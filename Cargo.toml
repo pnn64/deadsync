@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.352"
+version = "0.3.389"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -41,8 +41,8 @@ qrcodegen = "1.8.0"
 mlua = { version = "0.11.6", features = ["lua54", "vendored"] }
 
 # rssp and null-or-die
-rssp = { git = "https://github.com/pnn64/rssp", rev = "ac9cd58" }
-null-or-die = { git = "https://github.com/pnn64/null-or-die", rev = "f0f5d01" }
+rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
+null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 
 # Software renderer
 softbuffer = "0.4.8"
@@ -130,7 +130,7 @@ wgpu = { version = "29.0.1", features = ["dx12", "gles"] }
 wgpu = { version = "29.0.1", features = ["gles"] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
-libc = "0.2.184"
+libc = "0.2.185"
 xcb = { version = "1.7.0", features = ["randr"] }
 smithay-client-toolkit = { version = "0.20.0", default-features = false }
 

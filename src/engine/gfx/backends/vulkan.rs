@@ -71,9 +71,10 @@ struct TexturedMeshInstanceGpu {
     model_col1: [f32; 4],   // offset 16
     model_col2: [f32; 4],   // offset 32
     model_col3: [f32; 4],   // offset 48
-    uv_scale: [f32; 2],     // offset 64
-    uv_offset: [f32; 2],    // offset 72
-    uv_tex_shift: [f32; 2], // offset 80
+    tint: [f32; 4],         // offset 64
+    uv_scale: [f32; 2],     // offset 80
+    uv_offset: [f32; 2],    // offset 88
+    uv_tex_shift: [f32; 2], // offset 96
 }
 
 struct PipelinePair {
@@ -117,6 +118,11 @@ struct SubmittedTextureUpload {
     frame: usize,
     cmd: vk::CommandBuffer,
     staging: Vec<BufferResource>,
+}
+
+struct RetiredTexture {
+    retire_after_present_id: u32,
+    _texture: Texture,
 }
 
 struct CachedTMeshGeom {
@@ -247,6 +253,8 @@ pub struct State {
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
     submitted_tex_uploads: Vec<SubmittedTextureUpload>, // retired when the tagged frame slot completes
+    retired_textures: Vec<RetiredTexture>,
+    last_submitted_present_id: u32,
     present_telemetry: PresentTelemetryState,
     screenshot_requested: bool,
     captured_frame: Option<RgbaImage>,
@@ -393,6 +401,8 @@ pub fn init(
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
         submitted_tex_uploads: Vec::new(),
+        retired_textures: Vec::new(),
+        last_submitted_present_id: 0,
         present_telemetry,
         screenshot_requested: false,
         captured_frame: None,
@@ -1212,6 +1222,53 @@ pub fn retire_submitted_uploads(state: &mut State) {
     retire_all_submitted_texture_uploads(state)
 }
 
+#[inline(always)]
+fn completed_present_id(state: &State) -> u32 {
+    state
+        .present_telemetry
+        .last_completed
+        .map_or(0, |timing| timing.present_id)
+}
+
+fn retire_completed_textures(state: &mut State) {
+    let completed = completed_present_id(state);
+    if completed == 0 {
+        return;
+    }
+
+    let mut keep = Vec::with_capacity(state.retired_textures.len());
+    for retired in mem::take(&mut state.retired_textures) {
+        if retired.retire_after_present_id != 0 && retired.retire_after_present_id > completed {
+            keep.push(retired);
+        }
+    }
+    state.retired_textures = keep;
+}
+
+pub fn retire_textures(state: &mut State, textures: Vec<Texture>) {
+    if textures.is_empty() {
+        return;
+    }
+
+    let retire_after_present_id = state.last_submitted_present_id;
+    let completed = completed_present_id(state);
+    if retire_after_present_id == 0 || retire_after_present_id <= completed {
+        drop(textures);
+        return;
+    }
+
+    state
+        .retired_textures
+        .extend(textures.into_iter().map(|texture| RetiredTexture {
+            retire_after_present_id,
+            _texture: texture,
+        }));
+}
+
+pub fn retire_all_textures(state: &mut State) {
+    state.retired_textures.clear();
+}
+
 pub fn create_texture(
     state: &mut State,
     image: &RgbaImage,
@@ -1525,6 +1582,7 @@ pub fn draw(
         };
         stats.acquire_us = elapsed_us_since(acquire_started);
         record_cpu_present_completion(state, image_index);
+        retire_completed_textures(state);
 
         let in_flight = state.images_in_flight[image_index as usize];
         if in_flight != vk::Fence::null() {
@@ -1614,6 +1672,7 @@ pub fn draw(
                         model_col1: inst.model_col1,
                         model_col2: inst.model_col2,
                         model_col3: inst.model_col3,
+                        tint: inst.tint,
                         uv_scale: inst.uv_scale,
                         uv_offset: inst.uv_offset,
                         uv_tex_shift: inst.uv_tex_shift,
@@ -2008,6 +2067,8 @@ pub fn draw(
         }
         calibrate_present_clock(state);
         poll_past_presentation_timing(state);
+        state.last_submitted_present_id = submitted_present_id;
+        retire_completed_textures(state);
         stats.present_stats = snapshot_present_stats(
             state,
             waited_for_image,
@@ -2101,6 +2162,7 @@ pub fn cleanup(state: &mut State) {
         }
     }
     retire_all_submitted_texture_uploads(state);
+    retire_all_textures(state);
 
     // SAFETY: The device is idle, so it is valid to tear down swapchain resources, mapped rings,
     // pipelines, descriptor pools/layouts, the device, and finally the instance-owned objects.
@@ -2576,7 +2638,7 @@ fn vertex_input_descriptions_mesh() -> (
 #[inline(always)]
 fn vertex_input_descriptions_tmesh() -> (
     [vk::VertexInputBindingDescription; 2],
-    [vk::VertexInputAttributeDescription; 11],
+    [vk::VertexInputAttributeDescription; 12],
 ) {
     let b0 = vk::VertexInputBindingDescription::default()
         .binding(0)
@@ -2627,21 +2689,26 @@ fn vertex_input_descriptions_tmesh() -> (
         .location(7)
         .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(48);
-    let a_uv_scale = vk::VertexInputAttributeDescription::default()
+    let a_tint = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(8)
-        .format(vk::Format::R32G32_SFLOAT)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(64);
-    let a_uv_offset = vk::VertexInputAttributeDescription::default()
+    let a_uv_scale = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(9)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(72);
-    let a_uv_tex_shift = vk::VertexInputAttributeDescription::default()
+        .offset(80);
+    let a_uv_offset = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(10)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(80);
+        .offset(88);
+    let a_uv_tex_shift = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(11)
+        .format(vk::Format::R32G32_SFLOAT)
+        .offset(96);
 
     (
         [b0, b1],
@@ -2654,6 +2721,7 @@ fn vertex_input_descriptions_tmesh() -> (
             a_model1,
             a_model2,
             a_model3,
+            a_tint,
             a_uv_scale,
             a_uv_offset,
             a_uv_tex_shift,

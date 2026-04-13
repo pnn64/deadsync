@@ -62,6 +62,7 @@ pub struct TexturedMeshInstanceRaw {
     pub model_col1: [f32; 4],
     pub model_col2: [f32; 4],
     pub model_col3: [f32; 4],
+    pub tint: [f32; 4],
     pub uv_scale: [f32; 2],
     pub uv_offset: [f32; 2],
     pub uv_tex_shift: [f32; 2],
@@ -201,6 +202,7 @@ pub fn decompose_2d(m: &Matrix4<f32>) -> ([f32; 4], [f32; 2], [f32; 2]) {
 #[inline(always)]
 fn textured_instance_raw(
     m: &Matrix4<f32>,
+    tint: [f32; 4],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
@@ -210,6 +212,7 @@ fn textured_instance_raw(
         model_col1: [m.y.x, m.y.y, m.y.z, m.y.w],
         model_col2: [m.z.x, m.z.y, m.z.z, m.z.w],
         model_col3: [m.w.x, m.w.y, m.w.z, m.w.w],
+        tint,
         uv_scale,
         uv_offset,
         uv_tex_shift,
@@ -429,6 +432,7 @@ where
                 }));
             }
             ObjectType::TexturedMesh {
+                tint,
                 vertices,
                 geom_cache_key,
                 mode,
@@ -474,6 +478,7 @@ where
                 let instance_start = scratch.tmesh_instances.len() as u32;
                 scratch.tmesh_instances.push(textured_instance_raw(
                     &obj.transform,
+                    *tint,
                     *uv_scale,
                     *uv_offset,
                     *uv_tex_shift,

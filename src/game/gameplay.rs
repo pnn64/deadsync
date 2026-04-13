@@ -1,17 +1,15 @@
 use crate::engine::audio;
-use crate::engine::gfx::MeshVertex;
 use crate::engine::input::{
     InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
-use crate::engine::present::{
-    color,
-    density::{self, DensityHistCache},
-};
+use crate::engine::present::color;
 use crate::engine::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
 use crate::game::chart::{ChartData, GameplayChartData};
-use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
+use crate::game::judgment::{
+    self, JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
+};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{self, ModelMeshCache, Noteskin, Style};
 use crate::game::parsing::song_lua::{
@@ -22,8 +20,8 @@ use crate::game::parsing::song_lua::{
 use crate::game::scores;
 use crate::game::song::SongData;
 use crate::game::timing::{
-    BeatInfoCache, ROWS_PER_BEAT, TimingData, TimingProfile,
-    classify_offset_s_with_disabled_windows, largest_enabled_tap_window_s,
+    BeatInfoCache, ROWS_PER_BEAT, TimingData, TimingProfile, TimingProfileNs,
+    classify_offset_ns_with_disabled_windows, largest_enabled_tap_window_ns,
 };
 use crate::game::{
     profile::{self, TimingTickMode as TickMode},
@@ -518,6 +516,7 @@ const REPLAY_EDGE_RATE_PER_SEC: usize = 256;
 pub type SongTimeNs = i64;
 const INVALID_SONG_TIME_NS: SongTimeNs = i64::MIN;
 const SONG_TIME_NS_PER_SECOND: f64 = 1_000_000_000.0;
+const MIN_VALID_SONG_TIME_NS: i128 = (i64::MIN + 1) as i128;
 
 #[inline(always)]
 pub(crate) const fn song_time_ns_invalid(time_ns: SongTimeNs) -> bool {
@@ -556,6 +555,36 @@ fn song_time_ns_add_seconds(time_ns: SongTimeNs, delta_seconds: f32) -> SongTime
         return INVALID_SONG_TIME_NS;
     }
     time_ns.saturating_add(delta_ns)
+}
+
+#[inline(always)]
+fn normalized_song_rate(seconds_per_second: f32) -> f32 {
+    if seconds_per_second.is_finite() && seconds_per_second > 0.0 {
+        seconds_per_second
+    } else {
+        1.0
+    }
+}
+
+#[inline(always)]
+fn song_time_ns_span_seconds(span_ns: i128) -> f32 {
+    (span_ns as f64 / SONG_TIME_NS_PER_SECOND) as f32
+}
+
+#[inline(always)]
+fn clamp_song_time_ns(value: i128) -> SongTimeNs {
+    value.clamp(MIN_VALID_SONG_TIME_NS, i64::MAX as i128) as SongTimeNs
+}
+
+#[inline(always)]
+fn scaled_song_delta_ns(delta_host_nanos: i128, seconds_per_second: f32) -> i128 {
+    let slope = normalized_song_rate(seconds_per_second);
+    (delta_host_nanos as f64 * slope as f64).round() as i128
+}
+
+#[inline(always)]
+fn scaled_song_time_ns(seconds: f32, seconds_per_second: f32) -> SongTimeNs {
+    song_time_ns_from_seconds(seconds * normalized_song_rate(seconds_per_second))
 }
 
 #[inline(always)]
@@ -841,20 +870,22 @@ struct FinalizedRowOutcome {
 
 #[inline(always)]
 fn finalized_row_outcome_for_entry(
-    row_outcomes: &[Option<FinalizedRowOutcome>],
+    row_entries: &[RowEntry],
     row_entry_index: usize,
 ) -> Option<FinalizedRowOutcome> {
-    row_outcomes.get(row_entry_index).copied().flatten()
+    row_entries
+        .get(row_entry_index)
+        .and_then(|row_entry| row_entry.final_outcome)
 }
 
 #[inline(always)]
 fn finalized_row_outcome_for_cached_row(
+    row_entries: &[RowEntry],
     row_map_cache: &[u32],
-    row_outcomes: &[Option<FinalizedRowOutcome>],
     row_index: usize,
 ) -> Option<FinalizedRowOutcome> {
     let row_entry_index = row_entry_index_for_cached_row(row_map_cache, row_index)?;
-    finalized_row_outcome_for_entry(row_outcomes, row_entry_index)
+    finalized_row_outcome_for_entry(row_entries, row_entry_index)
 }
 
 #[inline(always)]
@@ -873,27 +904,15 @@ fn row_entry_for_cached_row<'a>(
 fn completed_row_final_judgment<'a>(
     notes: &'a [Note],
     row_entry: &RowEntry,
-    col_start: usize,
-    col_end: usize,
 ) -> Option<&'a Judgment> {
     let mut row_judgments: [Option<&Judgment>; MAX_COLS] = [None; MAX_COLS];
     let mut row_judgment_count = 0usize;
-    let mut has_player_notes = false;
 
     for &note_index in &row_entry.nonmine_note_indices {
-        let note = &notes[note_index];
-        if note.column < col_start || note.column >= col_end {
-            continue;
-        }
-        has_player_notes = true;
-        let judgment = note.result.as_ref()?;
+        let judgment = notes[note_index].result.as_ref()?;
         debug_assert!(row_judgment_count < row_judgments.len());
         row_judgments[row_judgment_count] = Some(judgment);
         row_judgment_count += 1;
-    }
-
-    if !has_player_notes {
-        return None;
     }
 
     judgment::aggregate_row_final_judgment(
@@ -917,21 +936,14 @@ const fn row_final_grade_hides_note(grade: JudgeGrade) -> bool {
 fn completed_row_flash_note_indices_and_grade(
     notes: &[Note],
     row_entry: &RowEntry,
-    col_start: usize,
-    col_end: usize,
 ) -> Option<([usize; MAX_COLS], usize, JudgeGrade)> {
-    let Some(final_judgment) = completed_row_final_judgment(notes, row_entry, col_start, col_end)
-    else {
+    let Some(final_judgment) = completed_row_final_judgment(notes, row_entry) else {
         return None;
     };
 
     let mut out = [usize::MAX; MAX_COLS];
     let mut len = 0usize;
     for &note_index in &row_entry.nonmine_note_indices {
-        let note = &notes[note_index];
-        if note.column < col_start || note.column >= col_end {
-            continue;
-        }
         debug_assert!(len < out.len());
         out[len] = note_index;
         len += 1;
@@ -942,8 +954,8 @@ fn completed_row_flash_note_indices_and_grade(
 #[inline(always)]
 pub fn row_hides_completed_note(state: &State, player: usize, row_index: usize) -> bool {
     finalized_row_outcome_for_cached_row(
+        &state.row_entries,
         &state.row_map_cache[player],
-        &state.finalized_row_outcomes[player],
         row_index,
     )
     .is_some_and(|outcome| row_final_grade_hides_note(outcome.final_grade))
@@ -951,14 +963,13 @@ pub fn row_hides_completed_note(state: &State, player: usize, row_index: usize) 
 
 #[inline(always)]
 fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_index: usize) {
-    let (col_start, col_end) = player_col_range(state, player);
     let Some((flash_note_indices, flash_count, flash_grade)) = ({
         let Some(row_entry) =
             row_entry_for_cached_row(&state.row_entries, &state.row_map_cache[player], row_index)
         else {
             return;
         };
-        completed_row_flash_note_indices_and_grade(&state.notes, row_entry, col_start, col_end)
+        completed_row_flash_note_indices_and_grade(&state.notes, row_entry)
     }) else {
         return;
     };
@@ -970,22 +981,45 @@ fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_in
 }
 
 #[inline(always)]
-fn count_rescore_tracks_on_row(
+fn count_rescore_tracks_on_row(row_entry: &RowEntry) -> usize {
+    usize::from(row_entry.rescore_track_count)
+}
+
+fn build_row_entry(
+    row_index: usize,
+    nonmine_note_indices: Vec<usize>,
     notes: &[Note],
-    row_entry: &RowEntry,
-    col_start: usize,
-    col_end: usize,
-) -> usize {
-    row_entry
-        .nonmine_note_indices
-        .iter()
-        .filter(|&&idx| {
-            let note = &notes[idx];
-            note.column >= col_start
-                && note.column < col_end
-                && counts_for_early_rescore(note.note_type)
-        })
-        .count()
+    note_time_cache_ns: &[SongTimeNs],
+) -> RowEntry {
+    debug_assert!(!nonmine_note_indices.is_empty());
+    let time_ns = note_time_cache_ns[nonmine_note_indices[0]];
+    let mut rescore_track_count = 0u8;
+    let mut unresolved_count = 0u8;
+    let mut unresolved_nonlift_count = 0u8;
+    let mut had_provisional_early_hit = false;
+    for &note_index in &nonmine_note_indices {
+        let note = &notes[note_index];
+        if counts_for_early_rescore(note.note_type) {
+            rescore_track_count = rescore_track_count.saturating_add(1);
+        }
+        if note.result.is_none() {
+            unresolved_count = unresolved_count.saturating_add(1);
+            if note.note_type != NoteType::Lift {
+                unresolved_nonlift_count = unresolved_nonlift_count.saturating_add(1);
+            }
+        }
+        had_provisional_early_hit |= note.early_result.is_some();
+    }
+    RowEntry {
+        row_index,
+        time_ns,
+        nonmine_note_indices,
+        rescore_track_count,
+        unresolved_count,
+        unresolved_nonlift_count,
+        had_provisional_early_hit,
+        final_outcome: None,
+    }
 }
 
 #[inline(always)]
@@ -1043,6 +1077,73 @@ fn closest_lane_note_ns(
         }
     }
     best
+}
+
+#[inline(always)]
+fn build_lane_note_display_runs(
+    note_indices: &[usize],
+    note_display_beats: &[f32],
+) -> Vec<LaneIndexRun> {
+    if note_indices.is_empty() {
+        return Vec::new();
+    }
+    let mut runs = Vec::with_capacity(1);
+    let mut run_start = 0usize;
+    let mut prev = note_display_beats[note_indices[0]];
+    for (pos, &note_index) in note_indices.iter().enumerate().skip(1) {
+        let curr = note_display_beats[note_index];
+        if curr < prev {
+            runs.push(LaneIndexRun {
+                start: run_start,
+                end: pos,
+            });
+            run_start = pos;
+        }
+        prev = curr;
+    }
+    runs.push(LaneIndexRun {
+        start: run_start,
+        end: note_indices.len(),
+    });
+    runs
+}
+
+#[inline(always)]
+fn build_lane_hold_display_runs(
+    hold_indices: &[usize],
+    hold_display_beat_min_cache: &[Option<f32>],
+    hold_display_beat_max_cache: &[Option<f32>],
+) -> Vec<LaneIndexRun> {
+    if hold_indices.is_empty() {
+        return Vec::new();
+    }
+    let first = hold_indices[0];
+    let mut runs = Vec::with_capacity(1);
+    let mut run_start = 0usize;
+    let mut prev_min = hold_display_beat_min_cache[first].unwrap_or(0.0);
+    let mut prev_max = hold_display_beat_max_cache[first].unwrap_or(0.0);
+    debug_assert!(hold_display_beat_min_cache[first].is_some());
+    debug_assert!(hold_display_beat_max_cache[first].is_some());
+    for (pos, &note_index) in hold_indices.iter().enumerate().skip(1) {
+        let curr_min = hold_display_beat_min_cache[note_index].unwrap_or(0.0);
+        let curr_max = hold_display_beat_max_cache[note_index].unwrap_or(0.0);
+        debug_assert!(hold_display_beat_min_cache[note_index].is_some());
+        debug_assert!(hold_display_beat_max_cache[note_index].is_some());
+        if curr_min < prev_min || curr_max < prev_max {
+            runs.push(LaneIndexRun {
+                start: run_start,
+                end: pos,
+            });
+            run_start = pos;
+        }
+        prev_min = curr_min;
+        prev_max = curr_max;
+    }
+    runs.push(LaneIndexRun {
+        start: run_start,
+        end: hold_indices.len(),
+    });
+    runs
 }
 
 #[inline(always)]
@@ -4567,6 +4668,8 @@ fn build_song_lua_runtime_windows(
             .unwrap_or_default(),
         song.title.clone(),
     );
+    context.song_display_bpms =
+        song_lua_display_bpm_pair(song, charts.first().map(|chart| chart.as_ref()));
     context.global_offset_seconds = machine_global_offset_seconds;
     context.screen_width = screen_width;
     context.screen_height = screen_height;
@@ -4582,6 +4685,11 @@ fn build_song_lua_runtime_windows(
             song_lua_difficulty_from_chart(&charts[player].difficulty)
         } else {
             SongLuaDifficulty::default_enabled()
+        },
+        display_bpms: if player < num_players {
+            song_lua_display_bpm_pair(song, Some(charts[player].as_ref()))
+        } else {
+            [60.0, 60.0]
         },
         speedmod: if player < num_players {
             song_lua_speedmod_from_setting(scroll_speed[player])
@@ -5647,33 +5755,24 @@ fn compute_end_times_ns(
 }
 
 #[inline(always)]
-fn late_note_resolution_window_s(timing_profile: &TimingProfile) -> f32 {
+fn late_note_resolution_window_ns(timing_profile: &TimingProfile, rate: f32) -> SongTimeNs {
     // Mirror ITG's shared late-resolution window from Player::GetMaxStepDistanceSeconds():
     // late taps, missed hold heads, and avoided mines all wait for the largest
     // relevant gameplay window instead of resolving on their own local window.
-    timing_profile
-        .windows_s
-        .iter()
-        .copied()
-        .fold(0.0_f32, f32::max)
-        .max(timing_profile.mine_window_s)
-        .max(TIMING_WINDOW_SECONDS_HOLD)
-        .max(TIMING_WINDOW_SECONDS_ROLL)
-}
-
-#[inline(always)]
-fn max_step_distance_seconds(timing_profile: &TimingProfile, rate: f32) -> f32 {
-    let rate = if rate.is_finite() && rate > 0.0 {
-        rate
-    } else {
-        1.0
-    };
-    rate * late_note_resolution_window_s(timing_profile) + MAX_INPUT_LATENCY_SECONDS
+    let profile_music_ns = TimingProfileNs::from_profile_scaled(timing_profile, rate);
+    profile_music_ns
+        .windows_ns
+        .into_iter()
+        .fold(0, i64::max)
+        .max(profile_music_ns.mine_window_ns)
+        .max(scaled_song_time_ns(TIMING_WINDOW_SECONDS_HOLD, rate))
+        .max(scaled_song_time_ns(TIMING_WINDOW_SECONDS_ROLL, rate))
 }
 
 #[inline(always)]
 fn max_step_distance_ns(timing_profile: &TimingProfile, rate: f32) -> SongTimeNs {
-    song_time_ns_from_seconds(max_step_distance_seconds(timing_profile, rate))
+    late_note_resolution_window_ns(timing_profile, rate)
+        .saturating_add(song_time_ns_from_seconds(MAX_INPUT_LATENCY_SECONDS))
 }
 
 #[inline(always)]
@@ -5726,8 +5825,14 @@ pub fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplayTotals
 #[derive(Clone, Debug)]
 pub struct RowEntry {
     row_index: usize,
+    time_ns: SongTimeNs,
     // Non-mine, non-fake, judgable notes on this row
     nonmine_note_indices: Vec<usize>,
+    rescore_track_count: u8,
+    unresolved_count: u8,
+    unresolved_nonlift_count: u8,
+    had_provisional_early_hit: bool,
+    final_outcome: Option<FinalizedRowOutcome>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -5741,6 +5846,12 @@ pub struct ColumnCue {
     pub start_time: f32,
     pub duration: f32,
     pub columns: Vec<ColumnCueColumn>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LaneIndexRun {
+    pub start: usize,
+    pub end: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -6507,7 +6618,6 @@ pub struct ReplayOffsetSnapshot {
 
 #[derive(Clone, Copy, Debug)]
 struct SongClockSnapshot {
-    song_time: f32,
     song_time_ns: SongTimeNs,
     seconds_per_second: f32,
     valid_at: Instant,
@@ -6516,8 +6626,8 @@ struct SongClockSnapshot {
 
 #[derive(Clone, Copy, Debug)]
 struct FrameStableDisplayClock {
-    current_time_sec: f32,
-    target_time_sec: f32,
+    current_time_ns: SongTimeNs,
+    target_time_ns: SongTimeNs,
     catching_up: bool,
     error_over_threshold: bool,
 }
@@ -6637,22 +6747,22 @@ pub struct DisplayClockHealth {
 
 impl FrameStableDisplayClock {
     #[inline(always)]
-    const fn new(time_sec: f32) -> Self {
+    const fn new(time_ns: SongTimeNs) -> Self {
         Self {
-            current_time_sec: time_sec,
-            target_time_sec: time_sec,
+            current_time_ns: time_ns,
+            target_time_ns: time_ns,
             catching_up: false,
             error_over_threshold: false,
         }
     }
 
     #[inline(always)]
-    fn reset(&mut self, time_sec: f32) -> f32 {
-        self.current_time_sec = time_sec;
-        self.target_time_sec = time_sec;
+    fn reset(&mut self, time_ns: SongTimeNs) -> SongTimeNs {
+        self.current_time_ns = time_ns;
+        self.target_time_ns = time_ns;
         self.catching_up = false;
         self.error_over_threshold = false;
-        time_sec
+        time_ns
     }
 }
 
@@ -6677,9 +6787,6 @@ struct GameplayUpdatePhaseTimings {
     judged_rows_us: u32,
     density_us: u32,
     density_sample_us: u32,
-    density_hist_mesh_us: u32,
-    density_life_mesh_us: u32,
-    density_clip_us: u32,
     danger_us: u32,
     untracked_us: u32,
 }
@@ -6777,6 +6884,31 @@ impl Default for GameplayUpdateTraceState {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct PlayerJudgmentTiming {
+    profile_music_ns: TimingProfileNs,
+    disabled_windows: [bool; 5],
+    largest_tap_window_music_ns: SongTimeNs,
+}
+
+impl Default for PlayerJudgmentTiming {
+    fn default() -> Self {
+        Self {
+            profile_music_ns: TimingProfileNs::default(),
+            disabled_windows: [false; 5],
+            largest_tap_window_music_ns: 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct NoteHitEval {
+    note_time_ns: SongTimeNs,
+    measured_offset_music_ns: SongTimeNs,
+    grade: JudgeGrade,
+    window: TimingWindow,
+}
+
 pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
@@ -6795,6 +6927,7 @@ pub struct State {
     pub timing_players: [Arc<TimingData>; MAX_PLAYERS],
     pub beat_info_cache: BeatInfoCache,
     pub timing_profile: TimingProfile,
+    player_judgment_timing: [PlayerJudgmentTiming; MAX_PLAYERS],
     pub notes: Vec<Note>,
     pub note_ranges: [(usize, usize); MAX_PLAYERS],
     pub audio_lead_in_seconds: f32,
@@ -6805,12 +6938,17 @@ pub struct State {
     display_clock: FrameStableDisplayClock,
     display_clock_diag: DisplayClockDiagRing,
     pub lane_note_indices: [Vec<usize>; MAX_COLS],
+    pub lane_hold_indices: [Vec<usize>; MAX_COLS],
+    pub lane_note_display_runs: [Vec<LaneIndexRun>; MAX_COLS],
+    pub lane_hold_display_runs: [Vec<LaneIndexRun>; MAX_COLS],
+    pub row_entry_ranges: [(usize, usize); MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
-    finalized_row_outcomes: [Vec<Option<FinalizedRowOutcome>>; MAX_PLAYERS],
     pub note_time_cache_ns: Vec<SongTimeNs>,
     pub note_display_beat_cache: Vec<f32>,
     pub hold_end_time_cache_ns: Vec<Option<SongTimeNs>>,
     pub hold_end_display_beat_cache: Vec<Option<f32>>,
+    pub hold_display_beat_min_cache: Vec<Option<f32>>,
+    pub hold_display_beat_max_cache: Vec<Option<f32>>,
     pub notes_end_time_ns: SongTimeNs,
     pub music_end_time_ns: SongTimeNs,
     pub music_rate: f32,
@@ -6844,6 +6982,7 @@ pub struct State {
 
     // Optimization: Per-player direct row lookup instead of HashMap
     pub row_map_cache: [Vec<u32>; MAX_PLAYERS],
+    pub note_row_entry_indices: Vec<u32>,
     // Bit flags per note index:
     // bit0 => same row contains a hold start, bit1 => same row contains a roll start.
     pub tap_row_hold_roll_flags: Vec<u8>,
@@ -6958,19 +7097,13 @@ pub struct State {
     pub density_graph_scaled_width: f32,
     pub density_graph_u0: f32,
     pub density_graph_u_window: f32,
-    pub density_graph_cache: [Option<DensityHistCache>; MAX_PLAYERS],
-    pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
-    pub density_graph_mesh_offset_px: [i32; MAX_PLAYERS],
     pub density_graph_life_update_rate: f32,
     pub density_graph_life_next_update_elapsed: f32,
     pub density_graph_life_points: [Vec<[f32; 2]>; MAX_PLAYERS],
-    pub density_graph_life_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
-    pub density_graph_life_mesh_offset_px: [i32; MAX_PLAYERS],
     pub density_graph_life_dirty: [bool; MAX_PLAYERS],
     pub density_graph_top_h: f32,
     pub density_graph_top_w: [f32; MAX_PLAYERS],
     pub density_graph_top_scale_y: [f32; MAX_PLAYERS],
-    pub density_graph_top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
 
     pub hold_to_exit_key: Option<HoldToExitKey>,
     pub hold_to_exit_start: Option<Instant>,
@@ -7112,9 +7245,6 @@ fn accumulate_phase_max(dst: &mut GameplayUpdatePhaseTimings, src: &GameplayUpda
     dst.judged_rows_us = dst.judged_rows_us.max(src.judged_rows_us);
     dst.density_us = dst.density_us.max(src.density_us);
     dst.density_sample_us = dst.density_sample_us.max(src.density_sample_us);
-    dst.density_hist_mesh_us = dst.density_hist_mesh_us.max(src.density_hist_mesh_us);
-    dst.density_life_mesh_us = dst.density_life_mesh_us.max(src.density_life_mesh_us);
-    dst.density_clip_us = dst.density_clip_us.max(src.density_clip_us);
     dst.danger_us = dst.danger_us.max(src.danger_us);
     dst.untracked_us = dst.untracked_us.max(src.untracked_us);
 }
@@ -7221,7 +7351,7 @@ fn trace_gameplay_update(
         state.update_trace.summary_slow_frames =
             state.update_trace.summary_slow_frames.saturating_add(1);
         debug!(
-            "Gameplay slow frame={} t={:.3}s total={:.3}ms hot={}({:.3}ms) pending={} decays={} phases_ms=[pre:{:.3} auto:{:.3} input:{:.3} held:{:.3} holds:{:.3} decay:{:.3} vis:{:.3} spawn:{:.3} mine:{:.3} tmiss:{:.3} cull:{:.3} judged:{:.3} density:{:.3} danger:{:.3} other:{:.3}] input_sub_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}]",
+            "Gameplay slow frame={} t={:.3}s total={:.3}ms hot={}({:.3}ms) pending={} decays={} phases_ms=[pre:{:.3} auto:{:.3} input:{:.3} held:{:.3} holds:{:.3} decay:{:.3} vis:{:.3} spawn:{:.3} mine:{:.3} tmiss:{:.3} cull:{:.3} judged:{:.3} density:{:.3} danger:{:.3} other:{:.3}] input_sub_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_ms=[sample:{:.3}]",
             frame_counter,
             music_time_sec,
             total_us as f32 / 1000.0,
@@ -7249,10 +7379,7 @@ fn trace_gameplay_update(
             phases.input_glow_us as f32 / 1000.0,
             phases.input_judge_us as f32 / 1000.0,
             phases.input_roll_us as f32 / 1000.0,
-            phases.density_sample_us as f32 / 1000.0,
-            phases.density_hist_mesh_us as f32 / 1000.0,
-            phases.density_life_mesh_us as f32 / 1000.0,
-            phases.density_clip_us as f32 / 1000.0
+            phases.density_sample_us as f32 / 1000.0
         );
     }
 
@@ -7267,7 +7394,7 @@ fn trace_gameplay_update(
         let summary_peak_pending_edges = state.update_trace.summary_peak_pending_edges;
         let (summary_hot_name, summary_hot_us) = max_phase_name_and_us(&summary_max_phase);
         trace!(
-            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] input_latency_us=[samples:{} cap_store_avg:{:.1} cap_store_max:{} store_emit_avg:{:.1} store_emit_max:{} emit_queue_avg:{:.1} emit_queue_max:{} queue_proc_avg:{:.1} queue_proc_max:{} cap_proc_avg:{:.1} cap_proc_max:{}] density_sub_max_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}] other_max={:.3}",
+            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] input_latency_us=[samples:{} cap_store_avg:{:.1} cap_store_max:{} store_emit_avg:{:.1} store_emit_max:{} emit_queue_avg:{:.1} emit_queue_max:{} queue_proc_avg:{:.1} queue_proc_max:{} cap_proc_avg:{:.1} cap_proc_max:{}] density_sub_max_ms=[sample:{:.3}] other_max={:.3}",
             summary_frames,
             summary_slow_frames,
             summary_max_total_us as f32 / 1000.0,
@@ -7306,9 +7433,6 @@ fn trace_gameplay_update(
             ),
             summary_input_latency.capture_to_process_max_us,
             summary_max_phase.density_sample_us as f32 / 1000.0,
-            summary_max_phase.density_hist_mesh_us as f32 / 1000.0,
-            summary_max_phase.density_life_mesh_us as f32 / 1000.0,
-            summary_max_phase.density_clip_us as f32 / 1000.0,
             summary_max_phase.untracked_us as f32 / 1000.0
         );
         state.update_trace.summary_elapsed_s = 0.0;
@@ -7352,10 +7476,19 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
     debug_assert_eq!(state.notes.len(), state.note_display_beat_cache.len());
     debug_assert_eq!(state.notes.len(), state.hold_end_time_cache_ns.len());
     debug_assert_eq!(state.notes.len(), state.hold_end_display_beat_cache.len());
+    debug_assert_eq!(state.notes.len(), state.hold_display_beat_min_cache.len());
+    debug_assert_eq!(state.notes.len(), state.hold_display_beat_max_cache.len());
     debug_assert_eq!(state.notes.len(), state.hold_decay_active.len());
+    debug_assert_eq!(state.notes.len(), state.note_row_entry_indices.len());
     for player in 0..state.num_players {
         let (start, end) = state.note_ranges[player];
         debug_assert!(start <= end && end <= state.notes.len());
+        let (row_start, row_end) = state.row_entry_ranges[player];
+        debug_assert!(row_start <= row_end && row_end <= state.row_entries.len());
+        debug_assert!(
+            state.judged_row_cursor[player] >= row_start
+                && state.judged_row_cursor[player] <= row_end
+        );
         debug_assert!(
             state.next_tap_miss_cursor[player] >= start
                 && state.next_tap_miss_cursor[player] <= end
@@ -7395,6 +7528,10 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
     for (row_entry_index, row_entry) in state.row_entries.iter().enumerate() {
         let first_note_index = row_entry.nonmine_note_indices[0];
         let player = player_for_col(state, state.notes[first_note_index].column);
+        debug_assert!(
+            row_entry_index >= state.row_entry_ranges[player].0
+                && row_entry_index < state.row_entry_ranges[player].1
+        );
         debug_assert_eq!(
             state.row_map_cache[player]
                 .get(row_entry.row_index)
@@ -7403,6 +7540,10 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
         );
         for &note_index in &row_entry.nonmine_note_indices {
             debug_assert!(note_index < state.notes.len());
+            debug_assert_eq!(
+                state.note_row_entry_indices[note_index],
+                row_entry_index as u32
+            );
             let note = &state.notes[note_index];
             debug_assert_eq!(note.row_index, row_entry.row_index);
             debug_assert!(note.can_be_judged);
@@ -7417,13 +7558,87 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
             let right = pair[1];
             left < right && state.note_time_cache_ns[left] <= state.note_time_cache_ns[right]
         }));
+        let note_runs = &state.lane_note_display_runs[col];
+        if state.lane_note_indices[col].is_empty() {
+            debug_assert!(note_runs.is_empty());
+        } else {
+            debug_assert_eq!(note_runs.first().map(|run| run.start), Some(0));
+            debug_assert_eq!(
+                note_runs.last().map(|run| run.end),
+                Some(state.lane_note_indices[col].len())
+            );
+            debug_assert!(note_runs.iter().all(|run| run.start < run.end));
+            debug_assert!(
+                note_runs
+                    .windows(2)
+                    .all(|pair| pair[0].end == pair[1].start)
+            );
+            for run in note_runs {
+                debug_assert!(
+                    state.lane_note_indices[col][run.start..run.end]
+                        .windows(2)
+                        .all(|pair| {
+                            state.note_display_beat_cache[pair[0]]
+                                <= state.note_display_beat_cache[pair[1]]
+                        })
+                );
+            }
+        }
         for &note_index in &state.lane_note_indices[col] {
             debug_assert!(note_index < state.notes.len());
             debug_assert_eq!(state.notes[note_index].column, col);
         }
+        debug_assert!(state.lane_hold_indices[col].windows(2).all(|pair| {
+            let left = pair[0];
+            let right = pair[1];
+            left < right && state.note_time_cache_ns[left] <= state.note_time_cache_ns[right]
+        }));
+        let hold_runs = &state.lane_hold_display_runs[col];
+        if state.lane_hold_indices[col].is_empty() {
+            debug_assert!(hold_runs.is_empty());
+        } else {
+            debug_assert_eq!(hold_runs.first().map(|run| run.start), Some(0));
+            debug_assert_eq!(
+                hold_runs.last().map(|run| run.end),
+                Some(state.lane_hold_indices[col].len())
+            );
+            debug_assert!(hold_runs.iter().all(|run| run.start < run.end));
+            debug_assert!(
+                hold_runs
+                    .windows(2)
+                    .all(|pair| pair[0].end == pair[1].start)
+            );
+            for run in hold_runs {
+                debug_assert!(
+                    state.lane_hold_indices[col][run.start..run.end]
+                        .windows(2)
+                        .all(|pair| {
+                            let left = pair[0];
+                            let right = pair[1];
+                            state.hold_display_beat_min_cache[left]
+                                .zip(state.hold_display_beat_min_cache[right])
+                                .is_some_and(|(lhs, rhs)| lhs <= rhs)
+                                && state.hold_display_beat_max_cache[left]
+                                    .zip(state.hold_display_beat_max_cache[right])
+                                    .is_some_and(|(lhs, rhs)| lhs <= rhs)
+                        })
+                );
+            }
+        }
+        for &note_index in &state.lane_hold_indices[col] {
+            debug_assert!(note_index < state.notes.len());
+            debug_assert_eq!(state.notes[note_index].column, col);
+            debug_assert!(matches!(
+                state.notes[note_index].note_type,
+                NoteType::Hold | NoteType::Roll
+            ));
+        }
     }
     for col in state.num_cols..MAX_COLS {
         debug_assert!(state.lane_note_indices[col].is_empty());
+        debug_assert!(state.lane_hold_indices[col].is_empty());
+        debug_assert!(state.lane_note_display_runs[col].is_empty());
+        debug_assert!(state.lane_hold_display_runs[col].is_empty());
     }
     let mut lane_positions = [0usize; MAX_COLS];
     for (note_index, note) in state.notes.iter().enumerate() {
@@ -8055,7 +8270,10 @@ pub fn toggle_flash_text(state: &State) -> Option<(&'static str, f32)> {
 #[inline(always)]
 pub fn display_clock_health(state: &State) -> DisplayClockHealth {
     DisplayClockHealth {
-        error_seconds: state.display_clock.target_time_sec - state.display_clock.current_time_sec,
+        error_seconds: song_time_ns_span_seconds(
+            i128::from(state.display_clock.target_time_ns)
+                - i128::from(state.display_clock.current_time_ns),
+        ),
         catching_up: state.display_clock.catching_up,
     }
 }
@@ -8118,56 +8336,59 @@ fn settle_due_autoplay_active_holds(state: &mut State, cutoff_time_ns: SongTimeN
 }
 
 #[inline(always)]
-fn random_range_f32(rng: &mut TurnRng, min: f32, max: f32) -> f32 {
-    if !min.is_finite() || !max.is_finite() {
-        return 0.0;
-    }
+fn random_range_song_time_ns(rng: &mut TurnRng, min: SongTimeNs, max: SongTimeNs) -> SongTimeNs {
     if max <= min {
         return min;
     }
-    min + (max - min) * rng.next_f32_unit()
+    let span = i128::from(max) - i128::from(min);
+    let offset = (span as f64 * f64::from(rng.next_f32_unit())).floor() as i128;
+    clamp_song_time_ns(i128::from(min) + offset)
 }
 
 #[inline(always)]
-fn autoplay_random_offset_s_for_window(
+fn autoplay_random_offset_music_ns_for_window(
     rng: &mut TurnRng,
-    timing_profile: TimingProfile,
+    timing_profile: TimingProfileNs,
     window: TimingWindow,
-) -> f32 {
-    let w0 = timing_profile.fa_plus_window_s.unwrap_or(0.0);
+) -> SongTimeNs {
+    let w0 = timing_profile.fa_plus_window_ns.unwrap_or(0);
     let (inner, outer) = match window {
-        TimingWindow::W0 => (0.0, w0),
-        TimingWindow::W1 => (w0, timing_profile.windows_s[0]),
-        TimingWindow::W2 => (timing_profile.windows_s[0], timing_profile.windows_s[1]),
-        TimingWindow::W3 => (timing_profile.windows_s[1], timing_profile.windows_s[2]),
-        TimingWindow::W4 => (timing_profile.windows_s[2], timing_profile.windows_s[3]),
-        TimingWindow::W5 => (timing_profile.windows_s[3], timing_profile.windows_s[4]),
+        TimingWindow::W0 => (0, w0),
+        TimingWindow::W1 => (w0, timing_profile.windows_ns[0]),
+        TimingWindow::W2 => (timing_profile.windows_ns[0], timing_profile.windows_ns[1]),
+        TimingWindow::W3 => (timing_profile.windows_ns[1], timing_profile.windows_ns[2]),
+        TimingWindow::W4 => (timing_profile.windows_ns[2], timing_profile.windows_ns[3]),
+        TimingWindow::W5 => (timing_profile.windows_ns[3], timing_profile.windows_ns[4]),
     };
-    if !outer.is_finite() || outer <= 0.0 {
-        return 0.0;
+    if outer <= 0 {
+        return 0;
     }
-    if !inner.is_finite() || inner <= 0.0 || inner >= outer {
-        return random_range_f32(rng, -outer, outer);
+    if inner <= 0 || inner >= outer {
+        return random_range_song_time_ns(rng, -outer, outer);
     }
     if rng.next_u32() & 1 == 0 {
-        random_range_f32(rng, -outer, -inner)
+        random_range_song_time_ns(rng, -outer, -inner)
     } else {
-        random_range_f32(rng, inner, outer)
+        random_range_song_time_ns(rng, inner, outer)
     }
 }
 
 #[inline(always)]
-fn live_autoplay_judgment_offset_s(
+fn live_autoplay_judgment_offset_music_ns(
     state: &mut State,
     player_idx: usize,
     window: TimingWindow,
-    measured_offset_s: f32,
-) -> f32 {
+    measured_offset_music_ns: SongTimeNs,
+) -> SongTimeNs {
     if !live_autoplay_enabled(state) {
-        return measured_offset_s;
+        return measured_offset_music_ns;
     }
-    let timing_profile = timing_profile_for_player(state, player_idx);
-    autoplay_random_offset_s_for_window(&mut state.autoplay_rng, timing_profile, window)
+    let timing_profile = if player_idx < state.num_players {
+        state.player_judgment_timing[player_idx].profile_music_ns
+    } else {
+        TimingProfileNs::from_profile_scaled(&state.timing_profile, state.music_rate)
+    };
+    autoplay_random_offset_music_ns_for_window(&mut state.autoplay_rng, timing_profile, window)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -8385,24 +8606,6 @@ fn push_density_life_point(points: &mut Vec<[f32; 2]>, x: f32, y: f32) -> bool {
     true
 }
 
-fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
-    let first_visible = points.partition_point(|p| p[0] < offset);
-    if first_visible == 0 {
-        return;
-    }
-    if first_visible >= points.len() {
-        points.clear();
-        return;
-    }
-
-    let a = points[first_visible - 1];
-    let b = points[first_visible];
-    let dx = (b[0] - a[0]).max(0.000_001_f32);
-    let t = ((offset - a[0]) / dx).clamp(0.0_f32, 1.0_f32);
-    points[first_visible - 1] = [offset, a[1] + (b[1] - a[1]) * t];
-    points.drain(0..(first_visible - 1));
-}
-
 fn update_density_graph(
     state: &mut State,
     current_music_time: f32,
@@ -8414,9 +8617,6 @@ fn update_density_graph(
     let scaled_width = state.density_graph_scaled_width;
     if graph_w <= 0.0_f32 || graph_h <= 0.0_f32 || scaled_width <= 0.0_f32 {
         state.density_graph_u0 = 0.0_f32;
-        for player in 0..state.num_players {
-            state.density_graph_mesh[player] = None;
-        }
         return;
     }
 
@@ -8443,9 +8643,6 @@ fn update_density_graph(
     }
 
     state.density_graph_u0 = u0;
-    let offset = (u0 * scaled_width).clamp(0.0_f32, scaled_width);
-    let offset_px = offset.floor() as i32;
-    let offset_px_f = offset_px as f32;
 
     let next_t = state.density_graph_life_next_update_elapsed;
     if state.density_graph_life_update_rate > 0.0_f32 && state.total_elapsed_in_screen >= next_t {
@@ -8481,81 +8678,6 @@ fn update_density_graph(
         }
         if let Some(started) = sample_started {
             add_elapsed_us(&mut phase_timings.density_sample_us, started);
-        }
-    }
-
-    for player in 0..state.num_players {
-        if offset_px == state.density_graph_mesh_offset_px[player] {
-            continue;
-        }
-        if trace_enabled {
-            let started = Instant::now();
-            state.density_graph_mesh_offset_px[player] = offset_px;
-            density::update_density_hist_mesh(
-                &mut state.density_graph_mesh[player],
-                state.density_graph_cache[player].as_ref(),
-                offset_px as f32,
-                graph_w,
-            );
-            add_elapsed_us(&mut phase_timings.density_hist_mesh_us, started);
-        } else {
-            state.density_graph_mesh_offset_px[player] = offset_px;
-            density::update_density_hist_mesh(
-                &mut state.density_graph_mesh[player],
-                state.density_graph_cache[player].as_ref(),
-                offset_px as f32,
-                graph_w,
-            );
-        }
-    }
-
-    for player in 0..state.num_players {
-        let prev_offset_px = state.density_graph_life_mesh_offset_px[player];
-        let offset_changed = offset_px != prev_offset_px;
-        if !offset_changed && !state.density_graph_life_dirty[player] {
-            continue;
-        }
-        state.density_graph_life_mesh_offset_px[player] = offset_px;
-        state.density_graph_life_dirty[player] = false;
-        let should_clip = offset_px > prev_offset_px;
-
-        if trace_enabled {
-            if should_clip {
-                let clip_started = Instant::now();
-                clip_density_life_points(&mut state.density_graph_life_points[player], offset_px_f);
-                add_elapsed_us(&mut phase_timings.density_clip_us, clip_started);
-            }
-            if state.density_graph_life_points[player].len() < 2 {
-                state.density_graph_life_mesh[player] = None;
-                continue;
-            }
-
-            let mesh_started = Instant::now();
-            density::update_density_life_mesh(
-                &mut state.density_graph_life_mesh[player],
-                &state.density_graph_life_points[player],
-                offset_px_f,
-                graph_w,
-                2.0_f32,
-                [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
-            );
-            add_elapsed_us(&mut phase_timings.density_life_mesh_us, mesh_started);
-        } else {
-            if should_clip {
-                clip_density_life_points(&mut state.density_graph_life_points[player], offset_px_f);
-            }
-            if state.density_graph_life_points[player].len() < 2 {
-                state.density_graph_life_mesh[player] = None;
-                continue;
-            }
-            density::update_density_life_mesh(
-                &mut state.density_graph_life_mesh[player],
-                &state.density_graph_life_points[player],
-                offset_px_f,
-                graph_w,
-                2.0_f32,
-                [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
-            );
         }
     }
 }
@@ -8702,7 +8824,7 @@ pub fn replay_capture_enabled(state: &State) -> bool {
 
 #[inline(always)]
 fn current_music_time_from_stream(state: &State) -> f32 {
-    current_song_clock_snapshot(state).song_time
+    song_time_ns_to_seconds(current_song_clock_snapshot(state).song_time_ns)
 }
 
 #[inline(always)]
@@ -8715,7 +8837,6 @@ fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
     };
     if stream_clock.has_music_mapping {
         SongClockSnapshot {
-            song_time: stream_clock.music_seconds,
             song_time_ns: stream_clock.music_nanos,
             seconds_per_second: if stream_clock.music_seconds_per_second.is_finite()
                 && stream_clock.music_seconds_per_second > 0.0
@@ -8730,7 +8851,6 @@ fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
     } else {
         let song_time = stream_pos_to_music_time(state, stream_clock.stream_seconds);
         SongClockSnapshot {
-            song_time,
             song_time_ns: song_time_ns_from_seconds(song_time),
             seconds_per_second: fallback_rate,
             valid_at: stream_clock.valid_at,
@@ -8745,35 +8865,8 @@ fn music_time_ns_from_song_clock(
     captured_at: Instant,
     captured_host_nanos: u64,
 ) -> SongTimeNs {
-    let slope = if snapshot.seconds_per_second.is_finite() && snapshot.seconds_per_second > 0.0 {
-        snapshot.seconds_per_second
-    } else {
-        1.0
-    };
-    if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
-        let dt_nanos = captured_host_nanos as i128 - snapshot.valid_at_host_nanos as i128;
-        let delta_song_nanos = (dt_nanos as f64 * slope as f64).round() as i128;
-        let song_time_ns = snapshot.song_time_ns as i128 + delta_song_nanos;
-        return song_time_ns.clamp(i64::MIN as i128, i64::MAX as i128) as SongTimeNs;
-    }
-    song_time_ns_from_seconds(music_time_from_song_clock(
-        snapshot,
-        captured_at,
-        captured_host_nanos,
-    ))
-}
-
-#[inline(always)]
-fn music_time_from_song_clock(
-    snapshot: SongClockSnapshot,
-    captured_at: Instant,
-    captured_host_nanos: u64,
-) -> f32 {
-    let slope = if snapshot.seconds_per_second.is_finite() && snapshot.seconds_per_second > 0.0 {
-        snapshot.seconds_per_second
-    } else {
-        1.0
-    };
+    let slope = normalized_song_rate(snapshot.seconds_per_second);
+    let snapshot_song_time = song_time_ns_to_seconds(snapshot.song_time_ns);
     if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
         let dt_nanos = captured_host_nanos as i128 - snapshot.valid_at_host_nanos as i128;
         if audio::timing_diag_enabled() {
@@ -8781,53 +8874,59 @@ fn music_time_from_song_clock(
                 "AUDIO_DIAG snap_age_ms={:.3} path=host callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
                 dt_nanos as f64 * 1e-6,
                 audio::timing_diag_last_callback_gap_ns() as f64 * 1e-6,
-                snapshot.song_time,
+                snapshot_song_time,
                 slope,
                 snapshot.valid_at_host_nanos,
                 captured_host_nanos,
             );
         }
-        return snapshot.song_time + (dt_nanos as f64 * 1e-9 * slope as f64) as f32;
+        return clamp_song_time_ns(
+            i128::from(snapshot.song_time_ns) + scaled_song_delta_ns(dt_nanos, slope),
+        );
     }
-    if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at) {
+    let delta_host_nanos = if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at)
+    {
         if audio::timing_diag_enabled() {
             debug!(
                 "AUDIO_DIAG snap_age_ms={:.3} path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
                 -(age.as_secs_f64() * 1000.0),
                 audio::timing_diag_last_callback_gap_ns() as f64 * 1e-6,
-                snapshot.song_time,
+                snapshot_song_time,
                 slope,
                 snapshot.valid_at_host_nanos,
                 captured_host_nanos,
             );
         }
-        snapshot.song_time - age.as_secs_f32() * slope
+        -(age.as_nanos() as i128)
     } else if let Some(lead) = captured_at.checked_duration_since(snapshot.valid_at) {
         if audio::timing_diag_enabled() {
             debug!(
                 "AUDIO_DIAG snap_age_ms={:.3} path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
                 lead.as_secs_f64() * 1000.0,
                 audio::timing_diag_last_callback_gap_ns() as f64 * 1e-6,
-                snapshot.song_time,
+                snapshot_song_time,
                 slope,
                 snapshot.valid_at_host_nanos,
                 captured_host_nanos,
             );
         }
-        snapshot.song_time + lead.as_secs_f32() * slope
+        lead.as_nanos() as i128
     } else {
         if audio::timing_diag_enabled() {
             debug!(
                 "AUDIO_DIAG snap_age_ms=0.000 path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
                 audio::timing_diag_last_callback_gap_ns() as f64 * 1e-6,
-                snapshot.song_time,
+                snapshot_song_time,
                 slope,
                 snapshot.valid_at_host_nanos,
                 captured_host_nanos,
             );
         }
-        snapshot.song_time
-    }
+        0
+    };
+    clamp_song_time_ns(
+        i128::from(snapshot.song_time_ns) + scaled_song_delta_ns(delta_host_nanos, slope),
+    )
 }
 
 const DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S: f32 = 0.012;
@@ -8868,93 +8967,94 @@ fn note_display_clock_diag_event(
 }
 
 #[inline(always)]
-fn frame_stable_display_music_time(
+fn frame_stable_display_music_time_ns(
     display_clock: &mut FrameStableDisplayClock,
     diag: &mut DisplayClockDiagRing,
     at_host_nanos: u64,
-    target_display_time_sec: f32,
+    target_display_time_ns: SongTimeNs,
     delta_time: f32,
     seconds_per_second: f32,
     first_update: bool,
-) -> f32 {
-    display_clock.target_time_sec = target_display_time_sec;
+) -> SongTimeNs {
+    display_clock.target_time_ns = target_display_time_ns;
     if first_update
-        || !display_clock.current_time_sec.is_finite()
-        || !target_display_time_sec.is_finite()
+        || song_time_ns_invalid(display_clock.current_time_ns)
+        || song_time_ns_invalid(target_display_time_ns)
         || !delta_time.is_finite()
         || delta_time <= 0.0
     {
-        return display_clock.reset(target_display_time_sec);
+        return display_clock.reset(target_display_time_ns);
     }
 
-    let slope = if seconds_per_second.is_finite() && seconds_per_second > 0.0 {
-        seconds_per_second
-    } else {
-        1.0
-    };
-    let previous_display_time_sec = display_clock.current_time_sec;
+    let slope = normalized_song_rate(seconds_per_second);
+    let previous_display_time_ns = display_clock.current_time_ns;
     let previous_catching_up = display_clock.catching_up;
     let previous_error_over_threshold = display_clock.error_over_threshold;
-    let target_delta = target_display_time_sec - previous_display_time_sec;
-    let max_error = DISPLAY_CLOCK_RESET_ERROR_S * slope;
-    if target_delta.abs() > max_error {
+    let target_delta_ns = i128::from(target_display_time_ns) - i128::from(previous_display_time_ns);
+    let max_error_ns = i128::from(scaled_song_time_ns(DISPLAY_CLOCK_RESET_ERROR_S, slope));
+    if target_delta_ns.abs() > max_error_ns {
         note_display_clock_diag_event(
             diag,
             at_host_nanos,
             DisplayClockDiagEventKind::ResetJump,
-            target_display_time_sec,
-            previous_display_time_sec,
-            target_display_time_sec,
-            target_delta,
-            target_delta,
-            max_error,
+            song_time_ns_to_seconds(target_display_time_ns),
+            song_time_ns_to_seconds(previous_display_time_ns),
+            song_time_ns_to_seconds(target_display_time_ns),
+            song_time_ns_span_seconds(target_delta_ns),
+            song_time_ns_span_seconds(target_delta_ns),
+            song_time_ns_span_seconds(max_error_ns),
         );
-        return display_clock.reset(target_display_time_sec);
+        return display_clock.reset(target_display_time_ns);
     }
 
-    let advanced = previous_display_time_sec + delta_time * slope;
+    let advanced_ns =
+        i128::from(previous_display_time_ns) + i128::from(scaled_song_time_ns(delta_time, slope));
     let correction_alpha = 1.0 - f32::exp2(-delta_time / DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S);
-    let mut corrected = advanced + (target_display_time_sec - advanced) * correction_alpha;
-    let max_step = DISPLAY_CLOCK_MAX_STEP_S * slope;
-    if target_delta.abs() > max_step * 2.0 {
+    let mut corrected_ns = advanced_ns
+        + ((i128::from(target_display_time_ns) - advanced_ns) as f64 * correction_alpha as f64)
+            .round() as i128;
+    let max_step_ns = i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_STEP_S, slope));
+    if target_delta_ns.abs() > (max_step_ns as f64 * 2.0).round() as i128 {
         note_display_clock_diag_event(
             diag,
             at_host_nanos,
             DisplayClockDiagEventKind::TargetJump,
-            target_display_time_sec,
-            previous_display_time_sec,
-            corrected,
-            target_delta,
-            target_delta,
-            max_step * 2.0,
+            song_time_ns_to_seconds(target_display_time_ns),
+            song_time_ns_to_seconds(previous_display_time_ns),
+            song_time_ns_to_seconds(clamp_song_time_ns(corrected_ns)),
+            song_time_ns_span_seconds(target_delta_ns),
+            song_time_ns_span_seconds(target_delta_ns),
+            song_time_ns_span_seconds((max_step_ns as f64 * 2.0).round() as i128),
         );
     }
-    let step = corrected - previous_display_time_sec;
+    let step_ns = corrected_ns - i128::from(previous_display_time_ns);
     let mut clamped_step = false;
-    if step.abs() > max_step * 1.2 {
-        corrected = previous_display_time_sec + step.signum() * max_step;
+    if step_ns.abs() > (max_step_ns as f64 * 1.2).round() as i128 {
+        corrected_ns = i128::from(previous_display_time_ns) + step_ns.signum() * max_step_ns;
         clamped_step = true;
     }
-    let min_allowed = target_display_time_sec - DISPLAY_CLOCK_MAX_LAG_S * slope;
-    let max_allowed = target_display_time_sec + DISPLAY_CLOCK_MAX_LEAD_S * slope;
-    let corrected = corrected
-        .clamp(min_allowed, max_allowed)
-        .max(previous_display_time_sec);
-    display_clock.current_time_sec = corrected;
-    let error_seconds = target_display_time_sec - corrected;
-    display_clock.catching_up = error_seconds.abs() > max_step * 0.5;
-    display_clock.error_over_threshold = error_seconds.abs() > max_step;
+    let min_allowed_ns = i128::from(target_display_time_ns)
+        - i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_LAG_S, slope));
+    let max_allowed_ns = i128::from(target_display_time_ns)
+        + i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_LEAD_S, slope));
+    corrected_ns = corrected_ns
+        .clamp(min_allowed_ns, max_allowed_ns)
+        .max(i128::from(previous_display_time_ns));
+    display_clock.current_time_ns = clamp_song_time_ns(corrected_ns);
+    let error_ns = i128::from(target_display_time_ns) - corrected_ns;
+    display_clock.catching_up = error_ns.abs() > (max_step_ns / 2);
+    display_clock.error_over_threshold = error_ns.abs() > max_step_ns;
     if clamped_step {
         note_display_clock_diag_event(
             diag,
             at_host_nanos,
             DisplayClockDiagEventKind::ClampStep,
-            target_display_time_sec,
-            previous_display_time_sec,
-            corrected,
-            error_seconds,
-            corrected - previous_display_time_sec,
-            max_step,
+            song_time_ns_to_seconds(target_display_time_ns),
+            song_time_ns_to_seconds(previous_display_time_ns),
+            song_time_ns_to_seconds(display_clock.current_time_ns),
+            song_time_ns_span_seconds(error_ns),
+            song_time_ns_span_seconds(corrected_ns - i128::from(previous_display_time_ns)),
+            song_time_ns_span_seconds(max_step_ns),
         );
     }
     if !previous_error_over_threshold && display_clock.error_over_threshold {
@@ -8962,12 +9062,12 @@ fn frame_stable_display_music_time(
             diag,
             at_host_nanos,
             DisplayClockDiagEventKind::ErrorThreshold,
-            target_display_time_sec,
-            previous_display_time_sec,
-            corrected,
-            error_seconds,
-            corrected - previous_display_time_sec,
-            max_step,
+            song_time_ns_to_seconds(target_display_time_ns),
+            song_time_ns_to_seconds(previous_display_time_ns),
+            song_time_ns_to_seconds(display_clock.current_time_ns),
+            song_time_ns_span_seconds(error_ns),
+            song_time_ns_span_seconds(corrected_ns - i128::from(previous_display_time_ns)),
+            song_time_ns_span_seconds(max_step_ns),
         );
     }
     if !previous_catching_up && display_clock.catching_up {
@@ -8975,15 +9075,15 @@ fn frame_stable_display_music_time(
             diag,
             at_host_nanos,
             DisplayClockDiagEventKind::CatchUpStart,
-            target_display_time_sec,
-            previous_display_time_sec,
-            corrected,
-            error_seconds,
-            corrected - previous_display_time_sec,
-            max_step * 0.5,
+            song_time_ns_to_seconds(target_display_time_ns),
+            song_time_ns_to_seconds(previous_display_time_ns),
+            song_time_ns_to_seconds(display_clock.current_time_ns),
+            song_time_ns_span_seconds(error_ns),
+            song_time_ns_span_seconds(corrected_ns - i128::from(previous_display_time_ns)),
+            song_time_ns_span_seconds(max_step_ns / 2),
         );
     }
-    corrected
+    display_clock.current_time_ns
 }
 
 #[inline(always)]
@@ -9008,7 +9108,7 @@ fn stage_music_cut(lead_in_seconds: f32) -> audio::Cut {
 }
 
 fn start_stage_music_audio(state: &State) {
-    let Some(music_path) = state.song.music_path.as_ref() else {
+    let Some(music_path) = state.charts[0].music_path.as_ref() else {
         return;
     };
     let lead_in = state.audio_lead_in_seconds.max(0.0);
@@ -9024,8 +9124,8 @@ fn start_stage_music_audio(state: &State) {
 pub fn start_stage_music(state: &mut State) {
     let start_time = -state.audio_lead_in_seconds.max(0.0);
     state.current_music_time_ns = song_time_ns_from_seconds(start_time);
-    state.current_music_time_display = state.display_clock.reset(start_time);
-    let display_time_ns = song_time_ns_from_seconds(state.current_music_time_display);
+    let display_time_ns = state.display_clock.reset(state.current_music_time_ns);
+    state.current_music_time_display = song_time_ns_to_seconds(display_time_ns);
     state.current_beat = state
         .timing
         .get_beat_for_time_ns(state.current_music_time_ns);
@@ -9148,6 +9248,20 @@ fn get_reference_bpm_from_display_tag(
         return max_str.trim().parse::<f32>().ok();
     }
     s.parse::<f32>().ok()
+}
+
+fn song_lua_display_bpm_pair(song: &SongData, chart: Option<&ChartData>) -> [f32; 2] {
+    song.chart_display_bpm_range(chart)
+        .map(|(lo, hi)| {
+            let lo = lo as f32;
+            let hi = hi as f32;
+            if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
+                [lo, hi]
+            } else {
+                [60.0, 60.0]
+            }
+        })
+        .unwrap_or([60.0, 60.0])
 }
 
 fn step_stats_notefield_width(
@@ -9611,55 +9725,74 @@ pub fn init(
     let mut note_display_beat_cache = Vec::with_capacity(notes.len());
     let mut hold_end_time_cache_ns = Vec::with_capacity(notes.len());
     let mut hold_end_display_beat_cache = Vec::with_capacity(notes.len());
+    let mut hold_display_beat_min_cache = Vec::with_capacity(notes.len());
+    let mut hold_display_beat_max_cache = Vec::with_capacity(notes.len());
     for note in &notes {
         let timing_player = &timing_players[note_player_for_col(note.column)];
         let note_time_ns = timing_player.get_time_for_beat_ns(note.beat);
+        let note_display_beat = timing_player.get_displayed_beat(note.beat);
         note_time_cache_ns.push(note_time_ns);
-        note_display_beat_cache.push(timing_player.get_displayed_beat(note.beat));
+        note_display_beat_cache.push(note_display_beat);
         if let Some(hold) = note.hold.as_ref() {
             let end_time_ns = timing_player.get_time_for_beat_ns(hold.end_beat);
+            let end_display_beat = timing_player.get_displayed_beat(hold.end_beat);
             hold_end_time_cache_ns.push(Some(end_time_ns));
-            hold_end_display_beat_cache.push(Some(timing_player.get_displayed_beat(hold.end_beat)));
+            hold_end_display_beat_cache.push(Some(end_display_beat));
+            hold_display_beat_min_cache.push(Some(note_display_beat.min(end_display_beat)));
+            hold_display_beat_max_cache.push(Some(note_display_beat.max(end_display_beat)));
         } else {
             hold_end_time_cache_ns.push(None);
             hold_end_display_beat_cache.push(None);
+            hold_display_beat_min_cache.push(None);
+            hold_display_beat_max_cache.push(None);
         }
     }
 
     debug!("Parsed {} notes from chart data.", notes.len());
 
     let mut row_entries: Vec<RowEntry> = Vec::with_capacity(notes.len() / 2);
+    let mut row_entry_ranges = [(0usize, 0usize); MAX_PLAYERS];
     let mut row_map_cache: [Vec<u32>; MAX_PLAYERS] =
         std::array::from_fn(|_| vec![u32::MAX; max_row_index + 1]);
+    let mut note_row_entry_indices = vec![u32::MAX; notes.len()];
     let mut tap_row_hold_roll_flags = vec![0u8; notes.len()];
-    let mut cursor = 0usize;
-    while cursor < notes.len() {
-        let row_index = notes[cursor].row_index;
-        let row_start = cursor;
-        let mut row_flags = 0u8;
-        let mut nonmine_note_indices = Vec::with_capacity(4);
-        while cursor < notes.len() && notes[cursor].row_index == row_index {
-            let note = &notes[cursor];
-            match note.note_type {
-                NoteType::Hold => row_flags |= 0b01,
-                NoteType::Roll => row_flags |= 0b10,
-                _ => {}
+    for player in 0..num_players {
+        let row_range_start = row_entries.len();
+        let (note_start, note_end) = note_ranges[player];
+        let mut cursor = note_start;
+        while cursor < note_end {
+            let row_index = notes[cursor].row_index;
+            let row_start = cursor;
+            let mut row_flags = 0u8;
+            let mut nonmine_note_indices = Vec::with_capacity(4);
+            while cursor < note_end && notes[cursor].row_index == row_index {
+                let note = &notes[cursor];
+                match note.note_type {
+                    NoteType::Hold => row_flags |= 0b01,
+                    NoteType::Roll => row_flags |= 0b10,
+                    _ => {}
+                }
+                if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+                    nonmine_note_indices.push(cursor);
+                }
+                cursor += 1;
             }
-            if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
-                nonmine_note_indices.push(cursor);
+            if !nonmine_note_indices.is_empty() {
+                let row_entry_index = row_entries.len() as u32;
+                row_map_cache[player][row_index] = row_entry_index;
+                for &note_index in &nonmine_note_indices {
+                    note_row_entry_indices[note_index] = row_entry_index;
+                }
+                row_entries.push(build_row_entry(
+                    row_index,
+                    nonmine_note_indices,
+                    &notes,
+                    &note_time_cache_ns,
+                ));
             }
-            cursor += 1;
+            tap_row_hold_roll_flags[row_start..cursor].fill(row_flags);
         }
-        if !nonmine_note_indices.is_empty() {
-            let row_entry_index = row_entries.len() as u32;
-            let player = note_player_for_col(notes[nonmine_note_indices[0]].column);
-            row_map_cache[player][row_index] = row_entry_index;
-            row_entries.push(RowEntry {
-                row_index,
-                nonmine_note_indices,
-            });
-        }
-        tap_row_hold_roll_flags[row_start..cursor].fill(row_flags);
+        row_entry_ranges[player] = (row_range_start, row_entries.len());
     }
     let cache_build_ms = cache_build_started.elapsed().as_secs_f64() * 1000.0;
 
@@ -9743,6 +9876,9 @@ pub fn init(
     });
 
     let timing_profile = TimingProfile::default_itg_with_fa_plus();
+    let player_judgment_timing = std::array::from_fn(|player| {
+        build_player_judgment_timing(timing_profile, &player_profiles[player], rate)
+    });
     let (notes_end_time_ns, music_end_time_ns) =
         compute_end_times_ns(&notes, &note_time_cache_ns, &hold_end_time_cache_ns, rate);
     let notes_len = notes.len();
@@ -9758,6 +9894,8 @@ pub fn init(
 
     let note_range_start: [usize; MAX_PLAYERS] =
         std::array::from_fn(|player| note_ranges[player].0);
+    let row_entry_range_start: [usize; MAX_PLAYERS] =
+        std::array::from_fn(|player| row_entry_ranges[player].0);
     let mut mine_note_ix: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
     let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
     for player in 0..num_players {
@@ -9775,11 +9913,15 @@ pub fn init(
     }
     let next_mine_ix_cursor: [usize; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let mut lane_note_counts = [0usize; MAX_COLS];
+    let mut lane_hold_counts = [0usize; MAX_COLS];
     let mut replay_cells = 0usize;
     for note in &notes {
         let col = note.column;
         if col < num_cols && col < MAX_COLS {
             lane_note_counts[col] = lane_note_counts[col].saturating_add(1);
+            if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                lane_hold_counts[col] = lane_hold_counts[col].saturating_add(1);
+            }
         }
         if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
             replay_cells = replay_cells.saturating_add(1);
@@ -9787,11 +9929,29 @@ pub fn init(
     }
     let mut lane_note_indices: [Vec<usize>; MAX_COLS] =
         std::array::from_fn(|col| Vec::with_capacity(lane_note_counts[col]));
+    let mut lane_hold_indices: [Vec<usize>; MAX_COLS] =
+        std::array::from_fn(|col| Vec::with_capacity(lane_hold_counts[col]));
     for (note_index, note) in notes.iter().enumerate() {
         let col = note.column;
         if col < num_cols && col < MAX_COLS {
             lane_note_indices[col].push(note_index);
+            if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                lane_hold_indices[col].push(note_index);
+            }
         }
+    }
+    let mut lane_note_display_runs: [Vec<LaneIndexRun>; MAX_COLS] =
+        std::array::from_fn(|_| Vec::new());
+    let mut lane_hold_display_runs: [Vec<LaneIndexRun>; MAX_COLS] =
+        std::array::from_fn(|_| Vec::new());
+    for col in 0..num_cols {
+        lane_note_display_runs[col] =
+            build_lane_note_display_runs(&lane_note_indices[col], &note_display_beat_cache);
+        lane_hold_display_runs[col] = build_lane_hold_display_runs(
+            &lane_hold_indices[col],
+            &hold_display_beat_min_cache,
+            &hold_display_beat_max_cache,
+        );
     }
     let pending_edges_capacity = input_queue_cap(num_cols);
     let replay_seconds = (song_time_ns_to_seconds(music_end_time_ns) + start_delay)
@@ -10049,66 +10209,6 @@ pub fn init(
         }
         scale
     };
-    let density_graph_top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
-        std::array::from_fn(|p| {
-            let graph_w = density_graph_top_w[p];
-            let graph_h = density_graph_top_h * density_graph_top_scale_y[p].clamp(0.0, 1.0);
-            if p >= num_players || graph_w <= 0.0 || graph_h <= 0.0 {
-                return None;
-            }
-            let chart = charts[p].as_ref();
-            let verts = density::build_density_histogram_mesh(
-                &chart.measure_nps_vec,
-                chart.max_nps,
-                &chart.measure_seconds_vec,
-                density_graph_first_second,
-                density_graph_last_second,
-                graph_w,
-                graph_h,
-                0.0,
-                graph_w,
-                None,
-                1.0,
-            );
-            if verts.is_empty() {
-                None
-            } else {
-                Some(Arc::from(verts.into_boxed_slice()))
-            }
-        });
-
-    let density_graph_cache: [Option<DensityHistCache>; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if !density_graph_enabled || p >= num_players {
-            return None;
-        }
-        let chart = charts[p].as_ref();
-        density::build_density_histogram_cache(
-            &chart.measure_nps_vec,
-            chart.max_nps,
-            &chart.measure_seconds_vec,
-            density_graph_first_second,
-            density_graph_last_second,
-            density_graph_scaled_width,
-            density_graph_graph_h,
-            None,
-            1.0,
-        )
-    });
-    let density_graph_mesh_offset_px: [i32; MAX_PLAYERS] = [0; MAX_PLAYERS];
-    let density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if !density_graph_enabled || p >= num_players {
-            return None;
-        }
-        let mut mesh = None;
-        density::update_density_hist_mesh(
-            &mut mesh,
-            density_graph_cache[p].as_ref(),
-            0.0_f32,
-            density_graph_graph_w,
-        );
-        mesh
-    });
-
     let mut density_graph_life_update_rate = 0.25_f32;
     if density_graph_enabled && !timing.has_bpm_changes() {
         let bpm = timing.first_bpm();
@@ -10131,9 +10231,6 @@ pub fn init(
             Vec::new()
         }
     });
-    let density_graph_life_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
-        std::array::from_fn(|_| None);
-    let density_graph_life_mesh_offset_px: [i32; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let density_graph_life_dirty: [bool; MAX_PLAYERS] = [false; MAX_PLAYERS];
     let graph_prep_ms = graph_prep_started.elapsed().as_secs_f64() * 1000.0;
 
@@ -10179,6 +10276,7 @@ pub fn init(
         timing_players,
         beat_info_cache,
         timing_profile,
+        player_judgment_timing,
         notes,
         note_ranges,
         audio_lead_in_seconds: start_delay,
@@ -10186,15 +10284,20 @@ pub fn init(
         current_music_time_ns: song_time_ns_from_seconds(init_music_time),
         current_beat_display: init_beat,
         current_music_time_display: init_music_time,
-        display_clock: FrameStableDisplayClock::new(init_music_time),
+        display_clock: FrameStableDisplayClock::new(song_time_ns_from_seconds(init_music_time)),
         display_clock_diag: DisplayClockDiagRing::new(),
         lane_note_indices,
-        judged_row_cursor: [0; MAX_PLAYERS],
-        finalized_row_outcomes: std::array::from_fn(|_| vec![None; row_entries.len()]),
+        lane_hold_indices,
+        lane_note_display_runs,
+        lane_hold_display_runs,
+        row_entry_ranges,
+        judged_row_cursor: row_entry_range_start,
         note_time_cache_ns,
         note_display_beat_cache,
         hold_end_time_cache_ns,
         hold_end_display_beat_cache,
+        hold_display_beat_min_cache,
+        hold_display_beat_max_cache,
         notes_end_time_ns,
         music_end_time_ns,
         music_rate: rate,
@@ -10226,6 +10329,7 @@ pub fn init(
         mini_indicator_target_score_percent,
         mini_indicator_rival_score_percent,
         row_map_cache,
+        note_row_entry_indices,
         tap_row_hold_roll_flags,
         decaying_hold_indices: Vec::with_capacity(decaying_hold_capacity),
         hold_decay_active: vec![false; notes_len],
@@ -10327,19 +10431,13 @@ pub fn init(
         density_graph_scaled_width,
         density_graph_u0,
         density_graph_u_window,
-        density_graph_cache,
-        density_graph_mesh,
-        density_graph_mesh_offset_px,
         density_graph_life_update_rate,
         density_graph_life_next_update_elapsed,
         density_graph_life_points,
-        density_graph_life_mesh,
-        density_graph_life_mesh_offset_px,
         density_graph_life_dirty,
         density_graph_top_h,
         density_graph_top_w,
         density_graph_top_scale_y,
-        density_graph_top_mesh,
         hold_to_exit_key: None,
         hold_to_exit_start: None,
         hold_to_exit_aborted_at: None,
@@ -10586,43 +10684,105 @@ pub fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
 }
 
 #[inline(always)]
-fn player_disabled_timing_windows(state: &State, player_idx: usize) -> [bool; 5] {
-    if player_idx >= state.num_players {
-        return profile::TimingWindowsOption::default().disabled_windows();
+fn build_player_judgment_timing(
+    mut timing_profile: TimingProfile,
+    player_profile: &profile::Profile,
+    music_rate: f32,
+) -> PlayerJudgmentTiming {
+    let base_fa_plus_s = timing_profile
+        .fa_plus_window_s
+        .unwrap_or(timing_profile.windows_s[0]);
+    timing_profile.fa_plus_window_s = Some(if player_profile.custom_fantastic_window {
+        profile_custom_window_ms(player_profile) / 1000.0
+    } else {
+        base_fa_plus_s
+    });
+    let disabled_windows = player_profile.timing_windows.disabled_windows();
+    let profile_music_ns = TimingProfileNs::from_profile_scaled(&timing_profile, music_rate);
+    let largest_tap_window_music_ns =
+        largest_enabled_tap_window_ns(&profile_music_ns, &disabled_windows)
+            .unwrap_or(profile_music_ns.windows_ns[2]);
+
+    PlayerJudgmentTiming {
+        profile_music_ns,
+        disabled_windows,
+        largest_tap_window_music_ns,
     }
-    state.player_profiles[player_idx]
-        .timing_windows
-        .disabled_windows()
 }
 
 #[inline(always)]
-fn timing_profile_for_player(state: &State, player_idx: usize) -> TimingProfile {
-    let mut timing_profile = state.timing_profile;
-    timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player_idx));
-    timing_profile
+fn player_largest_tap_window_ns(state: &State, player_idx: usize) -> SongTimeNs {
+    if player_idx >= state.num_players {
+        return 0;
+    }
+    state.player_judgment_timing[player_idx].largest_tap_window_music_ns
 }
 
 #[inline(always)]
-fn player_largest_tap_window_s(state: &State, player_idx: usize) -> f32 {
-    let timing_profile = timing_profile_for_player(state, player_idx);
-    largest_enabled_tap_window_s(
-        &timing_profile,
-        &player_disabled_timing_windows(state, player_idx),
-    )
-    .unwrap_or(timing_profile.windows_s[2])
-}
-
-#[inline(always)]
-fn classify_player_tap_offset_s(
+fn classify_player_tap_offset_ns(
     state: &State,
     player_idx: usize,
-    offset_s: f32,
+    offset_music_ns: SongTimeNs,
 ) -> Option<(JudgeGrade, TimingWindow)> {
-    let timing_profile = timing_profile_for_player(state, player_idx);
-    classify_offset_s_with_disabled_windows(
-        offset_s,
-        &timing_profile,
-        &player_disabled_timing_windows(state, player_idx),
+    if player_idx >= state.num_players {
+        return None;
+    }
+    let timing = state.player_judgment_timing[player_idx];
+    classify_offset_ns_with_disabled_windows(
+        offset_music_ns,
+        &timing.profile_music_ns,
+        &timing.disabled_windows,
+    )
+}
+
+#[inline(always)]
+fn note_hit_eval(
+    state: &State,
+    player_idx: usize,
+    note_time_ns: SongTimeNs,
+    current_time_ns: SongTimeNs,
+) -> Option<NoteHitEval> {
+    if player_idx >= state.num_players {
+        return None;
+    }
+    let timing = state.player_judgment_timing[player_idx];
+    let measured_offset_music_ns = current_time_ns.saturating_sub(note_time_ns);
+    if i128::from(measured_offset_music_ns).abs() > i128::from(timing.largest_tap_window_music_ns) {
+        return None;
+    }
+    let (grade, window) =
+        classify_player_tap_offset_ns(state, player_idx, measured_offset_music_ns)?;
+    Some(NoteHitEval {
+        note_time_ns,
+        measured_offset_music_ns,
+        grade,
+        window,
+    })
+}
+
+#[inline(always)]
+fn build_final_note_hit_judgment(
+    state: &mut State,
+    player_idx: usize,
+    hit: NoteHitEval,
+    rate: f32,
+) -> (Judgment, SongTimeNs) {
+    let judgment_offset_music_ns = live_autoplay_judgment_offset_music_ns(
+        state,
+        player_idx,
+        hit.window,
+        hit.measured_offset_music_ns,
+    );
+    let judgment_event_time_ns = hit.note_time_ns.saturating_add(judgment_offset_music_ns);
+    (
+        Judgment {
+            time_error_ms: judgment_time_error_ms_from_music_ns(judgment_offset_music_ns, rate),
+            time_error_music_ns: judgment_offset_music_ns,
+            grade: hit.grade,
+            window: Some(hit.window),
+            miss_because_held: false,
+        },
+        judgment_event_time_ns,
     )
 }
 
@@ -10953,6 +11113,36 @@ fn remove_provisional_early_score(p: &mut PlayerRuntime, grade: JudgeGrade) {
 }
 
 #[inline(always)]
+fn mark_row_provisional_early_result(state: &mut State, note_index: usize) {
+    let Some(&row_entry_index) = state.note_row_entry_indices.get(note_index) else {
+        return;
+    };
+    if row_entry_index == u32::MAX {
+        return;
+    }
+    if let Some(row_entry) = state.row_entries.get_mut(row_entry_index as usize) {
+        row_entry.had_provisional_early_hit = true;
+    }
+}
+
+#[inline(always)]
+fn mark_row_note_finalized(state: &mut State, note_index: usize) {
+    let Some(&row_entry_index) = state.note_row_entry_indices.get(note_index) else {
+        return;
+    };
+    if row_entry_index == u32::MAX {
+        return;
+    }
+    let Some(row_entry) = state.row_entries.get_mut(row_entry_index as usize) else {
+        return;
+    };
+    row_entry.unresolved_count = row_entry.unresolved_count.saturating_sub(1);
+    if state.notes[note_index].note_type != NoteType::Lift {
+        row_entry.unresolved_nonlift_count = row_entry.unresolved_nonlift_count.saturating_sub(1);
+    }
+}
+
+#[inline(always)]
 fn register_provisional_early_result(
     state: &mut State,
     player: usize,
@@ -10964,16 +11154,19 @@ fn register_provisional_early_result(
     }
     add_provisional_early_score(&mut state.players[player], judgment.grade);
     state.notes[note_index].early_result = Some(judgment);
+    mark_row_provisional_early_result(state, note_index);
 }
 
 #[inline(always)]
 fn set_final_note_result(state: &mut State, player: usize, note_index: usize, judgment: Judgment) {
-    if state.notes[note_index].result.is_none()
-        && let Some(early) = state.notes[note_index].early_result.as_ref()
-    {
+    let was_unjudged = state.notes[note_index].result.is_none();
+    if was_unjudged && let Some(early) = state.notes[note_index].early_result.as_ref() {
         remove_provisional_early_score(&mut state.players[player], early.grade);
     }
     state.notes[note_index].result = Some(judgment);
+    if was_unjudged {
+        mark_row_note_finalized(state, note_index);
+    }
 }
 
 const fn grade_to_window(grade: JudgeGrade) -> Option<&'static str> {
@@ -11187,16 +11380,22 @@ fn apply_hold_success_combo_state(_p: &mut PlayerRuntime) {
     // ITG dance/pump scoring does not let Held / Roll Held reset miss combo.
 }
 
-fn hit_mine(state: &mut State, column: usize, note_index: usize, time_error: f32) -> bool {
+fn hit_mine(
+    state: &mut State,
+    column: usize,
+    note_index: usize,
+    time_error_music_ns: SongTimeNs,
+) -> bool {
     let player = player_for_col(state, column);
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
         1.0
     };
-    let abs_time_error = (time_error / rate).abs();
-    let mine_window = state.timing_profile.mine_window_s;
-    if abs_time_error > mine_window {
+    let mine_window_music_ns = state.player_judgment_timing[player]
+        .profile_music_ns
+        .mine_window_ns;
+    if i128::from(time_error_music_ns).abs() > i128::from(mine_window_music_ns) {
         return false;
     }
     if state.notes[note_index].mine_result.is_some() || state.notes[note_index].is_fake {
@@ -11230,7 +11429,7 @@ fn hit_mine(state: &mut State, column: usize, note_index: usize, time_error: f32
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
     let note_time_ns = state.note_time_cache_ns[note_index];
-    let hit_time_ns = song_time_ns_add_seconds(note_time_ns, time_error);
+    let hit_time_ns = note_time_ns.saturating_add(time_error_music_ns);
     debug!(
         "JUDGE MINE HIT: row={}, col={}, beat={:.3}, note_time={:.4}s, hit_time={:.4}s, offset_ms={:.2}, rate={:.3}",
         state.notes[note_index].row_index,
@@ -11238,7 +11437,7 @@ fn hit_mine(state: &mut State, column: usize, note_index: usize, time_error: f32
         state.notes[note_index].beat,
         song_time_ns_to_seconds(note_time_ns),
         song_time_ns_to_seconds(hit_time_ns),
-        (time_error / rate) * 1000.0,
+        judgment_time_error_ms_from_music_ns(time_error_music_ns, rate),
         rate
     );
     if updated_scoring {
@@ -11252,16 +11451,12 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time_ns: So
     if song_time_ns_invalid(current_time_ns) {
         return false;
     }
-    let mine_window = state.timing_profile.mine_window_s;
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
-    let search_radius_ns = song_time_ns_from_seconds(mine_window * rate);
-    let start_t_ns = current_time_ns.saturating_sub(search_radius_ns);
-    let end_t_ns = current_time_ns.saturating_add(search_radius_ns);
     let player = player_for_col(state, column);
+    let mine_window_music_ns = state.player_judgment_timing[player]
+        .profile_music_ns
+        .mine_window_ns;
+    let start_t_ns = current_time_ns.saturating_sub(mine_window_music_ns);
+    let end_t_ns = current_time_ns.saturating_add(mine_window_music_ns);
     let mine_ix = &state.mine_note_ix[player];
     let mine_times_ns = &state.mine_note_time_ns[player];
     let (start_idx, end_idx) = mine_window_bounds_ns(mine_times_ns, start_t_ns, end_t_ns);
@@ -11280,8 +11475,7 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time_ns: So
         }
         let signed_err_ns = current_time_ns.saturating_sub(mine_times_ns[i]);
         let abs_err_ns = (signed_err_ns as i128).unsigned_abs();
-        let time_error = song_time_ns_delta_seconds(current_time_ns, mine_times_ns[i]);
-        if (time_error / rate).abs() <= mine_window {
+        if abs_err_ns <= i128::from(mine_window_music_ns) as u128 {
             match best {
                 Some((_, best_err_ns)) if abs_err_ns >= (best_err_ns as i128).unsigned_abs() => {}
                 _ => best = Some((idx, signed_err_ns)),
@@ -11291,8 +11485,7 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time_ns: So
     let Some((note_index, time_error_ns)) = best else {
         return false;
     };
-    let time_error = song_time_ns_delta_seconds(time_error_ns, 0);
-    hit_mine(state, column, note_index, time_error)
+    hit_mine(state, column, note_index, time_error_ns)
 }
 
 #[inline(always)]
@@ -11308,13 +11501,10 @@ fn try_hit_crossed_mines_while_held(
     {
         return false;
     }
-    let mine_window = state.timing_profile.mine_window_s;
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
     let player = player_for_col(state, column);
+    let mine_window_music_ns = state.player_judgment_timing[player]
+        .profile_music_ns
+        .mine_window_ns;
     // ITG checks held mines as rows are crossed. Match that by only considering
     // mines whose note time crossed between previous and current music time.
     let (start_idx, end_idx) = crossed_mine_bounds_ns(
@@ -11342,12 +11532,11 @@ fn try_hit_crossed_mines_while_held(
         if !is_mine || !can_be_judged || already_scored || is_fake || note_column != column {
             continue;
         }
-        let time_error = song_time_ns_delta_seconds(current_time_ns, note_time_ns);
-        let abs_err = (time_error / rate).abs();
-        if abs_err > mine_window {
+        let time_error_music_ns = current_time_ns.saturating_sub(note_time_ns);
+        if i128::from(time_error_music_ns).abs() > i128::from(mine_window_music_ns) {
             continue;
         }
-        if hit_mine(state, column, note_index, time_error) {
+        if hit_mine(state, column, note_index, time_error_music_ns) {
             hit_any = true;
         }
     }
@@ -12049,7 +12238,6 @@ pub fn judge_a_tap(
     current_time: f32,
     current_time_ns: SongTimeNs,
 ) -> bool {
-    let mine_window = state.timing_profile.mine_window_s;
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -12061,12 +12249,10 @@ pub fn judge_a_tap(
     let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
-    let (col_start, col_end) = player_col_range(state, player);
-    let way_off_window = player_largest_tap_window_s(state, player);
-    let way_off_window_music = way_off_window * rate;
-    let mine_window_music = mine_window * rate;
-    let search_window_music = way_off_window_music.max(mine_window_music);
-    let search_window_ns = song_time_ns_from_seconds(search_window_music);
+    let timing = state.player_judgment_timing[player];
+    let search_window_ns = timing
+        .largest_tap_window_music_ns
+        .max(timing.profile_music_ns.mine_window_ns);
     let search_start_time_ns = current_time_ns.saturating_sub(search_window_ns);
     let search_end_time_ns = current_time_ns.saturating_add(search_window_ns);
     let lane_notes = &state.lane_note_indices[column];
@@ -12086,16 +12272,14 @@ pub fn judge_a_tap(
     ) {
         let note_row_index = state.notes[note_index].row_index;
         let note_type = state.notes[note_index].note_type;
-        let time_error_music =
-            song_time_ns_delta_seconds(current_time_ns, state.note_time_cache_ns[note_index]);
-        let time_error_real = time_error_music / rate;
-        let abs_time_error = time_error_real.abs();
+        let time_error_music_ns =
+            current_time_ns.saturating_sub(state.note_time_cache_ns[note_index]);
 
         if matches!(note_type, NoteType::Mine) {
             if state.notes[note_index].is_fake {
                 return false;
             }
-            if hit_mine(state, column, note_index, time_error_music) {
+            if hit_mine(state, column, note_index, time_error_music_ns) {
                 return true;
             }
             return false;
@@ -12109,248 +12293,212 @@ pub fn judge_a_tap(
             return mine_hit_on_press;
         }
 
-        if abs_time_error <= way_off_window {
-            let Some(row_entry) = row_entry_for_cached_row(
-                &state.row_entries,
-                &state.row_map_cache[player],
-                note_row_index,
-            ) else {
-                debug_assert!(false, "missing row cache for row {note_row_index}");
-                return false;
-            };
-            let row_rescore_track_count =
-                count_rescore_tracks_on_row(&state.notes, row_entry, col_start, col_end);
-            let row_note_count = row_entry
-                .nonmine_note_indices
-                .iter()
-                .filter(|&&idx| {
-                    let row_note = &state.notes[idx];
-                    row_note.column >= col_start
-                        && row_note.column < col_end
-                        && row_note.result.is_none()
-                        && row_note.note_type != NoteType::Lift
-                })
-                .count();
-            let Some((grade, window)) =
-                classify_player_tap_offset_s(state, player, time_error_real)
-            else {
-                return mine_hit_on_press;
-            };
-            let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
-                (
-                    state.song_offset_seconds,
-                    effective_player_global_offset_seconds(state, player),
-                    state.audio_lead_in_seconds.max(0.0),
-                    audio::get_music_stream_position_seconds(),
-                )
-            } else {
-                (0.0, 0.0, 0.0, 0.0)
-            };
+        let Some(hit) = note_hit_eval(
+            state,
+            player,
+            state.note_time_cache_ns[note_index],
+            current_time_ns,
+        ) else {
+            return mine_hit_on_press;
+        };
+        let Some(row_entry) = row_entry_for_cached_row(
+            &state.row_entries,
+            &state.row_map_cache[player],
+            note_row_index,
+        ) else {
+            debug_assert!(false, "missing row cache for row {note_row_index}");
+            return false;
+        };
+        let row_rescore_track_count = count_rescore_tracks_on_row(row_entry);
+        let row_note_count = usize::from(row_entry.unresolved_nonlift_count);
+        let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
+            (
+                state.song_offset_seconds,
+                effective_player_global_offset_seconds(state, player),
+                state.audio_lead_in_seconds.max(0.0),
+                audio::get_music_stream_position_seconds(),
+            )
+        } else {
+            (0.0, 0.0, 0.0, 0.0)
+        };
 
-            if rescore_early_hits && row_rescore_track_count == 1 {
-                let note_col = state.notes[note_index].column;
-                let row_note_time_ns = state.note_time_cache_ns[note_index];
-                let row_note_time = song_time_ns_to_seconds(row_note_time_ns);
-                let te_music = song_time_ns_delta_seconds(current_time_ns, row_note_time_ns);
-                let te_real = te_music / rate;
-                let is_early = te_real < 0.0;
-                let is_bad = matches!(grade, JudgeGrade::Decent | JudgeGrade::WayOff);
+        if rescore_early_hits && row_rescore_track_count == 1 {
+            let note_col = state.notes[note_index].column;
+            let is_early = hit.measured_offset_music_ns < 0;
+            let is_bad = matches!(hit.grade, JudgeGrade::Decent | JudgeGrade::WayOff);
 
-                if is_early && is_bad {
-                    if state.notes[note_index].early_result.is_none() {
-                        let judgment = Judgment {
-                            time_error_ms: te_real * 1000.0,
-                            grade,
-                            window: Some(window),
-                            miss_because_held: false,
-                        };
-                        register_provisional_early_result(
-                            state,
-                            player,
-                            note_index,
-                            judgment.clone(),
-                        );
-                        let life_delta = judge_life_delta(grade);
-                        let current_music_time = current_music_time_s(state);
-                        {
-                            let p = &mut state.players[player];
-                            if !scoring_blocked {
-                                apply_life_change(p, current_music_time, life_delta);
-                            }
-                        }
-                        if !scoring_blocked {
-                            capture_failed_ex_score_inputs(state, player);
-                        }
-                        render_provisional_early_rescore_feedback(
-                            state,
-                            player,
-                            note_col,
-                            &judgment,
-                            current_time,
-                            hide_early_dw_judgments,
-                            hide_early_dw_flash,
-                        );
-                        // Zmod parity: provisional early W4/W5 (with Rescore Early Hits enabled)
-                        // should immediately drive EarlyHit-style visuals, but the later finalized
-                        // W4/W5 should not produce a second bad popup/tick.
-                        log_timing_hit_detail(
-                            timing_hit_log,
-                            stream_pos_s,
-                            grade,
-                            note_row_index,
-                            note_col,
-                            state.notes[note_index].beat,
-                            song_offset_s,
-                            global_offset_s,
-                            row_note_time,
-                            current_time,
-                            current_music_time_s(state),
+            if is_early && is_bad {
+                if state.notes[note_index].early_result.is_none() {
+                    let judgment = Judgment {
+                        time_error_ms: judgment_time_error_ms_from_music_ns(
+                            hit.measured_offset_music_ns,
                             rate,
-                            lead_in_s,
-                        );
-
-                        if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
-                            && matches!(
-                                state.notes[note_index].note_type,
-                                NoteType::Hold | NoteType::Roll
-                            )
-                        {
-                            start_active_hold(
-                                state,
-                                note_col,
-                                note_index,
-                                row_note_time_ns,
-                                end_time_ns,
-                                current_time_ns,
-                            );
+                        ),
+                        time_error_music_ns: hit.measured_offset_music_ns,
+                        grade: hit.grade,
+                        window: Some(hit.window),
+                        miss_because_held: false,
+                    };
+                    register_provisional_early_result(state, player, note_index, judgment.clone());
+                    let life_delta = judge_life_delta(hit.grade);
+                    let current_music_time = current_music_time_s(state);
+                    {
+                        let p = &mut state.players[player];
+                        if !scoring_blocked {
+                            apply_life_change(p, current_music_time, life_delta);
                         }
                     }
-                    return true;
-                }
-
-                if state.notes[note_index].early_result.is_some()
-                    && !matches!(
-                        grade,
-                        JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
-                    )
-                {
-                    return true;
-                }
-
-                let judgment_time_error_s =
-                    live_autoplay_judgment_offset_s(state, player, window, te_real);
-                let judgment_event_time = song_time_ns_to_seconds(song_time_ns_add_seconds(
-                    row_note_time_ns,
-                    judgment_time_error_s * rate,
-                ));
-                let judgment = Judgment {
-                    time_error_ms: judgment_time_error_s * 1000.0,
-                    grade,
-                    window: Some(window),
-                    miss_because_held: false,
-                };
-                set_final_note_result(state, player, note_index, judgment.clone());
-
-                log_timing_hit_detail(
-                    timing_hit_log,
-                    stream_pos_s,
-                    grade,
-                    note_row_index,
-                    note_col,
-                    state.notes[note_index].beat,
-                    song_offset_s,
-                    global_offset_s,
-                    row_note_time,
-                    judgment_event_time,
-                    current_music_time_s(state),
-                    rate,
-                    lead_in_s,
-                );
-
-                trigger_completed_row_tap_explosions(state, player, note_row_index);
-                trigger_receptor_glow_pulse(state, note_col);
-                if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
-                    && matches!(
-                        state.notes[note_index].note_type,
-                        NoteType::Hold | NoteType::Roll
-                    )
-                {
-                    start_active_hold(
+                    if !scoring_blocked {
+                        capture_failed_ex_score_inputs(state, player);
+                    }
+                    render_provisional_early_rescore_feedback(
                         state,
+                        player,
                         note_col,
-                        note_index,
-                        row_note_time_ns,
-                        end_time_ns,
-                        current_time_ns,
+                        &judgment,
+                        current_time,
+                        hide_early_dw_judgments,
+                        hide_early_dw_flash,
                     );
+                    // Zmod parity: provisional early W4/W5 (with Rescore Early Hits enabled)
+                    // should immediately drive EarlyHit-style visuals, but the later finalized
+                    // W4/W5 should not produce a second bad popup/tick.
+                    log_timing_hit_detail(
+                        timing_hit_log,
+                        stream_pos_s,
+                        hit.grade,
+                        note_row_index,
+                        note_col,
+                        state.notes[note_index].beat,
+                        song_offset_s,
+                        global_offset_s,
+                        song_time_ns_to_seconds(hit.note_time_ns),
+                        current_time,
+                        current_music_time_s(state),
+                        rate,
+                        lead_in_s,
+                    );
+
+                    if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
+                        && matches!(
+                            state.notes[note_index].note_type,
+                            NoteType::Hold | NoteType::Roll
+                        )
+                    {
+                        start_active_hold(
+                            state,
+                            note_col,
+                            note_index,
+                            hit.note_time_ns,
+                            end_time_ns,
+                            current_time_ns,
+                        );
+                    }
                 }
                 return true;
             }
 
-            let Some((judge_indices, judge_count)) =
-                collect_edge_judge_indices(row_note_count, note_index)
-            else {
-                return false;
-            };
+            if state.notes[note_index].early_result.is_some()
+                && !matches!(
+                    hit.grade,
+                    JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
+                )
+            {
+                return true;
+            }
 
-            for &idx in &judge_indices[..judge_count] {
-                let note_col = state.notes[idx].column;
-                let row_note_time_ns = state.note_time_cache_ns[idx];
-                let row_note_time = song_time_ns_to_seconds(row_note_time_ns);
-                let te_music = song_time_ns_delta_seconds(current_time_ns, row_note_time_ns);
-                let te_real = te_music / rate;
-                let Some((grade, window)) = classify_player_tap_offset_s(state, player, te_real)
-                else {
-                    continue;
-                };
-                let judgment_time_error_s =
-                    live_autoplay_judgment_offset_s(state, player, window, te_real);
-                let judgment_event_time = song_time_ns_to_seconds(song_time_ns_add_seconds(
-                    row_note_time_ns,
-                    judgment_time_error_s * rate,
-                ));
-                let judgment = Judgment {
-                    time_error_ms: judgment_time_error_s * 1000.0,
-                    grade,
-                    window: Some(window),
-                    miss_because_held: false,
-                };
-                set_final_note_result(state, player, idx, judgment.clone());
+            let (judgment, judgment_event_time) =
+                build_final_note_hit_judgment(state, player, hit, rate);
+            set_final_note_result(state, player, note_index, judgment.clone());
 
-                log_timing_hit_detail(
-                    timing_hit_log,
-                    stream_pos_s,
-                    grade,
-                    note_row_index,
+            log_timing_hit_detail(
+                timing_hit_log,
+                stream_pos_s,
+                hit.grade,
+                note_row_index,
+                note_col,
+                state.notes[note_index].beat,
+                song_offset_s,
+                global_offset_s,
+                song_time_ns_to_seconds(hit.note_time_ns),
+                song_time_ns_to_seconds(judgment_event_time),
+                current_music_time_s(state),
+                rate,
+                lead_in_s,
+            );
+
+            trigger_completed_row_tap_explosions(state, player, note_row_index);
+            trigger_receptor_glow_pulse(state, note_col);
+            if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
+                && matches!(
+                    state.notes[note_index].note_type,
+                    NoteType::Hold | NoteType::Roll
+                )
+            {
+                start_active_hold(
+                    state,
                     note_col,
-                    state.notes[idx].beat,
-                    song_offset_s,
-                    global_offset_s,
-                    row_note_time,
-                    judgment_event_time,
-                    current_music_time_s(state),
-                    rate,
-                    lead_in_s,
+                    note_index,
+                    hit.note_time_ns,
+                    end_time_ns,
+                    current_time_ns,
                 );
-
-                trigger_completed_row_tap_explosions(state, player, note_row_index);
-                trigger_receptor_glow_pulse(state, note_col);
-                if let Some(end_time_ns) = state.hold_end_time_cache_ns[idx]
-                    && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
-                {
-                    start_active_hold(
-                        state,
-                        note_col,
-                        idx,
-                        row_note_time_ns,
-                        end_time_ns,
-                        current_time_ns,
-                    );
-                }
             }
             return true;
         }
-        return mine_hit_on_press;
+
+        let Some((judge_indices, judge_count)) =
+            collect_edge_judge_indices(row_note_count, note_index)
+        else {
+            return false;
+        };
+
+        for &idx in &judge_indices[..judge_count] {
+            let note_col = state.notes[idx].column;
+            let Some(hit) = note_hit_eval(
+                state,
+                player,
+                state.note_time_cache_ns[idx],
+                current_time_ns,
+            ) else {
+                continue;
+            };
+            let (judgment, judgment_event_time) =
+                build_final_note_hit_judgment(state, player, hit, rate);
+            set_final_note_result(state, player, idx, judgment.clone());
+
+            log_timing_hit_detail(
+                timing_hit_log,
+                stream_pos_s,
+                hit.grade,
+                note_row_index,
+                note_col,
+                state.notes[idx].beat,
+                song_offset_s,
+                global_offset_s,
+                song_time_ns_to_seconds(hit.note_time_ns),
+                song_time_ns_to_seconds(judgment_event_time),
+                current_music_time_s(state),
+                rate,
+                lead_in_s,
+            );
+
+            trigger_completed_row_tap_explosions(state, player, note_row_index);
+            trigger_receptor_glow_pulse(state, note_col);
+            if let Some(end_time_ns) = state.hold_end_time_cache_ns[idx]
+                && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
+            {
+                start_active_hold(
+                    state,
+                    note_col,
+                    idx,
+                    hit.note_time_ns,
+                    end_time_ns,
+                    current_time_ns,
+                );
+            }
+        }
+        return true;
     }
     if live_autoplay_enabled(state) {
         false
@@ -12378,9 +12526,7 @@ pub fn judge_a_lift(
     let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
-    let way_off_window = player_largest_tap_window_s(state, player);
-    let way_off_window_music = way_off_window * rate;
-    let search_window_ns = song_time_ns_from_seconds(way_off_window_music);
+    let search_window_ns = player_largest_tap_window_ns(state, player);
     let search_start_time_ns = current_time_ns.saturating_sub(search_window_ns);
     let search_end_time_ns = current_time_ns.saturating_add(search_window_ns);
     let lane_notes = &state.lane_note_indices[column];
@@ -12404,16 +12550,12 @@ pub fn judge_a_lift(
         return false;
     }
 
-    let note_time_ns = state.note_time_cache_ns[note_index];
-    let note_time = song_time_ns_to_seconds(note_time_ns);
-    let time_error_music = song_time_ns_delta_seconds(current_time_ns, note_time_ns);
-    let time_error_real = time_error_music / rate;
-    let abs_time_error = time_error_real.abs();
-    if abs_time_error > way_off_window {
-        return false;
-    }
-
-    let Some((grade, window)) = classify_player_tap_offset_s(state, player, time_error_real) else {
+    let Some(hit) = note_hit_eval(
+        state,
+        player,
+        state.note_time_cache_ns[note_index],
+        current_time_ns,
+    ) else {
         return false;
     };
     let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
@@ -12440,22 +12582,24 @@ pub fn judge_a_lift(
             debug_assert!(false, "missing row cache for row {note_row_index}");
             return false;
         };
-        let (col_start, col_end) = player_col_range(state, player);
-        let row_rescore_track_count =
-            count_rescore_tracks_on_row(&state.notes, row_entry, col_start, col_end);
-        let is_early = time_error_real < 0.0;
-        let is_bad = matches!(grade, JudgeGrade::Decent | JudgeGrade::WayOff);
+        let row_rescore_track_count = count_rescore_tracks_on_row(row_entry);
+        let is_early = hit.measured_offset_music_ns < 0;
+        let is_bad = matches!(hit.grade, JudgeGrade::Decent | JudgeGrade::WayOff);
 
         if row_rescore_track_count == 1 && is_early && is_bad {
             if state.notes[note_index].early_result.is_none() {
                 let judgment = Judgment {
-                    time_error_ms: time_error_real * 1000.0,
-                    grade,
-                    window: Some(window),
+                    time_error_ms: judgment_time_error_ms_from_music_ns(
+                        hit.measured_offset_music_ns,
+                        rate,
+                    ),
+                    time_error_music_ns: hit.measured_offset_music_ns,
+                    grade: hit.grade,
+                    window: Some(hit.window),
                     miss_because_held: false,
                 };
                 register_provisional_early_result(state, player, note_index, judgment.clone());
-                let life_delta = judge_life_delta(grade);
+                let life_delta = judge_life_delta(hit.grade);
                 let current_music_time = current_music_time_s(state);
                 if !scoring_blocked {
                     let p = &mut state.players[player];
@@ -12475,13 +12619,13 @@ pub fn judge_a_lift(
                 log_timing_hit_detail(
                     timing_hit_log,
                     stream_pos_s,
-                    grade,
+                    hit.grade,
                     note_row_index,
                     note_col,
                     note_beat,
                     song_offset_s,
                     global_offset_s,
-                    note_time,
+                    song_time_ns_to_seconds(hit.note_time_ns),
                     current_time,
                     current_music_time_s(state),
                     rate,
@@ -12494,7 +12638,7 @@ pub fn judge_a_lift(
         if row_rescore_track_count == 1
             && state.notes[note_index].early_result.is_some()
             && !matches!(
-                grade,
+                hit.grade,
                 JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
             )
         {
@@ -12502,31 +12646,20 @@ pub fn judge_a_lift(
         }
     }
 
-    let judgment_time_error_s =
-        live_autoplay_judgment_offset_s(state, player, window, time_error_real);
-    let judgment_event_time = song_time_ns_to_seconds(song_time_ns_add_seconds(
-        note_time_ns,
-        judgment_time_error_s * rate,
-    ));
-    let judgment = Judgment {
-        time_error_ms: judgment_time_error_s * 1000.0,
-        grade,
-        window: Some(window),
-        miss_because_held: false,
-    };
+    let (judgment, judgment_event_time) = build_final_note_hit_judgment(state, player, hit, rate);
     set_final_note_result(state, player, note_index, judgment.clone());
 
     log_timing_hit_detail(
         timing_hit_log,
         stream_pos_s,
-        grade,
+        hit.grade,
         note_row_index,
         note_col,
         note_beat,
         song_offset_s,
         global_offset_s,
-        note_time,
-        judgment_event_time,
+        song_time_ns_to_seconds(hit.note_time_ns),
+        song_time_ns_to_seconds(judgment_event_time),
         current_music_time_s(state),
         rate,
         lead_in_s,
@@ -12842,6 +12975,11 @@ fn refresh_timing_after_offset_change(state: &mut State) {
             .as_ref()
             .map(|h| state.timing_players[player].get_time_for_beat_ns(h.end_beat));
     }
+    for row_entry in &mut state.row_entries {
+        if let Some(&note_index) = row_entry.nonmine_note_indices.first() {
+            row_entry.time_ns = state.note_time_cache_ns[note_index];
+        }
+    }
     for player in 0..state.num_players {
         let mine_note_time_ns = &mut state.mine_note_time_ns[player];
         mine_note_time_ns.clear();
@@ -12963,12 +13101,7 @@ fn apply_autosync_offset_correction(state: &mut State, note_off_by_ns: SongTimeN
 }
 
 #[inline(always)]
-fn apply_autosync_for_row_hits(
-    state: &mut State,
-    row_entry_index: usize,
-    col_start: usize,
-    col_end: usize,
-) {
+fn apply_autosync_for_row_hits(state: &mut State, row_entry_index: usize) {
     if state.replay_mode
         || autoplay_blocks_scoring(state)
         || state.autosync_mode == AutosyncMode::Off
@@ -12986,25 +13119,20 @@ fn apply_autosync_for_row_hits(
     let mut i = 0;
     while i < row_len {
         let note_index = state.row_entries[row_entry_index].nonmine_note_indices[i];
-        let maybe_note_offset_ns = {
-            let note = &state.notes[note_index];
-            if note.column < col_start || note.column >= col_end {
-                None
-            } else {
-                note.result.as_ref().and_then(|judgment| {
-                    if matches!(
-                        judgment.grade,
-                        JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
-                    ) {
-                        // ITG's fNoteOffset is positive when stepping early.
-                        let offset_ns = song_time_ns_from_seconds(-judgment.time_error_ms * 0.001);
-                        (!song_time_ns_invalid(offset_ns)).then_some(offset_ns)
-                    } else {
-                        None
-                    }
-                })
-            }
-        };
+        let maybe_note_offset_ns = state.notes[note_index]
+            .result
+            .as_ref()
+            .and_then(|judgment| {
+                if matches!(
+                    judgment.grade,
+                    JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
+                ) {
+                    // ITG's fNoteOffset is positive when stepping early.
+                    Some(-judgment.time_error_music_ns)
+                } else {
+                    None
+                }
+            });
         if let Some(note_off_by_ns) = maybe_note_offset_ns {
             apply_autosync_offset_correction(state, note_off_by_ns);
         }
@@ -13231,12 +13359,7 @@ fn finalize_row_judgment(
     let row_notes = &state.row_entries[row_entry_index].nonmine_note_indices;
     let Some(final_judgment) =
         judgment::aggregate_row_final_judgment(row_notes.iter().filter_map(|&note_index| {
-            let note = &state.notes[note_index];
-            if note.column < col_start || note.column >= col_end {
-                return None;
-            }
-            debug_assert!(note.result.is_some());
-            let judgment = note.result.as_ref()?;
+            let judgment = state.notes[note_index].result.as_ref()?;
             player_row_note_count = player_row_note_count.saturating_add(1);
             row_has_miss |= judgment.grade == JudgeGrade::Miss;
             row_has_wayoff |= judgment.grade == JudgeGrade::WayOff;
@@ -13247,10 +13370,9 @@ fn finalize_row_judgment(
         return;
     };
     let scoring_blocked = autoplay_blocks_scoring(state);
-    apply_autosync_for_row_hits(state, row_entry_index, col_start, col_end);
+    apply_autosync_for_row_hits(state, row_entry_index);
     let final_grade = final_judgment.grade;
-    state.finalized_row_outcomes[player][row_entry_index] =
-        Some(FinalizedRowOutcome { final_grade });
+    state.row_entries[row_entry_index].final_outcome = Some(FinalizedRowOutcome { final_grade });
     record_display_window_counts(state, player, &final_judgment);
     let suppress_final_early_bad_visual =
         suppress_final_bad_rescore_visual(skip_life_change, final_grade);
@@ -13311,7 +13433,6 @@ fn finalize_row_judgment(
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PlayerRowScanState {
-    NoNotes,
     BeyondLookahead,
     Pending,
     Ready {
@@ -13323,51 +13444,23 @@ enum PlayerRowScanState {
 
 #[inline(always)]
 fn player_row_scan_state(
-    notes: &[Note],
     row_entries: &[RowEntry],
-    note_time_cache_ns: &[SongTimeNs],
-    row_outcomes: &[Option<FinalizedRowOutcome>],
     row_entry_index: usize,
-    col_start: usize,
-    col_end: usize,
     lookahead_time_ns: SongTimeNs,
 ) -> PlayerRowScanState {
     let row_entry = &row_entries[row_entry_index];
-    let mut has_notes_on_row = false;
-    let mut is_row_complete = true;
-    let mut skip_life_change = false;
-    let row_len = row_entry.nonmine_note_indices.len();
-    let mut i = 0;
-    while i < row_len {
-        let note_index = row_entry.nonmine_note_indices[i];
-        let note = &notes[note_index];
-        if note.column >= col_start && note.column < col_end {
-            has_notes_on_row = true;
-            if note.result.is_none() {
-                is_row_complete = false;
-                break;
-            }
-            skip_life_change |= note.early_result.is_some();
-        }
-        i += 1;
-    }
-
-    if !has_notes_on_row {
-        return PlayerRowScanState::NoNotes;
-    }
-    if finalized_row_outcome_for_entry(row_outcomes, row_entry_index).is_some() {
+    if row_entry.final_outcome.is_some() {
         return PlayerRowScanState::Finalized;
     }
-    let row_time_ns = note_time_cache_ns[row_entry.nonmine_note_indices[0]];
-    if row_time_ns > lookahead_time_ns {
+    if row_entry.time_ns > lookahead_time_ns {
         return PlayerRowScanState::BeyondLookahead;
     }
-    if !is_row_complete {
+    if row_entry.unresolved_count != 0 {
         return PlayerRowScanState::Pending;
     }
     PlayerRowScanState::Ready {
         row_index: row_entry.row_index,
-        skip_life_change,
+        skip_life_change: row_entry.had_provisional_early_hit,
     }
 }
 
@@ -13388,9 +13481,7 @@ where
                 row_index,
                 skip_life_change,
             } => return Some((row_entry_index, row_index, skip_life_change)),
-            PlayerRowScanState::NoNotes
-            | PlayerRowScanState::Pending
-            | PlayerRowScanState::Finalized => {}
+            PlayerRowScanState::Pending | PlayerRowScanState::Finalized => {}
         }
         row_entry_index += 1;
     }
@@ -13405,7 +13496,7 @@ where
     let mut next_cursor = cursor;
     while next_cursor < row_count {
         match row_state(next_cursor) {
-            PlayerRowScanState::NoNotes | PlayerRowScanState::Finalized => {
+            PlayerRowScanState::Finalized => {
                 next_cursor += 1;
             }
             PlayerRowScanState::BeyondLookahead
@@ -13424,39 +13515,22 @@ fn update_judged_rows(state: &mut State) {
             state.music_rate,
         ));
     for player in 0..state.num_players {
-        let (col_start, col_end) = player_col_range(state, player);
-        let row_count = state.row_entries.len();
-        let mut scan_start = state.judged_row_cursor[player];
+        let (row_start, row_end) = state.row_entry_ranges[player];
+        let row_count = row_end;
+        let mut scan_start = state.judged_row_cursor[player].max(row_start);
         while let Some((row_entry_index, row_index, skip_life_change)) =
             next_ready_row_in_lookahead(scan_start, row_count, |idx| {
-                player_row_scan_state(
-                    &state.notes,
-                    &state.row_entries,
-                    &state.note_time_cache_ns,
-                    &state.finalized_row_outcomes[player],
-                    idx,
-                    col_start,
-                    col_end,
-                    lookahead_time_ns,
-                )
+                player_row_scan_state(&state.row_entries, idx, lookahead_time_ns)
             })
         {
             finalize_row_judgment(state, player, row_index, row_entry_index, skip_life_change);
             scan_start = row_entry_index + 1;
         }
-        state.judged_row_cursor[player] =
-            advance_judged_row_cursor(state.judged_row_cursor[player], row_count, |idx| {
-                player_row_scan_state(
-                    &state.notes,
-                    &state.row_entries,
-                    &state.note_time_cache_ns,
-                    &state.finalized_row_outcomes[player],
-                    idx,
-                    col_start,
-                    col_end,
-                    lookahead_time_ns,
-                )
-            });
+        state.judged_row_cursor[player] = advance_judged_row_cursor(
+            state.judged_row_cursor[player].max(row_start),
+            row_count,
+            |idx| player_row_scan_state(&state.row_entries, idx, lookahead_time_ns),
+        );
     }
 }
 
@@ -13663,14 +13737,16 @@ fn decay_let_go_hold_life(state: &mut State) {
         };
         if window <= 0.0 {
             hold.life = 0.0;
-            i += 1;
+            state.hold_decay_active[note_index] = false;
+            state.decaying_hold_indices.swap_remove(i);
             continue;
         }
         let start_time = hold.let_go_started_at.unwrap();
         let base_life = hold.let_go_starting_life.clamp(0.0, MAX_HOLD_LIFE);
         if base_life <= 0.0 {
             hold.life = 0.0;
-            i += 1;
+            state.hold_decay_active[note_index] = false;
+            state.decaying_hold_indices.swap_remove(i);
             continue;
         }
         let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
@@ -13682,6 +13758,11 @@ fn decay_let_go_hold_life(state: &mut State) {
             song_time_ns_delta_seconds(state.current_music_time_ns, start_time).max(0.0);
         let elapsed_real = elapsed_music / rate;
         hold.life = (base_life - elapsed_real / window).max(0.0);
+        if hold.life <= f32::EPSILON {
+            state.hold_decay_active[note_index] = false;
+            state.decaying_hold_indices.swap_remove(i);
+            continue;
+        }
         i += 1;
     }
 }
@@ -13745,17 +13826,11 @@ fn track_held_miss_windows(
     inputs: &[bool; MAX_COLS],
     music_time_ns: SongTimeNs,
 ) {
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
     for player in 0..state.num_players {
-        let largest_window = player_largest_tap_window_s(state, player);
-        if largest_window <= 0.0 {
+        let largest_window_ns = player_largest_tap_window_ns(state, player);
+        if largest_window_ns <= 0 {
             continue;
         }
-        let largest_window_ns = song_time_ns_from_seconds(largest_window * rate);
         let future_cutoff_time_ns = music_time_ns.saturating_add(largest_window_ns);
         let (col_start, col_end) = player_col_range(state, player);
         let (note_start, note_end) = player_note_range(state, player);
@@ -13889,8 +13964,9 @@ fn mine_avoid_log_enabled() -> bool {
 
 #[inline(always)]
 fn apply_time_based_mine_avoidance(state: &mut State, music_time_ns: SongTimeNs) {
-    let cutoff_time_ns = music_time_ns.saturating_sub(song_time_ns_from_seconds(
-        max_step_distance_seconds(&state.timing_profile, state.music_rate),
+    let cutoff_time_ns = music_time_ns.saturating_sub(max_step_distance_ns(
+        &state.timing_profile,
+        state.music_rate,
     ));
     let music_time_sec = song_time_ns_to_seconds(music_time_ns);
     let log_mine_avoid = mine_avoid_log_enabled();
@@ -13962,15 +14038,15 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                 (note.row_index, note.column, note.beat)
             };
             {
-                let time_err_music = song_time_ns_delta_seconds(music_time_ns, note_time_ns);
-                let time_err_real = time_err_music / rate;
+                let miss_offset_music_ns = music_time_ns.saturating_sub(note_time_ns);
                 let miss_because_held = state
                     .tap_miss_held_window
                     .get(cursor)
                     .copied()
                     .unwrap_or(false);
                 let miss = Judgment {
-                    time_error_ms: time_err_real * 1000.0,
+                    time_error_ms: judgment_time_error_ms_from_music_ns(miss_offset_music_ns, rate),
+                    time_error_music_ns: miss_offset_music_ns,
                     grade: JudgeGrade::Miss,
                     window: None,
                     miss_because_held,
@@ -14074,7 +14150,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
 
     // Music time driven directly by the audio device clock, interpolated
     // between callbacks for smooth, continuous motion.
-    let mut song_clock = current_song_clock_snapshot(state);
+    let song_clock = current_song_clock_snapshot(state);
     let lead_in = state.audio_lead_in_seconds.max(0.0);
     let previous_music_time_ns = state.current_music_time_ns;
     let mut music_time_ns = song_clock.song_time_ns;
@@ -14093,26 +14169,22 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         }
     }
     let music_time_sec = song_time_ns_to_seconds(music_time_ns);
-    song_clock.song_time_ns = music_time_ns;
-    song_clock.song_time = music_time_sec;
     state.current_music_time_ns = music_time_ns;
-    let target_display_music_time_sec = music_time_sec;
     let display_diag_host_nanos = if song_clock.valid_at_host_nanos != 0 {
         song_clock.valid_at_host_nanos
     } else {
         crate::engine::host_time::instant_nanos(Instant::now())
     };
-    let display_music_time_sec = frame_stable_display_music_time(
+    let display_music_time_ns = frame_stable_display_music_time_ns(
         &mut state.display_clock,
         &mut state.display_clock_diag,
         display_diag_host_nanos,
-        target_display_music_time_sec,
+        music_time_ns,
         delta_time,
         song_clock.seconds_per_second,
         is_first_update,
     );
-    let display_music_time_ns = song_time_ns_from_seconds(display_music_time_sec);
-    state.current_music_time_display = display_music_time_sec;
+    state.current_music_time_display = song_time_ns_to_seconds(display_music_time_ns);
 
     if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start) {
         let hold_s = match key {
@@ -14429,23 +14501,25 @@ mod tests {
     use super::{
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, FinalizedRowOutcome,
         FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, HoldJudgmentRenderInfo,
-        HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, REPLAY_EDGE_RATE_PER_SEC,
-        RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TickMode, TurnRng,
-        active_hold_counts_as_pressed, add_provisional_early_score, advance_hold_last_held,
-        advance_hold_life_ns, advance_judged_row_cursor, apply_global_offset_delta,
-        apply_mines_insert, apply_song_offset_delta, autoplay_random_offset_s_for_window,
+        HoldToExitKey, INSERT_MASK_BIT_MINES, LaneIndexRun, MAX_COLS, MAX_PLAYERS,
+        REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
+        TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
+        advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
+        apply_autosync_for_row_hits, apply_global_offset_delta, apply_mines_insert,
+        apply_song_offset_delta, autoplay_random_offset_music_ns_for_window,
         build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
-        build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
+        build_lane_hold_display_runs, build_lane_note_display_runs, build_player_judgment_timing,
+        build_row_entry, build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
         completed_row_final_judgment, completed_row_flash_note_indices_and_grade,
         count_rescore_tracks_on_row, crossed_mine_bounds_ns,
         effective_appearance_effects_for_player, effective_player_global_offset_seconds,
         enforce_max_simultaneous_notes, finalize_row_judgment,
-        finalized_row_outcome_for_cached_row, frame_stable_display_music_time, handle_input,
+        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, handle_input,
         input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
         lane_note_window_bounds_ns, lane_press_started, lane_release_finished,
-        late_note_resolution_window_s, live_autoplay_enabled_from_flags, max_step_distance_seconds,
-        mine_window_bounds_ns, music_time_from_song_clock, mutate_timing_arc,
-        next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
+        late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_step_distance_ns,
+        mine_window_bounds_ns, music_time_ns_from_song_clock, mutate_timing_arc,
+        next_ready_row_in_lookahead, next_tick_mode, note_hit_eval, parse_attack_mods,
         parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
         player_row_scan_state, recent_step_tracks, recompute_player_totals,
         refresh_active_attack_masks, refresh_timing_after_offset_change,
@@ -14459,13 +14533,13 @@ mod tests {
     use crate::engine::input::{InputEvent, InputSource, VirtualAction};
     use crate::engine::present::color;
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
-    use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
+    use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{HoldData, HoldResult, Note, NoteType};
     use crate::game::parsing::notes::ParsedNote;
     use crate::game::profile;
     use crate::game::song::SongData;
     use crate::game::timing::{
-        ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile, TimingSegments,
+        ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile, TimingProfileNs, TimingSegments,
     };
     use rssp::{TechCounts, stats::ArrowStats};
     use std::path::PathBuf;
@@ -14550,6 +14624,7 @@ mod tests {
         let mut note = test_note(column, row_index, note_type);
         note.result = Some(Judgment {
             time_error_ms: 0.0,
+            time_error_music_ns: 0,
             grade: JudgeGrade::Great,
             window: None,
             miss_because_held: false,
@@ -14567,6 +14642,7 @@ mod tests {
         let mut note = test_note(column, row_index, note_type);
         note.result = Some(Judgment {
             time_error_ms,
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(time_error_ms, 1.0),
             grade,
             window: None,
             miss_because_held: false,
@@ -14582,6 +14658,7 @@ mod tests {
             chart_name: String::new(),
             meter: 12,
             step_artist: String::new(),
+            music_path: None,
             short_hash: "double-p2-regression".to_string(),
             stats: ArrowStats {
                 total_arrows: 2,
@@ -14716,6 +14793,24 @@ mod tests {
         )
     }
 
+    fn test_row_entry(
+        notes: &[Note],
+        row_index: usize,
+        nonmine_note_indices: Vec<usize>,
+    ) -> RowEntry {
+        let note_time_cache_ns = vec![0; notes.len()];
+        build_row_entry(row_index, nonmine_note_indices, notes, &note_time_cache_ns)
+    }
+
+    fn test_row_entry_with_times(
+        notes: &[Note],
+        note_time_cache_ns: &[super::SongTimeNs],
+        row_index: usize,
+        nonmine_note_indices: Vec<usize>,
+    ) -> RowEntry {
+        build_row_entry(row_index, nonmine_note_indices, notes, note_time_cache_ns)
+    }
+
     fn test_input_event(action: VirtualAction) -> InputEvent {
         let now = Instant::now();
         InputEvent {
@@ -14828,16 +14923,17 @@ mod tests {
 
         let song_after = song_state.note_time_cache_ns[0];
         let global_after = global_state.note_time_cache_ns[0];
+        let expected_delta_ns = song_time_ns_from_seconds(0.010);
+        let song_delta_ns = song_before - song_after;
+        let global_delta_ns = global_before - global_after;
 
         assert!((song_state.song_offset_seconds - (song_offset_before + 0.010)).abs() <= 1e-6);
         assert!(
             (global_state.global_offset_seconds - (global_offset_before + 0.010)).abs() <= 1e-6
         );
-        assert_eq!(song_before - song_after, song_time_ns_from_seconds(0.010));
-        assert_eq!(
-            global_before - global_after,
-            song_time_ns_from_seconds(0.010)
-        );
+        assert!((song_delta_ns - expected_delta_ns).abs() <= 1);
+        assert!((global_delta_ns - expected_delta_ns).abs() <= 1);
+        assert!((song_delta_ns - global_delta_ns).abs() <= 1);
     }
 
     #[test]
@@ -14923,6 +15019,7 @@ mod tests {
             chart_name: String::new(),
             meter: 10,
             step_artist: String::new(),
+            music_path: None,
             short_hash: String::new(),
             stats,
             tech_counts: TechCounts::default(),
@@ -15125,9 +15222,11 @@ mod tests {
         let mut rng = TurnRng::new(1);
         let mut profile = TimingProfile::default_itg_with_fa_plus();
         profile.fa_plus_window_s = None;
-        let outer = profile.windows_s[0];
+        let profile_ns = TimingProfileNs::from_profile_scaled(&profile, 1.0);
+        let outer = profile_ns.windows_ns[0];
         for _ in 0..32 {
-            let offset = autoplay_random_offset_s_for_window(&mut rng, profile, TimingWindow::W1);
+            let offset =
+                autoplay_random_offset_music_ns_for_window(&mut rng, profile_ns, TimingWindow::W1);
             assert!(offset.abs() <= outer);
         }
     }
@@ -15136,10 +15235,14 @@ mod tests {
     fn autoplay_random_offset_w1_excludes_w0_band_when_enabled() {
         let mut rng = TurnRng::new(2);
         let profile = TimingProfile::default_itg_with_fa_plus();
-        let inner = profile.fa_plus_window_s.expect("default profile has W0");
-        let outer = profile.windows_s[0];
+        let profile_ns = TimingProfileNs::from_profile_scaled(&profile, 1.0);
+        let inner = profile_ns
+            .fa_plus_window_ns
+            .expect("default profile has W0");
+        let outer = profile_ns.windows_ns[0];
         for _ in 0..32 {
-            let offset = autoplay_random_offset_s_for_window(&mut rng, profile, TimingWindow::W1);
+            let offset =
+                autoplay_random_offset_music_ns_for_window(&mut rng, profile_ns, TimingWindow::W1);
             assert!(offset.abs() >= inner);
             assert!(offset.abs() <= outer);
         }
@@ -15152,15 +15255,9 @@ mod tests {
             judged_note(0, row_index, NoteType::Tap),
             test_note(1, row_index, NoteType::Tap),
         ];
-        let row_entries = [RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        }];
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        assert_eq!(
-            count_rescore_tracks_on_row(&notes, &row_entries[0], 0, 4),
-            2
-        );
+        assert_eq!(count_rescore_tracks_on_row(&row_entry), 2);
     }
 
     #[test]
@@ -15170,24 +15267,19 @@ mod tests {
             test_note(0, row_index, NoteType::Tap),
             test_note(1, row_index, NoteType::Lift),
         ];
-        let row_entries = [RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        }];
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        assert_eq!(
-            count_rescore_tracks_on_row(&notes, &row_entries[0], 0, 4),
-            2
-        );
+        assert_eq!(count_rescore_tracks_on_row(&row_entry), 2);
     }
 
     #[test]
     fn cached_row_entry_lookup_uses_row_map_cache() {
         let row_index = 48usize;
-        let row_entries = vec![RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        }];
+        let notes = vec![
+            test_note(0, row_index, NoteType::Tap),
+            test_note(1, row_index, NoteType::Tap),
+        ];
+        let row_entries = vec![test_row_entry(&notes, row_index, vec![0, 1])];
         let mut row_map_cache = vec![u32::MAX; row_index + 1];
         row_map_cache[row_index] = 0;
 
@@ -15201,15 +15293,15 @@ mod tests {
     #[test]
     fn cached_row_entry_lookup_keeps_duplicate_rows_player_specific() {
         let row_index = 48usize;
+        let notes = vec![
+            test_note(0, row_index, NoteType::Tap),
+            test_note(1, row_index, NoteType::Tap),
+            test_note(4, row_index, NoteType::Tap),
+            test_note(5, row_index, NoteType::Tap),
+        ];
         let row_entries = vec![
-            RowEntry {
-                row_index,
-                nonmine_note_indices: vec![0, 1],
-            },
-            RowEntry {
-                row_index,
-                nonmine_note_indices: vec![2, 3],
-            },
+            test_row_entry(&notes, row_index, vec![0, 1]),
+            test_row_entry(&notes, row_index, vec![2, 3]),
         ];
         let mut row_map_cache: [Vec<u32>; MAX_PLAYERS] =
             std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
@@ -15228,15 +15320,16 @@ mod tests {
     #[test]
     fn finalized_row_outcome_lookup_uses_row_map_cache() {
         let row_index = 48usize;
+        let notes = vec![test_note(0, row_index, NoteType::Tap)];
+        let mut row_entries = vec![test_row_entry(&notes, row_index, vec![0])];
+        row_entries[0].final_outcome = Some(FinalizedRowOutcome {
+            final_grade: JudgeGrade::Great,
+        });
         let mut row_map_cache = vec![u32::MAX; row_index + 1];
         row_map_cache[row_index] = 0;
-        let row_outcomes = vec![Some(FinalizedRowOutcome {
-            final_grade: JudgeGrade::Great,
-        })];
 
-        let outcome =
-            finalized_row_outcome_for_cached_row(&row_map_cache, &row_outcomes, row_index)
-                .expect("expected cached finalized row outcome");
+        let outcome = finalized_row_outcome_for_cached_row(&row_entries, &row_map_cache, row_index)
+            .expect("expected cached finalized row outcome");
 
         assert_eq!(outcome.final_grade, JudgeGrade::Great);
     }
@@ -15254,20 +15347,6 @@ mod tests {
             note_with_judgment(0, row3, NoteType::Tap, JudgeGrade::Great, -6.0),
             note_with_judgment(2, row3, NoteType::Tap, JudgeGrade::Excellent, 4.0),
         ];
-        let row_entries = vec![
-            RowEntry {
-                row_index: row1,
-                nonmine_note_indices: vec![0, 1],
-            },
-            RowEntry {
-                row_index: row2,
-                nonmine_note_indices: vec![2, 3],
-            },
-            RowEntry {
-                row_index: row3,
-                nonmine_note_indices: vec![4, 5],
-            },
-        ];
         let note_time_cache_ns = vec![
             song_time_ns_from_seconds(1.0),
             song_time_ns_from_seconds(1.0),
@@ -15276,36 +15355,22 @@ mod tests {
             song_time_ns_from_seconds(3.0),
             song_time_ns_from_seconds(3.0),
         ];
-        let mut row_outcomes = vec![None; row_entries.len()];
-        row_outcomes[0] = Some(FinalizedRowOutcome {
+        let mut row_entries = vec![
+            test_row_entry_with_times(&notes, &note_time_cache_ns, row1, vec![0, 1]),
+            test_row_entry_with_times(&notes, &note_time_cache_ns, row2, vec![2, 3]),
+            test_row_entry_with_times(&notes, &note_time_cache_ns, row3, vec![4, 5]),
+        ];
+        row_entries[0].final_outcome = Some(FinalizedRowOutcome {
             final_grade: JudgeGrade::Great,
         });
 
         let cursor = advance_judged_row_cursor(0, row_entries.len(), |idx| {
-            player_row_scan_state(
-                &notes,
-                &row_entries,
-                &note_time_cache_ns,
-                &row_outcomes,
-                idx,
-                0,
-                4,
-                song_time_ns_from_seconds(3.5),
-            )
+            player_row_scan_state(&row_entries, idx, song_time_ns_from_seconds(3.5))
         });
         assert_eq!(cursor, 1);
 
         let ready = next_ready_row_in_lookahead(cursor, row_entries.len(), |idx| {
-            player_row_scan_state(
-                &notes,
-                &row_entries,
-                &note_time_cache_ns,
-                &row_outcomes,
-                idx,
-                0,
-                4,
-                song_time_ns_from_seconds(3.5),
-            )
+            player_row_scan_state(&row_entries, idx, song_time_ns_from_seconds(3.5))
         });
         assert_eq!(ready, Some((2, row3, false)));
     }
@@ -15323,20 +15388,6 @@ mod tests {
             note_with_judgment(0, row3, NoteType::Tap, JudgeGrade::Great, -6.0),
             note_with_judgment(2, row3, NoteType::Tap, JudgeGrade::Excellent, 4.0),
         ];
-        let row_entries = vec![
-            RowEntry {
-                row_index: row1,
-                nonmine_note_indices: vec![0, 1],
-            },
-            RowEntry {
-                row_index: row2,
-                nonmine_note_indices: vec![2, 3],
-            },
-            RowEntry {
-                row_index: row3,
-                nonmine_note_indices: vec![4, 5],
-            },
-        ];
         let note_time_cache_ns = vec![
             song_time_ns_from_seconds(1.0),
             song_time_ns_from_seconds(1.0),
@@ -15345,44 +15396,28 @@ mod tests {
             song_time_ns_from_seconds(3.0),
             song_time_ns_from_seconds(3.0),
         ];
-        let mut row_outcomes = vec![
-            Some(FinalizedRowOutcome {
-                final_grade: JudgeGrade::Great,
-            }),
-            None,
-            Some(FinalizedRowOutcome {
-                final_grade: JudgeGrade::Great,
-            }),
+        let mut row_entries = vec![
+            test_row_entry_with_times(&notes, &note_time_cache_ns, row1, vec![0, 1]),
+            test_row_entry_with_times(&notes, &note_time_cache_ns, row2, vec![2, 3]),
+            test_row_entry_with_times(&notes, &note_time_cache_ns, row3, vec![4, 5]),
         ];
+        row_entries[0].final_outcome = Some(FinalizedRowOutcome {
+            final_grade: JudgeGrade::Great,
+        });
+        row_entries[2].final_outcome = Some(FinalizedRowOutcome {
+            final_grade: JudgeGrade::Great,
+        });
 
         let pending_cursor = advance_judged_row_cursor(0, row_entries.len(), |idx| {
-            player_row_scan_state(
-                &notes,
-                &row_entries,
-                &note_time_cache_ns,
-                &row_outcomes,
-                idx,
-                0,
-                4,
-                song_time_ns_from_seconds(3.5),
-            )
+            player_row_scan_state(&row_entries, idx, song_time_ns_from_seconds(3.5))
         });
         assert_eq!(pending_cursor, 1);
 
-        row_outcomes[1] = Some(FinalizedRowOutcome {
+        row_entries[1].final_outcome = Some(FinalizedRowOutcome {
             final_grade: JudgeGrade::Great,
         });
         let advanced_cursor = advance_judged_row_cursor(0, row_entries.len(), |idx| {
-            player_row_scan_state(
-                &notes,
-                &row_entries,
-                &note_time_cache_ns,
-                &row_outcomes,
-                idx,
-                0,
-                4,
-                song_time_ns_from_seconds(3.5),
-            )
+            player_row_scan_state(&row_entries, idx, song_time_ns_from_seconds(3.5))
         });
         assert_eq!(advanced_cursor, 3);
     }
@@ -15394,12 +15429,9 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
             test_note(1, row_index, NoteType::Tap),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        assert!(completed_row_final_judgment(&notes, &row_entry, 0, 4).is_none());
+        assert!(completed_row_final_judgment(&notes, &row_entry).is_none());
     }
 
     #[test]
@@ -15409,12 +15441,9 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
             note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Excellent, 8.0),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        let judgment = completed_row_final_judgment(&notes, &row_entry, 0, 4)
+        let judgment = completed_row_final_judgment(&notes, &row_entry)
             .expect("completed jump should have a final row judgment");
 
         assert_eq!(judgment.grade, JudgeGrade::Excellent);
@@ -15432,14 +15461,11 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
             note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::WayOff, 140.0),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&decent_notes, row_index, vec![0, 1]);
 
-        let decent = completed_row_final_judgment(&decent_notes, &row_entry, 0, 4)
+        let decent = completed_row_final_judgment(&decent_notes, &row_entry)
             .expect("completed row should produce a final Decent");
-        let wayoff = completed_row_final_judgment(&wayoff_notes, &row_entry, 0, 4)
+        let wayoff = completed_row_final_judgment(&wayoff_notes, &row_entry)
             .expect("completed row should produce a final Way Off");
 
         assert_eq!(decent.grade, JudgeGrade::Decent);
@@ -15467,15 +15493,21 @@ mod tests {
                     test_note(0, row_index, NoteType::Tap),
                     test_note(1, row_index, NoteType::Tap),
                 ];
-                state.row_entries = vec![RowEntry {
-                    row_index,
-                    nonmine_note_indices: vec![0, 1],
-                }];
                 state.note_time_cache_ns = vec![
                     song_time_ns_from_seconds(1.0),
                     song_time_ns_from_seconds(1.0),
                 ];
-                state.finalized_row_outcomes = std::array::from_fn(|_| vec![None; 1]);
+                state.row_entries = vec![test_row_entry_with_times(
+                    &state.notes,
+                    &state.note_time_cache_ns,
+                    row_index,
+                    vec![0, 1],
+                )];
+                state.row_entry_ranges = [(0, 1), (0, 0)];
+                state.row_map_cache = std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
+                state.row_map_cache[0][row_index] = 0;
+                state.note_row_entry_indices = vec![0, 0];
+                state.judged_row_cursor = [0; MAX_PLAYERS];
                 state.current_music_time_ns = song_time_ns_from_seconds(1.096);
                 state.total_elapsed_in_screen = 12.0;
 
@@ -15485,6 +15517,9 @@ mod tests {
                     0,
                     Judgment {
                         time_error_ms: -12.0,
+                        time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(
+                            -12.0, 1.0,
+                        ),
                         grade: JudgeGrade::Great,
                         window: Some(TimingWindow::W3),
                         miss_because_held: false,
@@ -15496,6 +15531,9 @@ mod tests {
                     1,
                     Judgment {
                         time_error_ms: 96.0,
+                        time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(
+                            96.0, 1.0,
+                        ),
                         grade: JudgeGrade::Decent,
                         window: Some(TimingWindow::W4),
                         miss_because_held: false,
@@ -15532,6 +15570,39 @@ mod tests {
     }
 
     #[test]
+    fn autosync_row_hits_use_music_time_offsets_at_rate() {
+        let mut state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let row_index = 48usize;
+        let autosync_offset_ns = song_time_ns_from_seconds(0.015);
+
+        state.music_rate = 1.5;
+        state.autosync_mode = super::AutosyncMode::Song;
+        state.notes = vec![test_note(0, row_index, NoteType::Tap)];
+        state.notes[0].result = Some(Judgment {
+            time_error_ms: -10.0,
+            time_error_music_ns: -autosync_offset_ns,
+            grade: JudgeGrade::Great,
+            window: Some(TimingWindow::W3),
+            miss_because_held: false,
+        });
+        state.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0)];
+        state.row_entries = vec![test_row_entry_with_times(
+            &state.notes,
+            &state.note_time_cache_ns,
+            row_index,
+            vec![0],
+        )];
+        state.autosync_offset_samples = [autosync_offset_ns; super::AUTOSYNC_OFFSET_SAMPLE_COUNT];
+        state.autosync_offset_sample_count = super::AUTOSYNC_OFFSET_SAMPLE_COUNT - 1;
+
+        apply_autosync_for_row_hits(&mut state, 0);
+
+        assert!((state.song_offset_seconds - 0.015).abs() <= 1e-6);
+        assert_eq!(state.autosync_offset_sample_count, 0);
+    }
+
+    #[test]
     fn hold_judgment_cleanup_uses_screen_time_boundary() {
         let mut state =
             regression_state([profile::Profile::default(), profile::Profile::default()]);
@@ -15558,12 +15629,9 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
             test_note(1, row_index, NoteType::Tap),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        assert!(completed_row_flash_note_indices_and_grade(&notes, &row_entry, 0, 4).is_none());
+        assert!(completed_row_flash_note_indices_and_grade(&notes, &row_entry).is_none());
     }
 
     #[test]
@@ -15573,13 +15641,10 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
             note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Excellent, 8.0),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
         let (hide_indices, hide_count, final_grade) =
-            completed_row_flash_note_indices_and_grade(&notes, &row_entry, 0, 4)
+            completed_row_flash_note_indices_and_grade(&notes, &row_entry)
                 .expect("completed jump should produce a row-final grade");
 
         assert!(row_final_grade_hides_note(final_grade));
@@ -15595,14 +15660,10 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
             note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Decent, 96.0),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        let (_, _, final_grade) =
-            completed_row_flash_note_indices_and_grade(&notes, &row_entry, 0, 4)
-                .expect("completed jump should produce a row-final grade");
+        let (_, _, final_grade) = completed_row_flash_note_indices_and_grade(&notes, &row_entry)
+            .expect("completed jump should produce a row-final grade");
         assert!(!row_final_grade_hides_note(final_grade));
     }
 
@@ -15613,13 +15674,10 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Decent, -96.0),
             note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Great, 42.0),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
         let (flash_indices, flash_count, flash_grade) =
-            completed_row_flash_note_indices_and_grade(&notes, &row_entry, 0, 4)
+            completed_row_flash_note_indices_and_grade(&notes, &row_entry)
                 .expect("completed jump should flash every lane with the final row grade");
 
         assert_eq!(flash_grade, JudgeGrade::Great);
@@ -15651,13 +15709,12 @@ mod tests {
     fn song_clock_reconstructs_past_edge_time() {
         let base = Instant::now();
         let snapshot = SongClockSnapshot {
-            song_time: 120.0,
             song_time_ns: song_time_ns_from_seconds(120.0),
             seconds_per_second: 1.5,
             valid_at: base + Duration::from_millis(24),
             valid_at_host_nanos: 0,
         };
-        let edge_time = music_time_from_song_clock(snapshot, base, 0);
+        let edge_time = song_time_ns_to_seconds(music_time_ns_from_song_clock(snapshot, base, 0));
         assert!((edge_time - 119.964).abs() < 0.000_5);
     }
 
@@ -15665,75 +15722,81 @@ mod tests {
     fn song_clock_handles_future_edge_time() {
         let base = Instant::now();
         let snapshot = SongClockSnapshot {
-            song_time: 64.0,
             song_time_ns: song_time_ns_from_seconds(64.0),
             seconds_per_second: 2.0,
             valid_at: base,
             valid_at_host_nanos: 0,
         };
-        let edge_time = music_time_from_song_clock(snapshot, base + Duration::from_millis(5), 0);
+        let edge_time = song_time_ns_to_seconds(music_time_ns_from_song_clock(
+            snapshot,
+            base + Duration::from_millis(5),
+            0,
+        ));
         assert!((edge_time - 64.01).abs() < 0.000_5);
     }
 
     #[test]
     fn song_clock_prefers_host_clock_when_available() {
         let snapshot = SongClockSnapshot {
-            song_time: 32.0,
             song_time_ns: song_time_ns_from_seconds(32.0),
             seconds_per_second: 1.0,
             valid_at: Instant::now(),
             valid_at_host_nanos: 2_000_000_000,
         };
-        let edge_time = music_time_from_song_clock(snapshot, Instant::now(), 1_997_000_000);
+        let edge_time = song_time_ns_to_seconds(music_time_ns_from_song_clock(
+            snapshot,
+            Instant::now(),
+            1_997_000_000,
+        ));
         assert!((edge_time - 31.997).abs() < 0.000_5);
     }
 
     #[test]
     fn display_clock_snaps_on_first_update() {
-        let mut display_clock = FrameStableDisplayClock::new(10.0);
+        let mut display_clock = FrameStableDisplayClock::new(song_time_ns_from_seconds(10.0));
         let mut diag = DisplayClockDiagRing::new();
-        let display_time = frame_stable_display_music_time(
+        let display_time = song_time_ns_to_seconds(frame_stable_display_music_time_ns(
             &mut display_clock,
             &mut diag,
             1,
-            12.5,
+            song_time_ns_from_seconds(12.5),
             0.001,
             1.0,
             true,
-        );
+        ));
         assert!((display_time - 12.5).abs() < 0.000_5);
     }
 
     #[test]
     fn display_clock_advances_smoothly_toward_target() {
-        let mut display_clock = FrameStableDisplayClock::new(100.0);
+        let mut display_clock = FrameStableDisplayClock::new(song_time_ns_from_seconds(100.0));
         let mut diag = DisplayClockDiagRing::new();
-        let display_time = frame_stable_display_music_time(
+        let display_time = song_time_ns_to_seconds(frame_stable_display_music_time_ns(
             &mut display_clock,
             &mut diag,
             1,
-            100.004,
+            song_time_ns_from_seconds(100.004),
             0.001,
             1.0,
             false,
-        );
+        ));
         assert!(display_time > 100.0);
         assert!(display_time < 100.004);
     }
 
     #[test]
     fn display_clock_snaps_back_when_far_from_target() {
-        let mut display_clock = FrameStableDisplayClock::new(100.0);
+        let mut display_clock = FrameStableDisplayClock::new(song_time_ns_from_seconds(100.0));
         let mut diag = DisplayClockDiagRing::new();
-        let display_time = frame_stable_display_music_time(
+        let display_time = song_time_ns_to_seconds(frame_stable_display_music_time_ns(
             &mut display_clock,
             &mut diag,
             1,
-            100.250,
+            song_time_ns_from_seconds(100.250),
             0.001,
             1.0,
             false,
-        );
+        ));
         assert!((display_time - 100.250).abs() < 0.000_5);
     }
 
@@ -15806,14 +15869,21 @@ mod tests {
     fn late_note_resolution_window_matches_itg_max_step_distance_window() {
         let timing_profile = TimingProfile::default_itg_with_fa_plus();
 
-        assert!((late_note_resolution_window_s(&timing_profile) - 0.35).abs() <= 1e-6);
+        assert!(
+            (song_time_ns_to_seconds(late_note_resolution_window_ns(&timing_profile, 1.0)) - 0.35)
+                .abs()
+                <= 1e-6
+        );
     }
 
     #[test]
     fn max_step_distance_scales_with_music_rate() {
         let timing_profile = TimingProfile::default_itg_with_fa_plus();
 
-        assert!((max_step_distance_seconds(&timing_profile, 1.5) - 0.525).abs() <= 1e-6);
+        assert!(
+            (song_time_ns_to_seconds(max_step_distance_ns(&timing_profile, 1.5)) - 0.525).abs()
+                <= 1e-6
+        );
     }
 
     #[test]
@@ -16486,7 +16556,7 @@ mod tests {
         let compiled = crate::game::parsing::song_lua::CompiledSongLua {
             eases: vec![
                 crate::game::parsing::song_lua::SongLuaEaseWindow {
-                    player: Some(0),
+                    player: Some(1),
                     unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
                     start: 0.0,
                     limit: 4.0,
@@ -16500,7 +16570,7 @@ mod tests {
                     opt2: None,
                 },
                 crate::game::parsing::song_lua::SongLuaEaseWindow {
-                    player: Some(0),
+                    player: Some(1),
                     unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
                     start: 8.0,
                     limit: 4.0,
@@ -16692,6 +16762,38 @@ mod tests {
                 song_time_ns_from_seconds(2.0),
             ),
             (1, 3)
+        );
+    }
+
+    #[test]
+    fn lane_note_display_runs_split_nonmonotonic_display_order() {
+        let note_indices = [0usize, 1, 2, 3, 4];
+        let note_display_beats = [10.0f32, 40.0, 20.0, 45.0, 30.0];
+        assert_eq!(
+            build_lane_note_display_runs(&note_indices, &note_display_beats),
+            vec![
+                LaneIndexRun { start: 0, end: 2 },
+                LaneIndexRun { start: 2, end: 4 },
+                LaneIndexRun { start: 4, end: 5 },
+            ]
+        );
+    }
+
+    #[test]
+    fn lane_hold_display_runs_split_when_interval_bounds_decrease() {
+        let hold_indices = [0usize, 1, 2, 3];
+        let hold_display_beat_min_cache = [Some(10.0f32), Some(15.0), Some(12.0), Some(40.0)];
+        let hold_display_beat_max_cache = [Some(20.0f32), Some(30.0), Some(32.0), Some(50.0)];
+        assert_eq!(
+            build_lane_hold_display_runs(
+                &hold_indices,
+                &hold_display_beat_min_cache,
+                &hold_display_beat_max_cache,
+            ),
+            vec![
+                LaneIndexRun { start: 0, end: 2 },
+                LaneIndexRun { start: 2, end: 4 },
+            ]
         );
     }
 
@@ -16910,5 +17012,50 @@ mod tests {
         assert!((cues[1].duration - 3.0).abs() <= 1e-6);
         assert_eq!(cues[1].columns.len(), 1);
         assert_eq!(cues[1].columns[0].column, 2);
+    }
+
+    #[test]
+    fn note_hit_eval_scales_windows_in_music_time_ns() {
+        let mut state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        state.music_rate = 1.5;
+        state.player_judgment_timing = std::array::from_fn(|player| {
+            build_player_judgment_timing(
+                state.timing_profile,
+                &state.player_profiles[player],
+                state.music_rate,
+            )
+        });
+
+        let note_time_ns = song_time_ns_from_seconds(2.0);
+        let great_edge_ns = state.player_judgment_timing[0].profile_music_ns.windows_ns[2];
+        let way_off_edge_ns = state.player_judgment_timing[0].profile_music_ns.windows_ns[4];
+
+        let on_great_edge = note_hit_eval(&state, 0, note_time_ns, note_time_ns + great_edge_ns)
+            .expect("great edge should still judge");
+        assert_eq!(on_great_edge.grade, JudgeGrade::Great);
+        assert_eq!(on_great_edge.window, TimingWindow::W3);
+
+        assert!(
+            note_hit_eval(&state, 0, note_time_ns, note_time_ns + way_off_edge_ns + 1).is_none(),
+            "offsets beyond the scaled way-off edge should miss",
+        );
+    }
+
+    #[test]
+    fn note_hit_eval_matches_tap_and_lift_zero_offsets() {
+        let state = regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let tap_time_ns = song_time_ns_from_seconds(1.0);
+        let lift_time_ns = song_time_ns_from_seconds(2.0);
+
+        let tap_hit =
+            note_hit_eval(&state, 0, tap_time_ns, tap_time_ns).expect("tap hit should judge");
+        let lift_hit =
+            note_hit_eval(&state, 0, lift_time_ns, lift_time_ns).expect("lift hit should judge");
+
+        assert_eq!(tap_hit.grade, lift_hit.grade);
+        assert_eq!(tap_hit.window, lift_hit.window);
+        assert_eq!(tap_hit.measured_offset_music_ns, 0);
+        assert_eq!(lift_hit.measured_offset_music_ns, 0);
     }
 }

@@ -350,7 +350,8 @@ pub fn init(
             (8 * std::mem::size_of::<f32>()) as i32,
         );
 
-        // i_model_col0..i_model_col3 (locations 4..7), i_uv_scale/i_uv_offset/i_uv_tex_shift (8..10)
+        // i_model_col0..i_model_col3 (locations 4..7), i_tint (8),
+        // i_uv_scale/i_uv_offset/i_uv_tex_shift (9..11)
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
         gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
 
@@ -370,17 +371,10 @@ pub fn init(
         gl.vertex_attrib_pointer_f32(7, 4, glow::FLOAT, false, inst_stride, 3 * col_size);
         gl.vertex_attrib_divisor(7, 1);
         gl.enable_vertex_attrib_array(8);
-        gl.vertex_attrib_pointer_f32(8, 2, glow::FLOAT, false, inst_stride, 4 * col_size);
+        gl.vertex_attrib_pointer_f32(8, 4, glow::FLOAT, false, inst_stride, 4 * col_size);
         gl.vertex_attrib_divisor(8, 1);
         gl.enable_vertex_attrib_array(9);
-        gl.vertex_attrib_pointer_f32(
-            9,
-            2,
-            glow::FLOAT,
-            false,
-            inst_stride,
-            4 * col_size + uv_size,
-        );
+        gl.vertex_attrib_pointer_f32(9, 2, glow::FLOAT, false, inst_stride, 5 * col_size);
         gl.vertex_attrib_divisor(9, 1);
         gl.enable_vertex_attrib_array(10);
         gl.vertex_attrib_pointer_f32(
@@ -389,9 +383,19 @@ pub fn init(
             glow::FLOAT,
             false,
             inst_stride,
-            4 * col_size + 2 * uv_size,
+            5 * col_size + uv_size,
         );
         gl.vertex_attrib_divisor(10, 1);
+        gl.enable_vertex_attrib_array(11);
+        gl.vertex_attrib_pointer_f32(
+            11,
+            2,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            5 * col_size + 2 * uv_size,
+        );
+        gl.vertex_attrib_divisor(11, 1);
 
         gl.bind_vertex_array(None);
         (vao, vbo, instance_vbo)
@@ -1016,7 +1020,7 @@ pub fn draw(
                         );
                         gl.vertex_attrib_pointer_f32(
                             8,
-                            2,
+                            4,
                             glow::FLOAT,
                             false,
                             inst_stride,
@@ -1028,7 +1032,7 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + 4 * col_size + uv_size,
+                            base + 5 * col_size,
                         );
                         gl.vertex_attrib_pointer_f32(
                             10,
@@ -1036,7 +1040,15 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + 4 * col_size + 2 * uv_size,
+                            base + 5 * col_size + uv_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            11,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 5 * col_size + 2 * uv_size,
                         );
                         last_tmesh_instance_start = Some(run.instance_start);
                     }

@@ -1073,6 +1073,7 @@ fn build_actor_recursive<'a>(
             world_z,
             size,
             texture,
+            tint,
             vertices,
             geom_cache_key,
             mode,
@@ -1097,6 +1098,7 @@ fn build_actor_recursive<'a>(
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::TexturedMesh {
                     texture_id: std::borrow::Cow::Borrowed(texture.as_ref()),
+                    tint: *tint,
                     vertices: std::borrow::Cow::Borrowed(vertices.as_ref()),
                     geom_cache_key: *geom_cache_key,
                     mode: *mode,
@@ -1104,7 +1106,7 @@ fn build_actor_recursive<'a>(
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
                 },
-                texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                texture_handle: assets::texture_handle(texture.as_ref()),
                 transform,
                 blend: *blend,
                 z: 0,
@@ -1174,34 +1176,19 @@ fn build_actor_recursive<'a>(
                         }
                         *vertices = std::borrow::Cow::Owned(out);
                     }
-                    renderer::ObjectType::TexturedMesh {
-                        vertices,
-                        geom_cache_key,
-                        ..
-                    } => {
-                        let sc = *color;
-                        let mut out = Vec::with_capacity(vertices.len());
-                        for v in vertices.iter() {
-                            out.push(renderer::TexturedMeshVertex {
-                                pos: v.pos,
-                                uv: v.uv,
-                                tex_matrix_scale: v.tex_matrix_scale,
-                                color: [
-                                    v.color[0] * sc[0],
-                                    v.color[1] * sc[1],
-                                    v.color[2] * sc[2],
-                                    v.color[3] * sc[3],
-                                ],
-                            });
-                        }
-                        *geom_cache_key = renderer::INVALID_TMESH_CACHE_KEY;
-                        *vertices = std::borrow::Cow::Owned(out);
+                    renderer::ObjectType::TexturedMesh { tint, .. } => {
+                        let mut shadow_tint = *color;
+                        shadow_tint[0] *= tint[0];
+                        shadow_tint[1] *= tint[1];
+                        shadow_tint[2] *= tint[2];
+                        shadow_tint[3] *= tint[3];
+                        *tint = shadow_tint;
                     }
                 }
 
                 out.push(renderer::RenderObject {
                     object_type: obj_type,
-                    texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                    texture_handle: obj.texture_handle,
                     transform: t_world * obj.transform,
                     blend: obj.blend,
                     // Draw behind the original to ensure correct order without
@@ -1391,7 +1378,7 @@ fn build_actor_recursive<'a>(
                                 local_offset_rot_sin_cos,
                                 edge_fade,
                             },
-                            texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                            texture_handle: assets::texture_handle(stroke_key),
                             transform,
                             blend: *blend,
                             z: layer,
@@ -1853,7 +1840,7 @@ fn push_sprite<'a>(
             local_offset_rot_sin_cos,
             edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
         },
-        texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+        texture_handle: assets::texture_handle(if is_solid { "__white" } else { texture_id }),
         transform,
         blend,
         z: 0,
@@ -2101,15 +2088,14 @@ fn layout_text<'a>(
                     quad_w, 0.0, 0.0, 0.0, 0.0, quad_h, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, center_x,
                     center_y, 0.0, 1.0,
                 );
+                // SAFETY: `glyph.texture_key` was captured from cached font storage
+                // when the layout was built and remains valid for this render-list
+                // assembly pass.
+                let texture_key = unsafe { str_from_cached_ptr(glyph.texture_key) };
 
                 out.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
-                        // SAFETY: `glyph.texture_key` was captured from cached font
-                        // storage when the layout was built and remains valid for
-                        // the lifetime of this render-list assembly pass.
-                        texture_id: std::borrow::Cow::Borrowed(unsafe {
-                            str_from_cached_ptr(glyph.texture_key)
-                        }),
+                        texture_id: std::borrow::Cow::Borrowed(texture_key),
                         tint: glyph_tint(attributes, glyph.char_index),
                         uv_scale: glyph.uv_scale,
                         uv_offset: glyph.uv_offset,
@@ -2117,7 +2103,7 @@ fn layout_text<'a>(
                         local_offset_rot_sin_cos: [0.0, 1.0],
                         edge_fade: [0.0; 4],
                     },
-                    texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                    texture_handle: assets::texture_handle(texture_key),
                     transform,
                     blend: BlendMode::Alpha,
                     z: 0,
@@ -2492,6 +2478,7 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
 
     obj.object_type = renderer::ObjectType::TexturedMesh {
         texture_id: std::borrow::Cow::Owned(texture_id),
+        tint: [1.0; 4],
         vertices: std::borrow::Cow::Owned(out),
         geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
         mode: renderer::MeshMode::Triangles,
@@ -2506,9 +2493,14 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
 #[cfg(test)]
 mod tests {
     use super::{
-        CachedTextLayout, TextLayoutCache, TextLayoutKey, TextLayoutOverflowPolicy,
+        CachedTextLayout, TextLayoutCache, TextLayoutKey, TextLayoutOverflowPolicy, build_screen,
         fold_sprite_xy_rot, wrap_text_lines_by_words,
     };
+    use crate::engine::gfx::{BlendMode, MeshMode, TMeshCacheKey, TexturedMeshVertex};
+    use crate::engine::present::actors::{Actor, SizeSpec};
+    use crate::engine::space::Metrics;
+    use std::collections::HashMap;
+    use std::sync::Arc;
 
     fn boxed_lines(lines: &[&str]) -> Vec<Box<str>> {
         lines.iter().map(|line| Box::<str>::from(*line)).collect()
@@ -2581,5 +2573,74 @@ mod tests {
         assert_eq!(cache.frame_stats.prunes, 0);
         assert!(cache.owned_layout(key, "beta").is_none());
         assert!(cache.uncached_layout.is_some());
+    }
+
+    #[test]
+    fn shadowed_textured_mesh_keeps_geom_cache_key() {
+        const CACHE_KEY: TMeshCacheKey = 77;
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let mesh = Actor::TexturedMesh {
+            align: [0.0, 0.0],
+            offset: [10.0, 20.0],
+            world_z: 0.0,
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            texture: Arc::from("mesh"),
+            tint: [0.25, 0.5, 0.75, 0.8],
+            vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),
+            geom_cache_key: CACHE_KEY,
+            mode: MeshMode::Triangles,
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            uv_tex_shift: [0.0, 0.0],
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 5,
+        };
+        let actors = [Actor::Shadow {
+            len: [4.0, 3.0],
+            color: [0.5, 0.25, 0.75, 0.5],
+            child: Box::new(mesh),
+        }];
+        let fonts = HashMap::new();
+        let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+
+        assert_eq!(render.objects.len(), 2);
+
+        let shadow = render
+            .objects
+            .iter()
+            .find(|obj| obj.z == 4)
+            .expect("shadow draw should be present");
+        let original = render
+            .objects
+            .iter()
+            .find(|obj| obj.z == 5)
+            .expect("original draw should be present");
+
+        match (&shadow.object_type, &original.object_type) {
+            (
+                crate::engine::gfx::ObjectType::TexturedMesh {
+                    tint: shadow_tint,
+                    geom_cache_key: shadow_key,
+                    ..
+                },
+                crate::engine::gfx::ObjectType::TexturedMesh {
+                    tint: original_tint,
+                    geom_cache_key: original_key,
+                    ..
+                },
+            ) => {
+                assert_eq!(*shadow_key, CACHE_KEY);
+                assert_eq!(*original_key, CACHE_KEY);
+                assert_eq!(*original_tint, [0.25, 0.5, 0.75, 0.8]);
+                assert_eq!(*shadow_tint, [0.125, 0.125, 0.5625, 0.4]);
+            }
+            _ => panic!("expected textured-mesh objects"),
+        }
     }
 }

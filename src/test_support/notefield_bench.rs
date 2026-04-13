@@ -40,6 +40,10 @@ impl NotefieldBenchFixture {
         &self.profile
     }
 
+    pub fn into_parts(self) -> (gameplay::State, profile::Profile) {
+        (self.state, self.profile)
+    }
+
     pub fn build(&self, retained: bool) -> Vec<Actor> {
         if !retained {
             for cache in &self.state.notefield_model_cache {
@@ -258,6 +262,7 @@ fn bench_chart() -> ChartData {
         chart_name: String::new(),
         meter: 15,
         step_artist: String::new(),
+        music_path: None,
         short_hash: "notefield-bench".to_string(),
         stats: ArrowStats {
             total_arrows: total_steps,

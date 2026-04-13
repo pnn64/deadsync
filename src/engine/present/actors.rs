@@ -122,6 +122,7 @@ pub enum Actor {
         world_z: f32,
         size: [SizeSpec; 2],
         texture: Arc<str>,
+        tint: [f32; 4],
         vertices: Arc<[TexturedMeshVertex]>,
         geom_cache_key: TMeshCacheKey,
         mode: MeshMode,

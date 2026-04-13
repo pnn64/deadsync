@@ -1163,12 +1163,51 @@ fn chart_ix_for_steps_index(
     edits_sorted.get(edit_index).copied()
 }
 
+#[inline]
+fn chart_music_path<'a>(
+    song: &'a SongData,
+    chart_type: &str,
+    steps_index: usize,
+) -> Option<&'a PathBuf> {
+    chart_for_steps_index(song, chart_type, steps_index).and_then(|chart| chart.music_path.as_ref())
+}
+
+fn sync_versus_music_selection(state: &mut State, song: &SongData, chart_type: &str) {
+    let p1_changed = state.cached_steps_index_p1 != state.selected_steps_index;
+    let p2_changed = state.cached_steps_index_p2 != state.p2_selected_steps_index;
+    if !p1_changed && !p2_changed {
+        return;
+    }
+
+    let p1_music = chart_music_path(song, chart_type, state.selected_steps_index);
+    let p2_music = chart_music_path(song, chart_type, state.p2_selected_steps_index);
+    if p1_music == p2_music {
+        return;
+    }
+
+    if p2_changed {
+        state.selected_steps_index = state.p2_selected_steps_index;
+        if state.selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+            state.preferred_difficulty_index = state.selected_steps_index;
+        }
+    } else {
+        state.p2_selected_steps_index = state.selected_steps_index;
+        if state.p2_selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+            state.p2_preferred_difficulty_index = state.p2_selected_steps_index;
+        }
+    }
+}
+
 fn ensure_chart_cache_for_song(
     state: &mut State,
     song: &Arc<SongData>,
     chart_type: &'static str,
     is_versus: bool,
 ) {
+    if is_versus {
+        sync_versus_music_selection(state, song.as_ref(), chart_type);
+    }
+
     let song_changed = state
         .cached_song
         .as_ref()
@@ -1961,8 +2000,7 @@ fn build_top_grades_grouped_entries(
                 continue;
             }
             for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
-                let Some(score) = scores::get_cached_score_for_side(&chart.short_hash, side)
-                else {
+                let Some(score) = scores::get_cached_score_for_side(&chart.short_hash, side) else {
                     continue;
                 };
                 if score.grade != scores::Grade::Failed || score.score_percent > 0.0 {
@@ -2110,7 +2148,11 @@ fn build_popularity_grouped_entries_for_profile(
         original_index: 0,
         banner_path: None,
     });
-    entries.extend(ranked.into_iter().map(|(song, _)| MusicWheelEntry::Song(song)));
+    entries.extend(
+        ranked
+            .into_iter()
+            .map(|(song, _)| MusicWheelEntry::Song(song)),
+    );
 
     let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
     counts.insert(header, count);

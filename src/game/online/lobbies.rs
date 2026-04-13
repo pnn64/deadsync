@@ -14,6 +14,7 @@ const LOBBY_SERVICE_URL: &str = "ws://syncservice.groovestats.com:1337";
 const SOCKET_POLL_SLEEP: Duration = Duration::from_millis(16);
 const SOCKET_PING_INTERVAL: Duration = Duration::from_secs(15);
 pub const LOBBY_DISCONNECT_HOLD_SECONDS: f32 = 5.0;
+pub const LOBBY_PASSWORD_MAX_LEN: usize = 4;
 const LOBBY_PROFILE_PREFIX: &str = "[DS] ";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -198,16 +199,15 @@ pub fn join_lobby(code: &str) {
 }
 
 pub fn create_lobby_with_password(password: &str) {
+    let password = normalize_lobby_password(password);
     {
         let mut reconnect = RECONNECT_STATE.lock().unwrap();
         reconnect.target = None;
-        reconnect.pending_create_password = Some(password.to_string());
+        reconnect.pending_create_password = Some(password.clone());
         reconnect.retry_attempts = 0;
         reconnect.next_retry_at = None;
     }
-    let _ = send_command(Command::Create {
-        password: password.to_string(),
-    });
+    let _ = send_command(Command::Create { password });
 }
 
 pub fn join_lobby_with_password(code: &str, password: &str) {
@@ -215,11 +215,12 @@ pub fn join_lobby_with_password(code: &str, password: &str) {
     if code.is_empty() {
         return;
     }
+    let password = normalize_lobby_password(password);
     {
         let mut reconnect = RECONNECT_STATE.lock().unwrap();
         reconnect.target = Some(ReconnectTarget {
             code: code.to_string(),
-            password: password.to_string(),
+            password: password.clone(),
         });
         reconnect.pending_create_password = None;
         reconnect.retry_attempts = 0;
@@ -227,8 +228,22 @@ pub fn join_lobby_with_password(code: &str, password: &str) {
     }
     let _ = send_command(Command::Join {
         code: code.to_string(),
-        password: password.to_string(),
+        password,
     });
+}
+
+fn normalize_lobby_password(raw: &str) -> String {
+    let mut out = String::with_capacity(LOBBY_PASSWORD_MAX_LEN);
+    for ch in raw.chars() {
+        if out.len() >= LOBBY_PASSWORD_MAX_LEN {
+            break;
+        }
+        if !ch.is_ascii_graphic() {
+            continue;
+        }
+        out.push(ch.to_ascii_uppercase());
+    }
+    out
 }
 
 pub fn leave_lobby() {
@@ -833,4 +848,21 @@ struct ResponseStatusData {
     event: String,
     success: bool,
     message: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LOBBY_PASSWORD_MAX_LEN, normalize_lobby_password};
+
+    #[test]
+    fn normalize_lobby_password_uppercases_and_caps_length() {
+        assert_eq!(normalize_lobby_password("ab1!cd"), "AB1!");
+        assert_eq!(LOBBY_PASSWORD_MAX_LEN, 4);
+    }
+
+    #[test]
+    fn normalize_lobby_password_skips_non_graphic_ascii() {
+        assert_eq!(normalize_lobby_password(" a b "), "AB");
+        assert_eq!(normalize_lobby_password("ab\n\tcd"), "ABCD");
+    }
 }

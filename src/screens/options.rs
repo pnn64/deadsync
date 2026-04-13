@@ -1462,7 +1462,7 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         name: MACHINE_ROW_KEYBOARD_FEATURES,
-        help: &["Enable keyboard-only shortcuts like Ctrl+R restart in gameplay."],
+        help: &["Enable keyboard-only shortcuts like Ctrl+R restart in gameplay and evaluation."],
     },
     Item {
         name: MACHINE_ROW_VIDEO_BGS,
@@ -8531,21 +8531,7 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
             }
             *vertices = std::sync::Arc::from(out);
         }
-        Actor::TexturedMesh { vertices, .. } => {
-            let mut out: Vec<crate::engine::gfx::TexturedMeshVertex> =
-                Vec::with_capacity(vertices.len());
-            for v in vertices.iter() {
-                let mut c = v.color;
-                c[3] *= alpha;
-                out.push(crate::engine::gfx::TexturedMeshVertex {
-                    pos: v.pos,
-                    uv: v.uv,
-                    tex_matrix_scale: v.tex_matrix_scale,
-                    color: c,
-                });
-            }
-            *vertices = std::sync::Arc::from(out);
-        }
+        Actor::TexturedMesh { tint, .. } => tint[3] *= alpha,
         Actor::Frame {
             background,
             children,

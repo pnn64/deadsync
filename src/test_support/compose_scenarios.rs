@@ -815,6 +815,7 @@ fn textured_mesh() -> Actor {
         world_z: 0.0,
         size: [SizeSpec::Px(120.0), SizeSpec::Px(80.0)],
         texture: Arc::<str>::from(MESH_TEX),
+        tint: [1.0; 4],
         vertices: verts,
         geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
         mode: MeshMode::Triangles,

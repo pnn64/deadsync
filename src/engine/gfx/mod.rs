@@ -96,6 +96,7 @@ pub enum ObjectType<'a> {
     #[allow(dead_code)]
     TexturedMesh {
         texture_id: Cow<'a, str>,
+        tint: [f32; 4],
         vertices: Cow<'a, [TexturedMeshVertex]>,
         geom_cache_key: TMeshCacheKey,
         mode: MeshMode,
@@ -450,6 +451,49 @@ impl Backend {
         }
     }
 
+    pub fn retire_textures(&mut self, textures: &mut HashMap<TextureHandle, Texture>) {
+        let old_textures = std::mem::take(textures);
+        match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
+            BackendImpl::Vulkan(state) => {
+                let retired = old_textures
+                    .into_values()
+                    .filter_map(|texture| match texture {
+                        Texture::Vulkan(texture) => Some(texture),
+                        _ => None,
+                    })
+                    .collect();
+                vulkan::retire_textures(state, retired);
+            }
+            #[cfg(not(target_pointer_width = "32"))]
+            BackendImpl::VulkanWgpu(_) => {
+                drop(old_textures);
+            }
+            BackendImpl::OpenGL(state) => {
+                // SAFETY: Each texture handle came from this backend and runtime
+                // retirement only drops the GL object name; the driver defers
+                // actual destruction until it is no longer in use.
+                unsafe {
+                    for tex in old_textures.values() {
+                        if let Texture::OpenGL(opengl::Texture(handle)) = tex {
+                            state.gl.delete_texture(*handle);
+                        }
+                    }
+                }
+            }
+            BackendImpl::OpenGLWgpu(_) => {
+                drop(old_textures);
+            }
+            BackendImpl::Software(_) => {
+                drop(old_textures);
+            }
+            #[cfg(target_os = "windows")]
+            BackendImpl::DirectX(_) => {
+                drop(old_textures);
+            }
+        }
+    }
+
     pub fn dispose_textures(&mut self, textures: &mut HashMap<TextureHandle, Texture>) {
         self.wait_for_idle();
 
@@ -503,6 +547,7 @@ impl Backend {
                     }
                 }
                 vulkan::retire_submitted_uploads(state);
+                vulkan::retire_all_textures(state);
             }
             #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => {

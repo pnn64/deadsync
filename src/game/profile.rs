@@ -4600,7 +4600,7 @@ mod tests {
     fn initials_from_name_uses_four_char_default() {
         assert_eq!(initials_from_name("john smith"), "JOHN");
         assert_eq!(initials_from_name("a"), "A?");
-        assert_eq!(initials_from_name("!!!"), "??");
+        assert_eq!(initials_from_name("!!!"), "!!!");
     }
 
     #[test]

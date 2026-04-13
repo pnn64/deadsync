@@ -46,7 +46,6 @@ fn build_model_vertices(
     size: [f32; 2],
     rotation_deg: f32,
     draw: ModelDrawState,
-    tint: [f32; 4],
 ) -> Arc<[TexturedMeshVertex]> {
     let model_size = model.size();
     let model_h = model_size[1];
@@ -116,7 +115,7 @@ fn build_model_vertices(
             pos: [x3 * perspective, y_screen * perspective],
             uv: [u, v_tex],
             tex_matrix_scale: v.tex_matrix_scale,
-            color: tint,
+            color: [1.0; 4],
         });
     }
     Arc::from(vertices)
@@ -126,6 +125,7 @@ fn build_model_vertices(
 fn actor_from_vertices(
     slot: &SpriteSlot,
     xy: [f32; 2],
+    tint: [f32; 4],
     vertices: Arc<[TexturedMeshVertex]>,
     geom_cache_key: crate::engine::gfx::TMeshCacheKey,
     uv_scale: [f32; 2],
@@ -140,6 +140,7 @@ fn actor_from_vertices(
         world_z: 0.0,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         texture: slot.texture_key_shared(),
+        tint,
         vertices,
         geom_cache_key,
         mode: MeshMode::Triangles,
@@ -171,11 +172,12 @@ fn actor_from_draw(
 
     let tint = model_tint(color, draw);
     let blend = model_blend(draw, blend);
-    let vertices = build_model_vertices(slot, model, size, rotation_deg, draw, tint);
+    let vertices = build_model_vertices(slot, model, size, rotation_deg, draw);
     let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
     Some(actor_from_vertices(
         slot,
         xy,
+        tint,
         vertices,
         crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
         uv_scale,
@@ -206,13 +208,14 @@ pub(crate) fn noteskin_model_actor_from_draw_cached(
 
     let tint = model_tint(color, draw);
     let (geom_cache_key, vertices) =
-        cache.get_or_insert_with(slot, size, rotation_deg, draw, tint, || {
-            build_model_vertices(slot, model, size, rotation_deg, draw, tint)
+        cache.get_or_insert_with(slot, size, rotation_deg, draw, || {
+            build_model_vertices(slot, model, size, rotation_deg, draw)
         });
     let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
     Some(actor_from_vertices(
         slot,
         xy,
+        tint,
         vertices,
         geom_cache_key,
         uv_scale,

@@ -6,9 +6,16 @@ use crate::game::profile;
 use std::cmp::Ordering;
 
 const PANEL_WIDTH: f32 = 200.0;
+const CENTER_PANEL_WIDTH: f32 = 150.0;
 const PANEL_BG_ALPHA: f32 = 0.5;
 const PANEL_TEXT_ZOOM: f32 = 0.72;
-const PANEL_TEXT_MAXWIDTH: f32 = PANEL_WIDTH - 16.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PanelPlacement {
+    Left,
+    Center,
+    Right,
+}
 
 pub struct RenderParams<'a> {
     pub screen_name: &'a str,
@@ -19,6 +26,8 @@ pub struct RenderParams<'a> {
 }
 
 pub fn build_panel(params: RenderParams<'_>) -> Vec<Actor> {
+    let placement = panel_placement(params.screen_name);
+    let width = panel_width(params.screen_name, placement);
     let body_lines = build_body_lines(
         params.joined,
         params.screen_name,
@@ -26,7 +35,7 @@ pub fn build_panel(params: RenderParams<'_>) -> Vec<Actor> {
         params.status_text.as_deref(),
     );
     let body_text = body_lines.join("\n");
-    let x = display_x(params.screen_name);
+    let x = display_x(placement, width);
     let y = screen_center_y();
     let height = screen_height();
 
@@ -34,7 +43,7 @@ pub fn build_panel(params: RenderParams<'_>) -> Vec<Actor> {
         act!(quad:
             align(0.5, 0.5):
             xy(x, y):
-            zoomto(PANEL_WIDTH, height):
+            zoomto(width, height):
             diffuse(0.0, 0.0, 0.0, PANEL_BG_ALPHA):
             z(params.z)
         ),
@@ -44,7 +53,7 @@ pub fn build_panel(params: RenderParams<'_>) -> Vec<Actor> {
             align(0.5, 0.5):
             xy(x, y):
             zoom(PANEL_TEXT_ZOOM):
-            maxwidth(PANEL_TEXT_MAXWIDTH):
+            maxwidth(width - 16.0):
             diffuse(1.0, 1.0, 0.0, 1.0):
             z(params.z + 1):
             horizalign(center)
@@ -179,19 +188,34 @@ fn format_percent(value: Option<f32>) -> String {
     format!("{value:.2}%")
 }
 
-fn display_x(screen_name: &str) -> f32 {
-    let left = PANEL_WIDTH * 0.5;
-    let right = screen_width() - PANEL_WIDTH * 0.5;
-    let center = screen_center_x();
+#[inline(always)]
+fn panel_width(screen_name: &str, placement: PanelPlacement) -> f32 {
+    if placement == PanelPlacement::Center && is_score_screen(screen_name) {
+        CENTER_PANEL_WIDTH
+    } else {
+        PANEL_WIDTH
+    }
+}
+
+fn panel_placement(screen_name: &str) -> PanelPlacement {
     if screen_name.eq_ignore_ascii_case("ScreenSelectMusic") {
-        return left;
+        return PanelPlacement::Left;
     }
     if !screen_name.eq_ignore_ascii_case("ScreenGameplay")
         && !screen_name.eq_ignore_ascii_case("ScreenEvaluationStage")
     {
-        return left;
+        return PanelPlacement::Left;
     }
 
+    let (p1_joined, p2_joined) = joined_sides();
+    match (p1_joined, p2_joined) {
+        (true, true) => PanelPlacement::Center,
+        (true, false) => PanelPlacement::Right,
+        _ => PanelPlacement::Left,
+    }
+}
+
+fn joined_sides() -> (bool, bool) {
     let mut p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
     let mut p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
     if !(p1_joined || p2_joined) {
@@ -200,13 +224,16 @@ fn display_x(screen_name: &str) -> f32 {
             profile::PlayerSide::P2 => p2_joined = true,
         }
     }
+    (p1_joined, p2_joined)
+}
 
-    if p1_joined && p2_joined {
-        center
-    } else if p1_joined {
-        right
-    } else {
-        left
+fn display_x(placement: PanelPlacement, width: f32) -> f32 {
+    let left = width * 0.5;
+    let right = screen_width() - width * 0.5;
+    match placement {
+        PanelPlacement::Left => left,
+        PanelPlacement::Center => screen_center_x(),
+        PanelPlacement::Right => right,
     }
 }
 

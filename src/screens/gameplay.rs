@@ -1,20 +1,22 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::engine::gfx::{BlendMode, MeshMode};
+use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec, TextAlign, TextContent};
 use crate::engine::present::anim::EffectState;
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
 use crate::engine::present::compose::TextLayoutCache;
+use crate::engine::present::density::{self, DensityHistCache};
 use crate::engine::present::font;
 use crate::engine::space::widescale;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::parsing::song_lua::{
     SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
     SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaProxyTarget,
 };
-use crate::game::profile;
+use crate::game::{profile, scroll::ScrollSpeedSetting, song::SongData};
 use crate::screens::components::gameplay::{gameplay_stats, notefield};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::lobby_hud;
@@ -23,6 +25,7 @@ use crate::screens::{Screen, ScreenAction};
 use cgmath::{Deg, Matrix4, Vector3};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
@@ -30,12 +33,164 @@ const TEXT_CACHE_LIMIT: usize = 8192;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 
 use crate::game::gameplay::{
-    GameplayAction, GameplayExit, TRANSITION_IN_DURATION, TRANSITION_OUT_DELAY,
-    TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
-    handle_input as gameplay_handle_input, timing_tick_status_line, toggle_flash_text,
-    update as gameplay_update,
+    self as gameplay_core, CourseDisplayCarry, CourseDisplayTotals, GameplayAction, GameplayExit,
+    LeadInTiming, MAX_PLAYERS, ReplayInputEdge, ReplayOffsetSnapshot, TRANSITION_IN_DURATION,
+    TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION,
+    effective_visibility_effects_for_player, handle_input as gameplay_handle_input,
+    timing_tick_status_line, toggle_flash_text, update as gameplay_update,
 };
-pub use crate::game::gameplay::{State, init};
+
+pub struct DensityGraphRenderState {
+    pub cache: [Option<DensityHistCache>; MAX_PLAYERS],
+    pub mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub mesh_offset_px: [i32; MAX_PLAYERS],
+    pub life_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub life_mesh_offset_px: [i32; MAX_PLAYERS],
+    pub top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+}
+
+impl DensityGraphRenderState {
+    fn from_gameplay(state: &gameplay_core::State) -> Self {
+        let top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|player| {
+            let graph_w = state.density_graph_top_w[player];
+            let graph_h =
+                state.density_graph_top_h * state.density_graph_top_scale_y[player].clamp(0.0, 1.0);
+            if player >= state.num_players || graph_w <= 0.0 || graph_h <= 0.0 {
+                return None;
+            }
+
+            let chart = state.charts[player].as_ref();
+            let verts = density::build_density_histogram_mesh(
+                &chart.measure_nps_vec,
+                chart.max_nps,
+                &chart.measure_seconds_vec,
+                state.density_graph_first_second,
+                state.density_graph_last_second,
+                graph_w,
+                graph_h,
+                0.0,
+                graph_w,
+                None,
+                1.0,
+            );
+            if verts.is_empty() {
+                None
+            } else {
+                Some(Arc::from(verts.into_boxed_slice()))
+            }
+        });
+
+        let cache: [Option<DensityHistCache>; MAX_PLAYERS] = std::array::from_fn(|player| {
+            if player >= state.num_players
+                || state.density_graph_graph_w <= 0.0
+                || state.density_graph_graph_h <= 0.0
+            {
+                return None;
+            }
+
+            let chart = state.charts[player].as_ref();
+            density::build_density_histogram_cache(
+                &chart.measure_nps_vec,
+                chart.max_nps,
+                &chart.measure_seconds_vec,
+                state.density_graph_first_second,
+                state.density_graph_last_second,
+                state.density_graph_scaled_width,
+                state.density_graph_graph_h,
+                None,
+                1.0,
+            )
+        });
+
+        let mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|player| {
+            if player >= state.num_players || cache[player].is_none() {
+                return None;
+            }
+            let mut mesh = None;
+            density::update_density_hist_mesh(
+                &mut mesh,
+                cache[player].as_ref(),
+                0.0,
+                state.density_graph_graph_w,
+            );
+            mesh
+        });
+
+        Self {
+            cache,
+            mesh,
+            mesh_offset_px: [0; MAX_PLAYERS],
+            life_mesh: std::array::from_fn(|_| None),
+            life_mesh_offset_px: [0; MAX_PLAYERS],
+            top_mesh,
+        }
+    }
+}
+
+pub struct State {
+    pub(crate) gameplay: gameplay_core::State,
+    pub density_graph: DensityGraphRenderState,
+}
+
+impl State {
+    pub fn from_gameplay(gameplay: gameplay_core::State) -> Self {
+        let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
+        Self {
+            gameplay,
+            density_graph,
+        }
+    }
+}
+
+impl Deref for State {
+    type Target = gameplay_core::State;
+
+    fn deref(&self) -> &Self::Target {
+        &self.gameplay
+    }
+}
+
+impl DerefMut for State {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.gameplay
+    }
+}
+
+pub fn init(
+    song: Arc<SongData>,
+    charts: [Arc<ChartData>; MAX_PLAYERS],
+    gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
+    active_color_index: i32,
+    music_rate: f32,
+    scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
+    player_profiles: [profile::Profile; MAX_PLAYERS],
+    replay_edges: Option<Vec<ReplayInputEdge>>,
+    replay_offsets: Option<ReplayOffsetSnapshot>,
+    replay_status_text: Option<Arc<str>>,
+    stage_intro_text: Arc<str>,
+    lead_in_timing: Option<LeadInTiming>,
+    course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
+    course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
+    combo_carry: [u32; MAX_PLAYERS],
+) -> State {
+    State::from_gameplay(gameplay_core::init(
+        song,
+        charts,
+        gameplay_charts,
+        active_color_index,
+        music_rate,
+        scroll_speed,
+        player_profiles,
+        replay_edges,
+        replay_offsets,
+        replay_status_text,
+        stage_intro_text,
+        lead_in_timing,
+        course_display_carry,
+        course_display_totals,
+        combo_carry,
+    ))
+}
 
 #[inline(always)]
 const fn screen_for_exit(exit: GameplayExit) -> Screen {
@@ -1026,7 +1181,8 @@ fn song_lua_proxy_active_players(
         }
         if overlay_states
             .get(overlay_index)
-            .is_some_and(|proxy_state| proxy_state.visible && proxy_state.diffuse[3] > f32::EPSILON)
+            .copied()
+            .is_some_and(song_lua_overlay_is_visible)
         {
             out[player_index] = true;
         }
@@ -1164,11 +1320,31 @@ struct SongLuaPlayerProxySources {
     combo: Option<Vec<Actor>>,
 }
 
+#[derive(Clone, Copy, Default)]
+struct SongLuaPlayerProxyRequests {
+    player: bool,
+    note_field: bool,
+    judgment: bool,
+    combo: bool,
+}
+
 #[derive(Clone, Default)]
 struct SongLuaScreenProxySources {
     players: [SongLuaPlayerProxySources; 2],
     underlay: Option<Vec<Actor>>,
     overlay: Option<Vec<Actor>>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct SongLuaScreenProxyRequests {
+    players: [SongLuaPlayerProxyRequests; 2],
+    underlay: bool,
+    overlay: bool,
+}
+
+#[inline(always)]
+fn song_lua_overlay_is_visible(state: SongLuaOverlayState) -> bool {
+    state.visible && state.diffuse[3] > f32::EPSILON
 }
 
 #[inline(always)]
@@ -1211,6 +1387,119 @@ fn song_lua_proxy_source(
         SongLuaProxyTarget::Underlay => song_lua_clone_source(proxy_sources.underlay.as_ref()),
         SongLuaProxyTarget::Overlay => song_lua_clone_source(proxy_sources.overlay.as_ref()),
     }
+}
+
+fn song_lua_mark_proxy_target(
+    requests: &mut SongLuaScreenProxyRequests,
+    target: &SongLuaProxyTarget,
+) {
+    match target {
+        SongLuaProxyTarget::Player { player_index } => {
+            if let Some(player) = requests.players.get_mut(*player_index) {
+                player.player = true;
+            }
+        }
+        SongLuaProxyTarget::NoteField { player_index } => {
+            if let Some(player) = requests.players.get_mut(*player_index) {
+                player.note_field = true;
+            }
+        }
+        SongLuaProxyTarget::Judgment { player_index } => {
+            if let Some(player) = requests.players.get_mut(*player_index) {
+                player.judgment = true;
+            }
+        }
+        SongLuaProxyTarget::Combo { player_index } => {
+            if let Some(player) = requests.players.get_mut(*player_index) {
+                player.combo = true;
+            }
+        }
+        SongLuaProxyTarget::Underlay => requests.underlay = true,
+        SongLuaProxyTarget::Overlay => requests.overlay = true,
+    }
+}
+
+fn song_lua_collect_capture_requests(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    capture_index: usize,
+    requests: &mut SongLuaScreenProxyRequests,
+    capture_stack: &mut Vec<usize>,
+) {
+    if capture_stack.contains(&capture_index) {
+        return;
+    }
+    capture_stack.push(capture_index);
+    for (idx, overlay) in overlays.iter().enumerate() {
+        if song_lua_overlay_aft_ancestor(overlays, idx) != Some(capture_index) {
+            continue;
+        }
+        let Some(overlay_state) = overlay_states.get(idx).copied() else {
+            continue;
+        };
+        if !song_lua_overlay_is_visible(overlay_state) {
+            continue;
+        }
+        match &overlay.kind {
+            SongLuaOverlayKind::ActorProxy { target } => {
+                song_lua_mark_proxy_target(requests, target);
+            }
+            SongLuaOverlayKind::AftSprite { capture_name } => {
+                if let Some(nested_capture) =
+                    song_lua_overlay_capture_index_by_name(overlays, capture_name)
+                {
+                    song_lua_collect_capture_requests(
+                        overlays,
+                        overlay_states,
+                        nested_capture,
+                        requests,
+                        capture_stack,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    capture_stack.pop();
+}
+
+fn song_lua_proxy_requests(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+) -> SongLuaScreenProxyRequests {
+    let mut requests = SongLuaScreenProxyRequests::default();
+    let mut capture_stack = Vec::with_capacity(4);
+    for (idx, overlay) in overlays.iter().enumerate() {
+        if song_lua_overlay_aft_ancestor(overlays, idx).is_some() {
+            continue;
+        }
+        let Some(overlay_state) = overlay_states.get(idx).copied() else {
+            continue;
+        };
+        if !song_lua_overlay_is_visible(overlay_state) {
+            continue;
+        }
+        match &overlay.kind {
+            SongLuaOverlayKind::ActorProxy { target } => {
+                song_lua_mark_proxy_target(&mut requests, target);
+            }
+            SongLuaOverlayKind::AftSprite { capture_name } => {
+                if let Some(capture_index) =
+                    song_lua_overlay_capture_index_by_name(overlays, capture_name)
+                {
+                    song_lua_collect_capture_requests(
+                        overlays,
+                        overlay_states,
+                        capture_index,
+                        &mut requests,
+                        &mut capture_stack,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    requests
 }
 
 fn song_lua_capture_children(
@@ -1517,6 +1806,7 @@ fn song_lua_style_capture_actor(
             world_z,
             size,
             texture,
+            tint,
             vertices,
             geom_cache_key,
             mode,
@@ -1532,6 +1822,7 @@ fn song_lua_style_capture_actor(
             world_z,
             size,
             texture,
+            tint,
             vertices,
             geom_cache_key,
             mode,
@@ -2080,6 +2371,7 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             world_z,
             size,
             texture,
+            tint,
             vertices,
             geom_cache_key,
             mode,
@@ -2097,6 +2389,7 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 world_z,
                 size,
                 texture,
+                tint,
                 vertices,
                 geom_cache_key,
                 mode,
@@ -2291,30 +2584,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         state.player_color
     };
-    let mut underlay_proxy_source = state
-        .song_lua_overlays
-        .iter()
-        .any(|overlay| {
-            matches!(
-                &overlay.kind,
-                SongLuaOverlayKind::ActorProxy {
-                    target: SongLuaProxyTarget::Underlay,
-                }
-            )
-        })
-        .then_some(Vec::new());
-    let mut overlay_proxy_source = state
-        .song_lua_overlays
-        .iter()
-        .any(|overlay| {
-            matches!(
-                &overlay.kind,
-                SongLuaOverlayKind::ActorProxy {
-                    target: SongLuaProxyTarget::Overlay,
-                }
-            )
-        })
-        .then_some(Vec::new());
+    let overlay_states = song_lua_overlay_states(state);
+    let proxy_requests = song_lua_proxy_requests(&state.song_lua_overlays, &overlay_states);
+    let mut underlay_proxy_source = proxy_requests.underlay.then_some(Vec::new());
+    let mut overlay_proxy_source = proxy_requests.overlay.then_some(Vec::new());
     // --- Background and Filter ---
     actors.push(build_background(state, cfg.bg_brightness));
     let cover_alpha = |player_idx: usize| -> f32 {
@@ -2505,8 +2778,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
     song_lua_capture_new_actors(&mut overlay_proxy_source, &actors, overlay_start);
 
-    let overlay_states = song_lua_overlay_states(state);
-
     let notefield_width = |player_idx: usize| -> f32 {
         let Some(ns) = state.noteskin[player_idx].as_ref() else {
             return 256.0;
@@ -2541,38 +2812,46 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         (max_x - min_x) + arrow_w
     };
 
-    let build_player_bundle =
-        |player_idx: usize, profile: &profile::Profile, placement: notefield::FieldPlacement| {
-            let notefield::BuiltNotefield {
-                actors,
-                layout_center_x,
-                field_actors,
-                judgment_actors,
-                combo_actors,
-            } = notefield::build_bundles(
-                state,
-                profile,
-                placement,
-                play_style,
-                cfg.center_1player_notefield,
-            );
-            let rotation_z = state.song_lua_player_rotation_z[player_idx];
-            let rotation_y = state.song_lua_player_rotation_y[player_idx];
-            let skew_x = state.song_lua_player_skew_x[player_idx];
-            let zoom_x = state.song_lua_player_zoom_x[player_idx];
-            let zoom_y = state.song_lua_player_zoom_y[player_idx];
-            let player = apply_song_lua_player_transform(
-                actors,
-                layout_center_x,
-                rotation_z,
-                rotation_y,
-                skew_x,
-                zoom_x,
-                zoom_y,
-            );
-            let proxy_sources = SongLuaPlayerProxySources {
-                player: Some(player.clone()),
-                note_field: Some(apply_song_lua_player_transform(
+    let build_player_bundle = |player_idx: usize,
+                               profile: &profile::Profile,
+                               placement: notefield::FieldPlacement,
+                               requests: SongLuaPlayerProxyRequests| {
+        let notefield::BuiltNotefield {
+            actors,
+            layout_center_x,
+            field_actors,
+            judgment_actors,
+            combo_actors,
+        } = notefield::build_bundles(
+            state,
+            profile,
+            placement,
+            play_style,
+            cfg.center_1player_notefield,
+            notefield::ProxyCaptureRequests {
+                note_field: requests.note_field,
+                judgment: requests.judgment,
+                combo: requests.combo,
+            },
+        );
+        let rotation_z = state.song_lua_player_rotation_z[player_idx];
+        let rotation_y = state.song_lua_player_rotation_y[player_idx];
+        let skew_x = state.song_lua_player_skew_x[player_idx];
+        let zoom_x = state.song_lua_player_zoom_x[player_idx];
+        let zoom_y = state.song_lua_player_zoom_y[player_idx];
+        let player = apply_song_lua_player_transform(
+            actors,
+            layout_center_x,
+            rotation_z,
+            rotation_y,
+            skew_x,
+            zoom_x,
+            zoom_y,
+        );
+        let proxy_sources = SongLuaPlayerProxySources {
+            player: requests.player.then(|| player.clone()),
+            note_field: requests.note_field.then(|| {
+                apply_song_lua_player_transform(
                     field_actors,
                     layout_center_x,
                     rotation_z,
@@ -2580,8 +2859,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     skew_x,
                     zoom_x,
                     zoom_y,
-                )),
-                judgment: Some(apply_song_lua_player_transform(
+                )
+            }),
+            judgment: requests.judgment.then(|| {
+                apply_song_lua_player_transform(
                     judgment_actors,
                     layout_center_x,
                     rotation_z,
@@ -2589,8 +2870,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     skew_x,
                     zoom_x,
                     zoom_y,
-                )),
-                combo: Some(apply_song_lua_player_transform(
+                )
+            }),
+            combo: requests.combo.then(|| {
+                apply_song_lua_player_transform(
                     combo_actors,
                     layout_center_x,
                     rotation_z,
@@ -2598,10 +2881,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     skew_x,
                     zoom_x,
                     zoom_y,
-                )),
-            };
-            (player, layout_center_x, proxy_sources)
+                )
+            }),
         };
+        (player, layout_center_x, proxy_sources)
+    };
 
     let (p1_actors, p2_actors, playfield_center_x, per_player_fields, player_proxy_sources): (
         Vec<Actor>,
@@ -2611,10 +2895,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         [SongLuaPlayerProxySources; 2],
     ) = match play_style {
         profile::PlayStyle::Versus => {
-            let (p1, p1_x, p1_sources) =
-                build_player_bundle(0, &state.player_profiles[0], notefield::FieldPlacement::P1);
-            let (p2, p2_x, p2_sources) =
-                build_player_bundle(1, &state.player_profiles[1], notefield::FieldPlacement::P2);
+            let (p1, p1_x, p1_sources) = build_player_bundle(
+                0,
+                &state.player_profiles[0],
+                notefield::FieldPlacement::P1,
+                proxy_requests.players[0],
+            );
+            let (p2, p2_x, p2_sources) = build_player_bundle(
+                1,
+                &state.player_profiles[1],
+                notefield::FieldPlacement::P2,
+                proxy_requests.players[1],
+            );
             (
                 p1,
                 Some(p2),
@@ -2629,8 +2921,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 notefield::FieldPlacement::P1
             };
-            let (nf, nf_x, nf_sources) =
-                build_player_bundle(0, &state.player_profiles[0], placement);
+            let (nf, nf_x, nf_sources) = build_player_bundle(
+                0,
+                &state.player_profiles[0],
+                placement,
+                proxy_requests.players[0],
+            );
             (
                 nf,
                 None,
@@ -2821,7 +3117,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             z(84)
         ));
 
-        if let Some(mesh) = &state.density_graph_top_mesh[player_idx]
+        if let Some(mesh) = &state.density_graph.top_mesh[player_idx]
             && !mesh.is_empty()
         {
             actors.push(Actor::Mesh {
@@ -3601,6 +3897,44 @@ mod tests {
         }
     }
 
+    fn test_capture_overlay(name: &str) -> SongLuaOverlayActor {
+        SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorFrameTexture,
+            name: Some(name.to_string()),
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        }
+    }
+
+    fn test_capture_proxy_child(
+        parent_index: usize,
+        target: SongLuaProxyTarget,
+    ) -> SongLuaOverlayActor {
+        SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorProxy { target },
+            name: None,
+            parent_index: Some(parent_index),
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        }
+    }
+
+    fn test_aft_overlay(capture_name: &str, visible: bool) -> SongLuaOverlayActor {
+        SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::AftSprite {
+                capture_name: capture_name.to_string(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState {
+                visible,
+                ..SongLuaOverlayState::default()
+            },
+            message_commands: Vec::new(),
+        }
+    }
+
     fn test_source_actor() -> Actor {
         Actor::Frame {
             align: [0.0, 0.0],
@@ -3637,6 +3971,58 @@ mod tests {
             song_lua_proxy_active_players(&overlays, &overlay_states, &sources),
             [true, false]
         );
+    }
+
+    #[test]
+    fn song_lua_proxy_requests_ignore_unreferenced_capture_children() {
+        let overlays = vec![
+            test_capture_overlay("cap"),
+            test_capture_proxy_child(0, SongLuaProxyTarget::Player { player_index: 0 }),
+        ];
+        let overlay_states = vec![SongLuaOverlayState::default(); overlays.len()];
+        let requests = song_lua_proxy_requests(&overlays, &overlay_states);
+
+        assert!(!requests.players[0].player);
+        assert!(!requests.players[0].note_field);
+        assert!(!requests.players[0].judgment);
+        assert!(!requests.players[0].combo);
+        assert!(!requests.underlay);
+        assert!(!requests.overlay);
+    }
+
+    #[test]
+    fn song_lua_proxy_requests_follow_visible_aft_capture_usage() {
+        let overlays = vec![
+            test_capture_overlay("cap"),
+            test_capture_proxy_child(0, SongLuaProxyTarget::Judgment { player_index: 0 }),
+            test_aft_overlay("cap", true),
+        ];
+        let overlay_states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let requests = song_lua_proxy_requests(&overlays, &overlay_states);
+
+        assert!(!requests.players[0].player);
+        assert!(!requests.players[0].note_field);
+        assert!(requests.players[0].judgment);
+        assert!(!requests.players[0].combo);
+    }
+
+    #[test]
+    fn song_lua_proxy_requests_skip_hidden_aft_capture_usage() {
+        let overlays = vec![
+            test_capture_overlay("cap"),
+            test_capture_proxy_child(0, SongLuaProxyTarget::Combo { player_index: 0 }),
+            test_aft_overlay("cap", false),
+        ];
+        let overlay_states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let requests = song_lua_proxy_requests(&overlays, &overlay_states);
+
+        assert!(!requests.players[0].combo);
     }
 
     #[test]
@@ -3728,7 +4114,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_quad_bakes_zoom_into_explicit_size() {
+    fn song_lua_quad_keeps_zoomed_size_in_scale() {
         let overlay = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::Quad,
             name: None,
@@ -3761,13 +4147,18 @@ mod tests {
                 visible,
                 ..
             } => {
+                let expected_scale = [
+                    100.0 * 0.5 * screen_width() / 640.0,
+                    50.0 * 0.5 * screen_height() / 480.0,
+                ];
                 assert_eq!(z, 321);
                 assert!(visible);
-                assert_eq!(scale, [1.0, 1.0]);
+                assert!((scale[0] - expected_scale[0]).abs() <= 0.000_1);
+                assert!((scale[1] - expected_scale[1]).abs() <= 0.000_1);
                 match size {
                     [SizeSpec::Px(w), SizeSpec::Px(h)] => {
-                        assert_eq!(w, 50.0);
-                        assert_eq!(h, 25.0);
+                        assert_eq!(w, 0.0);
+                        assert_eq!(h, 0.0);
                     }
                     other => panic!("expected explicit quad size, got {other:?}"),
                 }

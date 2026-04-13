@@ -3,19 +3,20 @@ use crate::engine::present::actors::Actor;
 use crate::game::profile;
 use crate::game::timing::WindowCounts;
 use crate::screens::components::gameplay::gameplay_stats;
+use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};
 use std::sync::Arc;
 
 pub const SCENARIO_NAME: &str = "gameplay-stats-versus";
 
 pub struct GameplayStatsVersusBenchFixture {
-    base: notefield_bench::NotefieldBenchFixture,
+    state: gameplay_screen::State,
     asset_manager: AssetManager,
 }
 
 impl GameplayStatsVersusBenchFixture {
     pub fn build(&self) -> Vec<Actor> {
-        gameplay_stats::build_versus_step_stats(self.base.state(), &self.asset_manager)
+        gameplay_stats::build_versus_step_stats(&self.state, &self.asset_manager)
     }
 }
 
@@ -79,13 +80,17 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
         state.song_full_title = Arc::from("Gameplay Stats Versus Benchmark");
     }
 
+    let (state, _) = base.into_parts();
+    let mut state = gameplay_screen::State::from_gameplay(state);
+    gameplay_stats::refresh_density_graph_meshes(&mut state);
+
     let mut asset_manager = AssetManager::new();
     for (name, font) in compose_scenarios::bench_fonts() {
         asset_manager.register_font(name, font);
     }
 
     GameplayStatsVersusBenchFixture {
-        base,
+        state,
         asset_manager,
     }
 }
