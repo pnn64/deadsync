@@ -1020,7 +1020,7 @@ pub fn draw(
                         );
                         gl.vertex_attrib_pointer_f32(
                             8,
-                            2,
+                            4,
                             glow::FLOAT,
                             false,
                             inst_stride,
@@ -1032,7 +1032,7 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + 4 * col_size + uv_size,
+                            base + 5 * col_size,
                         );
                         gl.vertex_attrib_pointer_f32(
                             10,
@@ -1040,7 +1040,15 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + 4 * col_size + 2 * uv_size,
+                            base + 5 * col_size + uv_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            11,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 5 * col_size + 2 * uv_size,
                         );
                         last_tmesh_instance_start = Some(run.instance_start);
                     }
