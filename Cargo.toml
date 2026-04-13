@@ -130,7 +130,7 @@ wgpu = { version = "29.0.1", features = ["dx12", "gles"] }
 wgpu = { version = "29.0.1", features = ["gles"] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
-libc = "0.2.184"
+libc = "0.2.185"
 xcb = { version = "1.7.0", features = ["randr"] }
 smithay-client-toolkit = { version = "0.20.0", default-features = false }
 
