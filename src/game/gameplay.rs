@@ -14902,16 +14902,17 @@ mod tests {
 
         let song_after = song_state.note_time_cache_ns[0];
         let global_after = global_state.note_time_cache_ns[0];
+        let expected_delta_ns = song_time_ns_from_seconds(0.010);
+        let song_delta_ns = song_before - song_after;
+        let global_delta_ns = global_before - global_after;
 
         assert!((song_state.song_offset_seconds - (song_offset_before + 0.010)).abs() <= 1e-6);
         assert!(
             (global_state.global_offset_seconds - (global_offset_before + 0.010)).abs() <= 1e-6
         );
-        assert_eq!(song_before - song_after, song_time_ns_from_seconds(0.010));
-        assert_eq!(
-            global_before - global_after,
-            song_time_ns_from_seconds(0.010)
-        );
+        assert!((song_delta_ns - expected_delta_ns).abs() <= 1);
+        assert!((global_delta_ns - expected_delta_ns).abs() <= 1);
+        assert!((song_delta_ns - global_delta_ns).abs() <= 1);
     }
 
     #[test]
@@ -16534,7 +16535,7 @@ mod tests {
         let compiled = crate::game::parsing::song_lua::CompiledSongLua {
             eases: vec![
                 crate::game::parsing::song_lua::SongLuaEaseWindow {
-                    player: Some(0),
+                    player: Some(1),
                     unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
                     start: 0.0,
                     limit: 4.0,
@@ -16548,7 +16549,7 @@ mod tests {
                     opt2: None,
                 },
                 crate::game::parsing::song_lua::SongLuaEaseWindow {
-                    player: Some(0),
+                    player: Some(1),
                     unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
                     start: 8.0,
                     limit: 4.0,

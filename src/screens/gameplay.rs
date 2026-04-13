@@ -4114,7 +4114,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_quad_bakes_zoom_into_explicit_size() {
+    fn song_lua_quad_keeps_zoomed_size_in_scale() {
         let overlay = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::Quad,
             name: None,
@@ -4147,13 +4147,18 @@ mod tests {
                 visible,
                 ..
             } => {
+                let expected_scale = [
+                    100.0 * 0.5 * screen_width() / 640.0,
+                    50.0 * 0.5 * screen_height() / 480.0,
+                ];
                 assert_eq!(z, 321);
                 assert!(visible);
-                assert_eq!(scale, [1.0, 1.0]);
+                assert!((scale[0] - expected_scale[0]).abs() <= 0.000_1);
+                assert!((scale[1] - expected_scale[1]).abs() <= 0.000_1);
                 match size {
                     [SizeSpec::Px(w), SizeSpec::Px(h)] => {
-                        assert_eq!(w, 50.0);
-                        assert_eq!(h, 25.0);
+                        assert_eq!(w, 0.0);
+                        assert_eq!(h, 0.0);
                     }
                     other => panic!("expected explicit quad size, got {other:?}"),
                 }

@@ -412,6 +412,50 @@ struct OverlayCompileActor {
     actor: SongLuaOverlayActor,
 }
 
+struct SongLuaCompileGlobals {
+    prefix_globals: Value,
+    mods: Value,
+    mod_time: Value,
+    mods_ease: Value,
+    mod_perframes: Value,
+    mod_actions: Value,
+}
+
+fn clone_lua_value(lua: &Lua, value: Value) -> mlua::Result<Value> {
+    match value {
+        Value::Table(table) => {
+            let cloned = lua.create_table()?;
+            for pair in table.pairs::<Value, Value>() {
+                let (key, value) = pair?;
+                cloned.set(clone_lua_value(lua, key)?, clone_lua_value(lua, value)?)?;
+            }
+            Ok(Value::Table(cloned))
+        }
+        other => Ok(other),
+    }
+}
+
+fn snapshot_compile_globals(lua: &Lua, globals: &Table) -> mlua::Result<SongLuaCompileGlobals> {
+    Ok(SongLuaCompileGlobals {
+        prefix_globals: clone_lua_value(lua, globals.get::<Value>("prefix_globals")?)?,
+        mods: clone_lua_value(lua, globals.get::<Value>("mods")?)?,
+        mod_time: clone_lua_value(lua, globals.get::<Value>("mod_time")?)?,
+        mods_ease: clone_lua_value(lua, globals.get::<Value>("mods_ease")?)?,
+        mod_perframes: clone_lua_value(lua, globals.get::<Value>("mod_perframes")?)?,
+        mod_actions: clone_lua_value(lua, globals.get::<Value>("mod_actions")?)?,
+    })
+}
+
+fn restore_compile_globals(globals: &Table, snapshot: SongLuaCompileGlobals) -> mlua::Result<()> {
+    globals.set("prefix_globals", snapshot.prefix_globals)?;
+    globals.set("mods", snapshot.mods)?;
+    globals.set("mod_time", snapshot.mod_time)?;
+    globals.set("mods_ease", snapshot.mods_ease)?;
+    globals.set("mod_perframes", snapshot.mod_perframes)?;
+    globals.set("mod_actions", snapshot.mod_actions)?;
+    Ok(())
+}
+
 pub fn compile_song_lua(
     entry_path: &Path,
     context: &SongLuaCompileContext,
@@ -449,7 +493,13 @@ pub fn compile_song_lua(
         screen_height: context.screen_height,
         ..CompiledSongLua::default()
     };
-    let mut overlays = read_overlay_actors(&lua, &root)?;
+    // Overlay command capture replays actor commands. Restore the mod globals
+    // afterwards so capture-time side effects do not rewrite compile inputs.
+    let compile_globals =
+        snapshot_compile_globals(&lua, &globals).map_err(|err| err.to_string())?;
+    let overlays = read_overlay_actors(&lua, &root);
+    restore_compile_globals(&globals, compile_globals).map_err(|err| err.to_string())?;
+    let mut overlays = overlays?;
     let mut overlay_trigger_counter = 0usize;
 
     if let Some(prefix_globals) = globals
@@ -6099,6 +6149,13 @@ return Def.ActorFrame{
     fn compile_song_lua_reads_table_color_calls_for_overlays() {
         let song_dir = test_dir("overlay-table-colors");
         let entry = song_dir.join("default.lua");
+        let overlay_dir = song_dir.join("gfx");
+        fs::create_dir_all(&overlay_dir).unwrap();
+        fs::write(
+            overlay_dir.join("grid.png"),
+            b"not-an-image-but-good-enough-for-parser",
+        )
+        .unwrap();
         fs::write(
             &entry,
             r#"

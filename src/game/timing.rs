@@ -1819,7 +1819,7 @@ mod tests {
 
         let delay_midpoint = timing
             .get_time_for_beat_ns(6.0)
-            .saturating_add(timing_ns_from_seconds(0.050));
+            .saturating_sub(timing_ns_from_seconds(0.050));
         let delay_info = timing.get_beat_info_from_time_ns_cached(delay_midpoint, &mut cache);
         assert!(!delay_info.is_in_freeze);
         assert!(delay_info.is_in_delay);
