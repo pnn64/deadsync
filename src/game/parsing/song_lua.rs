@@ -3575,7 +3575,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             }
         })?,
     )?;
-    for name in ["skewx", "addy", "zoomz"] {
+    for name in ["skewx", "skewy", "addy", "zoomz"] {
         actor.set(
             name,
             lua.create_function({
@@ -5952,6 +5952,42 @@ return root
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "true:child");
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_skewy_probe_calls() {
+        let song_dir = test_dir("skewy-probe");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target = nil
+
+mods_ease = {
+    {1, 1, 0, 0.25, function(x)
+        if target then
+            target:skewy(x)
+        end
+    end, "len", ease.outQuad},
+}
+
+return Def.ActorFrame{
+    Def.ActorFrame{
+        OnCommand=function(self)
+            target = self
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "SkewY Probe"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_eases, 1);
     }
 
     #[test]
