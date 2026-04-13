@@ -221,16 +221,6 @@ fn local_lobby_side_is_active(side: profile::PlayerSide) -> bool {
     }
 }
 
-fn local_lobby_player_count() -> usize {
-    let mut count = 0usize;
-    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
-        if local_lobby_side_is_active(side) {
-            count += 1;
-        }
-    }
-    count.max(1)
-}
-
 fn gameplay_player_index_for_side(state: &State, side: profile::PlayerSide) -> Option<usize> {
     if state.num_players >= 2 {
         return Some(match side {
@@ -346,33 +336,38 @@ fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
     .max_by(f32::total_cmp)
 }
 
-fn gameplay_requires_lobby_wait() -> bool {
-    let snapshot = crate::game::online::lobbies::snapshot();
-    let Some(joined) = snapshot.joined_lobby.as_ref() else {
-        return false;
-    };
-    joined.players.is_empty() || joined.players.len() > local_lobby_player_count()
+fn lobby_player_on_screen(
+    player: &crate::game::online::lobbies::LobbyPlayer,
+    screen_name: &str,
+) -> bool {
+    player.screen_name.eq_ignore_ascii_case(screen_name)
 }
 
-fn gameplay_lobby_wait_text(state: &State) -> Option<String> {
-    if state.lobby_music_started {
-        return None;
-    }
+fn gameplay_requires_lobby_wait_for(
+    joined: Option<&crate::game::online::lobbies::JoinedLobby>,
+) -> bool {
+    joined.is_some()
+}
 
+fn gameplay_requires_lobby_wait() -> bool {
     let snapshot = crate::game::online::lobbies::snapshot();
-    let joined = snapshot.joined_lobby.as_ref()?;
-    if !(joined.players.is_empty() || joined.players.len() > local_lobby_player_count()) {
-        return None;
-    }
-    if let Some(text) = crate::game::online::lobbies::reconnect_status_text() {
-        return Some(text);
+    gameplay_requires_lobby_wait_for(snapshot.joined_lobby.as_ref())
+}
+
+fn gameplay_lobby_wait_text_for(
+    joined: &crate::game::online::lobbies::JoinedLobby,
+    local_players_ready: bool,
+    reconnect_status_text: Option<&str>,
+) -> Option<String> {
+    if let Some(text) = reconnect_status_text {
+        return Some(text.to_string());
     }
 
     let all_in_gameplay = !joined.players.is_empty()
         && joined
             .players
             .iter()
-            .all(|player| player.screen_name.eq_ignore_ascii_case("ScreenGameplay"));
+            .all(|player| lobby_player_on_screen(player, "ScreenGameplay"));
     let all_ready = !joined.players.is_empty() && joined.players.iter().all(|player| player.ready);
     if all_in_gameplay && all_ready {
         return None;
@@ -383,10 +378,25 @@ fn gameplay_lobby_wait_text(state: &State) -> Option<String> {
     } else {
         "Waiting for players to sync screens...".to_string()
     };
-    if !local_lobby_players_ready(state) {
+    if !local_players_ready {
         message.push_str("\nPress START to ready up.");
     }
     Some(message)
+}
+
+fn gameplay_lobby_wait_text(state: &State) -> Option<String> {
+    if state.lobby_music_started {
+        return None;
+    }
+
+    let snapshot = crate::game::online::lobbies::snapshot();
+    let joined = snapshot.joined_lobby.as_ref()?;
+    let reconnect_status_text = crate::game::online::lobbies::reconnect_status_text();
+    gameplay_lobby_wait_text_for(
+        joined,
+        local_lobby_players_ready(state),
+        reconnect_status_text.as_deref(),
+    )
 }
 
 fn gameplay_lobby_disconnect_prompt(state: &State) -> Option<String> {
@@ -3946,6 +3956,30 @@ mod tests {
         }
     }
 
+    fn test_lobby_player(
+        screen_name: &str,
+        ready: bool,
+    ) -> crate::game::online::lobbies::LobbyPlayer {
+        crate::game::online::lobbies::LobbyPlayer {
+            label: "Local".to_string(),
+            ready,
+            screen_name: screen_name.to_string(),
+            judgments: None,
+            score: None,
+            ex_score: None,
+        }
+    }
+
+    fn test_joined_lobby(
+        players: Vec<crate::game::online::lobbies::LobbyPlayer>,
+    ) -> crate::game::online::lobbies::JoinedLobby {
+        crate::game::online::lobbies::JoinedLobby {
+            code: "ABCD".to_string(),
+            players,
+            song_info: None,
+        }
+    }
+
     #[test]
     fn song_lua_proxy_active_players_requires_a_render_source() {
         let overlays = vec![test_proxy_overlay(0)];
@@ -4165,5 +4199,28 @@ mod tests {
             }
             other => panic!("expected sprite-backed quad, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn gameplay_requires_wait_for_solo_joined_lobby() {
+        let joined = test_joined_lobby(vec![test_lobby_player("ScreenGameplay", false)]);
+        assert!(gameplay_requires_lobby_wait_for(Some(&joined)));
+    }
+
+    #[test]
+    fn gameplay_wait_text_requires_ready_up_for_solo_lobby_player() {
+        let joined = test_joined_lobby(vec![test_lobby_player("ScreenGameplay", false)]);
+
+        assert_eq!(
+            gameplay_lobby_wait_text_for(&joined, false, None).as_deref(),
+            Some("Waiting for players to ready up...\nPress START to ready up.")
+        );
+    }
+
+    #[test]
+    fn gameplay_wait_text_unlocks_once_solo_lobby_player_is_ready() {
+        let joined = test_joined_lobby(vec![test_lobby_player("ScreenGameplay", true)]);
+
+        assert_eq!(gameplay_lobby_wait_text_for(&joined, true, None), None);
     }
 }
