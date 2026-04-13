@@ -48,6 +48,7 @@ const EVAL_STAGE_IN_BLACK_DELAY_SECONDS: f32 = 0.2;
 const EVAL_STAGE_IN_BLACK_FADE_SECONDS: f32 = 0.5;
 const EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS: f32 = 0.4;
 const EVAL_STAGE_IN_TEXT_HOLD_SECONDS: f32 = 0.6;
+
 const EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS: f32 = 0.4;
 const EVAL_STAGE_IN_TOTAL_SECONDS: f32 = EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS
     + EVAL_STAGE_IN_TEXT_HOLD_SECONDS
@@ -968,6 +969,7 @@ pub struct State {
     active_graph: [EvalGraphPane; MAX_PLAYERS],
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; MAX_PLAYERS],
+    favorite_code: crate::screens::favorite_code::FavoriteCodeTracker,
 }
 
 impl Clone for State {
@@ -1006,6 +1008,7 @@ impl Clone for State {
             active_graph: self.active_graph,
             menu_lr_chord: self.menu_lr_chord,
             menu_lr_undo: self.menu_lr_undo,
+            favorite_code: self.favorite_code.clone(),
         }
     }
 }
@@ -1501,6 +1504,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
+        favorite_code: Default::default(),
     }
 }
 
@@ -1567,6 +1571,7 @@ pub fn init_from_score_info(
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
+        favorite_code: Default::default(),
     }
 }
 
@@ -2048,6 +2053,25 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         && let Some(side) = screen_input::menu_lr_side(ev.action)
     {
         state.menu_lr_undo[side_idx(side)] = 0;
+    }
+    // Track favorite pad code on arrow presses (not menu buttons)
+    if ev.pressed {
+        if let Some(dir) = crate::screens::favorite_code::pad_dir_from_action(ev.action) {
+            if let Some(side) = state.favorite_code.check(dir, ev.timestamp) {
+                // Toggle favorite for the chart that was just played
+                for si in state.score_info.iter().flatten() {
+                    if si.side == side {
+                        let is_now_fav = profile::toggle_favorite(side, &si.chart.short_hash);
+                        crate::engine::audio::play_sfx(if is_now_fav {
+                            "assets/sounds/start.ogg"
+                        } else {
+                            "assets/sounds/start.ogg"
+                        });
+                        break;
+                    }
+                }
+            }
+        }
     }
     if evaluation_lobby_lock_text().is_some() {
         match ev.action {

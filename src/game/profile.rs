@@ -2508,6 +2508,7 @@ pub struct Profile {
     pub carry_combo_between_songs: bool,
     pub current_combo: u32,
     pub known_pack_names: HashSet<String>,
+    pub favorites: HashSet<String>,
     pub noteskin: NoteSkin,
     pub mine_noteskin: Option<NoteSkin>,
     pub receptor_noteskin: Option<NoteSkin>,
@@ -2675,6 +2676,7 @@ impl Default for Profile {
             carry_combo_between_songs: player_options.carry_combo_between_songs,
             current_combo: 0,
             known_pack_names: HashSet::new(),
+            favorites: HashSet::new(),
             noteskin: player_options.noteskin.clone(),
             mine_noteskin: player_options.mine_noteskin.clone(),
             receptor_noteskin: player_options.receptor_noteskin.clone(),
@@ -3802,6 +3804,7 @@ fn load_for_side(side: PlayerSide) {
             });
         profile.current_combo = stats.current_combo;
         profile.known_pack_names = stats.known_pack_names;
+        profile.favorites = load_favorites(&profile_id);
 
         // Load groovestats.ini
         let mut gs_conf = SimpleIni::new();
@@ -4018,6 +4021,69 @@ pub fn mark_packs_known<'a>(profile_ids: &[String], pack_names: impl IntoIterato
     for profile_id in profile_ids {
         mark_known_pack_names_for_local_profile(profile_id, pack_names.iter().copied());
     }
+}
+
+// --- Favorites ---
+
+fn favorites_path(profile_id: &str) -> PathBuf {
+    dirs::app_dirs()
+        .profiles_root()
+        .join(profile_id)
+        .join("favorites.txt")
+}
+
+fn load_favorites(profile_id: &str) -> HashSet<String> {
+    let path = favorites_path(profile_id);
+    let Ok(text) = fs::read_to_string(&path) else {
+        return HashSet::new();
+    };
+    text.lines()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+fn save_favorites(profile_id: &str, favorites: &HashSet<String>) {
+    let path = favorites_path(profile_id);
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let mut sorted: Vec<&str> = favorites.iter().map(String::as_str).collect();
+    sorted.sort_unstable();
+    let text = sorted.join("\n");
+    let tmp_path = path.with_extension("tmp");
+    if fs::write(&tmp_path, text.as_bytes()).is_ok() {
+        let _ = fs::rename(&tmp_path, &path);
+    }
+}
+
+/// Toggle a song's favorite status for the given player side.
+/// Returns `true` if the song is now a favorite, `false` if removed.
+pub fn toggle_favorite(side: PlayerSide, chart_hash: &str) -> bool {
+    let Some(profile_id) = active_local_profile_id_for_side(side) else {
+        return false;
+    };
+    let is_now_favorite = {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.favorites.contains(chart_hash) {
+            profile.favorites.remove(chart_hash);
+            false
+        } else {
+            profile.favorites.insert(chart_hash.to_string());
+            true
+        }
+    };
+    let favorites = lock_profiles()[side_ix(side)].favorites.clone();
+    save_favorites(&profile_id, &favorites);
+    is_now_favorite
+}
+
+/// Check if a chart hash is favorited for the given player side.
+pub fn is_favorite(side: PlayerSide, chart_hash: &str) -> bool {
+    let profiles = lock_profiles();
+    profiles[side_ix(side)].favorites.contains(chart_hash)
 }
 
 pub fn set_active_profile_for_side(side: PlayerSide, profile: ActiveProfile) -> Profile {

@@ -5,13 +5,14 @@ pub mod leaderboard;
 pub mod replay;
 pub mod song_search;
 
-pub use classic::{FOCUS_TWEEN_SECONDS, RenderParams, build_overlay};
+pub use classic::{build_overlay, RenderParams, FOCUS_TWEEN_SECONDS};
 pub use downloads::*;
 pub use leaderboard::*;
 pub use replay::*;
 pub use song_search::*;
 
 use crate::engine::present::actors::Actor;
+
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -33,6 +34,8 @@ pub enum Action {
     SortByRecentP2,
     SortByTopGradesP1,
     SortByTopGradesP2,
+    ToggleFavorite,
+    SortByFavorites,
     SwitchToSingle,
     SwitchToDouble,
     TestInput,
@@ -199,6 +202,16 @@ pub const ITEM_SHOW_LEADERBOARD: Item = Item {
     bottom_label: "Leaderboard",
     action: Action::ShowLeaderboard,
 };
+pub const ITEM_TOGGLE_FAVORITE: Item = Item {
+    top_label: "I'm Lovin' It",
+    bottom_label: "Add Favorite",
+    action: Action::ToggleFavorite,
+};
+pub const ITEM_SORT_BY_FAVORITES: Item = Item {
+    top_label: "Check Out My Mix Tape",
+    bottom_label: "Favorites",
+    action: Action::SortByFavorites,
+};
 const ITEM_GO_BACK: Item = Item {
     top_label: "Options",
     bottom_label: "Go Back",
@@ -242,6 +255,7 @@ impl State {
     }
 }
 
+
 #[inline(always)]
 pub fn scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
     if len <= 1 {
@@ -257,6 +271,7 @@ pub fn scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
         0
     }
 }
+
 
 #[inline(always)]
 pub(crate) fn set_text_clip_rect(actor: &mut Actor, rect: [f32; 4]) {
