@@ -635,6 +635,13 @@ pub struct BuiltNotefield {
     pub combo_actors: Vec<Actor>,
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct ProxyCaptureRequests {
+    pub note_field: bool,
+    pub judgment: bool,
+    pub combo: bool,
+}
+
 impl BuiltNotefield {
     fn empty(layout_center_x: f32) -> Self {
         Self {
@@ -647,8 +654,15 @@ impl BuiltNotefield {
     }
 }
 
-fn push_hud_capture(hud_actors: &mut Vec<Actor>, capture_actors: &mut Vec<Actor>, actor: Actor) {
-    capture_actors.push(actor.clone());
+fn push_hud_capture(
+    hud_actors: &mut Vec<Actor>,
+    capture_actors: &mut Vec<Actor>,
+    capture_enabled: bool,
+    actor: Actor,
+) {
+    if capture_enabled {
+        capture_actors.push(actor.clone());
+    }
     hud_actors.push(actor);
 }
 #[inline(always)]
@@ -2767,6 +2781,7 @@ pub fn build_bundles(
     placement: FieldPlacement,
     play_style: profile::PlayStyle,
     center_1player_notefield: bool,
+    capture_requests: ProxyCaptureRequests,
 ) -> BuiltNotefield {
     let hold_judgment_texture = resolved_hold_judgment_texture(profile);
 
@@ -6135,6 +6150,7 @@ pub fn build_bundles(
                             push_hud_capture(
                                 &mut hud_actors,
                                 &mut combo_actors,
+                                capture_requests.combo,
                                 act!(sprite("combo_explosion.png"):
                                     align(0.5, 0.5):
                                     xy(combo_center_x, combo_center_y):
@@ -6156,6 +6172,7 @@ pub fn build_bundles(
                         push_hud_capture(
                             &mut hud_actors,
                             &mut combo_actors,
+                            capture_requests.combo,
                             act!(sprite("combo_100milestone_splode.png"):
                                 align(0.5, 0.5):
                                 xy(combo_center_x, combo_center_y):
@@ -6176,6 +6193,7 @@ pub fn build_bundles(
                             push_hud_capture(
                                 &mut hud_actors,
                                 &mut combo_actors,
+                                capture_requests.combo,
                                 act!(sprite("combo_100milestone_minisplode.png"):
                                     align(0.5, 0.5):
                                     xy(combo_center_x, combo_center_y):
@@ -6202,6 +6220,7 @@ pub fn build_bundles(
                             push_hud_capture(
                                 &mut hud_actors,
                                 &mut combo_actors,
+                                capture_requests.combo,
                                 act!(sprite("combo_1000milestone_swoosh.png"):
                                     align(0.5, 0.5):
                                     xy(final_x, combo_center_y):
@@ -6227,6 +6246,7 @@ pub fn build_bundles(
                 push_hud_capture(
                     &mut hud_actors,
                     &mut combo_actors,
+                    capture_requests.combo,
                     act!(text:
                         font(font_name): settext(cached_int_u32(p.miss_combo)):
                         align(0.5, 0.5): xy(combo_x, combo_y):
@@ -6304,6 +6324,7 @@ pub fn build_bundles(
                 push_hud_capture(
                     &mut hud_actors,
                     &mut combo_actors,
+                    capture_requests.combo,
                     act!(text:
                         font(font_name): settext(cached_int_u32(p.combo)):
                         align(0.5, 0.5): xy(combo_x, combo_y):
@@ -7043,6 +7064,7 @@ pub fn build_bundles(
                 push_hud_capture(
                     &mut hud_actors,
                     &mut judgment_actors,
+                    capture_requests.judgment,
                     act!(sprite(judgment_texture):
                         align(0.5, 0.5): xy(judgment_x, judgment_y):
                         z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
@@ -7053,6 +7075,7 @@ pub fn build_bundles(
                     push_hud_capture(
                         &mut hud_actors,
                         &mut judgment_actors,
+                        capture_requests.judgment,
                         act!(sprite(judgment_texture):
                             align(0.5, 0.5): xy(judgment_x, judgment_y):
                             z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(overlay_index): zoom(zoom):
@@ -7106,6 +7129,7 @@ pub fn build_bundles(
             push_hud_capture(
                 &mut hud_actors,
                 &mut judgment_actors,
+                capture_requests.judgment,
                 act!(sprite(texture):
                     align(0.5, 0.5):
                     xy(judgment_x + column_offset, hold_judgment_y):
@@ -7137,7 +7161,11 @@ pub fn build_bundles(
         }
     }
 
-    let field_actors = actors.clone();
+    let field_actors = if capture_requests.note_field {
+        actors.clone()
+    } else {
+        Vec::new()
+    };
     if hud_actors.is_empty() {
         return BuiltNotefield {
             actors,
@@ -7172,6 +7200,7 @@ pub fn build(
         placement,
         play_style,
         center_1player_notefield,
+        ProxyCaptureRequests::default(),
     );
     (built.actors, built.layout_center_x)
 }
