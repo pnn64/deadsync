@@ -132,6 +132,7 @@ pub struct SongLuaCompileContext {
     pub song_dir: PathBuf,
     pub main_title: String,
     pub song_display_bpms: [f32; 2],
+    pub song_music_rate: f32,
     pub global_offset_seconds: f32,
     pub screen_width: f32,
     pub screen_height: f32,
@@ -147,6 +148,7 @@ impl SongLuaCompileContext {
             song_dir: song_dir.into(),
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
+            song_music_rate: 1.0,
             global_offset_seconds: 0.0,
             screen_width: 640.0,
             screen_height: 480.0,
@@ -1016,6 +1018,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
 
     let song = create_song_table(lua, context)?;
     let players = create_player_tables(lua, context)?;
+    let song_options = create_song_options_table(lua, context.song_music_rate)?;
     let gamestate = lua.create_table()?;
     let enabled_players = create_enabled_players_table(lua, context.players.clone())?;
     let human_players = enabled_players.clone();
@@ -1085,6 +1088,27 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         "GetSongPosition",
         lua.create_function(move |_, _args: MultiValue| Ok(song_position.clone()))?,
     )?;
+    gamestate.set(
+        "GetSongOptionsObject",
+        lua.create_function({
+            let song_options = song_options.clone();
+            move |_, _args: MultiValue| Ok(song_options.clone())
+        })?,
+    )?;
+    gamestate.set(
+        "GetSongOptions",
+        lua.create_function({
+            let song_options = song_options.clone();
+            move |lua, _args: MultiValue| {
+                let rate = song_options
+                    .get::<Option<f32>>("__songlua_music_rate")?
+                    .unwrap_or(1.0);
+                Ok(Value::String(
+                    lua.create_string(format_song_options_text(rate))?,
+                ))
+            }
+        })?,
+    )?;
     globals.set("GAMESTATE", gamestate)?;
 
     let screenman = lua.create_table()?;
@@ -1152,6 +1176,39 @@ fn create_screen_table(
     table.set("r", width)?;
     table.set("b", height)?;
     Ok(table)
+}
+
+fn create_song_options_table(lua: &Lua, music_rate: f32) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set("__songlua_music_rate", music_rate.max(0.0))?;
+    table.set(
+        "MusicRate",
+        lua.create_function(move |_, args: MultiValue| {
+            let Some(owner) = args.front().and_then(|value| match value {
+                Value::Table(table) => Some(table.clone()),
+                _ => None,
+            }) else {
+                return Ok(1.0_f32);
+            };
+            if let Some(rate) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                owner.set("__songlua_music_rate", rate.max(0.0))?;
+                return Ok(rate.max(0.0));
+            }
+            Ok(owner
+                .get::<Option<f32>>("__songlua_music_rate")?
+                .unwrap_or(1.0_f32))
+        })?,
+    )?;
+    Ok(table)
+}
+
+fn format_song_options_text(music_rate: f32) -> String {
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    format!("{rate}xMusic")
 }
 
 struct PlayerLuaTables {
@@ -6333,6 +6390,55 @@ return Def.ActorFrame{}
 
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "Display BPMs:120:180:150:200");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_song_options_object_music_rate() {
+        let song_dir = test_dir("song-options-object");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local so = GAMESTATE:GetSongOptionsObject("ModsLevel_Song")
+local before = so:MusicRate()
+so:MusicRate(0.75)
+mod_actions = {
+    {1, string.format("%.2f:%.2f", before, so:MusicRate()), true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Song Options Object");
+        context.song_music_rate = 1.5;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "1.50:0.75");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_song_options_string_music_rate() {
+        let song_dir = test_dir("song-options-string");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {1, GAMESTATE:GetSongOptions("ModsLevel_Song"), true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Song Options String");
+        context.song_music_rate = 1.25;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "1.25xMusic");
     }
 
     #[test]

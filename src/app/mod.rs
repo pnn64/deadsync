@@ -6189,13 +6189,12 @@ impl App {
                         .active_color_index
                 }
             };
-            self.state.screens.evaluation_summary_state = if prev == CurrentScreen::SelectMusic
-                || prev == CurrentScreen::SelectCourse
-            {
-                evaluation_summary::init_for_set_summary()
-            } else {
-                evaluation_summary::init()
-            };
+            self.state.screens.evaluation_summary_state =
+                if prev == CurrentScreen::SelectMusic || prev == CurrentScreen::SelectCourse {
+                    evaluation_summary::init_for_set_summary()
+                } else {
+                    evaluation_summary::init()
+                };
             self.state
                 .screens
                 .evaluation_summary_state

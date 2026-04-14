@@ -4612,6 +4612,7 @@ fn build_song_lua_runtime_windows(
     num_players: usize,
     player_profiles: &[profile::Profile; MAX_PLAYERS],
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
+    music_rate: f32,
     machine_global_offset_seconds: f32,
     player_global_offset_shift_seconds: &[f32; MAX_PLAYERS],
 ) -> (
@@ -4672,6 +4673,11 @@ fn build_song_lua_runtime_windows(
     );
     context.song_display_bpms =
         song_lua_display_bpm_pair(song, charts.first().map(|chart| chart.as_ref()));
+    context.song_music_rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
     context.global_offset_seconds = machine_global_offset_seconds;
     context.screen_width = screen_width;
     context.screen_height = screen_height;
@@ -10004,6 +10010,7 @@ pub fn init(
         num_players,
         &player_profiles,
         &scroll_speed,
+        rate,
         config.global_offset_seconds,
         &player_global_offset_shift_seconds,
     );

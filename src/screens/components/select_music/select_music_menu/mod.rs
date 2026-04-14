@@ -5,14 +5,13 @@ pub mod leaderboard;
 pub mod replay;
 pub mod song_search;
 
-pub use classic::{build_overlay, RenderParams, FOCUS_TWEEN_SECONDS};
+pub use classic::{FOCUS_TWEEN_SECONDS, RenderParams, build_overlay};
 pub use downloads::*;
 pub use leaderboard::*;
 pub use replay::*;
 pub use song_search::*;
 
 use crate::engine::present::actors::Actor;
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -266,7 +265,6 @@ impl State {
     }
 }
 
-
 #[inline(always)]
 pub fn scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
     if len <= 1 {
@@ -282,7 +280,6 @@ pub fn scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
         0
     }
 }
-
 
 #[inline(always)]
 pub(crate) fn set_text_clip_rect(actor: &mut Actor, rect: [f32; 4]) {
