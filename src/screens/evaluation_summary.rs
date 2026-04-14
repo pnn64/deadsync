@@ -36,14 +36,10 @@ pub struct State {
 }
 
 pub fn init() -> State {
-    init_with_return(Screen::Initials)
+    init_for_return(Screen::Initials)
 }
 
-pub fn init_for_set_summary() -> State {
-    init_with_return(Screen::SelectMusic)
-}
-
-fn init_with_return(return_to: Screen) -> State {
+pub fn init_for_return(return_to: Screen) -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: heart_bg::State::new(),

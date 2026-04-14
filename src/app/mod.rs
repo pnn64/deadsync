@@ -825,6 +825,7 @@ pub struct SessionState {
     preferred_difficulty_index: usize,
     session_start_time: Option<Instant>,
     played_stages: Vec<stage_stats::StageSummary>,
+    pending_post_select_summary_exit: bool,
     course_individual_stage_indices: Vec<usize>,
     combo_carry: [u32; crate::game::gameplay::MAX_PLAYERS],
     gameplay_restart_count: u32,
@@ -1213,6 +1214,7 @@ impl SessionState {
             preferred_difficulty_index,
             session_start_time: None,
             played_stages: Vec::new(),
+            pending_post_select_summary_exit: false,
             course_individual_stage_indices: Vec::new(),
             combo_carry,
             gameplay_restart_count: 0,
@@ -1784,6 +1786,21 @@ fn total_gameplay_elapsed(stages: &[stage_stats::StageSummary]) -> f32 {
         total += sec;
     }
     total
+}
+
+#[inline(always)]
+const fn evaluation_summary_return_to(
+    prev: CurrentScreen,
+    pending_post_select_summary_exit: bool,
+) -> CurrentScreen {
+    if pending_post_select_summary_exit {
+        return CurrentScreen::Initials;
+    }
+    match prev {
+        CurrentScreen::SelectMusic => CurrentScreen::SelectMusic,
+        CurrentScreen::SelectCourse => CurrentScreen::SelectCourse,
+        _ => CurrentScreen::Initials,
+    }
 }
 
 fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::StageSummary> {
@@ -6189,12 +6206,12 @@ impl App {
                         .active_color_index
                 }
             };
+            let return_to = evaluation_summary_return_to(
+                prev,
+                std::mem::take(&mut self.state.session.pending_post_select_summary_exit),
+            );
             self.state.screens.evaluation_summary_state =
-                if prev == CurrentScreen::SelectMusic || prev == CurrentScreen::SelectCourse {
-                    evaluation_summary::init_for_set_summary()
-                } else {
-                    evaluation_summary::init()
-                };
+                evaluation_summary::init_for_return(return_to);
             self.state
                 .screens
                 .evaluation_summary_state
@@ -7092,5 +7109,25 @@ mod tests {
             &next_song,
             ["a", "b"],
         ));
+    }
+
+    #[test]
+    fn evaluation_summary_return_to_stays_in_select_music_for_set_summary() {
+        assert_eq!(
+            evaluation_summary_return_to(CurrentScreen::SelectMusic, false),
+            CurrentScreen::SelectMusic,
+        );
+    }
+
+    #[test]
+    fn evaluation_summary_return_to_keeps_exit_flow_moving() {
+        assert_eq!(
+            evaluation_summary_return_to(CurrentScreen::SelectMusic, true),
+            CurrentScreen::Initials,
+        );
+        assert_eq!(
+            evaluation_summary_return_to(CurrentScreen::SelectCourse, true),
+            CurrentScreen::Initials,
+        );
     }
 }
