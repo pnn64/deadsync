@@ -1,8 +1,7 @@
 use deadsync::engine::input::{
     self, InputBinding, Keymap, PadDir, PadEvent, PadId, RawKeyboardEvent, VirtualAction,
 };
-use deadsync::game::gameplay;
-use deadsync::screens::{ScreenAction, gameplay as gameplay_screen};
+use deadsync::game::gameplay::{self, GameplayAction, GameplayExit};
 use deadsync::test_support::notefield_bench;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::error::Error;
@@ -307,7 +306,7 @@ fn run_key_event(
         host_nanos,
     };
     input::map_raw_key_event_with(black_box(&ev), |iev| {
-        let action = gameplay_screen::handle_input(state, black_box(&iev));
+        let action = gameplay::handle_input(state, black_box(&iev));
         checksum = mix_checksum(checksum, checksum_input_event(iev, action));
     });
     checksum
@@ -328,7 +327,7 @@ fn run_pad_event(
         pressed,
     };
     input::map_pad_event_with(black_box(&ev), |iev| {
-        let action = gameplay_screen::handle_input(state, black_box(&iev));
+        let action = gameplay::handle_input(state, black_box(&iev));
         checksum = mix_checksum(checksum, checksum_input_event(iev, action));
     });
     checksum
@@ -340,7 +339,7 @@ fn step_gameplay(
     checksum: u64,
     measured: bool,
 ) -> u64 {
-    let action = gameplay_screen::update(state, delta_time);
+    let action = gameplay::update(state, delta_time);
     let mut checksum = mix_checksum(checksum, checksum_state(state, action));
     if measured {
         checksum = mix_checksum(
@@ -370,6 +369,7 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     state.background_texture_key.clear();
     state.notes.clear();
     state.note_ranges.fill((0, 0));
+    state.row_entry_ranges.fill((0, 0));
     state.judged_row_cursor.fill(0);
     state.next_tap_miss_cursor.fill(0);
     state.next_mine_avoid_cursor.fill(0);
@@ -378,6 +378,7 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     for row_map_cache in &mut state.row_map_cache {
         row_map_cache.clear();
     }
+    state.note_row_entry_indices.clear();
     state.tap_row_hold_roll_flags.clear();
     state.note_time_cache_ns.clear();
     state.note_display_beat_cache.clear();
@@ -433,40 +434,37 @@ fn install_bench_keymap() {
 }
 
 #[inline(always)]
-fn checksum_input_event(ev: input::InputEvent, action: ScreenAction) -> u64 {
+fn checksum_input_event(ev: input::InputEvent, action: GameplayAction) -> u64 {
     (ev.action.ix() as u64)
         ^ ((ev.pressed as u64) << 8)
         ^ ((matches!(ev.source, input::InputSource::Gamepad) as u64) << 16)
         ^ ev.timestamp_host_nanos.rotate_left(21)
-        ^ screen_action_hash(action).rotate_left(7)
+        ^ gameplay_action_hash(action).rotate_left(7)
 }
 
 #[inline(always)]
-fn checksum_state(state: &gameplay::State, action: ScreenAction) -> u64 {
+fn checksum_state(state: &gameplay::State, action: GameplayAction) -> u64 {
     (state.total_elapsed_in_screen.to_bits() as u64)
         ^ (state.current_music_time_display.to_bits() as u64).rotate_left(13)
         ^ (state.players[0].combo as u64).rotate_left(29)
         ^ (state.players[0].life.to_bits() as u64).rotate_left(41)
-        ^ screen_action_hash(action)
+        ^ gameplay_action_hash(action)
 }
 
 #[inline(always)]
-fn screen_action_hash(action: ScreenAction) -> u64 {
+const fn gameplay_exit_hash(exit: GameplayExit) -> u64 {
+    match exit {
+        GameplayExit::Complete => 1,
+        GameplayExit::Cancel => 2,
+    }
+}
+
+#[inline(always)]
+fn gameplay_action_hash(action: GameplayAction) -> u64 {
     match action {
-        ScreenAction::None => 0,
-        ScreenAction::Navigate(screen) => 0x1000 | screen as u64,
-        ScreenAction::NavigateNoFade(screen) => 0x2000 | screen as u64,
-        ScreenAction::Exit => 0x3000,
-        ScreenAction::SelectProfiles { .. } => 0x4000,
-        ScreenAction::RequestScreenshot(_) => 0x4800,
-        ScreenAction::RequestBanner(_) => 0x5000,
-        ScreenAction::RequestCdTitle(_) => 0x6000,
-        ScreenAction::RequestDensityGraph { .. } => 0x7000,
-        ScreenAction::ApplySongOffsetSync { .. } => 0x8000,
-        ScreenAction::ApplySongOffsetSyncBatch { .. } => 0x8800,
-        ScreenAction::FetchOnlineGrade(_) => 0x9000,
-        ScreenAction::ChangeGraphics { .. } => 0xA000,
-        ScreenAction::UpdateShowOverlay(mode) => 0xB000 | u64::from(mode),
+        GameplayAction::None => 0,
+        GameplayAction::Navigate(exit) => 0x1000 | gameplay_exit_hash(exit),
+        GameplayAction::NavigateNoFade(exit) => 0x2000 | gameplay_exit_hash(exit),
     }
 }
 

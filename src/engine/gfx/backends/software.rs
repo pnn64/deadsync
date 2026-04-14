@@ -203,6 +203,7 @@ pub fn draw(
                                 }
                             },
                             ObjectType::TexturedMesh {
+                                tint,
                                 vertices,
                                 mode,
                                 uv_scale,
@@ -220,6 +221,7 @@ pub fn draw(
                                         &proj,
                                         &obj.transform,
                                         vertices.as_ref(),
+                                        *tint,
                                         *uv_scale,
                                         *uv_offset,
                                         *uv_tex_shift,
@@ -293,6 +295,7 @@ pub fn draw(
                     ),
                 },
                 ObjectType::TexturedMesh {
+                    tint,
                     vertices,
                     mode,
                     uv_scale,
@@ -310,6 +313,7 @@ pub fn draw(
                             &proj,
                             &obj.transform,
                             vertices.as_ref(),
+                            *tint,
                             *uv_scale,
                             *uv_offset,
                             *uv_tex_shift,
@@ -555,6 +559,7 @@ fn rasterize_textured_mesh_triangles(
     proj: &Matrix4<f32>,
     transform: &Matrix4<f32>,
     vertices: &[crate::engine::gfx::TexturedMeshVertex],
+    tint: [f32; 4],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
@@ -605,7 +610,12 @@ fn rasterize_textured_mesh_triangles(
                     + uv_tex_shift[0] * (chunk[i].tex_matrix_scale[0] - 1.0),
                 v: chunk[i].uv[1].mul_add(uv_scale[1], uv_offset[1])
                     + uv_tex_shift[1] * (chunk[i].tex_matrix_scale[1] - 1.0),
-                color: chunk[i].color,
+                color: [
+                    chunk[i].color[0] * tint[0],
+                    chunk[i].color[1] * tint[1],
+                    chunk[i].color[2] * tint[2],
+                    chunk[i].color[3] * tint[3],
+                ],
             };
         }
 

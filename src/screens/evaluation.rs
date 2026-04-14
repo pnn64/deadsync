@@ -597,6 +597,10 @@ mod tests {
     fn judgment(grade: JudgeGrade, window: Option<TimingWindow>, time_error_ms: f32) -> Judgment {
         Judgment {
             time_error_ms,
+            time_error_music_ns: crate::game::judgment::judgment_time_error_music_ns_from_ms(
+                time_error_ms,
+                1.0,
+            ),
             grade,
             window,
             miss_because_held: false,
@@ -931,7 +935,6 @@ const fn eval_graph_prev(pane: EvalGraphPane) -> EvalGraphPane {
     }
 }
 
-#[derive(Clone)]
 pub struct State {
     pub active_color_index: i32,
     bg: heart_bg::State,
@@ -967,6 +970,47 @@ pub struct State {
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; MAX_PLAYERS],
     favorite_code: crate::screens::favorite_code::FavoriteCodeTracker,
+}
+
+impl Clone for State {
+    fn clone(&self) -> Self {
+        Self {
+            active_color_index: self.active_color_index,
+            bg: self.bg.clone(),
+            screen_elapsed: self.screen_elapsed,
+            session_elapsed: self.session_elapsed,
+            gameplay_elapsed: self.gameplay_elapsed,
+            stage_duration_seconds: self.stage_duration_seconds,
+            score_info: self.score_info.clone(),
+            itl_progress: self.itl_progress.clone(),
+            density_graph_mesh: self.density_graph_mesh.clone(),
+            timing_hist_mesh: self.timing_hist_mesh.clone(),
+            timing_hist_mesh_ex: self.timing_hist_mesh_ex.clone(),
+            timing_hist_mesh_hard_ex: self.timing_hist_mesh_hard_ex.clone(),
+            scatter_mesh_itg: self.scatter_mesh_itg.clone(),
+            scatter_mesh_ex: self.scatter_mesh_ex.clone(),
+            scatter_mesh_hard_ex: self.scatter_mesh_hard_ex.clone(),
+            scatter_mesh_arrow: self.scatter_mesh_arrow.clone(),
+            scatter_mesh_foot: self.scatter_mesh_foot.clone(),
+            density_graph_texture_key: self.density_graph_texture_key.clone(),
+            return_to_course: self.return_to_course,
+            auto_advance_seconds: self.auto_advance_seconds,
+            allow_online_panes: self.allow_online_panes,
+            auto_screenshot_taken: self.auto_screenshot_taken,
+            itl_overlay_visible: self.itl_overlay_visible,
+            itl_overlay_shown: self.itl_overlay_shown,
+            submit_groovestats_fallback: self.submit_groovestats_fallback,
+            submit_arrowcloud_fallback: self.submit_arrowcloud_fallback,
+            lobby_disconnect_hold_p1: self.lobby_disconnect_hold_p1,
+            lobby_disconnect_hold_p2: self.lobby_disconnect_hold_p2,
+            itl_overlay_page: self.itl_overlay_page,
+            active_pane: self.active_pane,
+            active_graph: self.active_graph,
+            menu_lr_chord: self.menu_lr_chord,
+            menu_lr_undo: self.menu_lr_undo,
+            favorite_code: self.favorite_code.clone(),
+        }
+    }
 }
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
@@ -1596,6 +1640,10 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
 }
 
 pub fn update(state: &mut State, dt: f32) {
+    if dt > 0.0 {
+        state.screen_elapsed += dt;
+    }
+
     online::lobbies::poll_reconnect();
     online::lobbies::update_machine_state_sides_with_stats(
         "ScreenEvaluationStage",
@@ -1616,9 +1664,6 @@ pub fn update(state: &mut State, dt: f32) {
     }
     sync_submit_itl_progress(state);
     sync_missing_submit_status_fallbacks(state);
-    if dt > 0.0 {
-        state.screen_elapsed += dt;
-    }
 }
 
 fn local_lobby_player_count() -> usize {

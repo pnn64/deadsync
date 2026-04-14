@@ -9,6 +9,7 @@ use crate::screens::components::gameplay::{
     gameplay_stats,
     notefield::{self, FieldPlacement},
 };
+use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -16,7 +17,7 @@ use std::sync::Arc;
 pub const SCENARIO_NAME: &str = "gameplay-stats";
 
 pub struct GameplayStatsBenchFixture {
-    base: notefield_bench::NotefieldBenchFixture,
+    state: gameplay_screen::State,
     asset_manager: AssetManager,
     playfield_center_x: f32,
 }
@@ -24,7 +25,7 @@ pub struct GameplayStatsBenchFixture {
 impl GameplayStatsBenchFixture {
     pub fn build(&self) -> Vec<Actor> {
         gameplay_stats::build(
-            self.base.state(),
+            &self.state,
             &self.asset_manager,
             self.playfield_center_x,
             profile::PlayerSide::P1,
@@ -102,6 +103,9 @@ pub fn fixture() -> GameplayStatsBenchFixture {
             }),
         });
     }
+    let (state, bench_profile) = base.into_parts();
+    let mut state = gameplay_screen::State::from_gameplay(state);
+    gameplay_stats::refresh_density_graph_meshes(&mut state);
 
     let mut asset_manager = AssetManager::new();
     for (name, font) in compose_scenarios::bench_fonts() {
@@ -109,8 +113,8 @@ pub fn fixture() -> GameplayStatsBenchFixture {
     }
 
     let playfield_center_x = notefield::build(
-        base.state(),
-        base.profile(),
+        &state,
+        &bench_profile,
         FieldPlacement::P1,
         profile::PlayStyle::Single,
         false,
@@ -118,7 +122,7 @@ pub fn fixture() -> GameplayStatsBenchFixture {
     .1;
 
     GameplayStatsBenchFixture {
-        base,
+        state,
         asset_manager,
         playfield_center_x,
     }

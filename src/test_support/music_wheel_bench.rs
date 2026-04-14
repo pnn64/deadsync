@@ -152,6 +152,7 @@ fn bench_chart(base: &str, difficulty: &str, meter: u32) -> ChartData {
         chart_name: String::new(),
         meter,
         step_artist: String::new(),
+        music_path: None,
         short_hash: format!("{base}-{difficulty}"),
         stats: ArrowStats {
             total_arrows: 0,

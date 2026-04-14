@@ -1612,6 +1612,21 @@ fn prewarm_gameplay_assets(
                 .any(|block| uses_repeat_delta(&block.delta))
     }
 
+    fn gameplay_background_paths(state: &gameplay::State) -> Vec<&PathBuf> {
+        let mut paths =
+            Vec::with_capacity(1usize.saturating_add(state.song.background_changes.len()));
+        if let Some(path) = state.song.background_path.as_ref() {
+            paths.push(path);
+        }
+        for change in &state.song.background_changes {
+            let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
+                continue;
+            };
+            paths.push(path);
+        }
+        paths
+    }
+
     let mut seen = HashSet::<String>::with_capacity(256);
     let mut seen_song_lua_fonts = HashSet::<&'static str>::with_capacity(8);
     for noteskin in state.noteskin.iter().flatten() {
@@ -1642,16 +1657,7 @@ fn prewarm_gameplay_assets(
             }
         });
     }
-    if let Some(path) = state.song.background_path.as_ref() {
-        let key = path.to_string_lossy().into_owned();
-        if seen.insert(key) {
-            media_cache::ensure_banner_texture(assets, backend, path);
-        }
-    }
-    for change in &state.song.background_changes {
-        let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
-            continue;
-        };
+    for path in gameplay_background_paths(state) {
         let key = path.to_string_lossy().into_owned();
         if seen.insert(key) {
             media_cache::ensure_banner_texture(assets, backend, path);
@@ -1715,7 +1721,7 @@ fn prewarm_gameplay_text_layout_cache(
     assets: &AssetManager,
     metrics: &Metrics,
     cache: &mut crate::engine::present::compose::TextLayoutCache,
-    state: &gameplay::State,
+    state: &mut gameplay::State,
 ) {
     let started = Instant::now();
     cache.configure(
@@ -1725,6 +1731,7 @@ fn prewarm_gameplay_text_layout_cache(
     cache.begin_frame_stats();
 
     let fonts = assets.fonts();
+    crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
     let actors = gameplay::get_actors(state, assets);
     let _ = crate::engine::present::compose::build_screen_cached(
         &actors,
@@ -1750,6 +1757,20 @@ fn prewarm_gameplay_text_layout_cache(
         stats.shared_aliases,
         started.elapsed().as_secs_f64() * 1000.0,
     );
+}
+
+fn gameplay_background_keys(state: &gameplay::State) -> Vec<String> {
+    let mut keys = Vec::with_capacity(1usize.saturating_add(state.song.background_changes.len()));
+    if let Some(path) = state.song.background_path.as_ref() {
+        keys.push(path.to_string_lossy().into_owned());
+    }
+    for change in &state.song.background_changes {
+        let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
+            continue;
+        };
+        keys.push(path.to_string_lossy().into_owned());
+    }
+    keys
 }
 
 fn total_gameplay_elapsed(stages: &[stage_stats::StageSummary]) -> f32 {
@@ -2082,52 +2103,60 @@ impl ScreensState {
         now: Instant,
         session: &SessionState,
         asset_manager: &AssetManager,
-    ) -> Option<ScreenAction> {
+    ) -> (Option<ScreenAction>, bool) {
         match self.current_screen {
             CurrentScreen::Gameplay => self
                 .gameplay_state
                 .as_mut()
-                .map(|gs| gameplay::update(gs, delta_time)),
-            CurrentScreen::Init => Some(init::update(&mut self.init_state, delta_time)),
-            CurrentScreen::Options => {
-                options::update(&mut self.options_state, delta_time, asset_manager)
-            }
+                .map(|gs| gameplay::update(gs, delta_time))
+                .map_or((None, false), |action| (Some(action), false)),
+            CurrentScreen::Init => (Some(init::update(&mut self.init_state, delta_time)), false),
+            CurrentScreen::Options => (
+                options::update(&mut self.options_state, delta_time, asset_manager),
+                false,
+            ),
             CurrentScreen::Credits => {
                 credits::update(&mut self.credits_state, delta_time);
-                None
+                (None, false)
             }
-            CurrentScreen::ManageLocalProfiles => {
-                manage_local_profiles::update(&mut self.manage_local_profiles_state, delta_time)
-            }
+            CurrentScreen::ManageLocalProfiles => (
+                manage_local_profiles::update(&mut self.manage_local_profiles_state, delta_time),
+                false,
+            ),
             CurrentScreen::Mappings => {
                 mappings::update(&mut self.mappings_state, delta_time);
-                None
+                (None, false)
             }
-            CurrentScreen::Input => input_screen::update(&mut self.input_state, delta_time),
+            CurrentScreen::Input => (
+                input_screen::update(&mut self.input_state, delta_time),
+                false,
+            ),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &mut self.player_options_state {
                     player_options::update(pos, delta_time, asset_manager);
                 }
-                None
+                (None, false)
             }
             CurrentScreen::Sandbox => {
                 sandbox::update(&mut self.sandbox_state, delta_time);
-                None
+                (None, false)
             }
             CurrentScreen::SelectProfile => {
                 select_profile::update(&mut self.select_profile_state, delta_time);
-                None
+                (None, false)
             }
             CurrentScreen::SelectColor => {
                 select_color::update(&mut self.select_color_state, delta_time);
-                None
+                (None, false)
             }
-            CurrentScreen::SelectStyle => {
-                select_style::update(&mut self.select_style_state, delta_time)
-            }
-            CurrentScreen::SelectPlayMode => {
-                select_mode::update(&mut self.select_play_mode_state, delta_time)
-            }
+            CurrentScreen::SelectStyle => (
+                select_style::update(&mut self.select_style_state, delta_time),
+                false,
+            ),
+            CurrentScreen::SelectPlayMode => (
+                select_mode::update(&mut self.select_play_mode_state, delta_time),
+                false,
+            ),
             CurrentScreen::ProfileLoad => {
                 let action = profile_load::update(&mut self.profile_load_state, delta_time);
                 if matches!(
@@ -2168,7 +2197,7 @@ impl ScreensState {
                         self.profile_load_state.active_color_index;
                     select_course::trigger_immediate_refresh(&mut self.select_course_state);
                 }
-                action
+                (action, false)
             }
             CurrentScreen::Evaluation => {
                 if let Some(start) = session.session_start_time {
@@ -2177,21 +2206,28 @@ impl ScreensState {
                 self.evaluation_state.gameplay_elapsed =
                     total_gameplay_elapsed(&session.played_stages);
                 evaluation::update(&mut self.evaluation_state, delta_time);
-                if let Some(delay) = self.evaluation_state.auto_advance_seconds
+                let action = if let Some(delay) = self.evaluation_state.auto_advance_seconds
                     && self.evaluation_state.screen_elapsed >= delay
                     && self.player_options_state.is_some()
                 {
                     Some(ScreenAction::Navigate(CurrentScreen::Gameplay))
                 } else {
                     None
-                }
+                };
+                (action, false)
             }
             CurrentScreen::EvaluationSummary => {
                 evaluation_summary::update(&mut self.evaluation_summary_state, delta_time);
-                None
+                (None, false)
             }
-            CurrentScreen::Initials => initials::update(&mut self.initials_state, delta_time),
-            CurrentScreen::GameOver => gameover::update(&mut self.gameover_state, delta_time),
+            CurrentScreen::Initials => (
+                initials::update(&mut self.initials_state, delta_time),
+                false,
+            ),
+            CurrentScreen::GameOver => (
+                gameover::update(&mut self.gameover_state, delta_time),
+                false,
+            ),
             CurrentScreen::SelectMusic => {
                 if let Some(start) = session.session_start_time {
                     self.select_music_state.session_elapsed =
@@ -2199,22 +2235,28 @@ impl ScreensState {
                 }
                 self.select_music_state.gameplay_elapsed =
                     total_gameplay_elapsed(&session.played_stages);
-                Some(select_music::update(
-                    &mut self.select_music_state,
-                    delta_time,
-                ))
+                (
+                    Some(select_music::update(
+                        &mut self.select_music_state,
+                        delta_time,
+                    )),
+                    false,
+                )
             }
             CurrentScreen::SelectCourse => {
                 if let Some(start) = session.session_start_time {
                     self.select_course_state.session_elapsed =
                         now.duration_since(start).as_secs_f32();
                 }
-                Some(select_course::update(
-                    &mut self.select_course_state,
-                    delta_time,
-                ))
+                (
+                    Some(select_course::update(
+                        &mut self.select_course_state,
+                        delta_time,
+                    )),
+                    false,
+                )
             }
-            CurrentScreen::Menu => None,
+            CurrentScreen::Menu => (None, false),
         }
     }
 }
@@ -2336,7 +2378,7 @@ impl App {
             .screens
             .gameplay_state
             .as_ref()
-            .map(crate::game::gameplay::display_clock_health)
+            .map(|gs| crate::game::gameplay::display_clock_health(gs))
             .unwrap_or_default();
         let present = self.state.shell.last_present_stats;
         let interval_ns = if present.actual_interval_ns != 0 {
@@ -2520,16 +2562,18 @@ impl App {
                 let gameplay_prompt_active = self.state.screens.current_screen
                     == CurrentScreen::Gameplay
                     && self.state.gameplay_offset_save_prompt.is_some();
-                if !gameplay_prompt_active
-                    && let Some(action) = self.state.screens.step_idle(
+                if !gameplay_prompt_active {
+                    let (action, _) = self.state.screens.step_idle(
                         delta_time,
                         redraw_started,
                         &self.state.session,
                         &self.asset_manager,
-                    )
-                    && !matches!(action, ScreenAction::None)
-                {
-                    let _ = self.handle_action(action, event_loop);
+                    );
+                    if let Some(action) = action
+                        && !matches!(action, ScreenAction::None)
+                    {
+                        let _ = self.handle_action(action, event_loop);
+                    }
                 }
                 if self.state.screens.current_screen == CurrentScreen::Evaluation
                     && !self.state.screens.evaluation_state.auto_screenshot_taken
@@ -2602,7 +2646,7 @@ impl App {
         };
         text_layout_cache.begin_frame_stats();
         let build_screen_started = Instant::now();
-        let mut screen = crate::engine::present::compose::build_screen_cached(
+        let screen = crate::engine::present::compose::build_screen_cached(
             &actors,
             clear_color,
             &self.state.shell.metrics,
@@ -2612,9 +2656,7 @@ impl App {
         );
         let build_screen_us = elapsed_us_since(build_screen_started);
         let text_layout = text_layout_cache.frame_stats();
-        let resolve_textures_started = Instant::now();
-        self.asset_manager.resolve_render_textures(&mut screen);
-        let resolve_textures_us = elapsed_us_since(resolve_textures_started);
+        let resolve_textures_us = 0;
         let compose_us: u32 = actor_build_us
             .saturating_add(build_screen_us)
             .saturating_add(resolve_textures_us);
@@ -3339,28 +3381,25 @@ impl App {
         true
     }
 
-    fn prepare_player_options_for_gameplay_restart(&mut self) -> bool {
-        let Some(gs) = self.state.screens.gameplay_state.as_ref() else {
-            return false;
-        };
-
+    fn prepare_restart_player_options(
+        &mut self,
+        song: Arc<crate::game::song::SongData>,
+        chart_hashes: [&str; crate::game::gameplay::MAX_PLAYERS],
+        music_rate: f32,
+        scroll_speed: [ScrollSpeedSetting; crate::game::gameplay::MAX_PLAYERS],
+        active_color_index: i32,
+    ) -> bool {
         let play_style = profile::get_session_play_style();
         let player_side = profile::get_session_player_side();
         let target_chart_type = play_style.chart_type();
         let fallback_steps = self.state.session.preferred_difficulty_index;
 
-        let p1_steps = select_music::steps_index_for_chart_hash(
-            &gs.song,
-            target_chart_type,
-            gs.charts[0].short_hash.as_str(),
-        )
-        .unwrap_or(fallback_steps);
-        let p2_steps = select_music::steps_index_for_chart_hash(
-            &gs.song,
-            target_chart_type,
-            gs.charts[1].short_hash.as_str(),
-        )
-        .unwrap_or(fallback_steps);
+        let p1_steps =
+            select_music::steps_index_for_chart_hash(&song, target_chart_type, chart_hashes[0])
+                .unwrap_or(fallback_steps);
+        let p2_steps =
+            select_music::steps_index_for_chart_hash(&song, target_chart_type, chart_hashes[1])
+                .unwrap_or(fallback_steps);
 
         let chart_steps_index = match play_style {
             profile::PlayStyle::Versus => [p1_steps, p2_steps],
@@ -3372,16 +3411,15 @@ impl App {
         };
 
         let mut po_state = player_options::init(
-            gs.song.clone(),
+            song,
             chart_steps_index,
             chart_steps_index,
-            gs.active_color_index,
+            active_color_index,
             CurrentScreen::Gameplay,
             None,
         );
-        po_state.music_rate = gs.music_rate;
-        po_state.player_profiles.clone_from(&gs.player_profiles);
-        po_state.speed_mod = std::array::from_fn(|i| match gs.scroll_speed[i] {
+        po_state.music_rate = music_rate;
+        po_state.speed_mod = std::array::from_fn(|i| match scroll_speed[i] {
             ScrollSpeedSetting::XMod(v) => player_options::SpeedMod {
                 mod_type: "X".to_string(),
                 value: v,
@@ -3399,6 +3437,62 @@ impl App {
         true
     }
 
+    fn prepare_player_options_for_gameplay_restart(&mut self) -> bool {
+        if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
+            let song = gs.song.clone();
+            let chart_hashes = [
+                gs.charts[0].short_hash.clone(),
+                gs.charts[1].short_hash.clone(),
+            ];
+            let music_rate = gs.music_rate;
+            let scroll_speed = gs.scroll_speed;
+            let active_color_index = gs.active_color_index;
+            return self.prepare_restart_player_options(
+                song,
+                [chart_hashes[0].as_str(), chart_hashes[1].as_str()],
+                music_rate,
+                scroll_speed,
+                active_color_index,
+            );
+        }
+
+        if self.state.screens.current_screen != CurrentScreen::Evaluation {
+            return false;
+        }
+
+        let score_info = &self.state.screens.evaluation_state.score_info;
+        let Some(song) = score_info
+            .iter()
+            .find_map(|entry| entry.as_ref().map(|si| si.song.clone()))
+        else {
+            return false;
+        };
+
+        let chart_hashes: [String; crate::game::gameplay::MAX_PLAYERS] =
+            std::array::from_fn(|idx| {
+                score_info[idx]
+                    .as_ref()
+                    .map_or_else(String::new, |si| si.chart.short_hash.clone())
+            });
+        let music_rate = score_info
+            .iter()
+            .find_map(|entry| entry.as_ref().map(|si| si.music_rate))
+            .unwrap_or(1.0);
+        let scroll_speed = std::array::from_fn(|idx| {
+            score_info[idx]
+                .as_ref()
+                .map_or(ScrollSpeedSetting::default(), |si| si.speed_mod)
+        });
+        let active_color_index = self.state.screens.evaluation_state.active_color_index;
+        self.prepare_restart_player_options(
+            song,
+            [chart_hashes[0].as_str(), chart_hashes[1].as_str()],
+            music_rate,
+            scroll_speed,
+            active_color_index,
+        )
+    }
+
     fn try_gameplay_restart(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
         if self.prepare_player_options_for_gameplay_restart() {
             let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
@@ -3411,7 +3505,7 @@ impl App {
             }
             true
         } else {
-            log::warn!("Ignored {label} restart: no active gameplay state.");
+            log::warn!("Ignored {label} restart: no restartable stage state.");
             false
         }
     }
@@ -3469,6 +3563,77 @@ impl App {
             }
         }
         stage_summary
+    }
+
+    fn finalize_entered_evaluation(&mut self) {
+        if let Some(backend) = self.backend.as_mut() {
+            self.dynamic_media
+                .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
+        }
+
+        let color_idx = self.state.screens.evaluation_state.active_color_index;
+        let eval_snapshot = self.state.screens.evaluation_state.clone();
+        let _ = self.append_stage_results_from_eval(&eval_snapshot);
+        self.state.screens.evaluation_state.return_to_course =
+            self.state.session.course_run.is_some();
+        self.state.screens.evaluation_state.auto_advance_seconds = None;
+
+        if let Some(course_run) = self.state.session.course_run.as_mut() {
+            if course_run.next_stage_index >= course_run.stages.len() {
+                let score_hash = course_run.score_hash.clone();
+                let per_song_pages = course_run.stage_eval_pages.clone();
+                let course_summary = build_course_summary_stage(course_run);
+                self.state.session.course_run = None;
+                self.state.session.course_eval_pages.clear();
+                self.state.session.course_eval_page_index = 0;
+
+                if let Some(course_stage) = course_summary {
+                    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+                        if let Some(player) = course_stage.players[side_ix(side)].as_ref() {
+                            scores::save_local_summary_score_for_side(
+                                score_hash.as_str(),
+                                side,
+                                course_stage.music_rate,
+                                player,
+                            );
+                        }
+                    }
+                    self.state.session.played_stages.push(course_stage.clone());
+
+                    let gameplay_elapsed =
+                        total_gameplay_elapsed(&self.state.session.played_stages);
+                    let session_elapsed = self.state.screens.evaluation_state.session_elapsed;
+                    let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
+                    let mut course_page = build_course_summary_eval_state(
+                        &course_stage,
+                        color_idx,
+                        session_elapsed,
+                        gameplay_elapsed,
+                    );
+                    course_page.screen_elapsed = screen_elapsed;
+                    self.state.screens.evaluation_state = course_page.clone();
+
+                    let mut pages = Vec::with_capacity(per_song_pages.len().saturating_add(1));
+                    pages.push(course_page);
+                    for mut page in per_song_pages {
+                        page.return_to_course = true;
+                        page.auto_advance_seconds = None;
+                        page.screen_elapsed = screen_elapsed;
+                        page.session_elapsed = session_elapsed;
+                        page.gameplay_elapsed = gameplay_elapsed;
+                        pages.push(page);
+                    }
+                    self.state.session.course_eval_pages = pages;
+                    self.state.session.course_eval_page_index = 0;
+                }
+            }
+        } else {
+            self.state.session.course_eval_pages.clear();
+            self.state.session.course_eval_page_index = 0;
+        }
+
+        self.state.screens.evaluation_state.gameplay_elapsed =
+            total_gameplay_elapsed(&self.state.session.played_stages);
     }
 
     fn post_select_display_stages(&self) -> Cow<'_, [stage_stats::StageSummary]> {
@@ -3977,7 +4142,7 @@ impl App {
         ));
     }
 
-    fn get_current_actors(&self) -> (Vec<Actor>, [f32; 4]) {
+    fn get_current_actors(&mut self) -> (Vec<Actor>, [f32; 4]) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
 
@@ -4002,7 +4167,8 @@ impl App {
                 menu::get_actors(&self.state.screens.menu_state, screen_alpha_multiplier)
             }
             CurrentScreen::Gameplay => {
-                if let Some(gs) = &self.state.screens.gameplay_state {
+                if let Some(gs) = &mut self.state.screens.gameplay_state {
+                    crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
                     gameplay::get_actors(gs, &self.asset_manager)
                 } else {
                     vec![]
@@ -4236,7 +4402,7 @@ impl App {
             .screens
             .gameplay_state
             .as_ref()
-            .map(crate::game::gameplay::display_clock_health)
+            .map(|gs| crate::game::gameplay::display_clock_health(gs))
             .unwrap_or_default();
         let display_error_us_i64 =
             (f64::from(display_clock.error_seconds) * 1_000_000.0).round() as i64;
@@ -4416,7 +4582,7 @@ impl App {
             .screens
             .gameplay_state
             .as_ref()
-            .map(crate::game::gameplay::display_clock_stutter_diag_trigger_seq)
+            .map(|gs| crate::game::gameplay::display_clock_stutter_diag_trigger_seq(gs))
             .unwrap_or(0);
         let audio_triggered =
             audio_trigger_seq > self.state.shell.stutter_diag.last_audio_trigger_seq;
@@ -4497,7 +4663,7 @@ impl App {
             .screens
             .gameplay_state
             .as_ref()
-            .map(crate::game::gameplay::display_clock_health)
+            .map(|gs| crate::game::gameplay::display_clock_health(gs))
             .unwrap_or_default();
         let display_error_ms = display_clock.error_seconds * 1000.0;
         let mut dominant = ("redraw_delivery", request_to_redraw_us);
@@ -4680,7 +4846,7 @@ impl App {
             .screens
             .gameplay_state
             .as_ref()
-            .map(crate::game::gameplay::display_clock_health)
+            .map(|gs| crate::game::gameplay::display_clock_health(gs))
             .unwrap_or_default();
         let display_error_us_i64 =
             (f64::from(display_clock.error_seconds) * 1_000_000.0).round() as i64;
@@ -4817,7 +4983,7 @@ impl App {
         }
     }
 
-    fn capture_compose_case_now(&self) {
+    fn capture_compose_case_now(&mut self) {
         let total_elapsed = Instant::now()
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
@@ -4982,6 +5148,17 @@ impl App {
                 return true;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
+            if App::raw_keyboard_restart_screen(self.state.screens.current_screen)
+                && raw_key.pressed
+                && !raw_key.repeat
+                && raw_key.code == KeyCode::KeyR
+                && self.state.shell.ctrl_held
+                && config::get().keyboard_features
+                && self.state.session.course_run.is_none()
+            {
+                self.try_gameplay_restart(event_loop, "Ctrl+R");
+                return true;
+            }
             if raw_key.pressed
                 && !raw_key.repeat
                 && raw_key.code == KeyCode::F5
@@ -5597,6 +5774,14 @@ impl App {
         target: CurrentScreen,
     ) -> Vec<Command> {
         let mut commands = Vec::new();
+        if prev == CurrentScreen::Gameplay
+            && target != CurrentScreen::Gameplay
+            && target != CurrentScreen::Evaluation
+            && let Some(backend) = self.backend.as_mut()
+        {
+            self.dynamic_media
+                .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
+        }
         if target == CurrentScreen::Gameplay {
             crate::engine::audio::stop_music();
             if prev != CurrentScreen::Gameplay {
@@ -5875,7 +6060,7 @@ impl App {
                     };
                 let combo_carry = self.state.session.combo_carry;
                 let init_started = Instant::now();
-                let gs = gameplay::init(
+                let mut gs = gameplay::init(
                     song_arc,
                     charts,
                     gameplay_charts,
@@ -5897,6 +6082,11 @@ impl App {
                 let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
                     prewarm_gameplay_assets(&mut self.asset_manager, backend, &gs);
+                    self.dynamic_media.set_gameplay_background_keys(
+                        &mut self.asset_manager,
+                        backend,
+                        gameplay_background_keys(&gs),
+                    );
                     if let Some(path) = gs.song.banner_path.as_ref() {
                         media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
                     }
@@ -5907,7 +6097,7 @@ impl App {
                     &self.asset_manager,
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
-                    &gs,
+                    &mut gs,
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let total_ms = gameplay_entry_started.elapsed().as_secs_f64() * 1000.0;
@@ -5967,70 +6157,20 @@ impl App {
                 self.state.screens.evaluation_state.active_color_index,
                 |gs| gs.active_color_index,
             );
-            self.state.screens.evaluation_state = evaluation::init(gameplay_results);
+            self.state.screens.evaluation_state = gameplay_results
+                .map(|gs| evaluation::init(Some(gs)))
+                .unwrap_or_else(|| evaluation::init(None));
             self.state.screens.evaluation_state.active_color_index = color_idx;
-            let eval_snapshot = self.state.screens.evaluation_state.clone();
-            let _ = self.append_stage_results_from_eval(&eval_snapshot);
             self.state.screens.evaluation_state.return_to_course =
                 self.state.session.course_run.is_some();
             self.state.screens.evaluation_state.auto_advance_seconds = None;
-
-            if let Some(course_run) = self.state.session.course_run.as_mut() {
-                if course_run.next_stage_index >= course_run.stages.len() {
-                    let score_hash = course_run.score_hash.clone();
-                    let per_song_pages = course_run.stage_eval_pages.clone();
-                    let course_summary = build_course_summary_stage(course_run);
-                    self.state.session.course_run = None;
-                    self.state.session.course_eval_pages.clear();
-                    self.state.session.course_eval_page_index = 0;
-
-                    if let Some(course_stage) = course_summary {
-                        for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
-                            if let Some(player) = course_stage.players[side_ix(side)].as_ref() {
-                                scores::save_local_summary_score_for_side(
-                                    score_hash.as_str(),
-                                    side,
-                                    course_stage.music_rate,
-                                    player,
-                                );
-                            }
-                        }
-                        self.state.session.played_stages.push(course_stage.clone());
-
-                        let gameplay_elapsed =
-                            total_gameplay_elapsed(&self.state.session.played_stages);
-                        let session_elapsed = self.state.screens.evaluation_state.session_elapsed;
-                        let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
-                        let mut course_page = build_course_summary_eval_state(
-                            &course_stage,
-                            color_idx,
-                            session_elapsed,
-                            gameplay_elapsed,
-                        );
-                        course_page.screen_elapsed = screen_elapsed;
-                        self.state.screens.evaluation_state = course_page.clone();
-
-                        let mut pages = Vec::with_capacity(per_song_pages.len().saturating_add(1));
-                        pages.push(course_page);
-                        for mut page in per_song_pages {
-                            page.return_to_course = true;
-                            page.auto_advance_seconds = None;
-                            page.screen_elapsed = screen_elapsed;
-                            page.session_elapsed = session_elapsed;
-                            page.gameplay_elapsed = gameplay_elapsed;
-                            pages.push(page);
-                        }
-                        self.state.session.course_eval_pages = pages;
-                        self.state.session.course_eval_page_index = 0;
-                    }
-                }
-            } else {
-                self.state.session.course_eval_pages.clear();
-                self.state.session.course_eval_page_index = 0;
+            if let Some(start) = self.state.session.session_start_time {
+                self.state.screens.evaluation_state.session_elapsed =
+                    Instant::now().duration_since(start).as_secs_f32();
             }
-
             self.state.screens.evaluation_state.gameplay_elapsed =
                 total_gameplay_elapsed(&self.state.session.played_stages);
+            self.finalize_entered_evaluation();
         }
 
         if target == CurrentScreen::EvaluationSummary {
@@ -6825,6 +6965,7 @@ mod tests {
             chart_name: String::new(),
             meter: 9,
             step_artist: String::new(),
+            music_path: None,
             short_hash: hash.to_string(),
             stats: rssp::stats::ArrowStats::default(),
             tech_counts: rssp::TechCounts::default(),
@@ -6891,6 +7032,15 @@ mod tests {
         assert!(!foreground_input_active(false, true));
         assert!(!foreground_input_active(true, false));
         assert!(!foreground_input_active(false, false));
+    }
+
+    #[test]
+    fn raw_keyboard_restart_screen_matches_zmod_restart_flow() {
+        assert!(App::raw_keyboard_restart_screen(CurrentScreen::Gameplay));
+        assert!(App::raw_keyboard_restart_screen(CurrentScreen::Evaluation));
+        assert!(!App::raw_keyboard_restart_screen(
+            CurrentScreen::EvaluationSummary,
+        ));
     }
 
     #[test]

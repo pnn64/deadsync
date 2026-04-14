@@ -478,6 +478,7 @@ struct SerializableChartData {
     chart_name: String,
     meter: u32,
     step_artist: String,
+    music_path: Option<String>,
     notes: Vec<u8>,
     parsed_notes: Vec<CachedParsedNote>,
     row_to_beat: Vec<f32>,
@@ -614,6 +615,7 @@ struct CachedChartMeta {
     chart_name: String,
     meter: u32,
     step_artist: String,
+    music_path: Option<String>,
     short_hash: String,
     stats: CachedArrowStats,
     tech_counts: CachedTechCounts,
@@ -780,6 +782,7 @@ fn build_chart_meta(
         chart_name: chart.chart_name,
         meter: chart.meter,
         step_artist: chart.step_artist,
+        music_path: chart.music_path.map(PathBuf::from),
         short_hash: chart.short_hash,
         stats: chart.stats.into(),
         tech_counts: chart.tech_counts.into(),
@@ -833,6 +836,7 @@ fn build_cached_chart_meta(
         chart_name: chart.chart_name.clone(),
         meter: chart.meter,
         step_artist: chart.step_artist.clone(),
+        music_path: chart.music_path.clone(),
         short_hash: chart.short_hash.clone(),
         stats: chart.stats.clone(),
         tech_counts: chart.tech_counts,
@@ -871,6 +875,7 @@ fn build_chart_meta_from_cache(chart: CachedChartMeta) -> ChartData {
         chart_name: chart.chart_name,
         meter: chart.meter,
         step_artist: chart.step_artist,
+        music_path: chart.music_path.map(PathBuf::from),
         short_hash: chart.short_hash,
         stats: chart.stats.into(),
         tech_counts: chart.tech_counts.into(),
@@ -1863,6 +1868,11 @@ fn parse_and_process_song_file(
     };
 
     let summary = analyze(&simfile_data, extension, &options)?;
+    let simfile_dir = path
+        .parent()
+        .ok_or_else(|| "Could not determine simfile directory".to_string())?;
+    let song_music_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.music_path)
+        .or_else(|| rssp::assets::resolve_music_path_like_itg(simfile_dir, &summary.music_path));
     let charts: Vec<SerializableChartData> = summary
         .charts
         .into_iter()
@@ -1885,6 +1895,20 @@ fn parse_and_process_song_file(
                 chart_name: c.chart_name_str,
                 meter: c.rating_str.parse().unwrap_or(0),
                 step_artist: c.step_artist_str,
+                music_path: if c.music_path.trim().is_empty() {
+                    song_music_path
+                        .as_ref()
+                        .map(|path| path.to_string_lossy().into_owned())
+                } else {
+                    resolve_song_asset_path_like_itg(simfile_dir, c.music_path.as_str())
+                        .or_else(|| {
+                            rssp::assets::resolve_music_path_like_itg(
+                                simfile_dir,
+                                c.music_path.as_str(),
+                            )
+                        })
+                        .map(|path| path.to_string_lossy().into_owned())
+                },
                 notes: c.minimized_note_data,
                 parsed_notes: parsed_notes.iter().map(CachedParsedNote::from).collect(),
                 row_to_beat: c.row_to_beat,
@@ -1924,10 +1948,6 @@ fn parse_and_process_song_file(
         })
         .collect();
 
-    let simfile_dir = path
-        .parent()
-        .ok_or_else(|| "Could not determine simfile directory".to_string())?;
-
     let (banner_path, background_path_opt) = rssp::assets::resolve_song_assets(
         simfile_dir,
         &summary.banner_path,
@@ -1943,9 +1963,6 @@ fn parse_and_process_song_file(
             .collect();
     let cdtitle_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.cdtitle_path);
 
-    let music_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.music_path)
-        .or_else(|| rssp::assets::resolve_music_path_like_itg(simfile_dir, &summary.music_path));
-
     // Compute audio length (music file duration) in seconds, mirroring ITGmania's
     // m_fMusicLengthSeconds. This intentionally measures the full OGG length,
     // including trailing silence, and is used for displays that call
@@ -1955,7 +1972,7 @@ fn parse_and_process_song_file(
     // is suspiciously shorter than the chart's last second (by > 10s), it
     // trusts the chart timing instead. This handles meme files where the
     // audio is a short silent stub but the chart runs for hours.
-    let mut music_length_seconds = compute_music_length_seconds(music_path.as_deref());
+    let mut music_length_seconds = compute_music_length_seconds(song_music_path.as_deref());
     let chart_length_seconds = summary.total_length.max(0) as f32;
     if music_length_seconds > 0.0
         && chart_length_seconds > 0.0
@@ -1972,7 +1989,7 @@ fn parse_and_process_song_file(
             translit_title: summary.titletranslit_str,
             translit_subtitle: summary.subtitletranslit_str,
             artist: summary.artist_str,
-            genre: extract_genre_tag(&simfile_data),
+            genre: summary.genre_str,
             banner_path: banner_path.map(|p| p.to_string_lossy().into_owned()),
             background_path: background_path_opt.map(|p| p.to_string_lossy().into_owned()),
             background_changes,
@@ -1994,7 +2011,7 @@ fn parse_and_process_song_file(
             min_bpm: summary.min_bpm,
             max_bpm: summary.max_bpm,
             normalized_bpms: summary.normalized_bpms,
-            music_path: music_path.map(|p| p.to_string_lossy().into_owned()),
+            music_path: song_music_path.map(|p| p.to_string_lossy().into_owned()),
             music_length_seconds,
             total_length_seconds: summary.total_length,
             precise_last_second_seconds: summary.total_length.max(0) as f32,
@@ -2002,26 +2019,6 @@ fn parse_and_process_song_file(
         },
         content_hash,
     ))
-}
-
-/// Extracts the `#GENRE:` tag value from raw simfile bytes.
-/// Returns an empty string if the tag is not found.
-fn extract_genre_tag(data: &[u8]) -> String {
-    let tag = b"#GENRE:";
-    let data_len = data.len();
-    let tag_len = tag.len();
-    for i in 0..data_len.saturating_sub(tag_len) {
-        if data[i..i + tag_len].eq_ignore_ascii_case(tag) {
-            let start = i + tag_len;
-            let mut end = start;
-            while end < data_len && data[end] != b';' && data[end] != b'\n' && data[end] != b'\r'
-            {
-                end += 1;
-            }
-            return String::from_utf8_lossy(&data[start..end]).trim().to_string();
-        }
-    }
-    String::new()
 }
 
 /// Computes the length of the music file in seconds when the decode layer supports it.

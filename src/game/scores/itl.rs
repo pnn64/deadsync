@@ -1412,6 +1412,7 @@ mod tests {
             chart_name: String::new(),
             meter: 12,
             step_artist: String::new(),
+            music_path: None,
             short_hash: "deadbeefcafebabe".to_string(),
             stats: ArrowStats::default(),
             tech_counts: TechCounts::default(),

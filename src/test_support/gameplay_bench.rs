@@ -9,18 +9,18 @@ use std::sync::Arc;
 pub const SCENARIO_NAME: &str = "gameplay";
 
 pub struct GameplayBenchFixture {
-    base: notefield_bench::NotefieldBenchFixture,
+    state: gameplay_screen::State,
     asset_manager: AssetManager,
 }
 
 impl GameplayBenchFixture {
     pub fn build(&self, retained: bool) -> Vec<Actor> {
         if !retained {
-            for cache in &self.base.state().notefield_model_cache {
+            for cache in &self.state.notefield_model_cache {
                 cache.borrow_mut().clear();
             }
         }
-        gameplay_screen::get_actors(self.base.state(), &self.asset_manager)
+        gameplay_screen::get_actors(&self.state, &self.asset_manager)
     }
 }
 
@@ -52,7 +52,6 @@ pub fn fixture() -> GameplayBenchFixture {
         state.density_graph_top_h = 30.0;
         state.density_graph_top_w[0] = 214.0;
         state.density_graph_top_scale_y[0] = 0.85;
-        state.density_graph_top_mesh[0] = Some(top_graph_mesh());
         state.players[0].life = 0.734;
         state.player_profiles[0].nps_graph_at_top = true;
         state.player_profiles[0].show_ex_score = true;
@@ -63,6 +62,9 @@ pub fn fixture() -> GameplayBenchFixture {
         state.player_profiles[0].hide_song_bg = false;
         state.player_profiles[0].data_visualizations = profile::DataVisualizations::None;
     }
+    let (state, _) = base.into_parts();
+    let mut state = gameplay_screen::State::from_gameplay(state);
+    state.density_graph.top_mesh[0] = Some(top_graph_mesh());
 
     let mut asset_manager = AssetManager::new();
     for (name, font) in compose_scenarios::bench_fonts() {
@@ -70,7 +72,7 @@ pub fn fixture() -> GameplayBenchFixture {
     }
 
     GameplayBenchFixture {
-        base,
+        state,
         asset_manager,
     }
 }

@@ -97,6 +97,39 @@ impl TimingProfile {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct TimingProfileNs {
+    pub windows_ns: [i64; 5],
+    pub fa_plus_window_ns: Option<i64>,
+    pub mine_window_ns: i64,
+}
+
+impl TimingProfileNs {
+    #[inline(always)]
+    pub fn from_profile_scaled(profile: &TimingProfile, seconds_per_second: f32) -> Self {
+        #[inline(always)]
+        fn scale_window_ns(seconds: f32, seconds_per_second: f32) -> TimingNs {
+            let seconds_per_second = if seconds_per_second.is_finite() && seconds_per_second > 0.0 {
+                seconds_per_second
+            } else {
+                1.0
+            };
+            let nanos = f64::from(seconds) * f64::from(seconds_per_second) * 1_000_000_000.0;
+            nanos.round().clamp((i64::MIN + 1) as f64, i64::MAX as f64) as TimingNs
+        }
+
+        Self {
+            windows_ns: profile
+                .windows_s
+                .map(|seconds| scale_window_ns(seconds, seconds_per_second)),
+            fa_plus_window_ns: profile
+                .fa_plus_window_s
+                .map(|seconds| scale_window_ns(seconds, seconds_per_second)),
+            mine_window_ns: scale_window_ns(profile.mine_window_s, seconds_per_second),
+        }
+    }
+}
+
 #[inline(always)]
 pub fn effective_windows_ms() -> [f32; 5] {
     TimingProfile::default_itg_with_fa_plus().windows_ms()
@@ -107,43 +140,16 @@ pub fn mine_window_s() -> f32 {
     BASE_MINE_S + TIMING_WINDOW_ADD_S
 }
 
-/// Classify a signed tap offset (seconds) into an ITG-style `JudgeGrade` and
-/// detailed `TimingWindow` (including FA+ W0 when enabled in the profile).
-///
-/// Callers should ensure |`offset_s`| is within the outer `WayOff` window; if it is
-/// not, the returned `JudgeGrade` will still be `WayOff`.
 #[inline(always)]
-pub fn classify_offset_s(offset_s: f32, profile: &TimingProfile) -> (JudgeGrade, TimingWindow) {
-    let abs = offset_s.abs();
-    if let Some(w0) = profile.fa_plus_window_s
-        && abs <= w0
-    {
-        return (JudgeGrade::Fantastic, TimingWindow::W0);
-    }
-    let w = profile.windows_s;
-    if abs <= w[0] {
-        (JudgeGrade::Fantastic, TimingWindow::W1)
-    } else if abs <= w[1] {
-        (JudgeGrade::Excellent, TimingWindow::W2)
-    } else if abs <= w[2] {
-        (JudgeGrade::Great, TimingWindow::W3)
-    } else if abs <= w[3] {
-        (JudgeGrade::Decent, TimingWindow::W4)
-    } else {
-        (JudgeGrade::WayOff, TimingWindow::W5)
-    }
-}
-
-#[inline(always)]
-pub fn classify_offset_s_with_disabled_windows(
-    offset_s: f32,
-    profile: &TimingProfile,
+pub fn classify_offset_ns_with_disabled_windows(
+    offset_ns: i64,
+    profile: &TimingProfileNs,
     disabled_windows: &[bool; 5],
 ) -> Option<(JudgeGrade, TimingWindow)> {
-    let abs = offset_s.abs();
+    let abs = i128::from(offset_ns).abs();
     if !disabled_windows[0]
-        && let Some(w0) = profile.fa_plus_window_s
-        && abs <= w0
+        && let Some(w0) = profile.fa_plus_window_ns
+        && abs <= i128::from(w0)
     {
         return Some((JudgeGrade::Fantastic, TimingWindow::W0));
     }
@@ -151,37 +157,37 @@ pub fn classify_offset_s_with_disabled_windows(
     let checks = [
         (
             disabled_windows[0],
-            profile.windows_s[0],
+            profile.windows_ns[0],
             JudgeGrade::Fantastic,
             TimingWindow::W1,
         ),
         (
             disabled_windows[1],
-            profile.windows_s[1],
+            profile.windows_ns[1],
             JudgeGrade::Excellent,
             TimingWindow::W2,
         ),
         (
             disabled_windows[2],
-            profile.windows_s[2],
+            profile.windows_ns[2],
             JudgeGrade::Great,
             TimingWindow::W3,
         ),
         (
             disabled_windows[3],
-            profile.windows_s[3],
+            profile.windows_ns[3],
             JudgeGrade::Decent,
             TimingWindow::W4,
         ),
         (
             disabled_windows[4],
-            profile.windows_s[4],
+            profile.windows_ns[4],
             JudgeGrade::WayOff,
             TimingWindow::W5,
         ),
     ];
-    for (disabled, window_s, grade, window) in checks {
-        if !disabled && abs <= window_s {
+    for (disabled, window_ns, grade, window) in checks {
+        if !disabled && abs <= i128::from(window_ns) {
             return Some((grade, window));
         }
     }
@@ -189,11 +195,11 @@ pub fn classify_offset_s_with_disabled_windows(
 }
 
 #[inline(always)]
-pub fn largest_enabled_tap_window_s(
-    profile: &TimingProfile,
+pub fn largest_enabled_tap_window_ns(
+    profile: &TimingProfileNs,
     disabled_windows: &[bool; 5],
-) -> Option<f32> {
-    let windows = profile.windows_s;
+) -> Option<i64> {
+    let windows = profile.windows_ns;
     let ordered = [
         (disabled_windows[4], windows[4]),
         (disabled_windows[3], windows[3]),
@@ -201,9 +207,9 @@ pub fn largest_enabled_tap_window_s(
         (disabled_windows[1], windows[1]),
         (disabled_windows[0], windows[0]),
     ];
-    for (disabled, window_s) in ordered {
+    for (disabled, window_ns) in ordered {
         if !disabled {
-            return Some(window_s);
+            return Some(window_ns);
         }
     }
     None
@@ -1633,6 +1639,10 @@ mod tests {
             row_index,
             result: Some(Judgment {
                 time_error_ms,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(
+                    time_error_ms,
+                    1.0,
+                ),
                 grade,
                 window,
                 miss_because_held: false,
@@ -1809,7 +1819,7 @@ mod tests {
 
         let delay_midpoint = timing
             .get_time_for_beat_ns(6.0)
-            .saturating_add(timing_ns_from_seconds(0.050));
+            .saturating_sub(timing_ns_from_seconds(0.050));
         let delay_info = timing.get_beat_info_from_time_ns_cached(delay_midpoint, &mut cache);
         assert!(!delay_info.is_in_freeze);
         assert!(delay_info.is_in_delay);
@@ -1872,8 +1882,9 @@ mod tests {
     fn disabled_top_windows_demote_perfect_hits_to_greats() {
         let profile = TimingProfile::default_itg_with_fa_plus();
         let disabled = [true, true, false, false, false];
+        let profile_ns = TimingProfileNs::from_profile_scaled(&profile, 1.0);
 
-        let judged = classify_offset_s_with_disabled_windows(0.0, &profile, &disabled)
+        let judged = classify_offset_ns_with_disabled_windows(0, &profile_ns, &disabled)
             .expect("great window should still accept perfect offsets");
 
         assert_eq!(judged, (JudgeGrade::Great, TimingWindow::W3));
@@ -1883,19 +1894,64 @@ mod tests {
     fn disabled_bottom_windows_turn_outer_w4_hits_into_misses() {
         let profile = TimingProfile::default_itg_with_fa_plus();
         let disabled = [false, false, false, true, true];
-        let offset = (profile.windows_s[2] + profile.windows_s[3]) * 0.5;
+        let profile_ns = TimingProfileNs::from_profile_scaled(&profile, 1.0);
+        let offset_ns = (profile_ns.windows_ns[2] + profile_ns.windows_ns[3]) / 2;
 
-        assert!(classify_offset_s_with_disabled_windows(offset, &profile, &disabled).is_none());
+        assert!(
+            classify_offset_ns_with_disabled_windows(offset_ns, &profile_ns, &disabled).is_none()
+        );
     }
 
     #[test]
-    fn largest_enabled_tap_window_tracks_disabled_way_offs() {
+    fn ns_largest_enabled_window_tracks_disabled_way_offs() {
         let profile = TimingProfile::default_itg_with_fa_plus();
         let disabled = [false, false, false, false, true];
+        let profile_ns = TimingProfileNs::from_profile_scaled(&profile, 1.0);
 
-        let largest =
-            largest_enabled_tap_window_s(&profile, &disabled).expect("great or better stays on");
+        let largest = largest_enabled_tap_window_ns(&profile_ns, &disabled)
+            .expect("great or better stays on");
 
-        assert!((largest - profile.windows_s[3]).abs() <= f32::EPSILON);
+        assert_eq!(largest, profile_ns.windows_ns[3]);
+    }
+
+    #[test]
+    fn ns_classifier_handles_window_edges() {
+        let profile = TimingProfile::default_itg_with_fa_plus();
+        let disabled = [false; 5];
+        let profile_ns = TimingProfileNs::from_profile_scaled(&profile, 1.5);
+        let w0 = profile_ns
+            .fa_plus_window_ns
+            .expect("default profile has W0");
+        let w = profile_ns.windows_ns;
+        let cases = [
+            (0, Some((JudgeGrade::Fantastic, TimingWindow::W0))),
+            (1, Some((JudgeGrade::Fantastic, TimingWindow::W0))),
+            (w0, Some((JudgeGrade::Fantastic, TimingWindow::W0))),
+            (w0 + 1, Some((JudgeGrade::Fantastic, TimingWindow::W1))),
+            (w[0], Some((JudgeGrade::Fantastic, TimingWindow::W1))),
+            (w[0] + 1, Some((JudgeGrade::Excellent, TimingWindow::W2))),
+            (w[1], Some((JudgeGrade::Excellent, TimingWindow::W2))),
+            (w[1] + 1, Some((JudgeGrade::Great, TimingWindow::W3))),
+            (w[2], Some((JudgeGrade::Great, TimingWindow::W3))),
+            (w[2] + 1, Some((JudgeGrade::Decent, TimingWindow::W4))),
+            (w[3], Some((JudgeGrade::Decent, TimingWindow::W4))),
+            (w[3] + 1, Some((JudgeGrade::WayOff, TimingWindow::W5))),
+            (w[4], Some((JudgeGrade::WayOff, TimingWindow::W5))),
+            (w[4] + 1, None),
+        ];
+
+        for (offset_ns, expected) in cases {
+            for signed_offset_ns in [offset_ns, -offset_ns] {
+                assert_eq!(
+                    classify_offset_ns_with_disabled_windows(
+                        signed_offset_ns,
+                        &profile_ns,
+                        &disabled
+                    ),
+                    expected,
+                    "offset_ns={signed_offset_ns}",
+                );
+            }
+        }
     }
 }
