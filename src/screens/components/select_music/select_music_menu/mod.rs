@@ -48,6 +48,7 @@ pub enum Action {
     SyncPack,
     PlayReplay,
     ShowLeaderboard,
+    ShowSetSummary,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -221,6 +222,11 @@ pub const ITEM_GO_BACK_STANDALONE: Item = Item {
     top_label: "",
     bottom_label: "Go Back",
     action: Action::BackToMain,
+};
+pub const ITEM_SET_SUMMARY: Item = Item {
+    top_label: "Relive Your Memories",
+    bottom_label: "Set Summary",
+    action: Action::ShowSetSummary,
 };
 
 pub const ITEMS_SORTS: [Item; 11] = [

@@ -30,16 +30,26 @@ pub struct State {
     bg: heart_bg::State,
     pub page: usize,
     pub elapsed: f32,
+    pub return_to: Screen,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; 2],
 }
 
 pub fn init() -> State {
+    init_with_return(Screen::Initials)
+}
+
+pub fn init_for_set_summary() -> State {
+    init_with_return(Screen::SelectMusic)
+}
+
+fn init_with_return(return_to: Screen) -> State {
     State {
-        active_color_index: color::DEFAULT_COLOR_INDEX, // overwritten by app
+        active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: heart_bg::State::new(),
         page: 1,
         elapsed: 0.0,
+        return_to,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; 2],
     }
@@ -95,7 +105,7 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
         VirtualAction::p1_back
         | VirtualAction::p1_start
         | VirtualAction::p2_back
-        | VirtualAction::p2_start => ScreenAction::Navigate(Screen::Initials),
+        | VirtualAction::p2_start => ScreenAction::Navigate(state.return_to),
 
         VirtualAction::p1_menu_left
         | VirtualAction::p1_left
