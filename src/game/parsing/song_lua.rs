@@ -4271,6 +4271,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "fardistz",
         "fov",
         "finishtweening",
+        "hibernate",
         "texturetranslate",
         "vanishpoint",
         "wag",
@@ -6906,6 +6907,36 @@ return Def.ActorFrame{
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "640:360");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_hibernate_chain_method() {
+        let song_dir = test_dir("actor-hibernate");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:hibernate(0):diffusealpha(0.25):sleep(1)
+            mod_actions = {
+                {1, string.format("%.2f", self:GetDiffuseAlpha()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Hibernate"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "0.25");
     }
 
     #[test]
