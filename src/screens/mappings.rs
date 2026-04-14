@@ -63,23 +63,24 @@ const CURSOR_TWEEN_SECONDS: f32 = 0.1;
 /// Spacing between inline items (for cursor ring sizing).
 const INLINE_SPACING: f32 = 15.75;
 
-/// Physical keys that are considered "default" and are not
-/// accepted as candidates when capturing a new mapping.
-const DEFAULT_PROTECTED_KEYS: &[KeyCode] = &[
-    // P1 defaults (arrows + Enter/Escape)
-    KeyCode::ArrowUp,
-    KeyCode::ArrowDown,
-    KeyCode::ArrowLeft,
-    KeyCode::ArrowRight,
-    KeyCode::Enter,
-    KeyCode::Escape,
-    // P2 defaults (numpad directions + Start)
-    KeyCode::Numpad8,
-    KeyCode::Numpad2,
-    KeyCode::Numpad4,
-    KeyCode::Numpad6,
-    KeyCode::NumpadEnter,
-];
+#[inline(always)]
+const fn invalid_capture_key(code: KeyCode) -> bool {
+    matches!(
+        code,
+        KeyCode::F1
+            | KeyCode::F2
+            | KeyCode::F3
+            | KeyCode::F4
+            | KeyCode::F5
+            | KeyCode::F6
+            | KeyCode::F7
+            | KeyCode::F8
+            | KeyCode::F9
+            | KeyCode::F10
+            | KeyCode::F11
+            | KeyCode::F12
+    )
+}
 
 /// Logical mapping rows we expose in this prototype.
 const NUM_MAPPING_ROWS: usize = 18;
@@ -506,8 +507,9 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         if !is_pressed {
             return ScreenAction::None;
         }
-        // Default/protected keys do nothing while capturing; remain locked.
-        if DEFAULT_PROTECTED_KEYS.contains(&code) {
+        // Match ITGmania's mapper behavior: function keys remain reserved,
+        // but arrows, Enter, Escape, and other normal keys are valid bindings.
+        if invalid_capture_key(code) {
             return ScreenAction::None;
         }
 
@@ -1665,4 +1667,27 @@ pub fn get_actors(
     actors.extend(ui_actors);
 
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::invalid_capture_key;
+    use winit::keyboard::KeyCode;
+
+    #[test]
+    fn capture_allows_default_menu_keys() {
+        assert!(!invalid_capture_key(KeyCode::ArrowLeft));
+        assert!(!invalid_capture_key(KeyCode::ArrowRight));
+        assert!(!invalid_capture_key(KeyCode::ArrowUp));
+        assert!(!invalid_capture_key(KeyCode::ArrowDown));
+        assert!(!invalid_capture_key(KeyCode::Enter));
+        assert!(!invalid_capture_key(KeyCode::Escape));
+        assert!(!invalid_capture_key(KeyCode::NumpadEnter));
+    }
+
+    #[test]
+    fn capture_rejects_function_keys() {
+        assert!(invalid_capture_key(KeyCode::F1));
+        assert!(invalid_capture_key(KeyCode::F12));
+    }
 }

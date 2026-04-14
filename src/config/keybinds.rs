@@ -556,18 +556,7 @@ pub(crate) fn load_keymap_from_ini_local(conf: &SimpleIni) -> Keymap {
                 }
             }
         }
-        if km.binding_at(VirtualAction::p1_select, 0).is_none() {
-            km.bind(
-                VirtualAction::p1_select,
-                &[InputBinding::Key(KeyCode::Slash)],
-            );
-        }
-        if km.binding_at(VirtualAction::p2_select, 0).is_none() {
-            km.bind(
-                VirtualAction::p2_select,
-                &[InputBinding::Key(KeyCode::NumpadDecimal)],
-            );
-        }
+        restore_available_default_bindings(&mut km);
 
         km
     } else {
@@ -615,6 +604,36 @@ fn remove_matching_input_binding(bindings: &mut Vec<InputBinding>, binding: Inpu
 }
 
 #[inline(always)]
+fn keymap_contains_binding(keymap: &Keymap, binding: InputBinding) -> bool {
+    for act in ALL_VIRTUAL_ACTIONS {
+        let mut i = 0;
+        while let Some(existing) = keymap.binding_at(act, i) {
+            if existing == binding {
+                return true;
+            }
+            i += 1;
+        }
+    }
+    false
+}
+
+#[inline(always)]
+fn restore_available_default_bindings(keymap: &mut Keymap) {
+    let defaults = default_keymap_local();
+    for act in ALL_VIRTUAL_ACTIONS {
+        let Some(default_binding) = defaults.binding_at(act, 0) else {
+            continue;
+        };
+        if keymap_contains_binding(keymap, default_binding) {
+            continue;
+        }
+        let mut bindings = load_action_bindings(keymap, act);
+        bindings.insert(0, default_binding);
+        keymap.bind(act, &bindings);
+    }
+}
+
+#[inline(always)]
 fn set_binding_at_slot(bindings: &mut Vec<InputBinding>, slot_index: usize, binding: InputBinding) {
     debug_assert!(
         bindings.len() >= slot_index,
@@ -627,18 +646,16 @@ fn set_binding_at_slot(bindings: &mut Vec<InputBinding>, slot_index: usize, bind
     }
 }
 
-/// Update a keyboard binding in Primary/Secondary slots, ensuring that the
-/// given key code is not used anywhere else in the keymap.
-pub fn update_keymap_binding_unique_keyboard(
+fn updated_keymap_unique_keyboard(
+    current: &Keymap,
     action: VirtualAction,
     index: usize,
     keycode: KeyCode,
-) {
-    let current = crate::engine::input::get_keymap();
+) -> Keymap {
     let mut new_map = Keymap::default();
 
     for act in ALL_VIRTUAL_ACTIONS {
-        let mut bindings = load_action_bindings(&current, act);
+        let mut bindings = load_action_bindings(current, act);
         let first_editable = first_editable_binding_slot(&bindings);
 
         // Remove this key from every slot so one physical key cannot fan out
@@ -658,22 +675,20 @@ pub fn update_keymap_binding_unique_keyboard(
         new_map.bind(act, &bindings);
     }
 
-    crate::engine::input::set_keymap(new_map);
-    save_without_keymaps();
+    restore_available_default_bindings(&mut new_map);
+    new_map
 }
 
-/// Update a gamepad binding in Primary/Secondary slots, ensuring that the
-/// given physical binding is not used anywhere else in the keymap.
-pub fn update_keymap_binding_unique_gamepad(
+fn updated_keymap_unique_gamepad(
+    current: &Keymap,
     action: VirtualAction,
     index: usize,
     binding: InputBinding,
-) {
-    let current = crate::engine::input::get_keymap();
+) -> Keymap {
     let mut new_map = Keymap::default();
 
     for act in ALL_VIRTUAL_ACTIONS {
-        let mut bindings = load_action_bindings(&current, act);
+        let mut bindings = load_action_bindings(current, act);
         let first_editable = first_editable_binding_slot(&bindings);
 
         // Remove this binding from every slot so one physical control cannot
@@ -693,19 +708,16 @@ pub fn update_keymap_binding_unique_gamepad(
         new_map.bind(act, &bindings);
     }
 
-    crate::engine::input::set_keymap(new_map);
-    save_without_keymaps();
+    restore_available_default_bindings(&mut new_map);
+    new_map
 }
 
-/// Clear the requested Primary/Secondary binding slot for an action.
-/// Returns `true` when a binding was removed.
-pub fn clear_keymap_binding(action: VirtualAction, index: usize) -> bool {
-    let current = crate::engine::input::get_keymap();
+fn cleared_keymap(current: &Keymap, action: VirtualAction, index: usize) -> (Keymap, bool) {
     let mut new_map = Keymap::default();
     let mut changed = false;
 
     for act in ALL_VIRTUAL_ACTIONS {
-        let mut bindings = load_action_bindings(&current, act);
+        let mut bindings = load_action_bindings(current, act);
         if act == action {
             let first_editable = first_editable_binding_slot(&bindings);
             let effective_index = requested_to_actual_binding_slot(index, first_editable);
@@ -718,8 +730,99 @@ pub fn clear_keymap_binding(action: VirtualAction, index: usize) -> bool {
     }
 
     if changed {
+        restore_available_default_bindings(&mut new_map);
+    }
+    (new_map, changed)
+}
+
+/// Update a keyboard binding in Primary/Secondary slots, ensuring that the
+/// given key code is not used anywhere else in the keymap.
+pub fn update_keymap_binding_unique_keyboard(
+    action: VirtualAction,
+    index: usize,
+    keycode: KeyCode,
+) {
+    let current = crate::engine::input::get_keymap();
+    let new_map = updated_keymap_unique_keyboard(&current, action, index, keycode);
+    crate::engine::input::set_keymap(new_map);
+    save_without_keymaps();
+}
+
+/// Update a gamepad binding in Primary/Secondary slots, ensuring that the
+/// given physical binding is not used anywhere else in the keymap.
+pub fn update_keymap_binding_unique_gamepad(
+    action: VirtualAction,
+    index: usize,
+    binding: InputBinding,
+) {
+    let current = crate::engine::input::get_keymap();
+    let new_map = updated_keymap_unique_gamepad(&current, action, index, binding);
+    crate::engine::input::set_keymap(new_map);
+    save_without_keymaps();
+}
+
+/// Clear the requested Primary/Secondary binding slot for an action.
+/// Returns `true` when a binding was removed.
+pub fn clear_keymap_binding(action: VirtualAction, index: usize) -> bool {
+    let current = crate::engine::input::get_keymap();
+    let (new_map, changed) = cleared_keymap(&current, action, index);
+
+    if changed {
         crate::engine::input::set_keymap(new_map);
         save_without_keymaps();
     }
     changed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replacing_stolen_default_restores_original_action() {
+        let moved = updated_keymap_unique_keyboard(
+            &default_keymap_local(),
+            VirtualAction::p1_start,
+            1,
+            KeyCode::Slash,
+        );
+        assert_eq!(
+            moved.binding_at(VirtualAction::p1_start, 1),
+            Some(InputBinding::Key(KeyCode::Slash))
+        );
+        assert_eq!(moved.binding_at(VirtualAction::p1_select, 0), None);
+
+        let restored =
+            updated_keymap_unique_keyboard(&moved, VirtualAction::p1_start, 1, KeyCode::KeyZ);
+        assert_eq!(
+            restored.binding_at(VirtualAction::p1_select, 0),
+            Some(InputBinding::Key(KeyCode::Slash))
+        );
+        assert_eq!(
+            restored.binding_at(VirtualAction::p1_start, 1),
+            Some(InputBinding::Key(KeyCode::KeyZ))
+        );
+    }
+
+    #[test]
+    fn clearing_stolen_default_restores_original_action() {
+        let moved = updated_keymap_unique_keyboard(
+            &default_keymap_local(),
+            VirtualAction::p1_start,
+            1,
+            KeyCode::Slash,
+        );
+        let (restored, changed) = cleared_keymap(&moved, VirtualAction::p1_start, 1);
+
+        assert!(changed);
+        assert_eq!(
+            restored.binding_at(VirtualAction::p1_select, 0),
+            Some(InputBinding::Key(KeyCode::Slash))
+        );
+        assert_eq!(
+            restored.binding_at(VirtualAction::p1_start, 0),
+            Some(InputBinding::Key(KeyCode::Enter))
+        );
+        assert_eq!(restored.binding_at(VirtualAction::p1_start, 1), None);
+    }
 }
