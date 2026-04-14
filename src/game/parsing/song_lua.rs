@@ -3828,6 +3828,17 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "FullScreen",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let (width, height) = song_lua_screen_size(lua)?;
+                capture_block_set_stretch(lua, &actor, [0.0, 0.0, width, height])?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "cropright",
         lua.create_function({
             let actor = actor.clone();
@@ -6940,6 +6951,35 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "0.25");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_fullscreen_method() {
+        let song_dir = test_dir("actor-fullscreen");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:FullScreen():Center()
+            mod_actions = {
+                {1, string.format("%.0f:%.0f:%.0f:%.0f", self:GetX(), self:GetY(), self:GetWidth(), self:GetHeight()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Actor FullScreen");
+        context.screen_width = 1280.0;
+        context.screen_height = 720.0;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "640:360:1280:720");
     }
 
     #[test]
