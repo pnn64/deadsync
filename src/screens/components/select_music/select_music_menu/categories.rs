@@ -26,7 +26,7 @@ const UNFOCUSED_ROW_BG: [f32; 4] = [0.2, 0.2, 0.2, 1.0];
 const FOCUSED_ROW_BG: [f32; 4] = [0.35, 0.35, 0.35, 1.0];
 const GO_BACK_COLOR_UNFOCUSED: [f32; 3] = [0.494, 0.055, 0.075]; // #7E0E13
 const GO_BACK_COLOR_FOCUSED: [f32; 3] = [1.0, 0.6, 0.6]; // Simply Love GainFocus
-const TEXT_UNFOCUSED_GRAY: f32 = 0.533;
+const TEXT_UNFOCUSED_GRAY: f32 = 0.6; // #999999
 const TEXT_FOCUSED_WHITE: f32 = 1.0;
 
 // --- Types ---
@@ -159,7 +159,7 @@ pub fn build_entries(
 
     entries.push(Entry::CategoryHeader {
         category: Category::Advanced,
-        label: "Advanced...",
+        label: "Advanced Options",
     });
 
     if items_styles.is_some() {
@@ -464,8 +464,8 @@ fn render_item_text(
         settext(item.bottom_label):
         align(0.0, 0.5):
         xy(x, y + 4.0):
-        zoom(0.39):
-        maxwidth(max_w / 0.39):
+        zoom(0.36):
+        maxwidth(max_w / 0.36):
         diffuse(tint[0], tint[1], tint[2], row_alpha):
         z(1454):
         horizalign(left)

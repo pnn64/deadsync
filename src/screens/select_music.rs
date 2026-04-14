@@ -3388,13 +3388,13 @@ fn build_category_item_lists(
     // Sorts category
     let sorts = select_music_menu::ITEMS_SORTS[..select_music_menu::ITEMS_SORTS.len() - 1].to_vec();
 
-    // Profile category (per-player sorts, only if profile loaded)
+    // Profile category (per-player sorts + favorites)
     let p1_has_profile =
         p1_joined && profile::active_local_profile_id_for_side(profile::PlayerSide::P1).is_some();
     let p2_has_profile =
         p2_joined && profile::active_local_profile_id_for_side(profile::PlayerSide::P2).is_some();
     let profile_items = if p1_has_profile || p2_has_profile {
-        let mut items = Vec::with_capacity(7);
+        let mut items = Vec::with_capacity(8);
         if p1_has_profile {
             items.push(select_music_menu::ITEM_SORT_BY_POPULARITY_P1);
             items.push(select_music_menu::ITEM_SORT_BY_RECENT_P1);
@@ -3404,6 +3404,11 @@ fn build_category_item_lists(
             items.push(select_music_menu::ITEM_SORT_BY_POPULARITY_P2);
             items.push(select_music_menu::ITEM_SORT_BY_RECENT_P2);
             items.push(select_music_menu::ITEM_SORT_BY_TOP_GRADES_P2);
+        }
+        // Favorites sort (if any player has favorites)
+        let any_has_favorites = state.favorites_entries.len() > 1;
+        if any_has_favorites {
+            items.push(select_music_menu::ITEM_SORT_BY_FAVORITES);
         }
         Some(items)
     } else {
@@ -6372,11 +6377,23 @@ fn handle_categories_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAct
             audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
-        select_music_menu::categories::InputOutcome::ToggleCategory(_) => {
-            // Reset selection to the category header (index 0) when entering/leaving a category
+        select_music_menu::categories::InputOutcome::ToggleCategory(toggled_cat) => {
+            // After toggling, rebuild entries and find the category header to keep cursor on it
+            let (standalone, sorts, profile, advanced, styles) = build_category_item_lists(state);
             if let select_music_menu::State::Categories(ref mut cat_state) = state.select_music_menu {
-                cat_state.selected_index = 0;
-                cat_state.prev_selected_index = 0;
+                let new_entries = select_music_menu::categories::build_entries(
+                    &standalone,
+                    &sorts,
+                    profile.as_deref(),
+                    &advanced,
+                    styles.as_deref(),
+                    &cat_state.categories,
+                );
+                let cat_idx = new_entries.iter().position(|e| {
+                    matches!(e, select_music_menu::categories::Entry::CategoryHeader { category, .. } if *category == toggled_cat)
+                }).unwrap_or(0);
+                cat_state.selected_index = cat_idx;
+                cat_state.prev_selected_index = cat_idx;
                 cat_state.focus_anim_elapsed = select_music_menu::categories::FOCUS_TWEEN_SECONDS;
             }
             audio::play_sfx("assets/sounds/start.ogg");
