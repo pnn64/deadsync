@@ -145,26 +145,46 @@ fn build_entries_from_slices(
     // If a category is expanded, show ONLY that category header + its items
     // (wrapping/repeating in the wheel). This matches Simply Love's behavior.
     if categories.is_expanded(Category::Sorts) {
-        let mut entries = vec![Entry::CategoryHeader { category: Category::Sorts, label: "Sorts..." }];
-        for item in items_sorts { entries.push(Entry::CategoryItem(*item)); }
+        let mut entries = vec![Entry::CategoryHeader {
+            category: Category::Sorts,
+            label: "Sorts...",
+        }];
+        for item in items_sorts {
+            entries.push(Entry::CategoryItem(*item));
+        }
         return entries;
     }
     if categories.is_expanded(Category::Profile) {
         if let Some(profile_items) = items_profile {
-            let mut entries = vec![Entry::CategoryHeader { category: Category::Profile, label: "Profile..." }];
-            for item in profile_items { entries.push(Entry::CategoryItem(*item)); }
+            let mut entries = vec![Entry::CategoryHeader {
+                category: Category::Profile,
+                label: "Profile...",
+            }];
+            for item in profile_items {
+                entries.push(Entry::CategoryItem(*item));
+            }
             return entries;
         }
     }
     if categories.is_expanded(Category::Advanced) {
-        let mut entries = vec![Entry::CategoryHeader { category: Category::Advanced, label: "Advanced..." }];
-        for item in items_advanced { entries.push(Entry::CategoryItem(*item)); }
+        let mut entries = vec![Entry::CategoryHeader {
+            category: Category::Advanced,
+            label: "Advanced...",
+        }];
+        for item in items_advanced {
+            entries.push(Entry::CategoryItem(*item));
+        }
         return entries;
     }
     if categories.is_expanded(Category::Styles) {
         if let Some(style_items) = items_styles {
-            let mut entries = vec![Entry::CategoryHeader { category: Category::Styles, label: "Styles..." }];
-            for item in style_items { entries.push(Entry::CategoryItem(*item)); }
+            let mut entries = vec![Entry::CategoryHeader {
+                category: Category::Styles,
+                label: "Styles...",
+            }];
+            for item in style_items {
+                entries.push(Entry::CategoryItem(*item));
+            }
             return entries;
         }
     }
@@ -417,8 +437,16 @@ fn render_row(
     let icon_bot = y + icon_size * 0.5;
     let box_top = cy - half_height;
     let box_bot = cy + half_height;
-    let crop_top = if icon_top < box_top { (box_top - icon_top) / icon_size } else { 0.0 };
-    let crop_bottom = if icon_bot > box_bot { (icon_bot - box_bot) / icon_size } else { 0.0 };
+    let crop_top = if icon_top < box_top {
+        (box_top - icon_top) / icon_size
+    } else {
+        0.0
+    };
+    let crop_bottom = if icon_bot > box_bot {
+        (icon_bot - box_bot) / icon_size
+    } else {
+        0.0
+    };
 
     match entry {
         Entry::CategoryHeader { label, .. } => {
@@ -509,9 +537,21 @@ fn render_item_text(
 fn item_tint(item: &Item, focus_lerp: f32) -> [f32; 3] {
     if matches!(item.action, Action::BackToMain) {
         [
-            lerp_scalar(GO_BACK_COLOR_UNFOCUSED[0], GO_BACK_COLOR_FOCUSED[0], focus_lerp),
-            lerp_scalar(GO_BACK_COLOR_UNFOCUSED[1], GO_BACK_COLOR_FOCUSED[1], focus_lerp),
-            lerp_scalar(GO_BACK_COLOR_UNFOCUSED[2], GO_BACK_COLOR_FOCUSED[2], focus_lerp),
+            lerp_scalar(
+                GO_BACK_COLOR_UNFOCUSED[0],
+                GO_BACK_COLOR_FOCUSED[0],
+                focus_lerp,
+            ),
+            lerp_scalar(
+                GO_BACK_COLOR_UNFOCUSED[1],
+                GO_BACK_COLOR_FOCUSED[1],
+                focus_lerp,
+            ),
+            lerp_scalar(
+                GO_BACK_COLOR_UNFOCUSED[2],
+                GO_BACK_COLOR_FOCUSED[2],
+                focus_lerp,
+            ),
         ]
     } else {
         let v = lerp_scalar(TEXT_UNFOCUSED_GRAY, TEXT_FOCUSED_WHITE, focus_lerp);

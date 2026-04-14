@@ -2312,8 +2312,7 @@ fn build_favorites_grouped_entries(
     for song in &songs {
         let is_fav = song.charts.iter().any(|chart| {
             (p1_joined && profile::is_favorite(profile::PlayerSide::P1, &chart.short_hash))
-                || (p2_joined
-                    && profile::is_favorite(profile::PlayerSide::P2, &chart.short_hash))
+                || (p2_joined && profile::is_favorite(profile::PlayerSide::P2, &chart.short_hash))
         });
         if is_fav {
             favorite_songs.push(song.clone());
@@ -2329,11 +2328,7 @@ fn build_favorites_grouped_entries(
         original_index: 0,
         banner_path: None,
     });
-    entries.extend(
-        favorite_songs
-            .into_iter()
-            .map(MusicWheelEntry::Song),
-    );
+    entries.extend(favorite_songs.into_iter().map(MusicWheelEntry::Song));
 
     let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
     counts.insert(FAVORITES_SORT_HEADER.to_string(), count);
@@ -2480,8 +2475,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::Favorites => {
             // Rebuild favorites on the fly so toggling is immediately reflected
-            let (fav_entries, fav_counts) =
-                build_favorites_grouped_entries(&state.group_entries);
+            let (fav_entries, fav_counts) = build_favorites_grouped_entries(&state.group_entries);
             state.favorites_entries = fav_entries;
             state.favorites_pack_song_counts = fav_counts;
             state.all_entries = state.favorites_entries.clone();
@@ -3153,8 +3147,7 @@ fn toggle_favorite_for_selected_song(state: &mut State, side: profile::PlayerSid
             chart_for_steps_index(&song, target_chart_type, state.selected_steps_index)
         {
             let is_now_fav = profile::toggle_favorite(side, &chart.short_hash);
-            let (fav_entries, fav_counts) =
-                build_favorites_grouped_entries(&state.group_entries);
+            let (fav_entries, fav_counts) = build_favorites_grouped_entries(&state.group_entries);
             state.favorites_entries = fav_entries;
             state.favorites_pack_song_counts = fav_counts;
             audio::play_sfx(if is_now_fav {
@@ -3346,9 +3339,7 @@ fn show_sorts_submenu(state: &mut State) {
 }
 
 /// Build the item lists for each category section used by the categories-based menu.
-fn build_category_item_lists(
-    state: &State,
-) -> select_music_menu::categories::CategoryItemLists {
+fn build_category_item_lists(state: &State) -> select_music_menu::categories::CategoryItemLists {
     let replays_enabled = config::get().machine_enable_replays;
     let downloads_enabled = crate::game::online::downloads::sort_menu_available();
     let has_song_selected = matches!(
@@ -3430,12 +3421,8 @@ fn build_category_item_lists(
 
     // Styles category
     let styles = match (profile::get_session_play_style(), single_player_joined) {
-        (profile::PlayStyle::Single, true) => {
-            Some(vec![select_music_menu::ITEM_SWITCH_TO_DOUBLE])
-        }
-        (profile::PlayStyle::Double, true) => {
-            Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE])
-        }
+        (profile::PlayStyle::Single, true) => Some(vec![select_music_menu::ITEM_SWITCH_TO_DOUBLE]),
+        (profile::PlayStyle::Double, true) => Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE]),
         _ => None,
     };
 
@@ -3483,9 +3470,7 @@ fn select_music_menu_items(
     let any_has_favorites = (p1_joined
         && !state.favorites_entries.is_empty()
         && state.favorites_entries.len() > 1)
-        || (p2_joined
-            && !state.favorites_entries.is_empty()
-            && state.favorites_entries.len() > 1);
+        || (p2_joined && !state.favorites_entries.is_empty() && state.favorites_entries.len() > 1);
     if any_has_favorites {
         items.push(select_music_menu::ITEM_SORT_BY_FAVORITES);
     }
@@ -6363,7 +6348,11 @@ fn handle_categories_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAct
         return ScreenAction::None;
     };
 
-    let outcome = select_music_menu::categories::handle_input(cat_state, &cat_state.cached_entries.clone(), ev);
+    let outcome = select_music_menu::categories::handle_input(
+        cat_state,
+        &cat_state.cached_entries.clone(),
+        ev,
+    );
     match outcome {
         select_music_menu::categories::InputOutcome::None => ScreenAction::None,
         select_music_menu::categories::InputOutcome::Moved => {
@@ -6373,7 +6362,8 @@ fn handle_categories_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAct
         select_music_menu::categories::InputOutcome::ToggleCategory(toggled_cat) => {
             // After toggling, rebuild cached entries and find the category header
             let lists = build_category_item_lists(state);
-            if let select_music_menu::State::Categories(ref mut cat_state) = state.select_music_menu {
+            if let select_music_menu::State::Categories(ref mut cat_state) = state.select_music_menu
+            {
                 cat_state.rebuild_entries(&lists);
                 let cat_idx = cat_state.cached_entries.iter().position(|e| {
                     matches!(e, select_music_menu::categories::Entry::CategoryHeader { category, .. } if *category == toggled_cat)
