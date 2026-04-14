@@ -10,7 +10,6 @@ use super::{Action, Item, scroll_dir, set_text_clip_rect};
 // --- Layout constants (matching Simply Love SortMenu) ---
 const WIDTH: f32 = 210.0;
 const HEIGHT: f32 = 204.0;
-const HEADER_Y_OFFSET: f32 = -114.0;
 const ITEM_SPACING: f32 = 36.0;
 const DIM_ALPHA: f32 = 0.8;
 const HINT_Y_OFFSET: f32 = 120.0;
@@ -62,9 +61,9 @@ pub struct CategoryState {
 
 impl Default for CategoryState {
     fn default() -> Self {
-        let mut expanded = HashSet::new();
-        expanded.insert(Category::Sorts);
-        Self { expanded }
+        Self {
+            expanded: HashSet::new(),
+        }
     }
 }
 
