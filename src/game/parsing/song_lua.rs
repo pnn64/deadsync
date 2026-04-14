@@ -1000,11 +1000,26 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
 
     let prefsmgr = lua.create_table()?;
     let global_offset_seconds = context.global_offset_seconds;
+    let display_aspect_ratio = screen_width / screen_height.max(1.0);
+    let display_width = screen_width.round() as i32;
+    let display_height = screen_height.round() as i32;
+    let video_renderers = "opengl".to_string();
+    let bg_brightness = 1.0_f32;
     prefsmgr.set(
         "GetPreference",
-        lua.create_function(move |_, (_self, key): (Table, String)| {
+        lua.create_function(move |lua, (_self, key): (Table, String)| {
             if key.eq_ignore_ascii_case("GlobalOffsetSeconds") {
                 Ok(Value::Number(global_offset_seconds as f64))
+            } else if key.eq_ignore_ascii_case("DisplayAspectRatio") {
+                Ok(Value::Number(display_aspect_ratio as f64))
+            } else if key.eq_ignore_ascii_case("DisplayWidth") {
+                Ok(Value::Integer(display_width as i64))
+            } else if key.eq_ignore_ascii_case("DisplayHeight") {
+                Ok(Value::Integer(display_height as i64))
+            } else if key.eq_ignore_ascii_case("VideoRenderers") {
+                Ok(Value::String(lua.create_string(&video_renderers)?))
+            } else if key.eq_ignore_ascii_case("BGBrightness") {
+                Ok(Value::Number(bg_brightness as f64))
             } else {
                 Ok(Value::Nil)
             }
@@ -3751,6 +3766,40 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "Center",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let (center_x, center_y) = song_lua_screen_center(lua)?;
+                capture_block_set_f32(lua, &actor, "x", center_x)?;
+                capture_block_set_f32(lua, &actor, "y", center_y)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "CenterX",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let (center_x, _) = song_lua_screen_center(lua)?;
+                capture_block_set_f32(lua, &actor, "x", center_x)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "CenterY",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let (_, center_y) = song_lua_screen_center(lua)?;
+                capture_block_set_f32(lua, &actor, "y", center_y)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "stretchto",
         lua.create_function({
             let actor = actor.clone();
@@ -4683,6 +4732,17 @@ fn song_lua_screen_size(lua: &Lua) -> mlua::Result<(f32, f32)> {
     let width = globals.get::<Option<i32>>("SCREEN_WIDTH")?.unwrap_or(640) as f32;
     let height = globals.get::<Option<i32>>("SCREEN_HEIGHT")?.unwrap_or(480) as f32;
     Ok((width, height))
+}
+
+fn song_lua_screen_center(lua: &Lua) -> mlua::Result<(f32, f32)> {
+    let globals = lua.globals();
+    let center_x = globals
+        .get::<Option<f32>>("SCREEN_CENTER_X")?
+        .unwrap_or(song_lua_screen_size(lua)?.0 * 0.5);
+    let center_y = globals
+        .get::<Option<f32>>("SCREEN_CENTER_Y")?
+        .unwrap_or(song_lua_screen_size(lua)?.1 * 0.5);
+    Ok((center_x, center_y))
 }
 
 fn actor_texture_path(actor: &Table) -> mlua::Result<Option<PathBuf>> {
@@ -6587,6 +6647,46 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn compile_song_lua_exposes_common_prefsmgr_preferences() {
+        let song_dir = test_dir("prefsmgr-preferences");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%.4f:%d:%d:%s:%.2f:%.2f",
+            PREFSMAN:GetPreference("DisplayAspectRatio"),
+            PREFSMAN:GetPreference("DisplayWidth"),
+            PREFSMAN:GetPreference("DisplayHeight"),
+            tostring(string.find(string.lower(PREFSMAN:GetPreference("VideoRenderers")), "opengl") ~= nil),
+            PREFSMAN:GetPreference("BGBrightness"),
+            PREFSMAN:GetPreference("GlobalOffsetSeconds")
+        ),
+        true,
+    },
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "PrefsMgr Preferences");
+        context.screen_width = 1280.0;
+        context.screen_height = 720.0;
+        context.global_offset_seconds = 0.02;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "1.7778:1280:720:true:1.00:0.02"
+        );
+    }
+
+    #[test]
     fn compile_song_lua_exposes_difficulty_enum_globals() {
         let song_dir = test_dir("difficulty-enum");
         let entry = song_dir.join("default.lua");
@@ -6734,6 +6834,37 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "true:true");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_center_methods() {
+        let song_dir = test_dir("actor-center-methods");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:CenterX()
+            self:CenterY()
+            self:Center()
+            mod_actions = {
+                {1, string.format("%.0f:%.0f", self:GetX(), self:GetY()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Actor Center Methods");
+        context.screen_width = 1280.0;
+        context.screen_height = 720.0;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "640:360");
     }
 
     #[test]
