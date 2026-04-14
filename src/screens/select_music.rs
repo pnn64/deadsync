@@ -3409,6 +3409,7 @@ fn build_category_item_lists(state: &State) -> select_music_menu::categories::Ca
     if downloads_enabled {
         advanced.push(select_music_menu::ITEM_VIEW_DOWNLOADS);
     }
+    advanced.push(select_music_menu::ITEM_SET_SUMMARY);
     if has_pack_selected {
         advanced.push(select_music_menu::ITEM_SYNC_PACK);
     }
@@ -6564,6 +6565,10 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
             hide_select_music_menu(state);
             show_leaderboard_overlay(state);
             ScreenAction::None
+        }
+        select_music_menu::Action::ShowSetSummary => {
+            hide_select_music_menu(state);
+            ScreenAction::Navigate(crate::screens::Screen::EvaluationSummary)
         }
     }
 }
