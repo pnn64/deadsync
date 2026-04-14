@@ -3346,16 +3346,9 @@ fn show_sorts_submenu(state: &mut State) {
 }
 
 /// Build the item lists for each category section used by the categories-based menu.
-/// Returns (standalone, sorts, profile, advanced, styles).
 fn build_category_item_lists(
     state: &State,
-) -> (
-    Vec<select_music_menu::Item>,
-    Vec<select_music_menu::Item>,
-    Option<Vec<select_music_menu::Item>>,
-    Vec<select_music_menu::Item>,
-    Option<Vec<select_music_menu::Item>>,
-) {
+) -> select_music_menu::categories::CategoryItemLists {
     let replays_enabled = config::get().machine_enable_replays;
     let downloads_enabled = crate::game::online::downloads::sort_menu_available();
     let has_song_selected = matches!(
@@ -3446,7 +3439,13 @@ fn build_category_item_lists(
         _ => None,
     };
 
-    (standalone, sorts, profile_items, advanced, styles)
+    select_music_menu::categories::CategoryItemLists {
+        standalone,
+        sorts,
+        profile: profile_items,
+        advanced,
+        styles,
+    }
 }
 
 #[inline(always)]
@@ -6354,25 +6353,17 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
 }
 
 fn handle_categories_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    let select_music_menu::State::Categories(ref cat_state) = state.select_music_menu else {
-        return ScreenAction::None;
-    };
-
-    let (standalone, sorts, profile, advanced, styles) = build_category_item_lists(state);
-    let entries = select_music_menu::categories::build_entries(
-        &standalone,
-        &sorts,
-        profile.as_deref(),
-        &advanced,
-        styles.as_deref(),
-        &cat_state.categories,
-    );
+    // Rebuild cached entries from current game state
+    let lists = build_category_item_lists(state);
+    if let select_music_menu::State::Categories(ref mut cat_state) = state.select_music_menu {
+        cat_state.rebuild_entries(&lists);
+    }
 
     let select_music_menu::State::Categories(ref mut cat_state) = state.select_music_menu else {
         return ScreenAction::None;
     };
 
-    let outcome = select_music_menu::categories::handle_input(cat_state, &entries, ev);
+    let outcome = select_music_menu::categories::handle_input(cat_state, &cat_state.cached_entries.clone(), ev);
     match outcome {
         select_music_menu::categories::InputOutcome::None => ScreenAction::None,
         select_music_menu::categories::InputOutcome::Moved => {
@@ -6380,18 +6371,11 @@ fn handle_categories_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAct
             ScreenAction::None
         }
         select_music_menu::categories::InputOutcome::ToggleCategory(toggled_cat) => {
-            // After toggling, rebuild entries and find the category header to keep cursor on it
-            let (standalone, sorts, profile, advanced, styles) = build_category_item_lists(state);
+            // After toggling, rebuild cached entries and find the category header
+            let lists = build_category_item_lists(state);
             if let select_music_menu::State::Categories(ref mut cat_state) = state.select_music_menu {
-                let new_entries = select_music_menu::categories::build_entries(
-                    &standalone,
-                    &sorts,
-                    profile.as_deref(),
-                    &advanced,
-                    styles.as_deref(),
-                    &cat_state.categories,
-                );
-                let cat_idx = new_entries.iter().position(|e| {
+                cat_state.rebuild_entries(&lists);
+                let cat_idx = cat_state.cached_entries.iter().position(|e| {
                     matches!(e, select_music_menu::categories::Entry::CategoryHeader { category, .. } if *category == toggled_cat)
                 }).unwrap_or(0);
                 cat_state.selected_index = cat_idx;
@@ -9407,18 +9391,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     if let select_music_menu::State::Categories(ref cat_state) = state.select_music_menu {
-        let (standalone, sorts, profile, advanced, styles) = build_category_item_lists(state);
-        let entries = select_music_menu::categories::build_entries(
-            &standalone,
-            &sorts,
-            profile.as_deref(),
-            &advanced,
-            styles.as_deref(),
-            &cat_state.categories,
-        );
         actors.extend(select_music_menu::categories::build_overlay(
             select_music_menu::categories::RenderParams {
-                entries: &entries,
+                entries: &cat_state.cached_entries,
                 selected_index: cat_state.selected_index,
                 prev_selected_index: cat_state.prev_selected_index,
                 focus_anim_elapsed: cat_state.focus_anim_elapsed,

@@ -88,6 +88,15 @@ pub struct VisibleState {
     pub prev_selected_index: usize,
     pub focus_anim_elapsed: f32,
     pub categories: CategoryState,
+    /// Cached flattened entries, rebuilt on category toggle.
+    pub cached_entries: Vec<Entry>,
+}
+
+impl VisibleState {
+    /// Rebuild the cached entry list from the current item lists and expansion state.
+    pub fn rebuild_entries(&mut self, lists: &CategoryItemLists) {
+        self.cached_entries = build_entries(lists, &self.categories);
+    }
 }
 
 pub fn open() -> VisibleState {
@@ -96,13 +105,36 @@ pub fn open() -> VisibleState {
         prev_selected_index: 0,
         focus_anim_elapsed: FOCUS_TWEEN_SECONDS,
         categories: CategoryState::default(),
+        cached_entries: Vec::new(),
     }
+}
+
+// --- Item lists ---
+
+/// Named struct for the category item lists, replacing the 5-element tuple.
+pub struct CategoryItemLists {
+    pub standalone: Vec<Item>,
+    pub sorts: Vec<Item>,
+    pub profile: Option<Vec<Item>>,
+    pub advanced: Vec<Item>,
+    pub styles: Option<Vec<Item>>,
 }
 
 // --- Entry building ---
 
 /// Build the flattened entry list based on current category expansion state.
-pub fn build_entries(
+pub fn build_entries(lists: &CategoryItemLists, categories: &CategoryState) -> Vec<Entry> {
+    build_entries_from_slices(
+        &lists.standalone,
+        &lists.sorts,
+        lists.profile.as_deref(),
+        &lists.advanced,
+        lists.styles.as_deref(),
+        categories,
+    )
+}
+
+fn build_entries_from_slices(
     items_standalone: &[Item],
     items_sorts: &[Item],
     items_profile: Option<&[Item]>,
