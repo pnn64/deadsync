@@ -3762,6 +3762,18 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "basezoomz",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "basezoom_z", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "zoom",
         lua.create_function({
             let actor = actor.clone();
@@ -6453,6 +6465,33 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays[0].initial_state.basezoom, 2.0);
         assert_eq!(compiled.overlays[0].initial_state.basezoom_x, 3.0);
         assert_eq!(compiled.overlays[0].initial_state.basezoom_y, 4.0);
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_basezoomz_method() {
+        let song_dir = test_dir("basezoom-z");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.ActorFrame{
+        OnCommand=function(self)
+            self:basezoomz(5)
+            mod_actions = {
+                {1, "ok", true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled =
+            compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "BaseZoom Z")).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "ok");
     }
 
     #[test]
