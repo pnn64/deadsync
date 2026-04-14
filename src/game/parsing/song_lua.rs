@@ -4105,6 +4105,19 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "diffusecolor",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(color) = read_color_args(&args) else {
+                    return Ok(actor.clone());
+                };
+                capture_block_set_color(lua, &actor, color)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "SetDidTapNoteCallback",
         lua.create_function({
             let actor = actor.clone();
@@ -5843,6 +5856,36 @@ return Def.ActorFrame{}
         )
         .unwrap();
         assert!(compiled.overlays.is_empty());
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_diffusecolor_alias() {
+        let song_dir = test_dir("diffusecolor-alias");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:diffusecolor(0.85, 0.92, 0.99, 0.7)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "DiffuseColor Alias"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(
+            compiled.overlays[0].initial_state.diffuse,
+            [0.85, 0.92, 0.99, 0.7]
+        );
     }
 
     #[test]
