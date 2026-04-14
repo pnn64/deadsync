@@ -920,7 +920,19 @@ const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
     (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
     (BackendType::Software, "Software"),
 ];
-#[cfg(all(not(target_os = "windows"), not(target_pointer_width = "32")))]
+#[cfg(all(target_os = "macos", not(target_pointer_width = "32")))]
+const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
+    (BackendType::OpenGL, "OpenGL"),
+    (BackendType::Vulkan, "Vulkan"),
+    (BackendType::Metal, "Metal (wgpu)"),
+    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
+    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
+    (BackendType::Software, "Software"),
+];
+#[cfg(all(
+    not(any(target_os = "windows", target_os = "macos")),
+    not(target_pointer_width = "32")
+))]
 const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
     (BackendType::OpenGL, "OpenGL"),
     (BackendType::Vulkan, "Vulkan"),
@@ -951,7 +963,19 @@ const VIDEO_RENDERER_LABELS: &[&str] = &[
     VIDEO_RENDERER_OPTIONS[2].1,
     VIDEO_RENDERER_OPTIONS[3].1,
 ];
-#[cfg(all(not(target_os = "windows"), not(target_pointer_width = "32")))]
+#[cfg(all(target_os = "macos", not(target_pointer_width = "32")))]
+const VIDEO_RENDERER_LABELS: &[&str] = &[
+    VIDEO_RENDERER_OPTIONS[0].1,
+    VIDEO_RENDERER_OPTIONS[1].1,
+    VIDEO_RENDERER_OPTIONS[2].1,
+    VIDEO_RENDERER_OPTIONS[3].1,
+    VIDEO_RENDERER_OPTIONS[4].1,
+    VIDEO_RENDERER_OPTIONS[5].1,
+];
+#[cfg(all(
+    not(any(target_os = "windows", target_os = "macos")),
+    not(target_pointer_width = "32")
+))]
 const VIDEO_RENDERER_LABELS: &[&str] = &[
     VIDEO_RENDERER_OPTIONS[0].1,
     VIDEO_RENDERER_OPTIONS[1].1,
