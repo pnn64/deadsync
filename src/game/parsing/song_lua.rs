@@ -985,6 +985,18 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         screen_width / (640.0 * (screen_height / 480.0)),
     )?;
     globals.set(
+        "scale",
+        lua.create_function(
+            |_, (value, from_low, from_high, to_low, to_high): (f32, f32, f32, f32, f32)| {
+                let span = from_high - from_low;
+                if span.abs() <= f32::EPSILON {
+                    return Ok(to_low);
+                }
+                Ok((value - from_low) / span * (to_high - to_low) + to_low)
+            },
+        )?,
+    )?;
+    globals.set(
         "__songlua_song_dir",
         song_dir_string(context.song_dir.as_path()),
     )?;
@@ -6684,6 +6696,35 @@ return Def.ActorFrame{}
             compiled.messages[0].message,
             "1.7778:1280:720:true:1.00:0.02"
         );
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_scale_helper() {
+        let song_dir = test_dir("scale-helper");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local WideScale = function(AR4_3, AR16_9)
+    local w = 480 * PREFSMAN:GetPreference("DisplayAspectRatio")
+    return scale(w, 640, 854, AR4_3, AR16_9)
+end
+
+mod_actions = {
+    {1, string.format("%.2f", WideScale(100, 200)), true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Scale Helper");
+        context.screen_width = 1280.0;
+        context.screen_height = 720.0;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "200.00");
     }
 
     #[test]
