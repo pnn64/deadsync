@@ -12707,8 +12707,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
         profile::get_session_play_style(),
         profile::get_session_player_side(),
     );
+    let p1_menu_active = state.num_players > 1 || !p2_runtime_player;
+    let p2_menu_active = state.num_players > 1 || p2_runtime_player;
     match ev.action {
-        VirtualAction::p1_start if !p2_runtime_player => {
+        VirtualAction::p1_start if p1_menu_active => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(HoldToExitKey::Start);
                 state.hold_to_exit_start = Some(ev.timestamp);
@@ -12717,7 +12719,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
                 abort_hold_to_exit(state, ev.timestamp);
             }
         }
-        VirtualAction::p2_start if p2_runtime_player => {
+        VirtualAction::p2_start if p2_menu_active => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(HoldToExitKey::Start);
                 state.hold_to_exit_start = Some(ev.timestamp);
@@ -12726,7 +12728,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
                 abort_hold_to_exit(state, ev.timestamp);
             }
         }
-        VirtualAction::p1_back if !p2_runtime_player => {
+        VirtualAction::p1_back if p1_menu_active => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(HoldToExitKey::Back);
                 state.hold_to_exit_start = Some(ev.timestamp);
@@ -12735,7 +12737,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
                 abort_hold_to_exit(state, ev.timestamp);
             }
         }
-        VirtualAction::p2_back if p2_runtime_player => {
+        VirtualAction::p2_back if p2_menu_active => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(HoldToExitKey::Back);
                 state.hold_to_exit_start = Some(ev.timestamp);
@@ -14918,6 +14920,31 @@ mod tests {
                 handle_input(&mut state, &test_input_event(VirtualAction::p2_start));
                 assert_eq!(state.hold_to_exit_key, Some(HoldToExitKey::Start));
                 assert!(state.hold_to_exit_start.is_some());
+            },
+        );
+    }
+
+    #[test]
+    fn gameplay_handle_input_uses_p2_menu_buttons_for_versus() {
+        with_session(
+            profile::PlayStyle::Versus,
+            profile::PlayerSide::P1,
+            true,
+            true,
+            || {
+                let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+
+                let mut start_state = regression_state(state_profiles.clone());
+                assert_eq!(start_state.num_players, 2);
+                handle_input(&mut start_state, &test_input_event(VirtualAction::p2_start));
+                assert_eq!(start_state.hold_to_exit_key, Some(HoldToExitKey::Start));
+                assert!(start_state.hold_to_exit_start.is_some());
+
+                let mut back_state = regression_state(state_profiles);
+                assert_eq!(back_state.num_players, 2);
+                handle_input(&mut back_state, &test_input_event(VirtualAction::p2_back));
+                assert_eq!(back_state.hold_to_exit_key, Some(HoldToExitKey::Back));
+                assert!(back_state.hold_to_exit_start.is_some());
             },
         );
     }
