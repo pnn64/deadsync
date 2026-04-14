@@ -941,6 +941,16 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("SCREEN_RIGHT", screen_width.round() as i32)?;
     globals.set("SCREEN_BOTTOM", screen_height.round() as i32)?;
     globals.set(
+        "_screen",
+        create_screen_table(
+            lua,
+            screen_width,
+            screen_height,
+            screen_center_x,
+            screen_center_y,
+        )?,
+    )?;
+    globals.set(
         "ProductFamily",
         lua.create_function(|_, _args: MultiValue| Ok(SONG_LUA_PRODUCT_FAMILY))?,
     )?;
@@ -1116,6 +1126,25 @@ fn create_difficulty_table(lua: &Lua) -> mlua::Result<Table> {
     {
         table.raw_set(idx + 1, difficulty.sm_name())?;
     }
+    Ok(table)
+}
+
+fn create_screen_table(
+    lua: &Lua,
+    width: f32,
+    height: f32,
+    center_x: f32,
+    center_y: f32,
+) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set("w", width)?;
+    table.set("h", height)?;
+    table.set("cx", center_x)?;
+    table.set("cy", center_y)?;
+    table.set("l", 0.0_f32)?;
+    table.set("t", 0.0_f32)?;
+    table.set("r", width)?;
+    table.set("b", height)?;
     Ok(table)
 }
 
@@ -3759,6 +3788,34 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "zoomtowidth",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(width) = args.get(1).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let (_, height) = actor_base_size(&actor)?;
+                capture_block_set_size(lua, &actor, [width, height])?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "zoomtoheight",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(height) = args.get(1).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let (width, _) = actor_base_size(&actor)?;
+                capture_block_set_size(lua, &actor, [width, height])?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "SetSize",
         lua.create_function({
             let actor = actor.clone();
@@ -6248,6 +6305,72 @@ return Def.ActorFrame{
         let compiled = compile_song_lua(
             &entry,
             &SongLuaCompileContext::new(&song_dir, "Actor Set Size"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "30:40");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_screen_globals() {
+        let song_dir = test_dir("screen-globals");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%.0f:%.0f:%.0f:%.0f",
+            _screen.w,
+            _screen.h,
+            _screen.cx,
+            _screen.cy
+        ),
+        true,
+    },
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Screen Globals");
+        context.screen_width = 800.0;
+        context.screen_height = 600.0;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "800:600:400:300");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_zoom_to_width_and_height() {
+        let song_dir = test_dir("zoomto-width-height");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:SetSize(10, 20)
+            self:zoomtowidth(30)
+            self:zoomtoheight(40)
+            mod_actions = {
+                {1, string.format("%.0f:%.0f", self:GetWidth(), self:GetHeight()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Zoomto Width Height"),
         )
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
