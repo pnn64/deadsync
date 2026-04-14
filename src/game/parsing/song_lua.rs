@@ -4260,6 +4260,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     for name in [
+        "animate",
         "clearzbuffer",
         "diffuseramp",
         "effectclock",
@@ -4272,6 +4273,8 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "fov",
         "finishtweening",
         "hibernate",
+        "loop",
+        "rate",
         "texturetranslate",
         "vanishpoint",
         "wag",
@@ -6937,6 +6940,36 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "0.25");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_animate_loop_rate_chain_methods() {
+        let song_dir = test_dir("actor-animate-loop-rate");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        OnCommand=function(self)
+            self:animate(false):loop(false):rate(1.5):diffusealpha(0.2)
+            mod_actions = {
+                {1, string.format("%.2f", self:GetDiffuseAlpha()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Animate Loop Rate"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "0.20");
     }
 
     #[test]
