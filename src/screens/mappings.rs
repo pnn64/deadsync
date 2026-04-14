@@ -9,7 +9,6 @@ use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
 use crate::engine::space::{screen_height, screen_width, widescale};
-use crate::game::profile;
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{heart_bg, screen_bar};
 use crate::screens::input as screen_input;
@@ -388,6 +387,66 @@ fn clear_focused_binding(state: &State) -> bool {
     cleared
 }
 
+const RAW_NAV_ACTION_PRIORITY: [VirtualAction; 18] = [
+    VirtualAction::p1_back,
+    VirtualAction::p2_back,
+    VirtualAction::p1_up,
+    VirtualAction::p1_menu_up,
+    VirtualAction::p2_up,
+    VirtualAction::p2_menu_up,
+    VirtualAction::p1_down,
+    VirtualAction::p1_menu_down,
+    VirtualAction::p2_down,
+    VirtualAction::p2_menu_down,
+    VirtualAction::p1_left,
+    VirtualAction::p1_menu_left,
+    VirtualAction::p2_left,
+    VirtualAction::p2_menu_left,
+    VirtualAction::p1_right,
+    VirtualAction::p1_menu_right,
+    VirtualAction::p2_right,
+    VirtualAction::p2_menu_right,
+];
+
+#[inline(always)]
+fn keymap_raw_nav_action(
+    keymap: &crate::engine::input::Keymap,
+    key_event: &RawKeyboardEvent,
+) -> Option<VirtualAction> {
+    RAW_NAV_ACTION_PRIORITY
+        .iter()
+        .copied()
+        .find(|&action| keymap.raw_key_event_has_action(key_event, |mapped| mapped == action))
+        .or_else(|| {
+            [
+                VirtualAction::p1_start,
+                VirtualAction::p2_start,
+                VirtualAction::p1_select,
+                VirtualAction::p2_select,
+            ]
+            .into_iter()
+            .find(|&action| keymap.raw_key_event_has_action(key_event, |mapped| mapped == action))
+        })
+}
+
+#[inline(always)]
+fn mapped_raw_nav_action(key_event: &RawKeyboardEvent) -> Option<VirtualAction> {
+    with_keymap(|keymap| keymap_raw_nav_action(keymap, key_event))
+}
+
+#[inline(always)]
+fn input_event_from_raw(action: VirtualAction, key_event: &RawKeyboardEvent) -> InputEvent {
+    InputEvent {
+        action,
+        pressed: key_event.pressed,
+        source: InputSource::Keyboard,
+        timestamp: key_event.timestamp,
+        timestamp_host_nanos: key_event.host_nanos,
+        stored_at: key_event.timestamp,
+        emitted_at: key_event.timestamp,
+    }
+}
+
 pub fn update(state: &mut State, dt: f32) {
     // Hold-to-scroll for Up/Down.
     if let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
@@ -502,7 +561,8 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
     let code = key_event.code;
 
     // If we're capturing, treat this as a candidate mapping; otherwise,
-    // interpret arrows / Enter / Escape as navigation/back/capture.
+    // handle reserved raw navigation keys first and then fall back to the
+    // currently mapped menu actions for whichever player owns the key.
     if state.capture_active {
         if !is_pressed {
             return ScreenAction::None;
@@ -599,7 +659,11 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
                 return ScreenAction::Navigate(Screen::Options);
             }
         }
-        _ => {}
+        _ => {
+            if let Some(action) = mapped_raw_nav_action(key_event) {
+                return handle_input(state, &input_event_from_raw(action, key_event));
+            }
+        }
     }
 
     ScreenAction::None
@@ -679,14 +743,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     // While capturing, lock navigation and only allow backing out
     // of the screen; candidate keys are handled in handle_raw_key_event.
     if state.capture_active {
-        if let Some((profile::PlayerSide::P1, screen_input::ThreeKeyMenuAction::Cancel)) =
-            three_key_action
-        {
+        if let Some((_, screen_input::ThreeKeyMenuAction::Cancel)) = three_key_action {
             cancel_capture(state);
             audio::play_sfx("assets/sounds/change.ogg");
             return ScreenAction::None;
         }
-        if ev.action == VirtualAction::p1_back && ev.pressed {
+        if ev.pressed && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back) {
             return ScreenAction::Navigate(Screen::Options);
         }
         return ScreenAction::None;
@@ -694,14 +756,20 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     if screen_input::dedicated_three_key_nav_enabled() {
         match ev.action {
-            VirtualAction::p1_left | VirtualAction::p1_menu_left
+            VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left
                 if !ev.pressed && matches!(state.three_key_focus, ThreeKeyFocus::Row) =>
             {
                 state.menu_lr_undo_row = 0;
                 on_nav_release(state, NavDirection::Up);
                 return ScreenAction::None;
             }
-            VirtualAction::p1_right | VirtualAction::p1_menu_right
+            VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right
                 if !ev.pressed && matches!(state.three_key_focus, ThreeKeyFocus::Row) =>
             {
                 state.menu_lr_undo_row = 0;
@@ -710,10 +778,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             _ => {}
         }
-        if let Some((side, nav)) = three_key_action {
-            if side != crate::game::profile::PlayerSide::P1 {
-                return ScreenAction::None;
-            }
+        if let Some((_, nav)) = three_key_action {
             return match nav {
                 screen_input::ThreeKeyMenuAction::Prev => {
                     if matches!(state.three_key_focus, ThreeKeyFocus::Row) {
@@ -783,18 +848,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
     }
 
-    // Outside of capture, navigation on this screen is strictly keyboard-only.
-    // Gamepad inputs should not move the cursor or activate UI here; they are
-    // used only when explicitly capturing a new mapping.
-    if ev.source == InputSource::Gamepad {
-        return ScreenAction::None;
-    }
-
     match ev.action {
-        VirtualAction::p1_back if ev.pressed => {
+        VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
             return ScreenAction::Navigate(Screen::Options);
         }
-        VirtualAction::p1_menu_up => {
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up => {
             if ev.pressed {
                 move_selection(state, NavDirection::Up);
                 on_nav_press(state, NavDirection::Up);
@@ -802,7 +863,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 on_nav_release(state, NavDirection::Up);
             }
         }
-        VirtualAction::p1_menu_down => {
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down => {
             if ev.pressed {
                 move_selection(state, NavDirection::Down);
                 on_nav_press(state, NavDirection::Down);
@@ -810,19 +874,30 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 on_nav_release(state, NavDirection::Down);
             }
         }
-        VirtualAction::p1_menu_left => {
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => {
             if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
                 set_active_slot(state, active_slot_prev(state.active_slot));
                 audio::play_sfx("assets/sounds/change_value.ogg");
             }
         }
-        VirtualAction::p1_menu_right => {
+        VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => {
             if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
                 set_active_slot(state, active_slot_next(state.active_slot));
                 audio::play_sfx("assets/sounds/change_value.ogg");
             }
         }
-        VirtualAction::p1_start if ev.pressed => {
+        VirtualAction::p1_start
+        | VirtualAction::p1_select
+        | VirtualAction::p2_start
+        | VirtualAction::p2_select
+            if ev.pressed =>
+        {
             if state.selected_row == NUM_MAPPING_ROWS {
                 audio::play_sfx("assets/sounds/start.ogg");
                 return ScreenAction::Navigate(Screen::Options);
@@ -1671,8 +1746,25 @@ pub fn get_actors(
 
 #[cfg(test)]
 mod tests {
-    use super::invalid_capture_key;
+    use super::{ActiveSlot, handle_input, init, invalid_capture_key, keymap_raw_nav_action};
+    use crate::engine::input::{
+        InputBinding, InputEvent, InputSource, Keymap, RawKeyboardEvent, VirtualAction,
+    };
+    use std::time::Instant;
     use winit::keyboard::KeyCode;
+
+    fn input_event(action: VirtualAction, pressed: bool, source: InputSource) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            pressed,
+            source,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
 
     #[test]
     fn capture_allows_default_menu_keys() {
@@ -1689,5 +1781,67 @@ mod tests {
     fn capture_rejects_function_keys() {
         assert!(invalid_capture_key(KeyCode::F1));
         assert!(invalid_capture_key(KeyCode::F12));
+    }
+
+    #[test]
+    fn p2_gamepad_can_navigate_and_begin_capture() {
+        let mut state = init();
+
+        handle_input(
+            &mut state,
+            &input_event(VirtualAction::p2_down, true, InputSource::Gamepad),
+        );
+        assert_eq!(state.selected_row, 1);
+
+        handle_input(
+            &mut state,
+            &input_event(VirtualAction::p2_right, true, InputSource::Gamepad),
+        );
+        assert_eq!(state.active_slot, ActiveSlot::P1Secondary);
+
+        handle_input(
+            &mut state,
+            &input_event(VirtualAction::p2_start, true, InputSource::Gamepad),
+        );
+        assert!(state.capture_active);
+        assert_eq!(state.capture_row, Some(1));
+        assert_eq!(state.capture_slot, Some(ActiveSlot::P1Secondary));
+    }
+
+    #[test]
+    fn keymap_raw_nav_action_detects_p2_keyboard_bindings() {
+        let mut keymap = Keymap::default();
+        keymap.bind(
+            VirtualAction::p2_down,
+            &[InputBinding::Key(KeyCode::Numpad2)],
+        );
+        keymap.bind(
+            VirtualAction::p2_start,
+            &[InputBinding::Key(KeyCode::NumpadEnter)],
+        );
+
+        let down = RawKeyboardEvent {
+            code: KeyCode::Numpad2,
+            pressed: true,
+            repeat: false,
+            timestamp: Instant::now(),
+            host_nanos: 0,
+        };
+        let start = RawKeyboardEvent {
+            code: KeyCode::NumpadEnter,
+            pressed: true,
+            repeat: false,
+            timestamp: Instant::now(),
+            host_nanos: 0,
+        };
+
+        assert_eq!(
+            keymap_raw_nav_action(&keymap, &down),
+            Some(VirtualAction::p2_down)
+        );
+        assert_eq!(
+            keymap_raw_nav_action(&keymap, &start),
+            Some(VirtualAction::p2_start)
+        );
     }
 }
