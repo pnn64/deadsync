@@ -133,6 +133,7 @@ pub struct SongLuaCompileContext {
     pub main_title: String,
     pub song_display_bpms: [f32; 2],
     pub song_music_rate: f32,
+    pub style_name: String,
     pub global_offset_seconds: f32,
     pub screen_width: f32,
     pub screen_height: f32,
@@ -149,6 +150,7 @@ impl SongLuaCompileContext {
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
             song_music_rate: 1.0,
+            style_name: "single".to_string(),
             global_offset_seconds: 0.0,
             screen_width: 640.0,
             screen_height: 480.0,
@@ -1054,6 +1056,11 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         "GetCurrentSong",
         lua.create_function(move |_, _args: MultiValue| Ok(song_clone.clone()))?,
     )?;
+    let style = create_style_table(lua, &context.style_name)?;
+    gamestate.set(
+        "GetCurrentStyle",
+        lua.create_function(move |_, _args: MultiValue| Ok(style.clone()))?,
+    )?;
     let players_enabled = context.players.clone();
     gamestate.set(
         "IsPlayerEnabled",
@@ -1105,6 +1112,12 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     gamestate.set(
         "GetSongBeat",
         lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    let song_bps =
+        (context.song_display_bpms[1].max(context.song_display_bpms[0]) / 60.0).max(f32::EPSILON);
+    gamestate.set(
+        "GetSongBPS",
+        lua.create_function(move |_, _args: MultiValue| Ok(song_bps))?,
     )?;
     gamestate.set(
         "GetCurMusicSeconds",
@@ -1548,6 +1561,13 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
     )?;
     spline.set(
         "Solve",
+        lua.create_function({
+            let spline = spline.clone();
+            move |_, _args: MultiValue| Ok(spline.clone())
+        })?,
+    )?;
+    spline.set(
+        "SetPolygonal",
         lua.create_function({
             let spline = spline.clone();
             move |_, _args: MultiValue| Ok(spline.clone())
@@ -2120,6 +2140,18 @@ fn create_song_position_table(lua: &Lua) -> mlua::Result<Table> {
     table.set(
         "GetSongBeat",
         lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    Ok(table)
+}
+
+fn create_style_table(lua: &Lua, style_name: &str) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let style_name = style_name.to_string();
+    table.set(
+        "GetName",
+        lua.create_function(move |lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string(&style_name)?))
+        })?,
     )?;
     Ok(table)
 }
@@ -4440,6 +4472,22 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "runcommandsonleaves",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(command) = method_arg(&args, 0).cloned().and_then(|value| match value {
+                    Value::Function(function) => Some(function),
+                    _ => None,
+                }) else {
+                    return Ok(actor.clone());
+                };
+                run_command_on_leaves(lua, &actor, &command)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "GetWrapperState",
         lua.create_function({
             let actor = actor.clone();
@@ -4531,6 +4579,17 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_y")?
                     .unwrap_or(0.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetVisible",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<bool>>("__songlua_visible")?
+                    .unwrap_or(true))
             }
         })?,
     )?;
@@ -4865,6 +4924,29 @@ fn merge_actor_concat(_lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()
 fn make_actor_chain_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |_, _args: MultiValue| Ok(actor.clone()))
+}
+
+fn run_command_on_leaves(lua: &Lua, actor: &Table, command: &Function) -> mlua::Result<()> {
+    let mut saw_child = false;
+    for index in 1..=actor.raw_len() {
+        let Some(Value::Table(child)) = actor.raw_get::<Option<Value>>(index)? else {
+            continue;
+        };
+        saw_child = true;
+        run_command_on_leaves(lua, &child, command)?;
+    }
+    for pair in actor_children(lua, actor)?.pairs::<Value, Value>() {
+        let (_, value) = pair?;
+        let Value::Table(child) = value else {
+            continue;
+        };
+        saw_child = true;
+        run_command_on_leaves(lua, &child, command)?;
+    }
+    if !saw_child {
+        let _ = command.call::<Value>(actor.clone())?;
+    }
+    Ok(())
 }
 
 fn make_actor_capture_f32_method(
@@ -6746,6 +6828,52 @@ return Def.ActorFrame{}
             compiled.messages[0].message,
             "1.7778:1280:720:true:1.00:0.02"
         );
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_after_dark_runtime_helpers() {
+        let song_dir = test_dir("after-dark-runtime-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local leaf = nil
+
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local spline = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField"):GetColumnActors()[1]:GetPosHandler():GetSpline()
+        local polygonal = spline:SetPolygonal(true) ~= nil
+        self:runcommandsonleaves(function(actor)
+            actor:visible(false)
+        end)
+        mod_actions = {
+            {1, string.format(
+                "%s:%.2f:%s:%s",
+                GAMESTATE:GetCurrentStyle():GetName(),
+                GAMESTATE:GetSongBPS(),
+                tostring(leaf:GetVisible()),
+                tostring(polygonal)
+            ), true},
+        }
+    end,
+    Def.ActorFrame{
+        Def.Quad{
+            InitCommand=function(self)
+                leaf = self
+            end,
+        },
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "After Dark Helpers");
+        context.song_display_bpms = [120.0, 180.0];
+        context.style_name = "double".to_string();
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "double:3.00:false:true");
     }
 
     #[test]

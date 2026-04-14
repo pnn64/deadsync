@@ -4678,6 +4678,12 @@ fn build_song_lua_runtime_windows(
     } else {
         1.0
     };
+    context.style_name = match profile::get_session_play_style() {
+        profile::PlayStyle::Single => "single",
+        profile::PlayStyle::Versus => "versus",
+        profile::PlayStyle::Double => "double",
+    }
+    .to_string();
     context.global_offset_seconds = machine_global_offset_seconds;
     context.screen_width = screen_width;
     context.screen_height = screen_height;
