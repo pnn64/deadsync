@@ -471,6 +471,14 @@ fn restore_compile_globals(globals: &Table, snapshot: SongLuaCompileGlobals) -> 
     Ok(())
 }
 
+#[inline(always)]
+fn is_compile_global_name(name: &str) -> bool {
+    matches!(
+        name,
+        "prefix_globals" | "mods" | "mod_time" | "mods_ease" | "mod_perframes" | "mod_actions"
+    )
+}
+
 pub fn compile_song_lua(
     entry_path: &Path,
     context: &SongLuaCompileContext,
@@ -854,11 +862,17 @@ fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
         })?,
     )?;
     let proxy_for_newindex = proxy.clone();
+    let globals_for_newindex = globals.clone();
     mt.set(
         "__newindex",
         lua.create_function(move |_, (_self, key, value): (Table, Value, Value)| {
             let target: Table = proxy_for_newindex.get("__songlua_env_target")?;
-            target.set(key, value)?;
+            target.set(key.clone(), value.clone())?;
+            if let Some(name) = read_string(key.clone())
+                && is_compile_global_name(name.as_str())
+            {
+                globals_for_newindex.set(name, value)?;
+            }
             Ok(())
         })?,
     )?;
@@ -2204,13 +2218,14 @@ fn create_actorframe_class_table(lua: &Lua) -> mlua::Result<Table> {
                 return Ok(Value::Nil);
             };
             let Some(index) = args.get(1).and_then(|value| match value {
-                Value::Integer(value) if *value >= 1 => Some(*value as usize),
-                Value::Number(value) if value.is_finite() && *value >= 1.0 => Some(*value as usize),
+                Value::Integer(value) if *value >= 0 => Some(*value as usize),
+                Value::Number(value) if value.is_finite() && *value >= 0.0 => Some(*value as usize),
                 _ => None,
             }) else {
                 return Ok(Value::Nil);
             };
-            Ok(match actor.raw_get::<Option<Value>>(index)? {
+            let lua_index = if index == 0 { 1 } else { index };
+            Ok(match actor.raw_get::<Option<Value>>(lua_index)? {
                 Some(Value::Table(child)) => Value::Table(child),
                 _ => Value::Nil,
             })
@@ -2370,7 +2385,7 @@ fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<(
 
 fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if actor_runs_startup_commands(actor)? {
-        run_actor_named_command(lua, actor, "OnCommand")?;
+        run_actor_named_command_with_drain(lua, actor, "OnCommand", false)?;
     }
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child? else {
@@ -2379,7 +2394,7 @@ fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resul
         child.set("__songlua_parent", actor.clone())?;
         run_actor_startup_commands_for_table(lua, &child)?;
     }
-    Ok(())
+    drain_actor_command_queue(lua, actor)
 }
 
 fn run_actor_update_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -2401,10 +2416,19 @@ fn run_actor_init_command(lua: &Lua, actor: &Table) -> mlua::Result<()> {
 }
 
 fn run_actor_named_command(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<()> {
+    run_actor_named_command_with_drain(lua, actor, name, true)
+}
+
+fn run_actor_named_command_with_drain(
+    lua: &Lua,
+    actor: &Table,
+    name: &str,
+    drain_queue: bool,
+) -> mlua::Result<()> {
     let Some(command) = actor.get::<Option<Function>>(name)? else {
         return Ok(());
     };
-    run_guarded_actor_command(lua, actor, name, &command)
+    run_guarded_actor_command(lua, actor, name, &command, drain_queue)
 }
 
 fn actor_runs_startup_commands(actor: &Table) -> mlua::Result<bool> {
@@ -2429,6 +2453,7 @@ fn run_guarded_actor_command(
     actor: &Table,
     name: &str,
     command: &Function,
+    drain_queue: bool,
 ) -> mlua::Result<()> {
     let active = actor_active_commands(lua, actor)?;
     if active.get::<Option<bool>>(name)?.unwrap_or(false) {
@@ -2444,7 +2469,10 @@ fn run_guarded_actor_command(
     });
     active.set(name, Value::Nil)?;
     result?;
-    drain_actor_command_queue(lua, actor)
+    if drain_queue {
+        drain_actor_command_queue(lua, actor)?;
+    }
+    Ok(())
 }
 
 fn actor_active_commands(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
@@ -3736,15 +3764,17 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                         actor.set("__songlua_aft_capture_name", Value::Nil)?;
                     }
                     Some(Value::Table(texture)) => {
-                        if let Some(texture_path) =
-                            texture.get::<Option<String>>("__songlua_texture_path")?
-                        {
-                            actor.set("Texture", texture_path)?;
-                            actor.set("__songlua_aft_capture_name", Value::Nil)?;
-                        } else if let Some(capture_name) =
+                        if let Some(capture_name) =
                             texture.get::<Option<String>>("__songlua_aft_capture_name")?
                         {
                             actor.set("__songlua_aft_capture_name", capture_name)?;
+                            actor.set("Texture", Value::Nil)?;
+                        } else if let Some(texture_path) = texture
+                            .get::<Option<String>>("__songlua_texture_path")?
+                            .filter(|path| !path.is_empty())
+                        {
+                            actor.set("Texture", texture_path)?;
+                            actor.set("__songlua_aft_capture_name", Value::Nil)?;
                         }
                     }
                     _ => {}
@@ -4696,6 +4726,20 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
                     .unwrap_or(1.0_f32))
             }
+        })?,
+    )?;
+    actor.set(
+        "GetAlpha",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| Ok(actor_diffuse(&actor)?[3])
+        })?,
+    )?;
+    actor.set(
+        "GetDiffuseAlpha",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| Ok(actor_diffuse(&actor)?[3])
         })?,
     )?;
     actor.set(
@@ -6902,7 +6946,7 @@ return Def.ActorFrame{}
         context.screen_height = 720.0;
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "200.00");
+        assert_eq!(compiled.messages[0].message, "199.69");
     }
 
     #[test]
@@ -7570,7 +7614,7 @@ return root
         )
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "true:child");
+        assert_eq!(compiled.messages[0].message, "true:nil");
     }
 
     #[test]

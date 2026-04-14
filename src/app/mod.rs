@@ -2148,12 +2148,12 @@ impl ScreensState {
                 input_screen::update(&mut self.input_state, delta_time),
                 false,
             ),
-            CurrentScreen::PlayerOptions => {
-                if let Some(pos) = &mut self.player_options_state {
-                    player_options::update(pos, delta_time, asset_manager);
-                }
-                (None, false)
-            }
+            CurrentScreen::PlayerOptions => (
+                self.player_options_state
+                    .as_mut()
+                    .and_then(|pos| player_options::update(pos, delta_time, asset_manager)),
+                false,
+            ),
             CurrentScreen::Sandbox => {
                 sandbox::update(&mut self.sandbox_state, delta_time);
                 (None, false)

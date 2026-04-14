@@ -47,8 +47,8 @@ pub fn fixture() -> PlayerOptionsBenchFixture {
         .unwrap_or(perspective_row);
     state.selected_row = [perspective_row, background_filter_row];
     state.prev_selected_row = state.selected_row;
-    player_options::update(&mut state, 1.0, &asset_manager);
-    player_options::update(&mut state, 1.0, &asset_manager);
+    let _ = player_options::update(&mut state, 1.0, &asset_manager);
+    let _ = player_options::update(&mut state, 1.0, &asset_manager);
 
     PlayerOptionsBenchFixture {
         state,
