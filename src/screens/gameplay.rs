@@ -874,6 +874,12 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.basezoom {
         state.basezoom = value;
     }
+    if let Some(value) = delta.basezoom_x {
+        state.basezoom_x = value;
+    }
+    if let Some(value) = delta.basezoom_y {
+        state.basezoom_y = value;
+    }
     if let Some(value) = delta.rot_x_deg {
         state.rot_x_deg = value;
     }
@@ -967,6 +973,12 @@ fn song_lua_overlay_state_lerp(
     if delta.basezoom.is_some() {
         from.basezoom = (to.basezoom - from.basezoom).mul_add(t, from.basezoom);
     }
+    if delta.basezoom_x.is_some() {
+        from.basezoom_x = (to.basezoom_x - from.basezoom_x).mul_add(t, from.basezoom_x);
+    }
+    if delta.basezoom_y.is_some() {
+        from.basezoom_y = (to.basezoom_y - from.basezoom_y).mul_add(t, from.basezoom_y);
+    }
     if delta.rot_x_deg.is_some() {
         from.rot_x_deg = (to.rot_x_deg - from.rot_x_deg).mul_add(t, from.rot_x_deg);
     }
@@ -1051,8 +1063,8 @@ fn song_lua_overlay_state_lerp(
 #[inline(always)]
 fn song_lua_overlay_axis_scale(state: SongLuaOverlayState) -> [f32; 2] {
     [
-        state.basezoom * state.zoom * state.zoom_x,
-        state.basezoom * state.zoom * state.zoom_y,
+        state.basezoom * state.basezoom_x * state.zoom * state.zoom_x,
+        state.basezoom * state.basezoom_y * state.zoom * state.zoom_y,
     ]
 }
 
@@ -1111,8 +1123,8 @@ fn song_lua_overlay_compose_state(
     }
     child.visible = parent.visible && child.visible;
     child.basezoom *= parent.basezoom * parent.zoom;
-    child.zoom_x *= parent.zoom_x;
-    child.zoom_y *= parent.zoom_y;
+    child.basezoom_x *= parent.basezoom_x * parent.zoom_x;
+    child.basezoom_y *= parent.basezoom_y * parent.zoom_y;
     child.rot_x_deg += parent.rot_x_deg;
     child.rot_y_deg += parent.rot_y_deg;
     child.rot_z_deg += parent.rot_z_deg;
@@ -1889,8 +1901,8 @@ fn song_lua_capture_transform_matrix(
     let y_scale = screen_height() / overlay_space_height.max(1.0);
     let translate_x = (state.x - 0.5 * overlay_space_width) * x_scale + extra_offset[0];
     let translate_y = (state.y - 0.5 * overlay_space_height) * y_scale + extra_offset[1];
-    let scale_x = state.basezoom * state.zoom * state.zoom_x;
-    let scale_y = state.basezoom * state.zoom * state.zoom_y;
+    let scale_x = state.basezoom * state.basezoom_x * state.zoom * state.zoom_x;
+    let scale_y = state.basezoom * state.basezoom_y * state.zoom * state.zoom_y;
     if translate_x.abs() <= f32::EPSILON
         && translate_y.abs() <= f32::EPSILON
         && state.rot_z_deg.abs() <= f32::EPSILON

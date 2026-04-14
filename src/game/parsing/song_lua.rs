@@ -266,6 +266,8 @@ pub struct SongLuaOverlayState {
     pub zoom_x: f32,
     pub zoom_y: f32,
     pub basezoom: f32,
+    pub basezoom_x: f32,
+    pub basezoom_y: f32,
     pub rot_x_deg: f32,
     pub rot_y_deg: f32,
     pub rot_z_deg: f32,
@@ -297,6 +299,8 @@ impl Default for SongLuaOverlayState {
             zoom_x: 1.0,
             zoom_y: 1.0,
             basezoom: 1.0,
+            basezoom_x: 1.0,
+            basezoom_y: 1.0,
             rot_x_deg: 0.0,
             rot_y_deg: 0.0,
             rot_z_deg: 0.0,
@@ -329,6 +333,8 @@ pub struct SongLuaOverlayStateDelta {
     pub zoom_x: Option<f32>,
     pub zoom_y: Option<f32>,
     pub basezoom: Option<f32>,
+    pub basezoom_x: Option<f32>,
+    pub basezoom_y: Option<f32>,
     pub rot_x_deg: Option<f32>,
     pub rot_y_deg: Option<f32>,
     pub rot_z_deg: Option<f32>,
@@ -2573,6 +2579,18 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.basezoom = value;
     }
     if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_basezoom_x")
+        .map_err(|err| err.to_string())?
+    {
+        state.basezoom_x = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_basezoom_y")
+        .map_err(|err| err.to_string())?
+    {
+        state.basezoom_y = value;
+    }
+    if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_rot_x_deg")
         .map_err(|err| err.to_string())?
     {
@@ -2979,6 +2997,12 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                 basezoom: block
                     .get::<Option<f32>>("basezoom")
                     .map_err(|err| err.to_string())?,
+                basezoom_x: block
+                    .get::<Option<f32>>("basezoom_x")
+                    .map_err(|err| err.to_string())?,
+                basezoom_y: block
+                    .get::<Option<f32>>("basezoom_y")
+                    .map_err(|err| err.to_string())?,
                 rot_x_deg: block
                     .get::<Option<f32>>("rot_x_deg")
                     .map_err(|err| err.to_string())?,
@@ -3131,6 +3155,12 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.basezoom {
         state.basezoom = value;
     }
+    if let Some(value) = delta.basezoom_x {
+        state.basezoom_x = value;
+    }
+    if let Some(value) = delta.basezoom_y {
+        state.basezoom_y = value;
+    }
     if let Some(value) = delta.rot_x_deg {
         state.rot_x_deg = value;
     }
@@ -3215,6 +3245,12 @@ fn overlay_state_lerp(
     }
     if delta.basezoom.is_some() {
         from.basezoom = (to.basezoom - from.basezoom).mul_add(t, from.basezoom);
+    }
+    if delta.basezoom_x.is_some() {
+        from.basezoom_x = (to.basezoom_x - from.basezoom_x).mul_add(t, from.basezoom_x);
+    }
+    if delta.basezoom_y.is_some() {
+        from.basezoom_y = (to.basezoom_y - from.basezoom_y).mul_add(t, from.basezoom_y);
     }
     if delta.rot_x_deg.is_some() {
         from.rot_x_deg = (to.rot_x_deg - from.rot_x_deg).mul_add(t, from.rot_x_deg);
@@ -3696,6 +3732,30 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             move |lua, args: MultiValue| {
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "basezoom", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "basezoomx",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "basezoom_x", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "basezoomy",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "basezoom_y", value)?;
                 }
                 Ok(actor.clone())
             }
@@ -4889,6 +4949,8 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.zoom_x.is_none()
         && delta.zoom_y.is_none()
         && delta.basezoom.is_none()
+        && delta.basezoom_x.is_none()
+        && delta.basezoom_y.is_none()
         && delta.rot_x_deg.is_none()
         && delta.rot_y_deg.is_none()
         && delta.rot_z_deg.is_none()
@@ -4941,6 +5003,12 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.basezoom.is_some() {
         into.basezoom = from.basezoom;
+    }
+    if from.basezoom_x.is_some() {
+        into.basezoom_x = from.basezoom_x;
+    }
+    if from.basezoom_y.is_some() {
+        into.basezoom_y = from.basezoom_y;
     }
     if from.rot_x_deg.is_some() {
         into.rot_x_deg = from.rot_x_deg;
@@ -5022,6 +5090,8 @@ fn overlay_delta_intersection(
     copy_pair!(zoom_x);
     copy_pair!(zoom_y);
     copy_pair!(basezoom);
+    copy_pair!(basezoom_x);
+    copy_pair!(basezoom_y);
     copy_pair!(rot_x_deg);
     copy_pair!(rot_y_deg);
     copy_pair!(rot_z_deg);
@@ -6352,6 +6422,37 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "30:40");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_basezoom_axis_methods() {
+        let song_dir = test_dir("basezoom-axis");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:basezoom(2)
+            self:basezoomx(3)
+            self:basezoomy(4)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "BaseZoom Axis"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(compiled.overlays[0].initial_state.basezoom, 2.0);
+        assert_eq!(compiled.overlays[0].initial_state.basezoom_x, 3.0);
+        assert_eq!(compiled.overlays[0].initial_state.basezoom_y, 4.0);
     }
 
     #[test]
