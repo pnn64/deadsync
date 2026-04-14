@@ -30,6 +30,8 @@ const WGPU_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 enum Api {
     #[cfg(not(target_pointer_width = "32"))]
     Vulkan,
+    #[cfg(target_os = "macos")]
+    Metal,
     OpenGL,
     #[cfg(target_os = "windows")]
     DirectX,
@@ -41,6 +43,8 @@ impl Api {
         match self {
             #[cfg(not(target_pointer_width = "32"))]
             Self::Vulkan => "Vulkan",
+            #[cfg(target_os = "macos")]
+            Self::Metal => "Metal",
             Self::OpenGL => "OpenGL",
             #[cfg(target_os = "windows")]
             Self::DirectX => "DirectX",
@@ -52,6 +56,8 @@ impl Api {
         match self {
             #[cfg(not(target_pointer_width = "32"))]
             Self::Vulkan => wgpu::Backends::VULKAN,
+            #[cfg(target_os = "macos")]
+            Self::Metal => wgpu::Backends::METAL,
             Self::OpenGL => wgpu::Backends::GL,
             #[cfg(target_os = "windows")]
             Self::DirectX => wgpu::Backends::DX12,
@@ -249,6 +255,22 @@ pub fn init_vulkan(
 ) -> Result<State, Box<dyn Error>> {
     init(
         Api::Vulkan,
+        window,
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+    )
+}
+
+#[cfg(target_os = "macos")]
+pub fn init_metal(
+    window: Arc<Window>,
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+    gfx_debug_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
+    init(
+        Api::Metal,
         window,
         vsync_enabled,
         present_mode_policy,
@@ -848,6 +870,8 @@ fn pick_tex(api: Api, tex: &RendererTexture) -> Option<&Texture> {
     match (api, tex) {
         #[cfg(not(target_pointer_width = "32"))]
         (Api::Vulkan, RendererTexture::VulkanWgpu(t)) => Some(t),
+        #[cfg(target_os = "macos")]
+        (Api::Metal, RendererTexture::Metal(t)) => Some(t),
         (Api::OpenGL, RendererTexture::OpenGLWgpu(t)) => Some(t),
         #[cfg(target_os = "windows")]
         (Api::DirectX, RendererTexture::DirectX(t)) => Some(t),

@@ -4488,6 +4488,8 @@ fn song_lua_overlay_delta_overlaps(
     overlap!(zoom_x);
     overlap!(zoom_y);
     overlap!(basezoom);
+    overlap!(basezoom_x);
+    overlap!(basezoom_y);
     overlap!(rot_x_deg);
     overlap!(rot_y_deg);
     overlap!(rot_z_deg);
