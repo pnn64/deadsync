@@ -2216,8 +2216,7 @@ fn install_file_loaders(lua: &Lua, song_dir: PathBuf) -> mlua::Result<()> {
         lua.create_function(move |lua, value: Value| match value {
             Value::String(path) => {
                 let path = path.to_str()?.to_string();
-                let loader = create_loader_function(lua, &song_dir, &path)?;
-                match loader.call::<Value>(())? {
+                match load_actor_path(lua, &song_dir, &path)? {
                     Value::Table(table) => Ok(table),
                     _ => create_dummy_actor(lua, "LoadActor"),
                 }
@@ -2226,6 +2225,14 @@ fn install_file_loaders(lua: &Lua, song_dir: PathBuf) -> mlua::Result<()> {
         })?,
     )?;
     Ok(())
+}
+
+fn load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<Value> {
+    let resolved = resolve_script_path(lua, song_dir, path)?;
+    if is_song_lua_media_path(&resolved) {
+        return Ok(Value::Table(create_media_actor(lua, "Sprite", path)?));
+    }
+    load_script_file(lua, &resolved, song_dir)?.call::<Value>(())
 }
 
 fn create_loader_function(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<Function> {
@@ -3483,10 +3490,30 @@ fn call_with_chunk_env<T>(
 fn create_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table> {
     let actor = lua.create_table()?;
     actor.set("__songlua_actor_type", actor_type)?;
+    inherit_actor_dirs(lua, &actor)?;
     install_actor_methods(lua, &actor)?;
     install_actor_metatable(lua, &actor)?;
     reset_actor_capture(lua, &actor)?;
     Ok(actor)
+}
+
+fn create_media_actor(lua: &Lua, actor_type: &'static str, path: &str) -> mlua::Result<Table> {
+    let actor = create_dummy_actor(lua, actor_type)?;
+    actor.set("Texture", path)?;
+    Ok(actor)
+}
+
+fn inherit_actor_dirs(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if let Some(script_dir) = lua
+        .globals()
+        .get::<Option<String>>("__songlua_script_dir")?
+    {
+        actor.set("__songlua_script_dir", script_dir)?;
+    }
+    if let Some(song_dir) = lua.globals().get::<Option<String>>("__songlua_song_dir")? {
+        actor.set("__songlua_song_dir", song_dir)?;
+    }
+    Ok(())
 }
 
 fn set_proxy_target_fields(actor: &Table, target: &Table) -> mlua::Result<()> {
@@ -3650,7 +3677,12 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                         actor.set("__songlua_aft_capture_name", Value::Nil)?;
                     }
                     Some(Value::Table(texture)) => {
-                        if let Some(capture_name) =
+                        if let Some(texture_path) =
+                            texture.get::<Option<String>>("__songlua_texture_path")?
+                        {
+                            actor.set("Texture", texture_path)?;
+                            actor.set("__songlua_aft_capture_name", Value::Nil)?;
+                        } else if let Some(capture_name) =
                             texture.get::<Option<String>>("__songlua_aft_capture_name")?
                         {
                             actor.set("__songlua_aft_capture_name", capture_name)?;
@@ -3666,22 +3698,16 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "GetTexture",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _self: Table| {
-                if actor
-                    .get::<Option<String>>("__songlua_actor_type")?
-                    .as_deref()
-                    .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorFrameTexture"))
+            move |lua, _self: Table| match actor.get::<Value>("Texture")? {
+                Value::Nil
+                    if !actor
+                        .get::<Option<String>>("__songlua_actor_type")?
+                        .as_deref()
+                        .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorFrameTexture")) =>
                 {
-                    let marker = lua.create_table()?;
-                    if let Some(name) = actor.get::<Option<String>>("Name")? {
-                        marker.set("__songlua_aft_capture_name", name)?;
-                    }
-                    return Ok(Value::Table(marker));
+                    Ok(Value::Nil)
                 }
-                match actor.get::<Value>("Texture")? {
-                    Value::Nil => Ok(Value::Nil),
-                    other => Ok(other),
-                }
+                _ => Ok(Value::Table(create_texture_proxy(lua, &actor)?)),
             }
         })?,
     )?;
@@ -4555,6 +4581,108 @@ fn actor_base_size(actor: &Table) -> mlua::Result<(f32, f32)> {
         return Ok((width as f32, height as f32));
     }
     Ok((1.0, 1.0))
+}
+
+fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    let texture = lua.create_table()?;
+    let (screen_width, screen_height) = song_lua_screen_size(lua)?;
+    if actor
+        .get::<Option<String>>("__songlua_actor_type")?
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorFrameTexture"))
+    {
+        if let Some(name) = actor.get::<Option<String>>("Name")? {
+            texture.set("__songlua_aft_capture_name", name)?;
+        }
+        install_texture_proxy_methods(
+            lua,
+            &texture,
+            String::new(),
+            screen_width,
+            screen_height,
+            screen_width,
+            screen_height,
+        )?;
+        return Ok(texture);
+    }
+
+    let raw_texture = actor.get::<Option<String>>("Texture")?.unwrap_or_default();
+    let resolved = actor_texture_path(actor)?;
+    let path = resolved
+        .as_deref()
+        .map(file_path_string)
+        .unwrap_or_else(|| raw_texture.clone());
+    let (source_width, source_height) = texture_source_size(
+        lua,
+        actor,
+        resolved
+            .as_deref()
+            .unwrap_or_else(|| Path::new(&raw_texture)),
+    )?;
+    install_texture_proxy_methods(
+        lua,
+        &texture,
+        path,
+        source_width,
+        source_height,
+        source_width,
+        source_height,
+    )?;
+    Ok(texture)
+}
+
+fn install_texture_proxy_methods(
+    lua: &Lua,
+    texture: &Table,
+    path: String,
+    source_width: f32,
+    source_height: f32,
+    texture_width: f32,
+    texture_height: f32,
+) -> mlua::Result<()> {
+    texture.set("__songlua_texture_path", path.clone())?;
+    texture.set(
+        "GetPath",
+        lua.create_function(move |lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string(&path)?))
+        })?,
+    )?;
+    texture.set(
+        "GetSourceWidth",
+        lua.create_function(move |_, _args: MultiValue| Ok(source_width))?,
+    )?;
+    texture.set(
+        "GetSourceHeight",
+        lua.create_function(move |_, _args: MultiValue| Ok(source_height))?,
+    )?;
+    texture.set(
+        "GetTextureWidth",
+        lua.create_function(move |_, _args: MultiValue| Ok(texture_width))?,
+    )?;
+    texture.set(
+        "GetTextureHeight",
+        lua.create_function(move |_, _args: MultiValue| Ok(texture_height))?,
+    )?;
+    Ok(())
+}
+
+fn texture_source_size(lua: &Lua, actor: &Table, path: &Path) -> mlua::Result<(f32, f32)> {
+    if is_song_lua_image_path(path)
+        && let Ok((width, height)) = image_dimensions(path)
+    {
+        return Ok((width as f32, height as f32));
+    }
+    if is_song_lua_video_path(path) {
+        return song_lua_screen_size(lua);
+    }
+    actor_base_size(actor)
+}
+
+fn song_lua_screen_size(lua: &Lua) -> mlua::Result<(f32, f32)> {
+    let globals = lua.globals();
+    let width = globals.get::<Option<i32>>("SCREEN_WIDTH")?.unwrap_or(640) as f32;
+    let height = globals.get::<Option<i32>>("SCREEN_HEIGHT")?.unwrap_or(480) as f32;
+    Ok((width, height))
 }
 
 fn actor_texture_path(actor: &Table) -> mlua::Result<Option<PathBuf>> {
@@ -5514,6 +5642,23 @@ fn is_song_lua_image_path(path: &Path) -> bool {
                 "png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp" | "qoi" | "tif" | "tiff"
             )
         })
+}
+
+#[inline(always)]
+fn is_song_lua_video_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "mp4" | "avi" | "webm" | "mov" | "mkv" | "mpg" | "mpeg" | "ogv"
+            )
+        })
+}
+
+#[inline(always)]
+fn is_song_lua_media_path(path: &Path) -> bool {
+    is_song_lua_image_path(path) || is_song_lua_video_path(path)
 }
 
 #[inline(always)]
@@ -6508,6 +6653,87 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "10:20");
+    }
+
+    #[test]
+    fn compile_song_lua_loadactor_exposes_texture_proxy_methods() {
+        let song_dir = test_dir("loadactor-texture-proxy");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(12, 34).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local loaded = nil
+
+return Def.ActorFrame{
+    LoadActor("panel.png")..{
+        OnCommand=function(self)
+            loaded = self
+        end,
+    },
+    Def.Sprite{
+        OnCommand=function(self)
+            self:SetTexture(loaded:GetTexture())
+            local texture = self:GetTexture()
+            mod_actions = {
+                {1, string.format(
+                    "%s:%.0f:%.0f",
+                    tostring(texture:GetPath():match("panel%.png$") ~= nil),
+                    texture:GetSourceWidth(),
+                    texture:GetSourceHeight()
+                ), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "LoadActor Texture Proxy"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "true:12:34");
+    }
+
+    #[test]
+    fn compile_song_lua_loadactor_treats_binary_video_as_media() {
+        let song_dir = test_dir("loadactor-video-media");
+        let video_path = song_dir.join("clip.mp4");
+        fs::write(&video_path, [0xff_u8, 0xd8, 0x00, 0x81]).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    LoadActor("clip.mp4")..{
+        OnCommand=function(self)
+            local texture = self:GetTexture()
+            mod_actions = {
+                {1, string.format(
+                    "%s:%s",
+                    tostring(texture:GetPath():match("clip%.mp4$") ~= nil),
+                    tostring(texture:GetSourceWidth() > 0 and texture:GetSourceHeight() > 0)
+                ), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "LoadActor Video Media"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "true:true");
     }
 
     #[test]
