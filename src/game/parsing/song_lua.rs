@@ -4098,7 +4098,22 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             }
         })?,
     )?;
-    for name in ["skewx", "skewy", "addy", "zoomz"] {
+    actor.set("addx", make_actor_add_f32_method(lua, actor, "x")?)?;
+    actor.set("addy", make_actor_add_f32_method(lua, actor, "y")?)?;
+    actor.set("addz", make_actor_add_f32_method(lua, actor, "z")?)?;
+    actor.set(
+        "addrotationx",
+        make_actor_add_f32_method(lua, actor, "rot_x_deg")?,
+    )?;
+    actor.set(
+        "addrotationy",
+        make_actor_add_f32_method(lua, actor, "rot_y_deg")?,
+    )?;
+    actor.set(
+        "addrotationz",
+        make_actor_add_f32_method(lua, actor, "rot_z_deg")?,
+    )?;
+    for name in ["skewx", "skewy", "zoomz"] {
         actor.set(
             name,
             lua.create_function({
@@ -4866,6 +4881,26 @@ fn make_actor_capture_f32_method(
         if let Some(value) = args.get(1).cloned().and_then(read_f32) {
             capture_block_set_f32(lua, &actor, key, value)?;
         }
+        Ok(actor.clone())
+    })
+}
+
+fn make_actor_add_f32_method(
+    lua: &Lua,
+    actor: &Table,
+    key: &'static str,
+) -> mlua::Result<Function> {
+    let actor = actor.clone();
+    lua.create_function(move |lua, args: MultiValue| {
+        let Some(delta) = args.get(1).cloned().and_then(read_f32) else {
+            return Ok(actor.clone());
+        };
+        let block = actor_current_capture_block(lua, &actor)?;
+        let current = block
+            .get::<Option<f32>>(key)?
+            .or(actor.get::<Option<f32>>(format!("__songlua_state_{key}"))?)
+            .unwrap_or(0.0);
+        capture_block_set_f32(lua, &actor, key, current + delta)?;
         Ok(actor.clone())
     })
 }
@@ -6980,6 +7015,49 @@ return Def.ActorFrame{
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "640:360:1280:720");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_additive_transform_methods() {
+        let song_dir = test_dir("actor-additive-transforms");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:x(10):addx(5)
+            self:y(20):addy(-3)
+            self:z(4):addz(6)
+            self:rotationx(15):addrotationx(5)
+            self:rotationy(25):addrotationy(10)
+            self:rotationz(45):addrotationz(90)
+            mod_actions = {
+                {1, string.format(
+                    "%.0f:%.0f:%.0f:%.0f:%.0f:%.0f",
+                    self:GetX(),
+                    self:GetY(),
+                    self:GetZ(),
+                    self:GetRotationX(),
+                    self:GetRotationY(),
+                    self:GetRotationZ()
+                ), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Additive Transforms"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "15:17:10:20:35:135");
     }
 
     #[test]
