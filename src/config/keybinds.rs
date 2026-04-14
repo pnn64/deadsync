@@ -593,42 +593,57 @@ fn requested_to_actual_binding_slot(requested_index: usize, first_editable: usiz
     }
 }
 
+#[inline(always)]
+fn load_action_bindings(keymap: &Keymap, action: VirtualAction) -> Vec<InputBinding> {
+    let mut bindings = Vec::new();
+    let mut i = 0;
+    while let Some(binding) = keymap.binding_at(action, i) {
+        bindings.push(binding);
+        i += 1;
+    }
+    bindings
+}
+
+#[inline(always)]
+fn remove_matching_keyboard_binding(bindings: &mut Vec<InputBinding>, keycode: KeyCode) {
+    bindings.retain(|binding| !matches!(binding, InputBinding::Key(code) if *code == keycode));
+}
+
+#[inline(always)]
+fn remove_matching_input_binding(bindings: &mut Vec<InputBinding>, binding: InputBinding) {
+    bindings.retain(|existing| *existing != binding);
+}
+
+#[inline(always)]
+fn set_binding_at_slot(bindings: &mut Vec<InputBinding>, slot_index: usize, binding: InputBinding) {
+    debug_assert!(
+        bindings.len() >= slot_index,
+        "binding slot insertion should not skip intermediate slots"
+    );
+    if bindings.len() <= slot_index {
+        bindings.push(binding);
+    } else {
+        bindings[slot_index] = binding;
+    }
+}
+
 /// Update a keyboard binding in Primary/Secondary slots, ensuring that the
-/// given key code is not used in any other Primary/Secondary slot for P1/P2.
-/// Default slots (index 0) are never modified.
+/// given key code is not used anywhere else in the keymap.
 pub fn update_keymap_binding_unique_keyboard(
     action: VirtualAction,
     index: usize,
     keycode: KeyCode,
 ) {
-    // Update keyboard bindings while ensuring that `keycode` is unique across
-    // all Primary/Secondary slots (index >= 1) for P1/P2.
     let current = crate::engine::input::get_keymap();
     let mut new_map = Keymap::default();
 
     for act in ALL_VIRTUAL_ACTIONS {
-        let mut bindings: Vec<InputBinding> = Vec::new();
-        let mut i = 0;
-        while let Some(b) = current.binding_at(act, i) {
-            bindings.push(b);
-            i += 1;
-        }
+        let mut bindings = load_action_bindings(&current, act);
         let first_editable = first_editable_binding_slot(&bindings);
 
-        // Remove this key from all editable slots for this action.
-        if !bindings.is_empty() {
-            let mut filtered: Vec<InputBinding> = Vec::with_capacity(bindings.len());
-            for (slot_idx, b) in bindings.iter().enumerate() {
-                if slot_idx >= first_editable
-                    && let InputBinding::Key(code) = b
-                    && *code == keycode
-                {
-                    continue;
-                }
-                filtered.push(*b);
-            }
-            bindings = filtered;
-        }
+        // Remove this key from every slot so one physical key cannot fan out
+        // to multiple actions.
+        remove_matching_keyboard_binding(&mut bindings, keycode);
 
         if act == action {
             let mut effective_index = requested_to_actual_binding_slot(index, first_editable);
@@ -637,23 +652,7 @@ pub fn update_keymap_binding_unique_keyboard(
             if effective_index > first_editable && bindings.len() <= first_editable {
                 effective_index = first_editable;
             }
-
-            let new_binding = InputBinding::Key(keycode);
-            if bindings.len() <= effective_index {
-                if bindings.is_empty() {
-                    bindings.push(new_binding);
-                } else {
-                    bindings.push(new_binding);
-                }
-            } else if effective_index == 0 {
-                if bindings.is_empty() {
-                    bindings.push(new_binding);
-                } else {
-                    bindings[0] = new_binding;
-                }
-            } else {
-                bindings[effective_index] = new_binding;
-            }
+            set_binding_at_slot(&mut bindings, effective_index, InputBinding::Key(keycode));
         }
 
         new_map.bind(act, &bindings);
@@ -664,8 +663,7 @@ pub fn update_keymap_binding_unique_keyboard(
 }
 
 /// Update a gamepad binding in Primary/Secondary slots, ensuring that the
-/// given physical binding is not used in any other Primary/Secondary slot
-/// for P1/P2. Default slots (index 0) are never modified.
+/// given physical binding is not used anywhere else in the keymap.
 pub fn update_keymap_binding_unique_gamepad(
     action: VirtualAction,
     index: usize,
@@ -675,25 +673,12 @@ pub fn update_keymap_binding_unique_gamepad(
     let mut new_map = Keymap::default();
 
     for act in ALL_VIRTUAL_ACTIONS {
-        let mut bindings: Vec<InputBinding> = Vec::new();
-        let mut i = 0;
-        while let Some(b) = current.binding_at(act, i) {
-            bindings.push(b);
-            i += 1;
-        }
+        let mut bindings = load_action_bindings(&current, act);
         let first_editable = first_editable_binding_slot(&bindings);
 
-        // Remove this binding from all editable slots for this action.
-        if !bindings.is_empty() {
-            let mut filtered: Vec<InputBinding> = Vec::with_capacity(bindings.len());
-            for (slot_idx, b) in bindings.iter().enumerate() {
-                if slot_idx >= first_editable && *b == binding {
-                    continue;
-                }
-                filtered.push(*b);
-            }
-            bindings = filtered;
-        }
+        // Remove this binding from every slot so one physical control cannot
+        // remain assigned elsewhere.
+        remove_matching_input_binding(&mut bindings, binding);
 
         if act == action {
             let mut effective_index = requested_to_actual_binding_slot(index, first_editable);
@@ -702,22 +687,7 @@ pub fn update_keymap_binding_unique_gamepad(
             if effective_index > first_editable && bindings.len() <= first_editable {
                 effective_index = first_editable;
             }
-
-            if bindings.len() <= effective_index {
-                if bindings.is_empty() {
-                    bindings.push(binding);
-                } else {
-                    bindings.push(binding);
-                }
-            } else if effective_index == 0 {
-                if bindings.is_empty() {
-                    bindings.push(binding);
-                } else {
-                    bindings[0] = binding;
-                }
-            } else {
-                bindings[effective_index] = binding;
-            }
+            set_binding_at_slot(&mut bindings, effective_index, binding);
         }
 
         new_map.bind(act, &bindings);
@@ -725,4 +695,31 @@ pub fn update_keymap_binding_unique_gamepad(
 
     crate::engine::input::set_keymap(new_map);
     save_without_keymaps();
+}
+
+/// Clear the requested Primary/Secondary binding slot for an action.
+/// Returns `true` when a binding was removed.
+pub fn clear_keymap_binding(action: VirtualAction, index: usize) -> bool {
+    let current = crate::engine::input::get_keymap();
+    let mut new_map = Keymap::default();
+    let mut changed = false;
+
+    for act in ALL_VIRTUAL_ACTIONS {
+        let mut bindings = load_action_bindings(&current, act);
+        if act == action {
+            let first_editable = first_editable_binding_slot(&bindings);
+            let effective_index = requested_to_actual_binding_slot(index, first_editable);
+            if effective_index < bindings.len() {
+                bindings.remove(effective_index);
+                changed = true;
+            }
+        }
+        new_map.bind(act, &bindings);
+    }
+
+    if changed {
+        crate::engine::input::set_keymap(new_map);
+        save_without_keymaps();
+    }
+    changed
 }

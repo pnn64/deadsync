@@ -356,6 +356,37 @@ fn cancel_capture(state: &mut State) {
     state.menu_lr_undo_slot = None;
 }
 
+#[inline(always)]
+fn focused_binding_target(state: &State) -> Option<(VirtualAction, usize)> {
+    if state.selected_row >= NUM_MAPPING_ROWS {
+        return None;
+    }
+    let (p1_act_opt, p2_act_opt) = row_actions(state.selected_row);
+    match state.active_slot {
+        ActiveSlot::P1Primary => p1_act_opt.map(|action| (action, 1)),
+        ActiveSlot::P1Secondary => p1_act_opt.map(|action| (action, 2)),
+        ActiveSlot::P2Primary => p2_act_opt.map(|action| (action, 1)),
+        ActiveSlot::P2Secondary => p2_act_opt.map(|action| (action, 2)),
+    }
+}
+
+#[inline(always)]
+fn clear_focused_binding(state: &State) -> bool {
+    let Some((action, index)) = focused_binding_target(state) else {
+        return false;
+    };
+    let cleared = crate::config::clear_keymap_binding(action, index);
+    if cleared
+        && crate::config::get().only_dedicated_menu_buttons
+        && !crate::engine::input::any_player_has_dedicated_menu_buttons_for_mode(
+            crate::config::get().three_key_navigation,
+        )
+    {
+        crate::config::update_only_dedicated_menu_buttons(false);
+    }
+    cleared
+}
+
 pub fn update(state: &mut State, dt: f32) {
     // Hold-to-scroll for Up/Down.
     if let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
@@ -542,6 +573,11 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
             if is_pressed && state.selected_row < NUM_MAPPING_ROWS {
                 set_active_slot(state, active_slot_next(state.active_slot));
                 audio::play_sfx("assets/sounds/change_value.ogg");
+            }
+        }
+        KeyCode::Delete | KeyCode::Backspace => {
+            if is_pressed && clear_focused_binding(state) {
+                audio::play_sfx("assets/sounds/change.ogg");
             }
         }
         KeyCode::Enter => {

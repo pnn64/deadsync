@@ -15,7 +15,8 @@ mod update;
 pub use self::audio::{AudioMixLevels, AudioOutputMode, LinuxAudioBackend};
 pub use self::ini::SimpleIni;
 pub use self::keybinds::{
-    update_keymap_binding_unique_gamepad, update_keymap_binding_unique_keyboard,
+    clear_keymap_binding, update_keymap_binding_unique_gamepad,
+    update_keymap_binding_unique_keyboard,
 };
 pub use self::load::{bootstrap_log_to_file, load};
 pub use self::null_or_die_cfg::null_or_die_bias_cfg;
