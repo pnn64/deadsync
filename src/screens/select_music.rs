@@ -3373,7 +3373,9 @@ fn build_category_item_lists(
     // Standalone items (top-level, no category)
     let mut standalone = Vec::with_capacity(8);
     standalone.push(select_music_menu::ITEM_GO_BACK_STANDALONE);
-    standalone.push(select_music_menu::ITEM_SWITCH_PROFILE);
+    if config::get().allow_switch_profile_in_menu {
+        standalone.push(select_music_menu::ITEM_SWITCH_PROFILE);
+    }
     standalone.push(select_music_menu::ITEM_SONG_SEARCH);
     if has_song_selected {
         standalone.push(select_music_menu::ITEM_SHOW_LEADERBOARD);
