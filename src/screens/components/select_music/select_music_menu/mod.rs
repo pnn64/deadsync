@@ -212,8 +212,13 @@ pub const ITEM_SORT_BY_FAVORITES: Item = Item {
     bottom_label: "Favorites",
     action: Action::SortByFavorites,
 };
-const ITEM_GO_BACK: Item = Item {
+pub const ITEM_GO_BACK: Item = Item {
     top_label: "Options",
+    bottom_label: "Go Back",
+    action: Action::BackToMain,
+};
+pub const ITEM_GO_BACK_STANDALONE: Item = Item {
+    top_label: "",
     bottom_label: "Go Back",
     action: Action::BackToMain,
 };

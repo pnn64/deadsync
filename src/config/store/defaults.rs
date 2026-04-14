@@ -303,6 +303,11 @@ fn push_default_theme(content: &mut String, default: &Config) {
     );
     push_bool(
         content,
+        "AllowSwitchProfileInMenu",
+        default.allow_switch_profile_in_menu,
+    );
+    push_bool(
+        content,
         "MachineShowSelectStyle",
         default.machine_show_select_style,
     );

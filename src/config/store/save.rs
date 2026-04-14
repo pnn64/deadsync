@@ -375,6 +375,11 @@ fn push_saved_theme(content: &mut String, cfg: &Config) {
     );
     push_bool(
         content,
+        "AllowSwitchProfileInMenu",
+        cfg.allow_switch_profile_in_menu,
+    );
+    push_bool(
+        content,
         "MachineShowSelectStyle",
         cfg.machine_show_select_style,
     );

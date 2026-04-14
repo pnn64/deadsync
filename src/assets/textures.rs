@@ -869,6 +869,10 @@ impl AssetManager {
                 "fave-icon.png".to_string(),
                 "fave-icon.png".to_string(),
             ),
+            (
+                "folder-solid.png".to_string(),
+                "folder-solid.png".to_string(),
+            ),
             ("GrooveStats.png".to_string(), "GrooveStats.png".to_string()),
             ("arrowcloud.png".to_string(), "arrowcloud.png".to_string()),
             ("ITL.png".to_string(), "ITL.png".to_string()),
