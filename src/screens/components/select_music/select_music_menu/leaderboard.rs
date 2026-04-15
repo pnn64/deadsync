@@ -15,6 +15,8 @@ const GS_LEADERBOARD_PANE_SIDE_OFFSET: f32 = 160.0;
 const GS_LEADERBOARD_PANE_CENTER_Y: f32 = -15.0;
 const GS_LEADERBOARD_DIM_ALPHA: f32 = 0.875;
 const GS_LEADERBOARD_Z: i16 = 1480;
+const GS_LEADERBOARD_HEADER_BG: [f32; 4] = color::rgba_hex("#00AEEF");
+const GS_LEADERBOARD_TEXT_ZOOM: f32 = 1.0;
 const GS_LEADERBOARD_ERROR_TIMEOUT: &str = "Timed Out";
 const GS_LEADERBOARD_ERROR_FAILED: &str = "Failed to Load 😞";
 const GS_LEADERBOARD_DISABLED_TEXT: &str = "Disabled";
@@ -410,7 +412,12 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
             align(0.5, 0.5):
             xy(center_x, header_y):
             zoomto(pane_width, GS_LEADERBOARD_ROW_HEIGHT):
-            diffuse(0.0, 0.0, 1.0, 1.0):
+            diffuse(
+                GS_LEADERBOARD_HEADER_BG[0],
+                GS_LEADERBOARD_HEADER_BG[1],
+                GS_LEADERBOARD_HEADER_BG[2],
+                GS_LEADERBOARD_HEADER_BG[3]
+            ):
             z(GS_LEADERBOARD_Z + 5)
         ));
         actors.push(act!(text:
@@ -536,7 +543,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
                 settext(rank):
                 align(1.0, 0.5):
                 xy(rank_x, y):
-                zoom(0.8):
+                zoom(GS_LEADERBOARD_TEXT_ZOOM):
                 maxwidth(30.0):
                 diffuse(rank_col[0], rank_col[1], rank_col[2], rank_col[3]):
                 z(GS_LEADERBOARD_Z + 7):
@@ -547,7 +554,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
                 settext(name):
                 align(0.5, 0.5):
                 xy(name_x, y):
-                zoom(0.8):
+                zoom(GS_LEADERBOARD_TEXT_ZOOM):
                 maxwidth(130.0):
                 diffuse(name_col[0], name_col[1], name_col[2], name_col[3]):
                 z(GS_LEADERBOARD_Z + 7):
@@ -558,7 +565,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
                 settext(score):
                 align(1.0, 0.5):
                 xy(score_x, y):
-                zoom(0.8):
+                zoom(GS_LEADERBOARD_TEXT_ZOOM):
                 diffuse(score_col[0], score_col[1], score_col[2], score_col[3]):
                 z(GS_LEADERBOARD_Z + 7):
                 horizalign(right)
@@ -569,7 +576,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
                     settext(date):
                     align(1.0, 0.5):
                     xy(date_x, y):
-                    zoom(0.8):
+                    zoom(GS_LEADERBOARD_TEXT_ZOOM):
                     diffuse(date_col[0], date_col[1], date_col[2], date_col[3]):
                     z(GS_LEADERBOARD_Z + 7):
                     horizalign(right)
