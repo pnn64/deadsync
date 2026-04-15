@@ -721,6 +721,7 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
             )?))
         })?,
     )?;
+    globals.set("Color", create_color_constants_table(lua)?)?;
     globals.set(
         "setfenv",
         lua.create_function(|lua, (target, env): (Value, Table)| match target {
@@ -5726,6 +5727,24 @@ fn make_color_table(lua: &Lua, rgba: [f32; 4]) -> mlua::Result<Table> {
     Ok(table)
 }
 
+fn create_color_constants_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    for (name, rgba) in [
+        ("Black", [0.0, 0.0, 0.0, 1.0]),
+        ("Blue", [0.0, 0.0, 1.0, 1.0]),
+        ("Green", [0.0, 1.0, 0.0, 1.0]),
+        ("Orange", [1.0, 0.5, 0.0, 1.0]),
+        ("Pink", [1.0, 0.75, 0.8, 1.0]),
+        ("Purple", [0.5, 0.0, 0.5, 1.0]),
+        ("Red", [1.0, 0.0, 0.0, 1.0]),
+        ("White", [1.0, 1.0, 1.0, 1.0]),
+        ("Yellow", [1.0, 1.0, 0.0, 1.0]),
+    ] {
+        table.set(name, make_color_table(lua, rgba)?)?;
+    }
+    Ok(table)
+}
+
 #[inline(always)]
 fn table_color(table: &Table) -> Option<[f32; 4]> {
     Some([
@@ -6375,6 +6394,12 @@ if c2[4] ~= 1 then
 end
 if not approx(mix[1], 0.125) or not approx(mix[2], 0.25) or not approx(mix[3], 0.375) then
     error("unexpected lerp color")
+end
+if Color.White[1] ~= 1 or Color.White[2] ~= 1 or Color.White[3] ~= 1 or Color.White[4] ~= 1 then
+    error("unexpected Color.White")
+end
+if Color.Blue[3] ~= 1 or Color.Blue[1] ~= 0 then
+    error("unexpected Color.Blue")
 end
 
 return Def.ActorFrame{}
