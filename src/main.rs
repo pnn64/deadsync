@@ -1,4 +1,4 @@
-use deadsync::{app, config, engine, game};
+use deadsync::{app, config, engine, game, i18n};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 
@@ -198,6 +198,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = config::get();
     log::set_max_level(cfg.log_level.as_level_filter());
     engine::logging::write_startup_report(&startup_lines(&cfg));
+
+    // Initialize localization after config (which provides the language preference)
+    // and before profile/audio/screens which may use tr() for display strings.
+    let locale = match cfg.language_flag {
+        config::LanguageFlag::Auto => i18n::detect_os_locale(),
+        flag => flag.locale_code().to_string(),
+    };
+    i18n::init(&locale);
+
     #[cfg(windows)]
     let _windows_timing = boost_windows_runtime_timing();
     game::profile::load();
