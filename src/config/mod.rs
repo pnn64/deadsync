@@ -148,7 +148,6 @@ pub struct Config {
     pub show_select_music_previews: bool,
     pub show_select_music_preview_marker: bool,
     pub select_music_preview_loop: bool,
-    pub use_category_select_music_menu: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart in gameplay/evaluation.
     pub keyboard_features: bool,
     /// Enable or disable animated gameplay background videos.
@@ -294,7 +293,6 @@ impl Default for Config {
             show_select_music_previews: true,
             show_select_music_preview_marker: false,
             select_music_preview_loop: true,
-            use_category_select_music_menu: false,
             keyboard_features: true,
             show_video_backgrounds: true,
             machine_show_select_profile: true,

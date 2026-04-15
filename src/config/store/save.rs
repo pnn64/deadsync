@@ -235,11 +235,6 @@ fn push_saved_options(
         "SelectMusicPreviewLoop",
         cfg.select_music_preview_loop,
     );
-    push_bool(
-        content,
-        "UseCategorySelectMusicMenu",
-        cfg.use_category_select_music_menu,
-    );
     push_line(
         content,
         "SelectMusicPatternInfo",

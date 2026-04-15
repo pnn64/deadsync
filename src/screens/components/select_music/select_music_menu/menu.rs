@@ -5,7 +5,7 @@ use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 
-use super::{Action, Item, scroll_dir, set_text_clip_rect};
+use super::{Action, Item, scroll_anim_dir, set_text_clip_rect};
 
 // --- Layout constants (matching Simply Love SortMenu) ---
 const WIDTH: f32 = 210.0;
@@ -86,6 +86,7 @@ impl CategoryState {
 pub struct VisibleState {
     pub selected_index: usize,
     pub prev_selected_index: usize,
+    pub last_move_dir: isize,
     pub focus_anim_elapsed: f32,
     pub categories: CategoryState,
     /// Cached flattened entries, rebuilt on category toggle.
@@ -103,6 +104,7 @@ pub fn open() -> VisibleState {
     VisibleState {
         selected_index: 0,
         prev_selected_index: 0,
+        last_move_dir: 0,
         focus_anim_elapsed: FOCUS_TWEEN_SECONDS,
         categories: CategoryState::default(),
         cached_entries: Vec::new(),
@@ -276,7 +278,7 @@ pub fn handle_input(state: &mut VisibleState, entries: &[Entry], ev: &InputEvent
     }
 }
 
-fn move_selection(state: &mut VisibleState, len: usize, delta: isize) -> bool {
+pub fn move_selection(state: &mut VisibleState, len: usize, delta: isize) -> bool {
     if len <= 1 {
         return false;
     }
@@ -286,6 +288,7 @@ fn move_selection(state: &mut VisibleState, len: usize, delta: isize) -> bool {
         return false;
     }
     state.prev_selected_index = old;
+    state.last_move_dir = delta.signum();
     state.selected_index = next;
     state.focus_anim_elapsed = 0.0;
     true
@@ -313,9 +316,9 @@ pub struct RenderParams<'a> {
     pub entries: &'a [Entry],
     pub selected_index: usize,
     pub prev_selected_index: usize,
+    pub last_move_dir: isize,
     pub focus_anim_elapsed: f32,
     pub selected_color: [f32; 4],
-    pub categories: &'a CategoryState,
 }
 
 pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
@@ -362,10 +365,11 @@ pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
 
     if !p.entries.is_empty() {
         let focus_t = (p.focus_anim_elapsed / FOCUS_TWEEN_SECONDS.max(1e-6)).clamp(0.0, 1.0);
-        let scroll_dir_val = scroll_dir(
+        let scroll_dir_val = scroll_anim_dir(
             p.entries.len(),
             p.prev_selected_index.min(p.entries.len() - 1),
             selected_index,
+            p.last_move_dir,
         ) as f32;
         let scroll_shift = scroll_dir_val * (1.0 - focus_t);
 

@@ -1,11 +1,13 @@
-pub mod categories;
-pub mod classic;
+mod menu;
 pub mod downloads;
 pub mod leaderboard;
 pub mod replay;
 pub mod song_search;
 
-pub use classic::{FOCUS_TWEEN_SECONDS, RenderParams, build_overlay};
+pub use menu::{
+    CategoryItemLists as MenuLists, Entry, FOCUS_TWEEN_SECONDS, InputOutcome, RenderParams,
+    VisibleState as MenuState, build_overlay, handle_input, move_selection, open,
+};
 pub use downloads::*;
 pub use leaderboard::*;
 pub use replay::*;
@@ -15,7 +17,6 @@ use crate::engine::present::actors::Actor;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
-    OpenSorts,
     BackToMain,
     SortByGroup,
     SortByTitle,
@@ -57,11 +58,6 @@ pub struct Item {
     pub action: Action,
 }
 
-pub const ITEM_CATEGORY_SORTS: Item = Item {
-    top_label: "",
-    bottom_label: "SORTS...",
-    action: Action::OpenSorts,
-};
 const ITEM_SORT_BY_GROUP: Item = Item {
     top_label: "Sort By",
     bottom_label: "Group",
@@ -213,11 +209,6 @@ pub const ITEM_SORT_BY_FAVORITES: Item = Item {
     action: Action::SortByFavorites,
 };
 pub const ITEM_GO_BACK: Item = Item {
-    top_label: "Options",
-    bottom_label: "Go Back",
-    action: Action::BackToMain,
-};
-pub const ITEM_GO_BACK_STANDALONE: Item = Item {
     top_label: "",
     bottom_label: "Go Back",
     action: Action::BackToMain,
@@ -228,7 +219,7 @@ pub const ITEM_SET_SUMMARY: Item = Item {
     action: Action::ShowSetSummary,
 };
 
-pub const ITEMS_SORTS: [Item; 11] = [
+pub const SORT_ITEMS: [Item; 10] = [
     ITEM_SORT_BY_GROUP,
     ITEM_SORT_BY_TITLE,
     ITEM_SORT_BY_ARTIST,
@@ -239,20 +230,12 @@ pub const ITEMS_SORTS: [Item; 11] = [
     ITEM_SORT_BY_POPULARITY,
     ITEM_SORT_BY_RECENT,
     ITEM_SORT_BY_TOP_GRADES,
-    ITEM_GO_BACK,
 ];
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Page {
-    Main,
-    Sorts,
-}
 
 #[derive(Clone, Debug)]
 pub enum State {
     Hidden,
-    Classic { page: Page, selected_index: usize },
-    Categories(categories::VisibleState),
+    Visible(MenuState),
 }
 
 impl State {
@@ -282,8 +265,41 @@ pub fn scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
 }
 
 #[inline(always)]
+pub fn scroll_anim_dir(len: usize, prev: usize, selected: usize, input_dir: isize) -> isize {
+    let dir = scroll_dir(len, prev, selected);
+    if len == 2 && dir != 0 {
+        match input_dir.cmp(&0) {
+            std::cmp::Ordering::Less => -1,
+            std::cmp::Ordering::Greater => 1,
+            std::cmp::Ordering::Equal => dir,
+        }
+    } else {
+        dir
+    }
+}
+
+#[inline(always)]
 pub(crate) fn set_text_clip_rect(actor: &mut Actor, rect: [f32; 4]) {
     if let Actor::Text { clip, .. } = actor {
         *clip = Some(rect);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{scroll_anim_dir, scroll_dir};
+
+    #[test]
+    fn scroll_anim_dir_uses_input_direction_for_two_item_wheels() {
+        assert_eq!(scroll_anim_dir(2, 0, 1, -1), -1);
+        assert_eq!(scroll_anim_dir(2, 0, 1, 1), 1);
+        assert_eq!(scroll_anim_dir(2, 1, 0, -1), -1);
+        assert_eq!(scroll_anim_dir(2, 1, 0, 1), 1);
+    }
+
+    #[test]
+    fn scroll_anim_dir_matches_index_direction_for_longer_wheels() {
+        assert_eq!(scroll_anim_dir(4, 0, 1, -1), scroll_dir(4, 0, 1));
+        assert_eq!(scroll_anim_dir(4, 1, 0, 1), scroll_dir(4, 1, 0));
     }
 }
