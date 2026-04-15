@@ -21,7 +21,6 @@ use crate::game::scores;
 use crate::game::song::SongData;
 use crate::game::timing::{
     BeatInfoCache, ROWS_PER_BEAT, TimingData, TimingProfile, TimingProfileNs,
-    classify_offset_ns_with_disabled_windows, largest_enabled_tap_window_ns,
 };
 use crate::game::{
     profile::{self, TimingTickMode as TickMode},
@@ -43,6 +42,10 @@ use winit::keyboard::KeyCode;
 mod clock;
 #[path = "gameplay/display.rs"]
 mod display;
+#[path = "gameplay/judging.rs"]
+mod judging;
+#[path = "gameplay/note_result.rs"]
+mod note_result;
 #[path = "gameplay/stats.rs"]
 mod stats;
 
@@ -66,6 +69,14 @@ pub use self::display::{
     display_window_counts,
 };
 pub(crate) use self::display::{display_ex_score_data, display_scored_ex_score_data};
+use self::judging::{
+    PlayerJudgmentTiming, build_final_note_hit_judgment, build_player_judgment_timing,
+    effective_player_global_offset_seconds, note_hit_eval, player_largest_tap_window_ns,
+};
+pub use self::judging::{player_blue_window_ms, player_fa_plus_window_s};
+#[cfg(test)]
+use self::note_result::{add_provisional_early_score, remove_provisional_early_score};
+use self::note_result::{register_provisional_early_result, set_final_note_result};
 pub use self::stats::{
     CourseDisplayTotals, course_display_carry_from_state, course_display_totals_for_chart,
     score_invalid_reason_lines_for_chart, stream_segments_for_results,
@@ -6339,31 +6350,6 @@ impl Default for GameplayUpdateTraceState {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-struct PlayerJudgmentTiming {
-    profile_music_ns: TimingProfileNs,
-    disabled_windows: [bool; 5],
-    largest_tap_window_music_ns: SongTimeNs,
-}
-
-impl Default for PlayerJudgmentTiming {
-    fn default() -> Self {
-        Self {
-            profile_music_ns: TimingProfileNs::default(),
-            disabled_windows: [false; 5],
-            largest_tap_window_music_ns: 0,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct NoteHitEval {
-    note_time_ns: SongTimeNs,
-    measured_offset_music_ns: SongTimeNs,
-    grade: JudgeGrade,
-    window: TimingWindow,
-}
-
 pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
@@ -9660,162 +9646,6 @@ pub fn init(
     state
 }
 
-#[inline(always)]
-fn default_fa_plus_window_s(state: &State) -> f32 {
-    state
-        .timing_profile
-        .fa_plus_window_s
-        .unwrap_or(state.timing_profile.windows_s[0])
-}
-
-#[inline(always)]
-fn profile_custom_window_ms(profile: &profile::Profile) -> f32 {
-    let ms = profile.custom_fantastic_window_ms;
-    f32::from(crate::game::profile::clamp_custom_fantastic_window_ms(ms))
-}
-
-#[inline(always)]
-pub fn player_fa_plus_window_s(state: &State, player_idx: usize) -> f32 {
-    let base = default_fa_plus_window_s(state);
-    if player_idx >= state.num_players {
-        return base;
-    }
-    let profile = &state.player_profiles[player_idx];
-    if profile.custom_fantastic_window {
-        profile_custom_window_ms(profile) / 1000.0
-    } else {
-        base
-    }
-}
-
-#[inline(always)]
-pub fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
-    if player_idx >= state.num_players {
-        return default_fa_plus_window_s(state) * 1000.0;
-    }
-    let profile = &state.player_profiles[player_idx];
-    if profile.custom_fantastic_window {
-        return profile_custom_window_ms(profile);
-    }
-    if profile.fa_plus_10ms_blue_window {
-        return 10.0;
-    }
-    default_fa_plus_window_s(state) * 1000.0
-}
-
-#[inline(always)]
-fn build_player_judgment_timing(
-    mut timing_profile: TimingProfile,
-    player_profile: &profile::Profile,
-    music_rate: f32,
-) -> PlayerJudgmentTiming {
-    let base_fa_plus_s = timing_profile
-        .fa_plus_window_s
-        .unwrap_or(timing_profile.windows_s[0]);
-    timing_profile.fa_plus_window_s = Some(if player_profile.custom_fantastic_window {
-        profile_custom_window_ms(player_profile) / 1000.0
-    } else {
-        base_fa_plus_s
-    });
-    let disabled_windows = player_profile.timing_windows.disabled_windows();
-    let profile_music_ns = TimingProfileNs::from_profile_scaled(&timing_profile, music_rate);
-    let largest_tap_window_music_ns =
-        largest_enabled_tap_window_ns(&profile_music_ns, &disabled_windows)
-            .unwrap_or(profile_music_ns.windows_ns[2]);
-
-    PlayerJudgmentTiming {
-        profile_music_ns,
-        disabled_windows,
-        largest_tap_window_music_ns,
-    }
-}
-
-#[inline(always)]
-fn player_largest_tap_window_ns(state: &State, player_idx: usize) -> SongTimeNs {
-    if player_idx >= state.num_players {
-        return 0;
-    }
-    state.player_judgment_timing[player_idx].largest_tap_window_music_ns
-}
-
-#[inline(always)]
-fn classify_player_tap_offset_ns(
-    state: &State,
-    player_idx: usize,
-    offset_music_ns: SongTimeNs,
-) -> Option<(JudgeGrade, TimingWindow)> {
-    if player_idx >= state.num_players {
-        return None;
-    }
-    let timing = state.player_judgment_timing[player_idx];
-    classify_offset_ns_with_disabled_windows(
-        offset_music_ns,
-        &timing.profile_music_ns,
-        &timing.disabled_windows,
-    )
-}
-
-#[inline(always)]
-fn note_hit_eval(
-    state: &State,
-    player_idx: usize,
-    note_time_ns: SongTimeNs,
-    current_time_ns: SongTimeNs,
-) -> Option<NoteHitEval> {
-    if player_idx >= state.num_players {
-        return None;
-    }
-    let timing = state.player_judgment_timing[player_idx];
-    let measured_offset_music_ns = current_time_ns.saturating_sub(note_time_ns);
-    if i128::from(measured_offset_music_ns).abs() > i128::from(timing.largest_tap_window_music_ns) {
-        return None;
-    }
-    let (grade, window) =
-        classify_player_tap_offset_ns(state, player_idx, measured_offset_music_ns)?;
-    Some(NoteHitEval {
-        note_time_ns,
-        measured_offset_music_ns,
-        grade,
-        window,
-    })
-}
-
-#[inline(always)]
-fn build_final_note_hit_judgment(
-    state: &mut State,
-    player_idx: usize,
-    hit: NoteHitEval,
-    rate: f32,
-) -> (Judgment, SongTimeNs) {
-    let judgment_offset_music_ns = live_autoplay_judgment_offset_music_ns(
-        state,
-        player_idx,
-        hit.window,
-        hit.measured_offset_music_ns,
-    );
-    let judgment_event_time_ns = hit.note_time_ns.saturating_add(judgment_offset_music_ns);
-    (
-        Judgment {
-            time_error_ms: judgment_time_error_ms_from_music_ns(judgment_offset_music_ns, rate),
-            time_error_music_ns: judgment_offset_music_ns,
-            grade: hit.grade,
-            window: Some(hit.window),
-            miss_because_held: false,
-        },
-        judgment_event_time_ns,
-    )
-}
-
-#[inline(always)]
-fn effective_player_global_offset_seconds(state: &State, player_idx: usize) -> f32 {
-    let shift = state
-        .player_global_offset_shift_seconds
-        .get(player_idx)
-        .copied()
-        .unwrap_or(0.0);
-    state.global_offset_seconds + shift
-}
-
 fn update_itg_grade_totals(p: &mut PlayerRuntime) {
     p.earned_grade_points = judgment::calculate_itg_grade_points_from_counts(
         &p.scoring_counts,
@@ -9823,77 +9653,6 @@ fn update_itg_grade_totals(p: &mut PlayerRuntime) {
         p.rolls_held_for_score,
         p.mines_hit_for_score,
     );
-}
-
-#[inline(always)]
-fn add_provisional_early_score(p: &mut PlayerRuntime, grade: JudgeGrade) {
-    let grade_ix = display_judge_ix(grade);
-    p.provisional_scoring_counts[grade_ix] =
-        p.provisional_scoring_counts[grade_ix].saturating_add(1);
-}
-
-#[inline(always)]
-fn remove_provisional_early_score(p: &mut PlayerRuntime, grade: JudgeGrade) {
-    let grade_ix = display_judge_ix(grade);
-    p.provisional_scoring_counts[grade_ix] =
-        p.provisional_scoring_counts[grade_ix].saturating_sub(1);
-}
-
-#[inline(always)]
-fn mark_row_provisional_early_result(state: &mut State, note_index: usize) {
-    let Some(&row_entry_index) = state.note_row_entry_indices.get(note_index) else {
-        return;
-    };
-    if row_entry_index == u32::MAX {
-        return;
-    }
-    if let Some(row_entry) = state.row_entries.get_mut(row_entry_index as usize) {
-        row_entry.had_provisional_early_hit = true;
-    }
-}
-
-#[inline(always)]
-fn mark_row_note_finalized(state: &mut State, note_index: usize) {
-    let Some(&row_entry_index) = state.note_row_entry_indices.get(note_index) else {
-        return;
-    };
-    if row_entry_index == u32::MAX {
-        return;
-    }
-    let Some(row_entry) = state.row_entries.get_mut(row_entry_index as usize) else {
-        return;
-    };
-    row_entry.unresolved_count = row_entry.unresolved_count.saturating_sub(1);
-    if state.notes[note_index].note_type != NoteType::Lift {
-        row_entry.unresolved_nonlift_count = row_entry.unresolved_nonlift_count.saturating_sub(1);
-    }
-}
-
-#[inline(always)]
-fn register_provisional_early_result(
-    state: &mut State,
-    player: usize,
-    note_index: usize,
-    judgment: Judgment,
-) {
-    if state.notes[note_index].early_result.is_some() {
-        return;
-    }
-    add_provisional_early_score(&mut state.players[player], judgment.grade);
-    state.notes[note_index].early_result = Some(judgment);
-    mark_row_provisional_early_result(state, note_index);
-}
-
-#[inline(always)]
-fn set_final_note_result(state: &mut State, player: usize, note_index: usize, judgment: Judgment) {
-    let was_unjudged = state.notes[note_index].result.is_none();
-    if was_unjudged && let Some(early) = state.notes[note_index].early_result.as_ref() {
-        remove_provisional_early_score(&mut state.players[player], early.grade);
-    }
-    state.notes[note_index].result = Some(judgment);
-    if was_unjudged {
-        mark_row_note_finalized(state, note_index);
-    }
 }
 
 const fn grade_to_window(grade: JudgeGrade) -> Option<&'static str> {
