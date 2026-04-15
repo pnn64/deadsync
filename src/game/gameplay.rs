@@ -36,10 +36,13 @@ use std::str::FromStr;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
-use winit::keyboard::KeyCode;
 
+#[path = "gameplay/autosync.rs"]
+mod autosync;
 #[path = "gameplay/clock.rs"]
 mod clock;
+#[path = "gameplay/controls.rs"]
+mod controls;
 #[path = "gameplay/display.rs"]
 mod display;
 #[path = "gameplay/judging.rs"]
@@ -51,6 +54,7 @@ mod offset;
 #[path = "gameplay/stats.rs"]
 mod stats;
 
+use self::autosync::apply_autosync_for_row_hits;
 pub use self::clock::{
     DisplayClockDiagEvent, DisplayClockDiagEventKind, DisplayClockHealth,
     collect_display_clock_stutter_diag_events, display_clock_health,
@@ -60,6 +64,11 @@ use self::clock::{
     DisplayClockDiagRing, FrameStableDisplayClock, SongClockSnapshot, current_song_clock_snapshot,
     frame_stable_display_music_time_ns, music_time_ns_from_song_clock,
 };
+pub use self::controls::{
+    RawKeyAction, autosync_mode_status_line, handle_queued_raw_key, timing_tick_status_line,
+};
+#[cfg(test)]
+use self::controls::{next_tick_mode, tick_mode_status_line};
 #[cfg(test)]
 use self::display::effective_ex_score_inputs;
 #[cfg(test)]
@@ -79,12 +88,12 @@ pub use self::judging::{player_blue_window_ms, player_fa_plus_window_s};
 #[cfg(test)]
 use self::note_result::{add_provisional_early_score, remove_provisional_early_score};
 use self::note_result::{register_provisional_early_result, set_final_note_result};
-use self::offset::{
-    apply_global_offset_delta, apply_song_offset_delta, clear_offset_adjust_hold,
-    start_offset_adjust_hold, update_offset_adjust_hold,
-};
+use self::offset::update_offset_adjust_hold;
 #[cfg(test)]
-use self::offset::{mutate_timing_arc, refresh_timing_after_offset_change};
+use self::offset::{
+    apply_global_offset_delta, apply_song_offset_delta, mutate_timing_arc,
+    refresh_timing_after_offset_change,
+};
 pub use self::stats::{
     CourseDisplayTotals, course_display_carry_from_state, course_display_totals_for_chart,
     score_invalid_reason_lines_for_chart, stream_segments_for_results,
@@ -7696,11 +7705,6 @@ fn all_joined_players_failed(state: &State) -> bool {
 const TOGGLE_FLASH_DURATION: f32 = 1.5;
 const TOGGLE_FLASH_FADE_START: f32 = 0.8;
 
-#[inline(always)]
-pub fn timing_tick_status_line(state: &State) -> Option<&'static str> {
-    tick_mode_status_line(state.tick_mode)
-}
-
 pub fn toggle_flash_text(state: &State) -> Option<(&'static str, f32)> {
     if state.toggle_flash_timer > 0.0 {
         let age = TOGGLE_FLASH_DURATION - state.toggle_flash_timer;
@@ -8242,11 +8246,6 @@ pub fn set_replay_capture_enabled(state: &mut State, enabled: bool) {
 #[inline(always)]
 pub fn replay_capture_enabled(state: &State) -> bool {
     state.replay_capture_enabled
-}
-
-#[inline(always)]
-fn current_music_time_from_stream(state: &State) -> f32 {
-    song_time_ns_to_seconds(current_song_clock_snapshot(state).song_time_ns)
 }
 
 #[inline(always)]
@@ -11252,76 +11251,6 @@ fn run_assist_clap(state: &mut State, current_row: i32) {
     state.assist_last_crossed_row = song_row;
 }
 
-#[inline(always)]
-const fn next_tick_mode(mode: TickMode) -> TickMode {
-    match mode {
-        TickMode::Off => TickMode::Assist,
-        TickMode::Assist => TickMode::Hit,
-        TickMode::Hit => TickMode::Off,
-    }
-}
-
-#[inline(always)]
-const fn tick_mode_status_line(mode: TickMode) -> Option<&'static str> {
-    match mode {
-        TickMode::Off => None,
-        TickMode::Assist => Some("Assist Tick"),
-        TickMode::Hit => Some("Hit Tick"),
-    }
-}
-
-#[inline(always)]
-const fn tick_mode_debug_label(mode: TickMode) -> &'static str {
-    match mode {
-        TickMode::Off => "off",
-        TickMode::Assist => "assist tick",
-        TickMode::Hit => "hit tick",
-    }
-}
-
-fn set_tick_mode(state: &mut State, mode: TickMode, now_music_time: f32) {
-    if state.tick_mode == mode {
-        return;
-    }
-    state.tick_mode = mode;
-    profile::set_session_timing_tick_mode(mode);
-
-    let song_row = assist_row_no_offset(state, now_music_time);
-    state.assist_last_crossed_row = song_row;
-    state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
-
-    debug!("Timing ticks set to {} (F7).", tick_mode_debug_label(mode));
-}
-
-fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
-    if state.autoplay_enabled == enabled {
-        return;
-    }
-    state.autoplay_enabled = enabled;
-
-    if enabled {
-        state.keyboard_lane_counts = [0; MAX_COLS];
-        state.gamepad_lane_counts = [0; MAX_COLS];
-        state.prev_inputs = [false; MAX_COLS];
-        state.receptor_glow_timers = [0.0; MAX_COLS];
-        state.receptor_glow_press_timers = [0.0; MAX_COLS];
-        state.receptor_glow_lift_start_alpha = [0.0; MAX_COLS];
-        state.receptor_glow_lift_start_zoom = [1.0; MAX_COLS];
-        state.pending_edges.clear();
-        for player in 0..state.num_players {
-            let (note_start, note_end) = player_note_range(state, player);
-            state.autoplay_cursor[player] = state.next_tap_miss_cursor[player]
-                .max(note_start)
-                .min(note_end);
-        }
-        debug!("Autoplay enabled (F8). Scores for this stage will not be saved.");
-        return;
-    }
-
-    debug!("Autoplay disabled (F8).");
-    let _ = now_music_time;
-}
-
 fn run_autoplay(state: &mut State, now_music_time_ns: SongTimeNs) {
     if !state.autoplay_enabled {
         return;
@@ -11438,198 +11367,11 @@ fn run_replay(state: &mut State) {
 }
 
 #[inline(always)]
-pub const fn autosync_mode_status_line(mode: AutosyncMode) -> Option<&'static str> {
-    match mode {
-        AutosyncMode::Off => None,
-        AutosyncMode::Song => Some("AutoSync Song"),
-        AutosyncMode::Machine => Some("AutoSync Machine"),
-    }
-}
-
-#[inline(always)]
-fn cycle_autosync_mode(state: &mut State) {
-    let mut next = match state.autosync_mode {
-        AutosyncMode::Off => AutosyncMode::Song,
-        AutosyncMode::Song => AutosyncMode::Machine,
-        AutosyncMode::Machine => AutosyncMode::Off,
-    };
-    if state.course_display_totals.is_some() && next == AutosyncMode::Song {
-        next = AutosyncMode::Machine;
-    }
-    state.autosync_mode = next;
-}
-
-#[inline(always)]
-fn autosync_mean_ns(samples: &[SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT]) -> SongTimeNs {
-    let mut sum = 0i128;
-    for value in samples {
-        sum += i128::from(*value);
-    }
-    let count = AUTOSYNC_OFFSET_SAMPLE_COUNT as i128;
-    let rounded = if sum >= 0 {
-        (sum + count / 2) / count
-    } else {
-        (sum - count / 2) / count
-    };
-    rounded.clamp(i64::MIN as i128, i64::MAX as i128) as SongTimeNs
-}
-
-#[inline(always)]
-fn autosync_stddev_seconds(
-    samples: &[SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT],
-    mean_ns: SongTimeNs,
-) -> f32 {
-    let mut dev = 0.0_f64;
-    for value in samples {
-        let d = (*value - mean_ns) as f64 / SONG_TIME_NS_PER_SECOND;
-        dev += d * d;
-    }
-    (dev / AUTOSYNC_OFFSET_SAMPLE_COUNT as f64).sqrt() as f32
-}
-
-#[inline(always)]
-fn apply_autosync_offset_correction(state: &mut State, note_off_by_ns: SongTimeNs) {
-    if song_time_ns_invalid(note_off_by_ns) || state.autosync_mode == AutosyncMode::Off {
-        return;
-    }
-    let sample_ix = state
-        .autosync_offset_sample_count
-        .min(AUTOSYNC_OFFSET_SAMPLE_COUNT.saturating_sub(1));
-    state.autosync_offset_samples[sample_ix] = note_off_by_ns;
-    state.autosync_offset_sample_count = state.autosync_offset_sample_count.saturating_add(1);
-    if state.autosync_offset_sample_count < AUTOSYNC_OFFSET_SAMPLE_COUNT {
-        return;
-    }
-
-    let mean_ns = autosync_mean_ns(&state.autosync_offset_samples);
-    let stddev = autosync_stddev_seconds(&state.autosync_offset_samples, mean_ns);
-    if stddev < AUTOSYNC_STDDEV_MAX_SECONDS {
-        let mean = song_time_ns_to_seconds(mean_ns);
-        match state.autosync_mode {
-            AutosyncMode::Off => {}
-            AutosyncMode::Song => {
-                if state.course_display_totals.is_none() {
-                    let _ = apply_song_offset_delta(state, mean);
-                }
-            }
-            AutosyncMode::Machine => {
-                let _ = apply_global_offset_delta(state, mean);
-            }
-        }
-    }
-
-    state.autosync_standard_deviation = stddev;
-    state.autosync_offset_sample_count = 0;
-}
-
-#[inline(always)]
-fn apply_autosync_for_row_hits(state: &mut State, row_entry_index: usize) {
-    if state.replay_mode
-        || autoplay_blocks_scoring(state)
-        || state.autosync_mode == AutosyncMode::Off
-    {
-        return;
-    }
-    // ITG parity: AdjustSync::HandleAutosync() is disabled in course mode.
-    if state.course_display_totals.is_some() {
-        return;
-    }
-
-    let row_len = state.row_entries[row_entry_index]
-        .nonmine_note_indices
-        .len();
-    let mut i = 0;
-    while i < row_len {
-        let note_index = state.row_entries[row_entry_index].nonmine_note_indices[i];
-        let maybe_note_offset_ns = state.notes[note_index]
-            .result
-            .as_ref()
-            .and_then(|judgment| {
-                if matches!(
-                    judgment.grade,
-                    JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
-                ) {
-                    // ITG's fNoteOffset is positive when stepping early.
-                    Some(-judgment.time_error_music_ns)
-                } else {
-                    None
-                }
-            });
-        if let Some(note_off_by_ns) = maybe_note_offset_ns {
-            apply_autosync_offset_correction(state, note_off_by_ns);
-        }
-        i += 1;
-    }
-}
-
-#[inline(always)]
 const fn suppress_final_bad_rescore_visual(
     row_had_provisional_early_hit: bool,
     final_grade: JudgeGrade,
 ) -> bool {
     row_had_provisional_early_hit && matches!(final_grade, JudgeGrade::Decent | JudgeGrade::WayOff)
-}
-
-#[inline(always)]
-fn update_raw_modifier_state(state: &mut State, code: KeyCode, pressed: bool) {
-    match code {
-        KeyCode::ShiftLeft | KeyCode::ShiftRight => state.shift_held = pressed,
-        KeyCode::ControlLeft | KeyCode::ControlRight => state.ctrl_held = pressed,
-        _ => {}
-    }
-}
-
-pub enum RawKeyAction {
-    None,
-    Restart,
-}
-
-pub fn handle_queued_raw_key(
-    state: &mut State,
-    code: KeyCode,
-    pressed: bool,
-    timestamp: Instant,
-    allow_commands: bool,
-) -> RawKeyAction {
-    update_raw_modifier_state(state, code, pressed);
-    if !pressed {
-        let _ = clear_offset_adjust_hold(state, code);
-        return RawKeyAction::None;
-    }
-    if !allow_commands {
-        return RawKeyAction::None;
-    }
-    if code == KeyCode::KeyR && state.ctrl_held {
-        return RawKeyAction::Restart;
-    }
-    if code == KeyCode::F6 {
-        cycle_autosync_mode(state);
-        return RawKeyAction::None;
-    }
-
-    if code == KeyCode::F7 {
-        let now_music_time = current_music_time_from_stream(state);
-        set_tick_mode(state, next_tick_mode(state.tick_mode), now_music_time);
-        return RawKeyAction::None;
-    }
-
-    if code == KeyCode::F8 {
-        let now_music_time = current_music_time_from_stream(state);
-        set_autoplay_enabled(state, !state.autoplay_enabled, now_music_time);
-        return RawKeyAction::None;
-    }
-    let Some(delta) = start_offset_adjust_hold(state, code, timestamp) else {
-        return RawKeyAction::None;
-    };
-
-    if state.shift_held {
-        let _ = apply_global_offset_delta(state, delta);
-        return RawKeyAction::None;
-    }
-    if state.course_display_totals.is_none() {
-        let _ = apply_song_offset_delta(state, delta);
-    }
-    RawKeyAction::None
 }
 
 fn finalize_row_judgment(
