@@ -62,7 +62,7 @@ pub enum LeaderboardInputOutcome {
 
 fn gs_machine_pane(chart_hash: Option<&str>) -> scores::LeaderboardPane {
     let entries = chart_hash
-        .map(|h| scores::get_machine_leaderboard_local(h, GS_LEADERBOARD_NUM_ENTRIES))
+        .map(|h| scores::get_machine_leaderboard_local_with_names(h, GS_LEADERBOARD_NUM_ENTRIES))
         .unwrap_or_default();
     scores::LeaderboardPane {
         name: GS_LEADERBOARD_MACHINE_BEST.to_string(),
