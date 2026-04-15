@@ -33,6 +33,7 @@ use crate::engine::present::color;
 use crate::engine::present::font;
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{heart_bg, screen_bar};
+use crate::i18n::LKey;
 use null_or_die::{BiasKernel, KernelTarget};
 
 /* ---------------------------- transitions ---------------------------- */
@@ -624,8 +625,63 @@ struct SoundDeviceOption {
 // Local fade timing when swapping between main options list and System Options submenu.
 const SUBMENU_FADE_DURATION: f32 = 0.2;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SubRowId {
+    // System Options
+    Game, Theme, Language, LogLevel, LogFile, DefaultNoteSkin,
+    // Graphics Options
+    VideoRenderer, SoftwareRendererThreads, DisplayMode, DisplayAspectRatio,
+    DisplayResolution, RefreshRate, FullscreenType, VSync, PresentMode,
+    MaxFps, MaxFpsValue, ShowStats, ValidationLayers, VisualDelay,
+    // Sound Options
+    SoundDevice, AudioOutputMode, AudioSampleRate, MasterVolume,
+    SfxVolume, AssistTickVolume, MusicVolume, MineSounds, GlobalOffset,
+    RateModPreservesPitch,
+    #[cfg(target_os = "linux")] LinuxAudioBackend,
+    #[cfg(target_os = "linux")] AlsaExclusive,
+    // Input Options (launcher)
+    ConfigureMappings, TestInput, InputOptions,
+    // Input Backend Options
+    GamepadBackend, MenuNavigation, OptionsNavigation, MenuButtons, Debounce,
+    // Machine Options
+    SelectProfile, SelectColor, SelectStyle, PreferredStyle,
+    SelectPlayMode, PreferredMode, EvalSummary, NameEntry,
+    GameoverScreen, WriteCurrentScreen, MenuMusic, Replays,
+    PerPlayerGlobalOffsets, KeyboardFeatures, VideoBgs,
+    // Gameplay Options
+    BgBrightness, CenteredP1Notefield, ZmodRatingBox, BpmDecimal, AutoScreenshot,
+    // Select Music Options
+    ShowBanners, ShowVideoBanners, ShowBreakdown, BreakdownStyle,
+    ShowNativeLanguage, MusicWheelSpeed, MusicWheelStyle, ShowCdTitles,
+    ShowWheelGrades, ShowWheelLamps, ItlWheelData, NewPackBadge,
+    ShowPatternInfo, ChartInfo, MusicPreviews, PreviewMarker,
+    LoopMusic, ShowGameplayTimer, ShowGsBox, GsBoxPlacement, GsBoxLeaderboards,
+    // Course Options
+    ShowRandomCourses, ShowMostPlayed, ShowIndividualScores, AutosubmitIndividual,
+    // Advanced Options
+    DefaultFailType, BannerCache, CdTitleCache, SongParsingThreads, CacheSongs, FastLoad,
+    // GrooveStats Options
+    EnableGrooveStats, EnableBoogieStats, GsSubmitFails,
+    AutoPopulateScores, AutoDownloadUnlocks, SeparateUnlocksByPlayer,
+    // ArrowCloud Options
+    EnableArrowCloud, ArrowCloudSubmitFails,
+    // Online Scoring (launcher)
+    GsBsOptions, ArrowCloudOptions, ScoreImport,
+    // Null-or-Die (launcher)
+    NullOrDieOptions, SyncPacks,
+    // Null-or-Die Settings
+    SyncGraph, SyncConfidence, PackSyncThreads, Fingerprint,
+    Window, Step, MagicOffset, KernelTarget, KernelType, FullSpectrogram,
+    // Sync Pack
+    SyncPackPack, SyncPackStart,
+    // Score Import
+    ScoreImportEndpoint, ScoreImportProfile, ScoreImportPack,
+    ScoreImportOnlyMissing, ScoreImportStart,
+}
+
 pub struct SubRow<'a> {
-    pub label: &'a str,
+    pub id: SubRowId,
+    pub label: LKey,
     pub choices: &'a [&'a str],
     pub inline: bool, // whether to lay out choices inline (vs single centered value)
 }
@@ -832,32 +888,38 @@ fn build_linux_backend_choices() -> Vec<String> {
 
 pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: "Game",
+        id: SubRowId::Game,
+        label: LKey { section: "OptionsSystem", key: "Game" },
         choices: &["dance"],
         inline: false,
     },
     SubRow {
-        label: "Theme",
+        id: SubRowId::Theme,
+        label: LKey { section: "OptionsSystem", key: "Theme" },
         choices: &["Simply Love"],
         inline: false,
     },
     SubRow {
-        label: "Language",
+        id: SubRowId::Language,
+        label: LKey { section: "OptionsSystem", key: "Language" },
         choices: &["English"],
         inline: false,
     },
     SubRow {
-        label: "Log Level",
+        id: SubRowId::LogLevel,
+        label: LKey { section: "OptionsSystem", key: "LogLevel" },
         choices: &["Error", "Warn", "Info", "Debug", "Trace"],
         inline: false,
     },
     SubRow {
-        label: SYSTEM_ROW_LOG_FILE,
+        id: SubRowId::LogFile,
+        label: LKey { section: "OptionsSystem", key: "LogFile" },
         choices: &["Off", "On"],
         inline: false,
     },
     SubRow {
-        label: "Default NoteSkin",
+        id: SubRowId::DefaultNoteSkin,
+        label: LKey { section: "OptionsSystem", key: "DefaultNoteSkin" },
         choices: &[profile::NoteSkin::DEFAULT_NAME],
         inline: false,
     },
@@ -1046,74 +1108,88 @@ fn build_display_mode_choices(monitor_specs: &[MonitorSpec]) -> Vec<String> {
 
 pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: GRAPHICS_ROW_VIDEO_RENDERER,
+        id: SubRowId::VideoRenderer,
+        label: LKey { section: "OptionsGraphics", key: "VideoRenderer" },
         choices: VIDEO_RENDERER_LABELS,
         inline: false,
     },
     SubRow {
-        label: GRAPHICS_ROW_SOFTWARE_THREADS,
+        id: SubRowId::SoftwareRendererThreads,
+        label: LKey { section: "OptionsGraphics", key: "SoftwareRendererThreads" },
         choices: &["Auto"],
         inline: false,
     },
     SubRow {
-        label: "Display Mode",
+        id: SubRowId::DisplayMode,
+        label: LKey { section: "OptionsGraphics", key: "DisplayMode" },
         choices: &["Windowed", "Fullscreen", "Borderless"], // Replaced dynamically
         inline: true,
     },
     SubRow {
-        label: "Display Aspect Ratio",
+        id: SubRowId::DisplayAspectRatio,
+        label: LKey { section: "OptionsGraphics", key: "DisplayAspectRatio" },
         choices: &DISPLAY_ASPECT_RATIO_CHOICES,
         inline: true,
     },
     SubRow {
-        label: "Display Resolution",
+        id: SubRowId::DisplayResolution,
+        label: LKey { section: "OptionsGraphics", key: "DisplayResolution" },
         choices: &["1920x1080", "1600x900", "1280x720", "1024x768", "800x600"], // Replaced dynamically
         inline: false,
     },
     SubRow {
-        label: "Refresh Rate",
+        id: SubRowId::RefreshRate,
+        label: LKey { section: "OptionsGraphics", key: "RefreshRate" },
         choices: &[
             "Default", "60 Hz", "75 Hz", "120 Hz", "144 Hz", "165 Hz", "240 Hz", "360 Hz",
         ], // Replaced dynamically
         inline: false,
     },
     SubRow {
-        label: "Fullscreen Type",
+        id: SubRowId::FullscreenType,
+        label: LKey { section: "OptionsGraphics", key: "FullscreenType" },
         choices: &["Exclusive", "Borderless"],
         inline: true,
     },
     SubRow {
-        label: "Wait for VSync",
+        id: SubRowId::VSync,
+        label: LKey { section: "OptionsGraphics", key: "VSync" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: GRAPHICS_ROW_PRESENT_MODE,
+        id: SubRowId::PresentMode,
+        label: LKey { section: "OptionsGraphics", key: "PresentMode" },
         choices: &PRESENT_MODE_CHOICES,
         inline: true,
     },
     SubRow {
-        label: GRAPHICS_ROW_MAX_FPS,
+        id: SubRowId::MaxFps,
+        label: LKey { section: "OptionsGraphics", key: "MaxFps" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: GRAPHICS_ROW_MAX_FPS_VALUE,
+        id: SubRowId::MaxFpsValue,
+        label: LKey { section: "OptionsGraphics", key: "MaxFpsValue" },
         choices: &["Off"], // Replaced dynamically
         inline: false,
     },
     SubRow {
-        label: "Show Stats",
+        id: SubRowId::ShowStats,
+        label: LKey { section: "OptionsGraphics", key: "ShowStats" },
         choices: &["Off", "FPS", "FPS+Stutter", "FPS+Stutter+Timing"],
         inline: true,
     },
     SubRow {
-        label: GRAPHICS_ROW_VALIDATION_LAYERS,
+        id: SubRowId::ValidationLayers,
+        label: LKey { section: "OptionsGraphics", key: "ValidationLayers" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: "Visual Delay (ms)",
+        id: SubRowId::VisualDelay,
+        label: LKey { section: "OptionsGraphics", key: "VisualDelay" },
         choices: &["0 ms"],
         inline: false,
     },
@@ -1203,17 +1279,20 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
 
 pub const INPUT_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: INPUT_ROW_CONFIGURE_MAPPINGS,
+        id: SubRowId::ConfigureMappings,
+        label: LKey { section: "OptionsInput", key: "ConfigureMappings" },
         choices: &["Open"],
         inline: false,
     },
     SubRow {
-        label: INPUT_ROW_TEST,
+        id: SubRowId::TestInput,
+        label: LKey { section: "OptionsInput", key: "TestInput" },
         choices: &["Open"],
         inline: false,
     },
     SubRow {
-        label: INPUT_ROW_OPTIONS,
+        id: SubRowId::InputOptions,
+        label: LKey { section: "OptionsInput", key: "InputOptions" },
         choices: &["Open"],
         inline: false,
     },
@@ -1249,27 +1328,32 @@ pub const INPUT_OPTIONS_ITEMS: &[Item] = &[
 
 pub const INPUT_BACKEND_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: INPUT_ROW_BACKEND,
+        id: SubRowId::GamepadBackend,
+        label: LKey { section: "OptionsInput", key: "GamepadBackend" },
         choices: INPUT_BACKEND_CHOICES,
         inline: INPUT_BACKEND_INLINE,
     },
     SubRow {
-        label: INPUT_ROW_MENU_NAVIGATION,
+        id: SubRowId::MenuNavigation,
+        label: LKey { section: "OptionsInput", key: "MenuNavigation" },
         choices: &["Five Key Menu", "Three Key Menu"],
         inline: true,
     },
     SubRow {
-        label: INPUT_ROW_OPTIONS_NAVIGATION,
+        id: SubRowId::OptionsNavigation,
+        label: LKey { section: "OptionsInput", key: "OptionsNavigation" },
         choices: &["StepMania Style", "Arcade Style"],
         inline: true,
     },
     SubRow {
-        label: INPUT_ROW_DEDICATED_MENU_BUTTONS,
+        id: SubRowId::MenuButtons,
+        label: LKey { section: "OptionsInput", key: "MenuButtons" },
         choices: &["Use Gameplay Buttons", "Only Dedicated Buttons"],
         inline: true,
     },
     SubRow {
-        label: INPUT_ROW_DEBOUNCE,
+        id: SubRowId::Debounce,
+        label: LKey { section: "OptionsInput", key: "Debounce" },
         choices: &["20ms"],
         inline: true,
     },
@@ -1325,77 +1409,92 @@ pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
 
 pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: MACHINE_ROW_SELECT_PROFILE,
+        id: SubRowId::SelectProfile,
+        label: LKey { section: "OptionsMachine", key: "SelectProfile" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_SELECT_COLOR,
+        id: SubRowId::SelectColor,
+        label: LKey { section: "OptionsMachine", key: "SelectColor" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_SELECT_STYLE,
+        id: SubRowId::SelectStyle,
+        label: LKey { section: "OptionsMachine", key: "SelectStyle" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_PREFERRED_STYLE,
+        id: SubRowId::PreferredStyle,
+        label: LKey { section: "OptionsMachine", key: "PreferredStyle" },
         choices: &["1 Player", "2 Players", "Double"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_SELECT_PLAY_MODE,
+        id: SubRowId::SelectPlayMode,
+        label: LKey { section: "OptionsMachine", key: "SelectPlayMode" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_PREFERRED_MODE,
+        id: SubRowId::PreferredMode,
+        label: LKey { section: "OptionsMachine", key: "PreferredMode" },
         choices: &["Regular", "Marathon"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_EVAL_SUMMARY,
+        id: SubRowId::EvalSummary,
+        label: LKey { section: "OptionsMachine", key: "EvalSummary" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_NAME_ENTRY,
+        id: SubRowId::NameEntry,
+        label: LKey { section: "OptionsMachine", key: "NameEntry" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_GAMEOVER,
+        id: SubRowId::GameoverScreen,
+        label: LKey { section: "OptionsMachine", key: "GameoverScreen" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_WRITE_CURRENT_SCREEN,
+        id: SubRowId::WriteCurrentScreen,
+        label: LKey { section: "OptionsMachine", key: "WriteCurrentScreen" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_MENU_MUSIC,
+        id: SubRowId::MenuMusic,
+        label: LKey { section: "OptionsMachine", key: "MenuMusic" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_REPLAYS,
+        id: SubRowId::Replays,
+        label: LKey { section: "OptionsMachine", key: "Replays" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_PER_PLAYER_GLOBAL_OFFSETS,
+        id: SubRowId::PerPlayerGlobalOffsets,
+        label: LKey { section: "OptionsMachine", key: "PerPlayerGlobalOffsets" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_KEYBOARD_FEATURES,
+        id: SubRowId::KeyboardFeatures,
+        label: LKey { section: "OptionsMachine", key: "KeyboardFeatures" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: MACHINE_ROW_VIDEO_BGS,
+        id: SubRowId::VideoBgs,
+        label: LKey { section: "OptionsMachine", key: "VideoBgs" },
         choices: &["Off", "On"],
         inline: true,
     },
@@ -1479,22 +1578,26 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
 
 pub const COURSE_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: COURSE_ROW_SHOW_RANDOM,
+        id: SubRowId::ShowRandomCourses,
+        label: LKey { section: "OptionsCourse", key: "ShowRandomCourses" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: COURSE_ROW_SHOW_MOST_PLAYED,
+        id: SubRowId::ShowMostPlayed,
+        label: LKey { section: "OptionsCourse", key: "ShowMostPlayed" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: COURSE_ROW_SHOW_INDIVIDUAL_SCORES,
+        id: SubRowId::ShowIndividualScores,
+        label: LKey { section: "OptionsCourse", key: "ShowIndividualScores" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES,
+        id: SubRowId::AutosubmitIndividual,
+        label: LKey { section: "OptionsCourse", key: "AutosubmitIndividual" },
         choices: &["No", "Yes"],
         inline: true,
     },
@@ -1525,27 +1628,32 @@ pub const COURSE_OPTIONS_ITEMS: &[Item] = &[
 
 pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: GAMEPLAY_ROW_BG_BRIGHTNESS,
+        id: SubRowId::BgBrightness,
+        label: LKey { section: "OptionsGameplay", key: "BgBrightness" },
         choices: &BG_BRIGHTNESS_CHOICES,
         inline: false,
     },
     SubRow {
-        label: GAMEPLAY_ROW_CENTERED_P1,
+        id: SubRowId::CenteredP1Notefield,
+        label: LKey { section: "OptionsGameplay", key: "CenteredP1Notefield" },
         choices: &CENTERED_P1_NOTEFIELD_CHOICES,
         inline: true,
     },
     SubRow {
-        label: GAMEPLAY_ROW_ZMOD_RATING_BOX,
+        id: SubRowId::ZmodRatingBox,
+        label: LKey { section: "OptionsGameplay", key: "ZmodRatingBox" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: GAMEPLAY_ROW_BPM_DECIMAL,
+        id: SubRowId::BpmDecimal,
+        label: LKey { section: "OptionsGameplay", key: "BpmDecimal" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        id: SubRowId::AutoScreenshot,
+        label: LKey { section: "OptionsGameplay", key: "AutoScreenshot" },
         choices: &config::AUTO_SS_FLAG_NAMES,
         inline: true,
     },
@@ -1585,64 +1693,76 @@ pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
 
 pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: SOUND_ROW_DEVICE,
+        id: SubRowId::SoundDevice,
+        label: LKey { section: "OptionsSound", key: "SoundDevice" },
         choices: &["Auto"],
         inline: false,
     },
     SubRow {
-        label: SOUND_ROW_OUTPUT_MODE,
+        id: SubRowId::AudioOutputMode,
+        label: LKey { section: "OptionsSound", key: "AudioOutputMode" },
         choices: SOUND_OUTPUT_MODE_CHOICES,
         inline: false,
     },
     #[cfg(target_os = "linux")]
     SubRow {
-        label: SOUND_ROW_LINUX_BACKEND,
+        id: SubRowId::LinuxAudioBackend,
+        label: LKey { section: "OptionsSound", key: "LinuxAudioBackend" },
         choices: SOUND_LINUX_BACKEND_CHOICES,
         inline: false,
     },
     #[cfg(target_os = "linux")]
     SubRow {
-        label: SOUND_ROW_ALSA_EXCLUSIVE,
+        id: SubRowId::AlsaExclusive,
+        label: LKey { section: "OptionsSound", key: "AlsaExclusive" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: SOUND_ROW_SAMPLE_RATE,
+        id: SubRowId::AudioSampleRate,
+        label: LKey { section: "OptionsSound", key: "AudioSampleRate" },
         choices: &["Auto"],
         inline: false,
     },
     SubRow {
-        label: SOUND_ROW_MASTER_VOLUME,
+        id: SubRowId::MasterVolume,
+        label: LKey { section: "OptionsSound", key: "MasterVolume" },
         choices: &["100%"],
         inline: false,
     },
     SubRow {
-        label: SOUND_ROW_SFX_VOLUME,
+        id: SubRowId::SfxVolume,
+        label: LKey { section: "OptionsSound", key: "SfxVolume" },
         choices: &["100%"],
         inline: false,
     },
     SubRow {
-        label: SOUND_ROW_ASSIST_TICK_VOLUME,
+        id: SubRowId::AssistTickVolume,
+        label: LKey { section: "OptionsSound", key: "AssistTickVolume" },
         choices: &["100%"],
         inline: false,
     },
     SubRow {
-        label: SOUND_ROW_MUSIC_VOLUME,
+        id: SubRowId::MusicVolume,
+        label: LKey { section: "OptionsSound", key: "MusicVolume" },
         choices: &["100%"],
         inline: false,
     },
     SubRow {
-        label: SOUND_ROW_MINE_SOUNDS,
+        id: SubRowId::MineSounds,
+        label: LKey { section: "OptionsSound", key: "MineSounds" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: SOUND_ROW_GLOBAL_OFFSET,
+        id: SubRowId::GlobalOffset,
+        label: LKey { section: "OptionsSound", key: "GlobalOffset" },
         choices: &["0 ms"],
         inline: false,
     },
     SubRow {
-        label: SOUND_ROW_RATEMOD_PITCH,
+        id: SubRowId::RateModPreservesPitch,
+        label: LKey { section: "OptionsSound", key: "RateModPreservesPitch" },
         choices: &["Off", "On"],
         inline: true,
     },
@@ -1734,107 +1854,128 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
 
 pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: SELECT_MUSIC_ROW_SHOW_BANNERS,
+        id: SubRowId::ShowBanners,
+        label: LKey { section: "OptionsSelectMusic", key: "ShowBanners" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_SHOW_VIDEO_BANNERS,
+        id: SubRowId::ShowVideoBanners,
+        label: LKey { section: "OptionsSelectMusic", key: "ShowVideoBanners" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_SHOW_BREAKDOWN,
+        id: SubRowId::ShowBreakdown,
+        label: LKey { section: "OptionsSelectMusic", key: "ShowBreakdown" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_BREAKDOWN_STYLE,
+        id: SubRowId::BreakdownStyle,
+        label: LKey { section: "OptionsSelectMusic", key: "BreakdownStyle" },
         choices: &["SL", "SN"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_NATIVE_LANGUAGE,
+        id: SubRowId::ShowNativeLanguage,
+        label: LKey { section: "OptionsSelectMusic", key: "ShowNativeLanguage" },
         choices: &["Translit", "Native"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_WHEEL_SPEED,
+        id: SubRowId::MusicWheelSpeed,
+        label: LKey { section: "OptionsSelectMusic", key: "MusicWheelSpeed" },
         choices: &MUSIC_WHEEL_SCROLL_SPEED_CHOICES,
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_WHEEL_STYLE,
+        id: SubRowId::MusicWheelStyle,
+        label: LKey { section: "OptionsSelectMusic", key: "MusicWheelStyle" },
         choices: &["ITG", "IIDX"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_CDTITLES,
+        id: SubRowId::ShowCdTitles,
+        label: LKey { section: "OptionsSelectMusic", key: "ShowCdTitles" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_WHEEL_GRADES,
+        id: SubRowId::ShowWheelGrades,
+        label: LKey { section: "OptionsSelectMusic", key: "ShowWheelGrades" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_WHEEL_LAMPS,
+        id: SubRowId::ShowWheelLamps,
+        label: LKey { section: "OptionsSelectMusic", key: "ShowWheelLamps" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_WHEEL_ITL,
+        id: SubRowId::ItlWheelData,
+        label: LKey { section: "OptionsSelectMusic", key: "ItlWheelData" },
         choices: &["Off", "Score", "Points+Score"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_NEW_PACKS,
+        id: SubRowId::NewPackBadge,
+        label: LKey { section: "OptionsSelectMusic", key: "NewPackBadge" },
         choices: &["Off", "Open Pack", "Has Score"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_PATTERN_INFO,
+        id: SubRowId::ShowPatternInfo,
+        label: LKey { section: "OptionsSelectMusic", key: "ShowPatternInfo" },
         choices: &["Auto", "Tech", "Stamina"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_CHART_INFO,
+        id: SubRowId::ChartInfo,
+        label: LKey { section: "OptionsSelectMusic", key: "ChartInfo" },
         choices: &SELECT_MUSIC_CHART_INFO_CHOICES,
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_PREVIEWS,
+        id: SubRowId::MusicPreviews,
+        label: LKey { section: "OptionsSelectMusic", key: "MusicPreviews" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_PREVIEW_MARKER,
+        id: SubRowId::PreviewMarker,
+        label: LKey { section: "OptionsSelectMusic", key: "PreviewMarker" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_PREVIEW_LOOP,
+        id: SubRowId::LoopMusic,
+        label: LKey { section: "OptionsSelectMusic", key: "LoopMusic" },
         choices: &["Play Once", "Loop"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_GAMEPLAY_TIMER,
+        id: SubRowId::ShowGameplayTimer,
+        label: LKey { section: "OptionsSelectMusic", key: "ShowGameplayTimer" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_SHOW_RIVALS,
+        id: SubRowId::ShowGsBox,
+        label: LKey { section: "OptionsSelectMusic", key: "ShowGsBox" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_SCOREBOX_PLACEMENT,
+        id: SubRowId::GsBoxPlacement,
+        label: LKey { section: "OptionsSelectMusic", key: "GsBoxPlacement" },
         choices: &["Auto", "Step Pane"],
         inline: true,
     },
     SubRow {
-        label: SELECT_MUSIC_ROW_SCOREBOX_CYCLE,
+        id: SubRowId::GsBoxLeaderboards,
+        label: LKey { section: "OptionsSelectMusic", key: "GsBoxLeaderboards" },
         choices: &SELECT_MUSIC_SCOREBOX_CYCLE_CHOICES,
         inline: true,
     },
@@ -1978,32 +2119,38 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
 
 pub const ADVANCED_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: ADVANCED_ROW_DEFAULT_FAIL_TYPE,
+        id: SubRowId::DefaultFailType,
+        label: LKey { section: "OptionsAdvanced", key: "DefaultFailType" },
         choices: &["Immediate", "ImmediateContinue"],
         inline: true,
     },
     SubRow {
-        label: ADVANCED_ROW_BANNER_CACHE,
+        id: SubRowId::BannerCache,
+        label: LKey { section: "OptionsAdvanced", key: "BannerCache" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: ADVANCED_ROW_CDTITLE_CACHE,
+        id: SubRowId::CdTitleCache,
+        label: LKey { section: "OptionsAdvanced", key: "CdTitleCache" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: ADVANCED_ROW_SONG_PARSING_THREADS,
+        id: SubRowId::SongParsingThreads,
+        label: LKey { section: "OptionsAdvanced", key: "SongParsingThreads" },
         choices: &["Auto"],
         inline: false,
     },
     SubRow {
-        label: ADVANCED_ROW_CACHE_SONGS,
+        id: SubRowId::CacheSongs,
+        label: LKey { section: "OptionsAdvanced", key: "CacheSongs" },
         choices: &["Off", "On"],
         inline: true,
     },
     SubRow {
-        label: ADVANCED_ROW_FAST_LOAD,
+        id: SubRowId::FastLoad,
+        label: LKey { section: "OptionsAdvanced", key: "FastLoad" },
         choices: &["Off", "On"],
         inline: true,
     },
@@ -2062,32 +2209,38 @@ pub const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
 
 pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: GS_ROW_ENABLE,
+        id: SubRowId::EnableGrooveStats,
+        label: LKey { section: "OptionsGrooveStats", key: "EnableGrooveStats" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: GS_ROW_ENABLE_BOOGIE,
+        id: SubRowId::EnableBoogieStats,
+        label: LKey { section: "OptionsGrooveStats", key: "EnableBoogieStats" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: GS_ROW_SUBMIT_FAILS,
+        id: SubRowId::GsSubmitFails,
+        label: LKey { section: "OptionsGrooveStats", key: "GsSubmitFails" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: GS_ROW_AUTO_POPULATE,
+        id: SubRowId::AutoPopulateScores,
+        label: LKey { section: "OptionsGrooveStats", key: "AutoPopulateScores" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: GS_ROW_AUTO_DOWNLOAD_UNLOCKS,
+        id: SubRowId::AutoDownloadUnlocks,
+        label: LKey { section: "OptionsGrooveStats", key: "AutoDownloadUnlocks" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: GS_ROW_SEPARATE_UNLOCKS,
+        id: SubRowId::SeparateUnlocksByPlayer,
+        label: LKey { section: "OptionsGrooveStats", key: "SeparateUnlocksByPlayer" },
         choices: &["No", "Yes"],
         inline: true,
     },
@@ -2095,12 +2248,14 @@ pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
 
 pub const ARROWCLOUD_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: ARROWCLOUD_ROW_ENABLE,
+        id: SubRowId::EnableArrowCloud,
+        label: LKey { section: "OptionsGrooveStats", key: "EnableArrowCloud" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: ARROWCLOUD_ROW_SUBMIT_FAILS,
+        id: SubRowId::ArrowCloudSubmitFails,
+        label: LKey { section: "OptionsGrooveStats", key: "ArrowCloudSubmitFails" },
         choices: &["No", "Yes"],
         inline: true,
     },
@@ -2108,17 +2263,20 @@ pub const ARROWCLOUD_OPTIONS_ROWS: &[SubRow] = &[
 
 pub const ONLINE_SCORING_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: ONLINE_SCORING_ROW_GS_BS,
+        id: SubRowId::GsBsOptions,
+        label: LKey { section: "OptionsOnlineScoring", key: "GsBsOptions" },
         choices: &[],
         inline: false,
     },
     SubRow {
-        label: ONLINE_SCORING_ROW_ARROWCLOUD,
+        id: SubRowId::ArrowCloudOptions,
+        label: LKey { section: "OptionsOnlineScoring", key: "ArrowCloudOptions" },
         choices: &[],
         inline: false,
     },
     SubRow {
-        label: ONLINE_SCORING_ROW_SCORE_IMPORT,
+        id: SubRowId::ScoreImport,
+        label: LKey { section: "OptionsOnlineScoring", key: "ScoreImport" },
         choices: &[],
         inline: false,
     },
@@ -2126,12 +2284,14 @@ pub const ONLINE_SCORING_OPTIONS_ROWS: &[SubRow] = &[
 
 pub const NULL_OR_DIE_MENU_ROWS: &[SubRow] = &[
     SubRow {
-        label: NULL_OR_DIE_ROW_OPTIONS,
+        id: SubRowId::NullOrDieOptions,
+        label: LKey { section: "OptionsOnlineScoring", key: "NullOrDieOptions" },
         choices: &[],
         inline: false,
     },
     SubRow {
-        label: NULL_OR_DIE_ROW_SYNC_PACKS,
+        id: SubRowId::SyncPacks,
+        label: LKey { section: "OptionsOnlineScoring", key: "SyncPacks" },
         choices: &[],
         inline: false,
     },
@@ -2139,52 +2299,62 @@ pub const NULL_OR_DIE_MENU_ROWS: &[SubRow] = &[
 
 pub const NULL_OR_DIE_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: NULL_OR_DIE_SETTING_ROW_SYNC_GRAPH,
+        id: SubRowId::SyncGraph,
+        label: LKey { section: "OptionsNullOrDie", key: "SyncGraph" },
         choices: NULL_OR_DIE_SYNC_GRAPH_CHOICES,
         inline: false,
     },
     SubRow {
-        label: NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE,
+        id: SubRowId::SyncConfidence,
+        label: LKey { section: "OptionsNullOrDie", key: "SyncConfidence" },
         choices: NULL_OR_DIE_SYNC_CONFIDENCE_CHOICES,
         inline: false,
     },
     SubRow {
-        label: NULL_OR_DIE_SETTING_ROW_PACK_SYNC_THREADS,
+        id: SubRowId::PackSyncThreads,
+        label: LKey { section: "OptionsNullOrDie", key: "PackSyncThreads" },
         choices: &["Auto"],
         inline: false,
     },
     SubRow {
-        label: NULL_OR_DIE_SETTING_ROW_FINGERPRINT,
+        id: SubRowId::Fingerprint,
+        label: LKey { section: "OptionsNullOrDie", key: "Fingerprint" },
         choices: &["50.0 ms"],
         inline: false,
     },
     SubRow {
-        label: NULL_OR_DIE_SETTING_ROW_WINDOW,
+        id: SubRowId::Window,
+        label: LKey { section: "OptionsNullOrDie", key: "Window" },
         choices: &["10.0 ms"],
         inline: false,
     },
     SubRow {
-        label: NULL_OR_DIE_SETTING_ROW_STEP,
+        id: SubRowId::Step,
+        label: LKey { section: "OptionsNullOrDie", key: "Step" },
         choices: &["0.2 ms"],
         inline: false,
     },
     SubRow {
-        label: NULL_OR_DIE_SETTING_ROW_MAGIC_OFFSET,
+        id: SubRowId::MagicOffset,
+        label: LKey { section: "OptionsNullOrDie", key: "MagicOffset" },
         choices: &["0.0 ms"],
         inline: false,
     },
     SubRow {
-        label: NULL_OR_DIE_SETTING_ROW_KERNEL_TARGET,
+        id: SubRowId::KernelTarget,
+        label: LKey { section: "OptionsNullOrDie", key: "KernelTarget" },
         choices: NULL_OR_DIE_KERNEL_TARGET_CHOICES,
         inline: false,
     },
     SubRow {
-        label: NULL_OR_DIE_SETTING_ROW_KERNEL_TYPE,
+        id: SubRowId::KernelType,
+        label: LKey { section: "OptionsNullOrDie", key: "KernelType" },
         choices: NULL_OR_DIE_KERNEL_TYPE_CHOICES,
         inline: false,
     },
     SubRow {
-        label: NULL_OR_DIE_SETTING_ROW_FULL_SPECTROGRAM,
+        id: SubRowId::FullSpectrogram,
+        label: LKey { section: "OptionsNullOrDie", key: "FullSpectrogram" },
         choices: &["No", "Yes"],
         inline: false,
     },
@@ -2192,12 +2362,14 @@ pub const NULL_OR_DIE_OPTIONS_ROWS: &[SubRow] = &[
 
 pub const SYNC_PACK_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: SYNC_PACK_ROW_PACK,
+        id: SubRowId::SyncPackPack,
+        label: LKey { section: "OptionsSyncPack", key: "SyncPackPack" },
         choices: &[SYNC_PACK_ALL_PACKS],
         inline: false,
     },
     SubRow {
-        label: SYNC_PACK_ROW_START,
+        id: SubRowId::SyncPackStart,
+        label: LKey { section: "OptionsSyncPack", key: "SyncPackStart" },
         choices: &["Start"],
         inline: false,
     },
@@ -2205,27 +2377,32 @@ pub const SYNC_PACK_OPTIONS_ROWS: &[SubRow] = &[
 
 pub const SCORE_IMPORT_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
-        label: SCORE_IMPORT_ROW_ENDPOINT,
+        id: SubRowId::ScoreImportEndpoint,
+        label: LKey { section: "OptionsScoreImport", key: "ScoreImportEndpoint" },
         choices: &["GrooveStats", "BoogieStats", "ArrowCloud"],
         inline: true,
     },
     SubRow {
-        label: SCORE_IMPORT_ROW_PROFILE,
+        id: SubRowId::ScoreImportProfile,
+        label: LKey { section: "OptionsScoreImport", key: "ScoreImportProfile" },
         choices: &["No eligible profiles"],
         inline: false,
     },
     SubRow {
-        label: SCORE_IMPORT_ROW_PACK,
+        id: SubRowId::ScoreImportPack,
+        label: LKey { section: "OptionsScoreImport", key: "ScoreImportPack" },
         choices: &[SCORE_IMPORT_ALL_PACKS],
         inline: false,
     },
     SubRow {
-        label: SCORE_IMPORT_ROW_ONLY_MISSING,
+        id: SubRowId::ScoreImportOnlyMissing,
+        label: LKey { section: "OptionsScoreImport", key: "ScoreImportOnlyMissing" },
         choices: &["No", "Yes"],
         inline: true,
     },
     SubRow {
-        label: SCORE_IMPORT_ROW_START,
+        id: SubRowId::ScoreImportStart,
+        label: LKey { section: "OptionsScoreImport", key: "ScoreImportStart" },
         choices: &["Start"],
         inline: false,
     },
@@ -2478,9 +2655,9 @@ pub const SCORE_IMPORT_OPTIONS_ITEMS: &[Item] = &[
 /// Returns `true` when the given submenu row should be treated as disabled
 /// (non-interactive and visually dimmed). Add new cases here for any row
 /// that should be conditionally locked based on runtime state.
-fn is_submenu_row_disabled(kind: SubmenuKind, label: &str) -> bool {
-    match (kind, label) {
-        (SubmenuKind::InputBackend, INPUT_ROW_DEDICATED_MENU_BUTTONS) => {
+fn is_submenu_row_disabled(kind: SubmenuKind, id: SubRowId) -> bool {
+    match (kind, id) {
+        (SubmenuKind::InputBackend, SubRowId::MenuButtons) => {
             !crate::engine::input::any_player_has_dedicated_menu_buttons_for_mode(
                 config::get().three_key_navigation,
             )
@@ -2768,13 +2945,13 @@ fn submenu_visible_row_indices(
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
-                    if row.label == GRAPHICS_ROW_SOFTWARE_THREADS && !show_sw {
+                    if row.id == SubRowId::SoftwareRendererThreads && !show_sw {
                         None
-                    } else if row.label == GRAPHICS_ROW_PRESENT_MODE && !show_present_mode {
+                    } else if row.id == SubRowId::PresentMode && !show_present_mode {
                         None
-                    } else if row.label == GRAPHICS_ROW_MAX_FPS && !show_max_fps {
+                    } else if row.id == SubRowId::MaxFps && !show_max_fps {
                         None
-                    } else if row.label == GRAPHICS_ROW_MAX_FPS_VALUE && !show_max_fps_value {
+                    } else if row.id == SubRowId::MaxFpsValue && !show_max_fps_value {
                         None
                     } else {
                         Some(idx)
@@ -2858,7 +3035,7 @@ fn submenu_visible_row_indices(
             .iter()
             .enumerate()
             .filter_map(|(idx, row)| {
-                if row.label == SOUND_ROW_ALSA_EXCLUSIVE && !sound_show_alsa_exclusive(state) {
+                if row.id == SubRowId::AlsaExclusive && !sound_show_alsa_exclusive(state) {
                     None
                 } else {
                     Some(idx)
@@ -3611,7 +3788,7 @@ fn row_choices<'a>(
 ) -> Vec<Cow<'a, str>> {
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::System)
-        && row.label == "Default NoteSkin"
+        && row.id == SubRowId::DefaultNoteSkin
     {
         return state
             .system_noteskin_choices
@@ -3623,7 +3800,7 @@ fn row_choices<'a>(
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Graphics)
     {
-        if row.label == GRAPHICS_ROW_SOFTWARE_THREADS {
+        if row.id == SubRowId::SoftwareRendererThreads {
             return state
                 .software_thread_labels
                 .iter()
@@ -3631,7 +3808,7 @@ fn row_choices<'a>(
                 .map(Cow::Owned)
                 .collect();
         }
-        if row.label == GRAPHICS_ROW_MAX_FPS_VALUE {
+        if row.id == SubRowId::MaxFpsValue {
             return state
                 .max_fps_labels
                 .iter()
@@ -3639,7 +3816,7 @@ fn row_choices<'a>(
                 .map(Cow::Owned)
                 .collect();
         }
-        if row.label == "Display Mode" {
+        if row.id == SubRowId::DisplayMode {
             return state
                 .display_mode_choices
                 .iter()
@@ -3647,14 +3824,14 @@ fn row_choices<'a>(
                 .map(Cow::Owned)
                 .collect();
         }
-        if row.label == "Display Resolution" {
+        if row.id == SubRowId::DisplayResolution {
             return state
                 .resolution_choices
                 .iter()
                 .map(|&(w, h)| Cow::Owned(format!("{w}x{h}")))
                 .collect();
         }
-        if row.label == "Refresh Rate" {
+        if row.id == SubRowId::RefreshRate {
             return state
                 .refresh_rate_choices
                 .iter()
@@ -3676,7 +3853,7 @@ fn row_choices<'a>(
     }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Advanced)
-        && row.label == ADVANCED_ROW_SONG_PARSING_THREADS
+        && row.id == SubRowId::SongParsingThreads
     {
         return state
             .software_thread_labels
@@ -3687,7 +3864,7 @@ fn row_choices<'a>(
     }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::NullOrDieOptions)
-        && row.label == NULL_OR_DIE_SETTING_ROW_PACK_SYNC_THREADS
+        && row.id == SubRowId::PackSyncThreads
     {
         return state
             .software_thread_labels
@@ -3699,14 +3876,14 @@ fn row_choices<'a>(
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Sound)
     {
-        if row.label == SOUND_ROW_DEVICE {
+        if row.id == SubRowId::SoundDevice {
             return state
                 .sound_device_options
                 .iter()
                 .map(|opt| Cow::Owned(opt.label.clone()))
                 .collect();
         }
-        if row.label == SOUND_ROW_SAMPLE_RATE {
+        if row.id == SubRowId::AudioSampleRate {
             return sound_sample_rate_choices(state)
                 .into_iter()
                 .map(|rate| match rate {
@@ -3716,7 +3893,7 @@ fn row_choices<'a>(
                 .collect();
         }
         #[cfg(target_os = "linux")]
-        if row.label == SOUND_ROW_LINUX_BACKEND {
+        if row.id == SubRowId::LinuxAudioBackend {
             return state
                 .linux_backend_choices
                 .iter()
@@ -3728,7 +3905,7 @@ fn row_choices<'a>(
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::ScoreImport)
     {
-        if row.label == SCORE_IMPORT_ROW_PROFILE {
+        if row.id == SubRowId::ScoreImportProfile {
             return state
                 .score_import_profile_choices
                 .iter()
@@ -3736,7 +3913,7 @@ fn row_choices<'a>(
                 .map(Cow::Owned)
                 .collect();
         }
-        if row.label == SCORE_IMPORT_ROW_PACK {
+        if row.id == SubRowId::ScoreImportPack {
             return state
                 .score_import_pack_choices
                 .iter()
@@ -3747,7 +3924,7 @@ fn row_choices<'a>(
     }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::SyncPacks)
-        && row.label == SYNC_PACK_ROW_PACK
+        && row.id == SubRowId::SyncPackPack
     {
         return state
             .sync_pack_choices
@@ -3774,27 +3951,27 @@ fn submenu_display_choice_texts<'a>(
     if choice_texts.is_empty() {
         return choice_texts;
     }
-    if row.label == SOUND_ROW_GLOBAL_OFFSET {
+    if row.id == SubRowId::GlobalOffset {
         choice_texts[0] = Cow::Owned(format_ms(state.global_offset_ms));
-    } else if row.label == SOUND_ROW_MASTER_VOLUME {
+    } else if row.id == SubRowId::MasterVolume {
         choice_texts[0] = Cow::Owned(format_percent(state.master_volume_pct));
-    } else if row.label == SOUND_ROW_SFX_VOLUME {
+    } else if row.id == SubRowId::SfxVolume {
         choice_texts[0] = Cow::Owned(format_percent(state.sfx_volume_pct));
-    } else if row.label == SOUND_ROW_ASSIST_TICK_VOLUME {
+    } else if row.id == SubRowId::AssistTickVolume {
         choice_texts[0] = Cow::Owned(format_percent(state.assist_tick_volume_pct));
-    } else if row.label == SOUND_ROW_MUSIC_VOLUME {
+    } else if row.id == SubRowId::MusicVolume {
         choice_texts[0] = Cow::Owned(format_percent(state.music_volume_pct));
-    } else if row.label == "Visual Delay (ms)" {
+    } else if row.id == SubRowId::VisualDelay {
         choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
-    } else if row.label == INPUT_ROW_DEBOUNCE {
+    } else if row.id == SubRowId::Debounce {
         choice_texts[0] = Cow::Owned(format_ms(state.input_debounce_ms));
-    } else if row.label == NULL_OR_DIE_SETTING_ROW_FINGERPRINT {
+    } else if row.id == SubRowId::Fingerprint {
         choice_texts[0] = Cow::Owned(format_tenths_ms(state.null_or_die_fingerprint_tenths));
-    } else if row.label == NULL_OR_DIE_SETTING_ROW_WINDOW {
+    } else if row.id == SubRowId::Window {
         choice_texts[0] = Cow::Owned(format_tenths_ms(state.null_or_die_window_tenths));
-    } else if row.label == NULL_OR_DIE_SETTING_ROW_STEP {
+    } else if row.id == SubRowId::Step {
         choice_texts[0] = Cow::Owned(format_tenths_ms(state.null_or_die_step_tenths));
-    } else if row.label == NULL_OR_DIE_SETTING_ROW_MAGIC_OFFSET {
+    } else if row.id == SubRowId::MagicOffset {
         choice_texts[0] = Cow::Owned(format_tenths_ms(state.null_or_die_magic_offset_tenths));
     }
     choice_texts
@@ -3962,8 +4139,8 @@ fn move_submenu_selection_vertical(
 
 const SOUND_VOLUME_LEVELS: [u8; 6] = [0, 10, 25, 50, 75, 100];
 
-fn set_choice_by_label(choice_indices: &mut Vec<usize>, rows: &[SubRow], label: &str, idx: usize) {
-    if let Some(pos) = rows.iter().position(|r| r.label == label)
+fn set_choice_by_id(choice_indices: &mut Vec<usize>, rows: &[SubRow], id: SubRowId, idx: usize) {
+    if let Some(pos) = rows.iter().position(|r| r.id == id)
         && let Some(slot) = choice_indices.get_mut(pos)
     {
         let max_idx = rows[pos].choices.len().saturating_sub(1);
@@ -3991,12 +4168,12 @@ fn master_volume_from_choice(idx: usize) -> u8 {
         .unwrap_or_else(|| *SOUND_VOLUME_LEVELS.last().unwrap_or(&100))
 }
 
-fn sound_row_index(label: &str) -> Option<usize> {
-    SOUND_OPTIONS_ROWS.iter().position(|row| row.label == label)
+fn sound_row_index(id: SubRowId) -> Option<usize> {
+    SOUND_OPTIONS_ROWS.iter().position(|row| row.id == id)
 }
 
 fn selected_sound_device_choice(state: &State) -> usize {
-    sound_row_index(SOUND_ROW_DEVICE)
+    sound_row_index(SubRowId::SoundDevice)
         .and_then(|idx| state.sub_choice_indices_sound.get(idx).copied())
         .unwrap_or(0)
 }
@@ -4065,7 +4242,7 @@ const fn alsa_exclusive_choice_index(mode: config::AudioOutputMode) -> usize {
 #[cfg(target_os = "linux")]
 #[inline(always)]
 fn selected_audio_output_mode(state: &State) -> config::AudioOutputMode {
-    sound_row_index(SOUND_ROW_OUTPUT_MODE)
+    sound_row_index(SubRowId::AudioOutputMode)
         .and_then(|idx| state.sub_choice_indices_sound.get(idx).copied())
         .map(audio_output_mode_from_choice)
         .unwrap_or(config::AudioOutputMode::Auto)
@@ -4100,7 +4277,7 @@ fn linux_audio_backend_from_choice(state: &State, idx: usize) -> config::LinuxAu
 #[cfg(target_os = "linux")]
 #[inline(always)]
 fn selected_linux_audio_backend(state: &State) -> config::LinuxAudioBackend {
-    sound_row_index(SOUND_ROW_LINUX_BACKEND)
+    sound_row_index(SubRowId::LinuxAudioBackend)
         .and_then(|idx| state.sub_choice_indices_sound.get(idx).copied())
         .map(|idx| linux_audio_backend_from_choice(state, idx))
         .unwrap_or(config::LinuxAudioBackend::Auto)
@@ -4117,15 +4294,15 @@ fn sound_show_alsa_exclusive(state: &State) -> bool {
 
 #[cfg(target_os = "linux")]
 fn sound_parent_row(actual_idx: usize) -> Option<usize> {
-    let child_idx = sound_row_index(SOUND_ROW_ALSA_EXCLUSIVE)?;
+    let child_idx = sound_row_index(SubRowId::AlsaExclusive)?;
     if actual_idx != child_idx {
         return None;
     }
-    sound_row_index(SOUND_ROW_LINUX_BACKEND)
+    sound_row_index(SubRowId::LinuxAudioBackend)
 }
 
-fn set_sound_choice_index(state: &mut State, label: &str, idx: usize) {
-    let Some(row_idx) = sound_row_index(label) else {
+fn set_sound_choice_index(state: &mut State, id: SubRowId, idx: usize) {
+    let Some(row_idx) = sound_row_index(id) else {
         return;
     };
     if let Some(slot) = state.sub_choice_indices_sound.get_mut(row_idx) {
@@ -4302,16 +4479,16 @@ fn toggle_auto_screenshot_option(state: &mut State, choice_idx: usize) {
     config::update_auto_screenshot_eval(mask);
 
     let clamped = choice_idx.min(config::AUTO_SS_NUM_FLAGS.saturating_sub(1));
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_gameplay,
         GAMEPLAY_OPTIONS_ROWS,
-        GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        SubRowId::AutoScreenshot,
         clamped,
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_cursor_indices_gameplay,
         GAMEPLAY_OPTIONS_ROWS,
-        GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        SubRowId::AutoScreenshot,
         clamped,
     );
     audio::play_sfx("assets/sounds/change_value.ogg");
@@ -4911,67 +5088,67 @@ pub fn init() -> State {
     );
     sync_display_resolution(&mut state, cfg.display_width, cfg.display_height);
 
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_system,
         SYSTEM_OPTIONS_ROWS,
-        "Game",
+        SubRowId::Game,
         0,
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_system,
         SYSTEM_OPTIONS_ROWS,
-        "Theme",
+        SubRowId::Theme,
         0,
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_system,
         SYSTEM_OPTIONS_ROWS,
-        "Language",
+        SubRowId::Language,
         0,
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_system,
         SYSTEM_OPTIONS_ROWS,
-        "Log Level",
+        SubRowId::LogLevel,
         log_level_choice_index(cfg.log_level),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_system,
         SYSTEM_OPTIONS_ROWS,
-        SYSTEM_ROW_LOG_FILE,
+        SubRowId::LogFile,
         usize::from(cfg.log_to_file),
     );
     if let Some(noteskin_row_idx) = SYSTEM_OPTIONS_ROWS
         .iter()
-        .position(|row| row.label == "Default NoteSkin")
+        .position(|row| row.id == SubRowId::DefaultNoteSkin)
         && let Some(slot) = state.sub_choice_indices_system.get_mut(noteskin_row_idx)
     {
         *slot = machine_noteskin_idx;
     }
 
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
-        "Wait for VSync",
+        SubRowId::VSync,
         yes_no_choice_index(cfg.vsync),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
-        GRAPHICS_ROW_PRESENT_MODE,
+        SubRowId::PresentMode,
         present_mode_choice_index(cfg.present_mode_policy),
     );
     sync_max_fps(&mut state, cfg.max_fps);
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
-        "Show Stats",
+        SubRowId::ShowStats,
         cfg.show_stats_mode.min(3) as usize,
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
-        GRAPHICS_ROW_VALIDATION_LAYERS,
+        SubRowId::ValidationLayers,
         yes_no_choice_index(cfg.gfx_debug),
     );
     if let Some(slot) = state
@@ -4984,136 +5161,136 @@ pub fn init() -> State {
         );
     }
     #[cfg(target_os = "windows")]
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_input_backend,
         INPUT_BACKEND_OPTIONS_ROWS,
-        INPUT_ROW_BACKEND,
+        SubRowId::GamepadBackend,
         windows_backend_choice_index(cfg.windows_gamepad_backend),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_input_backend,
         INPUT_BACKEND_OPTIONS_ROWS,
-        INPUT_ROW_MENU_NAVIGATION,
+        SubRowId::MenuNavigation,
         usize::from(cfg.three_key_navigation),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_input_backend,
         INPUT_BACKEND_OPTIONS_ROWS,
-        INPUT_ROW_OPTIONS_NAVIGATION,
+        SubRowId::OptionsNavigation,
         usize::from(cfg.arcade_options_navigation),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_input_backend,
         INPUT_BACKEND_OPTIONS_ROWS,
-        INPUT_ROW_DEDICATED_MENU_BUTTONS,
+        SubRowId::MenuButtons,
         usize::from(cfg.only_dedicated_menu_buttons),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_SELECT_PROFILE,
+        SubRowId::SelectProfile,
         usize::from(cfg.machine_show_select_profile),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_SELECT_COLOR,
+        SubRowId::SelectColor,
         usize::from(cfg.machine_show_select_color),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_SELECT_STYLE,
+        SubRowId::SelectStyle,
         usize::from(cfg.machine_show_select_style),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_PREFERRED_STYLE,
+        SubRowId::PreferredStyle,
         machine_preferred_style_choice_index(cfg.machine_preferred_style),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_SELECT_PLAY_MODE,
+        SubRowId::SelectPlayMode,
         usize::from(cfg.machine_show_select_play_mode),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_PREFERRED_MODE,
+        SubRowId::PreferredMode,
         machine_preferred_mode_choice_index(cfg.machine_preferred_play_mode),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_EVAL_SUMMARY,
+        SubRowId::EvalSummary,
         usize::from(cfg.machine_show_eval_summary),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_NAME_ENTRY,
+        SubRowId::NameEntry,
         usize::from(cfg.machine_show_name_entry),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_GAMEOVER,
+        SubRowId::GameoverScreen,
         usize::from(cfg.machine_show_gameover),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_MENU_MUSIC,
+        SubRowId::MenuMusic,
         usize::from(cfg.menu_music),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_REPLAYS,
+        SubRowId::Replays,
         usize::from(cfg.machine_enable_replays),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_PER_PLAYER_GLOBAL_OFFSETS,
+        SubRowId::PerPlayerGlobalOffsets,
         usize::from(cfg.machine_allow_per_player_global_offsets),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_KEYBOARD_FEATURES,
+        SubRowId::KeyboardFeatures,
         usize::from(cfg.keyboard_features),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_VIDEO_BGS,
+        SubRowId::VideoBgs,
         usize::from(cfg.show_video_backgrounds),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        MACHINE_ROW_WRITE_CURRENT_SCREEN,
+        SubRowId::WriteCurrentScreen,
         usize::from(cfg.write_current_screen),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_advanced,
         ADVANCED_OPTIONS_ROWS,
-        ADVANCED_ROW_DEFAULT_FAIL_TYPE,
+        SubRowId::DefaultFailType,
         default_fail_type_choice_index(cfg.default_fail_type),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_advanced,
         ADVANCED_OPTIONS_ROWS,
-        ADVANCED_ROW_BANNER_CACHE,
+        SubRowId::BannerCache,
         usize::from(cfg.banner_cache),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_advanced,
         ADVANCED_OPTIONS_ROWS,
-        ADVANCED_ROW_CDTITLE_CACHE,
+        SubRowId::CdTitleCache,
         usize::from(cfg.cdtitle_cache),
     );
     if let Some(slot) = state
@@ -5123,295 +5300,295 @@ pub fn init() -> State {
         *slot =
             software_thread_choice_index(&state.software_thread_choices, cfg.song_parsing_threads);
     }
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_advanced,
         ADVANCED_OPTIONS_ROWS,
-        ADVANCED_ROW_CACHE_SONGS,
+        SubRowId::CacheSongs,
         usize::from(cfg.cachesongs),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_advanced,
         ADVANCED_OPTIONS_ROWS,
-        ADVANCED_ROW_FAST_LOAD,
+        SubRowId::FastLoad,
         usize::from(cfg.fastload),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_null_or_die_options,
         NULL_OR_DIE_OPTIONS_ROWS,
-        NULL_OR_DIE_SETTING_ROW_SYNC_GRAPH,
+        SubRowId::SyncGraph,
         sync_graph_mode_choice_index(cfg.null_or_die_sync_graph),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_null_or_die_options,
         NULL_OR_DIE_OPTIONS_ROWS,
-        NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE,
+        SubRowId::SyncConfidence,
         sync_confidence_choice_index(cfg.null_or_die_confidence_percent),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_null_or_die_options,
         NULL_OR_DIE_OPTIONS_ROWS,
-        NULL_OR_DIE_SETTING_ROW_PACK_SYNC_THREADS,
+        SubRowId::PackSyncThreads,
         software_thread_choice_index(
             &state.software_thread_choices,
             cfg.null_or_die_pack_sync_threads,
         ),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_null_or_die_options,
         NULL_OR_DIE_OPTIONS_ROWS,
-        NULL_OR_DIE_SETTING_ROW_KERNEL_TARGET,
+        SubRowId::KernelTarget,
         null_or_die_kernel_target_choice_index(cfg.null_or_die_kernel_target),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_null_or_die_options,
         NULL_OR_DIE_OPTIONS_ROWS,
-        NULL_OR_DIE_SETTING_ROW_KERNEL_TYPE,
+        SubRowId::KernelType,
         null_or_die_kernel_type_choice_index(cfg.null_or_die_kernel_type),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_null_or_die_options,
         NULL_OR_DIE_OPTIONS_ROWS,
-        NULL_OR_DIE_SETTING_ROW_FULL_SPECTROGRAM,
+        SubRowId::FullSpectrogram,
         yes_no_choice_index(cfg.null_or_die_full_spectrogram),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_course,
         COURSE_OPTIONS_ROWS,
-        COURSE_ROW_SHOW_RANDOM,
+        SubRowId::ShowRandomCourses,
         yes_no_choice_index(cfg.show_random_courses),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_course,
         COURSE_OPTIONS_ROWS,
-        COURSE_ROW_SHOW_MOST_PLAYED,
+        SubRowId::ShowMostPlayed,
         yes_no_choice_index(cfg.show_most_played_courses),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_course,
         COURSE_OPTIONS_ROWS,
-        COURSE_ROW_SHOW_INDIVIDUAL_SCORES,
+        SubRowId::ShowIndividualScores,
         yes_no_choice_index(cfg.show_course_individual_scores),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_course,
         COURSE_OPTIONS_ROWS,
-        COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES,
+        SubRowId::AutosubmitIndividual,
         yes_no_choice_index(cfg.autosubmit_course_scores_individually),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_gameplay,
         GAMEPLAY_OPTIONS_ROWS,
-        GAMEPLAY_ROW_BG_BRIGHTNESS,
+        SubRowId::BgBrightness,
         bg_brightness_choice_index(cfg.bg_brightness),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_gameplay,
         GAMEPLAY_OPTIONS_ROWS,
-        GAMEPLAY_ROW_CENTERED_P1,
+        SubRowId::CenteredP1Notefield,
         usize::from(cfg.center_1player_notefield),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_gameplay,
         GAMEPLAY_OPTIONS_ROWS,
-        GAMEPLAY_ROW_ZMOD_RATING_BOX,
+        SubRowId::ZmodRatingBox,
         usize::from(cfg.zmod_rating_box_text),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_gameplay,
         GAMEPLAY_OPTIONS_ROWS,
-        GAMEPLAY_ROW_BPM_DECIMAL,
+        SubRowId::BpmDecimal,
         usize::from(cfg.show_bpm_decimal),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_gameplay,
         GAMEPLAY_OPTIONS_ROWS,
-        GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        SubRowId::AutoScreenshot,
         auto_screenshot_cursor_index(cfg.auto_screenshot_eval),
     );
 
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        SOUND_ROW_MASTER_VOLUME,
+        SubRowId::MasterVolume,
         master_volume_choice_index(cfg.master_volume),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        SOUND_ROW_SFX_VOLUME,
+        SubRowId::SfxVolume,
         master_volume_choice_index(cfg.sfx_volume),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        SOUND_ROW_ASSIST_TICK_VOLUME,
+        SubRowId::AssistTickVolume,
         master_volume_choice_index(cfg.assist_tick_volume),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        SOUND_ROW_MUSIC_VOLUME,
+        SubRowId::MusicVolume,
         master_volume_choice_index(cfg.music_volume),
     );
     let sound_device_idx =
         sound_device_choice_index(&state.sound_device_options, cfg.audio_output_device_index);
-    set_sound_choice_index(&mut state, SOUND_ROW_DEVICE, sound_device_idx);
+    set_sound_choice_index(&mut state, SubRowId::SoundDevice, sound_device_idx);
     set_sound_choice_index(
         &mut state,
-        SOUND_ROW_OUTPUT_MODE,
+        SubRowId::AudioOutputMode,
         audio_output_mode_choice_index(cfg.audio_output_mode),
     );
     #[cfg(target_os = "linux")]
     let linux_backend_idx = linux_audio_backend_choice_index(&state, cfg.linux_audio_backend);
     #[cfg(target_os = "linux")]
-    set_sound_choice_index(&mut state, SOUND_ROW_LINUX_BACKEND, linux_backend_idx);
+    set_sound_choice_index(&mut state, SubRowId::LinuxAudioBackend, linux_backend_idx);
     #[cfg(target_os = "linux")]
     set_sound_choice_index(
         &mut state,
-        SOUND_ROW_ALSA_EXCLUSIVE,
+        SubRowId::AlsaExclusive,
         alsa_exclusive_choice_index(cfg.audio_output_mode),
     );
     let sound_rate_idx = sample_rate_choice_index(&state, cfg.audio_sample_rate_hz);
-    set_sound_choice_index(&mut state, SOUND_ROW_SAMPLE_RATE, sound_rate_idx);
-    set_choice_by_label(
+    set_sound_choice_index(&mut state, SubRowId::AudioSampleRate, sound_rate_idx);
+    set_choice_by_id(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        SOUND_ROW_MINE_SOUNDS,
+        SubRowId::MineSounds,
         usize::from(cfg.mine_hit_sound),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_sound,
         SOUND_OPTIONS_ROWS,
-        SOUND_ROW_RATEMOD_PITCH,
+        SubRowId::RateModPreservesPitch,
         usize::from(cfg.rate_mod_preserves_pitch),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_SHOW_BANNERS,
+        SubRowId::ShowBanners,
         yes_no_choice_index(cfg.show_select_music_banners),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_SHOW_VIDEO_BANNERS,
+        SubRowId::ShowVideoBanners,
         yes_no_choice_index(cfg.show_select_music_video_banners),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_SHOW_BREAKDOWN,
+        SubRowId::ShowBreakdown,
         yes_no_choice_index(cfg.show_select_music_breakdown),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_BREAKDOWN_STYLE,
+        SubRowId::BreakdownStyle,
         breakdown_style_choice_index(cfg.select_music_breakdown_style),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_NATIVE_LANGUAGE,
+        SubRowId::ShowNativeLanguage,
         translated_titles_choice_index(cfg.translated_titles),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_WHEEL_SPEED,
+        SubRowId::MusicWheelSpeed,
         music_wheel_scroll_speed_choice_index(cfg.music_wheel_switch_speed),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_WHEEL_STYLE,
+        SubRowId::MusicWheelStyle,
         select_music_wheel_style_choice_index(cfg.select_music_wheel_style),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_CDTITLES,
+        SubRowId::ShowCdTitles,
         yes_no_choice_index(cfg.show_select_music_cdtitles),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_WHEEL_GRADES,
+        SubRowId::ShowWheelGrades,
         yes_no_choice_index(cfg.show_music_wheel_grades),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_WHEEL_LAMPS,
+        SubRowId::ShowWheelLamps,
         yes_no_choice_index(cfg.show_music_wheel_lamps),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_WHEEL_ITL,
+        SubRowId::ItlWheelData,
         select_music_itl_wheel_choice_index(cfg.select_music_itl_wheel_mode),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_NEW_PACKS,
+        SubRowId::NewPackBadge,
         new_pack_mode_choice_index(cfg.select_music_new_pack_mode),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_PATTERN_INFO,
+        SubRowId::ShowPatternInfo,
         select_music_pattern_info_choice_index(cfg.select_music_pattern_info_mode),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_CHART_INFO,
+        SubRowId::ChartInfo,
         select_music_chart_info_cursor_index(
             cfg.select_music_chart_info_peak_nps,
             cfg.select_music_chart_info_matrix_rating,
         ),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_PREVIEWS,
+        SubRowId::MusicPreviews,
         yes_no_choice_index(cfg.show_select_music_previews),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_PREVIEW_MARKER,
+        SubRowId::PreviewMarker,
         yes_no_choice_index(cfg.show_select_music_preview_marker),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_PREVIEW_LOOP,
+        SubRowId::LoopMusic,
         usize::from(cfg.select_music_preview_loop),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_GAMEPLAY_TIMER,
+        SubRowId::ShowGameplayTimer,
         yes_no_choice_index(cfg.show_select_music_gameplay_timer),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_SHOW_RIVALS,
+        SubRowId::ShowGsBox,
         yes_no_choice_index(cfg.show_select_music_scorebox),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_SCOREBOX_PLACEMENT,
+        SubRowId::GsBoxPlacement,
         select_music_scorebox_placement_choice_index(cfg.select_music_scorebox_placement),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_SCOREBOX_CYCLE,
+        SubRowId::GsBoxLeaderboards,
         scorebox_cycle_cursor_index(
             cfg.select_music_scorebox_cycle_itg,
             cfg.select_music_scorebox_cycle_ex,
@@ -5419,60 +5596,60 @@ pub fn init() -> State {
             cfg.select_music_scorebox_cycle_tournaments,
         ),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
-        GS_ROW_ENABLE,
+        SubRowId::EnableGrooveStats,
         yes_no_choice_index(cfg.enable_groovestats),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
-        GS_ROW_ENABLE_BOOGIE,
+        SubRowId::EnableBoogieStats,
         yes_no_choice_index(cfg.enable_boogiestats),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
-        GS_ROW_SUBMIT_FAILS,
+        SubRowId::GsSubmitFails,
         yes_no_choice_index(cfg.submit_groovestats_fails),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
-        GS_ROW_AUTO_POPULATE,
+        SubRowId::AutoPopulateScores,
         yes_no_choice_index(cfg.auto_populate_gs_scores),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
-        GS_ROW_AUTO_DOWNLOAD_UNLOCKS,
+        SubRowId::AutoDownloadUnlocks,
         yes_no_choice_index(cfg.auto_download_unlocks),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
-        GS_ROW_SEPARATE_UNLOCKS,
+        SubRowId::SeparateUnlocksByPlayer,
         yes_no_choice_index(cfg.separate_unlocks_by_player),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_arrowcloud,
         ARROWCLOUD_OPTIONS_ROWS,
-        ARROWCLOUD_ROW_ENABLE,
+        SubRowId::EnableArrowCloud,
         yes_no_choice_index(cfg.enable_arrowcloud),
     );
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_arrowcloud,
         ARROWCLOUD_OPTIONS_ROWS,
-        ARROWCLOUD_ROW_SUBMIT_FAILS,
+        SubRowId::ArrowCloudSubmitFails,
         yes_no_choice_index(cfg.submit_arrowcloud_fails),
     );
     refresh_score_import_options(&mut state);
     refresh_null_or_die_options(&mut state);
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_score_import,
         SCORE_IMPORT_OPTIONS_ROWS,
-        SCORE_IMPORT_ROW_ONLY_MISSING,
+        SubRowId::ScoreImportOnlyMissing,
         yes_no_choice_index(false),
     );
     sync_submenu_cursor_indices(&mut state);
@@ -5656,10 +5833,10 @@ pub fn sync_display_resolution(state: &mut State, width: u32, height: u32) {
 }
 
 pub fn sync_show_stats_mode(state: &mut State, mode: u8) {
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
-        "Show Stats",
+        SubRowId::ShowStats,
         mode.min(3) as usize,
     );
     sync_submenu_cursor_indices(state);
@@ -5667,10 +5844,10 @@ pub fn sync_show_stats_mode(state: &mut State, mode: u8) {
 }
 
 pub fn sync_translated_titles(state: &mut State, enabled: bool) {
-    set_choice_by_label(
+    set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SELECT_MUSIC_ROW_NATIVE_LANGUAGE,
+        SubRowId::ShowNativeLanguage,
         translated_titles_choice_index(enabled),
     );
     sync_submenu_cursor_indices(state);
@@ -6641,12 +6818,12 @@ fn apply_submenu_choice_delta(
 
     if let Some(row) = rows.get(row_index) {
         // Block cycling disabled rows (e.g. dedicated menu buttons when unmapped).
-        if is_submenu_row_disabled(kind, row.label) {
+        if is_submenu_row_disabled(kind, row.id) {
             return None;
         }
         if matches!(kind, SubmenuKind::Sound) {
-            match row.label {
-                SOUND_ROW_MASTER_VOLUME => {
+            match row.id {
+                SubRowId::MasterVolume => {
                     if adjust_ms_value(
                         &mut state.master_volume_pct,
                         delta,
@@ -6659,7 +6836,7 @@ fn apply_submenu_choice_delta(
                     }
                     return None;
                 }
-                SOUND_ROW_SFX_VOLUME => {
+                SubRowId::SfxVolume => {
                     if adjust_ms_value(
                         &mut state.sfx_volume_pct,
                         delta,
@@ -6672,7 +6849,7 @@ fn apply_submenu_choice_delta(
                     }
                     return None;
                 }
-                SOUND_ROW_ASSIST_TICK_VOLUME => {
+                SubRowId::AssistTickVolume => {
                     if adjust_ms_value(
                         &mut state.assist_tick_volume_pct,
                         delta,
@@ -6685,7 +6862,7 @@ fn apply_submenu_choice_delta(
                     }
                     return None;
                 }
-                SOUND_ROW_MUSIC_VOLUME => {
+                SubRowId::MusicVolume => {
                     if adjust_ms_value(
                         &mut state.music_volume_pct,
                         delta,
@@ -6701,7 +6878,7 @@ fn apply_submenu_choice_delta(
                 _ => {}
             }
         }
-        if matches!(kind, SubmenuKind::Sound) && row.label == SOUND_ROW_GLOBAL_OFFSET {
+        if matches!(kind, SubmenuKind::Sound) && row.id == SubRowId::GlobalOffset {
             if adjust_ms_value(
                 &mut state.global_offset_ms,
                 delta,
@@ -6714,7 +6891,7 @@ fn apply_submenu_choice_delta(
             }
             return None;
         }
-        if matches!(kind, SubmenuKind::Graphics) && row.label == "Visual Delay (ms)" {
+        if matches!(kind, SubmenuKind::Graphics) && row.id == SubRowId::VisualDelay {
             if adjust_ms_value(
                 &mut state.visual_delay_ms,
                 delta,
@@ -6727,7 +6904,7 @@ fn apply_submenu_choice_delta(
             }
             return None;
         }
-        if matches!(kind, SubmenuKind::InputBackend) && row.label == INPUT_ROW_DEBOUNCE {
+        if matches!(kind, SubmenuKind::InputBackend) && row.id == SubRowId::Debounce {
             if adjust_ms_value(
                 &mut state.input_debounce_ms,
                 delta,
@@ -6741,8 +6918,8 @@ fn apply_submenu_choice_delta(
             return None;
         }
         if matches!(kind, SubmenuKind::NullOrDieOptions) {
-            match row.label {
-                NULL_OR_DIE_SETTING_ROW_FINGERPRINT => {
+            match row.id {
+                SubRowId::Fingerprint => {
                     if adjust_tenths_value(
                         &mut state.null_or_die_fingerprint_tenths,
                         delta,
@@ -6757,7 +6934,7 @@ fn apply_submenu_choice_delta(
                     }
                     return None;
                 }
-                NULL_OR_DIE_SETTING_ROW_WINDOW => {
+                SubRowId::Window => {
                     if adjust_tenths_value(
                         &mut state.null_or_die_window_tenths,
                         delta,
@@ -6772,7 +6949,7 @@ fn apply_submenu_choice_delta(
                     }
                     return None;
                 }
-                NULL_OR_DIE_SETTING_ROW_STEP => {
+                SubRowId::Step => {
                     if adjust_tenths_value(
                         &mut state.null_or_die_step_tenths,
                         delta,
@@ -6787,7 +6964,7 @@ fn apply_submenu_choice_delta(
                     }
                     return None;
                 }
-                NULL_OR_DIE_SETTING_ROW_MAGIC_OFFSET => {
+                SubRowId::MagicOffset => {
                     if adjust_tenths_value(
                         &mut state.null_or_die_magic_offset_tenths,
                         delta,
@@ -6846,13 +7023,13 @@ fn apply_submenu_choice_delta(
 
     if matches!(kind, SubmenuKind::System) {
         let row = &rows[row_index];
-        match row.label {
-            "Game" => config::update_game_flag(config::GameFlag::Dance),
-            "Theme" => config::update_theme_flag(config::ThemeFlag::SimplyLove),
-            "Language" => config::update_language_flag(config::LanguageFlag::English),
-            "Log Level" => config::update_log_level(log_level_from_choice(new_index)),
-            SYSTEM_ROW_LOG_FILE => config::update_log_to_file(new_index == 1),
-            "Default NoteSkin" => {
+        match row.id {
+            SubRowId::Game => config::update_game_flag(config::GameFlag::Dance),
+            SubRowId::Theme => config::update_theme_flag(config::ThemeFlag::SimplyLove),
+            SubRowId::Language => config::update_language_flag(config::LanguageFlag::English),
+            SubRowId::LogLevel => config::update_log_level(log_level_from_choice(new_index)),
+            SubRowId::LogFile => config::update_log_to_file(new_index == 1),
+            SubRowId::DefaultNoteSkin => {
                 if let Some(skin_name) = selected_choice.as_deref() {
                     profile::update_machine_default_noteskin(profile::NoteSkin::new(skin_name));
                 }
@@ -6861,160 +7038,160 @@ fn apply_submenu_choice_delta(
         }
     } else if matches!(kind, SubmenuKind::Graphics) {
         let row = &rows[row_index];
-        if row.label == "Display Aspect Ratio" {
+        if row.id == SubRowId::DisplayAspectRatio {
             let (cur_w, cur_h) = selected_resolution(state);
             rebuild_resolution_choices(state, cur_w, cur_h);
         }
-        if row.label == "Display Resolution" {
+        if row.id == SubRowId::DisplayResolution {
             rebuild_refresh_rate_choices(state);
         }
-        if row.label == "Display Mode" {
+        if row.id == SubRowId::DisplayMode {
             let (cur_w, cur_h) = selected_resolution(state);
             rebuild_resolution_choices(state, cur_w, cur_h);
         }
-        if row.label == "Refresh Rate" && state.max_fps_at_load == 0 && !max_fps_enabled(state) {
+        if row.id == SubRowId::RefreshRate && state.max_fps_at_load == 0 && !max_fps_enabled(state) {
             seed_max_fps_value_choice(state, 0);
         }
-        if row.label == GRAPHICS_ROW_MAX_FPS
+        if row.id == SubRowId::MaxFps
             && yes_no_from_choice(new_index)
             && state.max_fps_at_load == 0
         {
             seed_max_fps_value_choice(state, 0);
         }
-        if row.label == "Show Stats" {
+        if row.id == SubRowId::ShowStats {
             let mode = new_index.min(3) as u8;
             action = Some(ScreenAction::UpdateShowOverlay(mode));
         }
-        if row.label == GRAPHICS_ROW_VALIDATION_LAYERS {
+        if row.id == SubRowId::ValidationLayers {
             config::update_gfx_debug(yes_no_from_choice(new_index));
         }
-        if row.label == GRAPHICS_ROW_SOFTWARE_THREADS {
+        if row.id == SubRowId::SoftwareRendererThreads {
             let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
             config::update_software_renderer_threads(threads);
         }
     } else if matches!(kind, SubmenuKind::InputBackend) {
         let row = &rows[row_index];
-        if row.label == INPUT_ROW_BACKEND {
+        if row.id == SubRowId::GamepadBackend {
             #[cfg(target_os = "windows")]
             {
                 config::update_windows_gamepad_backend(windows_backend_from_choice(new_index));
             }
         }
-        if row.label == INPUT_ROW_MENU_NAVIGATION {
+        if row.id == SubRowId::MenuNavigation {
             config::update_three_key_navigation(new_index == 1);
         }
-        if row.label == INPUT_ROW_OPTIONS_NAVIGATION {
+        if row.id == SubRowId::OptionsNavigation {
             config::update_arcade_options_navigation(new_index == 1);
         }
-        if row.label == INPUT_ROW_DEDICATED_MENU_BUTTONS {
+        if row.id == SubRowId::MenuButtons {
             state.pending_dedicated_menu_buttons = Some(new_index == 1);
         }
     } else if matches!(kind, SubmenuKind::Machine) {
         let row = &rows[row_index];
         let enabled = new_index == 1;
-        match row.label {
-            MACHINE_ROW_SELECT_PROFILE => config::update_machine_show_select_profile(enabled),
-            MACHINE_ROW_SELECT_COLOR => config::update_machine_show_select_color(enabled),
-            MACHINE_ROW_SELECT_STYLE => config::update_machine_show_select_style(enabled),
-            MACHINE_ROW_PREFERRED_STYLE => config::update_machine_preferred_style(
+        match row.id {
+            SubRowId::SelectProfile => config::update_machine_show_select_profile(enabled),
+            SubRowId::SelectColor => config::update_machine_show_select_color(enabled),
+            SubRowId::SelectStyle => config::update_machine_show_select_style(enabled),
+            SubRowId::PreferredStyle => config::update_machine_preferred_style(
                 machine_preferred_style_from_choice(new_index),
             ),
-            MACHINE_ROW_SELECT_PLAY_MODE => config::update_machine_show_select_play_mode(enabled),
-            MACHINE_ROW_PREFERRED_MODE => config::update_machine_preferred_play_mode(
+            SubRowId::SelectPlayMode => config::update_machine_show_select_play_mode(enabled),
+            SubRowId::PreferredMode => config::update_machine_preferred_play_mode(
                 machine_preferred_mode_from_choice(new_index),
             ),
-            MACHINE_ROW_EVAL_SUMMARY => config::update_machine_show_eval_summary(enabled),
-            MACHINE_ROW_NAME_ENTRY => config::update_machine_show_name_entry(enabled),
-            MACHINE_ROW_GAMEOVER => config::update_machine_show_gameover(enabled),
-            MACHINE_ROW_MENU_MUSIC => config::update_menu_music(enabled),
-            MACHINE_ROW_REPLAYS => config::update_machine_enable_replays(enabled),
-            MACHINE_ROW_PER_PLAYER_GLOBAL_OFFSETS => {
+            SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),
+            SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
+            SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),
+            SubRowId::MenuMusic => config::update_menu_music(enabled),
+            SubRowId::Replays => config::update_machine_enable_replays(enabled),
+            SubRowId::PerPlayerGlobalOffsets => {
                 config::update_machine_allow_per_player_global_offsets(enabled)
             }
-            MACHINE_ROW_KEYBOARD_FEATURES => config::update_keyboard_features(enabled),
-            MACHINE_ROW_VIDEO_BGS => config::update_show_video_backgrounds(enabled),
-            MACHINE_ROW_WRITE_CURRENT_SCREEN => config::update_write_current_screen(enabled),
+            SubRowId::KeyboardFeatures => config::update_keyboard_features(enabled),
+            SubRowId::VideoBgs => config::update_show_video_backgrounds(enabled),
+            SubRowId::WriteCurrentScreen => config::update_write_current_screen(enabled),
             _ => {}
         }
     } else if matches!(kind, SubmenuKind::Advanced) {
         let row = &rows[row_index];
-        if row.label == ADVANCED_ROW_DEFAULT_FAIL_TYPE {
+        if row.id == SubRowId::DefaultFailType {
             config::update_default_fail_type(default_fail_type_from_choice(new_index));
-        } else if row.label == ADVANCED_ROW_BANNER_CACHE {
+        } else if row.id == SubRowId::BannerCache {
             config::update_banner_cache(new_index == 1);
-        } else if row.label == ADVANCED_ROW_CDTITLE_CACHE {
+        } else if row.id == SubRowId::CdTitleCache {
             config::update_cdtitle_cache(new_index == 1);
-        } else if row.label == ADVANCED_ROW_SONG_PARSING_THREADS {
+        } else if row.id == SubRowId::SongParsingThreads {
             let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
             config::update_song_parsing_threads(threads);
-        } else if row.label == ADVANCED_ROW_CACHE_SONGS {
+        } else if row.id == SubRowId::CacheSongs {
             config::update_cache_songs(new_index == 1);
-        } else if row.label == ADVANCED_ROW_FAST_LOAD {
+        } else if row.id == SubRowId::FastLoad {
             config::update_fastload(new_index == 1);
         }
     } else if matches!(kind, SubmenuKind::NullOrDieOptions) {
         let row = &rows[row_index];
-        if row.label == NULL_OR_DIE_SETTING_ROW_SYNC_GRAPH {
+        if row.id == SubRowId::SyncGraph {
             config::update_null_or_die_sync_graph(sync_graph_mode_from_choice(new_index));
-        } else if row.label == NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE {
+        } else if row.id == SubRowId::SyncConfidence {
             config::update_null_or_die_confidence_percent(sync_confidence_from_choice(new_index));
-        } else if row.label == NULL_OR_DIE_SETTING_ROW_PACK_SYNC_THREADS {
+        } else if row.id == SubRowId::PackSyncThreads {
             let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
             config::update_null_or_die_pack_sync_threads(threads);
-        } else if row.label == NULL_OR_DIE_SETTING_ROW_KERNEL_TARGET {
+        } else if row.id == SubRowId::KernelTarget {
             config::update_null_or_die_kernel_target(null_or_die_kernel_target_from_choice(
                 new_index,
             ));
-        } else if row.label == NULL_OR_DIE_SETTING_ROW_KERNEL_TYPE {
+        } else if row.id == SubRowId::KernelType {
             config::update_null_or_die_kernel_type(null_or_die_kernel_type_from_choice(new_index));
-        } else if row.label == NULL_OR_DIE_SETTING_ROW_FULL_SPECTROGRAM {
+        } else if row.id == SubRowId::FullSpectrogram {
             config::update_null_or_die_full_spectrogram(yes_no_from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::Course) {
         let row = &rows[row_index];
         let enabled = yes_no_from_choice(new_index);
-        match row.label {
-            COURSE_ROW_SHOW_RANDOM => config::update_show_random_courses(enabled),
-            COURSE_ROW_SHOW_MOST_PLAYED => config::update_show_most_played_courses(enabled),
-            COURSE_ROW_SHOW_INDIVIDUAL_SCORES => {
+        match row.id {
+            SubRowId::ShowRandomCourses => config::update_show_random_courses(enabled),
+            SubRowId::ShowMostPlayed => config::update_show_most_played_courses(enabled),
+            SubRowId::ShowIndividualScores => {
                 config::update_show_course_individual_scores(enabled)
             }
-            COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES => {
+            SubRowId::AutosubmitIndividual => {
                 config::update_autosubmit_course_scores_individually(enabled)
             }
             _ => {}
         }
     } else if matches!(kind, SubmenuKind::Gameplay) {
         let row = &rows[row_index];
-        if row.label == GAMEPLAY_ROW_BG_BRIGHTNESS {
+        if row.id == SubRowId::BgBrightness {
             config::update_bg_brightness(bg_brightness_from_choice(new_index));
-        } else if row.label == GAMEPLAY_ROW_CENTERED_P1 {
+        } else if row.id == SubRowId::CenteredP1Notefield {
             config::update_center_1player_notefield(new_index == 1);
-        } else if row.label == GAMEPLAY_ROW_ZMOD_RATING_BOX {
+        } else if row.id == SubRowId::ZmodRatingBox {
             config::update_zmod_rating_box_text(new_index == 1);
-        } else if row.label == GAMEPLAY_ROW_BPM_DECIMAL {
+        } else if row.id == SubRowId::BpmDecimal {
             config::update_show_bpm_decimal(new_index == 1);
         }
     } else if matches!(kind, SubmenuKind::Sound) {
         let row = &rows[row_index];
-        match row.label {
-            SOUND_ROW_MASTER_VOLUME => {
+        match row.id {
+            SubRowId::MasterVolume => {
                 let vol = master_volume_from_choice(new_index);
                 config::update_master_volume(vol);
             }
-            SOUND_ROW_SFX_VOLUME => {
+            SubRowId::SfxVolume => {
                 let vol = master_volume_from_choice(new_index);
                 config::update_sfx_volume(vol);
             }
-            SOUND_ROW_ASSIST_TICK_VOLUME => {
+            SubRowId::AssistTickVolume => {
                 let vol = master_volume_from_choice(new_index);
                 config::update_assist_tick_volume(vol);
             }
-            SOUND_ROW_MUSIC_VOLUME => {
+            SubRowId::MusicVolume => {
                 let vol = master_volume_from_choice(new_index);
                 config::update_music_volume(vol);
             }
-            SOUND_ROW_DEVICE => {
+            SubRowId::SoundDevice => {
                 let device = sound_device_from_choice(state, new_index);
                 config::update_audio_output_device(device);
                 let current_rate = config::get().audio_sample_rate_hz;
@@ -7022,21 +7199,21 @@ fn apply_submenu_choice_delta(
                 if current_rate.is_some() && rate_choice == 0 {
                     config::update_audio_sample_rate(None);
                 }
-                set_sound_choice_index(state, SOUND_ROW_SAMPLE_RATE, rate_choice);
+                set_sound_choice_index(state, SubRowId::AudioSampleRate, rate_choice);
             }
-            SOUND_ROW_OUTPUT_MODE => {
+            SubRowId::AudioOutputMode => {
                 config::update_audio_output_mode(audio_output_mode_from_choice(new_index));
                 #[cfg(target_os = "linux")]
-                set_sound_choice_index(state, SOUND_ROW_ALSA_EXCLUSIVE, 0);
+                set_sound_choice_index(state, SubRowId::AlsaExclusive, 0);
             }
             #[cfg(target_os = "linux")]
-            SOUND_ROW_LINUX_BACKEND => {
+            SubRowId::LinuxAudioBackend => {
                 let backend = linux_audio_backend_from_choice(state, new_index);
                 config::update_linux_audio_backend(backend);
                 if matches!(backend, config::LinuxAudioBackend::Alsa) {
                     set_sound_choice_index(
                         state,
-                        SOUND_ROW_ALSA_EXCLUSIVE,
+                        SubRowId::AlsaExclusive,
                         alsa_exclusive_choice_index(config::get().audio_output_mode),
                     );
                 } else {
@@ -7046,11 +7223,11 @@ fn apply_submenu_choice_delta(
                     ) {
                         config::update_audio_output_mode(selected_audio_output_mode(state));
                     }
-                    set_sound_choice_index(state, SOUND_ROW_ALSA_EXCLUSIVE, 0);
+                    set_sound_choice_index(state, SubRowId::AlsaExclusive, 0);
                 }
             }
             #[cfg(target_os = "linux")]
-            SOUND_ROW_ALSA_EXCLUSIVE => {
+            SubRowId::AlsaExclusive => {
                 let mode = if new_index == 1 {
                     config::AudioOutputMode::Exclusive
                 } else {
@@ -7058,99 +7235,99 @@ fn apply_submenu_choice_delta(
                 };
                 config::update_audio_output_mode(mode);
             }
-            SOUND_ROW_SAMPLE_RATE => {
+            SubRowId::AudioSampleRate => {
                 let rate = sample_rate_from_choice(state, new_index);
                 config::update_audio_sample_rate(rate);
             }
-            SOUND_ROW_MINE_SOUNDS => {
+            SubRowId::MineSounds => {
                 config::update_mine_hit_sound(new_index == 1);
             }
-            SOUND_ROW_RATEMOD_PITCH => {
+            SubRowId::RateModPreservesPitch => {
                 config::update_rate_mod_preserves_pitch(new_index == 1);
             }
             _ => {}
         }
     } else if matches!(kind, SubmenuKind::SelectMusic) {
         let row = &rows[row_index];
-        if row.label == SELECT_MUSIC_ROW_SHOW_BANNERS {
+        if row.id == SubRowId::ShowBanners {
             config::update_show_select_music_banners(yes_no_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_SHOW_VIDEO_BANNERS {
+        } else if row.id == SubRowId::ShowVideoBanners {
             config::update_show_select_music_video_banners(yes_no_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_SHOW_BREAKDOWN {
+        } else if row.id == SubRowId::ShowBreakdown {
             config::update_show_select_music_breakdown(yes_no_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_BREAKDOWN_STYLE {
+        } else if row.id == SubRowId::BreakdownStyle {
             config::update_select_music_breakdown_style(breakdown_style_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_NATIVE_LANGUAGE {
+        } else if row.id == SubRowId::ShowNativeLanguage {
             config::update_translated_titles(translated_titles_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_WHEEL_SPEED {
+        } else if row.id == SubRowId::MusicWheelSpeed {
             config::update_music_wheel_switch_speed(music_wheel_scroll_speed_from_choice(
                 new_index,
             ));
-        } else if row.label == SELECT_MUSIC_ROW_WHEEL_STYLE {
+        } else if row.id == SubRowId::MusicWheelStyle {
             config::update_select_music_wheel_style(select_music_wheel_style_from_choice(
                 new_index,
             ));
-        } else if row.label == SELECT_MUSIC_ROW_CDTITLES {
+        } else if row.id == SubRowId::ShowCdTitles {
             config::update_show_select_music_cdtitles(yes_no_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_WHEEL_GRADES {
+        } else if row.id == SubRowId::ShowWheelGrades {
             config::update_show_music_wheel_grades(yes_no_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_WHEEL_LAMPS {
+        } else if row.id == SubRowId::ShowWheelLamps {
             config::update_show_music_wheel_lamps(yes_no_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_WHEEL_ITL {
+        } else if row.id == SubRowId::ItlWheelData {
             config::update_select_music_itl_wheel_mode(select_music_itl_wheel_from_choice(
                 new_index,
             ));
-        } else if row.label == SELECT_MUSIC_ROW_NEW_PACKS {
+        } else if row.id == SubRowId::NewPackBadge {
             config::update_select_music_new_pack_mode(new_pack_mode_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_PATTERN_INFO {
+        } else if row.id == SubRowId::ShowPatternInfo {
             config::update_select_music_pattern_info_mode(select_music_pattern_info_from_choice(
                 new_index,
             ));
-        } else if row.label == SELECT_MUSIC_ROW_PREVIEWS {
+        } else if row.id == SubRowId::MusicPreviews {
             config::update_show_select_music_previews(yes_no_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_PREVIEW_MARKER {
+        } else if row.id == SubRowId::PreviewMarker {
             config::update_show_select_music_preview_marker(yes_no_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_PREVIEW_LOOP {
+        } else if row.id == SubRowId::LoopMusic {
             config::update_select_music_preview_loop(new_index == 1);
-        } else if row.label == SELECT_MUSIC_ROW_GAMEPLAY_TIMER {
+        } else if row.id == SubRowId::ShowGameplayTimer {
             config::update_show_select_music_gameplay_timer(yes_no_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_SHOW_RIVALS {
+        } else if row.id == SubRowId::ShowGsBox {
             config::update_show_select_music_scorebox(yes_no_from_choice(new_index));
-        } else if row.label == SELECT_MUSIC_ROW_SCOREBOX_PLACEMENT {
+        } else if row.id == SubRowId::GsBoxPlacement {
             config::update_select_music_scorebox_placement(
                 select_music_scorebox_placement_from_choice(new_index),
             );
         }
     } else if matches!(kind, SubmenuKind::GrooveStats) {
         let row = &rows[row_index];
-        if row.label == GS_ROW_ENABLE {
+        if row.id == SubRowId::EnableGrooveStats {
             let enabled = yes_no_from_choice(new_index);
             config::update_enable_groovestats(enabled);
             // Re-run connectivity logic so toggling this option applies immediately.
             crate::game::online::init();
-        } else if row.label == GS_ROW_ENABLE_BOOGIE {
+        } else if row.id == SubRowId::EnableBoogieStats {
             config::update_enable_boogiestats(yes_no_from_choice(new_index));
             crate::game::online::init();
-        } else if row.label == GS_ROW_SUBMIT_FAILS {
+        } else if row.id == SubRowId::GsSubmitFails {
             config::update_submit_groovestats_fails(yes_no_from_choice(new_index));
-        } else if row.label == GS_ROW_AUTO_POPULATE {
+        } else if row.id == SubRowId::AutoPopulateScores {
             config::update_auto_populate_gs_scores(yes_no_from_choice(new_index));
-        } else if row.label == GS_ROW_AUTO_DOWNLOAD_UNLOCKS {
+        } else if row.id == SubRowId::AutoDownloadUnlocks {
             config::update_auto_download_unlocks(yes_no_from_choice(new_index));
-        } else if row.label == GS_ROW_SEPARATE_UNLOCKS {
+        } else if row.id == SubRowId::SeparateUnlocksByPlayer {
             config::update_separate_unlocks_by_player(yes_no_from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::ArrowCloud) {
         let row = &rows[row_index];
-        if row.label == ARROWCLOUD_ROW_ENABLE {
+        if row.id == SubRowId::EnableArrowCloud {
             config::update_enable_arrowcloud(yes_no_from_choice(new_index));
             crate::game::online::init();
-        } else if row.label == ARROWCLOUD_ROW_SUBMIT_FAILS {
+        } else if row.id == SubRowId::ArrowCloudSubmitFails {
             config::update_submit_arrowcloud_fails(yes_no_from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::ScoreImport) {
         let row = &rows[row_index];
-        if row.label == SCORE_IMPORT_ROW_ENDPOINT {
+        if row.id == SubRowId::ScoreImportEndpoint {
             refresh_score_import_profile_options(state);
         }
     }
@@ -7316,8 +7493,8 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                 && let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row)
             {
                 let rows = submenu_rows(kind);
-                let row_label = rows.get(row_idx).map(|row| row.label);
-                if row_label == Some(SELECT_MUSIC_ROW_SCOREBOX_CYCLE) {
+                let row_id = rows.get(row_idx).map(|row| row.id);
+                if row_id == Some(SubRowId::GsBoxLeaderboards) {
                     let choice_idx = submenu_cursor_indices(state, kind)
                         .get(row_idx)
                         .copied()
@@ -7325,7 +7502,7 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                         .min(SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES.saturating_sub(1));
                     toggle_select_music_scorebox_cycle_option(state, choice_idx);
                     return ScreenAction::None;
-                } else if row_label == Some(SELECT_MUSIC_ROW_CHART_INFO) {
+                } else if row_id == Some(SubRowId::ChartInfo) {
                     let choice_idx = submenu_cursor_indices(state, kind)
                         .get(row_idx)
                         .copied()
@@ -7339,7 +7516,7 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                 && let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row)
             {
                 let rows = submenu_rows(kind);
-                if rows.get(row_idx).map(|row| row.label) == Some(GAMEPLAY_ROW_AUTO_SCREENSHOT) {
+                if rows.get(row_idx).map(|row| row.id) == Some(SubRowId::AutoScreenshot) {
                     let choice_idx = submenu_cursor_indices(state, kind)
                         .get(row_idx)
                         .copied()
@@ -7367,16 +7544,16 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                     return ScreenAction::None;
                 };
                 if let Some(row) = rows.get(row_idx) {
-                    match row.label {
-                        INPUT_ROW_CONFIGURE_MAPPINGS => {
+                    match row.id {
+                        SubRowId::ConfigureMappings => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             return ScreenAction::Navigate(Screen::Mappings);
                         }
-                        INPUT_ROW_TEST => {
+                        SubRowId::TestInput => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             return ScreenAction::Navigate(Screen::Input);
                         }
-                        INPUT_ROW_OPTIONS => {
+                        SubRowId::InputOptions => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::InputBackend);
                             state.pending_submenu_parent_kind = Some(SubmenuKind::Input);
@@ -7393,8 +7570,8 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                     return ScreenAction::None;
                 };
                 if let Some(row) = rows.get(row_idx) {
-                    match row.label {
-                        ONLINE_SCORING_ROW_GS_BS => {
+                    match row.id {
+                        SubRowId::GsBsOptions => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::GrooveStats);
                             state.pending_submenu_parent_kind = Some(SubmenuKind::OnlineScoring);
@@ -7402,7 +7579,7 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                             state.submenu_fade_t = 0.0;
                             return ScreenAction::None;
                         }
-                        ONLINE_SCORING_ROW_ARROWCLOUD => {
+                        SubRowId::ArrowCloudOptions => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::ArrowCloud);
                             state.pending_submenu_parent_kind = Some(SubmenuKind::OnlineScoring);
@@ -7410,7 +7587,7 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                             state.submenu_fade_t = 0.0;
                             return ScreenAction::None;
                         }
-                        ONLINE_SCORING_ROW_SCORE_IMPORT => {
+                        SubRowId::ScoreImport => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             refresh_score_import_options(state);
                             state.pending_submenu_kind = Some(SubmenuKind::ScoreImport);
@@ -7428,8 +7605,8 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                     return ScreenAction::None;
                 };
                 if let Some(row) = rows.get(row_idx) {
-                    match row.label {
-                        NULL_OR_DIE_ROW_OPTIONS => {
+                    match row.id {
+                        SubRowId::NullOrDieOptions => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::NullOrDieOptions);
                             state.pending_submenu_parent_kind = Some(SubmenuKind::NullOrDie);
@@ -7437,7 +7614,7 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                             state.submenu_fade_t = 0.0;
                             return ScreenAction::None;
                         }
-                        NULL_OR_DIE_ROW_SYNC_PACKS => {
+                        SubRowId::SyncPacks => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             refresh_sync_pack_options(state);
                             state.pending_submenu_kind = Some(SubmenuKind::SyncPacks);
@@ -7455,7 +7632,7 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                     return ScreenAction::None;
                 };
                 if let Some(row) = rows.get(row_idx)
-                    && row.label == SCORE_IMPORT_ROW_START
+                    && row.id == SubRowId::ScoreImportStart
                 {
                     audio::play_sfx("assets/sounds/start.ogg");
                     if let Some(selection) = selected_score_import_selection(state) {
@@ -7481,7 +7658,7 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                     return ScreenAction::None;
                 };
                 if let Some(row) = rows.get(row_idx)
-                    && row.label == SYNC_PACK_ROW_START
+                    && row.id == SubRowId::SyncPackStart
                 {
                     audio::play_sfx("assets/sounds/start.ogg");
                     let selection = selected_sync_pack_selection(state);
@@ -8929,9 +9106,9 @@ pub fn get_actors(
 
                     let text_x = if is_exit { heart_x } else { text_x_base };
                     let label = if row_idx < rows.len() {
-                        rows[row_idx].label
+                        rows[row_idx].label.get()
                     } else {
-                        "Exit"
+                        Arc::from("Exit")
                     };
                     let mut text_color = if is_exit {
                         if is_active { col_black } else { col_white }
@@ -8947,7 +9124,7 @@ pub fn get_actors(
                         zoom(ITEM_TEXT_ZOOM):
                         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
                         font("miso"):
-                        settext(label):
+                        settext(&label):
                         horizalign(left)
                     ));
 
@@ -9099,8 +9276,8 @@ pub fn get_actors(
                         ));
 
                         let row = &rows[actual_row_idx];
-                        let label = row.label;
-                        let is_disabled = is_submenu_row_disabled(kind, row.label);
+                        let label = row.label.get();
+                        let is_disabled = is_submenu_row_disabled(kind, row.id);
                         #[cfg(target_os = "linux")]
                         let child_label_indent = if matches!(kind, SubmenuKind::Sound)
                             && sound_parent_row(actual_row_idx).is_some()
@@ -9129,7 +9306,7 @@ pub fn get_actors(
                             zoom(ITEM_TEXT_ZOOM):
                             diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                             font("miso"):
-                            settext(label):
+                            settext(&label):
                             maxwidth(label_text_max_w):
                             horizalign(left)
                         ));
@@ -9146,11 +9323,11 @@ pub fn get_actors(
                                 .unwrap_or(0)
                                 .min(layout.texts.len().saturating_sub(1));
                             let is_chart_info_row = matches!(kind, SubmenuKind::SelectMusic)
-                                && row.label == SELECT_MUSIC_ROW_CHART_INFO;
+                                && row.id == SubRowId::ChartInfo;
                             let is_scorebox_cycle_row = matches!(kind, SubmenuKind::SelectMusic)
-                                && row.label == SELECT_MUSIC_ROW_SCOREBOX_CYCLE;
+                                && row.id == SubRowId::GsBoxLeaderboards;
                             let is_auto_screenshot_row = matches!(kind, SubmenuKind::Gameplay)
-                                && row.label == GAMEPLAY_ROW_AUTO_SCREENSHOT;
+                                && row.id == SubRowId::AutoScreenshot;
                             let is_multi_toggle_row = is_chart_info_row
                                 || is_scorebox_cycle_row
                                 || is_auto_screenshot_row;
