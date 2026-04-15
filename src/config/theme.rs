@@ -442,13 +442,24 @@ impl FromStr for ThemeFlag {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LanguageFlag {
+    Auto,
     English,
 }
 
 impl LanguageFlag {
+    /// Returns the locale code persisted to `deadsync.ini`.
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::Auto => "auto",
             Self::English => "English",
+        }
+    }
+
+    /// Returns the locale code used by the i18n system.
+    pub const fn locale_code(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::English => "en",
         }
     }
 }
@@ -458,7 +469,8 @@ impl FromStr for LanguageFlag {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_ascii_lowercase().as_str() {
-            "english" => Ok(Self::English),
+            "auto" => Ok(Self::Auto),
+            "english" | "en" => Ok(Self::English),
             _ => Err(()),
         }
     }

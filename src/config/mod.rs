@@ -262,7 +262,7 @@ impl Default for Config {
             display_monitor: 0,
             game_flag: GameFlag::Dance,
             theme_flag: ThemeFlag::SimplyLove,
-            language_flag: LanguageFlag::English,
+            language_flag: LanguageFlag::Auto,
             log_level: LogLevel::Warn,
             log_to_file: true,
             write_current_screen: false,
