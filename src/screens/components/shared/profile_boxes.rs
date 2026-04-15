@@ -1361,12 +1361,7 @@ fn push_scroller_frame(
     if selected_is_local {
         let selected_mods = selected
             .map(|c| {
-                format_recent_mods(
-                    &c.speed_mod,
-                    c.scroll_option,
-                    c.mini_indicator,
-                    &c.noteskin,
-                )
+                format_recent_mods(&c.speed_mod, c.scroll_option, c.mini_indicator, &c.noteskin)
             })
             .unwrap_or_default();
         let preview_y = frame_cy + PREVIEW_Y_OFF;

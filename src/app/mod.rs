@@ -7080,7 +7080,9 @@ mod tests {
             score_percent: 0.0,
             grade: crate::game::scores::Grade::Tier01,
             speed_mod,
-            noteskin_name: crate::game::profile::get_for_side(side).noteskin.to_string(),
+            noteskin_name: crate::game::profile::get_for_side(side)
+                .noteskin
+                .to_string(),
             hands_achieved: 0,
             hands_total: 0,
             holds_held: 0,
