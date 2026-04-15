@@ -386,12 +386,20 @@ pub enum ItemId {
     SiStart,
 }
 
+/// An entry in the help/description pane for an option item.
+#[derive(Clone, Copy)]
+pub enum HelpEntry {
+    /// Description paragraph text.
+    Paragraph(LookupKey),
+    /// Bullet point item (rendered with "•" prefix).
+    Bullet(LookupKey),
+}
+
 /// A simple item model with help text for the description box.
 pub struct Item {
     pub id: ItemId,
     pub name: LookupKey,
-    pub help_title: LookupKey,
-    pub help_bullets: &'static [LookupKey],
+    pub help: &'static [HelpEntry],
 }
 
 /// Description pane layout (mirrors Simply Love's `ScreenOptionsService` overlay).
@@ -431,175 +439,180 @@ pub const ITEMS: &[Item] = &[
     Item {
         id: ItemId::SystemOptions,
         name: lookup_key("Options", "SystemOptions"),
-        help_title: lookup_key("OptionsHelp", "SystemOptionsHelp"),
-        help_bullets: &[
-            lookup_key("OptionsSystem", "Game"),
-            lookup_key("OptionsSystem", "Theme"),
-            lookup_key("OptionsSystem", "Language"),
-            lookup_key("OptionsSystem", "LogFile"),
-            lookup_key("OptionsSystem", "DefaultNoteSkin"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "SystemOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsSystem", "Game")),
+            HelpEntry::Bullet(lookup_key("OptionsSystem", "Theme")),
+            HelpEntry::Bullet(lookup_key("OptionsSystem", "Language")),
+            HelpEntry::Bullet(lookup_key("OptionsSystem", "LogFile")),
+            HelpEntry::Bullet(lookup_key("OptionsSystem", "DefaultNoteSkin")),
         ],
     },
     Item {
         id: ItemId::GraphicsOptions,
         name: lookup_key("Options", "GraphicsOptions"),
-        help_title: lookup_key("OptionsHelp", "GraphicsOptionsHelp"),
-        help_bullets: &[
-            lookup_key("OptionsGraphics", "VideoRenderer"),
-            lookup_key("OptionsGraphics", "DisplayMode"),
-            lookup_key("OptionsGraphics", "DisplayAspectRatio"),
-            lookup_key("OptionsGraphics", "DisplayResolution"),
-            lookup_key("OptionsGraphics", "RefreshRate"),
-            lookup_key("OptionsGraphics", "FullscreenType"),
-            lookup_key("OptionsGraphics", "VSync"),
-            lookup_key("OptionsGraphics", "PresentMode"),
-            lookup_key("OptionsGraphics", "MaxFps"),
-            lookup_key("OptionsGraphics", "ShowStats"),
-            lookup_key("OptionsGraphics", "VisualDelay"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "GraphicsOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "VideoRenderer")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "DisplayMode")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "DisplayAspectRatio")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "DisplayResolution")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "RefreshRate")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "FullscreenType")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "VSync")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "PresentMode")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "MaxFps")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "ShowStats")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "VisualDelay")),
         ],
     },
     Item {
         id: ItemId::SoundOptions,
         name: lookup_key("Options", "SoundOptions"),
-        help_title: lookup_key("OptionsHelp", "SoundOptionsHelp"),
-        help_bullets: &[
-            lookup_key("OptionsSound", "SoundDevice"),
-            lookup_key("OptionsSound", "AudioSampleRate"),
-            lookup_key("OptionsSound", "MasterVolume"),
-            lookup_key("OptionsSound", "SfxVolume"),
-            lookup_key("OptionsSound", "AssistTickVolume"),
-            lookup_key("OptionsSound", "MusicVolume"),
-            lookup_key("OptionsSound", "MineSounds"),
-            lookup_key("OptionsSound", "GlobalOffset"),
-            lookup_key("OptionsSound", "RateModPreservesPitch"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "SoundOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsSound", "SoundDevice")),
+            HelpEntry::Bullet(lookup_key("OptionsSound", "AudioSampleRate")),
+            HelpEntry::Bullet(lookup_key("OptionsSound", "MasterVolume")),
+            HelpEntry::Bullet(lookup_key("OptionsSound", "SfxVolume")),
+            HelpEntry::Bullet(lookup_key("OptionsSound", "AssistTickVolume")),
+            HelpEntry::Bullet(lookup_key("OptionsSound", "MusicVolume")),
+            HelpEntry::Bullet(lookup_key("OptionsSound", "MineSounds")),
+            HelpEntry::Bullet(lookup_key("OptionsSound", "GlobalOffset")),
+            HelpEntry::Bullet(lookup_key("OptionsSound", "RateModPreservesPitch")),
         ],
     },
     Item {
         id: ItemId::InputOptions,
         name: lookup_key("Options", "InputOptions"),
-        help_title: lookup_key("OptionsHelp", "InputOptionsHelp"),
-        help_bullets: &[
-            lookup_key("OptionsInput", "ConfigureMappings"),
-            lookup_key("OptionsInput", "TestInput"),
-            lookup_key("OptionsInput", "InputOptions"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "InputOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "ConfigureMappings")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "TestInput")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "InputOptions")),
         ],
     },
     Item {
         id: ItemId::MachineOptions,
         name: lookup_key("Options", "MachineOptions"),
-        help_title: lookup_key("OptionsHelp", "MachineOptionsHelp"),
-        help_bullets: &[
-            lookup_key("OptionsMachine", "SelectProfile"),
-            lookup_key("OptionsMachine", "SelectColor"),
-            lookup_key("OptionsMachine", "SelectStyle"),
-            lookup_key("OptionsMachine", "SelectPlayMode"),
-            lookup_key("OptionsMachine", "EvalSummary"),
-            lookup_key("OptionsMachine", "NameEntry"),
-            lookup_key("OptionsMachine", "GameoverScreen"),
-            lookup_key("OptionsMachine", "MenuMusic"),
-            lookup_key("OptionsMachine", "KeyboardFeatures"),
-            lookup_key("OptionsMachine", "VideoBgs"),
-            lookup_key("OptionsMachine", "WriteCurrentScreen"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "MachineOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectProfile")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectColor")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectStyle")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectPlayMode")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "EvalSummary")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "NameEntry")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "GameoverScreen")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuMusic")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "KeyboardFeatures")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "VideoBgs")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "WriteCurrentScreen")),
         ],
     },
     Item {
         id: ItemId::GameplayOptions,
         name: lookup_key("Options", "GameplayOptions"),
-        help_title: lookup_key("OptionsHelp", "GameplayOptionsHelp"),
-        help_bullets: &[
-            lookup_key("OptionsGameplay", "BgBrightness"),
-            lookup_key("OptionsGameplay", "CenteredP1Notefield"),
-            lookup_key("OptionsGameplay", "ZmodRatingBox"),
-            lookup_key("OptionsGameplay", "BpmDecimal"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "GameplayOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsGameplay", "BgBrightness")),
+            HelpEntry::Bullet(lookup_key("OptionsGameplay", "CenteredP1Notefield")),
+            HelpEntry::Bullet(lookup_key("OptionsGameplay", "ZmodRatingBox")),
+            HelpEntry::Bullet(lookup_key("OptionsGameplay", "BpmDecimal")),
         ],
     },
     Item {
         id: ItemId::SelectMusicOptions,
         name: lookup_key("Options", "SelectMusicOptions"),
-        help_title: lookup_key("OptionsHelp", "SelectMusicOptionsHelp"),
-        help_bullets: &[
-            lookup_key("OptionsSelectMusic", "ShowBanners"),
-            lookup_key("OptionsSelectMusic", "ShowVideoBanners"),
-            lookup_key("OptionsSelectMusic", "ShowBreakdown"),
-            lookup_key("OptionsSelectMusic", "ShowNativeLanguage"),
-            lookup_key("OptionsSelectMusic", "MusicWheelSpeed"),
-            lookup_key("OptionsSelectMusic", "ShowCdTitles"),
-            lookup_key("OptionsSelectMusic", "ShowWheelGrades"),
-            lookup_key("OptionsSelectMusic", "ShowWheelLamps"),
-            lookup_key("OptionsSelectMusic", "NewPackBadge"),
-            lookup_key("OptionsSelectMusic", "ShowPatternInfo"),
-            lookup_key("OptionsSelectMusic", "ChartInfo"),
-            lookup_key("OptionsSelectMusic", "MusicPreviews"),
-            lookup_key("OptionsSelectMusic", "ShowGameplayTimer"),
-            lookup_key("OptionsSelectMusic", "ShowGsBox"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "SelectMusicOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowBanners")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowVideoBanners")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowBreakdown")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowNativeLanguage")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "MusicWheelSpeed")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowCdTitles")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowWheelGrades")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowWheelLamps")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "NewPackBadge")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowPatternInfo")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ChartInfo")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "MusicPreviews")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowGameplayTimer")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowGsBox")),
         ],
     },
     Item {
         id: ItemId::AdvancedOptions,
         name: lookup_key("Options", "AdvancedOptions"),
-        help_title: lookup_key("OptionsHelp", "AdvancedOptionsHelp"),
-        help_bullets: &[
-            lookup_key("OptionsAdvanced", "DefaultFailType"),
-            lookup_key("OptionsAdvanced", "BannerCache"),
-            lookup_key("OptionsAdvanced", "CdTitleCache"),
-            lookup_key("OptionsAdvanced", "SongParsingThreads"),
-            lookup_key("OptionsAdvanced", "CacheSongs"),
-            lookup_key("OptionsAdvanced", "FastLoad"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "AdvancedOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsAdvanced", "DefaultFailType")),
+            HelpEntry::Bullet(lookup_key("OptionsAdvanced", "BannerCache")),
+            HelpEntry::Bullet(lookup_key("OptionsAdvanced", "CdTitleCache")),
+            HelpEntry::Bullet(lookup_key("OptionsAdvanced", "SongParsingThreads")),
+            HelpEntry::Bullet(lookup_key("OptionsAdvanced", "CacheSongs")),
+            HelpEntry::Bullet(lookup_key("OptionsAdvanced", "FastLoad")),
         ],
     },
     Item {
         id: ItemId::CourseOptions,
         name: lookup_key("Options", "CourseOptions"),
-        help_title: lookup_key("OptionsHelp", "CourseOptionsHelp"),
-        help_bullets: &[
-            lookup_key("OptionsCourse", "ShowRandomCourses"),
-            lookup_key("OptionsCourse", "ShowMostPlayed"),
-            lookup_key("OptionsCourse", "ShowIndividualScores"),
-            lookup_key("OptionsCourse", "AutosubmitIndividual"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "CourseOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsCourse", "ShowRandomCourses")),
+            HelpEntry::Bullet(lookup_key("OptionsCourse", "ShowMostPlayed")),
+            HelpEntry::Bullet(lookup_key("OptionsCourse", "ShowIndividualScores")),
+            HelpEntry::Bullet(lookup_key("OptionsCourse", "AutosubmitIndividual")),
         ],
     },
     Item {
         id: ItemId::ManageLocalProfiles,
         name: lookup_key("Options", "ManageLocalProfiles"),
-        help_title: lookup_key("OptionsHelp", "ManageLocalProfilesHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ManageLocalProfilesHelp",
+        ))],
     },
     Item {
         id: ItemId::OnlineScoreServices,
         name: lookup_key("Options", "OnlineScoreServices"),
-        help_title: lookup_key("OptionsHelp", "OnlineScoreServicesHelp"),
-        help_bullets: &[
-            lookup_key("OptionsOnlineScoring", "GsBsOptions"),
-            lookup_key("OptionsOnlineScoring", "ArrowCloudOptions"),
-            lookup_key("OptionsOnlineScoring", "ScoreImport"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "OnlineScoreServicesHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "GsBsOptions")),
+            HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "ArrowCloudOptions")),
+            HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "ScoreImport")),
         ],
     },
     Item {
         id: ItemId::NullOrDieOptions,
         name: lookup_key("Options", "NullOrDieOptions"),
-        help_title: lookup_key("OptionsHelp", "NullOrDieOptionsHelp"),
-        help_bullets: &[
-            lookup_key("OptionsOnlineScoring", "NullOrDieOptions"),
-            lookup_key("OptionsOnlineScoring", "SyncPacks"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "NullOrDieOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "NullOrDieOptions")),
+            HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "SyncPacks")),
         ],
     },
     Item {
         id: ItemId::ReloadSongsCourses,
         name: lookup_key("Options", "ReloadSongsCourses"),
-        help_title: lookup_key("OptionsHelp", "ReloadSongsCoursesHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ReloadSongsCoursesHelp",
+        ))],
     },
     Item {
         id: ItemId::Credits,
         name: lookup_key("Options", "Credits"),
-        help_title: lookup_key("OptionsHelp", "CreditsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "CreditsHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key("OptionsHelp", "ExitHelp"))],
     },
 ];
 
@@ -1193,44 +1206,58 @@ pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::SysGame,
         name: lookup_key("OptionsSystem", "Game"),
-        help_title: lookup_key("OptionsSystemHelp", "GameHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSystemHelp",
+            "GameHelp",
+        ))],
     },
     Item {
         id: ItemId::SysTheme,
         name: lookup_key("OptionsSystem", "Theme"),
-        help_title: lookup_key("OptionsSystemHelp", "ThemeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSystemHelp",
+            "ThemeHelp",
+        ))],
     },
     Item {
         id: ItemId::SysLanguage,
         name: lookup_key("OptionsSystem", "Language"),
-        help_title: lookup_key("OptionsSystemHelp", "LanguageHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSystemHelp",
+            "LanguageHelp",
+        ))],
     },
     Item {
         id: ItemId::SysLogLevel,
         name: lookup_key("OptionsSystem", "LogLevel"),
-        help_title: lookup_key("OptionsSystemHelp", "LogLevelHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSystemHelp",
+            "LogLevelHelp",
+        ))],
     },
     Item {
         id: ItemId::SysLogFile,
         name: lookup_key("OptionsSystem", "LogFile"),
-        help_title: lookup_key("OptionsSystemHelp", "LogFileHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSystemHelp",
+            "LogFileHelp",
+        ))],
     },
     Item {
         id: ItemId::SysDefaultNoteSkin,
         name: lookup_key("OptionsSystem", "DefaultNoteSkin"),
-        help_title: lookup_key("OptionsSystemHelp", "DefaultNoteSkinHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSystemHelp",
+            "DefaultNoteSkinHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -1526,92 +1553,122 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::GfxVideoRenderer,
         name: lookup_key("OptionsGraphics", "VideoRenderer"),
-        help_title: lookup_key("OptionsGraphicsHelp", "VideoRendererHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "VideoRendererHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxSoftwareThreads,
         name: lookup_key("OptionsGraphics", "SoftwareRendererThreads"),
-        help_title: lookup_key("OptionsGraphicsHelp", "SoftwareRendererThreadsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "SoftwareRendererThreadsHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxDisplayMode,
         name: lookup_key("OptionsGraphics", "DisplayMode"),
-        help_title: lookup_key("OptionsGraphicsHelp", "DisplayModeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "DisplayModeHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxDisplayAspectRatio,
         name: lookup_key("OptionsGraphics", "DisplayAspectRatio"),
-        help_title: lookup_key("OptionsGraphicsHelp", "DisplayAspectRatioHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "DisplayAspectRatioHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxDisplayResolution,
         name: lookup_key("OptionsGraphics", "DisplayResolution"),
-        help_title: lookup_key("OptionsGraphicsHelp", "DisplayResolutionHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "DisplayResolutionHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxRefreshRate,
         name: lookup_key("OptionsGraphics", "RefreshRate"),
-        help_title: lookup_key("OptionsGraphicsHelp", "RefreshRateHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "RefreshRateHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxFullscreenType,
         name: lookup_key("OptionsGraphics", "FullscreenType"),
-        help_title: lookup_key("OptionsGraphicsHelp", "FullscreenTypeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "FullscreenTypeHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxVSync,
         name: lookup_key("OptionsGraphics", "VSync"),
-        help_title: lookup_key("OptionsGraphicsHelp", "VSyncHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "VSyncHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxPresentMode,
         name: lookup_key("OptionsGraphics", "PresentMode"),
-        help_title: lookup_key("OptionsGraphicsHelp", "PresentModeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "PresentModeHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxMaxFps,
         name: lookup_key("OptionsGraphics", "MaxFps"),
-        help_title: lookup_key("OptionsGraphicsHelp", "MaxFpsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "MaxFpsHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxMaxFpsValue,
         name: lookup_key("OptionsGraphics", "MaxFpsValue"),
-        help_title: lookup_key("OptionsGraphicsHelp", "MaxFpsValueHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "MaxFpsValueHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxShowStats,
         name: lookup_key("OptionsGraphics", "ShowStats"),
-        help_title: lookup_key("OptionsGraphicsHelp", "ShowStatsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "ShowStatsHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxValidationLayers,
         name: lookup_key("OptionsGraphics", "ValidationLayers"),
-        help_title: lookup_key("OptionsGraphicsHelp", "ValidationLayersHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "ValidationLayersHelp",
+        ))],
     },
     Item {
         id: ItemId::GfxVisualDelay,
         name: lookup_key("OptionsGraphics", "VisualDelay"),
-        help_title: lookup_key("OptionsGraphicsHelp", "VisualDelayHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "VisualDelayHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -1640,32 +1697,38 @@ pub const INPUT_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::InpConfigureMappings,
         name: lookup_key("OptionsInput", "ConfigureMappings"),
-        help_title: lookup_key("OptionsInputHelp", "ConfigureMappingsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "ConfigureMappingsHelp",
+        ))],
     },
     Item {
         id: ItemId::InpTestInput,
         name: lookup_key("OptionsInput", "TestInput"),
-        help_title: lookup_key("OptionsInputHelp", "TestInputHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "TestInputHelp",
+        ))],
     },
     Item {
         id: ItemId::InpInputOptions,
         name: lookup_key("OptionsInput", "InputOptions"),
-        help_title: lookup_key("OptionsInputHelp", "InputOptionsHelp"),
-        help_bullets: &[
-            lookup_key("OptionsInput", "GamepadBackend"),
-            lookup_key("OptionsInput", "MenuNavigation"),
-            lookup_key("OptionsInput", "OptionsNavigation"),
-            lookup_key("OptionsInput", "MenuButtons"),
-            lookup_key("OptionsInput", "Debounce"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsInputHelp", "InputOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "GamepadBackend")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "MenuNavigation")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "OptionsNavigation")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "MenuButtons")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "Debounce")),
         ],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -1715,38 +1778,50 @@ pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::InpGamepadBackend,
         name: lookup_key("OptionsInput", "GamepadBackend"),
-        help_title: lookup_key("OptionsInputHelp", "GamepadBackendHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "GamepadBackendHelp",
+        ))],
     },
     Item {
         id: ItemId::InpMenuButtons,
         name: lookup_key("OptionsInput", "MenuButtons"),
-        help_title: lookup_key("OptionsInputHelp", "MenuButtonsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "MenuButtonsHelp",
+        ))],
     },
     Item {
         id: ItemId::InpOptionsNavigation,
         name: lookup_key("OptionsInput", "OptionsNavigation"),
-        help_title: lookup_key("OptionsInputHelp", "OptionsNavigationHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "OptionsNavigationHelp",
+        ))],
     },
     Item {
         id: ItemId::InpMenuNavigation,
         name: lookup_key("OptionsInput", "MenuNavigation"),
-        help_title: lookup_key("OptionsInputHelp", "MenuNavigationHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "MenuNavigationHelp",
+        ))],
     },
     Item {
         id: ItemId::InpDebounce,
         name: lookup_key("OptionsInput", "Debounce"),
-        help_title: lookup_key("OptionsInputHelp", "DebounceHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "DebounceHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -1893,98 +1968,130 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::MchSelectProfile,
         name: lookup_key("OptionsMachine", "SelectProfile"),
-        help_title: lookup_key("OptionsMachineHelp", "SelectProfileHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "SelectProfileHelp",
+        ))],
     },
     Item {
         id: ItemId::MchSelectColor,
         name: lookup_key("OptionsMachine", "SelectColor"),
-        help_title: lookup_key("OptionsMachineHelp", "SelectColorHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "SelectColorHelp",
+        ))],
     },
     Item {
         id: ItemId::MchSelectStyle,
         name: lookup_key("OptionsMachine", "SelectStyle"),
-        help_title: lookup_key("OptionsMachineHelp", "SelectStyleHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "SelectStyleHelp",
+        ))],
     },
     Item {
         id: ItemId::MchPreferredStyle,
         name: lookup_key("OptionsMachine", "PreferredStyle"),
-        help_title: lookup_key("OptionsMachineHelp", "PreferredStyleHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "PreferredStyleHelp",
+        ))],
     },
     Item {
         id: ItemId::MchSelectPlayMode,
         name: lookup_key("OptionsMachine", "SelectPlayMode"),
-        help_title: lookup_key("OptionsMachineHelp", "SelectPlayModeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "SelectPlayModeHelp",
+        ))],
     },
     Item {
         id: ItemId::MchPreferredMode,
         name: lookup_key("OptionsMachine", "PreferredMode"),
-        help_title: lookup_key("OptionsMachineHelp", "PreferredModeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "PreferredModeHelp",
+        ))],
     },
     Item {
         id: ItemId::MchEvalSummary,
         name: lookup_key("OptionsMachine", "EvalSummary"),
-        help_title: lookup_key("OptionsMachineHelp", "EvalSummaryHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "EvalSummaryHelp",
+        ))],
     },
     Item {
         id: ItemId::MchNameEntry,
         name: lookup_key("OptionsMachine", "NameEntry"),
-        help_title: lookup_key("OptionsMachineHelp", "NameEntryHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "NameEntryHelp",
+        ))],
     },
     Item {
         id: ItemId::MchGameoverScreen,
         name: lookup_key("OptionsMachine", "GameoverScreen"),
-        help_title: lookup_key("OptionsMachineHelp", "GameoverScreenHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "GameoverScreenHelp",
+        ))],
     },
     Item {
         id: ItemId::MchWriteCurrentScreen,
         name: lookup_key("OptionsMachine", "WriteCurrentScreen"),
-        help_title: lookup_key("OptionsMachineHelp", "WriteCurrentScreenHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "WriteCurrentScreenHelp",
+        ))],
     },
     Item {
         id: ItemId::MchMenuMusic,
         name: lookup_key("OptionsMachine", "MenuMusic"),
-        help_title: lookup_key("OptionsMachineHelp", "MenuMusicHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "MenuMusicHelp",
+        ))],
     },
     Item {
         id: ItemId::MchReplays,
         name: lookup_key("OptionsMachine", "Replays"),
-        help_title: lookup_key("OptionsMachineHelp", "ReplaysHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "ReplaysHelp",
+        ))],
     },
     Item {
         id: ItemId::MchPerPlayerGlobalOffsets,
         name: lookup_key("OptionsMachine", "PerPlayerGlobalOffsets"),
-        help_title: lookup_key("OptionsMachineHelp", "PerPlayerGlobalOffsetsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "PerPlayerGlobalOffsetsHelp",
+        ))],
     },
     Item {
         id: ItemId::MchKeyboardFeatures,
         name: lookup_key("OptionsMachine", "KeyboardFeatures"),
-        help_title: lookup_key("OptionsMachineHelp", "KeyboardFeaturesHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "KeyboardFeaturesHelp",
+        ))],
     },
     Item {
         id: ItemId::MchVideoBgs,
         name: lookup_key("OptionsMachine", "VideoBgs"),
-        help_title: lookup_key("OptionsMachineHelp", "VideoBgsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "VideoBgsHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -2031,32 +2138,42 @@ pub const COURSE_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::CrsShowRandom,
         name: lookup_key("OptionsCourse", "ShowRandomCourses"),
-        help_title: lookup_key("OptionsCourseHelp", "ShowRandomCoursesHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsCourseHelp",
+            "ShowRandomCoursesHelp",
+        ))],
     },
     Item {
         id: ItemId::CrsShowMostPlayed,
         name: lookup_key("OptionsCourse", "ShowMostPlayed"),
-        help_title: lookup_key("OptionsCourseHelp", "ShowMostPlayedHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsCourseHelp",
+            "ShowMostPlayedHelp",
+        ))],
     },
     Item {
         id: ItemId::CrsShowIndividualScores,
         name: lookup_key("OptionsCourse", "ShowIndividualScores"),
-        help_title: lookup_key("OptionsCourseHelp", "ShowIndividualScoresHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsCourseHelp",
+            "ShowIndividualScoresHelp",
+        ))],
     },
     Item {
         id: ItemId::CrsAutosubmitIndividual,
         name: lookup_key("OptionsCourse", "AutosubmitIndividual"),
-        help_title: lookup_key("OptionsCourseHelp", "AutosubmitIndividualHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsCourseHelp",
+            "AutosubmitIndividualHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -2103,38 +2220,50 @@ pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::GpBgBrightness,
         name: lookup_key("OptionsGameplay", "BgBrightness"),
-        help_title: lookup_key("OptionsGameplayHelp", "BgBrightnessHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGameplayHelp",
+            "BgBrightnessHelp",
+        ))],
     },
     Item {
         id: ItemId::GpCenteredP1,
         name: lookup_key("OptionsGameplay", "CenteredP1Notefield"),
-        help_title: lookup_key("OptionsGameplayHelp", "CenteredP1NotefieldHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGameplayHelp",
+            "CenteredP1NotefieldHelp",
+        ))],
     },
     Item {
         id: ItemId::GpZmodRatingBox,
         name: lookup_key("OptionsGameplay", "ZmodRatingBox"),
-        help_title: lookup_key("OptionsGameplayHelp", "ZmodRatingBoxHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGameplayHelp",
+            "ZmodRatingBoxHelp",
+        ))],
     },
     Item {
         id: ItemId::GpBpmDecimal,
         name: lookup_key("OptionsGameplay", "BpmDecimal"),
-        help_title: lookup_key("OptionsGameplayHelp", "BpmDecimalHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGameplayHelp",
+            "BpmDecimalHelp",
+        ))],
     },
     Item {
         id: ItemId::GpAutoScreenshot,
         name: lookup_key("OptionsGameplay", "AutoScreenshot"),
-        help_title: lookup_key("OptionsGameplayHelp", "AutoScreenshotHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGameplayHelp",
+            "AutoScreenshotHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -2228,82 +2357,108 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::SndDevice,
         name: lookup_key("OptionsSound", "SoundDevice"),
-        help_title: lookup_key("OptionsSoundHelp", "SoundDeviceHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "SoundDeviceHelp",
+        ))],
     },
     Item {
         id: ItemId::SndOutputMode,
         name: lookup_key("OptionsSound", "AudioOutputMode"),
-        help_title: lookup_key("OptionsSoundHelp", "AudioOutputModeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "AudioOutputModeHelp",
+        ))],
     },
     #[cfg(target_os = "linux")]
     Item {
         id: ItemId::SndLinuxBackend,
         name: lookup_key("OptionsSound", "LinuxAudioBackend"),
-        help_title: lookup_key("OptionsSoundHelp", "LinuxAudioBackendHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "LinuxAudioBackendHelp",
+        ))],
     },
     #[cfg(target_os = "linux")]
     Item {
         id: ItemId::SndAlsaExclusive,
         name: lookup_key("OptionsSound", "AlsaExclusive"),
-        help_title: lookup_key("OptionsSoundHelp", "AlsaExclusiveHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "AlsaExclusiveHelp",
+        ))],
     },
     Item {
         id: ItemId::SndSampleRate,
         name: lookup_key("OptionsSound", "AudioSampleRate"),
-        help_title: lookup_key("OptionsSoundHelp", "AudioSampleRateHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "AudioSampleRateHelp",
+        ))],
     },
     Item {
         id: ItemId::SndMasterVolume,
         name: lookup_key("OptionsSound", "MasterVolume"),
-        help_title: lookup_key("OptionsSoundHelp", "MasterVolumeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "MasterVolumeHelp",
+        ))],
     },
     Item {
         id: ItemId::SndSfxVolume,
         name: lookup_key("OptionsSound", "SfxVolume"),
-        help_title: lookup_key("OptionsSoundHelp", "SfxVolumeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "SfxVolumeHelp",
+        ))],
     },
     Item {
         id: ItemId::SndAssistTickVolume,
         name: lookup_key("OptionsSound", "AssistTickVolume"),
-        help_title: lookup_key("OptionsSoundHelp", "AssistTickVolumeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "AssistTickVolumeHelp",
+        ))],
     },
     Item {
         id: ItemId::SndMusicVolume,
         name: lookup_key("OptionsSound", "MusicVolume"),
-        help_title: lookup_key("OptionsSoundHelp", "MusicVolumeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "MusicVolumeHelp",
+        ))],
     },
     Item {
         id: ItemId::SndMineSounds,
         name: lookup_key("OptionsSound", "MineSounds"),
-        help_title: lookup_key("OptionsSoundHelp", "MineSoundsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "MineSoundsHelp",
+        ))],
     },
     Item {
         id: ItemId::SndGlobalOffset,
         name: lookup_key("OptionsSound", "GlobalOffset"),
-        help_title: lookup_key("OptionsSoundHelp", "GlobalOffsetHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "GlobalOffsetHelp",
+        ))],
     },
     Item {
         id: ItemId::SndRateModPitch,
         name: lookup_key("OptionsSound", "RateModPreservesPitch"),
-        help_title: lookup_key("OptionsSoundHelp", "RateModPreservesPitchHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSoundHelp",
+            "RateModPreservesPitchHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -2491,134 +2646,178 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::SmShowBanners,
         name: lookup_key("OptionsSelectMusic", "ShowBanners"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "ShowBannersHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ShowBannersHelp",
+        ))],
     },
     Item {
         id: ItemId::SmShowVideoBanners,
         name: lookup_key("OptionsSelectMusic", "ShowVideoBanners"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "ShowVideoBannersHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ShowVideoBannersHelp",
+        ))],
     },
     Item {
         id: ItemId::SmShowBreakdown,
         name: lookup_key("OptionsSelectMusic", "ShowBreakdown"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "ShowBreakdownHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ShowBreakdownHelp",
+        ))],
     },
     Item {
         id: ItemId::SmBreakdownStyle,
         name: lookup_key("OptionsSelectMusic", "BreakdownStyle"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "BreakdownStyleHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "BreakdownStyleHelp",
+        ))],
     },
     Item {
         id: ItemId::SmNativeLanguage,
         name: lookup_key("OptionsSelectMusic", "ShowNativeLanguage"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "ShowNativeLanguageHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ShowNativeLanguageHelp",
+        ))],
     },
     Item {
         id: ItemId::SmWheelSpeed,
         name: lookup_key("OptionsSelectMusic", "MusicWheelSpeed"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "MusicWheelSpeedHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "MusicWheelSpeedHelp",
+        ))],
     },
     Item {
         id: ItemId::SmWheelStyle,
         name: lookup_key("OptionsSelectMusic", "MusicWheelStyle"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "MusicWheelStyleHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "MusicWheelStyleHelp",
+        ))],
     },
     Item {
         id: ItemId::SmCdTitles,
         name: lookup_key("OptionsSelectMusic", "ShowCdTitles"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "ShowCdTitlesHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ShowCdTitlesHelp",
+        ))],
     },
     Item {
         id: ItemId::SmWheelGrades,
         name: lookup_key("OptionsSelectMusic", "ShowWheelGrades"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "ShowWheelGradesHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ShowWheelGradesHelp",
+        ))],
     },
     Item {
         id: ItemId::SmWheelLamps,
         name: lookup_key("OptionsSelectMusic", "ShowWheelLamps"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "ShowWheelLampsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ShowWheelLampsHelp",
+        ))],
     },
     Item {
         id: ItemId::SmWheelItl,
         name: lookup_key("OptionsSelectMusic", "ItlWheelData"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "ItlWheelDataHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ItlWheelDataHelp",
+        ))],
     },
     Item {
         id: ItemId::SmNewPackBadge,
         name: lookup_key("OptionsSelectMusic", "NewPackBadge"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "NewPackBadgeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "NewPackBadgeHelp",
+        ))],
     },
     Item {
         id: ItemId::SmPatternInfo,
         name: lookup_key("OptionsSelectMusic", "ShowPatternInfo"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "ShowPatternInfoHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ShowPatternInfoHelp",
+        ))],
     },
     Item {
         id: ItemId::SmChartInfo,
         name: lookup_key("OptionsSelectMusic", "ChartInfo"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "ChartInfoHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ChartInfoHelp",
+        ))],
     },
     Item {
         id: ItemId::SmPreviews,
         name: lookup_key("OptionsSelectMusic", "MusicPreviews"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "MusicPreviewsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "MusicPreviewsHelp",
+        ))],
     },
     Item {
         id: ItemId::SmPreviewMarker,
         name: lookup_key("OptionsSelectMusic", "PreviewMarker"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "PreviewMarkerHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "PreviewMarkerHelp",
+        ))],
     },
     Item {
         id: ItemId::SmPreviewLoop,
         name: lookup_key("OptionsSelectMusic", "LoopMusic"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "LoopMusicHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "LoopMusicHelp",
+        ))],
     },
     Item {
         id: ItemId::SmGameplayTimer,
         name: lookup_key("OptionsSelectMusic", "ShowGameplayTimer"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "ShowGameplayTimerHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ShowGameplayTimerHelp",
+        ))],
     },
     Item {
         id: ItemId::SmShowRivals,
         name: lookup_key("OptionsSelectMusic", "ShowGsBox"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "ShowGsBoxHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ShowGsBoxHelp",
+        ))],
     },
     Item {
         id: ItemId::SmScoreboxPlacement,
         name: lookup_key("OptionsSelectMusic", "GsBoxPlacement"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "GsBoxPlacementHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "GsBoxPlacementHelp",
+        ))],
     },
     Item {
         id: ItemId::SmScoreboxCycle,
         name: lookup_key("OptionsSelectMusic", "GsBoxLeaderboards"),
-        help_title: lookup_key("OptionsSelectMusicHelp", "GsBoxLeaderboardsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "GsBoxLeaderboardsHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -2680,44 +2879,58 @@ pub const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::AdvDefaultFailType,
         name: lookup_key("OptionsAdvanced", "DefaultFailType"),
-        help_title: lookup_key("OptionsAdvancedHelp", "DefaultFailTypeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsAdvancedHelp",
+            "DefaultFailTypeHelp",
+        ))],
     },
     Item {
         id: ItemId::AdvBannerCache,
         name: lookup_key("OptionsAdvanced", "BannerCache"),
-        help_title: lookup_key("OptionsAdvancedHelp", "BannerCacheHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsAdvancedHelp",
+            "BannerCacheHelp",
+        ))],
     },
     Item {
         id: ItemId::AdvCdTitleCache,
         name: lookup_key("OptionsAdvanced", "CdTitleCache"),
-        help_title: lookup_key("OptionsAdvancedHelp", "CdTitleCacheHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsAdvancedHelp",
+            "CdTitleCacheHelp",
+        ))],
     },
     Item {
         id: ItemId::AdvSongParsingThreads,
         name: lookup_key("OptionsAdvanced", "SongParsingThreads"),
-        help_title: lookup_key("OptionsAdvancedHelp", "SongParsingThreadsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsAdvancedHelp",
+            "SongParsingThreadsHelp",
+        ))],
     },
     Item {
         id: ItemId::AdvCacheSongs,
         name: lookup_key("OptionsAdvanced", "CacheSongs"),
-        help_title: lookup_key("OptionsAdvancedHelp", "CacheSongsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsAdvancedHelp",
+            "CacheSongsHelp",
+        ))],
     },
     Item {
         id: ItemId::AdvFastLoad,
         name: lookup_key("OptionsAdvanced", "FastLoad"),
-        help_title: lookup_key("OptionsAdvancedHelp", "FastLoadHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsAdvancedHelp",
+            "FastLoadHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -2960,44 +3173,58 @@ pub const GROOVESTATS_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::GsEnable,
         name: lookup_key("OptionsGrooveStats", "EnableGrooveStats"),
-        help_title: lookup_key("OptionsGrooveStatsHelp", "EnableGrooveStatsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "EnableGrooveStatsHelp",
+        ))],
     },
     Item {
         id: ItemId::GsEnableBoogie,
         name: lookup_key("OptionsGrooveStats", "EnableBoogieStats"),
-        help_title: lookup_key("OptionsGrooveStatsHelp", "EnableBoogieStatsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "EnableBoogieStatsHelp",
+        ))],
     },
     Item {
         id: ItemId::GsSubmitFails,
         name: lookup_key("OptionsGrooveStats", "GsSubmitFails"),
-        help_title: lookup_key("OptionsGrooveStatsHelp", "GsSubmitFailsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "GsSubmitFailsHelp",
+        ))],
     },
     Item {
         id: ItemId::GsAutoPopulate,
         name: lookup_key("OptionsGrooveStats", "AutoPopulateScores"),
-        help_title: lookup_key("OptionsGrooveStatsHelp", "AutoPopulateScoresHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "AutoPopulateScoresHelp",
+        ))],
     },
     Item {
         id: ItemId::GsAutoDownloadUnlocks,
         name: lookup_key("OptionsGrooveStats", "AutoDownloadUnlocks"),
-        help_title: lookup_key("OptionsGrooveStatsHelp", "AutoDownloadUnlocksHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "AutoDownloadUnlocksHelp",
+        ))],
     },
     Item {
         id: ItemId::GsSeparateUnlocks,
         name: lookup_key("OptionsGrooveStats", "SeparateUnlocksByPlayer"),
-        help_title: lookup_key("OptionsGrooveStatsHelp", "SeparateUnlocksByPlayerHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "SeparateUnlocksByPlayerHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -3005,20 +3232,26 @@ pub const ARROWCLOUD_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::AcEnable,
         name: lookup_key("OptionsGrooveStats", "EnableArrowCloud"),
-        help_title: lookup_key("OptionsGrooveStatsHelp", "EnableArrowCloudHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "EnableArrowCloudHelp",
+        ))],
     },
     Item {
         id: ItemId::AcSubmitFails,
         name: lookup_key("OptionsGrooveStats", "ArrowCloudSubmitFails"),
-        help_title: lookup_key("OptionsGrooveStatsHelp", "ArrowCloudSubmitFailsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "ArrowCloudSubmitFailsHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -3026,26 +3259,34 @@ pub const ONLINE_SCORING_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::OsGsBsOptions,
         name: lookup_key("OptionsOnlineScoring", "GsBsOptions"),
-        help_title: lookup_key("OptionsOnlineScoringHelp", "GsBsOptionsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsOnlineScoringHelp",
+            "GsBsOptionsHelp",
+        ))],
     },
     Item {
         id: ItemId::OsArrowCloudOptions,
         name: lookup_key("OptionsOnlineScoring", "ArrowCloudOptions"),
-        help_title: lookup_key("OptionsOnlineScoringHelp", "ArrowCloudOptionsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsOnlineScoringHelp",
+            "ArrowCloudOptionsHelp",
+        ))],
     },
     Item {
         id: ItemId::OsScoreImport,
         name: lookup_key("OptionsOnlineScoring", "ScoreImport"),
-        help_title: lookup_key("OptionsOnlineScoringHelp", "ScoreImportHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsOnlineScoringHelp",
+            "ScoreImportHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -3053,20 +3294,26 @@ pub const NULL_OR_DIE_MENU_ITEMS: &[Item] = &[
     Item {
         id: ItemId::NodOptions,
         name: lookup_key("OptionsOnlineScoring", "NullOrDieOptions"),
-        help_title: lookup_key("OptionsOnlineScoringHelp", "NullOrDieOptionsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsOnlineScoringHelp",
+            "NullOrDieOptionsHelp",
+        ))],
     },
     Item {
         id: ItemId::NodSyncPacks,
         name: lookup_key("OptionsOnlineScoring", "SyncPacks"),
-        help_title: lookup_key("OptionsOnlineScoringHelp", "SyncPacksHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsOnlineScoringHelp",
+            "SyncPacksHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -3074,68 +3321,90 @@ pub const NULL_OR_DIE_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::NodSyncGraph,
         name: lookup_key("OptionsNullOrDie", "SyncGraph"),
-        help_title: lookup_key("OptionsNullOrDieHelp", "SyncGraphHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "SyncGraphHelp",
+        ))],
     },
     Item {
         id: ItemId::NodSyncConfidence,
         name: lookup_key("OptionsNullOrDie", "SyncConfidence"),
-        help_title: lookup_key("OptionsNullOrDieHelp", "SyncConfidenceHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "SyncConfidenceHelp",
+        ))],
     },
     Item {
         id: ItemId::NodPackSyncThreads,
         name: lookup_key("OptionsNullOrDie", "PackSyncThreads"),
-        help_title: lookup_key("OptionsNullOrDieHelp", "PackSyncThreadsHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "PackSyncThreadsHelp",
+        ))],
     },
     Item {
         id: ItemId::NodFingerprint,
         name: lookup_key("OptionsNullOrDie", "Fingerprint"),
-        help_title: lookup_key("OptionsNullOrDieHelp", "FingerprintHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "FingerprintHelp",
+        ))],
     },
     Item {
         id: ItemId::NodWindow,
         name: lookup_key("OptionsNullOrDie", "Window"),
-        help_title: lookup_key("OptionsNullOrDieHelp", "WindowHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "WindowHelp",
+        ))],
     },
     Item {
         id: ItemId::NodStep,
         name: lookup_key("OptionsNullOrDie", "Step"),
-        help_title: lookup_key("OptionsNullOrDieHelp", "StepHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "StepHelp",
+        ))],
     },
     Item {
         id: ItemId::NodMagicOffset,
         name: lookup_key("OptionsNullOrDie", "MagicOffset"),
-        help_title: lookup_key("OptionsNullOrDieHelp", "MagicOffsetHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "MagicOffsetHelp",
+        ))],
     },
     Item {
         id: ItemId::NodKernelTarget,
         name: lookup_key("OptionsNullOrDie", "KernelTarget"),
-        help_title: lookup_key("OptionsNullOrDieHelp", "KernelTargetHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "KernelTargetHelp",
+        ))],
     },
     Item {
         id: ItemId::NodKernelType,
         name: lookup_key("OptionsNullOrDie", "KernelType"),
-        help_title: lookup_key("OptionsNullOrDieHelp", "KernelTypeHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "KernelTypeHelp",
+        ))],
     },
     Item {
         id: ItemId::NodFullSpectrogram,
         name: lookup_key("OptionsNullOrDie", "FullSpectrogram"),
-        help_title: lookup_key("OptionsNullOrDieHelp", "FullSpectrogramHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "FullSpectrogramHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -3143,20 +3412,26 @@ pub const SYNC_PACK_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::SpPack,
         name: lookup_key("OptionsSyncPack", "SyncPackPack"),
-        help_title: lookup_key("OptionsSyncPackHelp", "SyncPackPackHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSyncPackHelp",
+            "SyncPackPackHelp",
+        ))],
     },
     Item {
         id: ItemId::SpStart,
         name: lookup_key("OptionsSyncPack", "SyncPackStart"),
-        help_title: lookup_key("OptionsSyncPackHelp", "SyncPackStartHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSyncPackHelp",
+            "SyncPackStartHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -3164,38 +3439,50 @@ pub const SCORE_IMPORT_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::SiEndpoint,
         name: lookup_key("OptionsScoreImport", "ScoreImportEndpoint"),
-        help_title: lookup_key("OptionsScoreImportHelp", "ScoreImportEndpointHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsScoreImportHelp",
+            "ScoreImportEndpointHelp",
+        ))],
     },
     Item {
         id: ItemId::SiProfile,
         name: lookup_key("OptionsScoreImport", "ScoreImportProfile"),
-        help_title: lookup_key("OptionsScoreImportHelp", "ScoreImportProfileHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsScoreImportHelp",
+            "ScoreImportProfileHelp",
+        ))],
     },
     Item {
         id: ItemId::SiPack,
         name: lookup_key("OptionsScoreImport", "ScoreImportPack"),
-        help_title: lookup_key("OptionsScoreImportHelp", "ScoreImportPackHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsScoreImportHelp",
+            "ScoreImportPackHelp",
+        ))],
     },
     Item {
         id: ItemId::SiOnlyMissing,
         name: lookup_key("OptionsScoreImport", "ScoreImportOnlyMissing"),
-        help_title: lookup_key("OptionsScoreImportHelp", "ScoreImportOnlyMissingHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsScoreImportHelp",
+            "ScoreImportOnlyMissingHelp",
+        ))],
     },
     Item {
         id: ItemId::SiStart,
         name: lookup_key("OptionsScoreImport", "ScoreImportStart"),
-        help_title: lookup_key("OptionsScoreImportHelp", "ScoreImportStartHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsScoreImportHelp",
+            "ScoreImportStartHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,
         name: lookup_key("Options", "Exit"),
-        help_title: lookup_key("OptionsHelp", "ExitSubHelp"),
-        help_bullets: &[],
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "ExitSubHelp",
+        ))],
     },
 ];
 
@@ -9078,8 +9365,15 @@ fn build_description_layout(
 ) -> DescriptionLayout {
     let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
     let wrap_extra_pad = desc_wrap_extra_pad_unscaled() * s;
-    let raw_title_text = item.help_title.get();
-    let bullet_keys = item.help_bullets;
+    let mut title_text = None;
+    let mut bullet_keys = Vec::new();
+    for entry in item.help {
+        match entry {
+            HelpEntry::Paragraph(key) => title_text = Some(key.get()),
+            HelpEntry::Bullet(key) => bullet_keys.push(key),
+        }
+    }
+    let raw_title_text = title_text.unwrap_or_else(|| item.name.get());
     let title_max_width_px =
         desc_w_unscaled().mul_add(s, -((2.0 * title_side_pad) + wrap_extra_pad));
     let wrapped_title = wrap_miso_text(
@@ -9098,14 +9392,14 @@ fn build_description_layout(
             s,
             -((2.0 * bullet_side_pad) + (DESC_BULLET_INDENT_PX * s) + wrap_extra_pad),
         );
-        for LookupKey in bullet_keys {
-            let resolved = LookupKey.get();
+        for key in &bullet_keys {
+            let resolved = key.get();
             let trimmed = resolved.trim();
             if trimmed.is_empty() {
                 continue;
             }
             let mut entry = String::with_capacity(trimmed.len() + 2);
-            entry.push('•');
+            entry.push('\u{2022}');
             entry.push(' ');
             entry.push_str(trimmed);
             let wrapped = wrap_miso_text(
