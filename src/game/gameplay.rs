@@ -37,6 +37,8 @@ use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
+#[path = "gameplay/autoplay.rs"]
+mod autoplay;
 #[path = "gameplay/autosync.rs"]
 mod autosync;
 #[path = "gameplay/clock.rs"]
@@ -55,7 +57,12 @@ mod offset;
 mod rows;
 #[path = "gameplay/stats.rs"]
 mod stats;
+#[path = "gameplay/time.rs"]
+mod time;
 
+#[cfg(test)]
+use self::autoplay::live_autoplay_enabled_from_flags;
+use self::autoplay::{autoplay_blocks_scoring, live_autoplay_enabled, run_autoplay, run_replay};
 use self::autosync::apply_autosync_for_row_hits;
 pub use self::clock::{
     DisplayClockDiagEvent, DisplayClockDiagEventKind, DisplayClockHealth,
@@ -109,6 +116,14 @@ pub use self::stats::{
 use self::stats::{
     compute_possible_grade_points, mini_indicator_mode, needs_stream_data, recompute_player_totals,
     stream_sequences_threshold, target_score_setting_percent, zmod_stream_totals_full_measures,
+};
+use self::time::{
+    INVALID_SONG_TIME_NS, clamp_song_time_ns, current_music_time_s, normalized_song_rate,
+    scaled_song_delta_ns, scaled_song_time_ns, song_time_ns_add_seconds,
+    song_time_ns_delta_seconds, song_time_ns_span_seconds,
+};
+pub(crate) use self::time::{
+    song_time_ns_from_seconds, song_time_ns_invalid, song_time_ns_to_seconds,
 };
 
 // Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
@@ -585,83 +600,6 @@ const GAMEPLAY_INPUT_LATENCY_WARN_US: u32 = 2_000;
 const REPLAY_EDGE_FLOOR_PER_LANE: usize = 64;
 const REPLAY_EDGE_RATE_PER_SEC: usize = 256;
 pub type SongTimeNs = i64;
-const INVALID_SONG_TIME_NS: SongTimeNs = i64::MIN;
-const SONG_TIME_NS_PER_SECOND: f64 = 1_000_000_000.0;
-const MIN_VALID_SONG_TIME_NS: i128 = (i64::MIN + 1) as i128;
-
-#[inline(always)]
-pub(crate) const fn song_time_ns_invalid(time_ns: SongTimeNs) -> bool {
-    time_ns == INVALID_SONG_TIME_NS
-}
-
-#[inline(always)]
-pub(crate) fn song_time_ns_from_seconds(seconds: f32) -> SongTimeNs {
-    if !seconds.is_finite() {
-        return INVALID_SONG_TIME_NS;
-    }
-    let nanos = (seconds as f64 * SONG_TIME_NS_PER_SECOND).round();
-    nanos.clamp((i64::MIN + 1) as f64, i64::MAX as f64) as SongTimeNs
-}
-
-#[inline(always)]
-pub(crate) fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
-    if song_time_ns_invalid(time_ns) {
-        return f32::NAN;
-    }
-    (time_ns as f64 / SONG_TIME_NS_PER_SECOND) as f32
-}
-
-#[inline(always)]
-fn song_time_ns_delta_seconds(lhs: SongTimeNs, rhs: SongTimeNs) -> f32 {
-    ((lhs as i128 - rhs as i128) as f64 / SONG_TIME_NS_PER_SECOND) as f32
-}
-
-#[inline(always)]
-fn song_time_ns_add_seconds(time_ns: SongTimeNs, delta_seconds: f32) -> SongTimeNs {
-    if song_time_ns_invalid(time_ns) {
-        return INVALID_SONG_TIME_NS;
-    }
-    let delta_ns = song_time_ns_from_seconds(delta_seconds);
-    if song_time_ns_invalid(delta_ns) {
-        return INVALID_SONG_TIME_NS;
-    }
-    time_ns.saturating_add(delta_ns)
-}
-
-#[inline(always)]
-fn normalized_song_rate(seconds_per_second: f32) -> f32 {
-    if seconds_per_second.is_finite() && seconds_per_second > 0.0 {
-        seconds_per_second
-    } else {
-        1.0
-    }
-}
-
-#[inline(always)]
-fn song_time_ns_span_seconds(span_ns: i128) -> f32 {
-    (span_ns as f64 / SONG_TIME_NS_PER_SECOND) as f32
-}
-
-#[inline(always)]
-fn clamp_song_time_ns(value: i128) -> SongTimeNs {
-    value.clamp(MIN_VALID_SONG_TIME_NS, i64::MAX as i128) as SongTimeNs
-}
-
-#[inline(always)]
-fn scaled_song_delta_ns(delta_host_nanos: i128, seconds_per_second: f32) -> i128 {
-    let slope = normalized_song_rate(seconds_per_second);
-    (delta_host_nanos as f64 * slope as f64).round() as i128
-}
-
-#[inline(always)]
-fn scaled_song_time_ns(seconds: f32, seconds_per_second: f32) -> SongTimeNs {
-    song_time_ns_from_seconds(seconds * normalized_song_rate(seconds_per_second))
-}
-
-#[inline(always)]
-fn current_music_time_s(state: &State) -> f32 {
-    song_time_ns_to_seconds(state.current_music_time_ns)
-}
 
 #[inline(always)]
 const fn input_queue_cap(num_cols: usize) -> usize {
@@ -7729,44 +7667,8 @@ pub fn toggle_flash_text(state: &State) -> Option<(&'static str, f32)> {
 }
 
 #[inline(always)]
-fn autoplay_blocks_scoring(state: &State) -> bool {
-    live_autoplay_enabled(state)
-}
-
-#[inline(always)]
-const fn live_autoplay_enabled_from_flags(autoplay_enabled: bool, replay_mode: bool) -> bool {
-    autoplay_enabled && !replay_mode
-}
-
-#[inline(always)]
-fn live_autoplay_enabled(state: &State) -> bool {
-    live_autoplay_enabled_from_flags(state.autoplay_enabled, state.replay_mode)
-}
-
-#[inline(always)]
 const fn active_hold_counts_as_pressed(live_autoplay: bool, lane_pressed: bool) -> bool {
     live_autoplay || lane_pressed
-}
-
-#[inline(always)]
-fn settle_due_autoplay_active_holds(state: &mut State, cutoff_time_ns: SongTimeNs) {
-    for column in 0..state.num_cols {
-        let Some(active) = state.active_holds[column].as_ref() else {
-            continue;
-        };
-        if active.end_time_ns > cutoff_time_ns {
-            continue;
-        }
-        let note_index = active.note_index;
-        let end_time_ns = active.end_time_ns;
-        let hold_succeeded = !active.let_go && active.life > 0.0;
-        state.active_holds[column] = None;
-        if hold_succeeded {
-            handle_hold_success(state, column, note_index);
-        } else {
-            handle_hold_let_go(state, column, note_index, end_time_ns);
-        }
-    }
 }
 
 #[inline(always)]
@@ -11257,121 +11159,6 @@ fn run_assist_clap(state: &mut State, current_row: i32) {
 
     state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
     state.assist_last_crossed_row = song_row;
-}
-
-fn run_autoplay(state: &mut State, now_music_time_ns: SongTimeNs) {
-    if !state.autoplay_enabled {
-        return;
-    }
-
-    for player in 0..state.num_players {
-        let (note_start, note_end) = player_note_range(state, player);
-        let mut cursor = state.autoplay_cursor[player].max(note_start);
-        while cursor < note_end {
-            while cursor < note_end && state.notes[cursor].result.is_some() {
-                cursor += 1;
-            }
-            if cursor >= note_end {
-                break;
-            }
-
-            let row = state.notes[cursor].row_index;
-            let mut row_end = cursor + 1;
-            while row_end < note_end && state.notes[row_end].row_index == row {
-                row_end += 1;
-            }
-            let row_time_ns = state.note_time_cache_ns[cursor];
-            if row_time_ns > now_music_time_ns {
-                break;
-            }
-            let row_time = song_time_ns_to_seconds(row_time_ns);
-            // Finalize any already-ended autoplay holds before a new warped
-            // row on the same lane can replace the active hold slot.
-            settle_due_autoplay_active_holds(state, row_time_ns);
-            for idx in cursor..row_end {
-                let (result_is_some, is_fake, can_be_judged, note_type, col) = {
-                    let note = &state.notes[idx];
-                    (
-                        note.result.is_some(),
-                        note.is_fake,
-                        note.can_be_judged,
-                        note.note_type,
-                        note.column,
-                    )
-                };
-                if result_is_some
-                    || is_fake
-                    || !can_be_judged
-                    || matches!(note_type, NoteType::Mine)
-                {
-                    continue;
-                }
-
-                if col >= state.num_cols {
-                    continue;
-                }
-
-                state.autoplay_used = true;
-                match note_type {
-                    NoteType::Lift => {
-                        let _ = judge_a_lift(state, col, row_time, row_time_ns);
-                    }
-                    NoteType::Tap | NoteType::Hold | NoteType::Roll => {
-                        let _ = judge_a_tap(state, col, row_time, row_time_ns);
-                    }
-                    NoteType::Mine | NoteType::Fake => {}
-                }
-            }
-
-            cursor = row_end;
-        }
-        state.autoplay_cursor[player] = cursor;
-    }
-
-    let mut roll_cols = [usize::MAX; MAX_COLS];
-    let mut roll_count = 0usize;
-    for col in 0..state.num_cols {
-        if state.active_holds[col]
-            .as_ref()
-            .is_some_and(|active| matches!(active.note_type, NoteType::Roll) && !active.let_go)
-            && roll_count < MAX_COLS
-        {
-            roll_cols[roll_count] = col;
-            roll_count += 1;
-        }
-    }
-    for col in roll_cols.into_iter().take(roll_count) {
-        refresh_roll_life_on_step(state, col, state.current_music_time_ns);
-    }
-}
-
-fn run_replay(state: &mut State) {
-    if !state.autoplay_enabled || !state.replay_mode {
-        return;
-    }
-    while state.replay_cursor < state.replay_input.len() {
-        let edge = state.replay_input[state.replay_cursor];
-        if edge.event_music_time_ns > state.current_music_time_ns {
-            break;
-        }
-        state.replay_cursor += 1;
-        let col = edge.lane_index as usize;
-        if col >= state.num_cols {
-            continue;
-        }
-        let Some(lane) = lane_from_column(col) else {
-            continue;
-        };
-        push_input_edge(
-            state,
-            edge.source,
-            lane,
-            edge.pressed,
-            edge.event_music_time_ns,
-            false,
-        );
-        state.autoplay_used = true;
-    }
 }
 
 #[inline(always)]

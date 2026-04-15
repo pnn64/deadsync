@@ -3,7 +3,8 @@ use crate::game::judgment::JudgeGrade;
 use super::offset::{apply_global_offset_delta, apply_song_offset_delta};
 use super::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AUTOSYNC_STDDEV_MAX_SECONDS, AutosyncMode, SongTimeNs, State,
-    autoplay_blocks_scoring, song_time_ns_invalid, song_time_ns_to_seconds,
+    autoplay_blocks_scoring, song_time_ns_invalid, song_time_ns_span_seconds,
+    song_time_ns_to_seconds,
 };
 
 #[inline(always)]
@@ -28,7 +29,7 @@ fn autosync_stddev_seconds(
 ) -> f32 {
     let mut dev = 0.0_f64;
     for value in samples {
-        let d = (*value - mean_ns) as f64 / super::SONG_TIME_NS_PER_SECOND;
+        let d = song_time_ns_span_seconds(i128::from(*value) - i128::from(mean_ns)) as f64;
         dev += d * d;
     }
     (dev / AUTOSYNC_OFFSET_SAMPLE_COUNT as f64).sqrt() as f32
