@@ -2495,19 +2495,14 @@ fn fetch_arrowcloud_hard_ex_pane(
     }
 
     let decoded: ArrowCloudLeaderboardsApiResponse = response.into_body().read_json()?;
-    let hard_ex = decoded
+    let entries = decoded
         .leaderboards
         .into_iter()
-        .find(|pane| arrowcloud_lb_type_is_hard_ex(pane.r#type.as_str()));
-    let Some(hard_ex) = hard_ex else {
-        return Ok(None);
-    };
-    if hard_ex.scores.is_empty() {
-        return Ok(None);
-    }
+        .find(|pane| arrowcloud_lb_type_is_hard_ex(pane.r#type.as_str()))
+        .map_or_else(Vec::new, |pane| arrowcloud_entries_from_api(pane.scores));
     Ok(Some(LeaderboardPane {
         name: "ArrowCloud".to_string(),
-        entries: arrowcloud_entries_from_api(hard_ex.scores),
+        entries,
         is_ex: false,
         disabled: false,
     }))

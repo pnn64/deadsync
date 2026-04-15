@@ -478,6 +478,10 @@ pub fn select_music_scorebox_view(
     let kind = pane_kind(pane);
     let entries = entries_with_local_self_state(side, Some(hash), pane);
     view.mode_text = pane_mode_text(kind, pane).to_string();
+    if entries.is_empty() {
+        view.loading_text = Some("No Scores".to_string());
+        return view;
+    }
 
     if let Some(world) = entries
         .iter()
