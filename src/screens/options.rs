@@ -409,7 +409,6 @@ const DESC_TITLE_SIDE_PAD_PX: f32 = 7.5; // left/right padding for title text
 const DESC_BULLET_TOP_PAD_PX: f32 = 23.25; // vertical gap between title and bullet list
 const DESC_BULLET_SIDE_PAD_PX: f32 = 7.5; // left/right padding for bullet text
 const DESC_BULLET_INDENT_PX: f32 = 10.0; // extra indent for bullet marker + text
-const DESC_NOTE_BOTTOM_PAD_PX: f32 = 18.0; // bottom padding for footer/note text
 const DESC_TITLE_ZOOM: f32 = 1.0; // title text zoom (roughly header-sized)
 const DESC_BODY_ZOOM: f32 = 1.0; // body/bullet text zoom (similar to help text)
 
@@ -663,15 +662,17 @@ enum DescriptionCacheKey {
     Submenu(SubmenuKind, usize),
 }
 
+/// A pre-wrapped block of text in the description pane, ready for rendering.
+#[derive(Clone, Debug)]
+enum RenderedHelpBlock {
+    Paragraph { text: Arc<str>, line_count: usize },
+    Bullet { text: Arc<str>, line_count: usize },
+}
+
 #[derive(Clone, Debug)]
 struct DescriptionLayout {
     key: DescriptionCacheKey,
-    title: Arc<str>,
-    title_lines: usize,
-    bullet_text: Option<Arc<str>>,
-    bullet_line_count: usize,
-    note_text: Option<Arc<str>>,
-    note_line_count: usize,
+    blocks: Vec<RenderedHelpBlock>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -996,7 +997,7 @@ pub enum Choice {
 impl Choice {
     pub fn get(&self) -> Arc<str> {
         match self {
-            Choice::Localized(LookupKey) => LookupKey.get(),
+            Choice::Localized(lkey) => lkey.get(),
             Choice::Literal(s) => Arc::from(*s),
         }
     }
@@ -1039,46 +1040,7 @@ const INPUT_BACKEND_INLINE: bool = true;
 const INPUT_BACKEND_INLINE: bool = false;
 const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 4;
 const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 2;
-const NULL_OR_DIE_SYNC_GRAPH_CHOICES: &[Choice] = &[
-    localized_choice("OptionsNullOrDie", "SyncGraphFrequency"),
-    localized_choice("OptionsNullOrDie", "SyncGraphBeatIndex"),
-    localized_choice("OptionsNullOrDie", "SyncGraphPostKernel"),
-];
-const NULL_OR_DIE_SYNC_CONFIDENCE_CHOICES: &[Choice] = &[
-    literal_choice("0%"),
-    literal_choice("5%"),
-    literal_choice("10%"),
-    literal_choice("15%"),
-    literal_choice("20%"),
-    literal_choice("25%"),
-    literal_choice("30%"),
-    literal_choice("35%"),
-    literal_choice("40%"),
-    literal_choice("45%"),
-    literal_choice("50%"),
-    literal_choice("55%"),
-    literal_choice("60%"),
-    literal_choice("65%"),
-    literal_choice("70%"),
-    literal_choice("75%"),
-    literal_choice("80%"),
-    literal_choice("85%"),
-    literal_choice("90%"),
-    literal_choice("95%"),
-    literal_choice("100%"),
-];
-const NULL_OR_DIE_KERNEL_TARGET_CHOICES: &[Choice] = &[
-    localized_choice("OptionsNullOrDie", "KernelTargetDigest"),
-    localized_choice("OptionsNullOrDie", "KernelTargetAccumulator"),
-];
-const NULL_OR_DIE_KERNEL_TYPE_CHOICES: &[Choice] = &[
-    localized_choice("OptionsNullOrDie", "KernelTypeRising"),
-    localized_choice("OptionsNullOrDie", "KernelTypeLoudest"),
-];
-const SOUND_OUTPUT_MODE_CHOICES: &[Choice] = &[
-    localized_choice("OptionsSound", "OutputModeAuto"),
-    localized_choice("OptionsSound", "OutputModeShared"),
-];
+
 #[cfg(target_os = "linux")]
 const SOUND_ROW_LINUX_BACKEND: &str = "Linux Audio Backend";
 #[cfg(target_os = "linux")]
@@ -1350,61 +1312,12 @@ const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
 const MACHINE_PREFERRED_MODE_ROW_INDEX: usize = 5;
 const ADVANCED_SONG_PARSING_THREADS_ROW_INDEX: usize = 3;
 
-const BG_BRIGHTNESS_CHOICES: [Choice; 11] = [
-    literal_choice("0%"),
-    literal_choice("10%"),
-    literal_choice("20%"),
-    literal_choice("30%"),
-    literal_choice("40%"),
-    literal_choice("50%"),
-    literal_choice("60%"),
-    literal_choice("70%"),
-    literal_choice("80%"),
-    literal_choice("90%"),
-    literal_choice("100%"),
-];
 const MAX_FPS_MIN: u16 = 5;
 const MAX_FPS_MAX: u16 = 1000;
 const MAX_FPS_STEP: u16 = 5;
 const MAX_FPS_DEFAULT: u16 = 60;
-const DISPLAY_ASPECT_RATIO_CHOICES: [Choice; 4] = [
-    literal_choice("16:9"),
-    literal_choice("16:10"),
-    literal_choice("4:3"),
-    literal_choice("1:1"),
-];
-const PRESENT_MODE_CHOICES: [Choice; 2] = [literal_choice("Mailbox"), literal_choice("Immediate")];
-const CENTERED_P1_NOTEFIELD_CHOICES: [Choice; 2] = [
-    localized_choice("Common", "Off"),
-    localized_choice("Common", "On"),
-];
-const MUSIC_WHEEL_SCROLL_SPEED_CHOICES: [Choice; 7] = [
-    localized_choice("OptionsSelectMusic", "WheelSpeedSlow"),
-    localized_choice("OptionsSelectMusic", "WheelSpeedNormal"),
-    localized_choice("OptionsSelectMusic", "WheelSpeedFast"),
-    localized_choice("OptionsSelectMusic", "WheelSpeedFaster"),
-    localized_choice("OptionsSelectMusic", "WheelSpeedRidiculous"),
-    localized_choice("OptionsSelectMusic", "WheelSpeedLudicrous"),
-    localized_choice("OptionsSelectMusic", "WheelSpeedPlaid"),
-];
 const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
-const SELECT_MUSIC_SCOREBOX_CYCLE_CHOICES: [Choice; SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES] = [
-    localized_choice("OptionsSelectMusic", "ScoreboxCycleITG"),
-    localized_choice("OptionsSelectMusic", "ScoreboxCycleEX"),
-    localized_choice("OptionsSelectMusic", "ScoreboxCycleHEX"),
-    localized_choice("OptionsSelectMusic", "ScoreboxCycleTournaments"),
-];
-const SELECT_MUSIC_CHART_INFO_CHOICES: [Choice; SELECT_MUSIC_CHART_INFO_NUM_CHOICES] = [
-    localized_choice("OptionsSelectMusic", "ChartInfoPeakNPS"),
-    localized_choice("OptionsSelectMusic", "ChartInfoMatrixRating"),
-];
-const AUTO_SS_CHOICES: [Choice; 5] = [
-    literal_choice("PBs"),
-    literal_choice("Fails"),
-    literal_choice("Clears"),
-    literal_choice("Quads"),
-    literal_choice("Quints"),
-];
+
 
 const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
     (1920, 1080),
@@ -1452,7 +1365,12 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::DisplayAspectRatio,
         label: lookup_key("OptionsGraphics", "DisplayAspectRatio"),
-        choices: &DISPLAY_ASPECT_RATIO_CHOICES,
+        choices: &[
+            literal_choice("16:9"),
+            literal_choice("16:10"),
+            literal_choice("4:3"),
+            literal_choice("1:1"),
+        ],
         inline: true,
     },
     SubRow {
@@ -1503,7 +1421,7 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::PresentMode,
         label: lookup_key("OptionsGraphics", "PresentMode"),
-        choices: &PRESENT_MODE_CHOICES,
+        choices: &[literal_choice("Mailbox"), literal_choice("Immediate")],
         inline: true,
     },
     SubRow {
@@ -2181,13 +2099,28 @@ pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::BgBrightness,
         label: lookup_key("OptionsGameplay", "BgBrightness"),
-        choices: &BG_BRIGHTNESS_CHOICES,
+        choices: &[
+            literal_choice("0%"),
+            literal_choice("10%"),
+            literal_choice("20%"),
+            literal_choice("30%"),
+            literal_choice("40%"),
+            literal_choice("50%"),
+            literal_choice("60%"),
+            literal_choice("70%"),
+            literal_choice("80%"),
+            literal_choice("90%"),
+            literal_choice("100%"),
+        ],
         inline: false,
     },
     SubRow {
         id: SubRowId::CenteredP1Notefield,
         label: lookup_key("OptionsGameplay", "CenteredP1Notefield"),
-        choices: &CENTERED_P1_NOTEFIELD_CHOICES,
+        choices: &[
+            localized_choice("Common", "Off"),
+            localized_choice("Common", "On"),
+        ],
         inline: true,
     },
     SubRow {
@@ -2211,7 +2144,13 @@ pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::AutoScreenshot,
         label: lookup_key("OptionsGameplay", "AutoScreenshot"),
-        choices: &AUTO_SS_CHOICES,
+        choices: &[
+            literal_choice("PBs"),
+            literal_choice("Fails"),
+            literal_choice("Clears"),
+            literal_choice("Quads"),
+            literal_choice("Quints"),
+        ],
         inline: true,
     },
 ];
@@ -2277,7 +2216,10 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::AudioOutputMode,
         label: lookup_key("OptionsSound", "AudioOutputMode"),
-        choices: SOUND_OUTPUT_MODE_CHOICES,
+        choices: &[
+            localized_choice("OptionsSound", "OutputModeAuto"),
+            localized_choice("OptionsSound", "OutputModeShared"),
+        ],
         inline: false,
     },
     #[cfg(target_os = "linux")]
@@ -2508,7 +2450,15 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::MusicWheelSpeed,
         label: lookup_key("OptionsSelectMusic", "MusicWheelSpeed"),
-        choices: &MUSIC_WHEEL_SCROLL_SPEED_CHOICES,
+        choices: &[
+            localized_choice("OptionsSelectMusic", "WheelSpeedSlow"),
+            localized_choice("OptionsSelectMusic", "WheelSpeedNormal"),
+            localized_choice("OptionsSelectMusic", "WheelSpeedFast"),
+            localized_choice("OptionsSelectMusic", "WheelSpeedFaster"),
+            localized_choice("OptionsSelectMusic", "WheelSpeedRidiculous"),
+            localized_choice("OptionsSelectMusic", "WheelSpeedLudicrous"),
+            localized_choice("OptionsSelectMusic", "WheelSpeedPlaid"),
+        ],
         inline: true,
     },
     SubRow {
@@ -2577,7 +2527,10 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::ChartInfo,
         label: lookup_key("OptionsSelectMusic", "ChartInfo"),
-        choices: &SELECT_MUSIC_CHART_INFO_CHOICES,
+        choices: &[
+            localized_choice("OptionsSelectMusic", "ChartInfoPeakNPS"),
+            localized_choice("OptionsSelectMusic", "ChartInfoMatrixRating"),
+        ],
         inline: true,
     },
     SubRow {
@@ -2637,7 +2590,12 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::GsBoxLeaderboards,
         label: lookup_key("OptionsSelectMusic", "GsBoxLeaderboards"),
-        choices: &SELECT_MUSIC_SCOREBOX_CYCLE_CHOICES,
+        choices: &[
+            localized_choice("OptionsSelectMusic", "ScoreboxCycleITG"),
+            localized_choice("OptionsSelectMusic", "ScoreboxCycleEX"),
+            localized_choice("OptionsSelectMusic", "ScoreboxCycleHEX"),
+            localized_choice("OptionsSelectMusic", "ScoreboxCycleTournaments"),
+        ],
         inline: true,
     },
 ];
@@ -3052,13 +3010,39 @@ pub const NULL_OR_DIE_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::SyncGraph,
         label: lookup_key("OptionsNullOrDie", "SyncGraph"),
-        choices: NULL_OR_DIE_SYNC_GRAPH_CHOICES,
+        choices: &[
+            localized_choice("OptionsNullOrDie", "SyncGraphFrequency"),
+            localized_choice("OptionsNullOrDie", "SyncGraphBeatIndex"),
+            localized_choice("OptionsNullOrDie", "SyncGraphPostKernel"),
+        ],
         inline: false,
     },
     SubRow {
         id: SubRowId::SyncConfidence,
         label: lookup_key("OptionsNullOrDie", "SyncConfidence"),
-        choices: NULL_OR_DIE_SYNC_CONFIDENCE_CHOICES,
+        choices: &[
+            literal_choice("0%"),
+            literal_choice("5%"),
+            literal_choice("10%"),
+            literal_choice("15%"),
+            literal_choice("20%"),
+            literal_choice("25%"),
+            literal_choice("30%"),
+            literal_choice("35%"),
+            literal_choice("40%"),
+            literal_choice("45%"),
+            literal_choice("50%"),
+            literal_choice("55%"),
+            literal_choice("60%"),
+            literal_choice("65%"),
+            literal_choice("70%"),
+            literal_choice("75%"),
+            literal_choice("80%"),
+            literal_choice("85%"),
+            literal_choice("90%"),
+            literal_choice("95%"),
+            literal_choice("100%"),
+        ],
         inline: false,
     },
     SubRow {
@@ -3094,13 +3078,19 @@ pub const NULL_OR_DIE_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::KernelTarget,
         label: lookup_key("OptionsNullOrDie", "KernelTarget"),
-        choices: NULL_OR_DIE_KERNEL_TARGET_CHOICES,
+        choices: &[
+            localized_choice("OptionsNullOrDie", "KernelTargetDigest"),
+            localized_choice("OptionsNullOrDie", "KernelTargetAccumulator"),
+        ],
         inline: false,
     },
     SubRow {
         id: SubRowId::KernelType,
         label: lookup_key("OptionsNullOrDie", "KernelType"),
-        choices: NULL_OR_DIE_KERNEL_TYPE_CHOICES,
+        choices: &[
+            localized_choice("OptionsNullOrDie", "KernelTypeRising"),
+            localized_choice("OptionsNullOrDie", "KernelTypeLoudest"),
+        ],
         inline: false,
     },
     SubRow {
@@ -9365,66 +9355,55 @@ fn build_description_layout(
 ) -> DescriptionLayout {
     let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
     let wrap_extra_pad = desc_wrap_extra_pad_unscaled() * s;
-    let mut title_text = None;
-    let mut bullet_keys = Vec::new();
-    for entry in item.help {
-        match entry {
-            HelpEntry::Paragraph(key) => title_text = Some(key.get()),
-            HelpEntry::Bullet(key) => bullet_keys.push(key),
-        }
-    }
-    let raw_title_text = title_text.unwrap_or_else(|| item.name.get());
     let title_max_width_px =
         desc_w_unscaled().mul_add(s, -((2.0 * title_side_pad) + wrap_extra_pad));
-    let wrapped_title = wrap_miso_text(
-        asset_manager,
-        &raw_title_text,
-        title_max_width_px,
-        DESC_TITLE_ZOOM * s,
+    let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
+    let bullet_max_width_px = desc_w_unscaled().mul_add(
+        s,
+        -((2.0 * bullet_side_pad) + (DESC_BULLET_INDENT_PX * s) + wrap_extra_pad),
     );
-    let title_lines = wrapped_title.lines().count().max(1);
-    let mut bullet_text = String::new();
-    let mut bullet_line_count = 0usize;
-    let note_text = String::new();
-    if !bullet_keys.is_empty() {
-        let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
-        let bullet_max_width_px = desc_w_unscaled().mul_add(
-            s,
-            -((2.0 * bullet_side_pad) + (DESC_BULLET_INDENT_PX * s) + wrap_extra_pad),
-        );
-        for key in &bullet_keys {
-            let resolved = key.get();
-            let trimmed = resolved.trim();
-            if trimmed.is_empty() {
-                continue;
+
+    let mut blocks = Vec::new();
+
+    if item.help.is_empty() {
+        // No help entries — show the item name as a paragraph fallback.
+        let wrapped = wrap_miso_text(asset_manager, &item.name.get(), title_max_width_px, DESC_TITLE_ZOOM * s);
+        blocks.push(RenderedHelpBlock::Paragraph {
+            line_count: wrapped.lines().count().max(1),
+            text: Arc::from(wrapped),
+        });
+    } else {
+        for entry in item.help {
+            match entry {
+                HelpEntry::Paragraph(lkey) => {
+                    let raw = lkey.get();
+                    let wrapped = wrap_miso_text(asset_manager, &raw, title_max_width_px, DESC_TITLE_ZOOM * s);
+                    blocks.push(RenderedHelpBlock::Paragraph {
+                        line_count: wrapped.lines().count().max(1),
+                        text: Arc::from(wrapped),
+                    });
+                }
+                HelpEntry::Bullet(lkey) => {
+                    let resolved = lkey.get();
+                    let trimmed = resolved.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    let mut entry_str = String::with_capacity(trimmed.len() + 2);
+                    entry_str.push('\u{2022}');
+                    entry_str.push(' ');
+                    entry_str.push_str(trimmed);
+                    let wrapped = wrap_miso_text(asset_manager, &entry_str, bullet_max_width_px, DESC_BODY_ZOOM * s);
+                    blocks.push(RenderedHelpBlock::Bullet {
+                        line_count: wrapped.lines().count().max(1),
+                        text: Arc::from(wrapped),
+                    });
+                }
             }
-            let mut entry = String::with_capacity(trimmed.len() + 2);
-            entry.push('\u{2022}');
-            entry.push(' ');
-            entry.push_str(trimmed);
-            let wrapped = wrap_miso_text(
-                asset_manager,
-                &entry,
-                bullet_max_width_px,
-                DESC_BODY_ZOOM * s,
-            );
-            bullet_line_count += wrapped.lines().count();
-            if !bullet_text.is_empty() {
-                bullet_text.push('\n');
-            }
-            bullet_text.push_str(&wrapped);
         }
     }
-    let note_line_count = note_text.lines().count().max(1);
-    DescriptionLayout {
-        key,
-        title: Arc::from(wrapped_title),
-        title_lines,
-        bullet_text: (!bullet_text.is_empty()).then(|| Arc::from(bullet_text)),
-        bullet_line_count,
-        note_text: (!note_text.is_empty()).then(|| Arc::from(note_text)),
-        note_line_count,
-    }
+
+    DescriptionLayout { key, blocks }
 }
 
 fn description_layout(
@@ -10426,52 +10405,36 @@ pub fn get_actors(
         let mut cursor_y = DESC_TITLE_TOP_PAD_PX.mul_add(s, list_y);
         let desc_layout = description_layout(state, asset_manager, desc_key, item, s);
         let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
-        let title_step_px = 20.0 * s; // approximate vertical advance for title line
+        let title_step_px = 20.0 * s;
         let body_step_px = 18.0 * s;
+        let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
 
-        // Draw the wrapped explanation/title text.
-        ui_actors.push(act!(text:
-            align(0.0, 0.0):
-            xy(desc_x + title_side_pad, cursor_y):
-            zoom(DESC_TITLE_ZOOM):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            font("miso"): settext(&desc_layout.title):
-            horizalign(left)
-        ));
-        cursor_y += title_step_px * desc_layout.title_lines as f32 + DESC_BULLET_TOP_PAD_PX * s;
-
-        if let Some(bullet_text) = desc_layout.bullet_text.as_ref() {
-            let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
-            let bullet_x = DESC_BULLET_INDENT_PX.mul_add(s, desc_x + bullet_side_pad);
-            ui_actors.push(act!(text:
-                align(0.0, 0.0):
-                xy(bullet_x, cursor_y):
-                zoom(DESC_BODY_ZOOM):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                font("miso"): settext(bullet_text):
-                horizalign(left)
-            ));
-            cursor_y += body_step_px * desc_layout.bullet_line_count as f32;
-        }
-        if let Some(note_text) = desc_layout.note_text.as_ref() {
-            let note_min_y = cursor_y
-                + if desc_layout.bullet_text.is_some() {
-                    8.0 * s
-                } else {
-                    0.0
-                };
-            let note_bottom_y = (list_y + desc_h)
-                - (DESC_NOTE_BOTTOM_PAD_PX * s)
-                - (body_step_px * desc_layout.note_line_count as f32);
-            let note_y = note_min_y.max(note_bottom_y);
-            ui_actors.push(act!(text:
-                align(0.0, 0.0):
-                xy(desc_x + title_side_pad, note_y):
-                zoom(DESC_BODY_ZOOM):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                font("miso"): settext(note_text):
-                horizalign(left)
-            ));
+        for block in &desc_layout.blocks {
+            match block {
+                RenderedHelpBlock::Paragraph { text, line_count } => {
+                    ui_actors.push(act!(text:
+                        align(0.0, 0.0):
+                        xy(desc_x + title_side_pad, cursor_y):
+                        zoom(DESC_TITLE_ZOOM):
+                        diffuse(1.0, 1.0, 1.0, 1.0):
+                        font("miso"): settext(text):
+                        horizalign(left)
+                    ));
+                    cursor_y += title_step_px * *line_count as f32 + DESC_BULLET_TOP_PAD_PX * s;
+                }
+                RenderedHelpBlock::Bullet { text, line_count } => {
+                    let bullet_x = DESC_BULLET_INDENT_PX.mul_add(s, desc_x + bullet_side_pad);
+                    ui_actors.push(act!(text:
+                        align(0.0, 0.0):
+                        xy(bullet_x, cursor_y):
+                        zoom(DESC_BODY_ZOOM):
+                        diffuse(1.0, 1.0, 1.0, 1.0):
+                        font("miso"): settext(text):
+                        horizalign(left)
+                    ));
+                    cursor_y += body_step_px * *line_count as f32;
+                }
+            }
         }
     }
     if let Some(confirm) = &state.score_import_confirm {
