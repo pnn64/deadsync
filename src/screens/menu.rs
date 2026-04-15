@@ -6,6 +6,7 @@ use crate::engine::present::color;
 use crate::game::course::get_course_cache;
 use crate::game::online::{self as network, ArrowCloudConnectionStatus, ConnectionStatus};
 use crate::game::song::get_song_cache;
+use crate::i18n::tr;
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::menu::menu_list::{self};
 use crate::screens::components::menu::menu_splash;
@@ -13,7 +14,7 @@ use crate::screens::components::shared::{heart_bg, screen_bar};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::cell::RefCell;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use winit::keyboard::KeyCode;
 
 use crate::engine::space::{screen_center_x, screen_height, screen_width};
@@ -25,7 +26,6 @@ const TRANSITION_OUT_DURATION: f32 = 1.0;
 const NORMAL_COLOR_HEX: &str = "#888888";
 
 pub const OPTION_COUNT: usize = 3;
-const MENU_OPTIONS: [&str; OPTION_COUNT] = ["GAMEPLAY", "OPTIONS", "EXIT"];
 
 // --- CONSTANTS UPDATED FOR NEW ANIMATION-DRIVEN LAYOUT ---
 //const MENU_BELOW_LOGO: f32 = 25.0;
@@ -73,31 +73,15 @@ enum ArrowCloudStatusKey {
     CannotConnect,
 }
 
-static DISABLED_LINE_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("Disabled"));
-static FAILED_TO_LOAD_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("Failed to Load 😞"));
-static MACHINE_OFFLINE_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("Machine Offline"));
-static CANNOT_CONNECT_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("Cannot Connect"));
-static TIMED_OUT_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("Timed Out"));
-static HOST_BLOCKED_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("Host Blocked"));
-static GROOVESTATS_DISABLED_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("❌ GrooveStats"));
-static GROOVESTATS_WARN_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("⚠ GrooveStats"));
-static GET_SCORES_DISABLED_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("❌ Get Scores"));
-static LEADERBOARD_DISABLED_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("❌ Leaderboard"));
-static AUTO_SUBMIT_DISABLED_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("❌ Auto-Submit"));
-static ARROW_CLOUD_DISABLED_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("❌ Arrow Cloud"));
-static ARROW_CLOUD_PENDING_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("     Arrow Cloud"));
-static ARROW_CLOUD_CONNECTED_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("✔ Arrow Cloud"));
+fn groove_error_text(kind: GrooveErrorKind) -> Arc<str> {
+    match kind {
+        GrooveErrorKind::MachineOffline => tr("Menu", "MachineOffline"),
+        GrooveErrorKind::CannotConnect => tr("Menu", "CannotConnect"),
+        GrooveErrorKind::TimedOut => tr("Menu", "TimedOut"),
+        GrooveErrorKind::Disabled => tr("Menu", "Disabled"),
+        GrooveErrorKind::FailedToLoad => tr("Menu", "FailedToLoad"),
+    }
+}
 
 pub struct State {
     pub selected_index: usize,
@@ -234,23 +218,12 @@ fn groove_status_key() -> GrooveStatusKey {
     }
 }
 
-#[inline(always)]
-fn groove_error_text(kind: GrooveErrorKind) -> Arc<str> {
-    match kind {
-        GrooveErrorKind::MachineOffline => MACHINE_OFFLINE_TEXT.clone(),
-        GrooveErrorKind::CannotConnect => CANNOT_CONNECT_TEXT.clone(),
-        GrooveErrorKind::TimedOut => TIMED_OUT_TEXT.clone(),
-        GrooveErrorKind::Disabled => DISABLED_LINE_TEXT.clone(),
-        GrooveErrorKind::FailedToLoad => FAILED_TO_LOAD_TEXT.clone(),
-    }
-}
-
 fn build_groovestats_text(key: GrooveStatusKey) -> StatusTextCache<GrooveStatusKey, 3> {
     let mut lines = [None, None, None];
     let (main, line_count) = match key {
         GrooveStatusKey::Disabled => {
-            lines[0] = Some(DISABLED_LINE_TEXT.clone());
-            (GROOVESTATS_DISABLED_TEXT.clone(), 1)
+            lines[0] = Some(tr("Menu", "Disabled"));
+            (tr("Menu", "GrooveStatsDisabled"), 1)
         }
         GrooveStatusKey::Pending { boogie } => (
             Arc::<str>::from(format!("     {}", groove_service_name(boogie))),
@@ -273,22 +246,22 @@ fn build_groovestats_text(key: GrooveStatusKey) -> StatusTextCache<GrooveStatusK
                     0,
                 )
             } else if disabled_mask == 0b111 {
-                (GROOVESTATS_DISABLED_TEXT.clone(), 0)
+                (tr("Menu", "GrooveStatsDisabled"), 0)
             } else {
                 let mut line_count = 0;
                 if disabled_mask & 0b001 != 0 {
-                    lines[line_count] = Some(GET_SCORES_DISABLED_TEXT.clone());
+                    lines[line_count] = Some(tr("Menu", "GetScoresDisabled"));
                     line_count += 1;
                 }
                 if disabled_mask & 0b010 != 0 {
-                    lines[line_count] = Some(LEADERBOARD_DISABLED_TEXT.clone());
+                    lines[line_count] = Some(tr("Menu", "LeaderboardDisabled"));
                     line_count += 1;
                 }
                 if disabled_mask & 0b100 != 0 {
-                    lines[line_count] = Some(AUTO_SUBMIT_DISABLED_TEXT.clone());
+                    lines[line_count] = Some(tr("Menu", "AutoSubmitDisabled"));
                     line_count += 1;
                 }
-                (GROOVESTATS_WARN_TEXT.clone(), line_count)
+                (tr("Menu", "GrooveStatsWarn"), line_count)
             }
         }
     };
@@ -337,22 +310,22 @@ fn build_arrowcloud_text(key: ArrowCloudStatusKey) -> StatusTextCache<ArrowCloud
     let mut lines = [None];
     let (main, line_count) = match key {
         ArrowCloudStatusKey::Disabled => {
-            lines[0] = Some(DISABLED_LINE_TEXT.clone());
-            (ARROW_CLOUD_DISABLED_TEXT.clone(), 1)
+            lines[0] = Some(tr("Menu", "Disabled"));
+            (tr("Menu", "ArrowCloudDisabled"), 1)
         }
-        ArrowCloudStatusKey::Pending => (ARROW_CLOUD_PENDING_TEXT.clone(), 0),
-        ArrowCloudStatusKey::Connected => (ARROW_CLOUD_CONNECTED_TEXT.clone(), 0),
+        ArrowCloudStatusKey::Pending => (tr("Menu", "ArrowCloudPending"), 0),
+        ArrowCloudStatusKey::Connected => (tr("Menu", "ArrowCloudConnected"), 0),
         ArrowCloudStatusKey::TimedOut => {
-            lines[0] = Some(TIMED_OUT_TEXT.clone());
-            (ARROW_CLOUD_DISABLED_TEXT.clone(), 1)
+            lines[0] = Some(tr("Menu", "TimedOut"));
+            (tr("Menu", "ArrowCloudDisabled"), 1)
         }
         ArrowCloudStatusKey::HostBlocked => {
-            lines[0] = Some(HOST_BLOCKED_TEXT.clone());
-            (ARROW_CLOUD_DISABLED_TEXT.clone(), 1)
+            lines[0] = Some(tr("Menu", "HostBlocked"));
+            (tr("Menu", "ArrowCloudDisabled"), 1)
         }
         ArrowCloudStatusKey::CannotConnect => {
-            lines[0] = Some(CANNOT_CONNECT_TEXT.clone());
-            (ARROW_CLOUD_DISABLED_TEXT.clone(), 1)
+            lines[0] = Some(tr("Menu", "CannotConnect"));
+            (tr("Menu", "ArrowCloudDisabled"), 1)
         }
     };
     StatusTextCache {
@@ -457,9 +430,16 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     selected[3] *= alpha_multiplier;
     normal[3] *= alpha_multiplier;
 
+    let menu_labels = [
+        tr("Menu", "Gameplay"),
+        tr("Menu", "Options"),
+        tr("Menu", "Exit"),
+    ];
+    let menu_strs: Vec<&str> = menu_labels.iter().map(|s| s.as_ref()).collect();
+
     // --- UPDATED PARAMS FOR THE NEW MENU LIST BUILDER ---
     let params = menu_list::MenuParams {
-        options: &MENU_OPTIONS,
+        options: &menu_strs,
         selected_index: state.selected_index,
         start_center_y: base_y,
         row_spacing: MENU_ROW_SPACING,
