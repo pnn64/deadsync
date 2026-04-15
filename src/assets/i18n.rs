@@ -1,6 +1,7 @@
 use crate::config;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 
 /// Loaded language data: active locale strings + English fallback.
@@ -15,6 +16,22 @@ struct LangData {
 }
 
 static LANG: OnceLock<RwLock<LangData>> = OnceLock::new();
+static LANG_REVISION: AtomicU64 = AtomicU64::new(0);
+
+fn language_file_path(locale: &str) -> std::path::PathBuf {
+    config::dirs::app_dirs()
+        .exe_dir
+        .join("assets")
+        .join("languages")
+        .join(format!("{locale}.ini"))
+}
+
+fn languages_dir_path() -> std::path::PathBuf {
+    config::dirs::app_dirs()
+        .exe_dir
+        .join("assets")
+        .join("languages")
+}
 
 fn load_ini_to_map(path: &Path) -> HashMap<Box<str>, HashMap<Box<str>, Arc<str>>> {
     let mut ini = config::SimpleIni::new();
@@ -50,11 +67,9 @@ fn native_name(path: &Path, locale_code: &str) -> String {
 /// `locale` is the resolved locale code (e.g. `"en"`, `"es"`). If the locale
 /// is `"en"`, only the fallback map is populated and the active map stays empty.
 pub fn init(locale: &str) {
-    let dirs = config::dirs::app_dirs();
-    let fallback = load_ini_to_map(&dirs.resolve_asset_path("assets/languages/en.ini"));
+    let fallback = load_ini_to_map(&language_file_path("en"));
     let active = if locale != "en" {
-        let path = dirs.resolve_asset_path(&format!("assets/languages/{locale}.ini"));
-        load_ini_to_map(&path)
+        load_ini_to_map(&language_file_path(locale))
     } else {
         HashMap::new()
     };
@@ -63,7 +78,12 @@ pub fn init(locale: &str) {
         fallback,
         locale: locale.to_string(),
     };
-    let _ = LANG.set(RwLock::new(data));
+    if let Some(lang) = LANG.get() {
+        *lang.write().unwrap() = data;
+    } else {
+        let _ = LANG.set(RwLock::new(data));
+    }
+    LANG_REVISION.fetch_add(1, Ordering::AcqRel);
 }
 
 /// Look up a localized string by section and key.
@@ -105,15 +125,22 @@ pub fn tr_fmt(section: &str, key: &str, args: &[(&str, &str)]) -> Arc<str> {
 ///
 /// All subsequent `tr()` calls will return strings from the new language.
 pub fn set_locale(locale: &str) {
-    let mut lang = LANG.get().expect("i18n not initialized").write().unwrap();
-    let dirs = config::dirs::app_dirs();
+    let Some(lang_lock) = LANG.get() else {
+        init(locale);
+        return;
+    };
+    let mut lang = lang_lock.write().unwrap();
+    if lang.locale == locale {
+        return;
+    }
     lang.active = if locale != "en" {
-        let path = dirs.resolve_asset_path(&format!("assets/languages/{locale}.ini"));
-        load_ini_to_map(&path)
+        load_ini_to_map(&language_file_path(locale))
     } else {
         HashMap::new()
     };
     lang.locale = locale.to_string();
+    drop(lang);
+    LANG_REVISION.fetch_add(1, Ordering::AcqRel);
 }
 
 /// Returns the currently active locale code (e.g. `"en"`, `"es"`).
@@ -124,6 +151,17 @@ pub fn current_locale() -> String {
         .unwrap()
         .locale
         .clone()
+}
+
+pub fn revision() -> u64 {
+    LANG_REVISION.load(Ordering::Acquire)
+}
+
+pub fn resolve_locale(flag: config::LanguageFlag) -> String {
+    match flag {
+        config::LanguageFlag::Auto => detect_os_locale(),
+        flag => flag.locale_code().to_string(),
+    }
 }
 
 /// Detect the best locale from the OS settings, falling back to `"en"` if
@@ -179,17 +217,14 @@ fn normalize_locale(raw: &str) -> String {
 }
 
 fn locale_file_exists(code: &str) -> bool {
-    let dirs = config::dirs::app_dirs();
-    let path = dirs.resolve_asset_path(&format!("assets/languages/{code}.ini"));
-    path.exists()
+    language_file_path(code).exists()
 }
 
 /// Scan `assets/languages/*.ini` and return `(locale_code, native_name)` pairs
 /// sorted by locale code. The native name comes from each file's `[Meta]`
 /// `NativeName` value.
 pub fn available_locales() -> Vec<(String, String)> {
-    let dirs = config::dirs::app_dirs();
-    let languages_dir = dirs.resolve_asset_path("assets/languages");
+    let languages_dir = languages_dir_path();
     let mut locales = Vec::new();
 
     let entries = match std::fs::read_dir(&languages_dir) {

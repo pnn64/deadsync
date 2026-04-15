@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::AssetManager;
+use crate::assets::{self, AssetManager};
 use crate::engine::display::{self, MonitorSpec};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
 use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
@@ -876,9 +876,7 @@ pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         name: "Language",
-        help: &[
-            "Stored in deadsync.ini for compatibility; runtime language switching is not implemented yet.",
-        ],
+        help: &["Applies immediately and is saved to deadsync.ini."],
     },
     Item {
         name: "Log Level",
@@ -6873,7 +6871,11 @@ fn apply_submenu_choice_delta(
         match row.label {
             "Game" => config::update_game_flag(config::GameFlag::Dance),
             "Theme" => config::update_theme_flag(config::ThemeFlag::SimplyLove),
-            "Language" => config::update_language_flag(config::LanguageFlag::English),
+            "Language" => {
+                let flag = config::LanguageFlag::English;
+                config::update_language_flag(flag);
+                assets::i18n::set_locale(&assets::i18n::resolve_locale(flag));
+            }
             "Log Level" => config::update_log_level(log_level_from_choice(new_index)),
             SYSTEM_ROW_LOG_FILE => config::update_log_to_file(new_index == 1),
             "Default NoteSkin" => {

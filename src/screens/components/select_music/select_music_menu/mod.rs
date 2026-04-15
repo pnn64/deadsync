@@ -1,15 +1,15 @@
-mod menu;
 pub mod downloads;
 pub mod leaderboard;
+mod menu;
 pub mod replay;
 pub mod song_search;
 
+pub use downloads::*;
+pub use leaderboard::*;
 pub use menu::{
     CategoryItemLists as MenuLists, Entry, FOCUS_TWEEN_SECONDS, InputOutcome, RenderParams,
     VisibleState as MenuState, build_overlay, handle_input, move_selection, open,
 };
-pub use downloads::*;
-pub use leaderboard::*;
 pub use replay::*;
 pub use song_search::*;
 

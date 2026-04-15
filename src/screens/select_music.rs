@@ -6136,7 +6136,8 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
         return ScreenAction::None;
     };
 
-    let outcome = select_music_menu::handle_input(menu_state, &menu_state.cached_entries.clone(), ev);
+    let outcome =
+        select_music_menu::handle_input(menu_state, &menu_state.cached_entries.clone(), ev);
     match outcome {
         select_music_menu::InputOutcome::None => {
             if let Some(dir) = dir {

@@ -201,10 +201,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize localization after config (which provides the language preference)
     // and before profile/audio/screens which may use tr() for display strings.
-    let locale = match cfg.language_flag {
-        config::LanguageFlag::Auto => assets::i18n::detect_os_locale(),
-        flag => flag.locale_code().to_string(),
-    };
+    let locale = assets::i18n::resolve_locale(cfg.language_flag);
     assets::i18n::init(&locale);
 
     #[cfg(windows)]

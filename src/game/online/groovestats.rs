@@ -30,11 +30,20 @@ pub struct Services {
     pub auto_submit: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionError {
+    Disabled,
+    MachineOffline,
+    CannotConnect,
+    TimedOut,
+    InvalidResponse,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConnectionStatus {
     Pending,
     Connected(Services),
-    Error(String),
+    Error(ConnectionError),
 }
 
 static STATUS: LazyLock<Mutex<ConnectionStatus>> =
@@ -112,7 +121,7 @@ fn new_session_url() -> String {
 pub fn init() {
     let cfg = crate::config::get();
     if !cfg.enable_groovestats {
-        set_status(ConnectionStatus::Error("Disabled".to_string()));
+        set_status(ConnectionStatus::Error(ConnectionError::Disabled));
         return;
     }
 
@@ -130,7 +139,7 @@ fn perform_check() {
         Ok(data) => {
             if !data.services_result.eq_ignore_ascii_case("OK") {
                 warn!("{service_name} servicesResult != OK.");
-                set_status(ConnectionStatus::Error("Machine Offline".to_string()));
+                set_status(ConnectionStatus::Error(ConnectionError::MachineOffline));
                 return;
             }
 
@@ -147,15 +156,15 @@ fn perform_check() {
         }
         Err(network::NetworkError::Timeout) => {
             warn!("{service_name} connectivity check timed out.");
-            set_status(ConnectionStatus::Error("Timed Out".to_string()));
+            set_status(ConnectionStatus::Error(ConnectionError::TimedOut));
         }
         Err(network::NetworkError::Decode(error)) => {
             warn!("Failed to parse {service_name} response: {error}");
-            set_status(ConnectionStatus::Error("Failed to Parse".to_string()));
+            set_status(ConnectionStatus::Error(ConnectionError::InvalidResponse));
         }
         Err(error) => {
             warn!("HTTP error to {service_name}: {error}");
-            set_status(ConnectionStatus::Error("Cannot Connect".to_string()));
+            set_status(ConnectionStatus::Error(ConnectionError::CannotConnect));
         }
     }
 }
