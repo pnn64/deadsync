@@ -843,7 +843,7 @@ pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         label: "Language",
-        choices: &["English"],
+        choices: &["English", "Swedish"],
         inline: false,
     },
     SubRow {
@@ -4437,6 +4437,20 @@ const fn translated_titles_from_choice(idx: usize) -> bool {
     idx == 0
 }
 
+const fn language_choice_index(flag: config::LanguageFlag) -> usize {
+    match flag {
+        config::LanguageFlag::Auto | config::LanguageFlag::English => 0,
+        config::LanguageFlag::Swedish => 1,
+    }
+}
+
+const fn language_flag_from_choice(idx: usize) -> config::LanguageFlag {
+    match idx {
+        1 => config::LanguageFlag::Swedish,
+        _ => config::LanguageFlag::English,
+    }
+}
+
 const fn select_music_pattern_info_choice_index(mode: SelectMusicPatternInfoMode) -> usize {
     match mode {
         SelectMusicPatternInfoMode::Auto => 0,
@@ -4949,7 +4963,7 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_system,
         SYSTEM_OPTIONS_ROWS,
         "Language",
-        0,
+        language_choice_index(cfg.language_flag),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_system,
@@ -6872,7 +6886,7 @@ fn apply_submenu_choice_delta(
             "Game" => config::update_game_flag(config::GameFlag::Dance),
             "Theme" => config::update_theme_flag(config::ThemeFlag::SimplyLove),
             "Language" => {
-                let flag = config::LanguageFlag::English;
+                let flag = language_flag_from_choice(new_index);
                 config::update_language_flag(flag);
                 assets::i18n::set_locale(&assets::i18n::resolve_locale(flag));
             }

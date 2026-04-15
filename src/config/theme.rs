@@ -444,6 +444,7 @@ impl FromStr for ThemeFlag {
 pub enum LanguageFlag {
     Auto,
     English,
+    Swedish,
 }
 
 impl LanguageFlag {
@@ -452,6 +453,7 @@ impl LanguageFlag {
         match self {
             Self::Auto => "auto",
             Self::English => "English",
+            Self::Swedish => "Swedish",
         }
     }
 
@@ -460,6 +462,7 @@ impl LanguageFlag {
         match self {
             Self::Auto => "auto",
             Self::English => "en",
+            Self::Swedish => "sv",
         }
     }
 }
@@ -471,6 +474,7 @@ impl FromStr for LanguageFlag {
         match s.trim().to_ascii_lowercase().as_str() {
             "auto" => Ok(Self::Auto),
             "english" | "en" => Ok(Self::English),
+            "swedish" | "sv" => Ok(Self::Swedish),
             _ => Err(()),
         }
     }
