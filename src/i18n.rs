@@ -4,6 +4,32 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, OnceLock, RwLock};
 
+// ---------------------------------------------------------------------------
+// LKey — lazy localization key (const-compatible)
+// ---------------------------------------------------------------------------
+
+/// A reference to a localized string that resolves at render time via `tr()`.
+///
+/// `LKey` is `Copy` and can live in `const` static arrays. Call `.get()` to
+/// resolve to the current language's text. If the key is missing, falls back
+/// to English, then to `"Section.Key"`.
+#[derive(Clone, Copy)]
+pub struct LKey {
+    pub section: &'static str,
+    pub key: &'static str,
+}
+
+impl LKey {
+    /// Resolve this key to the localized string for the current language.
+    pub fn get(&self) -> Arc<str> {
+        tr(self.section, self.key)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LangData
+// ---------------------------------------------------------------------------
+
 /// Loaded language data: active locale strings + English fallback.
 struct LangData {
     /// Active (non-English) language strings: section → (key → value).
