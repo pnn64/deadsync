@@ -442,14 +442,13 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
                 horizalign(right)
             ));
         } else if show_hard_ex {
-            let hex = color::HARD_EX_SCORE_RGBA;
             actors.push(act!(text:
                 font("wendy"):
                 settext("H.EX"):
                 align(1.0, 0.5):
                 xy(center_x + pane_width * 0.5 - 16.0, header_y):
                 zoom(0.5):
-                diffuse(hex[0], hex[1], hex[2], hex[3]):
+                diffuse(1.0, 1.0, 1.0, 1.0):
                 z(GS_LEADERBOARD_Z + 6):
                 horizalign(right)
             ));
@@ -474,7 +473,9 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
             let mut highlight_rgb = [0.0, 0.0, 0.0];
             let mut rank_col = [1.0, 1.0, 1.0, 1.0];
             let mut name_col = [1.0, 1.0, 1.0, 1.0];
-            let mut score_col = if show_hard_ex {
+            let mut score_col = if show_ex {
+                color::JUDGMENT_RGBA[0]
+            } else if show_hard_ex {
                 color::HARD_EX_SCORE_RGBA
             } else {
                 [1.0, 1.0, 1.0, 1.0]
