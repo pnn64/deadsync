@@ -10,20 +10,25 @@ use std::sync::{Arc, OnceLock, RwLock};
 
 /// A reference to a localized string that resolves at render time via `tr()`.
 ///
-/// `LKey` is `Copy` and can live in `const` static arrays. Call `.get()` to
+/// `LookupKey` is `Copy` and can live in `const` static arrays. Call `.get()` to
 /// resolve to the current language's text. If the key is missing, falls back
 /// to English, then to `"Section.Key"`.
 #[derive(Clone, Copy)]
-pub struct LKey {
+pub struct LookupKey {
     pub section: &'static str,
     pub key: &'static str,
 }
 
-impl LKey {
+impl LookupKey {
     /// Resolve this key to the localized string for the current language.
     pub fn get(&self) -> Arc<str> {
         tr(self.section, self.key)
     }
+}
+
+/// Shorthand for constructing a `LookupKey` in const contexts.
+pub const fn lookup_key(section: &'static str, key: &'static str) -> LookupKey {
+    LookupKey { section, key }
 }
 
 // ---------------------------------------------------------------------------
@@ -205,11 +210,7 @@ fn normalize_locale(raw: &str) -> String {
     }
 
     // For most locales, just use the primary language subtag.
-    lower
-        .split('-')
-        .next()
-        .unwrap_or("en")
-        .to_string()
+    lower.split('-').next().unwrap_or("en").to_string()
 }
 
 fn locale_file_exists(code: &str) -> bool {
