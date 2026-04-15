@@ -1,4 +1,5 @@
 pub(crate) mod dynamic;
+pub mod i18n;
 mod textures;
 
 use crate::config::dirs;
