@@ -79,6 +79,10 @@ directories = "6.0.0"
 # Song cache
 bincode = "2.0.1"
 twox-hash = "2.1.2"
+
+# Localization
+rust-ini = "0.21"
+sys-locale = "0.3"
 tokio = { version = "1.51.1", features = ["rt"] }
 bitflags = "2.11.0"
 
