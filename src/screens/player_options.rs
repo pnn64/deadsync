@@ -455,6 +455,8 @@ pub struct State {
     pub nav_key_held_direction: [Option<NavDirection>; PLAYER_SLOTS],
     pub nav_key_held_since: [Option<Instant>; PLAYER_SLOTS],
     pub nav_key_last_scrolled_at: [Option<Instant>; PLAYER_SLOTS],
+    pub start_held_since: [Option<Instant>; PLAYER_SLOTS],
+    pub start_last_triggered_at: [Option<Instant>; PLAYER_SLOTS],
     inline_choice_x: [f32; PLAYER_SLOTS],
     arcade_row_focus: [bool; PLAYER_SLOTS],
     allow_per_player_global_offsets: bool,
@@ -2934,6 +2936,8 @@ pub fn init(
         nav_key_held_direction: [None; PLAYER_SLOTS],
         nav_key_held_since: [None; PLAYER_SLOTS],
         nav_key_last_scrolled_at: [None; PLAYER_SLOTS],
+        start_held_since: [None; PLAYER_SLOTS],
+        start_last_triggered_at: [None; PLAYER_SLOTS],
         inline_choice_x: [f32::NAN; PLAYER_SLOTS],
         arcade_row_focus: [true; PLAYER_SLOTS],
         allow_per_player_global_offsets,
@@ -4813,7 +4817,7 @@ pub fn apply_choice_delta(
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app
-pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
+pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ScreenAction> {
     // Keep options-screen noteskin previews on a stable clock.
     // ITG/SL preview actors are not driven by selected chart BPM, so tying this to song BPM
     // makes beat-based skins (e.g. cel) appear too fast/slow depending on the selected chart.
@@ -4822,6 +4826,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
     state.preview_beat += dt * (PREVIEW_BPM / 60.0);
     let active = session_active_players();
     let now = Instant::now();
+    let arcade_style = crate::config::get().arcade_options_navigation;
+    let mut pending_action: Option<ScreenAction> = None;
     sync_selected_rows_with_visibility(state, active);
 
     // Hold-to-scroll per player.
@@ -4867,6 +4873,15 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
             }
         }
         state.nav_key_last_scrolled_at[player_idx] = Some(now);
+    }
+
+    if arcade_style {
+        for player_idx in active_player_indices(active) {
+            let action = repeat_held_arcade_start(state, asset_manager, active, player_idx, now);
+            if pending_action.is_none() {
+                pending_action = action;
+            }
+        }
     }
 
     match state.pane_transition {
@@ -5109,6 +5124,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
             }
         }
     }
+
+    pending_action
 }
 
 // Helpers for hold-to-scroll controlled by the app dispatcher
@@ -5127,6 +5144,21 @@ pub fn on_nav_release(state: &mut State, player_idx: usize, dir: NavDirection) {
         state.nav_key_held_since[idx] = None;
         state.nav_key_last_scrolled_at[idx] = None;
     }
+}
+
+#[inline(always)]
+fn on_start_press(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let now = Instant::now();
+    state.start_held_since[idx] = Some(now);
+    state.start_last_triggered_at[idx] = Some(now);
+}
+
+#[inline(always)]
+fn clear_start_hold(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    state.start_held_since[idx] = None;
+    state.start_last_triggered_at[idx] = None;
 }
 
 fn toggle_scroll_row(state: &mut State, player_idx: usize) {
@@ -6105,6 +6137,8 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.prev_selected_row = [0; PLAYER_SLOTS];
     state.inline_choice_x = [f32::NAN; PLAYER_SLOTS];
     state.arcade_row_focus = [false; PLAYER_SLOTS];
+    state.start_held_since = [None; PLAYER_SLOTS];
+    state.start_last_triggered_at = [None; PLAYER_SLOTS];
     state.cursor_initialized = [false; PLAYER_SLOTS];
     state.cursor_from_x = [0.0; PLAYER_SLOTS];
     state.cursor_from_y = [0.0; PLAYER_SLOTS];
@@ -6139,6 +6173,8 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     state.nav_key_held_direction = [None; PLAYER_SLOTS];
     state.nav_key_held_since = [None; PLAYER_SLOTS];
     state.nav_key_last_scrolled_at = [None; PLAYER_SLOTS];
+    state.start_held_since = [None; PLAYER_SLOTS];
+    state.start_last_triggered_at = [None; PLAYER_SLOTS];
 
     state.pane_transition = match state.pane_transition {
         PaneTransition::FadingOut { t, .. } => PaneTransition::FadingOut { target: pane, t },
@@ -6225,6 +6261,63 @@ fn clear_nav_hold(state: &mut State, player_idx: usize) {
     state.nav_key_held_direction[idx] = None;
     state.nav_key_held_since[idx] = None;
     state.nav_key_last_scrolled_at[idx] = None;
+}
+
+#[inline(always)]
+fn player_side_for_idx(player_idx: usize) -> crate::game::profile::PlayerSide {
+    if player_idx == P2 {
+        crate::game::profile::PlayerSide::P2
+    } else {
+        crate::game::profile::PlayerSide::P1
+    }
+}
+
+fn handle_arcade_start_press(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    active: [bool; PLAYER_SLOTS],
+    player_idx: usize,
+    repeated: bool,
+) -> Option<ScreenAction> {
+    if screen_input::menu_lr_both_held(&state.menu_lr_chord, player_side_for_idx(player_idx)) {
+        handle_arcade_prev_event(state, asset_manager, active, player_idx);
+        return None;
+    }
+    if repeated && !state.rows.is_empty() {
+        let idx = player_idx.min(PLAYER_SLOTS - 1);
+        let row_idx = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
+        if row_idx + 1 == state.rows.len() {
+            return None;
+        }
+    }
+    handle_arcade_start_event(state, asset_manager, active, player_idx)
+}
+
+fn repeat_held_arcade_start(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    active: [bool; PLAYER_SLOTS],
+    player_idx: usize,
+    now: Instant,
+) -> Option<ScreenAction> {
+    if !active[player_idx] {
+        clear_start_hold(state, player_idx);
+        return None;
+    }
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let (Some(held_since), Some(last_triggered_at)) = (
+        state.start_held_since[idx],
+        state.start_last_triggered_at[idx],
+    ) else {
+        return None;
+    };
+    if now.duration_since(held_since) <= NAV_INITIAL_HOLD_DELAY
+        || now.duration_since(last_triggered_at) < NAV_REPEAT_SCROLL_INTERVAL
+    {
+        return None;
+    }
+    state.start_last_triggered_at[idx] = Some(now);
+    handle_arcade_start_press(state, asset_manager, active, player_idx, true)
 }
 
 fn move_arcade_horizontal_focus(
@@ -6575,40 +6668,16 @@ pub fn handle_input(
                 ev.pressed,
             );
         }
-        VirtualAction::p1_start if ev.pressed => {
-            if dedicated_three_key {
-                // Match ITGmania ScreenOptions NAV_THREE_KEY:
-                // left/right change values, Start advances rows, and
-                // Left+Right+Start moves to the previous row.
-                if arcade_style {
-                    if screen_input::menu_lr_both_held(
-                        &state.menu_lr_chord,
-                        crate::game::profile::PlayerSide::P1,
-                    ) {
-                        handle_arcade_prev_event(state, asset_manager, active, P1);
-                        return ScreenAction::None;
-                    }
-                    if let Some(action) =
-                        handle_arcade_start_event(state, asset_manager, active, P1)
-                    {
-                        return action;
-                    }
-                    return ScreenAction::None;
-                }
-                if let Some(action) = handle_start_event(state, asset_manager, active, P1) {
-                    return action;
-                }
+        VirtualAction::p1_start => {
+            if !ev.pressed {
+                clear_start_hold(state, P1);
                 return ScreenAction::None;
             }
-            if arcade_options_navigation_active() {
-                if screen_input::menu_lr_both_held(
-                    &state.menu_lr_chord,
-                    crate::game::profile::PlayerSide::P1,
-                ) {
-                    handle_arcade_prev_event(state, asset_manager, active, P1);
-                    return ScreenAction::None;
-                }
-                if let Some(action) = handle_arcade_start_event(state, asset_manager, active, P1) {
+            if arcade_style {
+                on_start_press(state, P1);
+                if let Some(action) =
+                    handle_arcade_start_press(state, asset_manager, active, P1, false)
+                {
                     return action;
                 }
                 return ScreenAction::None;
@@ -6617,11 +6686,7 @@ pub fn handle_input(
                 return action;
             }
         }
-        VirtualAction::p1_select
-            if ev.pressed
-                && (arcade_options_navigation_active()
-                    || (dedicated_three_key && arcade_style)) =>
-        {
+        VirtualAction::p1_select if ev.pressed && arcade_style => {
             handle_arcade_prev_event(state, asset_manager, active, P1);
             return ScreenAction::None;
         }
@@ -6665,37 +6730,16 @@ pub fn handle_input(
                 ev.pressed,
             );
         }
-        VirtualAction::p2_start if ev.pressed => {
-            if dedicated_three_key {
-                if arcade_style {
-                    if screen_input::menu_lr_both_held(
-                        &state.menu_lr_chord,
-                        crate::game::profile::PlayerSide::P2,
-                    ) {
-                        handle_arcade_prev_event(state, asset_manager, active, P2);
-                        return ScreenAction::None;
-                    }
-                    if let Some(action) =
-                        handle_arcade_start_event(state, asset_manager, active, P2)
-                    {
-                        return action;
-                    }
-                    return ScreenAction::None;
-                }
-                if let Some(action) = handle_start_event(state, asset_manager, active, P2) {
-                    return action;
-                }
+        VirtualAction::p2_start => {
+            if !ev.pressed {
+                clear_start_hold(state, P2);
                 return ScreenAction::None;
             }
-            if arcade_options_navigation_active() {
-                if screen_input::menu_lr_both_held(
-                    &state.menu_lr_chord,
-                    crate::game::profile::PlayerSide::P2,
-                ) {
-                    handle_arcade_prev_event(state, asset_manager, active, P2);
-                    return ScreenAction::None;
-                }
-                if let Some(action) = handle_arcade_start_event(state, asset_manager, active, P2) {
+            if arcade_style {
+                on_start_press(state, P2);
+                if let Some(action) =
+                    handle_arcade_start_press(state, asset_manager, active, P2, false)
+                {
                     return action;
                 }
                 return ScreenAction::None;
@@ -6704,11 +6748,7 @@ pub fn handle_input(
                 return action;
             }
         }
-        VirtualAction::p2_select
-            if ev.pressed
-                && (arcade_options_navigation_active()
-                    || (dedicated_three_key && arcade_style)) =>
-        {
+        VirtualAction::p2_select if ev.pressed && arcade_style => {
             handle_arcade_prev_event(state, asset_manager, active, P2);
             return ScreenAction::None;
         }
@@ -8780,12 +8820,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::{
-        HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, ROW_COMBO_FONT, ROW_COMBO_OFFSET_X,
-        ROW_ERROR_BAR_OFFSET_X, ROW_JUDGMENT_FONT, ROW_JUDGMENT_OFFSET_X, Row, SpeedMod,
-        hud_offset_choices, is_row_visible, row_visibility, sync_profile_scroll_speed,
+        HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, NAV_INITIAL_HOLD_DELAY,
+        NAV_REPEAT_SCROLL_INTERVAL, P1, ROW_COMBO_FONT, ROW_COMBO_OFFSET_X, ROW_ERROR_BAR_OFFSET_X,
+        ROW_JUDGMENT_FONT, ROW_JUDGMENT_OFFSET_X, Row, SpeedMod, handle_arcade_start_event,
+        hud_offset_choices, is_row_visible, repeat_held_arcade_start, row_visibility,
+        session_active_players, sync_profile_scroll_speed,
     };
-    use crate::game::profile::Profile;
+    use crate::assets::AssetManager;
+    use crate::game::profile::{self, PlayStyle, PlayerSide, Profile};
     use crate::game::scroll::ScrollSpeedSetting;
+    use crate::screens::Screen;
+    use crate::test_support::{compose_scenarios, notefield_bench};
+    use std::time::{Duration, Instant};
 
     fn test_row(name: &str, choices: &[&str], selected_choice_index: [usize; 2]) -> Row {
         Row {
@@ -8886,5 +8932,64 @@ mod tests {
         );
         assert_eq!(choices.last().map(String::as_str), Some("250"));
         assert_eq!(choices.len() as i32, HUD_OFFSET_MAX - HUD_OFFSET_MIN + 1);
+    }
+
+    #[test]
+    fn held_arcade_start_keeps_advancing_rows() {
+        let base = notefield_bench::fixture();
+        let song = base.state().song.clone();
+
+        profile::set_session_play_style(PlayStyle::Single);
+        profile::set_session_player_side(PlayerSide::P1);
+        profile::set_session_joined(true, false);
+
+        let mut asset_manager = AssetManager::new();
+        for (name, font) in compose_scenarios::bench_fonts() {
+            asset_manager.register_font(name, font);
+        }
+
+        let mut state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
+        let active = session_active_players();
+        let first_row = state.selected_row[P1];
+        assert!(handle_arcade_start_event(&mut state, &asset_manager, active, P1).is_none());
+        let second_row = state.selected_row[P1];
+        assert!(second_row > first_row);
+
+        let now = Instant::now();
+        state.start_held_since[P1] = Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
+        state.start_last_triggered_at[P1] =
+            Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
+
+        assert!(repeat_held_arcade_start(&mut state, &asset_manager, active, P1, now).is_none());
+        assert!(state.selected_row[P1] > second_row);
+    }
+
+    #[test]
+    fn held_arcade_start_stops_at_exit_row() {
+        let base = notefield_bench::fixture();
+        let song = base.state().song.clone();
+
+        profile::set_session_play_style(PlayStyle::Single);
+        profile::set_session_player_side(PlayerSide::P1);
+        profile::set_session_joined(true, false);
+
+        let mut asset_manager = AssetManager::new();
+        for (name, font) in compose_scenarios::bench_fonts() {
+            asset_manager.register_font(name, font);
+        }
+
+        let mut state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
+        let active = session_active_players();
+        let last_row = state.rows.len().saturating_sub(1);
+        state.selected_row[P1] = last_row;
+        state.prev_selected_row[P1] = last_row;
+
+        let now = Instant::now();
+        state.start_held_since[P1] = Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
+        state.start_last_triggered_at[P1] =
+            Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
+
+        assert!(repeat_held_arcade_start(&mut state, &asset_manager, active, P1, now).is_none());
+        assert_eq!(state.selected_row[P1], last_row);
     }
 }

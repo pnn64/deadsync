@@ -825,6 +825,7 @@ pub struct SessionState {
     preferred_difficulty_index: usize,
     session_start_time: Option<Instant>,
     played_stages: Vec<stage_stats::StageSummary>,
+    pending_post_select_summary_exit: bool,
     course_individual_stage_indices: Vec<usize>,
     combo_carry: [u32; crate::game::gameplay::MAX_PLAYERS],
     gameplay_restart_count: u32,
@@ -1213,6 +1214,7 @@ impl SessionState {
             preferred_difficulty_index,
             session_start_time: None,
             played_stages: Vec::new(),
+            pending_post_select_summary_exit: false,
             course_individual_stage_indices: Vec::new(),
             combo_carry,
             gameplay_restart_count: 0,
@@ -1786,6 +1788,21 @@ fn total_gameplay_elapsed(stages: &[stage_stats::StageSummary]) -> f32 {
     total
 }
 
+#[inline(always)]
+const fn evaluation_summary_return_to(
+    prev: CurrentScreen,
+    pending_post_select_summary_exit: bool,
+) -> CurrentScreen {
+    if pending_post_select_summary_exit {
+        return CurrentScreen::Initials;
+    }
+    match prev {
+        CurrentScreen::SelectMusic => CurrentScreen::SelectMusic,
+        CurrentScreen::SelectCourse => CurrentScreen::SelectCourse,
+        _ => CurrentScreen::Initials,
+    }
+}
+
 fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::StageSummary> {
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
@@ -1913,6 +1930,32 @@ fn can_reuse_quick_restart_payload(
     current_song.simfile_path == next_song.simfile_path
         && (current_song.offset - next_song.offset).abs() < 0.000_001_f32
         && current_chart_hashes == next_chart_hashes
+}
+
+fn restart_payload_from_eval(
+    score_info: &[Option<evaluation::ScoreInfo>; crate::game::gameplay::MAX_PLAYERS],
+) -> Option<(
+    Arc<crate::game::song::SongData>,
+    [String; crate::game::gameplay::MAX_PLAYERS],
+    f32,
+    [ScrollSpeedSetting; crate::game::gameplay::MAX_PLAYERS],
+)> {
+    let mut song = None;
+    let mut chart_hashes = std::array::from_fn(|_| String::new());
+    let mut scroll_speed = [ScrollSpeedSetting::default(); crate::game::gameplay::MAX_PLAYERS];
+    let mut music_rate = None;
+
+    for entry in score_info.iter().flatten() {
+        song.get_or_insert_with(|| entry.song.clone());
+        let side = side_ix(entry.side);
+        chart_hashes[side] = entry.chart.short_hash.clone();
+        scroll_speed[side] = entry.speed_mod;
+        if music_rate.is_none() && entry.music_rate.is_finite() && entry.music_rate > 0.0 {
+            music_rate = Some(entry.music_rate);
+        }
+    }
+
+    song.map(|song| (song, chart_hashes, music_rate.unwrap_or(1.0), scroll_speed))
 }
 
 fn rewrite_simfile_offset_tags(
@@ -2131,12 +2174,12 @@ impl ScreensState {
                 input_screen::update(&mut self.input_state, delta_time),
                 false,
             ),
-            CurrentScreen::PlayerOptions => {
-                if let Some(pos) = &mut self.player_options_state {
-                    player_options::update(pos, delta_time, asset_manager);
-                }
-                (None, false)
-            }
+            CurrentScreen::PlayerOptions => (
+                self.player_options_state
+                    .as_mut()
+                    .and_then(|pos| player_options::update(pos, delta_time, asset_manager)),
+                false,
+            ),
             CurrentScreen::Sandbox => {
                 sandbox::update(&mut self.sandbox_state, delta_time);
                 (None, false)
@@ -3461,28 +3504,11 @@ impl App {
         }
 
         let score_info = &self.state.screens.evaluation_state.score_info;
-        let Some(song) = score_info
-            .iter()
-            .find_map(|entry| entry.as_ref().map(|si| si.song.clone()))
+        let Some((song, chart_hashes, music_rate, scroll_speed)) =
+            restart_payload_from_eval(score_info)
         else {
             return false;
         };
-
-        let chart_hashes: [String; crate::game::gameplay::MAX_PLAYERS] =
-            std::array::from_fn(|idx| {
-                score_info[idx]
-                    .as_ref()
-                    .map_or_else(String::new, |si| si.chart.short_hash.clone())
-            });
-        let music_rate = score_info
-            .iter()
-            .find_map(|entry| entry.as_ref().map(|si| si.music_rate))
-            .unwrap_or(1.0);
-        let scroll_speed = std::array::from_fn(|idx| {
-            score_info[idx]
-                .as_ref()
-                .map_or(ScrollSpeedSetting::default(), |si| si.speed_mod)
-        });
         let active_color_index = self.state.screens.evaluation_state.active_color_index;
         self.prepare_restart_player_options(
             song,
@@ -6189,7 +6215,12 @@ impl App {
                         .active_color_index
                 }
             };
-            self.state.screens.evaluation_summary_state = evaluation_summary::init();
+            let return_to = evaluation_summary_return_to(
+                prev,
+                std::mem::take(&mut self.state.session.pending_post_select_summary_exit),
+            );
+            self.state.screens.evaluation_summary_state =
+                evaluation_summary::init_for_return(return_to);
             self.state
                 .screens
                 .evaluation_summary_state
@@ -7026,6 +7057,66 @@ mod tests {
         }
     }
 
+    fn test_score_info(
+        song: Arc<SongData>,
+        side: profile::PlayerSide,
+        hash: &str,
+        speed_mod: ScrollSpeedSetting,
+        music_rate: f32,
+    ) -> evaluation::ScoreInfo {
+        evaluation::ScoreInfo {
+            song: song.clone(),
+            chart: Arc::new(test_chart(hash)),
+            side,
+            profile_name: String::new(),
+            score_valid: true,
+            disqualified: false,
+            expected_groovestats_submit: false,
+            expected_arrowcloud_submit: false,
+            groovestats: crate::game::scores::GrooveStatsEvalState::default(),
+            itl: crate::game::scores::ItlEvalState::default(),
+            judgment_counts: [0; crate::game::judgment::JUDGE_GRADE_COUNT],
+            score_percent: 0.0,
+            grade: crate::game::scores::Grade::Tier01,
+            speed_mod,
+            hands_achieved: 0,
+            hands_total: 0,
+            holds_held: 0,
+            holds_total: 0,
+            rolls_held: 0,
+            rolls_total: 0,
+            mines_avoided: 0,
+            mines_total: 0,
+            timing: crate::game::timing::TimingStats::default(),
+            scatter: Vec::new(),
+            scatter_worst_window_ms: 45.0,
+            histogram: crate::game::timing::HistogramMs::default(),
+            graph_first_second: 0.0,
+            graph_last_second: song.precise_last_second(),
+            music_rate,
+            scroll_option: crate::game::profile::ScrollOption::default(),
+            life_history: Vec::new(),
+            fail_time: None,
+            window_counts: crate::game::timing::WindowCounts::default(),
+            window_counts_10ms: crate::game::timing::WindowCounts::default(),
+            ex_score_percent: 0.0,
+            hard_ex_score_percent: 0.0,
+            calories_burned: 0.0,
+            column_judgments: Vec::new(),
+            noteskin: None,
+            show_fa_plus_window: false,
+            show_ex_score: false,
+            show_hard_ex_score: false,
+            show_fa_plus_pane: false,
+            track_early_judgments: false,
+            machine_records: Vec::new(),
+            machine_record_highlight_rank: None,
+            personal_records: Vec::new(),
+            personal_record_highlight_rank: None,
+            show_machine_personal_split: false,
+        }
+    }
+
     #[test]
     fn foreground_input_requires_focus_and_surface() {
         assert!(foreground_input_active(true, true));
@@ -7087,5 +7178,48 @@ mod tests {
             &next_song,
             ["a", "b"],
         ));
+    }
+
+    #[test]
+    fn evaluation_restart_payload_uses_score_side_for_single_p2() {
+        let song = Arc::new(test_song("Songs/Test/song.ssc", 0.0, ["p1", "p2"]));
+        let mut score_info = std::array::from_fn(|_| None);
+        score_info[0] = Some(test_score_info(
+            song.clone(),
+            profile::PlayerSide::P2,
+            "p2hash",
+            ScrollSpeedSetting::MMod(777.0),
+            1.5,
+        ));
+
+        let (payload_song, chart_hashes, music_rate, scroll_speed) =
+            restart_payload_from_eval(&score_info).expect("score info should restart");
+
+        assert!(Arc::ptr_eq(&payload_song, &song));
+        assert!(chart_hashes[0].is_empty());
+        assert_eq!(chart_hashes[1], "p2hash");
+        assert!((music_rate - 1.5).abs() < f32::EPSILON);
+        assert_eq!(scroll_speed[0], ScrollSpeedSetting::default());
+        assert_eq!(scroll_speed[1], ScrollSpeedSetting::MMod(777.0));
+    }
+
+    #[test]
+    fn evaluation_summary_return_to_stays_in_select_music_for_set_summary() {
+        assert_eq!(
+            evaluation_summary_return_to(CurrentScreen::SelectMusic, false),
+            CurrentScreen::SelectMusic,
+        );
+    }
+
+    #[test]
+    fn evaluation_summary_return_to_keeps_exit_flow_moving() {
+        assert_eq!(
+            evaluation_summary_return_to(CurrentScreen::SelectMusic, true),
+            CurrentScreen::Initials,
+        );
+        assert_eq!(
+            evaluation_summary_return_to(CurrentScreen::SelectCourse, true),
+            CurrentScreen::Initials,
+        );
     }
 }

@@ -46,9 +46,11 @@ const fn backend_key(backend: BackendType) -> u8 {
         BackendType::VulkanWgpu => 1,
         BackendType::OpenGL => 2,
         BackendType::OpenGLWgpu => 3,
-        BackendType::Software => 4,
+        #[cfg(target_os = "macos")]
+        BackendType::Metal => 4,
+        BackendType::Software => 5,
         #[cfg(target_os = "windows")]
-        BackendType::DirectX => 5,
+        BackendType::DirectX => 6,
     }
 }
 

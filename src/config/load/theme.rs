@@ -49,6 +49,10 @@ fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Theme", "MachineShowSelectProfile")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.machine_show_select_profile);
+    cfg.allow_switch_profile_in_menu = conf
+        .get("Theme", "AllowSwitchProfileInMenu")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.allow_switch_profile_in_menu);
     cfg.machine_show_select_color = conf
         .get("Theme", "MachineShowSelectColor")
         .and_then(|v| parse_loose_bool_str(&v))

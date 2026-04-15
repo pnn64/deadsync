@@ -5,14 +5,13 @@ pub mod leaderboard;
 pub mod replay;
 pub mod song_search;
 
-pub use classic::{build_overlay, RenderParams, FOCUS_TWEEN_SECONDS};
+pub use classic::{FOCUS_TWEEN_SECONDS, RenderParams, build_overlay};
 pub use downloads::*;
 pub use leaderboard::*;
 pub use replay::*;
 pub use song_search::*;
 
 use crate::engine::present::actors::Actor;
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -48,6 +47,7 @@ pub enum Action {
     SyncPack,
     PlayReplay,
     ShowLeaderboard,
+    ShowSetSummary,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -212,10 +212,20 @@ pub const ITEM_SORT_BY_FAVORITES: Item = Item {
     bottom_label: "Favorites",
     action: Action::SortByFavorites,
 };
-const ITEM_GO_BACK: Item = Item {
+pub const ITEM_GO_BACK: Item = Item {
     top_label: "Options",
     bottom_label: "Go Back",
     action: Action::BackToMain,
+};
+pub const ITEM_GO_BACK_STANDALONE: Item = Item {
+    top_label: "",
+    bottom_label: "Go Back",
+    action: Action::BackToMain,
+};
+pub const ITEM_SET_SUMMARY: Item = Item {
+    top_label: "Relive Your Memories",
+    bottom_label: "Set Summary",
+    action: Action::ShowSetSummary,
 };
 
 pub const ITEMS_SORTS: [Item; 11] = [
@@ -255,7 +265,6 @@ impl State {
     }
 }
 
-
 #[inline(always)]
 pub fn scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
     if len <= 1 {
@@ -271,7 +280,6 @@ pub fn scroll_dir(len: usize, prev: usize, selected: usize) -> isize {
         0
     }
 }
-
 
 #[inline(always)]
 pub(crate) fn set_text_clip_rect(actor: &mut Actor, rect: [f32; 4]) {

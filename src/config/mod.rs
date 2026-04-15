@@ -15,7 +15,8 @@ mod update;
 pub use self::audio::{AudioMixLevels, AudioOutputMode, LinuxAudioBackend};
 pub use self::ini::SimpleIni;
 pub use self::keybinds::{
-    update_keymap_binding_unique_gamepad, update_keymap_binding_unique_keyboard,
+    clear_keymap_binding, update_keymap_binding_unique_gamepad,
+    update_keymap_binding_unique_keyboard,
 };
 pub use self::load::{bootstrap_log_to_file, load};
 pub use self::null_or_die_cfg::null_or_die_bias_cfg;
@@ -154,6 +155,8 @@ pub struct Config {
     pub show_video_backgrounds: bool,
     /// Startup flow: show Select Profile before continuing.
     pub machine_show_select_profile: bool,
+    /// Whether "Switch Profile" appears in the select music sort menu.
+    pub allow_switch_profile_in_menu: bool,
     /// Startup flow: show Select Color before continuing.
     pub machine_show_select_color: bool,
     /// Startup flow: show Select Style before continuing.
@@ -295,6 +298,7 @@ impl Default for Config {
             keyboard_features: true,
             show_video_backgrounds: true,
             machine_show_select_profile: true,
+            allow_switch_profile_in_menu: false,
             machine_show_select_color: true,
             machine_show_select_style: true,
             machine_show_select_play_mode: true,

@@ -249,6 +249,8 @@ pub enum BackendType {
     Vulkan,
     #[cfg(not(target_pointer_width = "32"))]
     VulkanWgpu,
+    #[cfg(target_os = "macos")]
+    Metal,
     OpenGL,
     OpenGLWgpu,
     Software,
@@ -262,6 +264,8 @@ pub enum Texture {
     Vulkan(vulkan::Texture),
     #[cfg(not(target_pointer_width = "32"))]
     VulkanWgpu(wgpu_core::Texture),
+    #[cfg(target_os = "macos")]
+    Metal(wgpu_core::Texture),
     OpenGL(opengl::Texture),
     OpenGLWgpu(wgpu_core::Texture),
     Software(software::Texture),
@@ -275,6 +279,8 @@ enum BackendImpl {
     Vulkan(vulkan::State),
     #[cfg(not(target_pointer_width = "32"))]
     VulkanWgpu(wgpu_core::State),
+    #[cfg(target_os = "macos")]
+    Metal(wgpu_core::State),
     OpenGL(opengl::State),
     OpenGLWgpu(wgpu_core::State),
     Software(software::State),
@@ -302,6 +308,10 @@ impl Backend {
             BackendImpl::VulkanWgpu(state) => {
                 wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
             }
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => {
+                wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
+            }
             BackendImpl::OpenGL(state) => {
                 opengl::draw(state, render_list, textures, apply_present_back_pressure)
             }
@@ -324,6 +334,8 @@ impl Backend {
             BackendImpl::Vulkan(state) => vulkan::request_screenshot(state),
             #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::request_screenshot(state),
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => wgpu_core::request_screenshot(state),
             BackendImpl::OpenGL(state) => opengl::request_screenshot(state),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::request_screenshot(state),
             BackendImpl::Software(state) => software::request_screenshot(state),
@@ -339,6 +351,8 @@ impl Backend {
             BackendImpl::Vulkan(state) => vulkan::capture_frame(state),
             #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::capture_frame(state),
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => wgpu_core::capture_frame(state),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::capture_frame(state),
             BackendImpl::Software(_) => Err(std::io::Error::other(
                 "Screenshot capture is not implemented for Software renderer yet",
@@ -361,6 +375,8 @@ impl Backend {
             BackendImpl::Vulkan(state) => vulkan::resize(state, width, height),
             #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::resize(state, width, height),
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => wgpu_core::resize(state, width, height),
             BackendImpl::OpenGL(state) => opengl::resize(state, width, height),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::resize(state, width, height),
             BackendImpl::Software(state) => software::resize(state, width, height),
@@ -375,6 +391,8 @@ impl Backend {
             BackendImpl::Vulkan(state) => vulkan::cleanup(state),
             #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::cleanup(state),
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => wgpu_core::cleanup(state),
             BackendImpl::OpenGL(state) => opengl::cleanup(state),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::cleanup(state),
             BackendImpl::Software(state) => software::cleanup(state),
@@ -398,6 +416,11 @@ impl Backend {
             BackendImpl::VulkanWgpu(state) => {
                 let tex = wgpu_core::create_texture(state, image, sampler)?;
                 Ok(Texture::VulkanWgpu(tex))
+            }
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => {
+                let tex = wgpu_core::create_texture(state, image, sampler)?;
+                Ok(Texture::Metal(tex))
             }
             BackendImpl::OpenGL(state) => {
                 let tex = opengl::create_texture(&state.gl, image, sampler)?;
@@ -431,6 +454,10 @@ impl Backend {
             }
             #[cfg(not(target_pointer_width = "32"))]
             (BackendImpl::VulkanWgpu(state), Texture::VulkanWgpu(texture)) => {
+                wgpu_core::update_texture(state, texture, image)
+            }
+            #[cfg(target_os = "macos")]
+            (BackendImpl::Metal(state), Texture::Metal(texture)) => {
                 wgpu_core::update_texture(state, texture, image)
             }
             (BackendImpl::OpenGL(state), Texture::OpenGL(texture)) => {
@@ -467,6 +494,10 @@ impl Backend {
             }
             #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(_) => {
+                drop(old_textures);
+            }
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(_) => {
                 drop(old_textures);
             }
             BackendImpl::OpenGL(state) => {
@@ -506,6 +537,10 @@ impl Backend {
             }
             #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(_) => {
+                drop(old_textures);
+            }
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(_) => {
                 drop(old_textures);
             }
             BackendImpl::OpenGL(state) => {
@@ -551,6 +586,13 @@ impl Backend {
             }
             #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => {
+                let _ = state.device.poll(wgpu::PollType::Wait {
+                    submission_index: None,
+                    timeout: None,
+                });
+            }
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => {
                 let _ = state.device.poll(wgpu::PollType::Wait {
                     submission_index: None,
                     timeout: None,
@@ -602,6 +644,13 @@ pub fn create_backend(
             present_mode_policy,
             gfx_debug_enabled,
         )?),
+        #[cfg(target_os = "macos")]
+        BackendType::Metal => BackendImpl::Metal(wgpu_core::init_metal(
+            window,
+            vsync_enabled,
+            present_mode_policy,
+            gfx_debug_enabled,
+        )?),
         BackendType::OpenGL => {
             BackendImpl::OpenGL(opengl::init(window, vsync_enabled, gfx_debug_enabled)?)
         }
@@ -638,6 +687,10 @@ impl Backend {
             BackendImpl::VulkanWgpu(state) => {
                 wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
             }
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => {
+                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
+            }
             BackendImpl::OpenGL(state) => opengl::set_vsync_enabled(state, vsync_enabled),
             BackendImpl::OpenGLWgpu(state) => {
                 wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
@@ -659,6 +712,8 @@ impl core::fmt::Display for BackendType {
             Self::Vulkan => write!(f, "Vulkan"),
             #[cfg(not(target_pointer_width = "32"))]
             Self::VulkanWgpu => write!(f, "Vulkan (wgpu)"),
+            #[cfg(target_os = "macos")]
+            Self::Metal => write!(f, "Metal (wgpu)"),
             Self::OpenGL => write!(f, "OpenGL"),
             Self::OpenGLWgpu => write!(f, "OpenGL (wgpu)"),
             Self::Software => write!(f, "Software"),
@@ -675,6 +730,10 @@ impl FromStr for BackendType {
             "vulkan" => Ok(Self::Vulkan),
             #[cfg(not(target_pointer_width = "32"))]
             "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "vulkan (wgpu)" => Ok(Self::VulkanWgpu),
+            #[cfg(target_os = "macos")]
+            "metal" | "metal-wgpu" | "metal_wgpu" | "wgpu-metal" | "metal (wgpu)" => {
+                Ok(Self::Metal)
+            }
             "opengl" => Ok(Self::OpenGL),
             "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => Ok(Self::OpenGLWgpu),
             "software" | "cpu" => Ok(Self::Software),

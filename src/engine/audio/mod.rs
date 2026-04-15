@@ -968,6 +968,11 @@ pub fn play_assist_tick(path: &str) {
 }
 
 fn play_sfx_on_lane(path: &str, lane: SfxLane) {
+    #[cfg(test)]
+    if !is_initialized() {
+        return;
+    }
+
     let sound_data = {
         let mut cache = ENGINE.sfx_cache.lock().unwrap();
         if let Some(data) = cache.get(path) {
