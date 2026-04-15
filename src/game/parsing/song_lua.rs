@@ -686,6 +686,14 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
             lua.create_function(|_, (value, min, max): (f64, f64, f64)| Ok(value.clamp(min, max)))?,
         )?;
     }
+    if matches!(math.get::<Value>("mod")?, Value::Nil) {
+        math.set(
+            "mod",
+            lua.create_function(|_, (left, right): (f64, f64)| {
+                Ok(if right == 0.0 { f64::NAN } else { left % right })
+            })?,
+        )?;
+    }
     globals.set("unpack", table.get::<Value>("unpack")?)?;
     globals.set("Trace", lua.create_function(|_, _msg: String| Ok(()))?)?;
     globals.set("debug", create_debug_table(lua)?)?;
@@ -6413,6 +6421,32 @@ return Def.ActorFrame{}
         )
         .unwrap();
         assert!(compiled.overlays.is_empty());
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_lua51_stdlib_aliases() {
+        let song_dir = test_dir("lua51-stdlib-aliases");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local values = {10, 20, 30}
+mod_actions = {
+    {1, string.format("%d:%d", math.mod(5, 2), table.getn(values)), true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Lua51 Stdlib Aliases"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "1:3");
     }
 
     #[test]
