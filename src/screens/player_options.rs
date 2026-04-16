@@ -223,7 +223,8 @@ fn init_row_tweens(
         parent_anchor_visible_index(rows, RowId::JudgmentTilt, visibility);
     let combo_font_anchor_visible_idx =
         parent_anchor_visible_index(rows, RowId::ComboFont, visibility);
-    let error_bar_anchor_visible_idx = parent_anchor_visible_index(rows, RowId::ErrorBar, visibility);
+    let error_bar_anchor_visible_idx =
+        parent_anchor_visible_index(rows, RowId::ErrorBar, visibility);
     let hide_anchor_visible_idx = parent_anchor_visible_index(rows, RowId::Hide, visibility);
 
     let mut out: Vec<RowTween> = Vec::with_capacity(total_rows);
@@ -235,17 +236,17 @@ fn init_row_tweens(
             visible_idx += 1;
             f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
         } else {
-            let anchor =
-                rows.get(i)
-                    .and_then(|row| match conditional_row_parent(row.id) {
-                        Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
-                        Some(RowId::JudgmentFont) => judgment_font_anchor_visible_idx,
-                        Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
-                        Some(RowId::ComboFont) => combo_font_anchor_visible_idx,
-                        Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
-                        Some(RowId::Hide) => hide_anchor_visible_idx,
-                        _ => None,
-                    });
+            let anchor = rows
+                .get(i)
+                .and_then(|row| match conditional_row_parent(row.id) {
+                    Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
+                    Some(RowId::JudgmentFont) => judgment_font_anchor_visible_idx,
+                    Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
+                    Some(RowId::ComboFont) => combo_font_anchor_visible_idx,
+                    Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
+                    Some(RowId::Hide) => hide_anchor_visible_idx,
+                    _ => None,
+                });
             if let Some(anchor_idx) = anchor {
                 let (anchor_f_pos, _) = f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
                 (anchor_f_pos, true)
@@ -342,10 +343,7 @@ const COMBO_COLORS_VARIANTS: [ComboColors; 5] = [
     ComboColors::None,
 ];
 
-const COMBO_MODE_VARIANTS: [ComboMode; 2] = [
-    ComboMode::FullCombo,
-    ComboMode::CurrentCombo,
-];
+const COMBO_MODE_VARIANTS: [ComboMode; 2] = [ComboMode::FullCombo, ComboMode::CurrentCombo];
 
 const DATA_VISUALIZATIONS_VARIANTS: [DataVisualizations; 3] = [
     DataVisualizations::None,
@@ -412,11 +410,7 @@ const MINI_INDICATOR_SCORE_TYPE_VARIANTS: [MiniIndicatorScoreType; 3] = [
     MiniIndicatorScoreType::HardEx,
 ];
 
-const ATTACK_MODE_VARIANTS: [AttackMode; 3] = [
-    AttackMode::On,
-    AttackMode::Random,
-    AttackMode::Off,
-];
+const ATTACK_MODE_VARIANTS: [AttackMode; 3] = [AttackMode::On, AttackMode::Random, AttackMode::Off];
 
 const HIDE_LIGHT_TYPE_VARIANTS: [HideLightType; 4] = [
     HideLightType::NoHideLights,
@@ -469,7 +463,6 @@ impl PaneTransition {
         !matches!(self, Self::None)
     }
 }
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RowId {
@@ -795,7 +788,10 @@ fn difficulty_display_name(index: usize) -> String {
 fn music_rate_display_name(state: &State) -> String {
     let p1_chart = resolve_p1_chart(&state.song, &state.chart_steps_index);
     let is_random = p1_chart.is_some_and(|c| {
-        matches!(c.display_bpm, Some(crate::game::chart::ChartDisplayBpm::Random))
+        matches!(
+            c.display_bpm,
+            Some(crate::game::chart::ChartDisplayBpm::Random)
+        )
     });
     let bpm_str = if is_random {
         "???".to_string()
@@ -808,8 +804,7 @@ fn music_rate_display_name(state: &State) -> String {
             format!("{effective_bpm:.1}")
         }
     };
-    tr_fmt("PlayerOptions", "MusicRate", &[("bpm", &bpm_str)])
-        .replace("\\n", "\n")
+    tr_fmt("PlayerOptions", "MusicRate", &[("bpm", &bpm_str)]).replace("\\n", "\n")
 }
 
 #[inline(always)]
@@ -1217,11 +1212,21 @@ fn build_main_rows(
                 let desc = chart.description.trim();
                 if desc.is_empty() {
                     stepchart_choices.push(
-                        tr_fmt("PlayerOptions", "EditChartMeter", &[("meter", &chart.meter.to_string())]).to_string()
+                        tr_fmt(
+                            "PlayerOptions",
+                            "EditChartMeter",
+                            &[("meter", &chart.meter.to_string())],
+                        )
+                        .to_string(),
                     );
                 } else {
                     stepchart_choices.push(
-                        tr_fmt("PlayerOptions", "EditChartDescMeter", &[("desc", desc), ("meter", &chart.meter.to_string())]).to_string()
+                        tr_fmt(
+                            "PlayerOptions",
+                            "EditChartDescMeter",
+                            &[("desc", desc), ("meter", &chart.meter.to_string())],
+                        )
+                        .to_string(),
                     );
                 }
                 stepchart_choice_indices
@@ -1276,7 +1281,10 @@ fn build_main_rows(
                 "M" => 2,
                 _ => 1, // Default to C
             }; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "TypeOfSpeedModHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "TypeOfSpeedModHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1284,7 +1292,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "SpeedMod"),
             choices: vec![speed_mod_value_str], // Display only the current value
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "SpeedModHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "SpeedModHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1292,7 +1303,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "Mini"),
             choices: (-100..=150).map(|v| format!("{v}%")).collect(),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "MiniHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "MiniHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1306,7 +1320,10 @@ fn build_main_rows(
                 tr("PlayerOptions", "PerspectiveSpace").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "PerspectiveHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "PerspectiveHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1318,7 +1335,10 @@ fn build_main_rows(
                 noteskin_names.to_vec()
             },
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "NoteSkinHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "NoteSkinHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1326,7 +1346,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "MineSkin"),
             choices: build_noteskin_override_choices(noteskin_names),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "MineSkinHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "MineSkinHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1334,7 +1357,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "ReceptorSkin"),
             choices: build_noteskin_override_choices(noteskin_names),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "ReceptorSkinHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "ReceptorSkinHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1342,7 +1368,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "TapExplosionSkin"),
             choices: build_tap_explosion_noteskin_choices(noteskin_names),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "TapExplosionSkinHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "TapExplosionSkinHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1353,7 +1382,10 @@ fn build_main_rows(
                 .map(|choice| choice.label.clone())
                 .collect(),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "JudgmentFontHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "JudgmentFontHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1361,7 +1393,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "JudgmentOffsetX"),
             choices: hud_offset_choices(),
             selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "JudgmentOffsetXHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "JudgmentOffsetXHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1369,7 +1404,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "JudgmentOffsetY"),
             choices: hud_offset_choices(),
             selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "JudgmentOffsetYHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "JudgmentOffsetYHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1386,7 +1424,10 @@ fn build_main_rows(
                 tr("PlayerOptions", "ComboFontNone").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "ComboFontHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "ComboFontHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1394,7 +1435,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "ComboOffsetX"),
             choices: hud_offset_choices(),
             selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "ComboOffsetXHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "ComboOffsetXHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1402,7 +1446,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "ComboOffsetY"),
             choices: hud_offset_choices(),
             selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "ComboOffsetYHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "ComboOffsetYHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1413,7 +1460,10 @@ fn build_main_rows(
                 .map(|choice| choice.label.clone())
                 .collect(),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "HoldJudgmentHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "HoldJudgmentHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1426,7 +1476,10 @@ fn build_main_rows(
                 tr("PlayerOptions", "BackgroundFilterDarkest").to_string(),
             ],
             selected_choice_index: [3; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "BackgroundFilterHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "BackgroundFilterHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1434,7 +1487,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "NoteFieldOffsetX"),
             choices: (0..=50).map(|v| v.to_string()).collect(),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "NoteFieldOffsetXHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "NoteFieldOffsetXHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1442,7 +1498,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "NoteFieldOffsetY"),
             choices: (-50..=50).map(|v| v.to_string()).collect(),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "NoteFieldOffsetYHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "NoteFieldOffsetYHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1450,7 +1509,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "VisualDelay"),
             choices: (-100..=100).map(|v| format!("{v}ms")).collect(),
             selected_choice_index: [100; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "VisualDelayHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "VisualDelayHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1458,7 +1520,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "GlobalOffsetShift"),
             choices: (-100..=100).map(|v| format!("{v}ms")).collect(),
             selected_choice_index: [100; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "GlobalOffsetShiftHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "GlobalOffsetShiftHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1466,7 +1531,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "MusicRate"),
             choices: vec![fmt_music_rate(session_music_rate.clamp(0.5, 3.0))],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "MusicRateHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "MusicRateHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1474,7 +1542,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "Stepchart"),
             choices: stepchart_choices,
             selected_choice_index: initial_stepchart_choice_index,
-            help: tr("PlayerOptionsHelp", "StepchartHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "StepchartHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: Some(stepchart_choice_indices),
         },
         Row {
@@ -1482,7 +1553,10 @@ fn build_main_rows(
             name: lookup_key("PlayerOptions", "WhatComesNext"),
             choices: what_comes_next_choices(OptionsPane::Main, return_screen),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "WhatComesNextHelp").split("\\n").map(|s| s.to_string()).collect(),
+            help: tr("PlayerOptionsHelp", "WhatComesNextHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
@@ -1503,7 +1577,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
         tr("PlayerOptions", "GameplayExtrasColumnCues").to_string(),
     ];
     if crate::game::scores::is_gs_get_scores_service_allowed() {
-        gameplay_extras_choices.push(tr("PlayerOptions", "GameplayExtrasDisplayScorebox").to_string());
+        gameplay_extras_choices
+            .push(tr("PlayerOptions", "GameplayExtrasDisplayScorebox").to_string());
     }
 
     vec![
@@ -1876,7 +1951,11 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             name: lookup_key("PlayerOptions", "EarlyDecentWayOffOptions"),
             choices: vec![
                 tr("PlayerOptions", "EarlyDecentWayOffOptionsHideJudgments").to_string(),
-                tr("PlayerOptions", "EarlyDecentWayOffOptionsHideNoteFieldFlash").to_string(),
+                tr(
+                    "PlayerOptions",
+                    "EarlyDecentWayOffOptionsHideNoteFieldFlash",
+                )
+                .to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "EarlyDecentWayOffOptionsHelp").to_string()],
@@ -2220,7 +2299,11 @@ fn apply_profile_defaults(
                 row.choices
                     .iter()
                     .position(|c| c.eq_ignore_ascii_case(mine_noteskin.as_str()))
-                    .or_else(|| row.choices.iter().position(|c| c.as_str() == match_ns_label.as_ref()))
+                    .or_else(|| {
+                        row.choices
+                            .iter()
+                            .position(|c| c.as_str() == match_ns_label.as_ref())
+                    })
                     .unwrap_or(0)
             },
         );
@@ -2237,7 +2320,11 @@ fn apply_profile_defaults(
                 row.choices
                     .iter()
                     .position(|c| c.eq_ignore_ascii_case(receptor_noteskin.as_str()))
-                    .or_else(|| row.choices.iter().position(|c| c.as_str() == match_ns_label.as_ref()))
+                    .or_else(|| {
+                        row.choices
+                            .iter()
+                            .position(|c| c.as_str() == match_ns_label.as_ref())
+                    })
                     .unwrap_or(0)
             },
         );
@@ -2261,7 +2348,11 @@ fn apply_profile_defaults(
                         row.choices
                             .iter()
                             .position(|c| c.eq_ignore_ascii_case(tap_explosion_noteskin.as_str()))
-                            .or_else(|| row.choices.iter().position(|c| c.as_str() == match_ns_label.as_ref()))
+                            .or_else(|| {
+                                row.choices
+                                    .iter()
+                                    .position(|c| c.as_str() == match_ns_label.as_ref())
+                            })
                             .unwrap_or(0)
                     }
                 },
@@ -2433,7 +2524,10 @@ fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::JudgmentBehindArrows) {
+    if let Some(row) = rows
+        .iter_mut()
+        .find(|r| r.id == RowId::JudgmentBehindArrows)
+    {
         row.selected_choice_index[player_idx] = if profile.judgment_back { 1 } else { 0 };
     }
     // Initialize Error Bar rows from profile (Simply Love semantics).
@@ -3315,10 +3409,7 @@ fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bool {
     if id == RowId::DensityGraphBackground {
         return visibility.show_density_graph_background;
     }
-    if id == RowId::ComboColors
-        || id == RowId::ComboColorMode
-        || id == RowId::CarryCombo
-    {
+    if id == RowId::ComboColors || id == RowId::ComboColorMode || id == RowId::CarryCombo {
         return visibility.show_combo_rows;
     }
     if id == RowId::LifeMeterType || id == RowId::LifeBarOptions {
@@ -3456,7 +3547,10 @@ fn error_bar_children_visible(
 }
 
 fn custom_fantastic_window_ms_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.id == RowId::CustomBlueFantasticWindow) else {
+    let Some(row) = rows
+        .iter()
+        .find(|r| r.id == RowId::CustomBlueFantasticWindow)
+    else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -4482,14 +4576,13 @@ fn change_choice_for_player(
             }
         }
     } else if id == RowId::MiniIndicator {
-        let choice_idx = row.selected_choice_index[player_idx]
-            .min(row.choices.len().saturating_sub(1));
+        let choice_idx =
+            row.selected_choice_index[player_idx].min(row.choices.len().saturating_sub(1));
         let mini_indicator = MINI_INDICATOR_VARIANTS
             .get(choice_idx)
             .copied()
             .unwrap_or(MiniIndicator::None);
-        let subtractive_scoring =
-            mini_indicator == MiniIndicator::SubtractiveScoring;
+        let subtractive_scoring = mini_indicator == MiniIndicator::SubtractiveScoring;
         let pacemaker = mini_indicator == MiniIndicator::Pacemaker;
         state.player_profiles[player_idx].mini_indicator = mini_indicator;
         state.player_profiles[player_idx].subtractive_scoring = subtractive_scoring;
@@ -5112,15 +5205,17 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     visible_idx += 1;
                     f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
                 } else {
-                    let anchor = state.rows.get(i).and_then(|row| {
-                        match conditional_row_parent(row.id) {
-                            Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
-                            Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
-                            Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
-                            Some(RowId::Hide) => hide_anchor_visible_idx,
-                            _ => None,
-                        }
-                    });
+                    let anchor =
+                        state
+                            .rows
+                            .get(i)
+                            .and_then(|row| match conditional_row_parent(row.id) {
+                                Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
+                                Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
+                                Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
+                                Some(RowId::Hide) => hide_anchor_visible_idx,
+                                _ => None,
+                            });
                     if let Some(anchor_idx) = anchor {
                         let (anchor_f_pos, _) =
                             f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
@@ -7149,12 +7244,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 ));
             }
         } else {
-            actors.push(act!(text: font("miso"): settext(row.name.get().to_string()):
-                align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
-                diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                horizalign(left): maxwidth(title_max_w):
-                z(101)
-            ));
+            actors.push(
+                act!(text: font("miso"): settext(row.name.get().to_string()):
+                    align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
+                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                    horizalign(left): maxwidth(title_max_w):
+                    z(101)
+                ),
+            );
         }
         // Inactive option text color should be #808080 (alpha 1.0)
         let mut sl_gray = color::rgba_hex("#808080");
@@ -8954,13 +9051,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 mod tests {
     use super::{
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, NAV_INITIAL_HOLD_DELAY,
-        NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowId, SpeedMod,
-        handle_arcade_start_event, hud_offset_choices, is_row_visible,
-        repeat_held_arcade_start, row_visibility, session_active_players,
-        sync_profile_scroll_speed,
+        NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowId, SpeedMod, handle_arcade_start_event,
+        hud_offset_choices, is_row_visible, repeat_held_arcade_start, row_visibility,
+        session_active_players, sync_profile_scroll_speed,
     };
-    use crate::assets::i18n::{LookupKey, lookup_key};
     use crate::assets::AssetManager;
+    use crate::assets::i18n::{LookupKey, lookup_key};
     use crate::game::profile::{self, PlayStyle, PlayerSide, Profile};
     use crate::game::scroll::ScrollSpeedSetting;
     use crate::screens::Screen;
@@ -8975,7 +9071,12 @@ mod tests {
         });
     }
 
-    fn test_row(id: RowId, name: LookupKey, choices: &[&str], selected_choice_index: [usize; 2]) -> Row {
+    fn test_row(
+        id: RowId,
+        name: LookupKey,
+        choices: &[&str],
+        selected_choice_index: [usize; 2],
+    ) -> Row {
         Row {
             id,
             name,
@@ -9022,8 +9123,18 @@ mod tests {
     fn error_bar_offsets_hide_with_empty_error_bar_mask() {
         ensure_i18n();
         let rows = vec![
-            test_row(RowId::ErrorBar, lookup_key("PlayerOptions", "ErrorBar"), &["Colorful"], [0, 0]),
-            test_row(RowId::ErrorBarOffsetX, lookup_key("PlayerOptions", "ErrorBarOffsetX"), &["0"], [0, 0]),
+            test_row(
+                RowId::ErrorBar,
+                lookup_key("PlayerOptions", "ErrorBar"),
+                &["Colorful"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::ErrorBarOffsetX,
+                lookup_key("PlayerOptions", "ErrorBarOffsetX"),
+                &["0"],
+                [0, 0],
+            ),
         ];
         let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0], false);
         assert!(!is_row_visible(&rows, 1, visibility));
@@ -9036,15 +9147,35 @@ mod tests {
     fn judgment_offsets_hide_when_judgment_font_is_none() {
         ensure_i18n();
         let rows = vec![
-            test_row(RowId::JudgmentFont, lookup_key("PlayerOptions", "JudgmentFont"), &["Love", "None"], [1, 0]),
-            test_row(RowId::JudgmentOffsetX, lookup_key("PlayerOptions", "JudgmentOffsetX"), &["0"], [0, 0]),
+            test_row(
+                RowId::JudgmentFont,
+                lookup_key("PlayerOptions", "JudgmentFont"),
+                &["Love", "None"],
+                [1, 0],
+            ),
+            test_row(
+                RowId::JudgmentOffsetX,
+                lookup_key("PlayerOptions", "JudgmentOffsetX"),
+                &["0"],
+                [0, 0],
+            ),
         ];
         let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0], false);
         assert!(!is_row_visible(&rows, 1, visibility));
 
         let rows = vec![
-            test_row(RowId::JudgmentFont, lookup_key("PlayerOptions", "JudgmentFont"), &["Love", "None"], [0, 0]),
-            test_row(RowId::JudgmentOffsetX, lookup_key("PlayerOptions", "JudgmentOffsetX"), &["0"], [0, 0]),
+            test_row(
+                RowId::JudgmentFont,
+                lookup_key("PlayerOptions", "JudgmentFont"),
+                &["Love", "None"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::JudgmentOffsetX,
+                lookup_key("PlayerOptions", "JudgmentOffsetX"),
+                &["0"],
+                [0, 0],
+            ),
         ];
         let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0], false);
         assert!(is_row_visible(&rows, 1, visibility));
@@ -9054,15 +9185,35 @@ mod tests {
     fn combo_offsets_hide_when_all_active_players_use_none_font() {
         ensure_i18n();
         let rows = vec![
-            test_row(RowId::ComboFont, lookup_key("PlayerOptions", "ComboFont"), &["Wendy", "None"], [1, 1]),
-            test_row(RowId::ComboOffsetX, lookup_key("PlayerOptions", "ComboOffsetX"), &["0"], [0, 0]),
+            test_row(
+                RowId::ComboFont,
+                lookup_key("PlayerOptions", "ComboFont"),
+                &["Wendy", "None"],
+                [1, 1],
+            ),
+            test_row(
+                RowId::ComboOffsetX,
+                lookup_key("PlayerOptions", "ComboOffsetX"),
+                &["0"],
+                [0, 0],
+            ),
         ];
         let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0], false);
         assert!(!is_row_visible(&rows, 1, visibility));
 
         let rows = vec![
-            test_row(RowId::ComboFont, lookup_key("PlayerOptions", "ComboFont"), &["Wendy", "None"], [1, 0]),
-            test_row(RowId::ComboOffsetX, lookup_key("PlayerOptions", "ComboOffsetX"), &["0"], [0, 0]),
+            test_row(
+                RowId::ComboFont,
+                lookup_key("PlayerOptions", "ComboFont"),
+                &["Wendy", "None"],
+                [1, 0],
+            ),
+            test_row(
+                RowId::ComboOffsetX,
+                lookup_key("PlayerOptions", "ComboOffsetX"),
+                &["0"],
+                [0, 0],
+            ),
         ];
         let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0], false);
         assert!(is_row_visible(&rows, 1, visibility));

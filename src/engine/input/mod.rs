@@ -9,8 +9,8 @@ mod backends;
 mod debounce;
 
 use debounce::{
-    DebounceBinding, DebounceEdges, DebounceStore, DebounceWindows, DebouncedEdge,
-    debounce_input_edge_in_store, emit_due_debounce_edges_from,
+    DebounceEdges, DebounceStore, DebounceWindows, DebouncedEdge, debounce_input_edge_in_store,
+    emit_due_debounce_edges_from,
 };
 
 /* ------------------------ Pad types + backend ------------------------ */
@@ -524,9 +524,35 @@ fn new_key_rev() -> Box<[Vec<VirtualAction>]> {
     vec![Vec::new(); KEY_CODE_CAP].into_boxed_slice()
 }
 
+const UNMAPPED_DEBOUNCE_SLOT: u32 = u32::MAX;
+
+#[derive(Clone, Copy, Debug)]
+struct CompiledBindingRev {
+    mask: u32,
+    slot: u32,
+}
+
+impl CompiledBindingRev {
+    const UNMAPPED: Self = Self {
+        mask: 0,
+        slot: UNMAPPED_DEBOUNCE_SLOT,
+    };
+
+    #[inline(always)]
+    const fn mapped(self) -> bool {
+        self.mask != 0
+    }
+}
+
+impl Default for CompiledBindingRev {
+    fn default() -> Self {
+        Self::UNMAPPED
+    }
+}
+
 #[inline(always)]
-fn new_key_mask_rev() -> Box<[u32]> {
-    vec![0; KEY_CODE_CAP].into_boxed_slice()
+fn new_compiled_key_rev() -> Box<[CompiledBindingRev]> {
+    vec![CompiledBindingRev::UNMAPPED; KEY_CODE_CAP].into_boxed_slice()
 }
 
 #[inline(always)]
@@ -543,22 +569,34 @@ struct CompiledPadCodeRev {
 }
 
 #[derive(Clone, Debug)]
+struct CompiledPadCodeMap {
+    slot: u32,
+    entries: Vec<CompiledPadCodeRev>,
+}
+
+#[derive(Clone, Debug)]
 struct CompiledKeymap {
-    key_rev: Box<[u32]>,
-    key_rev_extra: HashMap<KeyCode, u32>,
+    key_rev: Box<[CompiledBindingRev]>,
+    key_rev_extra: HashMap<KeyCode, CompiledBindingRev>,
     pad_dir_rev: [u32; 4],
     pad_dir_on_rev: HashMap<(usize, PadDir), u32>,
-    pad_code_rev: HashMap<u32, Vec<CompiledPadCodeRev>>,
+    pad_code_rev: HashMap<u32, CompiledPadCodeMap>,
+    key_slot_count: usize,
+    pad_stride: usize,
+    pad_slot_count: usize,
 }
 
 impl Default for CompiledKeymap {
     fn default() -> Self {
         Self {
-            key_rev: new_key_mask_rev(),
+            key_rev: new_compiled_key_rev(),
             key_rev_extra: HashMap::new(),
             pad_dir_rev: [0; 4],
             pad_dir_on_rev: HashMap::new(),
             pad_code_rev: HashMap::new(),
+            key_slot_count: 0,
+            pad_stride: 4,
+            pad_slot_count: 0,
         }
     }
 }
@@ -566,13 +604,21 @@ impl Default for CompiledKeymap {
 impl CompiledKeymap {
     #[inline(always)]
     fn from_keymap(km: &Keymap) -> Self {
-        let mut key_rev = new_key_mask_rev();
+        let mut key_rev = new_compiled_key_rev();
+        let mut next_key_slot = 0u32;
         for (ix, actions) in km.key_rev.iter().enumerate() {
+            if actions.is_empty() {
+                continue;
+            }
             let mut mask = 0;
             for &action in actions {
                 mask |= action_bit(action);
             }
-            key_rev[ix] = mask;
+            key_rev[ix] = CompiledBindingRev {
+                mask,
+                slot: next_key_slot,
+            };
+            next_key_slot = next_key_slot.saturating_add(1);
         }
         let mut key_rev_extra = HashMap::with_capacity(km.key_rev_extra.len());
         for (&code, actions) in &km.key_rev_extra {
@@ -580,7 +626,14 @@ impl CompiledKeymap {
             for &action in actions {
                 mask |= action_bit(action);
             }
-            key_rev_extra.insert(code, mask);
+            key_rev_extra.insert(
+                code,
+                CompiledBindingRev {
+                    mask,
+                    slot: next_key_slot,
+                },
+            );
+            next_key_slot = next_key_slot.saturating_add(1);
         }
         let mut pad_dir_rev = [0; 4];
         for (ix, actions) in km.pad_dir_rev.iter().enumerate() {
@@ -591,47 +644,66 @@ impl CompiledKeymap {
             pad_dir_rev[ix] = mask;
         }
         let mut pad_dir_on_rev = HashMap::with_capacity(km.pad_dir_on_rev.len());
+        let mut max_pad_device: Option<usize> = None;
         for (&key, actions) in &km.pad_dir_on_rev {
             let mut mask = 0;
             for &action in actions {
                 mask |= action_bit(action);
             }
+            max_pad_device = Some(max_pad_device.map_or(key.0, |max| max.max(key.0)));
             pad_dir_on_rev.insert(key, mask);
         }
         let mut pad_code_rev = HashMap::with_capacity(km.pad_code_rev.len());
+        let mut next_pad_button_slot = 0u32;
         for (&code, entries) in &km.pad_code_rev {
-            let mut compiled = Vec::with_capacity(entries.len());
+            let mut compiled_entries = Vec::with_capacity(entries.len());
             for entry in entries {
                 if let Some(existing) =
-                    compiled.iter_mut().find(|item: &&mut CompiledPadCodeRev| {
-                        item.device == entry.device && item.uuid == entry.uuid
-                    })
+                    compiled_entries
+                        .iter_mut()
+                        .find(|item: &&mut CompiledPadCodeRev| {
+                            item.device == entry.device && item.uuid == entry.uuid
+                        })
                 {
                     existing.mask |= action_bit(entry.act);
                     continue;
                 }
-                compiled.push(CompiledPadCodeRev {
+                compiled_entries.push(CompiledPadCodeRev {
                     mask: action_bit(entry.act),
                     device: entry.device,
                     uuid: entry.uuid,
                 });
+                if let Some(device) = entry.device {
+                    max_pad_device = Some(max_pad_device.map_or(device, |max| max.max(device)));
+                }
             }
-            pad_code_rev.insert(code, compiled);
+            pad_code_rev.insert(
+                code,
+                CompiledPadCodeMap {
+                    slot: next_pad_button_slot,
+                    entries: compiled_entries,
+                },
+            );
+            next_pad_button_slot = next_pad_button_slot.saturating_add(1);
         }
+        let pad_stride = 4 + next_pad_button_slot as usize;
+        let has_pad_bindings = pad_dir_rev.iter().any(|&mask| mask != 0)
+            || !pad_dir_on_rev.is_empty()
+            || !pad_code_rev.is_empty();
+        let pad_slot_count = if has_pad_bindings {
+            pad_stride.saturating_mul(max_pad_device.map_or(1, |max| max.saturating_add(1)))
+        } else {
+            0
+        };
         Self {
             key_rev,
             key_rev_extra,
             pad_dir_rev,
             pad_dir_on_rev,
             pad_code_rev,
-        }
-    }
-
-    #[inline(always)]
-    fn key_mask(&self, code: KeyCode) -> u32 {
-        match dense_key_ix(code) {
-            Some(ix) => self.key_rev[ix],
-            None => self.key_rev_extra.get(&code).copied().unwrap_or(0),
+            key_slot_count: next_key_slot as usize,
+            pad_stride,
+            pad_slot_count,
         }
     }
 }
@@ -673,31 +745,13 @@ static PAD_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<DebounceStore>> =
 const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
 
 #[inline(always)]
-fn debounce_caps(km: &Keymap) -> (usize, usize) {
-    let key_cap = km
-        .key_rev
-        .iter()
-        .filter(|actions| !actions.is_empty())
-        .count()
-        + km.key_rev_extra.len();
-    let mut pad_cap = km
-        .pad_dir_rev
-        .iter()
-        .filter(|actions| !actions.is_empty())
-        .count();
-    pad_cap += km.pad_dir_on_rev.len();
-    pad_cap += km.pad_code_rev.len();
-    (key_cap, pad_cap)
-}
-
-#[inline(always)]
-fn reset_debounce_state(key_cap: usize, pad_cap: usize) {
+fn reset_debounce_state(compiled: &CompiledKeymap) {
     let mut keyboard = KEYBOARD_DEBOUNCE_STATE.lock().unwrap();
-    keyboard.clear_and_reserve(key_cap);
+    keyboard.prepare_slots(compiled.key_slot_count);
     drop(keyboard);
 
     let mut pad = PAD_DEBOUNCE_STATE.lock().unwrap();
-    pad.clear_and_reserve(pad_cap);
+    pad.clear_and_reserve(compiled.pad_slot_count);
 }
 
 #[inline(always)]
@@ -712,19 +766,16 @@ pub fn get_keymap() -> Keymap {
 
 #[inline(always)]
 pub fn set_keymap(new_map: Keymap) {
-    let (key_cap, pad_cap) = debounce_caps(&new_map);
     let compiled = Arc::new(CompiledKeymap::from_keymap(&new_map));
     *KEYMAP.write().unwrap() = new_map;
-    *COMPILED_KEYMAP.write().unwrap() = compiled;
-    reset_debounce_state(key_cap, pad_cap);
+    *COMPILED_KEYMAP.write().unwrap() = Arc::clone(&compiled);
+    reset_debounce_state(compiled.as_ref());
 }
 
 #[inline(always)]
 pub fn clear_debounce_state() {
-    with_keymap(|km| {
-        let (key_cap, pad_cap) = debounce_caps(km);
-        reset_debounce_state(key_cap, pad_cap);
-    });
+    let compiled = load_compiled_keymap();
+    reset_debounce_state(compiled.as_ref());
 }
 
 #[inline(always)]
@@ -1088,8 +1139,19 @@ fn secondary_menu_mask(mask: u32) -> u32 {
 }
 
 #[inline(always)]
-fn collect_key_mask_from_compiled(km: &CompiledKeymap, code: KeyCode) -> u32 {
-    km.key_mask(code)
+fn collect_key_binding_from_compiled(
+    km: &CompiledKeymap,
+    code: KeyCode,
+) -> Option<CompiledBindingRev> {
+    let binding = match dense_key_ix(code) {
+        Some(ix) => km.key_rev[ix],
+        None => km
+            .key_rev_extra
+            .get(&code)
+            .copied()
+            .unwrap_or(CompiledBindingRev::UNMAPPED),
+    };
+    binding.mapped().then_some(binding)
 }
 
 #[inline(always)]
@@ -1099,18 +1161,18 @@ fn collect_pad_dir_mask_from_compiled(km: &CompiledKeymap, id: PadId, dir: PadDi
 }
 
 #[inline(always)]
-fn collect_pad_button_mask_from_compiled(
+fn collect_pad_button_binding_from_compiled(
     km: &CompiledKeymap,
     id: PadId,
     code: PadCode,
     uuid: [u8; 16],
-) -> u32 {
-    let Some(entries) = km.pad_code_rev.get(&code.into_u32()) else {
-        return 0;
+) -> Option<CompiledBindingRev> {
+    let Some(code_map) = km.pad_code_rev.get(&code.into_u32()) else {
+        return None;
     };
     let dev = usize::from(id);
     let mut mask = 0;
-    for entry in entries {
+    for entry in &code_map.entries {
         if let Some(d_expected) = entry.device
             && d_expected != dev
         {
@@ -1123,7 +1185,30 @@ fn collect_pad_button_mask_from_compiled(
         }
         mask |= entry.mask;
     }
-    mask
+    if mask == 0 {
+        return None;
+    }
+    Some(CompiledBindingRev {
+        mask,
+        slot: code_map.slot,
+    })
+}
+
+#[inline(always)]
+fn pad_slot_base(km: &CompiledKeymap, id: PadId) -> usize {
+    usize::from(id).saturating_mul(km.pad_stride)
+}
+
+#[inline(always)]
+fn pad_dir_slot_from_compiled(km: &CompiledKeymap, id: PadId, dir: PadDir) -> usize {
+    pad_slot_base(km, id).saturating_add(dir.ix())
+}
+
+#[inline(always)]
+fn pad_button_slot_from_compiled(km: &CompiledKeymap, id: PadId, code_slot: u32) -> usize {
+    pad_slot_base(km, id)
+        .saturating_add(4)
+        .saturating_add(code_slot as usize)
 }
 
 #[inline(always)]
@@ -1169,24 +1254,8 @@ fn emit_normalized_actions(
     });
 }
 
-fn collect_actions_from_compiled(km: &CompiledKeymap, edge: DebouncedEdge) -> u32 {
-    match edge.binding {
-        DebounceBinding::Keyboard(code) => collect_key_mask_from_compiled(km, code),
-        DebounceBinding::PadDir { id, dir } => collect_pad_dir_mask_from_compiled(km, id, dir),
-        DebounceBinding::PadButton { id, code, uuid } => {
-            collect_pad_button_mask_from_compiled(km, id, code, uuid)
-        }
-    }
-}
-
-#[inline(always)]
-fn emit_input_events_from_edge(
-    km: &CompiledKeymap,
-    edge: DebouncedEdge,
-    mut emit: impl FnMut(InputEvent),
-) {
-    let mask = collect_actions_from_compiled(km, edge);
-    emit_normalized_actions(mask, edge.pressed, |action, pressed| {
+fn emit_input_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(InputEvent)) {
+    emit_normalized_actions(edge.action_mask, edge.pressed, |action, pressed| {
         emit(input_event(
             action,
             pressed,
@@ -1200,16 +1269,12 @@ fn emit_input_events_from_edge(
 }
 
 #[inline(always)]
-fn emit_debounced_edges(
-    km: &CompiledKeymap,
-    edges: DebounceEdges,
-    mut emit: impl FnMut(InputEvent),
-) {
+fn emit_debounced_edges(edges: DebounceEdges, mut emit: impl FnMut(InputEvent)) {
     if let Some(edge) = edges.first {
-        emit_input_events_from_edge(km, edge, &mut emit);
+        emit_input_events_from_edge(edge, &mut emit);
     }
     if let Some(edge) = edges.second {
-        emit_input_events_from_edge(km, edge, &mut emit);
+        emit_input_events_from_edge(edge, &mut emit);
     }
 }
 
@@ -1219,18 +1284,20 @@ pub fn map_raw_key_event_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent
         return;
     }
     let km = load_compiled_keymap();
-    if collect_key_mask_from_compiled(km.as_ref(), ev.code) == 0 {
+    let Some(binding) = collect_key_binding_from_compiled(km.as_ref(), ev.code) else {
         return;
-    }
+    };
     let edges = debounce_input_edge_in_store(
         &KEYBOARD_DEBOUNCE_STATE,
-        DebounceBinding::Keyboard(ev.code),
+        binding.slot as usize,
+        binding.mask,
+        InputSource::Keyboard,
         ev.pressed,
         ev.timestamp,
         ev.host_nanos,
         debounce_windows(),
     );
-    emit_debounced_edges(km.as_ref(), edges, emit);
+    emit_debounced_edges(edges, emit);
 }
 
 #[inline(always)]
@@ -1252,8 +1319,10 @@ pub fn map_keycode_event_with_host(
     mut emit: impl FnMut(InputEvent),
 ) {
     let km = load_compiled_keymap();
-    let mask = collect_key_mask_from_compiled(km.as_ref(), code);
-    emit_normalized_actions(mask, pressed, |action, pressed| {
+    let Some(binding) = collect_key_binding_from_compiled(km.as_ref(), code) else {
+        return;
+    };
+    emit_normalized_actions(binding.mask, pressed, |action, pressed| {
         emit(input_event(
             action,
             pressed,
@@ -1277,12 +1346,15 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
             timestamp,
             host_nanos,
         } => {
-            if collect_pad_dir_mask_from_compiled(km.as_ref(), id, dir) == 0 {
+            let mask = collect_pad_dir_mask_from_compiled(km.as_ref(), id, dir);
+            if mask == 0 {
                 return;
             }
             debounce_input_edge_in_store(
                 &PAD_DEBOUNCE_STATE,
-                DebounceBinding::PadDir { id, dir },
+                pad_dir_slot_from_compiled(km.as_ref(), id, dir),
+                mask,
+                InputSource::Gamepad,
                 pressed,
                 timestamp,
                 host_nanos,
@@ -1298,12 +1370,16 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
             host_nanos,
             ..
         } => {
-            if collect_pad_button_mask_from_compiled(km.as_ref(), id, code, uuid) == 0 {
+            let Some(binding) =
+                collect_pad_button_binding_from_compiled(km.as_ref(), id, code, uuid)
+            else {
                 return;
-            }
+            };
             debounce_input_edge_in_store(
                 &PAD_DEBOUNCE_STATE,
-                DebounceBinding::PadButton { id, code, uuid },
+                pad_button_slot_from_compiled(km.as_ref(), id, binding.slot),
+                binding.mask,
+                InputSource::Gamepad,
                 pressed,
                 timestamp,
                 host_nanos,
@@ -1312,18 +1388,17 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
         }
         PadEvent::RawAxis { .. } => return,
     };
-    emit_debounced_edges(km.as_ref(), edges, &mut emit);
+    emit_debounced_edges(edges, &mut emit);
 }
 
 pub fn drain_debounced_input_events_with(mut emit: impl FnMut(InputEvent)) -> bool {
-    let km = load_compiled_keymap();
     let now = Instant::now();
     let mut flushed =
         emit_due_debounce_edges_from(&KEYBOARD_DEBOUNCE_STATE, now, debounce_windows(), |edge| {
-            emit_input_events_from_edge(km.as_ref(), edge, &mut emit)
+            emit_input_events_from_edge(edge, &mut emit)
         });
     flushed |= emit_due_debounce_edges_from(&PAD_DEBOUNCE_STATE, now, debounce_windows(), |edge| {
-        emit_input_events_from_edge(km.as_ref(), edge, &mut emit)
+        emit_input_events_from_edge(edge, &mut emit)
     });
     flushed
 }
@@ -1788,7 +1863,7 @@ mod tests {
     }
 
     #[test]
-    fn set_keymap_presizes_debounce_state() {
+    fn set_keymap_prepares_dense_debounce_slots() {
         let _guard = lock_test_guard();
         let _reset = TestReset::capture();
         let mut km = Keymap::default();
@@ -1818,17 +1893,21 @@ mod tests {
             VirtualAction::p2_right,
             &[InputBinding::Key(KeyCode::Numpad6)],
         );
-        let (key_cap, pad_cap) = debounce_caps(&km);
 
         set_keymap(km);
+        let compiled = load_compiled_keymap();
+
+        assert_eq!(compiled.key_slot_count, 2);
+        assert_eq!(compiled.pad_stride, 5);
+        assert_eq!(compiled.pad_slot_count, 15);
 
         assert!(
-            KEYBOARD_DEBOUNCE_STATE.lock().unwrap().capacity() >= key_cap,
+            KEYBOARD_DEBOUNCE_STATE.lock().unwrap().capacity() >= compiled.key_slot_count,
             "keyboard debounce store should be pre-sized for mapped keys"
         );
         assert!(
-            PAD_DEBOUNCE_STATE.lock().unwrap().capacity() >= pad_cap,
-            "pad debounce store should be pre-sized for mapped bindings"
+            PAD_DEBOUNCE_STATE.lock().unwrap().capacity() >= compiled.pad_slot_count,
+            "pad debounce store should reserve every explicitly addressed device stride"
         );
     }
 }
