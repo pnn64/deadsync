@@ -126,6 +126,21 @@ Use [IETF BCP 47](https://en.wikipedia.org/wiki/IETF_language_tag) base codes fo
 
 You don't have to translate every key. Any missing key falls back to the English value automatically. Start with the most visible sections (`Common`, `Menu`, `ScreenTitles`) and expand from there.
 
+### Skipping keys (`@skip`)
+
+Some keys don't need translating for a given language — brand names like "GrooveStats", technical terms, or values that are identical in English. Set these to `@skip`:
+
+```ini
+[Menu]
+GrooveStatsName=@skip
+BoogieStatsName=@skip
+Gameplay=SPELA
+```
+
+At runtime, `@skip` values are treated as missing, so the English fallback is used. In coverage reports, `@skip` keys count as complete — a language that translates everything applicable and skips the rest can reach 100%.
+
+This is per-language: Swedish might skip "GrooveStats" while Japanese might transliterate it to katakana.
+
 ### User overrides
 
 Language files are resolved from the executable's `assets/languages/` directory. Users can place custom or modified `.ini` files there to override bundled translations.
@@ -195,7 +210,47 @@ String extraction is being done screen-by-screen. Each screen group gets its own
 |---|---|
 | Language selection in options screen | ⬜ Not started |
 | Second language proof (Spanish) | ⬜ Not started |
-| Translation coverage tooling | ⬜ Not started |
+| Translation coverage tooling | 🟡 In progress |
+
+## Translation Coverage Tooling
+
+An integration test suite validates language files and reports translation progress.
+
+### Running
+
+```sh
+cargo test --test i18n_coverage -- --nocapture
+```
+
+### Tests
+
+| Test | Behavior |
+|------|----------|
+| `en_ini_has_no_duplicate_keys` | **Fails** if `en.ini` contains duplicate `[Section] Key` pairs |
+| `no_stale_keys_in_translations` | **Fails** if any translation has keys that don't exist in `en.ini` (renamed/removed keys that were never cleaned up) |
+| `print_translation_coverage_report` | **Always passes** — prints a per-language coverage summary showing translated count, total, and percentage. `@skip` keys count as covered |
+
+### Example output
+
+```
+Translation Coverage Report
+============================
+Language         Translated  Total  Coverage
+--------         ----------  -----  --------
+en (English)            590    590    100.0%
+sv (Svenska)             42    590      7.1%
+    548 missing keys (run with --nocapture to see full list)
+```
+
+### What the tests catch
+
+- **Duplicate keys in `en.ini`** — a real bug since the second value silently overwrites the first
+- **Stale keys in translations** — a key was renamed or removed in `en.ini` but the old key still exists in a translation file. The translated string would never be displayed
+- **Coverage regressions** — the report makes it easy to spot if a language's coverage drops after a key restructuring
+
+### What the tests don't enforce
+
+- **Missing keys don't fail the build.** Partial translations are welcome — the app falls back to English for any missing key. Contributors can translate progressively and open PRs at any coverage level
 
 ## Language Support
 
