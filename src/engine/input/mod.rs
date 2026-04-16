@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 use winit::keyboard::KeyCode;
@@ -733,8 +733,8 @@ impl Default for Keymap {
 
 static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> =
     std::sync::LazyLock::new(|| RwLock::new(Keymap::default()));
-static COMPILED_KEYMAP: std::sync::LazyLock<RwLock<Arc<CompiledKeymap>>> =
-    std::sync::LazyLock::new(|| RwLock::new(Arc::new(CompiledKeymap::default())));
+static COMPILED_KEYMAP: std::sync::LazyLock<RwLock<CompiledKeymap>> =
+    std::sync::LazyLock::new(|| RwLock::new(CompiledKeymap::default()));
 static ONLY_DEDICATED_MENU_BUTTONS: AtomicBool = AtomicBool::new(false);
 static INPUT_DEBOUNCE_SECONDS_BITS: AtomicU32 = AtomicU32::new((0.02f32).to_bits());
 static KEYBOARD_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<DebounceStore>> =
@@ -745,13 +745,13 @@ static PAD_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<DebounceStore>> =
 const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
 
 #[inline(always)]
-fn reset_debounce_state(compiled: &CompiledKeymap) {
+fn reset_debounce_state(key_slot_count: usize, pad_slot_count: usize) {
     let mut keyboard = KEYBOARD_DEBOUNCE_STATE.lock().unwrap();
-    keyboard.prepare_slots(compiled.key_slot_count);
+    keyboard.prepare_slots(key_slot_count);
     drop(keyboard);
 
     let mut pad = PAD_DEBOUNCE_STATE.lock().unwrap();
-    pad.clear_and_reserve(compiled.pad_slot_count);
+    pad.clear_and_reserve(pad_slot_count);
 }
 
 #[inline(always)]
@@ -766,21 +766,24 @@ pub fn get_keymap() -> Keymap {
 
 #[inline(always)]
 pub fn set_keymap(new_map: Keymap) {
-    let compiled = Arc::new(CompiledKeymap::from_keymap(&new_map));
+    let compiled = CompiledKeymap::from_keymap(&new_map);
+    let key_slot_count = compiled.key_slot_count;
+    let pad_slot_count = compiled.pad_slot_count;
     *KEYMAP.write().unwrap() = new_map;
-    *COMPILED_KEYMAP.write().unwrap() = Arc::clone(&compiled);
-    reset_debounce_state(compiled.as_ref());
+    *COMPILED_KEYMAP.write().unwrap() = compiled;
+    reset_debounce_state(key_slot_count, pad_slot_count);
 }
 
 #[inline(always)]
 pub fn clear_debounce_state() {
-    let compiled = load_compiled_keymap();
-    reset_debounce_state(compiled.as_ref());
+    let (key_slot_count, pad_slot_count) =
+        with_compiled_keymap(|compiled| (compiled.key_slot_count, compiled.pad_slot_count));
+    reset_debounce_state(key_slot_count, pad_slot_count);
 }
 
 #[inline(always)]
-fn load_compiled_keymap() -> Arc<CompiledKeymap> {
-    COMPILED_KEYMAP.read().unwrap().clone()
+fn with_compiled_keymap<R>(f: impl FnOnce(&CompiledKeymap) -> R) -> R {
+    f(&COMPILED_KEYMAP.read().unwrap())
 }
 
 #[inline(always)]
@@ -1283,8 +1286,8 @@ pub fn map_raw_key_event_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent
     if ev.pressed && ev.repeat {
         return;
     }
-    let km = load_compiled_keymap();
-    let Some(binding) = collect_key_binding_from_compiled(km.as_ref(), ev.code) else {
+    let Some(binding) = with_compiled_keymap(|km| collect_key_binding_from_compiled(km, ev.code))
+    else {
         return;
     };
     let edges = debounce_input_edge_in_store(
@@ -1318,8 +1321,8 @@ pub fn map_keycode_event_with_host(
     timestamp_host_nanos: u64,
     mut emit: impl FnMut(InputEvent),
 ) {
-    let km = load_compiled_keymap();
-    let Some(binding) = collect_key_binding_from_compiled(km.as_ref(), code) else {
+    let Some(binding) = with_compiled_keymap(|km| collect_key_binding_from_compiled(km, code))
+    else {
         return;
     };
     emit_normalized_actions(binding.mask, pressed, |action, pressed| {
@@ -1337,8 +1340,7 @@ pub fn map_keycode_event_with_host(
 
 #[inline(always)]
 pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
-    let km = load_compiled_keymap();
-    let edges = match *ev {
+    let Some((slot, mask, pressed, timestamp, host_nanos)) = with_compiled_keymap(|km| match *ev {
         PadEvent::Dir {
             id,
             dir,
@@ -1346,20 +1348,17 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
             timestamp,
             host_nanos,
         } => {
-            let mask = collect_pad_dir_mask_from_compiled(km.as_ref(), id, dir);
+            let mask = collect_pad_dir_mask_from_compiled(km, id, dir);
             if mask == 0 {
-                return;
+                return None;
             }
-            debounce_input_edge_in_store(
-                &PAD_DEBOUNCE_STATE,
-                pad_dir_slot_from_compiled(km.as_ref(), id, dir),
+            Some((
+                pad_dir_slot_from_compiled(km, id, dir),
                 mask,
-                InputSource::Gamepad,
                 pressed,
                 timestamp,
                 host_nanos,
-                debounce_windows(),
-            )
+            ))
         }
         PadEvent::RawButton {
             id,
@@ -1370,24 +1369,32 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
             host_nanos,
             ..
         } => {
-            let Some(binding) =
-                collect_pad_button_binding_from_compiled(km.as_ref(), id, code, uuid)
+            let Some(binding) = collect_pad_button_binding_from_compiled(km, id, code, uuid)
             else {
-                return;
+                return None;
             };
-            debounce_input_edge_in_store(
-                &PAD_DEBOUNCE_STATE,
-                pad_button_slot_from_compiled(km.as_ref(), id, binding.slot),
+            Some((
+                pad_button_slot_from_compiled(km, id, binding.slot),
                 binding.mask,
-                InputSource::Gamepad,
                 pressed,
                 timestamp,
                 host_nanos,
-                debounce_windows(),
-            )
+            ))
         }
-        PadEvent::RawAxis { .. } => return,
+        PadEvent::RawAxis { .. } => None,
+    }) else {
+        return;
     };
+    let edges = debounce_input_edge_in_store(
+        &PAD_DEBOUNCE_STATE,
+        slot,
+        mask,
+        InputSource::Gamepad,
+        pressed,
+        timestamp,
+        host_nanos,
+        debounce_windows(),
+    );
     emit_debounced_edges(edges, &mut emit);
 }
 
@@ -1895,18 +1902,24 @@ mod tests {
         );
 
         set_keymap(km);
-        let compiled = load_compiled_keymap();
+        let (key_slot_count, pad_stride, pad_slot_count) = with_compiled_keymap(|compiled| {
+            (
+                compiled.key_slot_count,
+                compiled.pad_stride,
+                compiled.pad_slot_count,
+            )
+        });
 
-        assert_eq!(compiled.key_slot_count, 2);
-        assert_eq!(compiled.pad_stride, 5);
-        assert_eq!(compiled.pad_slot_count, 15);
+        assert_eq!(key_slot_count, 2);
+        assert_eq!(pad_stride, 5);
+        assert_eq!(pad_slot_count, 15);
 
         assert!(
-            KEYBOARD_DEBOUNCE_STATE.lock().unwrap().capacity() >= compiled.key_slot_count,
+            KEYBOARD_DEBOUNCE_STATE.lock().unwrap().capacity() >= key_slot_count,
             "keyboard debounce store should be pre-sized for mapped keys"
         );
         assert!(
-            PAD_DEBOUNCE_STATE.lock().unwrap().capacity() >= compiled.pad_slot_count,
+            PAD_DEBOUNCE_STATE.lock().unwrap().capacity() >= pad_slot_count,
             "pad debounce store should reserve every explicitly addressed device stride"
         );
     }
