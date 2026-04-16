@@ -1294,8 +1294,13 @@ fn effective_mini_value(
 }
 
 #[inline(always)]
-fn mini_judgment_zoom(mini: f32) -> f32 {
-    0.5_f32.powf(mini).min(1.0)
+fn judgment_actor_zoom(mini: f32, judgment_back: bool) -> f32 {
+    if !judgment_back {
+        return 1.0;
+    }
+    // Arrow Cloud's JudgmentBack actorframe scales with Mini; the normal
+    // front judgment actor in ITGmania/Simply Love does not.
+    ((2.0 - mini) * 0.5).clamp(0.35, 1.0)
 }
 
 #[inline(always)]
@@ -3076,9 +3081,8 @@ pub fn build_bundles(
     let judgment_x = playfield_center_x + judgment_extra_x;
     let combo_x = playfield_center_x + combo_extra_x;
     let mc_font_name = zmod_small_combo_font(profile.combo_font);
-    // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0); deadsync currently supports Mini.
-    let judgment_zoom_mod =
-        mini_judgment_zoom(mini) * hallway_judgment_zoom(perspective.tilt, perspective.skew);
+    let judgment_zoom_mod = judgment_actor_zoom(mini, profile.judgment_back)
+        * hallway_judgment_zoom(perspective.tilt, perspective.skew);
     let effect_height = field_effect_height(perspective.tilt);
     let receptor_alpha = (1.0 - visibility.dark).clamp(0.0, 1.0);
     let blind_active = visibility.blind > f32::EPSILON;
@@ -6180,7 +6184,7 @@ pub fn build_bundles(
                     let explosion_duration = 0.5_f32;
                     if elapsed <= explosion_duration {
                         let progress = (elapsed / explosion_duration).clamp(0.0, 1.0);
-                        let zoom = (2.0 - progress) * judgment_zoom_mod;
+                        let zoom = 2.0 - progress;
                         let alpha = (0.5 * (1.0 - progress)).max(0.0);
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let rotation = 90.0 * direction * progress;
@@ -6203,7 +6207,7 @@ pub fn build_bundles(
                     if elapsed <= COMBO_HUNDRED_MILESTONE_DURATION {
                         let progress = (elapsed / COMBO_HUNDRED_MILESTONE_DURATION).clamp(0.0, 1.0);
                         let eased = ease_out_quad(progress);
-                        let zoom = (0.25 + (2.0 - 0.25) * eased) * judgment_zoom_mod;
+                        let zoom = 0.25 + (2.0 - 0.25) * eased;
                         let alpha = (0.6 * (1.0 - eased)).max(0.0);
                         let rotation = 10.0 + (0.0 - 10.0) * eased;
                         push_hud_capture(
@@ -6223,8 +6227,7 @@ pub fn build_bundles(
                         let mini_duration = 0.4_f32;
                         if elapsed <= mini_duration {
                             let mini_progress = (elapsed / mini_duration).clamp(0.0, 1.0);
-                            let mini_zoom =
-                                (0.25 + (1.8 - 0.25) * mini_progress) * judgment_zoom_mod;
+                            let mini_zoom = 0.25 + (1.8 - 0.25) * mini_progress;
                             let mini_alpha = (1.0 - mini_progress).max(0.0);
                             let mini_rotation = 10.0 + (0.0 - 10.0) * mini_progress;
                             push_hud_capture(
@@ -6249,9 +6252,9 @@ pub fn build_bundles(
                     if elapsed <= COMBO_THOUSAND_MILESTONE_DURATION {
                         let progress =
                             (elapsed / COMBO_THOUSAND_MILESTONE_DURATION).clamp(0.0, 1.0);
-                        let zoom = (0.25 + (3.0 - 0.25) * progress) * judgment_zoom_mod;
+                        let zoom = 0.25 + (3.0 - 0.25) * progress;
                         let alpha = (0.7 * (1.0 - progress)).max(0.0);
-                        let x_offset = 100.0 * progress * judgment_zoom_mod;
+                        let x_offset = 100.0 * progress;
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let final_x = combo_center_x + x_offset * direction;
                             push_hud_capture(
@@ -6287,7 +6290,7 @@ pub fn build_bundles(
                     act!(text:
                         font(font_name): settext(cached_int_u32(p.miss_combo)):
                         align(0.5, 0.5): xy(combo_x, combo_y):
-                        zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
+                        zoom(0.75): horizalign(center): shadowlength(1.0):
                         diffuse(1.0, 0.0, 0.0, 1.0):
                         z(90)
                     ),
@@ -6365,7 +6368,7 @@ pub fn build_bundles(
                     act!(text:
                         font(font_name): settext(cached_int_u32(p.combo)):
                         align(0.5, 0.5): xy(combo_x, combo_y):
-                        zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
+                        zoom(0.75): horizalign(center): shadowlength(1.0):
                         diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
                         z(90)
                     ),
@@ -7250,7 +7253,7 @@ mod tests {
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         clipped_hold_body_bounds, hallway_judgment_zoom, hold_head_render_flags, hold_segment_pose,
         hold_tail_cap_bounds, hold_window_for_display_run, hud_layout_ys, hud_y,
-        lane_hold_window_bounds_by_time_ns, let_go_head_beat,
+        judgment_actor_zoom, lane_hold_window_bounds_by_time_ns, let_go_head_beat,
         maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size,
         note_window_for_display_run, note_world_z, note_x_extra, offset_center,
         predictive_itg_percents, push_transform_parts, receptor_row_center, tap_judgment_rows,
@@ -7865,6 +7868,20 @@ mod tests {
         assert!((hallway_judgment_zoom(0.0, 0.0) - 1.0).abs() <= 1e-6);
         assert!((hallway_judgment_zoom(-1.0, 1.0) - 1.0).abs() <= 1e-6);
         assert!((hallway_judgment_zoom(1.0, 0.0) - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn judgment_actor_zoom_ignores_mini_without_judgment_back() {
+        assert!((judgment_actor_zoom(0.35, false) - 1.0).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(1.5, false) - 1.0).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(-1.0, false) - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn judgment_actor_zoom_matches_arrow_cloud_judgment_back_formula() {
+        assert!((judgment_actor_zoom(0.35, true) - 0.825).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(1.5, true) - 0.35).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(-1.0, true) - 1.0).abs() <= 1e-6);
     }
 
     #[test]
