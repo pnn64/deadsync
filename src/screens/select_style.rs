@@ -136,21 +136,24 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    let nav = match crate::game::profile::get_session_player_side() {
-        crate::game::profile::PlayerSide::P2 => match ev.action {
-            VirtualAction::p2_left | VirtualAction::p2_menu_left => Some(-1),
-            VirtualAction::p2_right | VirtualAction::p2_menu_right => Some(1),
-            VirtualAction::p2_start => Some(0),
-            VirtualAction::p2_back => Some(9),
-            _ => None,
-        },
-        crate::game::profile::PlayerSide::P1 => match ev.action {
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => Some(-1),
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => Some(1),
-            VirtualAction::p1_start => Some(0),
-            VirtualAction::p1_back => Some(9),
-            _ => None,
-        },
+    let nav = match ev.action {
+        VirtualAction::p1_left
+        | VirtualAction::p2_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_menu_left => Some(-1),
+
+        VirtualAction::p1_right
+        | VirtualAction::p2_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_menu_right => Some(1),
+
+        VirtualAction::p1_start
+        | VirtualAction::p2_start => Some(0),
+
+        VirtualAction::p1_back
+        | VirtualAction::p2_back => Some(9),
+
+        _ => None,
     };
 
     match nav {
