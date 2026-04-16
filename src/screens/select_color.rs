@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::tr;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 // Screen navigation handled in app
@@ -200,8 +201,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     // 2) Bars (top + bottom)
     const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+    let title = tr("ScreenTitles", "SelectAColor");
     actors.push(screen_bar::build(screen_bar::ScreenBarParams {
-        title: "SELECT A COLOR",
+        title: &title,
         title_placement: ScreenBarTitlePlacement::Left, // big title on the left
         position: ScreenBarPosition::Top,
         transparent: false,
@@ -229,32 +231,36 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let p1_guest = profile::is_session_side_guest(profile::PlayerSide::P1);
     let p2_guest = profile::is_session_side_guest(profile::PlayerSide::P2);
 
+    let insert_card = tr("Common", "InsertCard");
+    let press_start = tr("Common", "PressStart");
+
     let (footer_left, left_avatar) = if p1_joined {
         (
             Some(if p1_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p1_profile.display_name.as_str()
             }),
             if p1_guest { None } else { p1_avatar },
         )
     } else {
-        (Some("PRESS START"), None)
+        (Some(press_start.as_ref()), None)
     };
     let (footer_right, right_avatar) = if p2_joined {
         (
             Some(if p2_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p2_profile.display_name.as_str()
             }),
             if p2_guest { None } else { p2_avatar },
         )
     } else {
-        (Some("PRESS START"), None)
+        (Some(press_start.as_ref()), None)
     };
+    let event_mode = tr("Common", "EventMode");
     actors.push(screen_bar::build(screen_bar::ScreenBarParams {
-        title: "EVENT MODE",
+        title: &event_mode,
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,
         transparent: false,
