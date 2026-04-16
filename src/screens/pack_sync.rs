@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::config;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
@@ -23,7 +24,9 @@ const ROW_STEP: f32 = 43.0;
 const PROGRESS_STEP_BEATS: usize = 4;
 const MAX_MSGS_PER_FRAME: usize = 64;
 const POLL_BUDGET: Duration = Duration::from_millis(2);
-pub(crate) const ALL_LABEL: &str = "All Packs";
+pub(crate) fn all_label() -> std::sync::Arc<str> {
+    tr("PackSync", "AllPacksLabel")
+}
 
 pub(crate) struct TargetSpec {
     pub simfile_path: PathBuf,
@@ -187,11 +190,11 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
     let fill = color::decorative_rgba(active_color_index);
     let start = overlay.scroll_index.min(scroll_limit(overlay.rows.len()));
     let title = if overlay.phase == OverlayPhase::Running {
-        "Syncing pack..."
+        tr("PackSync", "SyncingPackTitle")
     } else if can_save(overlay) {
-        "Sync Pack Review"
+        tr("PackSync", "ReviewTitle")
     } else {
-        "Sync Pack Complete"
+        tr("PackSync", "CompleteTitle")
     };
     let counts_text = format!(
         "{}/{} chart(s) analyzed - {} ready, {} below {}%, {} no change, {} failed",
@@ -204,11 +207,14 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
         summary.failed
     );
     let scroll_text = (summary.total > VIEW_ROWS).then(|| {
-        format!(
-            "Rows {}-{} / {}",
-            start + 1,
-            (start + VIEW_ROWS).min(summary.total),
-            summary.total
+        tr_fmt(
+            "PackSync",
+            "RowsPaginationFormat",
+            &[
+                ("start", &(start + 1).to_string()),
+                ("end", &(start + VIEW_ROWS).min(summary.total).to_string()),
+                ("total", &summary.total.to_string()),
+            ],
         )
     });
     let counts_maxwidth = if scroll_text.is_some() {
@@ -287,9 +293,10 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
             horizalign(right)
         ));
     }
+    let col_song = tr("PackSync", "SongColumnHeader");
     actors.push(act!(text:
         font("miso"):
-        settext("SONG"):
+        settext(col_song):
         align(0.0, 0.5):
         xy(song_x, row_top - 20.0):
         zoom(0.75):
@@ -297,9 +304,10 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
         z(OVERLAY_Z + 3):
         horizalign(left)
     ));
+    let col_progress = tr("PackSync", "ProgressColumnHeader");
     actors.push(act!(text:
         font("miso"):
-        settext("PROGRESS"):
+        settext(col_progress):
         align(0.0, 0.5):
         xy(bar_x, row_top - 20.0):
         zoom(0.75):
@@ -307,9 +315,10 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
         z(OVERLAY_Z + 3):
         horizalign(left)
     ));
+    let col_result = tr("PackSync", "ResultColumnHeader");
     actors.push(act!(text:
         font("miso"):
-        settext("RESULT"):
+        settext(col_result):
         align(1.0, 0.5):
         xy(result_x, row_top - 20.0):
         zoom(0.75):
@@ -397,9 +406,10 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
 
     match overlay.phase {
         OverlayPhase::Running => {
+            let help = tr("PackSync", "HelpTextRunning");
             actors.push(act!(text:
                 font("miso"):
-                settext("UP/DOWN: SCROLL    LEFT/RIGHT: PAGE    START/BACK/SELECT: CANCEL"):
+                settext(help):
                 align(0.5, 0.5):
                 xy(pane_cx, pane_top + pane_h - 24.0):
                 zoom(0.8):
@@ -438,9 +448,10 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
                     z(OVERLAY_Z + 4):
                     horizalign(center)
                 ));
+                let yes_label = tr("PackSync", "YesOption");
                 actors.push(act!(text:
                     font("wendy"):
-                    settext("YES"):
+                    settext(yes_label):
                     align(0.5, 0.5):
                     xy(choice_yes_x, answer_y):
                     zoom(0.72):
@@ -448,9 +459,10 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
                     z(OVERLAY_Z + 4):
                     horizalign(center)
                 ));
+                let no_label = tr("PackSync", "NoOption");
                 actors.push(act!(text:
                     font("wendy"):
-                    settext("NO"):
+                    settext(no_label):
                     align(0.5, 0.5):
                     xy(choice_no_x, answer_y):
                     zoom(0.72):
@@ -458,9 +470,10 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
                     z(OVERLAY_Z + 4):
                     horizalign(center)
                 ));
+                let help = tr("PackSync", "HelpTextReview");
                 actors.push(act!(text:
                     font("miso"):
-                    settext("UP/DOWN: SCROLL    MENULEFT/MENURIGHT: PAGE    LEFT/RIGHT: CHOOSE    START: ACCEPT    BACK/SELECT: CANCEL"):
+                    settext(help):
                     align(0.5, 0.5):
                     xy(pane_cx, pane_top + pane_h - 18.0):
                     zoom(0.74):
@@ -480,9 +493,10 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
                     z(OVERLAY_Z + 4):
                     horizalign(center)
                 ));
+                let help = tr("PackSync", "HelpTextComplete");
                 actors.push(act!(text:
                     font("miso"):
-                    settext("UP/DOWN: SCROLL    MENULEFT/MENURIGHT: PAGE    START/BACK/SELECT: CLOSE"):
+                    settext(help):
                     align(0.5, 0.5):
                     xy(pane_cx, pane_top + pane_h - 18.0):
                     zoom(0.74):
@@ -946,15 +960,30 @@ fn save_prompt(overlay: &OverlayStateData) -> String {
     let summary = summary(overlay);
     let min_conf_pct = confidence_threshold_percent();
     if summary.eligible == 0 {
-        return format!(
-            "No pack sync changes are ready to save.\n{} song(s) are below {}% confidence, {} have no change, and {} failed.\nPress START/BACK/SELECT to close.",
-            summary.below_threshold, min_conf_pct, summary.no_change, summary.failed
-        );
+        return tr_fmt(
+            "PackSync",
+            "NothingToSaveMessage",
+            &[
+                ("below", &summary.below_threshold.to_string()),
+                ("threshold", &min_conf_pct.to_string()),
+                ("nochange", &summary.no_change.to_string()),
+                ("failed", &summary.failed.to_string()),
+            ],
+        )
+        .to_string();
     }
-    format!(
-        "Save {} pack sync change(s)?\n{} song(s) below {}% confidence, {} with no change, and {} failed will be skipped.\nChoosing NO will discard all pack sync changes.",
-        summary.eligible, summary.below_threshold, min_conf_pct, summary.no_change, summary.failed
+    tr_fmt(
+        "PackSync",
+        "SaveConfirmFormat",
+        &[
+            ("count", &summary.eligible.to_string()),
+            ("below", &summary.below_threshold.to_string()),
+            ("threshold", &min_conf_pct.to_string()),
+            ("nochange", &summary.no_change.to_string()),
+            ("failed", &summary.failed.to_string()),
+        ],
     )
+    .to_string()
 }
 
 #[inline(always)]
@@ -979,27 +1008,40 @@ fn progress(row: &RowState) -> f32 {
 
 fn bar_label(row: &RowState, min_confidence: f64) -> String {
     match row_disposition(row, min_confidence) {
-        RowDisposition::Pending => "Queued".to_string(),
+        RowDisposition::Pending => tr("PackSync", "StatusQueued").to_string(),
         RowDisposition::Running => match row.total_beats.max(row.beats_processed) {
-            0 => "Starting".to_string(),
-            total => format!("Beat {} / {}", row.beats_processed.min(total), total),
+            0 => tr("PackSync", "StatusStarting").to_string(),
+            total => tr_fmt(
+                "PackSync",
+                "ProgressFormat",
+                &[
+                    ("current", &row.beats_processed.min(total).to_string()),
+                    ("total", &total.to_string()),
+                ],
+            )
+            .to_string(),
         },
-        RowDisposition::Eligible => "Ready".to_string(),
-        RowDisposition::BelowThreshold => format!("Below {}%", confidence_threshold_percent()),
-        RowDisposition::NoChange => "No change".to_string(),
-        RowDisposition::Failed => "Error".to_string(),
+        RowDisposition::Eligible => tr("PackSync", "StatusReady").to_string(),
+        RowDisposition::BelowThreshold => tr_fmt(
+            "PackSync",
+            "StatusBelowThresholdFormat",
+            &[("threshold", &confidence_threshold_percent().to_string())],
+        )
+        .to_string(),
+        RowDisposition::NoChange => tr("PackSync", "StatusNoChange").to_string(),
+        RowDisposition::Failed => tr("PackSync", "StatusError").to_string(),
     }
 }
 
 fn result_text(row: &RowState, min_confidence: f64) -> String {
     let confidence_pct = confidence_percent(row.final_confidence);
     match row_disposition(row, min_confidence) {
-        RowDisposition::Pending => "Queued".to_string(),
+        RowDisposition::Pending => tr("PackSync", "StatusQueued").to_string(),
         RowDisposition::Running => {
             if let Some(bias_ms) = row.final_bias_ms {
                 format!("{bias_ms:+.2} ms")
             } else {
-                "Working".to_string()
+                tr("PackSync", "StatusWorking").to_string()
             }
         }
         RowDisposition::Eligible | RowDisposition::BelowThreshold => {
@@ -1013,8 +1055,8 @@ fn result_text(row: &RowState, min_confidence: f64) -> String {
         RowDisposition::Failed => row
             .error_text
             .as_deref()
-            .unwrap_or("Analysis failed")
-            .to_string(),
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| tr("PackSync", "AnalysisFailed").to_string()),
     }
 }
 

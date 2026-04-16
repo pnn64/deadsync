@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::tr;
 use crate::config::dirs;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
@@ -130,18 +131,6 @@ impl LoadingState {
 }
 
 static EMPTY_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from(""));
-static INIT_TITLE_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("DEAD SYNC"));
-static DONE_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("Done!"));
-static INITIALIZING_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("Initializing..."));
-static SONGS_PHASE_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("Loading songs..."));
-static COURSES_PHASE_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("Loading courses..."));
-static ARTWORK_PHASE_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("Caching artwork..."));
-static NOTESKINS_PHASE_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("Compiling noteskins..."));
 
 /* ----------------------- auto-advance ----------------------- */
 #[inline(always)]
@@ -298,10 +287,10 @@ fn cache_progress_lines(path: Option<&Path>) -> (String, String) {
 #[inline(always)]
 fn arc_phase_label(phase: LoadingPhase) -> Arc<str> {
     match phase {
-        LoadingPhase::Songs => SONGS_PHASE_TEXT.clone(),
-        LoadingPhase::Courses => COURSES_PHASE_TEXT.clone(),
-        LoadingPhase::Artwork => ARTWORK_PHASE_TEXT.clone(),
-        LoadingPhase::Noteskins => NOTESKINS_PHASE_TEXT.clone(),
+        LoadingPhase::Songs => tr("Init", "LoadingSongsText"),
+        LoadingPhase::Courses => tr("Init", "LoadingCoursesText"),
+        LoadingPhase::Artwork => tr("Init", "CachingArtworkText"),
+        LoadingPhase::Noteskins => tr("Init", "CompilingNoteskinsText"),
     }
 }
 
@@ -330,7 +319,7 @@ fn loading_progress_values(loading: &LoadingState) -> (usize, usize, f32) {
 fn refresh_loading_count_text(loading: &mut LoadingState) {
     let (done, total, _) = loading_progress_values(loading);
     loading.count_text = if loading.done || (total > 0 && done >= total) {
-        DONE_TEXT.clone()
+        tr("Init", "DoneText")
     } else if total == 0 {
         EMPTY_TEXT.clone()
     } else {
@@ -661,18 +650,20 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>, loading_elapsed_
         diffuse(0.0, 0.0, 0.0, 0.8):
         z(104.0)
     ));
+    let title_text = tr("Init", "TitleText");
     actors.push(act!(text:
         font("wendy"):
-        settext(INIT_TITLE_TEXT.clone()):
+        settext(title_text):
         align(0.5, 0.5):
         xy(screen_center_x(), bar_cy - 136.0):
         zoom(0.82):
         horizalign(center):
         z(110.0)
     ));
+    let phase_label = loading.map_or_else(|| tr("Init", "InitializingText"), |_| arc_phase_label(phase));
     actors.push(act!(text:
         font("miso"):
-        settext(loading.map_or_else(|| INITIALIZING_TEXT.clone(), |_| arc_phase_label(phase))):
+        settext(phase_label):
         align(0.5, 0.5):
         xy(screen_center_x(), bar_cy - 96.0):
         zoom(1.05):
