@@ -7,7 +7,7 @@ use crate::game::song::SongData;
 use crate::screens::select_music::MusicWheelEntry;
 use std::sync::Arc;
 
-use super::scroll_dir;
+use super::scroll_anim_dir;
 
 pub const SONG_SEARCH_FOCUS_TWEEN_SECONDS: f32 = 0.1;
 pub const SONG_SEARCH_INPUT_LOCK_SECONDS: f32 = 0.25;
@@ -39,6 +39,7 @@ pub struct SongSearchResultsState {
     pub candidates: Vec<SongSearchCandidate>,
     pub selected_index: usize,
     pub prev_selected_index: usize,
+    pub last_move_dir: isize,
     pub focus_anim_elapsed: f32,
     pub input_lock: f32,
 }
@@ -85,6 +86,7 @@ pub fn begin_song_search_results(
         candidates,
         selected_index: 0,
         prev_selected_index: 0,
+        last_move_dir: 0,
         focus_anim_elapsed: SONG_SEARCH_FOCUS_TWEEN_SECONDS,
         input_lock: SONG_SEARCH_INPUT_LOCK_SECONDS,
     })
@@ -144,6 +146,7 @@ pub fn song_search_move(results: &mut SongSearchResultsState, delta: isize) -> b
         return false;
     }
     results.prev_selected_index = old;
+    results.last_move_dir = delta.signum();
     results.selected_index = next;
     results.focus_anim_elapsed = 0.0;
     true
@@ -263,10 +266,11 @@ pub fn build_song_search_overlay(
             let total_items = song_search_total_items(results).max(1);
             let focus_t = (results.focus_anim_elapsed / SONG_SEARCH_FOCUS_TWEEN_SECONDS.max(1e-6))
                 .clamp(0.0, 1.0);
-            let scroll_dir = scroll_dir(
+            let scroll_dir = scroll_anim_dir(
                 total_items,
                 results.prev_selected_index,
                 results.selected_index,
+                results.last_move_dir,
             ) as f32;
             let scroll_shift = scroll_dir
                 * [1.0 - focus_t, 0.0]

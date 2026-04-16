@@ -163,11 +163,6 @@ fn push_default_options(content: &mut String, default: &Config) {
         "SelectMusicPreviewLoop",
         default.select_music_preview_loop,
     );
-    push_bool(
-        content,
-        "UseCategorySelectMusicMenu",
-        default.use_category_select_music_menu,
-    );
     push_line(
         content,
         "SelectMusicPatternInfo",
@@ -300,6 +295,11 @@ fn push_default_theme(content: &mut String, default: &Config) {
         content,
         "MachineShowSelectProfile",
         default.machine_show_select_profile,
+    );
+    push_bool(
+        content,
+        "AllowSwitchProfileInMenu",
+        default.allow_switch_profile_in_menu,
     );
     push_bool(
         content,

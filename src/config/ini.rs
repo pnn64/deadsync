@@ -56,4 +56,8 @@ impl SimpleIni {
     pub fn get_section(&self, section: &str) -> Option<&HashMap<String, String>> {
         self.sections.get(section)
     }
+
+    pub const fn sections(&self) -> &HashMap<String, HashMap<String, String>> {
+        &self.sections
+    }
 }

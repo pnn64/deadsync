@@ -2495,19 +2495,14 @@ fn fetch_arrowcloud_hard_ex_pane(
     }
 
     let decoded: ArrowCloudLeaderboardsApiResponse = response.into_body().read_json()?;
-    let hard_ex = decoded
+    let entries = decoded
         .leaderboards
         .into_iter()
-        .find(|pane| arrowcloud_lb_type_is_hard_ex(pane.r#type.as_str()));
-    let Some(hard_ex) = hard_ex else {
-        return Ok(None);
-    };
-    if hard_ex.scores.is_empty() {
-        return Ok(None);
-    }
+        .find(|pane| arrowcloud_lb_type_is_hard_ex(pane.r#type.as_str()))
+        .map_or_else(Vec::new, |pane| arrowcloud_entries_from_api(pane.scores));
     Ok(Some(LeaderboardPane {
         name: "ArrowCloud".to_string(),
-        entries: arrowcloud_entries_from_api(hard_ex.scores),
+        entries,
         is_ex: false,
         disabled: false,
     }))
@@ -2981,7 +2976,8 @@ pub fn invalidate_player_leaderboards_for_side(chart_hash: &str, side: profile::
 }
 #[derive(Debug)]
 struct MachineLeaderboardPlay {
-    initials: String,
+    name: String,
+    machine_tag: Option<String>,
     score_percent: f64,
     played_at_ms: i64,
     is_fail: bool,
@@ -3000,7 +2996,8 @@ struct MachineReplayPlay {
 fn push_machine_leaderboard_from_dir(
     dir: &Path,
     chart_hash: &str,
-    initials: &str,
+    name: &str,
+    machine_tag: Option<&str>,
     out: &mut Vec<MachineLeaderboardPlay>,
 ) {
     let Ok(read_dir) = fs::read_dir(dir) else {
@@ -3012,10 +3009,10 @@ fn push_machine_leaderboard_from_dir(
         if !path.is_file() {
             continue;
         }
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        let Some((file_hash, played_at_ms)) = parse_local_score_filename(name) else {
+        let Some((file_hash, played_at_ms)) = parse_local_score_filename(file_name) else {
             continue;
         };
         if file_hash != chart_hash {
@@ -3025,7 +3022,8 @@ fn push_machine_leaderboard_from_dir(
             continue;
         };
         out.push(MachineLeaderboardPlay {
-            initials: initials.to_string(),
+            name: name.to_string(),
+            machine_tag: machine_tag.map(str::to_string),
             score_percent: h.score_percent,
             played_at_ms,
             is_fail: grade_from_code(h.grade_code) == Grade::Failed || h.fail_time.is_some(),
@@ -3078,6 +3076,36 @@ fn local_score_date_string(played_at_ms: i64) -> String {
     dt.format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
+fn machine_leaderboard_entries(
+    mut plays: Vec<MachineLeaderboardPlay>,
+    max_entries: usize,
+) -> Vec<LeaderboardEntry> {
+    plays.sort_by(|a, b| {
+        b.score_percent
+            .partial_cmp(&a.score_percent)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| b.played_at_ms.cmp(&a.played_at_ms))
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.machine_tag.cmp(&b.machine_tag))
+    });
+
+    let take_len = max_entries.min(plays.len());
+    let mut out = Vec::with_capacity(take_len);
+    for (i, play) in plays.into_iter().take(take_len).enumerate() {
+        out.push(LeaderboardEntry {
+            rank: (i as u32).saturating_add(1),
+            name: play.name,
+            machine_tag: play.machine_tag,
+            score: (play.score_percent * 10000.0).round(),
+            date: local_score_date_string(play.played_at_ms),
+            is_rival: false,
+            is_self: false,
+            is_fail: play.is_fail,
+        });
+    }
+    out
+}
+
 pub fn get_machine_leaderboard_local(
     chart_hash: &str,
     max_entries: usize,
@@ -3091,34 +3119,45 @@ pub fn get_machine_leaderboard_local(
         let initials =
             profile_initials_for_id(&profile_meta.id).unwrap_or_else(|| "----".to_string());
         let root = local_scores_root_for_profile(&profile_meta.id);
-        push_machine_leaderboard_from_dir(&root, chart_hash, &initials, &mut plays);
+        push_machine_leaderboard_from_dir(&root, chart_hash, &initials, None, &mut plays);
         let shard_dir = root.join(shard2_for_hash(chart_hash));
-        push_machine_leaderboard_from_dir(&shard_dir, chart_hash, &initials, &mut plays);
+        push_machine_leaderboard_from_dir(&shard_dir, chart_hash, &initials, None, &mut plays);
     }
 
-    plays.sort_by(|a, b| {
-        b.score_percent
-            .partial_cmp(&a.score_percent)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| b.played_at_ms.cmp(&a.played_at_ms))
-            .then_with(|| a.initials.cmp(&b.initials))
-    });
+    machine_leaderboard_entries(plays, max_entries)
+}
 
-    let take_len = max_entries.min(plays.len());
-    let mut out = Vec::with_capacity(take_len);
-    for (i, play) in plays.into_iter().take(take_len).enumerate() {
-        out.push(LeaderboardEntry {
-            rank: (i as u32).saturating_add(1),
-            name: play.initials,
-            machine_tag: None,
-            score: (play.score_percent * 10000.0).round(),
-            date: local_score_date_string(play.played_at_ms),
-            is_rival: false,
-            is_self: false,
-            is_fail: play.is_fail,
-        });
+pub fn get_machine_leaderboard_local_with_names(
+    chart_hash: &str,
+    max_entries: usize,
+) -> Vec<LeaderboardEntry> {
+    if chart_hash.trim().is_empty() || max_entries == 0 {
+        return Vec::new();
     }
-    out
+
+    let mut plays: Vec<MachineLeaderboardPlay> = Vec::new();
+    for profile_meta in profile::scan_local_profiles() {
+        let initials =
+            profile_initials_for_id(&profile_meta.id).unwrap_or_else(|| "----".to_string());
+        let root = local_scores_root_for_profile(&profile_meta.id);
+        push_machine_leaderboard_from_dir(
+            &root,
+            chart_hash,
+            profile_meta.display_name.as_str(),
+            Some(initials.as_str()),
+            &mut plays,
+        );
+        let shard_dir = root.join(shard2_for_hash(chart_hash));
+        push_machine_leaderboard_from_dir(
+            &shard_dir,
+            chart_hash,
+            profile_meta.display_name.as_str(),
+            Some(initials.as_str()),
+            &mut plays,
+        );
+    }
+
+    machine_leaderboard_entries(plays, max_entries)
 }
 
 pub fn get_personal_leaderboard_local_for_side(
@@ -3138,32 +3177,10 @@ pub fn get_personal_leaderboard_local_for_side(
     let shard_dir = root.join(shard2_for_hash(chart_hash));
 
     let mut plays: Vec<MachineLeaderboardPlay> = Vec::new();
-    push_machine_leaderboard_from_dir(&root, chart_hash, &initials, &mut plays);
-    push_machine_leaderboard_from_dir(&shard_dir, chart_hash, &initials, &mut plays);
+    push_machine_leaderboard_from_dir(&root, chart_hash, &initials, None, &mut plays);
+    push_machine_leaderboard_from_dir(&shard_dir, chart_hash, &initials, None, &mut plays);
 
-    plays.sort_by(|a, b| {
-        b.score_percent
-            .partial_cmp(&a.score_percent)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| b.played_at_ms.cmp(&a.played_at_ms))
-            .then_with(|| a.initials.cmp(&b.initials))
-    });
-
-    let take_len = max_entries.min(plays.len());
-    let mut out = Vec::with_capacity(take_len);
-    for (i, play) in plays.into_iter().take(take_len).enumerate() {
-        out.push(LeaderboardEntry {
-            rank: (i as u32).saturating_add(1),
-            name: play.initials,
-            machine_tag: None,
-            score: (play.score_percent * 10000.0).round(),
-            date: local_score_date_string(play.played_at_ms),
-            is_rival: false,
-            is_self: false,
-            is_fail: play.is_fail,
-        });
-    }
-    out
+    machine_leaderboard_entries(plays, max_entries)
 }
 
 pub fn get_machine_replays_local(chart_hash: &str, max_entries: usize) -> Vec<MachineReplayEntry> {

@@ -37,7 +37,7 @@ use rssp::streams::StreamSegment;
 use std::array::from_fn;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::hash::BuildHasherDefault;
+use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::Arc;
 use twox_hash::XxHash64;
 
@@ -213,6 +213,7 @@ thread_local! {
 struct GameplayModsTextKey {
     speed_tag: u8,
     speed_bits: u32,
+    noteskin_hash: u64,
     insert_mask: u8,
     remove_mask: u8,
     holds_mask: u8,
@@ -566,9 +567,12 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
         ScrollSpeedSetting::XMod(value) => (1, value.to_bits()),
         ScrollSpeedSetting::MMod(value) => (2, value.to_bits()),
     };
+    let mut noteskin_hasher = XxHash64::default();
+    noteskin_hasher.write(profile.noteskin.as_str().as_bytes());
     GameplayModsTextKey {
         speed_tag,
         speed_bits,
+        noteskin_hash: noteskin_hasher.finish(),
         insert_mask: profile::normalize_insert_mask(profile.insert_active_mask)
             | chart_attack.insert_mask,
         remove_mask: profile::normalize_remove_mask(profile.remove_active_mask)
@@ -1401,6 +1405,7 @@ fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
         append_turn_parts(&mut parts, key.turn_bits);
         push_transform_parts(&mut parts, key.insert_mask, key.remove_mask, key.holds_mask);
         append_perspective_parts(&mut parts, key.perspective_tilt, key.perspective_skew);
+        parts.push(state.player_profiles[player_idx].noteskin.to_string());
         if key.visual_delay_ms != 0 {
             parts.push(format!("{}ms VisualDelay", key.visual_delay_ms));
         }

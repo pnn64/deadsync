@@ -4,11 +4,19 @@ use std::sync::{LazyLock, Mutex};
 
 const ARROWCLOUD_API_BASE_URL: &str = "https://api.arrowcloud.dance";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionError {
+    Disabled,
+    TimedOut,
+    HostBlocked,
+    CannotConnect,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConnectionStatus {
     Pending,
     Connected,
-    Error(String),
+    Error(ConnectionError),
 }
 
 static STATUS: LazyLock<Mutex<ConnectionStatus>> =
@@ -53,7 +61,7 @@ pub fn leaderboards_url(chart_hash: &str) -> Option<String> {
 pub fn init() {
     let cfg = crate::config::get();
     if !cfg.enable_arrowcloud {
-        set_status(ConnectionStatus::Error("Disabled".to_string()));
+        set_status(ConnectionStatus::Error(ConnectionError::Disabled));
         return;
     }
 
@@ -71,15 +79,20 @@ fn perform_check() {
             set_status(ConnectionStatus::Connected);
         }
         Err(error) => {
-            let message = error.to_string();
-            let lower = message.to_ascii_lowercase();
-            let status = if lower.contains("timeout") || lower.contains("timed out") {
-                ConnectionStatus::Error("Timed Out".to_string())
-            } else {
-                ConnectionStatus::Error(format!("HTTP error: {error}"))
-            };
             warn!("HTTP error to ArrowCloud: {error}");
-            set_status(status);
+            let message = error.to_string();
+            set_status(ConnectionStatus::Error(classify_error(&message)));
         }
     }
+}
+
+fn classify_error(message: &str) -> ConnectionError {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("timeout") || lower.contains("timed out") {
+        return ConnectionError::TimedOut;
+    }
+    if lower.contains("blocked") || lower.contains("forbidden") || lower.contains("403") {
+        return ConnectionError::HostBlocked;
+    }
+    ConnectionError::CannotConnect
 }

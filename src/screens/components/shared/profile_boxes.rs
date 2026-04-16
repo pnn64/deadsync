@@ -210,6 +210,7 @@ fn format_recent_mods(
     speed_mod: &str,
     scroll: profile::ScrollOption,
     mini_indicator: profile::MiniIndicator,
+    noteskin: &profile::NoteSkin,
 ) -> String {
     let mut out = String::new();
     let mut first = true;
@@ -242,6 +243,7 @@ fn format_recent_mods(
         push("Centered");
     }
     push("Overhead");
+    push(noteskin.as_str());
     let mini_indicator_label = match mini_indicator {
         profile::MiniIndicator::None => None,
         profile::MiniIndicator::SubtractiveScoring => Some("Subtractive Scoring"),
@@ -1358,7 +1360,9 @@ fn push_scroller_frame(
     // NoteSkin + JudgmentGraphic previews (SL-style placement).
     if selected_is_local {
         let selected_mods = selected
-            .map(|c| format_recent_mods(&c.speed_mod, c.scroll_option, c.mini_indicator))
+            .map(|c| {
+                format_recent_mods(&c.speed_mod, c.scroll_option, c.mini_indicator, &c.noteskin)
+            })
             .unwrap_or_default();
         let preview_y = frame_cy + PREVIEW_Y_OFF;
 

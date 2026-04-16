@@ -25,6 +25,7 @@ const OVERLAY_LB_ROWS: usize = 13;
 const OVERLAY_LB_GRID_W: f32 = 230.0;
 const OVERLAY_LB_RIVAL: [f32; 4] = color::rgba_hex("#BD94FF");
 const OVERLAY_LB_SELF: [f32; 4] = color::rgba_hex("#A1FF94");
+const OVERLAY_LB_TEXT_ZOOM: f32 = 1.0;
 const TIER_BRONZE: [f32; 4] = color::rgba_hex("#966832");
 const TIER_SILVER: [f32; 4] = color::rgba_hex("#A1AEC1");
 const TIER_GOLD: [f32; 4] = color::rgba_hex("#F6AB2D");
@@ -527,7 +528,7 @@ fn build_overlay_leaderboard(
             settext(rank):
             align(1.0, 0.5):
             xy(rank_x, y):
-            zoom(0.82):
+            zoom(OVERLAY_LB_TEXT_ZOOM):
             maxwidth(30.0):
             horizalign(right):
             diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
@@ -538,7 +539,7 @@ fn build_overlay_leaderboard(
             settext(name):
             align(0.5, 0.5):
             xy(name_x, y):
-            zoom(0.82):
+            zoom(OVERLAY_LB_TEXT_ZOOM):
             maxwidth(130.0):
             horizalign(center):
             diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
@@ -549,7 +550,7 @@ fn build_overlay_leaderboard(
             settext(score):
             align(1.0, 0.5):
             xy(score_x, y):
-            zoom(0.82):
+            zoom(OVERLAY_LB_TEXT_ZOOM):
             horizalign(right):
             diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
             z(z + 1)
@@ -560,7 +561,7 @@ fn build_overlay_leaderboard(
                 settext(date):
                 align(1.0, 0.5):
                 xy(date_x, y):
-                zoom(0.82):
+                zoom(OVERLAY_LB_TEXT_ZOOM):
                 horizalign(right):
                 diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
                 z(z + 1)

@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::AssetManager;
+use crate::assets::{self, AssetManager};
 use crate::engine::display::{self, MonitorSpec};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
 use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
@@ -31,7 +31,7 @@ use crate::engine::present::actors;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
-use crate::i18n::{LookupKey, lookup_key};
+use crate::assets::i18n::{LookupKey, lookup_key};
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{heart_bg, screen_bar};
 use null_or_die::{BiasKernel, KernelTarget};
@@ -1132,7 +1132,10 @@ pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::Language,
         label: lookup_key("OptionsSystem", "Language"),
-        choices: &[localized_choice("OptionsSystem", "EnglishLanguage")],
+        choices: &[
+            localized_choice("OptionsSystem", "EnglishLanguage"),
+            localized_choice("OptionsSystem", "SwedishLanguage"),
+        ],
         inline: false,
     },
     SubRow {
@@ -1239,7 +1242,19 @@ const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
     (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
     (BackendType::Software, "Software"),
 ];
-#[cfg(all(not(target_os = "windows"), not(target_pointer_width = "32")))]
+#[cfg(all(target_os = "macos", not(target_pointer_width = "32")))]
+const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
+    (BackendType::OpenGL, "OpenGL"),
+    (BackendType::Vulkan, "Vulkan"),
+    (BackendType::Metal, "Metal (wgpu)"),
+    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
+    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
+    (BackendType::Software, "Software"),
+];
+#[cfg(all(
+    not(any(target_os = "windows", target_os = "macos")),
+    not(target_pointer_width = "32")
+))]
 const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
     (BackendType::OpenGL, "OpenGL"),
     (BackendType::Vulkan, "Vulkan"),
@@ -1270,7 +1285,19 @@ const VIDEO_RENDERER_LABELS: &[Choice] = &[
     localized_choice("OptionsGraphics", "RendererOpenGLWgpu"),
     localized_choice("OptionsGraphics", "RendererSoftware"),
 ];
-#[cfg(all(not(target_os = "windows"), not(target_pointer_width = "32")))]
+#[cfg(all(target_os = "macos", not(target_pointer_width = "32")))]
+const VIDEO_RENDERER_LABELS: &[Choice] = &[
+    localized_choice("OptionsGraphics", "RendererOpenGL"),
+    localized_choice("OptionsGraphics", "RendererVulkan"),
+    localized_choice("OptionsGraphics", "RendererMetal"),
+    localized_choice("OptionsGraphics", "RendererOpenGLWgpu"),
+    localized_choice("OptionsGraphics", "RendererVulkanWgpu"),
+    localized_choice("OptionsGraphics", "RendererSoftware"),
+];
+#[cfg(all(
+    not(any(target_os = "windows", target_os = "macos")),
+    not(target_pointer_width = "32")
+))]
 const VIDEO_RENDERER_LABELS: &[Choice] = &[
     localized_choice("OptionsGraphics", "RendererOpenGL"),
     localized_choice("OptionsGraphics", "RendererVulkan"),
@@ -1283,6 +1310,13 @@ const VIDEO_RENDERER_LABELS: &[Choice] = &[
     localized_choice("OptionsGraphics", "RendererOpenGL"),
     localized_choice("OptionsGraphics", "RendererOpenGLWgpu"),
     localized_choice("OptionsGraphics", "RendererSoftware"),
+];
+
+const DISPLAY_ASPECT_RATIO_CHOICES: &[Choice] = &[
+    literal_choice("16:9"),
+    literal_choice("16:10"),
+    literal_choice("4:3"),
+    literal_choice("1:1"),
 ];
 
 const VIDEO_RENDERER_ROW_INDEX: usize = 0;
@@ -1365,12 +1399,7 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::DisplayAspectRatio,
         label: lookup_key("OptionsGraphics", "DisplayAspectRatio"),
-        choices: &[
-            literal_choice("16:9"),
-            literal_choice("16:10"),
-            literal_choice("4:3"),
-            literal_choice("1:1"),
-        ],
+        choices: DISPLAY_ASPECT_RATIO_CHOICES,
         inline: true,
     },
     SubRow {
@@ -5421,6 +5450,20 @@ const fn translated_titles_from_choice(idx: usize) -> bool {
     idx == 0
 }
 
+const fn language_choice_index(flag: config::LanguageFlag) -> usize {
+    match flag {
+        config::LanguageFlag::Auto | config::LanguageFlag::English => 0,
+        config::LanguageFlag::Swedish => 1,
+    }
+}
+
+const fn language_flag_from_choice(idx: usize) -> config::LanguageFlag {
+    match idx {
+        1 => config::LanguageFlag::Swedish,
+        _ => config::LanguageFlag::English,
+    }
+}
+
 const fn select_music_pattern_info_choice_index(mode: SelectMusicPatternInfoMode) -> usize {
     match mode {
         SelectMusicPatternInfoMode::Auto => 0,
@@ -5933,7 +5976,7 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_system,
         SYSTEM_OPTIONS_ROWS,
         SubRowId::Language,
-        0,
+        language_choice_index(cfg.language_flag),
     );
     set_choice_by_id(
         &mut state.sub_choice_indices_system,
@@ -7855,7 +7898,11 @@ fn apply_submenu_choice_delta(
         match row.id {
             SubRowId::Game => config::update_game_flag(config::GameFlag::Dance),
             SubRowId::Theme => config::update_theme_flag(config::ThemeFlag::SimplyLove),
-            SubRowId::Language => config::update_language_flag(config::LanguageFlag::English),
+            SubRowId::Language => {
+                let flag = language_flag_from_choice(new_index);
+                config::update_language_flag(flag);
+                assets::i18n::set_locale(&assets::i18n::resolve_locale(flag));
+            }
             SubRowId::LogLevel => config::update_log_level(log_level_from_choice(new_index)),
             SubRowId::LogFile => config::update_log_to_file(new_index == 1),
             SubRowId::DefaultNoteSkin => {
@@ -8521,12 +8568,22 @@ pub fn handle_input(
     let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
     if screen_input::dedicated_three_key_nav_enabled() {
         match ev.action {
-            VirtualAction::p1_left | VirtualAction::p1_menu_left if !ev.pressed => {
+            VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left
+                if !ev.pressed =>
+            {
                 state.menu_lr_undo = 0;
                 on_nav_release(state, NavDirection::Up);
                 return ScreenAction::None;
             }
-            VirtualAction::p1_right | VirtualAction::p1_menu_right if !ev.pressed => {
+            VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right
+                if !ev.pressed =>
+            {
                 state.menu_lr_undo = 0;
                 on_nav_release(state, NavDirection::Down);
                 return ScreenAction::None;
@@ -8537,11 +8594,9 @@ pub fn handle_input(
     if let Some(score_import) = state.score_import_ui.as_ref() {
         let cancel_requested = matches!(
             three_key_action,
-            Some((
-                profile::PlayerSide::P1,
-                screen_input::ThreeKeyMenuAction::Cancel
-            ))
-        ) || (ev.pressed && matches!(ev.action, VirtualAction::p1_back));
+            Some((_, screen_input::ThreeKeyMenuAction::Cancel))
+        ) || (ev.pressed
+            && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back));
         if cancel_requested {
             score_import.cancel_requested.store(true, Ordering::Relaxed);
             clear_navigation_holds(state);
@@ -8558,7 +8613,7 @@ pub fn handle_input(
         return shared_pack_sync::handle_input(&mut state.pack_sync_overlay, ev);
     }
     if let Some(confirm) = state.score_import_confirm.as_mut() {
-        if let Some((profile::PlayerSide::P1, nav)) = three_key_action {
+        if let Some((_, nav)) = three_key_action {
             match nav {
                 screen_input::ThreeKeyMenuAction::Prev => {
                     if confirm.active_choice > 0 {
@@ -8595,19 +8650,28 @@ pub fn handle_input(
             return ScreenAction::None;
         }
         match ev.action {
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+            VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left => {
                 if confirm.active_choice > 0 {
                     confirm.active_choice -= 1;
                     audio::play_sfx("assets/sounds/change.ogg");
                 }
             }
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+            VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right => {
                 if confirm.active_choice < 1 {
                     confirm.active_choice += 1;
                     audio::play_sfx("assets/sounds/change.ogg");
                 }
             }
-            VirtualAction::p1_start | VirtualAction::p1_select => {
+            VirtualAction::p1_start
+            | VirtualAction::p1_select
+            | VirtualAction::p2_start
+            | VirtualAction::p2_select => {
                 let should_start = confirm.active_choice == 0;
                 audio::play_sfx("assets/sounds/start.ogg");
                 if should_start {
@@ -8618,7 +8682,7 @@ pub fn handle_input(
                     state.score_import_confirm = None;
                 }
             }
-            VirtualAction::p1_back => {
+            VirtualAction::p1_back | VirtualAction::p2_back => {
                 clear_navigation_holds(state);
                 state.score_import_confirm = None;
                 audio::play_sfx("assets/sounds/change.ogg");
@@ -8628,7 +8692,7 @@ pub fn handle_input(
         return ScreenAction::None;
     }
     if let Some(confirm) = state.sync_pack_confirm.as_mut() {
-        if let Some((profile::PlayerSide::P1, nav)) = three_key_action {
+        if let Some((_, nav)) = three_key_action {
             match nav {
                 screen_input::ThreeKeyMenuAction::Prev => {
                     if confirm.active_choice > 0 {
@@ -8664,19 +8728,28 @@ pub fn handle_input(
             return ScreenAction::None;
         }
         match ev.action {
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+            VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left => {
                 if confirm.active_choice > 0 {
                     confirm.active_choice -= 1;
                     audio::play_sfx("assets/sounds/change.ogg");
                 }
             }
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+            VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right => {
                 if confirm.active_choice < 1 {
                     confirm.active_choice += 1;
                     audio::play_sfx("assets/sounds/change.ogg");
                 }
             }
-            VirtualAction::p1_start | VirtualAction::p1_select => {
+            VirtualAction::p1_start
+            | VirtualAction::p1_select
+            | VirtualAction::p2_start
+            | VirtualAction::p2_select => {
                 let should_start = confirm.active_choice == 0;
                 audio::play_sfx("assets/sounds/start.ogg");
                 clear_navigation_holds(state);
@@ -8686,7 +8759,7 @@ pub fn handle_input(
                     state.sync_pack_confirm = None;
                 }
             }
-            VirtualAction::p1_back => {
+            VirtualAction::p1_back | VirtualAction::p2_back => {
                 clear_navigation_holds(state);
                 state.sync_pack_confirm = None;
                 audio::play_sfx("assets/sounds/change.ogg");
@@ -8699,7 +8772,7 @@ pub fn handle_input(
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
         return ScreenAction::None;
     }
-    if let Some((profile::PlayerSide::P1, nav)) = three_key_action {
+    if let Some((_, nav)) = three_key_action {
         return match nav {
             screen_input::ThreeKeyMenuAction::Prev => {
                 match state.view {
@@ -8762,8 +8835,13 @@ pub fn handle_input(
     }
 
     match ev.action {
-        VirtualAction::p1_back if ev.pressed => return cancel_current_view(state),
-        VirtualAction::p1_up | VirtualAction::p1_menu_up => {
+        VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
+            return cancel_current_view(state);
+        }
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up => {
             if ev.pressed {
                 match state.view {
                     OptionsView::Main => {
@@ -8790,7 +8868,10 @@ pub fn handle_input(
                 on_nav_release(state, NavDirection::Up);
             }
         }
-        VirtualAction::p1_down | VirtualAction::p1_menu_down => {
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down => {
             if ev.pressed {
                 match state.view {
                     OptionsView::Main => {
@@ -8813,7 +8894,10 @@ pub fn handle_input(
                 on_nav_release(state, NavDirection::Down);
             }
         }
-        VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => {
             if ev.pressed {
                 if let Some(action) = apply_submenu_choice_delta(state, asset_manager, -1) {
                     on_lr_press(state, -1);
@@ -8824,7 +8908,10 @@ pub fn handle_input(
                 on_lr_release(state, -1);
             }
         }
-        VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+        VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => {
             if ev.pressed {
                 if let Some(action) = apply_submenu_choice_delta(state, asset_manager, 1) {
                     on_lr_press(state, 1);
@@ -8835,7 +8922,7 @@ pub fn handle_input(
                 on_lr_release(state, 1);
             }
         }
-        VirtualAction::p1_start if ev.pressed => {
+        VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {
             return activate_current_selection(state, asset_manager);
         }
         _ => {}
@@ -10486,11 +10573,35 @@ pub fn get_actors(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assets::AssetManager;
+    use crate::engine::input::{InputEvent, InputSource, VirtualAction};
+    use std::time::Instant;
+
+    fn press(
+        state: &mut State,
+        asset_manager: &AssetManager,
+        action: VirtualAction,
+    ) -> ScreenAction {
+        let now = Instant::now();
+        handle_input(
+            state,
+            asset_manager,
+            &InputEvent {
+                action,
+                pressed: true,
+                source: InputSource::Keyboard,
+                timestamp: now,
+                timestamp_host_nanos: 0,
+                stored_at: now,
+                emitted_at: now,
+            },
+        )
+    }
 
     #[test]
     fn inferred_aspect_choice_maps_1024x768_to_4_3() {
         let idx = inferred_aspect_choice(1024, 768);
-        assert_eq!(DISPLAY_ASPECT_RATIO_CHOICES[idx], "4:3");
+        assert_eq!(DISPLAY_ASPECT_RATIO_CHOICES[idx].as_str_static(), Some("4:3"));
     }
 
     #[test]
@@ -10501,5 +10612,29 @@ mod tests {
         assert_eq!(selected_aspect_label(&state), "4:3");
         assert_eq!(selected_resolution(&state), (1024, 768));
         assert!(state.resolution_choices.contains(&(1024, 768)));
+    }
+
+    #[test]
+    fn p2_can_navigate_and_change_system_options() {
+        let asset_manager = AssetManager::new();
+        let mut state = init();
+
+        assert_eq!(state.selected, 0);
+        press(&mut state, &asset_manager, VirtualAction::p2_start);
+        update(&mut state, 1.0, &asset_manager);
+        update(&mut state, 1.0, &asset_manager);
+        assert!(matches!(
+            state.view,
+            OptionsView::Submenu(SubmenuKind::System)
+        ));
+
+        press(&mut state, &asset_manager, VirtualAction::p2_down);
+        press(&mut state, &asset_manager, VirtualAction::p2_down);
+        press(&mut state, &asset_manager, VirtualAction::p2_down);
+        assert_eq!(state.sub_selected, 3);
+
+        let before = state.sub_cursor_indices_system[3];
+        press(&mut state, &asset_manager, VirtualAction::p2_right);
+        assert_eq!(state.sub_cursor_indices_system[3], before + 1);
     }
 }

@@ -272,6 +272,10 @@ impl App {
             && !self.state.session.played_stages.is_empty()
         {
             target = machine_first_post_select_target(&cfg);
+            self.state.session.pending_post_select_summary_exit =
+                target == CurrentScreen::EvaluationSummary;
+        } else if target == CurrentScreen::EvaluationSummary {
+            self.state.session.pending_post_select_summary_exit = false;
         }
 
         let startup_flow = matches!(

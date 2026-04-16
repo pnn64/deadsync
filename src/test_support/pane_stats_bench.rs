@@ -75,6 +75,7 @@ fn bench_score_info() -> ScoreInfo {
         score_percent: 0.9765,
         grade: Grade::Tier02,
         speed_mod: ScrollSpeedSetting::CMod(700.0),
+        noteskin_name: "cel".to_string(),
         hands_achieved: 237,
         hands_total: 288,
         holds_held: 452,

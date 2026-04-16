@@ -1,6 +1,8 @@
 use crate::game::profile;
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::fmt::Display;
 use std::io::ErrorKind;
 use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -668,18 +670,30 @@ fn decorate_lobby_profile_name(name: &str) -> String {
 }
 
 fn handle_message(message: Message) -> Result<(), String> {
-    let text = match message {
-        Message::Text(text) => text,
-        Message::Close(_) => return Err("Connection closed.".to_string()),
-        _ => return Ok(()),
+    match message {
+        Message::Text(text) => handle_text_message(text.as_str()),
+        Message::Close(_) => Err("Connection closed.".to_string()),
+        _ => Ok(()),
+    }
+}
+
+fn handle_text_message(text: &str) -> Result<(), String> {
+    let envelope: InboundEnvelope = match serde_json::from_str(text) {
+        Ok(envelope) => envelope,
+        Err(error) => {
+            log_malformed_payload(None, &error, text);
+            return Ok(());
+        }
     };
 
-    let envelope: InboundEnvelope =
-        serde_json::from_str(text.as_str()).map_err(|error| error.to_string())?;
-    match envelope.event.as_str() {
+    let event = envelope.event;
+    match event.as_str() {
         "lobbySearched" => {
-            let data: LobbySearchedData =
-                serde_json::from_value(envelope.data).map_err(|error| error.to_string())?;
+            let Some(data): Option<LobbySearchedData> =
+                parse_inbound_data(event.as_str(), envelope.data, text)
+            else {
+                return Ok(());
+            };
             let mut snapshot = SNAPSHOT.lock().unwrap();
             snapshot.available_lobbies = data
                 .lobbies
@@ -692,8 +706,11 @@ fn handle_message(message: Message) -> Result<(), String> {
                 .collect();
         }
         "lobbyState" => {
-            let data: LobbyStateData =
-                serde_json::from_value(envelope.data).map_err(|error| error.to_string())?;
+            let Some(data): Option<LobbyStateData> =
+                parse_inbound_data(event.as_str(), envelope.data, text)
+            else {
+                return Ok(());
+            };
             {
                 let mut reconnect = RECONNECT_STATE.lock().unwrap();
                 let password = reconnect
@@ -737,8 +754,11 @@ fn handle_message(message: Message) -> Result<(), String> {
             });
         }
         "lobbyLeft" => {
-            let data: LobbyLeftData =
-                serde_json::from_value(envelope.data).map_err(|error| error.to_string())?;
+            let Some(data): Option<LobbyLeftData> =
+                parse_inbound_data(event.as_str(), envelope.data, text)
+            else {
+                return Ok(());
+            };
             if data.left.unwrap_or(true) {
                 clear_reconnect_target();
                 *LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
@@ -753,8 +773,11 @@ fn handle_message(message: Message) -> Result<(), String> {
             snapshot.joined_lobby = None;
         }
         "responseStatus" => {
-            let data: ResponseStatusData =
-                serde_json::from_value(envelope.data).map_err(|error| error.to_string())?;
+            let Some(data): Option<ResponseStatusData> =
+                parse_inbound_data(event.as_str(), envelope.data, text)
+            else {
+                return Ok(());
+            };
             if !data.success && matches!(data.event.as_str(), "joinLobby" | "createLobby") {
                 clear_reconnect_target();
                 *LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
@@ -777,6 +800,27 @@ fn handle_message(message: Message) -> Result<(), String> {
         _ => {}
     }
     Ok(())
+}
+
+fn parse_inbound_data<T>(event: &str, data: Value, raw_text: &str) -> Option<T>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    match serde_json::from_value(data) {
+        Ok(parsed) => Some(parsed),
+        Err(error) => {
+            log_malformed_payload(Some(event), &error, raw_text);
+            None
+        }
+    }
+}
+
+fn log_malformed_payload(event: Option<&str>, error: &impl Display, raw_text: &str) {
+    match event {
+        Some(event) => warn!("Ignoring malformed lobby payload for event '{event}': {error}"),
+        None => warn!("Ignoring malformed lobby payload: {error}"),
+    }
+    debug!("Malformed lobby payload: {raw_text}");
 }
 
 fn set_socket_nonblocking(
@@ -852,7 +896,21 @@ struct ResponseStatusData {
 
 #[cfg(test)]
 mod tests {
-    use super::{LOBBY_PASSWORD_MAX_LEN, normalize_lobby_password};
+    use super::{
+        COMMAND_TX, ConnectionState, LAST_MACHINE_STATE_SIG, LOBBY_PASSWORD_MAX_LEN, LobbyPlayer,
+        RECONNECT_STATE, ReconnectState, SNAPSHOT, Snapshot, handle_text_message,
+        normalize_lobby_password,
+    };
+    use std::sync::{LazyLock, Mutex};
+
+    static TEST_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    fn reset_test_state() {
+        *SNAPSHOT.lock().unwrap() = Snapshot::default();
+        *LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+        *RECONNECT_STATE.lock().unwrap() = ReconnectState::default();
+        COMMAND_TX.lock().unwrap().take();
+    }
 
     #[test]
     fn normalize_lobby_password_uppercases_and_caps_length() {
@@ -864,5 +922,57 @@ mod tests {
     fn normalize_lobby_password_skips_non_graphic_ascii() {
         assert_eq!(normalize_lobby_password(" a b "), "AB");
         assert_eq!(normalize_lobby_password("ab\n\tcd"), "ABCD");
+    }
+
+    #[test]
+    fn malformed_lobby_state_payload_is_ignored() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+        reset_test_state();
+
+        let existing_player = LobbyPlayer {
+            label: "Existing".to_string(),
+            ready: true,
+            screen_name: "ScreenGameplay".to_string(),
+            judgments: None,
+            score: Some(98.5),
+            ex_score: Some(97.25),
+        };
+        {
+            let mut snapshot = SNAPSHOT.lock().unwrap();
+            snapshot.connection = ConnectionState::Connected;
+            snapshot.joined_lobby = Some(super::JoinedLobby {
+                code: "ABCD".to_string(),
+                players: vec![existing_player.clone()],
+                song_info: None,
+            });
+        }
+
+        let malformed = r#"{
+            "event":"lobbyState",
+            "data":{
+                "code":"ABCD",
+                "players":[{
+                    "profileName":"Remote",
+                    "screenName":"ScreenGameplay",
+                    "ready":true,
+                    "score":"98.50"
+                }]
+            }
+        }"#;
+
+        assert!(handle_text_message(malformed).is_ok());
+
+        let snapshot = SNAPSHOT.lock().unwrap().clone();
+        assert_eq!(snapshot.connection, ConnectionState::Connected);
+        assert_eq!(
+            snapshot.joined_lobby,
+            Some(super::JoinedLobby {
+                code: "ABCD".to_string(),
+                players: vec![existing_player],
+                song_info: None,
+            })
+        );
+
+        reset_test_state();
     }
 }

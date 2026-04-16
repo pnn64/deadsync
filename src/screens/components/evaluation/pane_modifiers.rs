@@ -38,6 +38,7 @@ pub fn build_modifiers_pane(
         parts.push("Centered".to_string());
     }
     parts.push("Overhead".to_string());
+    parts.push(score_info.noteskin_name.clone());
     let final_text = parts.join(", ");
 
     let bg = color::rgba_hex("#1E282F");

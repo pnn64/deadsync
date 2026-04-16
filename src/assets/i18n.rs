@@ -1,7 +1,7 @@
 use crate::config;
-use ini::Ini;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 
 // ---------------------------------------------------------------------------
@@ -31,13 +31,9 @@ pub const fn lookup_key(section: &'static str, key: &'static str) -> LookupKey {
     LookupKey { section, key }
 }
 
-// ---------------------------------------------------------------------------
-// LangData
-// ---------------------------------------------------------------------------
-
 /// Loaded language data: active locale strings + English fallback.
 struct LangData {
-    /// Active (non-English) language strings: section → (key → value).
+    /// Active (non-English) language strings: section -> (key -> value).
     /// Empty when the active language is English.
     active: HashMap<Box<str>, HashMap<Box<str>, Arc<str>>>,
     /// English fallback strings (always loaded).
@@ -47,44 +43,60 @@ struct LangData {
 }
 
 static LANG: OnceLock<RwLock<LangData>> = OnceLock::new();
+static LANG_REVISION: AtomicU64 = AtomicU64::new(0);
 
-// ---------------------------------------------------------------------------
-// INI loading
-// ---------------------------------------------------------------------------
+fn language_file_path(locale: &str) -> std::path::PathBuf {
+    config::dirs::app_dirs()
+        .exe_dir
+        .join("assets")
+        .join("languages")
+        .join(format!("{locale}.ini"))
+}
+
+fn languages_dir_path() -> std::path::PathBuf {
+    config::dirs::app_dirs()
+        .exe_dir
+        .join("assets")
+        .join("languages")
+}
 
 fn load_ini_to_map(path: &Path) -> HashMap<Box<str>, HashMap<Box<str>, Arc<str>>> {
-    let ini = match Ini::load_from_file(path) {
-        Ok(ini) => ini,
-        Err(e) => {
-            log::warn!("Failed to load language file {}: {e}", path.display());
-            return HashMap::new();
-        }
-    };
+    let mut ini = config::SimpleIni::new();
+    if let Err(e) = ini.load(path) {
+        log::warn!("Failed to load language file {}: {e}", path.display());
+        return HashMap::new();
+    }
     let mut sections: HashMap<Box<str>, HashMap<Box<str>, Arc<str>>> = HashMap::new();
-    for (section, props) in &ini {
-        let section_name: Box<str> = section.unwrap_or("").into();
-        let entries = sections.entry(section_name).or_default();
-        for (key, value) in props.iter() {
-            entries.insert(key.into(), Arc::from(value));
+    for (section, props) in ini.sections() {
+        let entries = sections.entry(section.as_str().into()).or_default();
+        for (key, value) in props {
+            entries.insert(key.as_str().into(), Arc::from(value.as_str()));
         }
     }
     sections
 }
 
-// ---------------------------------------------------------------------------
-// Initialization
-// ---------------------------------------------------------------------------
+fn native_name(path: &Path, locale_code: &str) -> String {
+    let mut ini = config::SimpleIni::new();
+    match ini.load(path) {
+        Ok(()) => ini
+            .get("Meta", "NativeName")
+            .unwrap_or_else(|| locale_code.to_string()),
+        Err(e) => {
+            log::warn!("Failed to load language file {}: {e}", path.display());
+            locale_code.to_string()
+        }
+    }
+}
 
 /// Initialize the i18n system. Call once at startup after config is loaded.
 ///
 /// `locale` is the resolved locale code (e.g. `"en"`, `"es"`). If the locale
 /// is `"en"`, only the fallback map is populated and the active map stays empty.
 pub fn init(locale: &str) {
-    let dirs = config::dirs::app_dirs();
-    let fallback = load_ini_to_map(&dirs.resolve_asset_path("assets/languages/en.ini"));
+    let fallback = load_ini_to_map(&language_file_path("en"));
     let active = if locale != "en" {
-        let path = dirs.resolve_asset_path(&format!("assets/languages/{locale}.ini"));
-        load_ini_to_map(&path)
+        load_ini_to_map(&language_file_path(locale))
     } else {
         HashMap::new()
     };
@@ -93,12 +105,13 @@ pub fn init(locale: &str) {
         fallback,
         locale: locale.to_string(),
     };
-    let _ = LANG.set(RwLock::new(data));
+    if let Some(lang) = LANG.get() {
+        *lang.write().unwrap() = data;
+    } else {
+        let _ = LANG.set(RwLock::new(data));
+    }
+    LANG_REVISION.fetch_add(1, Ordering::AcqRel);
 }
-
-// ---------------------------------------------------------------------------
-// Lookup API
-// ---------------------------------------------------------------------------
 
 /// Look up a localized string by section and key.
 ///
@@ -108,19 +121,16 @@ pub fn init(locale: &str) {
 pub fn tr(section: &str, key: &str) -> Arc<str> {
     let lang = LANG.get().expect("i18n not initialized").read().unwrap();
 
-    // Try active language first.
     if let Some(section_map) = lang.active.get(section) {
         if let Some(val) = section_map.get(key) {
             return val.clone();
         }
     }
-    // Fall back to English.
     if let Some(section_map) = lang.fallback.get(section) {
         if let Some(val) = section_map.get(key) {
             return val.clone();
         }
     }
-    // Missing everywhere — return "Section.Key" so it's visible.
     Arc::from(format!("{section}.{key}"))
 }
 
@@ -137,24 +147,27 @@ pub fn tr_fmt(section: &str, key: &str, args: &[(&str, &str)]) -> Arc<str> {
     Arc::from(s)
 }
 
-// ---------------------------------------------------------------------------
-// Language switching (runtime)
-// ---------------------------------------------------------------------------
-
 /// Switch the active language at runtime. Called when the user changes the
 /// Language option. Re-reads the new `.ini` file into the active map.
 ///
 /// All subsequent `tr()` calls will return strings from the new language.
 pub fn set_locale(locale: &str) {
-    let mut lang = LANG.get().expect("i18n not initialized").write().unwrap();
-    let dirs = config::dirs::app_dirs();
+    let Some(lang_lock) = LANG.get() else {
+        init(locale);
+        return;
+    };
+    let mut lang = lang_lock.write().unwrap();
+    if lang.locale == locale {
+        return;
+    }
     lang.active = if locale != "en" {
-        let path = dirs.resolve_asset_path(&format!("assets/languages/{locale}.ini"));
-        load_ini_to_map(&path)
+        load_ini_to_map(&language_file_path(locale))
     } else {
         HashMap::new()
     };
     lang.locale = locale.to_string();
+    drop(lang);
+    LANG_REVISION.fetch_add(1, Ordering::AcqRel);
 }
 
 /// Returns the currently active locale code (e.g. `"en"`, `"es"`).
@@ -167,20 +180,26 @@ pub fn current_locale() -> String {
         .clone()
 }
 
-// ---------------------------------------------------------------------------
-// OS language detection
-// ---------------------------------------------------------------------------
+pub fn revision() -> u64 {
+    LANG_REVISION.load(Ordering::Acquire)
+}
+
+pub fn resolve_locale(flag: config::LanguageFlag) -> String {
+    match flag {
+        config::LanguageFlag::Auto => detect_os_locale(),
+        flag => flag.locale_code().to_string(),
+    }
+}
 
 /// Detect the best locale from the OS settings, falling back to `"en"` if
 /// no matching language file is found.
 pub fn detect_os_locale() -> String {
-    let raw = sys_locale::get_locale().unwrap_or_else(|| "en".to_string());
+    let raw = raw_os_locale().unwrap_or_else(|| "en".to_string());
     let code = normalize_locale(&raw);
 
     if locale_file_exists(&code) {
         return code;
     }
-    // Try base language without region (e.g. "ja-JP" → "ja").
     if let Some(base) = code.split('-').next() {
         if base != code && locale_file_exists(base) {
             return base.to_string();
@@ -189,16 +208,28 @@ pub fn detect_os_locale() -> String {
     "en".to_string()
 }
 
+fn raw_os_locale() -> Option<String> {
+    for key in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
+        let Some(value) = std::env::var(key).ok() else {
+            continue;
+        };
+        let locale = value.split(':').next().unwrap_or_default().trim();
+        if !locale.is_empty() {
+            return Some(locale.to_string());
+        }
+    }
+    None
+}
+
 /// Normalize an OS locale string to our file-naming convention.
 ///
-/// - `"ja-JP"` → `"ja"`
-/// - `"fr-FR"` → `"fr"`
-/// - `"zh-TW"` / `"zh-HK"` → `"zh-Hant"`
-/// - `"zh-CN"` / `"zh-SG"` → `"zh-Hans"`
+/// - `"ja-JP"` -> `"ja"`
+/// - `"fr-FR"` -> `"fr"`
+/// - `"zh-TW"` / `"zh-HK"` -> `"zh-Hant"`
+/// - `"zh-CN"` / `"zh-SG"` -> `"zh-Hans"`
 fn normalize_locale(raw: &str) -> String {
     let lower = raw.replace('_', "-").to_ascii_lowercase();
 
-    // Handle Chinese variants (match ITGmania convention).
     if lower.starts_with("zh") {
         if lower.contains("hant") || lower.contains("tw") || lower.contains("hk") {
             return "zh-Hant".to_string();
@@ -209,26 +240,18 @@ fn normalize_locale(raw: &str) -> String {
         return "zh-Hans".to_string();
     }
 
-    // For most locales, just use the primary language subtag.
     lower.split('-').next().unwrap_or("en").to_string()
 }
 
 fn locale_file_exists(code: &str) -> bool {
-    let dirs = config::dirs::app_dirs();
-    let path = dirs.resolve_asset_path(&format!("assets/languages/{code}.ini"));
-    path.exists()
+    language_file_path(code).exists()
 }
 
-// ---------------------------------------------------------------------------
-// Available locales (for the Language option)
-// ---------------------------------------------------------------------------
-
 /// Scan `assets/languages/*.ini` and return `(locale_code, native_name)` pairs
-/// sorted by locale code. The native name comes from each file's `[Meta]
-/// NativeName` value.
+/// sorted by locale code. The native name comes from each file's `[Meta]`
+/// `NativeName` value.
 pub fn available_locales() -> Vec<(String, String)> {
-    let dirs = config::dirs::app_dirs();
-    let languages_dir = dirs.resolve_asset_path("assets/languages");
+    let languages_dir = languages_dir_path();
     let mut locales = Vec::new();
 
     let entries = match std::fs::read_dir(&languages_dir) {
@@ -250,19 +273,11 @@ pub fn available_locales() -> Vec<(String, String)> {
         let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
             continue;
         };
-        // Skip pseudo-localization file.
         if stem == "pseudo" {
             continue;
         }
         let locale_code = stem.to_string();
-        let native_name = match Ini::load_from_file(&path) {
-            Ok(ini) => ini
-                .get_from(Some("Meta"), "NativeName")
-                .unwrap_or(&locale_code)
-                .to_string(),
-            Err(_) => locale_code.clone(),
-        };
-        locales.push((locale_code, native_name));
+        locales.push((locale_code.clone(), native_name(&path, &locale_code)));
     }
 
     locales.sort_by(|a, b| a.0.cmp(&b.0));
