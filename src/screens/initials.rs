@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::tr;
 use crate::assets::AssetManager;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
@@ -288,9 +289,17 @@ impl Wheel {
     }
 }
 
-const MONTH_ABBR: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
+fn month_abbr(index: usize) -> std::sync::Arc<str> {
+    const KEYS: [&str; 12] = [
+        "MonthJan", "MonthFeb", "MonthMar", "MonthApr", "MonthMay", "MonthJun",
+        "MonthJul", "MonthAug", "MonthSep", "MonthOct", "MonthNov", "MonthDec",
+    ];
+    if index < KEYS.len() {
+        tr("Initials", KEYS[index])
+    } else {
+        std::sync::Arc::from("???")
+    }
+}
 
 fn format_highscore_date(date: &str) -> String {
     let trimmed = date.trim();
@@ -308,7 +317,7 @@ fn format_highscore_date(date: &str) -> String {
         .parse::<usize>()
         .ok()
         .and_then(|m| m.checked_sub(1))
-        .filter(|m| *m < MONTH_ABBR.len())
+        .filter(|m| *m < 12)
     else {
         return trimmed.to_string();
     };
@@ -316,7 +325,7 @@ fn format_highscore_date(date: &str) -> String {
         return trimmed.to_string();
     };
 
-    format!("{} {}, {}", MONTH_ABBR[month_idx], day_num, year)
+    format!("{} {}, {}", month_abbr(month_idx), day_num, year)
 }
 
 #[inline(always)]
@@ -828,9 +837,10 @@ fn build_banner_and_title(state: &State, stages: &[stage_stats::StageSummary]) -
     ));
 
     if stages.is_empty() {
+        let no_data = tr("EvaluationSummary", "NoStageDataAvailable");
         actors.push(act!(text:
             font("miso"):
-            settext("NO STAGE DATA AVAILABLE"):
+            settext(no_data):
             align(0.5, 0.5):
             xy(cx, 54.0):
             zoom(0.8):
@@ -1115,9 +1125,10 @@ fn build_player_frame(side: profile::PlayerSide, state: &State) -> Actor {
         }
     } else if p.joined {
         let pc = player_color_rgba(side, state.active_color_index);
+        let out_of_ranking = tr("Initials", "OutOfRanking");
         children.push(act!(text:
             font("miso"):
-            settext("Out of Ranking"):
+            settext(out_of_ranking):
             align(0.5, 0.5):
             xy(0.0, CURSOR_Y_IN_FRAME):
             zoom(0.7):

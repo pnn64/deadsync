@@ -5448,12 +5448,14 @@ const fn language_choice_index(flag: config::LanguageFlag) -> usize {
     match flag {
         config::LanguageFlag::Auto | config::LanguageFlag::English => 0,
         config::LanguageFlag::Swedish => 1,
+        config::LanguageFlag::Pseudo => 2,
     }
 }
 
 const fn language_flag_from_choice(idx: usize) -> config::LanguageFlag {
     match idx {
         1 => config::LanguageFlag::Swedish,
+        2 => config::LanguageFlag::Pseudo,
         _ => config::LanguageFlag::English,
     }
 }

@@ -73,8 +73,8 @@ fn pack_sync_targets_for_group(
     pack_group: Option<&str>,
 ) -> Option<(String, Vec<shared_pack_sync::TargetSpec>)> {
     let pack_name = pack_group
-        .unwrap_or(shared_pack_sync::ALL_LABEL)
-        .to_string();
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| shared_pack_sync::all_label().to_string());
     let target_chart_type = profile::get_session_play_style().chart_type();
     let preferred_difficulty_index = preferred_difficulty_index(state);
     let mut current_pack_name: Option<&str> = None;

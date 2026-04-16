@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::AssetManager;
 use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::engine::input::{InputEvent, VirtualAction};
@@ -374,12 +375,13 @@ fn gameplay_lobby_wait_text_for(
     }
 
     let mut message = if all_in_gameplay {
-        "Waiting for players to ready up...".to_string()
+        tr("Lobby", "WaitingForReadyUp").to_string()
     } else {
-        "Waiting for players to sync screens...".to_string()
+        tr("Lobby", "WaitingForSync").to_string()
     };
     if !local_players_ready {
-        message.push_str("\nPress START to ready up.");
+        message.push('\n');
+        message.push_str(&tr("Gameplay", "PressStartToReadyUp"));
     }
     Some(message)
 }
@@ -402,15 +404,22 @@ fn gameplay_lobby_wait_text(state: &State) -> Option<String> {
 fn gameplay_lobby_disconnect_prompt(state: &State) -> Option<String> {
     gameplay_lobby_wait_text(state)?;
     let Some(elapsed) = lobby_disconnect_hold_elapsed(state) else {
-        return Some("Hold &START; to disconnect from the lobby.".to_string());
+        return Some(tr("Lobby", "DisconnectBasicPrompt").to_string());
     };
     let remaining =
         (crate::game::online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
     let remaining = remaining.max(0);
-    Some(format!(
-        "Continue holding &START; for {remaining} more second{} to disconnect...",
-        if remaining == 1 { "" } else { "s" }
-    ))
+    Some(
+        tr_fmt(
+            "Lobby",
+            "DisconnectHoldingFormat",
+            &[
+                ("remaining", &remaining.to_string()),
+                ("s", if remaining == 1 { "" } else { "s" }),
+            ],
+        )
+        .to_string(),
+    )
 }
 
 fn gameplay_lobby_hud_status_text(state: &State) -> Option<String> {
@@ -561,7 +570,7 @@ fn cached_rate_text(rate: f32) -> Arc<str> {
         return empty_text();
     }
     cached_text(&RATE_TEXT_CACHE, rate.to_bits(), TEXT_CACHE_LIMIT, || {
-        format!("{rate:.2}x rate")
+        tr_fmt("Gameplay", "RateDisplay", &[("rate", &format!("{rate:.2}"))]).to_string()
     })
 }
 
@@ -703,15 +712,10 @@ pub fn prewarm_text_layout(
     cache.prewarm_text(fonts, "miso", "Hit Tick", None);
     cache.prewarm_text(fonts, "miso", "AutoSync Song", None);
     cache.prewarm_text(fonts, "miso", "AutoSync Machine", None);
-    cache.prewarm_text(fonts, "miso", "Continue holding &START; to give up", None);
-    cache.prewarm_text(fonts, "miso", "Continue holding &BACK; to give up", None);
-    cache.prewarm_text(
-        fonts,
-        "miso",
-        "Hold &START; to disconnect from the lobby.",
-        None,
-    );
-    cache.prewarm_text(fonts, "miso", "Don't go back!", None);
+    cache.prewarm_text(fonts, "miso", &tr("Gameplay", "ContinueHoldingStartGiveUp"), None);
+    cache.prewarm_text(fonts, "miso", &tr("Gameplay", "ContinueHoldingBackGiveUp"), None);
+    cache.prewarm_text(fonts, "miso", &tr("Lobby", "DisconnectBasicPrompt"), None);
+    cache.prewarm_text(fonts, "miso", &tr("Gameplay", "DontGoBack"), None);
     if let Some(text) = state.replay_status_text.as_ref() {
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     }
@@ -2729,10 +2733,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         {
             let s = match key {
                 crate::game::gameplay::HoldToExitKey::Start => {
-                    Some("Continue holding &START; to give up")
+                    Some(tr("Gameplay", "ContinueHoldingStartGiveUp"))
                 }
                 crate::game::gameplay::HoldToExitKey::Back => {
-                    Some("Continue holding &BACK; to give up")
+                    Some(tr("Gameplay", "ContinueHoldingBackGiveUp"))
                 }
             };
             let alpha = (start.elapsed().as_secs_f32() / HOLD_FADE_IN_S).clamp(0.0, 1.0);
@@ -2742,15 +2746,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             match exit.kind {
                 crate::game::gameplay::ExitTransitionKind::Out => {
                     let alpha = (1.0 - t / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
-                    Some(("Continue holding &START; to give up".to_string(), alpha))
+                    Some((tr("Gameplay", "ContinueHoldingStartGiveUp").to_string(), alpha))
                 }
                 crate::game::gameplay::ExitTransitionKind::Cancel => {
-                    Some(("Continue holding &BACK; to give up".to_string(), 1.0))
+                    Some((tr("Gameplay", "ContinueHoldingBackGiveUp").to_string(), 1.0))
                 }
             }
         } else if let Some(at) = state.hold_to_exit_aborted_at {
             let alpha = (1.0 - at.elapsed().as_secs_f32() / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
-            Some(("Don't go back!".to_string(), alpha))
+            Some((tr("Gameplay", "DontGoBack").to_string(), alpha))
         } else {
             None
         };
@@ -3765,10 +3769,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let p1_guest = hud_snapshot.p1.guest;
     let p2_guest = hud_snapshot.p2.guest;
 
+    let insert_card_text = tr("Common", "InsertCard");
     let (p1_footer_text, p1_footer_avatar) = if p1_joined {
         (
             Some(if p1_guest {
-                "INSERT CARD"
+                &*insert_card_text
             } else {
                 hud_snapshot.p1.display_name.as_str()
             }),
@@ -3780,7 +3785,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let (p2_footer_text, p2_footer_avatar) = if p2_joined {
         (
             Some(if p2_guest {
-                "INSERT CARD"
+                &*insert_card_text
             } else {
                 hud_snapshot.p2.display_name.as_str()
             }),
@@ -3906,6 +3911,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 mod tests {
     use super::*;
     use crate::engine::present::actors::SizeSpec;
+
+    fn ensure_i18n() {
+        crate::assets::i18n::init("en");
+    }
 
     fn test_proxy_overlay(player_index: usize) -> SongLuaOverlayActor {
         SongLuaOverlayActor {
@@ -4221,11 +4230,17 @@ mod tests {
 
     #[test]
     fn gameplay_wait_text_requires_ready_up_for_solo_lobby_player() {
+        ensure_i18n();
         let joined = test_joined_lobby(vec![test_lobby_player("ScreenGameplay", false)]);
 
+        let expected = format!(
+            "{}\n{}",
+            tr("Lobby", "WaitingForReadyUp"),
+            tr("Gameplay", "PressStartToReadyUp"),
+        );
         assert_eq!(
             gameplay_lobby_wait_text_for(&joined, false, None).as_deref(),
-            Some("Waiting for players to ready up...\nPress START to ready up.")
+            Some(expected.as_str())
         );
     }
 

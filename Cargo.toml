@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.438"
+version = "0.3.439"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -23,6 +23,10 @@ path = "tests/input/bench.rs"
 [[bin]]
 name = "input_e2e_bench"
 path = "tests/input_e2e/bench.rs"
+
+[[bin]]
+name = "generate_pseudo"
+path = "scripts/generate_pseudo.rs"
 
 
 [features]
