@@ -843,7 +843,7 @@ pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         label: "Language",
-        choices: &["English", "Swedish"],
+        choices: &["English", "Swedish", "Pseudo"],
         inline: false,
     },
     SubRow {
@@ -4441,12 +4441,14 @@ const fn language_choice_index(flag: config::LanguageFlag) -> usize {
     match flag {
         config::LanguageFlag::Auto | config::LanguageFlag::English => 0,
         config::LanguageFlag::Swedish => 1,
+        config::LanguageFlag::Pseudo => 2,
     }
 }
 
 const fn language_flag_from_choice(idx: usize) -> config::LanguageFlag {
     match idx {
         1 => config::LanguageFlag::Swedish,
+        2 => config::LanguageFlag::Pseudo,
         _ => config::LanguageFlag::English,
     }
 }
