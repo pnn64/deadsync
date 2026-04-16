@@ -60,6 +60,29 @@ fn languages_dir_path() -> std::path::PathBuf {
         .join("languages")
 }
 
+/// Unescape INI string escape sequences (`\n`, `\t`, `\\`).
+fn unescape_ini_value(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut chars = raw.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => out.push('\n'),
+                Some('t') => out.push('\t'),
+                Some('\\') => out.push('\\'),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 fn load_ini_to_map(path: &Path) -> HashMap<Box<str>, HashMap<Box<str>, Arc<str>>> {
     let mut ini = config::SimpleIni::new();
     if let Err(e) = ini.load(path) {
@@ -70,7 +93,7 @@ fn load_ini_to_map(path: &Path) -> HashMap<Box<str>, HashMap<Box<str>, Arc<str>>
     for (section, props) in ini.sections() {
         let entries = sections.entry(section.as_str().into()).or_default();
         for (key, value) in props {
-            entries.insert(key.as_str().into(), Arc::from(value.as_str()));
+            entries.insert(key.as_str().into(), Arc::from(unescape_ini_value(value.as_str()).as_str()));
         }
     }
     sections

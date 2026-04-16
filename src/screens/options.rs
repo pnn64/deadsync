@@ -31,7 +31,7 @@ use crate::engine::present::actors;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
-use crate::assets::i18n::{LookupKey, lookup_key};
+use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{heart_bg, screen_bar};
 use null_or_die::{BiasKernel, KernelTarget};
@@ -796,7 +796,7 @@ impl ScoreImportUiState {
             imported_scores: 0,
             missing_scores: 0,
             failed_requests: 0,
-            detail_line: "Preparing score import...".to_string(),
+            detail_line: tr("OptionsScoreImport", "PreparingImport").to_string(),
             done: false,
             done_message: String::new(),
             done_since: None,
@@ -1041,21 +1041,15 @@ const INPUT_BACKEND_INLINE: bool = false;
 const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 4;
 const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 2;
 
-#[cfg(target_os = "linux")]
-const SOUND_ROW_LINUX_BACKEND: &str = "Linux Audio Backend";
-#[cfg(target_os = "linux")]
-const SOUND_ROW_ALSA_EXCLUSIVE: &str = "Exclusive Mode";
-const SCORE_IMPORT_ALL_PACKS: &str = "All";
 const SCORE_IMPORT_DONE_OVERLAY_SECONDS: f32 = 1.5;
 const SCORE_IMPORT_ROW_ENDPOINT_INDEX: usize = 0;
 const SCORE_IMPORT_ROW_PROFILE_INDEX: usize = 1;
 const SCORE_IMPORT_ROW_PACK_INDEX: usize = 2;
 const SCORE_IMPORT_ROW_ONLY_MISSING_INDEX: usize = 3;
-const SYNC_PACK_ALL_PACKS: &str = "All Packs";
 const SYNC_PACK_ROW_PACK_INDEX: usize = 0;
 
 #[cfg(target_os = "linux")]
-const SOUND_LINUX_BACKEND_CHOICES: &[Choice] = &[literal_choice("Auto")];
+const SOUND_LINUX_BACKEND_CHOICES: &[Choice] = &[localized_choice("Common", "Auto")];
 
 fn discover_system_noteskin_choices() -> Vec<String> {
     let mut names = noteskin_parser::discover_itg_skins("dance");
@@ -1078,14 +1072,14 @@ fn build_sound_device_options() -> Vec<SoundDeviceOption> {
         .unwrap_or_default();
     let mut options = Vec::with_capacity(discovered.len() + 1);
     options.push(SoundDeviceOption {
-        label: "Auto".to_string(),
+        label: tr("Common", "Auto").to_string(),
         config_index: None,
         sample_rates_hz: default_rates,
     });
     for (idx, dev) in discovered.into_iter().enumerate() {
         let mut label = dev.name.clone();
         if dev.is_default {
-            label.push_str(" (Default)");
+            label.push_str(&tr("OptionsSound", "DefaultSuffix"));
         }
         options.push(SoundDeviceOption {
             label,
@@ -1098,13 +1092,13 @@ fn build_sound_device_options() -> Vec<SoundDeviceOption> {
 
 #[cfg(target_os = "linux")]
 #[inline(always)]
-const fn linux_backend_label(backend: config::LinuxAudioBackend) -> &'static str {
+fn linux_backend_label(backend: config::LinuxAudioBackend) -> std::sync::Arc<str> {
     match backend {
-        config::LinuxAudioBackend::Auto => "Auto",
-        config::LinuxAudioBackend::PipeWire => "PipeWire",
-        config::LinuxAudioBackend::PulseAudio => "PulseAudio",
-        config::LinuxAudioBackend::Jack => "JACK",
-        config::LinuxAudioBackend::Alsa => "ALSA",
+        config::LinuxAudioBackend::Auto => tr("Common", "Auto"),
+        config::LinuxAudioBackend::PipeWire => std::sync::Arc::from("PipeWire"),
+        config::LinuxAudioBackend::PulseAudio => std::sync::Arc::from("PulseAudio"),
+        config::LinuxAudioBackend::Jack => std::sync::Arc::from("JACK"),
+        config::LinuxAudioBackend::Alsa => std::sync::Arc::from("ALSA"),
     }
 }
 
@@ -1363,13 +1357,13 @@ const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
 
 fn build_display_mode_choices(monitor_specs: &[MonitorSpec]) -> Vec<String> {
     if monitor_specs.is_empty() {
-        return vec!["Screen 1".to_string(), "Windowed".to_string()];
+        return vec![tr("OptionsGraphics", "Screen1Fallback").to_string(), tr("OptionsGraphics", "Windowed").to_string()];
     }
     let mut out = Vec::with_capacity(monitor_specs.len() + 1);
     for spec in monitor_specs {
         out.push(spec.name.clone());
     }
-    out.push("Windowed".to_string());
+    out.push(tr("OptionsGraphics", "Windowed").to_string());
     out
 }
 
@@ -1418,7 +1412,7 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         id: SubRowId::RefreshRate,
         label: lookup_key("OptionsGraphics", "RefreshRate"),
         choices: &[
-            literal_choice("Default"),
+            localized_choice("Common", "Default"),
             literal_choice("60 Hz"),
             literal_choice("75 Hz"),
             literal_choice("120 Hz"),
@@ -3137,7 +3131,7 @@ pub const SYNC_PACK_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::SyncPackPack,
         label: lookup_key("OptionsSyncPack", "SyncPackPack"),
-        choices: &[literal_choice(SYNC_PACK_ALL_PACKS)],
+        choices: &[localized_choice("OptionsSyncPack", "AllPacks")],
         inline: false,
     },
     SubRow {
@@ -3168,7 +3162,7 @@ pub const SCORE_IMPORT_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::ScoreImportPack,
         label: lookup_key("OptionsScoreImport", "ScoreImportPack"),
-        choices: &[literal_choice(SCORE_IMPORT_ALL_PACKS)],
+        choices: &[localized_choice("OptionsScoreImport", "AllPacks")],
         inline: false,
     },
     SubRow {
@@ -3625,7 +3619,7 @@ fn software_thread_choice_labels(values: &[u8]) -> Vec<String> {
         .iter()
         .map(|v| {
             if *v == 0 {
-                "Auto".to_string()
+                tr("Common", "Auto").to_string()
             } else {
                 v.to_string()
             }
@@ -4400,11 +4394,11 @@ fn installed_pack_options(all_label: &str) -> (Vec<String>, Vec<Option<String>>)
 }
 
 fn score_import_pack_options() -> (Vec<String>, Vec<Option<String>>) {
-    installed_pack_options(SCORE_IMPORT_ALL_PACKS)
+    installed_pack_options(&tr("OptionsScoreImport", "AllPacks"))
 }
 
 fn sync_pack_options() -> (Vec<String>, Vec<Option<String>>) {
-    installed_pack_options(SYNC_PACK_ALL_PACKS)
+    installed_pack_options(&tr("OptionsSyncPack", "AllPacks"))
 }
 
 fn load_score_import_profiles() -> Vec<ScoreImportProfileConfig> {
@@ -4482,7 +4476,7 @@ fn refresh_score_import_profile_options(state: &mut State) {
     if state.score_import_profile_choices.is_empty() {
         state
             .score_import_profile_choices
-            .push("No eligible profiles".to_string());
+            .push(tr("OptionsScoreImport", "NoEligibleProfiles").to_string());
         state.score_import_profile_ids.push(None);
     }
 
@@ -4603,7 +4597,7 @@ fn selected_score_import_selection(state: &State) -> Option<ScoreImportSelection
     let pack_label = pack_group
         .as_ref()
         .cloned()
-        .unwrap_or_else(|| SCORE_IMPORT_ALL_PACKS.to_string());
+        .unwrap_or_else(|| tr("OptionsScoreImport", "AllPacks").to_string());
     let only_missing_gs_scores = score_import_only_missing_gs_scores(state);
     Some(ScoreImportSelection {
         endpoint,
@@ -4626,7 +4620,7 @@ fn selected_sync_pack_selection(state: &State) -> SyncPackSelection {
         .sync_pack_choices
         .get(pack_idx)
         .cloned()
-        .unwrap_or_else(|| SYNC_PACK_ALL_PACKS.to_string());
+        .unwrap_or_else(|| tr("OptionsSyncPack", "AllPacks").to_string());
     SyncPackSelection {
         pack_group,
         pack_label,
@@ -4690,7 +4684,7 @@ fn row_choices(
                 .iter()
                 .map(|&mhz| {
                     if mhz == 0 {
-                        Cow::Borrowed("Default")
+                        Cow::Owned(tr("Common", "Default").to_string())
                     } else {
                         // Format nicely: 60000 -> "60 Hz", 59940 -> "59.94 Hz"
                         let hz = mhz as f32 / 1000.0;
@@ -4740,7 +4734,7 @@ fn row_choices(
             return sound_sample_rate_choices(state)
                 .into_iter()
                 .map(|rate| match rate {
-                    None => Cow::Borrowed("Auto"),
+                    None => Cow::Owned(tr("Common", "Auto").to_string()),
                     Some(hz) => Cow::Owned(format!("{hz} Hz")),
                 })
                 .collect();
@@ -5108,11 +5102,11 @@ fn selected_audio_output_mode(state: &State) -> config::AudioOutputMode {
 
 #[cfg(target_os = "linux")]
 fn linux_audio_backend_choice_index(state: &State, backend: config::LinuxAudioBackend) -> usize {
-    let target = linux_backend_label(backend);
+    let target = linux_backend_label(backend).to_string();
     state
         .linux_backend_choices
         .iter()
-        .position(|choice| choice == target)
+        .position(|choice| *choice == target)
         .unwrap_or(0)
 }
 
@@ -5874,11 +5868,11 @@ pub fn init() -> State {
         sub_cursor_indices_arrowcloud: vec![0; ARROWCLOUD_OPTIONS_ROWS.len()],
         sub_cursor_indices_score_import: vec![0; SCORE_IMPORT_OPTIONS_ROWS.len()],
         score_import_profiles: Vec::new(),
-        score_import_profile_choices: vec!["No eligible profiles".to_string()],
+        score_import_profile_choices: vec![tr("OptionsScoreImport", "NoEligibleProfiles").to_string()],
         score_import_profile_ids: vec![None],
-        score_import_pack_choices: vec![SCORE_IMPORT_ALL_PACKS.to_string()],
+        score_import_pack_choices: vec![tr("OptionsScoreImport", "AllPacks").to_string()],
         score_import_pack_filters: vec![None],
-        sync_pack_choices: vec![SYNC_PACK_ALL_PACKS.to_string()],
+        sync_pack_choices: vec![tr("OptionsSyncPack", "AllPacks").to_string()],
         sync_pack_filters: vec![None],
         sound_device_options,
         #[cfg(target_os = "linux")]
@@ -7054,14 +7048,6 @@ fn reload_progress(reload: &ReloadUiState) -> (usize, usize, f32) {
     (done, total, progress)
 }
 
-#[inline(always)]
-const fn reload_phase_label(phase: ReloadPhase) -> &'static str {
-    match phase {
-        ReloadPhase::Songs => "Loading songs...",
-        ReloadPhase::Courses => "Loading courses...",
-    }
-}
-
 fn reload_detail_lines(reload: &ReloadUiState) -> (String, String) {
     (reload.line2.clone(), reload.line3.clone())
 }
@@ -7076,9 +7062,9 @@ fn build_reload_overlay_actors(reload: &ReloadUiState, active_color_index: i32) 
     };
     let show_speed_row = total > 0;
     let speed_text = if elapsed > 0.0 && show_speed_row {
-        format!("Current speed: {:.1} items/s", done as f32 / elapsed)
+        tr_fmt("SelectMusic", "LoadingSpeed", &[("speed", &format!("{:.1}", done as f32 / elapsed))]).to_string()
     } else if show_speed_row {
-        "Current speed: 0.0 items/s".to_string()
+        tr_fmt("SelectMusic", "LoadingSpeed", &[("speed", "0.0")]).to_string()
     } else {
         String::new()
     };
@@ -7099,9 +7085,13 @@ fn build_reload_overlay_actors(reload: &ReloadUiState, active_color_index: i32) 
         diffuse(0.0, 0.0, 0.0, 0.65):
         z(300)
     ));
+    let phase_label = match reload.phase {
+        ReloadPhase::Songs => tr("Init", "LoadingSongsText"),
+        ReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
+    };
     out.push(act!(text:
         font("miso"):
-        settext(if total == 0 { "Initializing..." } else { reload_phase_label(reload.phase) }):
+        settext(if total == 0 { tr("Init", "InitializingText") } else { phase_label }):
         align(0.5, 0.5):
         xy(screen_width() * 0.5, bar_cy - 98.0):
         zoom(1.05):
@@ -7226,7 +7216,7 @@ fn poll_score_import_ui(score_import: &mut ScoreImportUiState) {
                             )
                         }
                     }
-                    Err(e) => format!("Import failed: {e}"),
+                    Err(e) => tr_fmt("OptionsScoreImport", "ImportFailed", &[("error", &e.to_string())]).to_string(),
                 };
             }
         }
@@ -9663,7 +9653,7 @@ fn build_yes_no_confirm_overlay(
             xy(yes_x, answer_y):
             font("wendy"):
             zoom(0.72):
-            settext("YES"):
+            settext(tr("Common", "Yes")):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(702):
             horizalign(center)
@@ -9673,7 +9663,7 @@ fn build_yes_no_confirm_overlay(
             xy(no_x, answer_y):
             font("wendy"):
             zoom(0.72):
-            settext("NO"):
+            settext(tr("Common", "No")):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(702):
             horizalign(center)
@@ -10406,7 +10396,8 @@ pub fn get_actors(
                         }
                     } else {
                         // Exit row: centered "Exit" text in the items column.
-                        let label = "Exit";
+                        let exit_label = tr("Common", "Exit");
+                        let label = &*exit_label;
                         let value_zoom = 0.835_f32;
                         let mut choice_color = if is_active { col_white } else { sl_gray };
                         choice_color[3] *= row_alpha;
