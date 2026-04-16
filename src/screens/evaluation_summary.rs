@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::AssetManager;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
@@ -18,6 +19,7 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use chrono::Local;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -204,13 +206,13 @@ fn stringify_display_bpms(song: &SongData, chart: Option<&ChartData>, music_rate
     }
 }
 
-fn steps_type_label(chart_type: &str) -> &'static str {
+fn steps_type_label(chart_type: &str) -> Arc<str> {
     if chart_type.eq_ignore_ascii_case("dance-single") {
-        "Single"
+        tr("EvaluationSummary", "SingleLabel")
     } else if chart_type.eq_ignore_ascii_case("dance-double") {
-        "Double"
+        tr("EvaluationSummary", "DoubleLabel")
     } else {
-        "Unknown"
+        tr("EvaluationSummary", "UnknownLabel")
     }
 }
 
@@ -339,7 +341,7 @@ fn build_player_stats(
     {
         let style = steps_type_label(&p.chart.chart_type);
         let diff = difficulty_display_name(&p.chart.difficulty, zmod_rating_box_text);
-        let text = format!("{style} / {diff}");
+        let text = tr_fmt("EvaluationSummary", "DifficultyFormat", &[("style", &style), ("difficulty", &diff)]);
         let mut a = act!(text:
             font("miso"):
             settext(text):
@@ -484,13 +486,14 @@ fn build_row(
     let bpm_line = if bpm_str.is_empty() {
         String::new()
     } else if (stage.music_rate - 1.0).abs() > 0.001 {
-        format!(
-            "{} bpm ({}x Music Rate)",
-            bpm_str,
-            format_rate_x(stage.music_rate)
+        tr_fmt(
+            "EvaluationSummary",
+            "BpmWithRate",
+            &[("bpm", &bpm_str), ("rate", &format_rate_x(stage.music_rate))],
         )
+        .to_string()
     } else {
-        format!("{bpm_str} bpm")
+        tr_fmt("EvaluationSummary", "BpmDisplay", &[("bpm", &bpm_str)]).to_string()
     };
 
     let mut children: Vec<Actor> = Vec::with_capacity(64);
@@ -575,8 +578,9 @@ pub fn get_actors(
     }));
 
     // Top Bar
+    let eval_title = tr("EvaluationSummary", "ScreenTitle");
     actors.push(screen_bar::build(ScreenBarParams {
-        title: "EVALUATION",
+        title: &eval_title,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
         transparent: false,
@@ -591,7 +595,7 @@ pub fn get_actors(
     if stages.is_empty() {
         actors.push(act!(text:
             font("wendy"):
-            settext("NO STAGE DATA AVAILABLE"):
+            settext(tr("EvaluationSummary", "NoStageDataAvailable")):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_height() * 0.5):
             zoom(0.8):
@@ -608,7 +612,7 @@ pub fn get_actors(
     // Centered "Page x/y"
     actors.push(act!(text:
         font("wendy"):
-        settext(format!("Page {page}/{pages}")):
+        settext(tr_fmt("EvaluationSummary", "PageFormat", &[("page", &page.to_string()), ("pages", &pages.to_string())])):
         align(0.5, 0.5):
         xy(screen_center_x(), 15.0):
         zoom(widescale(0.5, 0.6)):
@@ -622,7 +626,7 @@ pub fn get_actors(
         let itg_text_x = screen_width() - 10.0;
         actors.push(act!(text:
                 font("wendy"):
-                settext("ITG"):
+                settext(tr("EvaluationSummary", "ITGLabel")):
                 align(1.0, 0.5):
             xy(itg_text_x, 15.0):
             zoom(widescale(0.5, 0.6)):
