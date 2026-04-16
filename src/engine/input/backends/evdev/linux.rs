@@ -166,6 +166,7 @@ struct DevSpec {
     class: DevClass,
     path: String,
     name: String,
+    uuid: [u8; 16],
     vendor_id: Option<u16>,
     product_id: Option<u16>,
 }
@@ -693,16 +694,64 @@ fn event_name_from_path(path: &str) -> Option<&str> {
     .then_some(name)
 }
 
+fn uuid_key_from_parts(
+    uniq: Option<&str>,
+    phys: Option<&str>,
+    name: &str,
+    vendor_id: Option<u16>,
+    product_id: Option<u16>,
+    path: &str,
+) -> String {
+    if let Some(uniq) = uniq {
+        return format!("linux-evdev:uniq:{uniq}");
+    }
+    if let Some(phys) = phys {
+        return format!("linux-evdev:phys:{phys}");
+    }
+    if !name.is_empty() || vendor_id.is_some() || product_id.is_some() {
+        return format!(
+            "linux-evdev:name:{name}|vid:{:04x}|pid:{:04x}",
+            vendor_id.unwrap_or(0),
+            product_id.unwrap_or(0),
+        );
+    }
+    format!("linux-evdev:path:{path}")
+}
+
+#[inline(always)]
+fn uuid_from_sys_device(
+    sys: &str,
+    name: &str,
+    vendor_id: Option<u16>,
+    product_id: Option<u16>,
+    path: &str,
+) -> [u8; 16] {
+    let uniq = read_trimmed(&format!("{sys}/uniq"));
+    let phys = read_trimmed(&format!("{sys}/phys"));
+    let key = uuid_key_from_parts(
+        uniq.as_deref(),
+        phys.as_deref(),
+        name,
+        vendor_id,
+        product_id,
+        path,
+    );
+    uuid_from_bytes(key.as_bytes())
+}
+
 fn dev_spec_from_event_path(path: &str, class: DevClass) -> Option<DevSpec> {
     let event_name = event_name_from_path(path)?;
     let sys = format!("/sys/class/input/{event_name}/device");
     let name = read_trimmed(&format!("{sys}/name")).unwrap_or_else(|| format!("evdev:{path}"));
+    let vendor_id = read_hex_u16(&format!("{sys}/id/vendor"));
+    let product_id = read_hex_u16(&format!("{sys}/id/product"));
     Some(DevSpec {
         class,
         path: path.to_string(),
+        uuid: uuid_from_sys_device(&sys, &name, vendor_id, product_id, path),
         name,
-        vendor_id: read_hex_u16(&format!("{sys}/id/vendor")),
-        product_id: read_hex_u16(&format!("{sys}/id/product")),
+        vendor_id,
+        product_id,
     })
 }
 
@@ -831,7 +880,6 @@ fn open_dev(
         }
     };
     configure_evdev_clock(&file);
-    let uuid = uuid_from_bytes(spec.path.as_bytes());
     emit_sys(GpSystemEvent::Connected {
         name: spec.name.clone(),
         id,
@@ -842,7 +890,7 @@ fn open_dev(
     });
     Some(Dev {
         id,
-        uuid,
+        uuid: spec.uuid,
         name: spec.name,
         path: spec.path,
         file,
@@ -1310,5 +1358,39 @@ mod tests {
         let key = caps(&[BTN_DPAD_UP, BTN_DPAD_RIGHT, BTN_START]);
         let abs = CapabilityBits::default();
         assert!(looks_like_controller(&ev, &key, &abs));
+    }
+
+    #[test]
+    fn uuid_key_prefers_uniq() {
+        assert_eq!(
+            uuid_key_from_parts(
+                Some("serial-123"),
+                Some("usb-0000:00:14.0-1/input0"),
+                "Pad",
+                Some(0x1234),
+                Some(0xabcd),
+                "/dev/input/event4",
+            ),
+            "linux-evdev:uniq:serial-123"
+        );
+    }
+
+    #[test]
+    fn uuid_key_falls_back_to_phys_then_ids() {
+        assert_eq!(
+            uuid_key_from_parts(
+                None,
+                Some("usb-0000:00:14.0-1/input0"),
+                "Pad",
+                Some(0x1234),
+                Some(0xabcd),
+                "/dev/input/event4",
+            ),
+            "linux-evdev:phys:usb-0000:00:14.0-1/input0"
+        );
+        assert_eq!(
+            uuid_key_from_parts(None, None, "Pad", Some(0x1234), Some(0xabcd), "/dev/input/event4"),
+            "linux-evdev:name:Pad|vid:1234|pid:abcd"
+        );
     }
 }
