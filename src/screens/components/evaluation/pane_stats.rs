@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::{LookupKey, lookup_key, tr};
 use crate::assets::AssetManager;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
@@ -29,44 +30,29 @@ static JUDGMENT_ORDER: [JudgeGrade; 6] = [
 ];
 
 #[derive(Clone, Copy)]
-struct JudgmentDisplayInfo {
-    label: &'static str,
+struct LabeledColor {
+    label: LookupKey,
     color: [f32; 4],
 }
 
-const JUDGMENT_INFO: [JudgmentDisplayInfo; 6] = [
-    JudgmentDisplayInfo {
-        label: "FANTASTIC",
-        color: color::JUDGMENT_RGBA[0],
-    },
-    JudgmentDisplayInfo {
-        label: "EXCELLENT",
-        color: color::JUDGMENT_RGBA[1],
-    },
-    JudgmentDisplayInfo {
-        label: "GREAT",
-        color: color::JUDGMENT_RGBA[2],
-    },
-    JudgmentDisplayInfo {
-        label: "DECENT",
-        color: color::JUDGMENT_RGBA[3],
-    },
-    JudgmentDisplayInfo {
-        label: "WAY OFF",
-        color: color::JUDGMENT_RGBA[4],
-    },
-    JudgmentDisplayInfo {
-        label: "MISS",
-        color: color::JUDGMENT_RGBA[5],
-    },
+const JUDGMENT_INFO: [LabeledColor; 6] = [
+    LabeledColor { label: lookup_key("Gameplay", "JudgmentFantastic"), color: color::JUDGMENT_RGBA[0] },
+    LabeledColor { label: lookup_key("Gameplay", "JudgmentExcellent"), color: color::JUDGMENT_RGBA[1] },
+    LabeledColor { label: lookup_key("Gameplay", "JudgmentGreat"), color: color::JUDGMENT_RGBA[2] },
+    LabeledColor { label: lookup_key("Gameplay", "JudgmentDecent"), color: color::JUDGMENT_RGBA[3] },
+    LabeledColor { label: lookup_key("Gameplay", "JudgmentWayOff"), color: color::JUDGMENT_RGBA[4] },
+    LabeledColor { label: lookup_key("Gameplay", "JudgmentMiss"), color: color::JUDGMENT_RGBA[5] },
+];
+
+const RADAR_LABELS: [LookupKey; 4] = [
+    lookup_key("Gameplay", "HandsLabel"),
+    lookup_key("Gameplay", "HoldsLabel"),
+    lookup_key("Gameplay", "MinesLabel"),
+    lookup_key("Gameplay", "RollsLabel"),
 ];
 
 static DIGIT_TEXT: LazyLock<[Arc<str>; 10]> =
     LazyLock::new(|| ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].map(Arc::<str>::from));
-static JUDGMENT_LABEL_TEXT: LazyLock<[Arc<str>; 6]> =
-    LazyLock::new(|| JUDGMENT_INFO.map(|info| Arc::<str>::from(info.label)));
-static RADAR_LABEL_TEXT: LazyLock<[Arc<str>; 4]> =
-    LazyLock::new(|| ["hands", "holds", "mines", "rolls"].map(Arc::<str>::from));
 static TEN_MS_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("(10ms)"));
 static SLASH_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("/"));
 
@@ -91,12 +77,16 @@ fn digit_text(digit: u8) -> Arc<str> {
 
 #[inline(always)]
 fn judgment_label_text(index: usize) -> Arc<str> {
-    JUDGMENT_LABEL_TEXT[index].clone()
+    JUDGMENT_INFO.get(index)
+        .map(|info| info.label.get())
+        .unwrap_or_else(|| Arc::from(""))
 }
 
 #[inline(always)]
 fn radar_label_text(index: usize) -> Arc<str> {
-    RADAR_LABEL_TEXT[index].clone()
+    RADAR_LABELS.get(index)
+        .map(LookupKey::get)
+        .unwrap_or_else(|| Arc::from(""))
 }
 
 #[inline(always)]

@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::tr;
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 
@@ -58,12 +59,12 @@ pub fn build_base(p: StatsPaneParams<'_>) -> Vec<Actor> {
     ));
 
     let stats = [
-        ("Steps", p.values.steps),
-        ("Mines", p.values.mines),
-        ("Jumps", p.values.jumps),
-        ("Hands", p.values.hands),
-        ("Holds", p.values.holds),
-        ("Rolls", p.values.rolls),
+        (tr("Gameplay", "StatsSteps"), p.values.steps),
+        (tr("Gameplay", "StatsMines"), p.values.mines),
+        (tr("Gameplay", "StatsJumps"), p.values.jumps),
+        (tr("Gameplay", "StatsHands"), p.values.hands),
+        (tr("Gameplay", "StatsHolds"), p.values.holds),
+        (tr("Gameplay", "StatsRolls"), p.values.rolls),
     ];
     for (i, (label, value)) in stats.iter().enumerate() {
         let (c, r) = (i % 2, i / 2);
@@ -79,7 +80,7 @@ pub fn build_base(p: StatsPaneParams<'_>) -> Vec<Actor> {
         ));
         out.push(act!(text:
             font("miso"):
-            settext(*label):
+            settext(label.clone()):
             align(0.0, 0.5):
             xy(p.pane_cx + l.cols[c] + 3.0, l.pane_top + l.rows[r]):
             zoom(l.text_zoom):
