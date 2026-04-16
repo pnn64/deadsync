@@ -2,7 +2,11 @@ use crate::engine::gfx::{
     BlendMode, ClockDomainTrace, DrawStats, MeshVertex, PresentModePolicy, PresentModeTrace,
     PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey,
     Texture as RendererTexture, TextureHandleMap,
-    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
+    draw_prep::{
+        self, DrawOp, DrawScratch, SpriteInstanceRaw as InstanceData,
+        TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshSource,
+        TexturedMeshVertexRaw as TexturedMeshVertexGpu,
+    },
 };
 use crate::engine::space::ortho_for_window;
 use ash::{
@@ -33,48 +37,13 @@ const VULKAN_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
 // --- Structs ---
+// Vulkan consumes the shared draw-prep raw layouts directly so the dynamic
+// upload path can memcpy them into the mapped ring without repacking.
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct ProjPush {
     proj: [[f32; 4]; 4],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct InstanceData {
-    // 96 bytes total
-    center: [f32; 4],                   // offset 0
-    size: [f32; 2],                     // offset 16
-    rot_sin_cos: [f32; 2],              // offset 24  (sin, cos)
-    tint: [f32; 4],                     // offset 32
-    uv_scale: [f32; 2],                 // offset 48
-    uv_offset: [f32; 2],                // offset 56
-    local_offset: [f32; 2],             // offset 64
-    local_offset_rot_sin_cos: [f32; 2], // offset 72
-    edge_fade: [f32; 4],                // offset 80
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct TexturedMeshVertexGpu {
-    pos: [f32; 2],              // offset 0
-    uv: [f32; 2],               // offset 8
-    color: [f32; 4],            // offset 16
-    tex_matrix_scale: [f32; 2], // offset 32
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct TexturedMeshInstanceGpu {
-    model_col0: [f32; 4],   // offset 0
-    model_col1: [f32; 4],   // offset 16
-    model_col2: [f32; 4],   // offset 32
-    model_col3: [f32; 4],   // offset 48
-    tint: [f32; 4],         // offset 64
-    uv_scale: [f32; 2],     // offset 80
-    uv_offset: [f32; 2],    // offset 88
-    uv_tex_shift: [f32; 2], // offset 96
 }
 
 struct PipelinePair {
@@ -1620,22 +1589,11 @@ pub fn draw(
         });
         if needed_instances > 0 {
             debug_assert!(!inst_base_ptr.is_null(), "instance ring missing");
-            for (ix, inst) in state.prep.sprite_instances.iter().enumerate() {
-                std::ptr::write(
-                    inst_base_ptr.add(ix),
-                    InstanceData {
-                        center: inst.center,
-                        size: inst.size,
-                        rot_sin_cos: inst.rot_sin_cos,
-                        tint: inst.tint,
-                        uv_scale: inst.uv_scale,
-                        uv_offset: inst.uv_offset,
-                        local_offset: inst.local_offset,
-                        local_offset_rot_sin_cos: inst.local_offset_rot_sin_cos,
-                        edge_fade: inst.edge_fade,
-                    },
-                );
-            }
+            std::ptr::copy_nonoverlapping(
+                state.prep.sprite_instances.as_ptr(),
+                inst_base_ptr,
+                needed_instances,
+            );
         }
         if needed_mesh_vertices > 0 {
             debug_assert!(!mesh_base_ptr.is_null(), "mesh ring missing");
@@ -1647,38 +1605,22 @@ pub fn draw(
         }
         if needed_tmesh_vertices > 0 {
             debug_assert!(!tmesh_base_ptr.is_null(), "textured mesh ring missing");
-            for (ix, vertex) in state.prep.tmesh_vertices.iter().enumerate() {
-                std::ptr::write(
-                    tmesh_base_ptr.add(ix),
-                    TexturedMeshVertexGpu {
-                        pos: vertex.pos,
-                        uv: vertex.uv,
-                        color: vertex.color,
-                        tex_matrix_scale: vertex.tex_matrix_scale,
-                    },
-                );
-            }
+            std::ptr::copy_nonoverlapping(
+                state.prep.tmesh_vertices.as_ptr(),
+                tmesh_base_ptr,
+                needed_tmesh_vertices,
+            );
         }
         if needed_tmesh_instances > 0 {
             debug_assert!(
                 !tmesh_instance_base_ptr.is_null(),
                 "textured mesh instance ring missing"
             );
-            for (ix, inst) in state.prep.tmesh_instances.iter().enumerate() {
-                std::ptr::write(
-                    tmesh_instance_base_ptr.add(ix),
-                    TexturedMeshInstanceGpu {
-                        model_col0: inst.model_col0,
-                        model_col1: inst.model_col1,
-                        model_col2: inst.model_col2,
-                        model_col3: inst.model_col3,
-                        tint: inst.tint,
-                        uv_scale: inst.uv_scale,
-                        uv_offset: inst.uv_offset,
-                        uv_tex_shift: inst.uv_tex_shift,
-                    },
-                );
-            }
+            std::ptr::copy_nonoverlapping(
+                state.prep.tmesh_instances.as_ptr(),
+                tmesh_instance_base_ptr,
+                needed_tmesh_instances,
+            );
         }
         stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
