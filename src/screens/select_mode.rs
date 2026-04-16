@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::tr;
 use crate::assets::AssetManager;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
@@ -35,9 +36,20 @@ const LOOP_RESET_Y: f32 = 24.0 * ARROW_H;
 const ARROW_SPRITE_SZ: f32 = 150.0;
 const ARROW_SPRITE_ZOOM: f32 = 0.18;
 
-const CHOICES: [&str; 2] = ["Regular", "Marathon"];
-const REGULAR_DESC: &str = "Choose your songs with a\nshort break between each.\n\nThese are dance games\nas we know and love them!";
-const MARATHON_DESC: &str = "Play a predetermined course\nof songs without any\nbreak between.\n\nMany courses have scripted\nmodifiers!";
+fn choice_labels() -> [String; 2] {
+    [
+        tr("SelectMode", "Regular").to_string(),
+        tr("SelectMode", "Marathon").to_string(),
+    ]
+}
+
+fn choice_description(choice: Choice) -> String {
+    let key = match choice {
+        Choice::Regular => "RegularDescription",
+        Choice::Marathon => "MarathonDescription",
+    };
+    tr("SelectMode", key).replace("\\n", "\n")
+}
 
 const PATTERN: [&str; 24] = [
     "left", "down", "left", "right", "down", "up", "left", "right", "left", "down", "up", "right",
@@ -58,13 +70,7 @@ const fn choice_from_index(idx: usize) -> Choice {
     }
 }
 
-#[inline(always)]
-const fn choice_desc(choice: Choice) -> &'static str {
-    match choice {
-        Choice::Regular => REGULAR_DESC,
-        Choice::Marathon => MARATHON_DESC,
-    }
-}
+const CHOICE_COUNT: usize = 2;
 
 #[inline(always)]
 const fn choice_cursor_label_width(choice: Choice) -> f32 {
@@ -87,7 +93,7 @@ pub struct State {
     pub active_color_index: i32,
     pub selected_index: usize,
     cursor_y: f32,
-    choice_zooms: [f32; CHOICES.len()],
+    choice_zooms: [f32; CHOICE_COUNT],
     demo_time: f32,
     exit_requested: bool,
     exit_target: Option<Screen>,
@@ -99,7 +105,7 @@ pub fn init() -> State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         selected_index: 0,
         cursor_y: -60.0,
-        choice_zooms: [CHOICE_ZOOM_UNFOCUSED; CHOICES.len()],
+        choice_zooms: [CHOICE_ZOOM_UNFOCUSED; CHOICE_COUNT],
         demo_time: 0.0,
         exit_requested: false,
         exit_target: None,
@@ -249,13 +255,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     match nav {
         Some(-1) => {
-            state.selected_index = (state.selected_index + CHOICES.len() - 1) % CHOICES.len();
+            state.selected_index = (state.selected_index + CHOICE_COUNT - 1) % CHOICE_COUNT;
             state.demo_time = 0.0;
             audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
         Some(1) => {
-            state.selected_index = (state.selected_index + 1) % CHOICES.len();
+            state.selected_index = (state.selected_index + 1) % CHOICE_COUNT;
             state.demo_time = 0.0;
             audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
@@ -329,8 +335,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
 
+    let select_mode = tr("ScreenTitles", "SelectMode");
     actors.push(screen_bar::build(ScreenBarParams {
-        title: "SELECT MODE",
+        title: &select_mode,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
         transparent: false,
@@ -362,32 +369,35 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let p2_guest =
         crate::game::profile::is_session_side_guest(crate::game::profile::PlayerSide::P2);
 
+    let insert_card = tr("Common", "InsertCard");
+    let press_start = tr("Common", "PressStart");
     let (footer_left, left_avatar) = if p1_joined {
         (
             Some(if p1_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p1_profile.display_name.as_str()
             }),
             if p1_guest { None } else { p1_avatar },
         )
     } else {
-        (Some("PRESS START"), None)
+        (Some(press_start.as_ref()), None)
     };
     let (footer_right, right_avatar) = if p2_joined {
         (
             Some(if p2_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p2_profile.display_name.as_str()
             }),
             if p2_guest { None } else { p2_avatar },
         )
     } else {
-        (Some("PRESS START"), None)
+        (Some(press_start.as_ref()), None)
     };
+    let event_mode = tr("Common", "EventMode");
     actors.push(screen_bar::build(ScreenBarParams {
-        title: "EVENT MODE",
+        title: &event_mode,
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,
         transparent: false,
@@ -440,7 +450,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let choice = choice_from_index(state.selected_index);
     actors.push(act!(text:
         font("miso"):
-        settext(choice_desc(choice)):
+        settext(choice_description(choice)):
         align(0.0, 0.0):
         xy(dx, dy):
         zoom(0.825 * ROOT_ZOOM):
@@ -451,7 +461,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Cursor highlight.
     let cursor_crop = cropleft_after(exit_t, 0.4, 0.2);
     let cursor_alpha = 1.0;
-    let label = CHOICES[state.selected_index];
+    let labels = choice_labels();
+    let label = &labels[state.selected_index];
     let measured_w = asset_manager.with_fonts(|all_fonts| {
         asset_manager
             .with_font("wendy", |f| {
@@ -487,7 +498,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let label_selected = color::simply_love_rgba(state.active_color_index);
     let label_unselected = color::rgba_hex("#888888");
     let zoom_den = (CHOICE_ZOOM_FOCUSED - CHOICE_ZOOM_UNFOCUSED).max(f32::EPSILON);
-    for (i, &label) in CHOICES.iter().enumerate() {
+    for (i, label) in labels.iter().enumerate() {
         let (x, y) = root_pt(-160.0, -60.0 + CURSOR_H * (i as f32));
         let zoom = state.choice_zooms[i];
         let t = ((zoom - CHOICE_ZOOM_UNFOCUSED) / zoom_den).clamp(0.0, 1.0);
