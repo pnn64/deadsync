@@ -42,52 +42,6 @@ Back=Back
 
 The `[Meta]` section is required and must contain a `NativeName` key — this is the language name shown in the language picker, written in the language itself (e.g. `日本語`, `Svenska`, `Español`).
 
-### Sections
-
-| Section | Purpose |
-|---------|---------|
-| `Meta` | Language metadata (`NativeName`) |
-| `Common` | Shared strings used across multiple screens (Yes, No, Back, etc.) |
-| `ScreenTitles` | Screen header bar titles (SELECT MUSIC, etc.) |
-| `Menu` | Main menu labels and network status strings |
-| `Options` | Top-level options menu item names |
-| `OptionsHelp` | Help text descriptions shown in options panes |
-| `OptionsSystem` | System options sublabels and choices |
-| `OptionsGraphics` | Graphics options sublabels and choices |
-| `OptionsSound` | Sound options sublabels and choices |
-| `OptionsInput` | Input options sublabels and choices |
-| `Mappings` | Key mapping screen strings |
-| `TestInput` | Input test screen strings |
-| `OptionsMachine` | Machine options sublabels and choices |
-| `OptionsGameplay` | Gameplay options sublabels and choices |
-| `OptionsSelectMusic` | Select music options sublabels and choices |
-| `OptionsAdvanced` | Advanced options sublabels and choices |
-| `OptionsCourse` | Course options sublabels and choices |
-| `OptionsOnlineScoring` | Online scoring options sublabels and choices |
-| `OptionsGrooveStats` | GrooveStats options sublabels and choices |
-| `OptionsScoreImport` | Score import screen strings |
-| `OptionsSyncPack` | Pack sync screen strings |
-| `OptionsNullOrDie` | Null or Die sync options sublabels and choices |
-| `PlayerOptions` | Player options sublabels and choices |
-| `PlayerOptionsHelp` | Player options help text descriptions |
-| `SelectMusic` | Music selection screen strings |
-| `PatternInfo` | Chart pattern information strings |
-| `SelectMode` | Mode selection screen strings |
-| `SelectStyle` | Style selection screen strings |
-| `SelectCourse` | Course selection screen strings |
-| `Evaluation` | Results screen labels and judgments |
-| `EvaluationSummary` | Evaluation summary screen strings |
-| `SubmitStatus` | Score submission status strings |
-| `Records` | Records display strings |
-| `Gameplay` | In-game HUD strings |
-| `GameOver` | Game over screen strings |
-| `Profiles` | Profile management screen strings |
-| `Initials` | Initials entry screen strings |
-| `PackSync` | Pack sync status strings |
-| `Init` | Loading/splash screen strings |
-| `Credits` | Credits screen strings |
-| `Lobby` | Online lobby screen strings |
-
 ### Format strings
 
 Some strings contain `{placeholder}` tokens for dynamic values:
