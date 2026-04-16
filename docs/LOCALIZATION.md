@@ -145,6 +145,40 @@ This is per-language: Swedish might skip "GrooveStats" while Japanese might tran
 
 Language files are resolved from the executable's `assets/languages/` directory. Users can place custom or modified `.ini` files there to override bundled translations.
 
+## Contributing a Translation
+
+### Getting started
+
+1. Fork the repository and create a branch (e.g. `i18n-add-french`)
+2. Copy `assets/languages/en.ini` to `assets/languages/{locale}.ini` (see [Locale codes](#locale-codes) for naming)
+3. Set `NativeName` in the `[Meta]` section to the language's own name (e.g. `Español`, `日本語`)
+4. Translate values (right side of `=`). Do not change keys (left side) or section names
+5. For keys that should stay in English (brand names, technical terms), set the value to `@skip` — see [Skipping keys](#skipping-keys-skip)
+
+### Testing locally
+
+```sh
+# Check coverage and see which keys are missing
+cargo run --bin lang_coverage
+
+# Run the CI validation tests
+cargo test --test i18n_coverage
+
+# Launch the game with your language to verify visually
+# (set language = {locale} in deadsync.ini, or let auto-detection pick it up)
+```
+
+### Submitting
+
+Open a PR. The CI will run the coverage tests to catch stale keys or duplicate entries. Partial translations are welcome — translate what you can and leave the rest. The app falls back to English for any missing key.
+
+### Tips
+
+- Start with the most visible sections: `[Common]`, `[Menu]`, `[ScreenTitles]`, `[SelectMusic]`
+- Format strings like `{songs} songs in {packs} groups` — translate the words but keep the `{placeholder}` names unchanged. You can reorder placeholders to match your language's word order
+- Test with longer strings — some languages (e.g. German) produce significantly longer text than English. Check that UI elements don't overflow
+- If you're unsure about a game-specific term, check [ITGmania's translations](https://github.com/itgmania/itgmania/tree/release/Themes/_fallback/Languages) for reference — both projects use GPL-3.0
+
 ## For Developers
 
 ### Using `tr()` in code
