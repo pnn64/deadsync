@@ -1,3 +1,4 @@
+use crate::screens::player_options::RowId;
 use crate::assets::AssetManager;
 use crate::engine::present::actors::Actor;
 use crate::game::profile;
@@ -21,6 +22,7 @@ impl PlayerOptionsBenchFixture {
 }
 
 pub fn fixture() -> PlayerOptionsBenchFixture {
+    crate::assets::i18n::init("en");
     let base = notefield_bench::fixture();
     let song = base.state().song.clone();
 
@@ -38,12 +40,12 @@ pub fn fixture() -> PlayerOptionsBenchFixture {
     let perspective_row = state
         .rows
         .iter()
-        .position(|row| row.name == "Perspective")
+        .position(|row| row.id == RowId::Perspective)
         .unwrap_or(0);
     let background_filter_row = state
         .rows
         .iter()
-        .position(|row| row.name == "Background Filter")
+        .position(|row| row.id == RowId::BackgroundFilter)
         .unwrap_or(perspective_row);
     state.selected_row = [perspective_row, background_filter_row];
     state.prev_selected_row = state.selected_row;
