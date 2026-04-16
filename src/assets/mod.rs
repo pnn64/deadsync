@@ -5,7 +5,7 @@ mod textures;
 use crate::config::dirs;
 use crate::engine::gfx::{
     Backend, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, SamplerDesc, Texture as GfxTexture,
-    TextureHandle,
+    TextureHandle, TextureHandleMap,
 };
 use crate::engine::present::font::{self, Font, FontLoadData, FontParseError};
 use image::RgbaImage;
@@ -151,8 +151,8 @@ impl TextureUploadQueue {
 }
 
 pub struct AssetManager {
-    textures: HashMap<TextureHandle, GfxTexture>,
-    uploaded_texture_dims: HashMap<TextureHandle, TexMeta>,
+    textures: TextureHandleMap<GfxTexture>,
+    uploaded_texture_dims: TextureHandleMap<TexMeta>,
     texture_handles: HashMap<String, TextureHandle>,
     next_texture_handle: TextureHandle,
     fonts: HashMap<&'static str, Font>,
@@ -162,8 +162,8 @@ pub struct AssetManager {
 impl AssetManager {
     pub fn new() -> Self {
         Self {
-            textures: HashMap::new(),
-            uploaded_texture_dims: HashMap::new(),
+            textures: TextureHandleMap::default(),
+            uploaded_texture_dims: TextureHandleMap::default(),
             texture_handles: HashMap::new(),
             next_texture_handle: 1,
             fonts: HashMap::new(),
@@ -180,7 +180,7 @@ impl AssetManager {
     }
 
     #[inline(always)]
-    pub fn textures(&self) -> &HashMap<TextureHandle, GfxTexture> {
+    pub fn textures(&self) -> &TextureHandleMap<GfxTexture> {
         &self.textures
     }
 
@@ -196,7 +196,7 @@ impl AssetManager {
             .is_some_and(|handle| self.textures.contains_key(handle))
     }
 
-    pub fn take_textures(&mut self) -> HashMap<TextureHandle, GfxTexture> {
+    pub fn take_textures(&mut self) -> TextureHandleMap<GfxTexture> {
         self.texture_handles.clear();
         clear_texture_handles();
         self.uploaded_texture_dims.clear();
@@ -350,7 +350,7 @@ impl AssetManager {
         handle: TextureHandle,
         texture: GfxTexture,
     ) {
-        let mut textures = HashMap::with_capacity(1);
+        let mut textures = TextureHandleMap::default();
         textures.insert(handle, texture);
         backend.retire_textures(&mut textures);
     }

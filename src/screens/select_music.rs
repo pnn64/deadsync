@@ -264,7 +264,12 @@ fn cached_chart_info_text(
     }
     let matrix_rating_rounded = (matrix_rating * 100.0).round() / 100.0;
     let matrix_rating_text = if meter >= 11 && matrix_rating_rounded > 0.0 {
-        tr_fmt("SelectMusic", "MrValue", &[("value", &format!("{matrix_rating_rounded:.2}"))]).to_string()
+        tr_fmt(
+            "SelectMusic",
+            "MrValue",
+            &[("value", &format!("{matrix_rating_rounded:.2}"))],
+        )
+        .to_string()
     } else {
         tr("SelectMusic", "MrNotAvailable").to_string()
     };
@@ -273,8 +278,21 @@ fn cached_chart_info_text(
         (mask, meter, peak_nps.to_bits(), matrix_rating.to_bits()),
         || match mask {
             0b10 => matrix_rating_text,
-            0b11 => tr_fmt("SelectMusic", "PnpsAndMr", &[("peak_nps", &format!("{peak_nps:.1}")), ("mr", &matrix_rating_text)]).to_string(),
-            _ => tr_fmt("SelectMusic", "PeakNpsOnly", &[("peak_nps", &format!("{peak_nps:.1}"))]).to_string(),
+            0b11 => tr_fmt(
+                "SelectMusic",
+                "PnpsAndMr",
+                &[
+                    ("peak_nps", &format!("{peak_nps:.1}")),
+                    ("mr", &matrix_rating_text),
+                ],
+            )
+            .to_string(),
+            _ => tr_fmt(
+                "SelectMusic",
+                "PeakNpsOnly",
+                &[("peak_nps", &format!("{peak_nps:.1}"))],
+            )
+            .to_string(),
         },
     )
 }
@@ -283,7 +301,12 @@ fn cached_chart_info_text(
 fn cached_stamina_mono_text(percent: f64) -> Arc<str> {
     let percent = if percent.is_finite() { percent } else { 0.0 };
     cached_text(&STAMINA_MONO_CACHE, percent.to_bits(), || {
-        tr_fmt("SelectMusic", "StaminaMono", &[("percent", &format!("{percent:.1}"))]).to_string()
+        tr_fmt(
+            "SelectMusic",
+            "StaminaMono",
+            &[("percent", &format!("{percent:.1}"))],
+        )
+        .to_string()
     })
 }
 
@@ -291,7 +314,12 @@ fn cached_stamina_mono_text(percent: f64) -> Arc<str> {
 fn cached_stamina_candles_text(percent: f64) -> Arc<str> {
     let percent = if percent.is_finite() { percent } else { 0.0 };
     cached_text(&STAMINA_CANDLES_CACHE, percent.to_bits(), || {
-        tr_fmt("SelectMusic", "StaminaCandles", &[("percent", &format!("{percent:.1}"))]).to_string()
+        tr_fmt(
+            "SelectMusic",
+            "StaminaCandles",
+            &[("percent", &format!("{percent:.1}"))],
+        )
+        .to_string()
     })
 }
 
@@ -1574,7 +1602,6 @@ fn build_artist_grouped_entries(
     (entries, counts)
 }
 
-
 fn build_genre_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
 ) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
@@ -1801,7 +1828,10 @@ fn song_meter_for_sort(song: &SongData, chart_type: &str) -> Option<u32> {
 
 #[inline(always)]
 fn meter_bucket_name(meter: Option<u32>) -> String {
-    meter.map_or_else(|| tr("SelectMusic", "NotAvailable").to_string(), |m| format!("{:02}", m.min(99)))
+    meter.map_or_else(
+        || tr("SelectMusic", "NotAvailable").to_string(),
+        |m| format!("{:02}", m.min(99)),
+    )
 }
 
 fn build_meter_grouped_entries(
@@ -1962,7 +1992,6 @@ fn build_recent_grouped_entries(
     counts.insert(tr("SelectMusic", "RecentlyPlayed").to_string(), count);
     (entries, counts)
 }
-
 
 fn build_top_grades_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
@@ -2275,7 +2304,6 @@ fn build_top_grades_grouped_entries_for_side(
 
     (entries, counts)
 }
-
 
 fn build_favorites_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
@@ -3710,7 +3738,6 @@ fn reload_progress(reload: &ReloadUiState) -> (usize, usize, f32) {
     (done, total, progress)
 }
 
-
 fn reload_detail_lines(reload: &ReloadUiState) -> (String, String) {
     (reload.line2.clone(), reload.line3.clone())
 }
@@ -3725,7 +3752,11 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
     };
     let show_speed_row = total > 0;
     let speed_text: Arc<str> = if elapsed > 0.0 && show_speed_row {
-        tr_fmt("SelectMusic", "LoadingSpeed", &[("speed", &format!("{:.1}", done as f32 / elapsed))])
+        tr_fmt(
+            "SelectMusic",
+            "LoadingSpeed",
+            &[("speed", &format!("{:.1}", done as f32 / elapsed))],
+        )
     } else if show_speed_row {
         tr_fmt("SelectMusic", "LoadingSpeed", &[("speed", "0.0")])
     } else {
@@ -5655,7 +5686,15 @@ fn select_music_lobby_status_text(state: &State) -> Option<String> {
         let remaining =
             (crate::game::online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
         let remaining = remaining.max(0);
-        tr_fmt("Lobby", "DisconnectHoldingFormat", &[("remaining", &remaining.to_string()), ("s", if remaining == 1 { "" } else { "s" })]).to_string()
+        tr_fmt(
+            "Lobby",
+            "DisconnectHoldingFormat",
+            &[
+                ("remaining", &remaining.to_string()),
+                ("s", if remaining == 1 { "" } else { "s" }),
+            ],
+        )
+        .to_string()
     } else {
         tr("Lobby", "DisconnectBasicPrompt").to_string()
     };
@@ -5769,14 +5808,17 @@ fn sync_low_confidence_warning(confidence: Option<f64>, threshold: f64) -> Optio
     }
     let confidence_pct = sync_confidence_percent(Some(confidence));
     let threshold_pct = (threshold.clamp(0.0, 1.0) * 100.0).round() as u32;
-    Some(tr_fmt(
-        "SelectMusic",
-        "SyncLowConfidenceWarning",
-        &[
-            ("confidence", &confidence_pct.to_string()),
-            ("threshold", &threshold_pct.to_string()),
-        ],
-    ).to_string())
+    Some(
+        tr_fmt(
+            "SelectMusic",
+            "SyncLowConfidenceWarning",
+            &[
+                ("confidence", &confidence_pct.to_string()),
+                ("threshold", &threshold_pct.to_string()),
+            ],
+        )
+        .to_string(),
+    )
 }
 
 fn build_sync_save_prompt_text(overlay: &SyncOverlayStateData) -> String {
@@ -5908,7 +5950,8 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
             Err(mpsc::TryRecvError::Disconnected) => {
                 if overlay.phase == SyncOverlayPhase::Running {
                     overlay.phase = SyncOverlayPhase::Failed;
-                    overlay.error_text = Some(tr("SelectMusic", "SyncWorkerDisconnected").to_string());
+                    overlay.error_text =
+                        Some(tr("SelectMusic", "SyncWorkerDisconnected").to_string());
                 }
                 break;
             }
@@ -8744,7 +8787,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 (side, tr("PatternInfo", "Sideswitches"), 0_u8, 1_u8, None),
                 (jack, tr("PatternInfo", "Jacks"), 1_u8, 1_u8, None),
                 (brack, tr("PatternInfo", "Brackets"), 0_u8, 2_u8, None),
-                (stream, tr("PatternInfo", "TotalStream"), 1_u8, 2_u8, Some(100.0)),
+                (
+                    stream,
+                    tr("PatternInfo", "TotalStream"),
+                    1_u8,
+                    2_u8,
+                    Some(100.0),
+                ),
             ];
 
             for (val, lbl, c, r, mw) in items {

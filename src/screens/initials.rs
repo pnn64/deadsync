@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::i18n::tr;
 use crate::assets::AssetManager;
+use crate::assets::i18n::tr;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
@@ -291,8 +291,8 @@ impl Wheel {
 
 fn month_abbr(index: usize) -> std::sync::Arc<str> {
     const KEYS: [&str; 12] = [
-        "MonthJan", "MonthFeb", "MonthMar", "MonthApr", "MonthMay", "MonthJun",
-        "MonthJul", "MonthAug", "MonthSep", "MonthOct", "MonthNov", "MonthDec",
+        "MonthJan", "MonthFeb", "MonthMar", "MonthApr", "MonthMay", "MonthJun", "MonthJul",
+        "MonthAug", "MonthSep", "MonthOct", "MonthNov", "MonthDec",
     ];
     if index < KEYS.len() {
         tr("Initials", KEYS[index])

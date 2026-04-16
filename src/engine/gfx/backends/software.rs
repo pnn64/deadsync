@@ -1,13 +1,12 @@
 use crate::engine::gfx::{
     BlendMode, DrawStats, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter,
-    SamplerWrap, Texture as RendererTexture, TextureHandle,
+    SamplerWrap, Texture as RendererTexture, TextureHandleMap,
 };
 use crate::engine::space::ortho_for_window;
 use cgmath::{Matrix4, Vector4};
 use image::RgbaImage;
 use log::info;
 use std::{
-    collections::HashMap,
     error::Error,
     num::NonZeroU32,
     sync::{
@@ -72,7 +71,7 @@ pub fn update_texture(texture: &mut Texture, image: &RgbaImage) -> Result<(), Bo
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
-    textures: &HashMap<TextureHandle, RendererTexture>,
+    textures: &TextureHandleMap<RendererTexture>,
     _apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
     #[inline(always)]

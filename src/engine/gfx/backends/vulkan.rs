@@ -1,7 +1,7 @@
 use crate::engine::gfx::{
     BlendMode, ClockDomainTrace, DrawStats, MeshVertex, PresentModePolicy, PresentModeTrace,
     PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey,
-    Texture as RendererTexture, TextureHandle,
+    Texture as RendererTexture, TextureHandleMap,
     draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use crate::engine::space::ortho_for_window;
@@ -1465,7 +1465,7 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
-    textures: &HashMap<TextureHandle, RendererTexture>,
+    textures: &TextureHandleMap<RendererTexture>,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
     #[inline(always)]

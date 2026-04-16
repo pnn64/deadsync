@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::AssetManager;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
@@ -341,7 +341,11 @@ fn build_player_stats(
     {
         let style = steps_type_label(&p.chart.chart_type);
         let diff = difficulty_display_name(&p.chart.difficulty, zmod_rating_box_text);
-        let text = tr_fmt("EvaluationSummary", "DifficultyFormat", &[("style", &style), ("difficulty", &diff)]);
+        let text = tr_fmt(
+            "EvaluationSummary",
+            "DifficultyFormat",
+            &[("style", &style), ("difficulty", &diff)],
+        );
         let mut a = act!(text:
             font("miso"):
             settext(text):
@@ -489,7 +493,10 @@ fn build_row(
         tr_fmt(
             "EvaluationSummary",
             "BpmWithRate",
-            &[("bpm", &bpm_str), ("rate", &format_rate_x(stage.music_rate))],
+            &[
+                ("bpm", &bpm_str),
+                ("rate", &format_rate_x(stage.music_rate)),
+            ],
         )
         .to_string()
     } else {

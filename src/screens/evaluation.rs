@@ -13,8 +13,8 @@ use crate::screens::components::{
     shared::{banner as shared_banner, heart_bg, lobby_hud, mode_pads, screen_bar, timers},
 };
 
-use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::AssetManager;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::present::font;
 use crate::game::chart::ChartData;
 use crate::game::gameplay::MAX_PLAYERS;
@@ -129,10 +129,20 @@ fn cached_bpm_text(min_bpm: f64, max_bpm: f64, music_rate: f32) -> Arc<str> {
         let base = if min == max {
             tr_fmt("Evaluation", "BpmSingle", &[("bpm", &min.to_string())]).to_string()
         } else {
-            tr_fmt("Evaluation", "BpmRange", &[("min", &min.to_string()), ("max", &max.to_string())]).to_string()
+            tr_fmt(
+                "Evaluation",
+                "BpmRange",
+                &[("min", &min.to_string()), ("max", &max.to_string())],
+            )
+            .to_string()
         };
         if (rate - 1.0).abs() > 0.001 {
-            tr_fmt("Evaluation", "BpmWithRate", &[("base", &base), ("rate", &format!("{rate:.2}"))]).to_string()
+            tr_fmt(
+                "Evaluation",
+                "BpmWithRate",
+                &[("base", &base), ("rate", &format!("{rate:.2}"))],
+            )
+            .to_string()
         } else {
             base
         }
@@ -158,9 +168,19 @@ fn cached_record_text(is_machine: bool, rank: u32) -> Arc<str> {
         (rank, if is_machine { 0 } else { 1 }),
         || {
             if is_machine {
-                tr_fmt("Records", "MachineRecordFormat", &[("rank", &rank.to_string())]).to_string()
+                tr_fmt(
+                    "Records",
+                    "MachineRecordFormat",
+                    &[("rank", &rank.to_string())],
+                )
+                .to_string()
             } else {
-                tr_fmt("Records", "PersonalRecordFormat", &[("rank", &rank.to_string())]).to_string()
+                tr_fmt(
+                    "Records",
+                    "PersonalRecordFormat",
+                    &[("rank", &rank.to_string())],
+                )
+                .to_string()
             }
         },
     )
@@ -247,12 +267,16 @@ fn combined_submit_footer_text(
     gs_status: SubmitFooterStatus,
     ac_status: SubmitFooterStatus,
 ) -> Arc<str> {
-    tr_fmt("SubmitStatus", "SubmittedCombined", &[
-        ("gs_glyph", submit_footer_status_glyph(gs_status)),
-        ("gs_label", &submit_footer_gs_label()),
-        ("ac_glyph", submit_footer_status_glyph(ac_status)),
-        ("ac_label", &tr("SubmitStatus", "ACLabel")),
-    ])
+    tr_fmt(
+        "SubmitStatus",
+        "SubmittedCombined",
+        &[
+            ("gs_glyph", submit_footer_status_glyph(gs_status)),
+            ("gs_label", &submit_footer_gs_label()),
+            ("ac_glyph", submit_footer_status_glyph(ac_status)),
+            ("ac_label", &tr("SubmitStatus", "ACLabel")),
+        ],
+    )
 }
 
 #[inline(always)]
@@ -348,7 +372,12 @@ fn submit_footer_lines(
 #[inline(always)]
 fn cached_difficulty_text(style_label: &'static str, difficulty: &'static str) -> Arc<str> {
     cached_text(&DIFFICULTY_TEXT_CACHE, (style_label, difficulty), || {
-        tr_fmt("Evaluation", "DifficultyFormat", &[("style", style_label), ("difficulty", difficulty)]).to_string()
+        tr_fmt(
+            "Evaluation",
+            "DifficultyFormat",
+            &[("style", style_label), ("difficulty", difficulty)],
+        )
+        .to_string()
     })
 }
 

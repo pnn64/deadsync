@@ -1,6 +1,6 @@
 use crate::engine::gfx::{
     BlendMode, DrawStats, MeshMode, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    TMeshCacheKey, Texture as RendererTexture, TextureHandle,
+    TMeshCacheKey, Texture as RendererTexture, TextureHandleMap,
     draw_prep::{
         self, DrawOp, DrawScratch, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshSource,
         TexturedMeshVertexRaw,
@@ -652,7 +652,7 @@ pub const fn request_screenshot(_state: &mut State) {}
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
-    textures: &HashMap<TextureHandle, RendererTexture>,
+    textures: &TextureHandleMap<RendererTexture>,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
     #[inline(always)]

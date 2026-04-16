@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::AssetManager;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::{self, Actor};
@@ -316,11 +316,7 @@ fn default_new_profile_name(state: &State) -> String {
     "New0001".to_string()
 }
 
-fn validate_profile_name(
-    state: &State,
-    mode: &NameEntryMode,
-    name: &str,
-) -> Result<(), Arc<str>> {
+fn validate_profile_name(state: &State, mode: &NameEntryMode, name: &str) -> Result<(), Arc<str>> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err(tr("Profiles", "NameCannotBeBlank"));
@@ -336,10 +332,7 @@ fn validate_profile_name(
     Ok(())
 }
 
-fn try_submit_name_entry(
-    state: &mut State,
-    entry: &NameEntryState,
-) -> Result<String, Arc<str>> {
+fn try_submit_name_entry(state: &mut State, entry: &NameEntryState) -> Result<String, Arc<str>> {
     validate_profile_name(state, &entry.mode, &entry.value)?;
     let trimmed = entry.value.trim();
     match &entry.mode {

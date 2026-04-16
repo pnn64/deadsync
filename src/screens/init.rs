@@ -660,7 +660,10 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>, loading_elapsed_
         horizalign(center):
         z(110.0)
     ));
-    let phase_label = loading.map_or_else(|| tr("Init", "InitializingText"), |_| arc_phase_label(phase));
+    let phase_label = loading.map_or_else(
+        || tr("Init", "InitializingText"),
+        |_| arc_phase_label(phase),
+    );
     actors.push(act!(text:
         font("miso"):
         settext(phase_label):

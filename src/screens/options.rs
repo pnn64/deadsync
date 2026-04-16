@@ -27,11 +27,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
 use crate::engine::present::actors;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
-use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{heart_bg, screen_bar};
 use null_or_die::{BiasKernel, KernelTarget};
@@ -1346,7 +1346,6 @@ const MAX_FPS_STEP: u16 = 5;
 const MAX_FPS_DEFAULT: u16 = 60;
 const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
 
-
 const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
     (1920, 1080),
     (1600, 900),
@@ -1357,7 +1356,10 @@ const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
 
 fn build_display_mode_choices(monitor_specs: &[MonitorSpec]) -> Vec<String> {
     if monitor_specs.is_empty() {
-        return vec![tr("OptionsGraphics", "Screen1Fallback").to_string(), tr("OptionsGraphics", "Windowed").to_string()];
+        return vec![
+            tr("OptionsGraphics", "Screen1Fallback").to_string(),
+            tr("OptionsGraphics", "Windowed").to_string(),
+        ];
     }
     let mut out = Vec::with_capacity(monitor_specs.len() + 1);
     for spec in monitor_specs {
@@ -5870,7 +5872,9 @@ pub fn init() -> State {
         sub_cursor_indices_arrowcloud: vec![0; ARROWCLOUD_OPTIONS_ROWS.len()],
         sub_cursor_indices_score_import: vec![0; SCORE_IMPORT_OPTIONS_ROWS.len()],
         score_import_profiles: Vec::new(),
-        score_import_profile_choices: vec![tr("OptionsScoreImport", "NoEligibleProfiles").to_string()],
+        score_import_profile_choices: vec![
+            tr("OptionsScoreImport", "NoEligibleProfiles").to_string(),
+        ],
         score_import_profile_ids: vec![None],
         score_import_pack_choices: vec![tr("OptionsScoreImport", "AllPacks").to_string()],
         score_import_pack_filters: vec![None],
@@ -7064,7 +7068,12 @@ fn build_reload_overlay_actors(reload: &ReloadUiState, active_color_index: i32) 
     };
     let show_speed_row = total > 0;
     let speed_text = if elapsed > 0.0 && show_speed_row {
-        tr_fmt("SelectMusic", "LoadingSpeed", &[("speed", &format!("{:.1}", done as f32 / elapsed))]).to_string()
+        tr_fmt(
+            "SelectMusic",
+            "LoadingSpeed",
+            &[("speed", &format!("{:.1}", done as f32 / elapsed))],
+        )
+        .to_string()
     } else if show_speed_row {
         tr_fmt("SelectMusic", "LoadingSpeed", &[("speed", "0.0")]).to_string()
     } else {
@@ -7218,7 +7227,12 @@ fn poll_score_import_ui(score_import: &mut ScoreImportUiState) {
                             )
                         }
                     }
-                    Err(e) => tr_fmt("OptionsScoreImport", "ImportFailed", &[("error", &e.to_string())]).to_string(),
+                    Err(e) => tr_fmt(
+                        "OptionsScoreImport",
+                        "ImportFailed",
+                        &[("error", &e.to_string())],
+                    )
+                    .to_string(),
                 };
             }
         }
@@ -9446,7 +9460,12 @@ fn build_description_layout(
 
     if item.help.is_empty() {
         // No help entries — show the item name as a paragraph fallback.
-        let wrapped = wrap_miso_text(asset_manager, &item.name.get(), title_max_width_px, DESC_TITLE_ZOOM * s);
+        let wrapped = wrap_miso_text(
+            asset_manager,
+            &item.name.get(),
+            title_max_width_px,
+            DESC_TITLE_ZOOM * s,
+        );
         blocks.push(RenderedHelpBlock::Paragraph {
             line_count: wrapped.lines().count().max(1),
             text: Arc::from(wrapped),
@@ -9456,7 +9475,12 @@ fn build_description_layout(
             match entry {
                 HelpEntry::Paragraph(lkey) => {
                     let raw = lkey.get();
-                    let wrapped = wrap_miso_text(asset_manager, &raw, title_max_width_px, DESC_TITLE_ZOOM * s);
+                    let wrapped = wrap_miso_text(
+                        asset_manager,
+                        &raw,
+                        title_max_width_px,
+                        DESC_TITLE_ZOOM * s,
+                    );
                     blocks.push(RenderedHelpBlock::Paragraph {
                         line_count: wrapped.lines().count().max(1),
                         text: Arc::from(wrapped),
@@ -9472,7 +9496,12 @@ fn build_description_layout(
                     entry_str.push('\u{2022}');
                     entry_str.push(' ');
                     entry_str.push_str(trimmed);
-                    let wrapped = wrap_miso_text(asset_manager, &entry_str, bullet_max_width_px, DESC_BODY_ZOOM * s);
+                    let wrapped = wrap_miso_text(
+                        asset_manager,
+                        &entry_str,
+                        bullet_max_width_px,
+                        DESC_BODY_ZOOM * s,
+                    );
                     blocks.push(RenderedHelpBlock::Bullet {
                         line_count: wrapped.lines().count().max(1),
                         text: Arc::from(wrapped),
@@ -10594,7 +10623,10 @@ mod tests {
     #[test]
     fn inferred_aspect_choice_maps_1024x768_to_4_3() {
         let idx = inferred_aspect_choice(1024, 768);
-        assert_eq!(DISPLAY_ASPECT_RATIO_CHOICES[idx].as_str_static(), Some("4:3"));
+        assert_eq!(
+            DISPLAY_ASPECT_RATIO_CHOICES[idx].as_str_static(),
+            Some("4:3")
+        );
     }
 
     #[test]

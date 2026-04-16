@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::AssetManager;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
@@ -134,14 +134,25 @@ fn build_player_lines(
             profile_lines.push(format!("{}\n{cals}", tr("GameOver", "CaloriesBurnedToday")));
         }
 
-        profile_lines.push(format!("{}\n{total_songs_played}", tr("GameOver", "TotalSongsPlayed")));
+        profile_lines.push(format!(
+            "{}\n{total_songs_played}",
+            tr("GameOver", "TotalSongsPlayed")
+        ));
     }
 
     // General stats (no profile required)
     let stats = session_stats_for_side(side, stages);
     let general_lines: Vec<String> = vec![
-        format!("{}\n{}", tr("GameOver", "SongsPlayedThisGame"), stats.songs_played),
-        format!("{}\n{}", tr("GameOver", "NotesHitThisGame"), stats.notes_hit),
+        format!(
+            "{}\n{}",
+            tr("GameOver", "SongsPlayedThisGame"),
+            stats.songs_played
+        ),
+        format!(
+            "{}\n{}",
+            tr("GameOver", "NotesHitThisGame"),
+            stats.notes_hit
+        ),
         format!(
             "{}\n{}",
             tr("GameOver", "TimeSpentThisGame"),

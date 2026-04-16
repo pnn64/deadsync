@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::AssetManager;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec, TextAlign, TextContent};
@@ -570,7 +570,12 @@ fn cached_rate_text(rate: f32) -> Arc<str> {
         return empty_text();
     }
     cached_text(&RATE_TEXT_CACHE, rate.to_bits(), TEXT_CACHE_LIMIT, || {
-        tr_fmt("Gameplay", "RateDisplay", &[("rate", &format!("{rate:.2}"))]).to_string()
+        tr_fmt(
+            "Gameplay",
+            "RateDisplay",
+            &[("rate", &format!("{rate:.2}"))],
+        )
+        .to_string()
     })
 }
 
@@ -712,8 +717,18 @@ pub fn prewarm_text_layout(
     cache.prewarm_text(fonts, "miso", "Hit Tick", None);
     cache.prewarm_text(fonts, "miso", "AutoSync Song", None);
     cache.prewarm_text(fonts, "miso", "AutoSync Machine", None);
-    cache.prewarm_text(fonts, "miso", &tr("Gameplay", "ContinueHoldingStartGiveUp"), None);
-    cache.prewarm_text(fonts, "miso", &tr("Gameplay", "ContinueHoldingBackGiveUp"), None);
+    cache.prewarm_text(
+        fonts,
+        "miso",
+        &tr("Gameplay", "ContinueHoldingStartGiveUp"),
+        None,
+    );
+    cache.prewarm_text(
+        fonts,
+        "miso",
+        &tr("Gameplay", "ContinueHoldingBackGiveUp"),
+        None,
+    );
     cache.prewarm_text(fonts, "miso", &tr("Lobby", "DisconnectBasicPrompt"), None);
     cache.prewarm_text(fonts, "miso", &tr("Gameplay", "DontGoBack"), None);
     if let Some(text) = state.replay_status_text.as_ref() {
@@ -2746,7 +2761,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             match exit.kind {
                 crate::game::gameplay::ExitTransitionKind::Out => {
                     let alpha = (1.0 - t / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
-                    Some((tr("Gameplay", "ContinueHoldingStartGiveUp").to_string(), alpha))
+                    Some((
+                        tr("Gameplay", "ContinueHoldingStartGiveUp").to_string(),
+                        alpha,
+                    ))
                 }
                 crate::game::gameplay::ExitTransitionKind::Cancel => {
                     Some((tr("Gameplay", "ContinueHoldingBackGiveUp").to_string(), 1.0))

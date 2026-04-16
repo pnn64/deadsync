@@ -1002,6 +1002,7 @@ dependencies = [
  "rssp",
  "rubato",
  "rust-ini",
+ "rustc-hash 2.1.2",
  "serde",
  "serde_json",
  "shaderc",

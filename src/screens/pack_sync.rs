@@ -1044,17 +1044,15 @@ fn result_text(row: &RowState, min_confidence: f64) -> String {
                 tr("PackSync", "StatusWorking").to_string()
             }
         }
-        RowDisposition::Eligible | RowDisposition::BelowThreshold => {
-            tr_fmt(
-                "PackSync",
-                "ResultConfidenceFormat",
-                &[
-                    ("bias", &format!("{:+.2}", row.final_bias_ms.unwrap_or(0.0))),
-                    ("confidence", &confidence_pct.to_string()),
-                ],
-            )
-            .to_string()
-        }
+        RowDisposition::Eligible | RowDisposition::BelowThreshold => tr_fmt(
+            "PackSync",
+            "ResultConfidenceFormat",
+            &[
+                ("bias", &format!("{:+.2}", row.final_bias_ms.unwrap_or(0.0))),
+                ("confidence", &confidence_pct.to_string()),
+            ],
+        )
+        .to_string(),
         RowDisposition::NoChange => tr_fmt(
             "PackSync",
             "ResultNoChangeFormat",

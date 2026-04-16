@@ -2690,7 +2690,7 @@ impl App {
         };
         text_layout_cache.begin_frame_stats();
         let build_screen_started = Instant::now();
-        let screen = crate::engine::present::compose::build_screen_cached(
+        let mut screen = crate::engine::present::compose::build_screen_cached(
             &actors,
             clear_color,
             &self.state.shell.metrics,
@@ -2700,7 +2700,9 @@ impl App {
         );
         let build_screen_us = elapsed_us_since(build_screen_started);
         let text_layout = text_layout_cache.frame_stats();
-        let resolve_textures_us = 0;
+        let resolve_textures_started = Instant::now();
+        self.asset_manager.resolve_render_textures(&mut screen);
+        let resolve_textures_us = elapsed_us_since(resolve_textures_started);
         let compose_us: u32 = actor_build_us
             .saturating_add(build_screen_us)
             .saturating_add(resolve_textures_us);

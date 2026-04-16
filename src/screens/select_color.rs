@@ -568,11 +568,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p1_menu_right
         | VirtualAction::p2_menu_right => Some(Nav::Right),
 
-        VirtualAction::p1_start
-        | VirtualAction::p2_start => Some(Nav::Confirm),
+        VirtualAction::p1_start | VirtualAction::p2_start => Some(Nav::Confirm),
 
-        VirtualAction::p1_back
-        | VirtualAction::p2_back => Some(Nav::Back),
+        VirtualAction::p1_back | VirtualAction::p2_back => Some(Nav::Back),
 
         _ => None,
     };

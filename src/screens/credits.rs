@@ -97,7 +97,7 @@ const CREDITS: &[CreditLine] = &[
     name("DolphinChips"),
     name("rehtlaw"),
     name("madewithlinux"),
-    name("saucepan"),    
+    name("saucepan"),
     spacer(),
     spacer(),
     section("rssp Contributors"),

@@ -187,9 +187,19 @@ fn preview_noteskin_for_choice(
 fn format_total_songs_played(count: u32) -> String {
     let count_str = count.to_string();
     if count == 1 {
-        tr_fmt("SelectProfile", "SongPlayedSingular", &[("count", &count_str)]).to_string()
+        tr_fmt(
+            "SelectProfile",
+            "SongPlayedSingular",
+            &[("count", &count_str)],
+        )
+        .to_string()
     } else {
-        tr_fmt("SelectProfile", "SongPlayedPlural", &[("count", &count_str)]).to_string()
+        tr_fmt(
+            "SelectProfile",
+            "SongPlayedPlural",
+            &[("count", &count_str)],
+        )
+        .to_string()
     }
 }
 
@@ -252,7 +262,9 @@ fn format_recent_mods(
     push(noteskin.as_str());
     let mini_indicator_label = match mini_indicator {
         profile::MiniIndicator::None => None,
-        profile::MiniIndicator::SubtractiveScoring => Some(tr("SelectProfile", "SubtractiveScoring")),
+        profile::MiniIndicator::SubtractiveScoring => {
+            Some(tr("SelectProfile", "SubtractiveScoring"))
+        }
         profile::MiniIndicator::PredictiveScoring => Some(tr("SelectProfile", "PredictiveScoring")),
         profile::MiniIndicator::PaceScoring => Some(tr("SelectProfile", "PaceScoring")),
         profile::MiniIndicator::RivalScoring => Some(tr("SelectProfile", "RivalScoring")),
@@ -1640,10 +1652,10 @@ fn build_box_actors(
         p1_ui.extend(join_ui);
 
         if show_selected_name {
-            let name = state
-                .choices
-                .get(state.p1_selected_index)
-                .map_or_else(|| tr("SelectProfile", "GuestLabel").to_string(), |c| c.display_name.clone());
+            let name = state.choices.get(state.p1_selected_index).map_or_else(
+                || tr("SelectProfile", "GuestLabel").to_string(),
+                |c| c.display_name.clone(),
+            );
             let a = act!(text:
                 align(0.5, 0.5):
                 xy(p1_cx, cy + SELECTED_NAME_Y_OFF):
@@ -1726,10 +1738,10 @@ fn build_box_actors(
         p2_ui.extend(join_ui);
 
         if show_selected_name {
-            let name = state
-                .choices
-                .get(state.p2_selected_index)
-                .map_or_else(|| tr("SelectProfile", "GuestLabel").to_string(), |c| c.display_name.clone());
+            let name = state.choices.get(state.p2_selected_index).map_or_else(
+                || tr("SelectProfile", "GuestLabel").to_string(),
+                |c| c.display_name.clone(),
+            );
             let a = act!(text:
                 align(0.5, 0.5):
                 xy(p2_cx, cy + SELECTED_NAME_Y_OFF):
