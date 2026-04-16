@@ -2,7 +2,7 @@ use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges,
 use crate::engine::windows_rt::{
     ThreadRole, boost_current_thread, current_host_nanos, qpc_ticks_to_nanos,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -420,12 +420,14 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
         return;
     }
 
-    let id = ctx.id_by_uuid.get(&uuid).copied().unwrap_or_else(|| {
-        let id = PadId(ctx.next_id);
-        ctx.next_id += 1;
-        ctx.id_by_uuid.insert(uuid, id);
-        id
-    });
+    let id = match ctx.id_by_uuid.entry(uuid) {
+        Entry::Occupied(entry) => *entry.get(),
+        Entry::Vacant(entry) => {
+            let id = PadId(ctx.next_id);
+            ctx.next_id += 1;
+            *entry.insert(id)
+        }
+    };
 
     let name = controller
         .DisplayName()
