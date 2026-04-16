@@ -24,6 +24,10 @@ path = "tests/input/bench.rs"
 name = "input_e2e_bench"
 path = "tests/input_e2e/bench.rs"
 
+[[bin]]
+name = "lang_coverage"
+path = "scripts/lang_coverage.rs"
+
 
 [features]
 pipewire-audio = ["dep:pipewire"]
