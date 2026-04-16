@@ -2,9 +2,18 @@ use crate::act;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::screens::evaluation::ScoreInfo;
+use std::sync::Arc;
 
 pub fn build_modifiers_pane(
     score_info: &ScoreInfo,
+    bar_center_x: f32,
+    bar_width: f32,
+) -> Vec<Actor> {
+    build_modifiers_pane_with_text(score_info.mods_text.clone(), bar_center_x, bar_width)
+}
+
+fn build_modifiers_pane_with_text(
+    mods_text: Arc<str>,
     bar_center_x: f32,
     bar_width: f32,
 ) -> Vec<Actor> {
@@ -15,31 +24,6 @@ pub fn build_modifiers_pane(
     // (For a 300px bar this is equivalent to `center_x - 140`.)
     let text_x = bar_center_x - (bar_width * 0.5) + 10.0;
     let text_y = frame_center_y - 5.0;
-
-    let speed_mod_text = score_info.speed_mod.to_string();
-    let mut parts = Vec::new();
-    parts.push(speed_mod_text);
-    // Show active scroll modifiers in a fixed order, matching Simply Love's
-    // preference for listing Reverse before the perspective.
-    let scroll = score_info.scroll_option;
-    if scroll.contains(crate::game::profile::ScrollOption::Reverse) {
-        parts.push("Reverse".to_string());
-    }
-    if scroll.contains(crate::game::profile::ScrollOption::Split) {
-        parts.push("Split".to_string());
-    }
-    if scroll.contains(crate::game::profile::ScrollOption::Alternate) {
-        parts.push("Alternate".to_string());
-    }
-    if scroll.contains(crate::game::profile::ScrollOption::Cross) {
-        parts.push("Cross".to_string());
-    }
-    if scroll.contains(crate::game::profile::ScrollOption::Centered) {
-        parts.push("Centered".to_string());
-    }
-    parts.push("Overhead".to_string());
-    parts.push(score_info.noteskin_name.clone());
-    let final_text = parts.join(", ");
 
     let bg = color::rgba_hex("#1E282F");
     vec![
@@ -52,7 +36,7 @@ pub fn build_modifiers_pane(
         ),
         act!(text:
             font("miso"):
-            settext(final_text):
+            settext(mods_text):
             align(0.0, 0.0):
             xy(text_x, text_y):
             zoom(font_zoom):
@@ -60,4 +44,27 @@ pub fn build_modifiers_pane(
             diffuse(1.0, 1.0, 1.0, 1.0)
         ),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_modifiers_pane_with_text;
+    use crate::engine::present::actors::Actor;
+    use std::sync::Arc;
+
+    #[test]
+    fn modifiers_pane_uses_supplied_mod_string() {
+        let actors = build_modifiers_pane_with_text(
+            Arc::<str>::from("M700, 40% Mini, Overhead, cel"),
+            320.0,
+            300.0,
+        );
+        let Some(Actor::Text { content, .. }) = actors
+            .into_iter()
+            .find(|actor| matches!(actor, Actor::Text { .. }))
+        else {
+            panic!("expected a text actor in the modifiers pane");
+        };
+        assert_eq!(content.as_str(), "M700, 40% Mini, Overhead, cel");
+    }
 }

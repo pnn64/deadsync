@@ -1352,7 +1352,7 @@ fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
 }
 
 #[inline(always)]
-fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
+pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
     let key = gameplay_mods_text_key(state, player_idx);
     cached_text(&GAMEPLAY_MODS_CACHE, key, TEXT_CACHE_LIMIT, || {
         let mut parts = Vec::with_capacity(32);

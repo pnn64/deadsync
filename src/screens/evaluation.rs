@@ -411,7 +411,7 @@ pub struct ScoreInfo {
     pub score_percent: f64,
     pub grade: scores::Grade,
     pub speed_mod: ScrollSpeedSetting,
-    pub noteskin_name: String,
+    pub mods_text: Arc<str>,
     pub hands_achieved: u32,
     pub hands_total: u32,
     pub holds_held: u32,
@@ -432,7 +432,6 @@ pub struct ScoreInfo {
     pub graph_first_second: f32,
     pub graph_last_second: f32,
     pub music_rate: f32,
-    pub scroll_option: crate::game::profile::ScrollOption,
     pub life_history: Vec<(f32, f32)>,
     pub fail_time: Option<f32>,
     // Per-window tap counts (including FA+ W0) for display purposes.
@@ -1269,7 +1268,9 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 score_percent,
                 grade,
                 speed_mod: gs.scroll_speed[player_idx],
-                noteskin_name: prof.noteskin.to_string(),
+                mods_text: crate::screens::components::gameplay::notefield::gameplay_mods_text(
+                    &gs, player_idx,
+                ),
                 hands_achieved: p.hands_achieved,
                 hands_total: gs.hands_total[player_idx],
                 holds_held: p.holds_held,
@@ -1289,7 +1290,6 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 } else {
                     1.0
                 },
-                scroll_option: prof.scroll_option,
                 life_history: p.life_history.clone(),
                 fail_time: p.fail_time,
                 window_counts,

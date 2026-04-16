@@ -1523,7 +1523,7 @@ fn score_info_from_stage(
         score_percent: player.score_percent,
         grade: player.grade,
         speed_mod: profile::get_for_side(side).scroll_speed,
-        noteskin_name: profile::get_for_side(side).noteskin.to_string(),
+        mods_text: fallback_eval_mods_text(side, profile::get_for_side(side).scroll_speed),
         hands_achieved: 0,
         hands_total: 0,
         holds_held: 0,
@@ -1543,7 +1543,6 @@ fn score_info_from_stage(
         } else {
             1.0
         },
-        scroll_option: profile::get_for_side(side).scroll_option,
         life_history: Vec::new(),
         fail_time: (player.grade == scores::Grade::Failed).then_some(stage.duration_seconds),
         window_counts: player.window_counts,
@@ -1564,6 +1563,33 @@ fn score_info_from_stage(
         personal_record_highlight_rank,
         show_machine_personal_split: !earned_machine_record && earned_top2_personal,
     })
+}
+
+fn fallback_eval_mods_text(side: profile::PlayerSide, speed_mod: ScrollSpeedSetting) -> Arc<str> {
+    let profile = profile::get_for_side(side);
+    let mut parts = vec![speed_mod.to_string()];
+    if profile.mini_percent != 0 {
+        parts.push(format!("{}% Mini", profile.mini_percent));
+    }
+    let scroll = profile.scroll_option;
+    if scroll.contains(profile::ScrollOption::Reverse) {
+        parts.push("Reverse".to_string());
+    }
+    if scroll.contains(profile::ScrollOption::Split) {
+        parts.push("Split".to_string());
+    }
+    if scroll.contains(profile::ScrollOption::Alternate) {
+        parts.push("Alternate".to_string());
+    }
+    if scroll.contains(profile::ScrollOption::Cross) {
+        parts.push("Cross".to_string());
+    }
+    if scroll.contains(profile::ScrollOption::Centered) {
+        parts.push("Centered".to_string());
+    }
+    parts.push(profile.perspective.to_string());
+    parts.push(profile.noteskin.to_string());
+    Arc::<str>::from(parts.join(", "))
 }
 
 fn build_course_summary_eval_state(
@@ -7082,9 +7108,7 @@ mod tests {
             score_percent: 0.0,
             grade: crate::game::scores::Grade::Tier01,
             speed_mod,
-            noteskin_name: crate::game::profile::get_for_side(side)
-                .noteskin
-                .to_string(),
+            mods_text: fallback_eval_mods_text(side, speed_mod),
             hands_achieved: 0,
             hands_total: 0,
             holds_held: 0,
@@ -7100,7 +7124,6 @@ mod tests {
             graph_first_second: 0.0,
             graph_last_second: song.precise_last_second(),
             music_rate,
-            scroll_option: crate::game::profile::ScrollOption::default(),
             life_history: Vec::new(),
             fail_time: None,
             window_counts: crate::game::timing::WindowCounts::default(),
