@@ -679,8 +679,7 @@ fn pump_raw<F>(
     uuid: [u8; 16],
     controller: &RawGameController,
     st: &mut RawState,
-)
-where
+) where
     F: FnMut(PadEvent),
 {
     let Ok(time) =

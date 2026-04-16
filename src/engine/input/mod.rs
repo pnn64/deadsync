@@ -1369,8 +1369,7 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
             host_nanos,
             ..
         } => {
-            let Some(binding) = collect_pad_button_binding_from_compiled(km, id, code, uuid)
-            else {
+            let Some(binding) = collect_pad_button_binding_from_compiled(km, id, code, uuid) else {
                 return None;
             };
             Some((

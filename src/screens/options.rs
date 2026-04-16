@@ -4863,6 +4863,14 @@ fn build_submenu_row_layout(
             }
         });
     });
+    if widths.len() != texts.len() {
+        widths.clear();
+        widths.extend(
+            texts
+                .iter()
+                .map(|text| (text.chars().count().max(1) as f32) * 8.0 * value_zoom),
+        );
+    }
     let inline_row = row.inline && submenu_inline_widths_fit(&widths);
     let mut x_positions: Vec<f32> = Vec::new();
     let mut centers: Vec<f32> = Vec::new();

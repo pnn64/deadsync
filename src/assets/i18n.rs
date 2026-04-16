@@ -145,6 +145,9 @@ pub fn init(locale: &str) {
 /// Returns `"Section.Key"` if the key is missing from English too (makes
 /// untranslated strings visible during development).
 pub fn tr(section: &str, key: &str) -> Arc<str> {
+    #[cfg(test)]
+    ensure_test_init();
+
     let lang = LANG.get().expect("i18n not initialized").read().unwrap();
 
     if let Some(section_map) = lang.active.get(section) {
@@ -158,6 +161,17 @@ pub fn tr(section: &str, key: &str) -> Arc<str> {
         }
     }
     Arc::from(format!("{section}.{key}"))
+}
+
+#[cfg(test)]
+fn ensure_test_init() {
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+    if LANG.get().is_some() {
+        return;
+    }
+    INIT.call_once(|| init("en"));
 }
 
 /// Look up a localized string with named placeholder substitution.

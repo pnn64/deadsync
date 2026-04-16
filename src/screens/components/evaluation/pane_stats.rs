@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::i18n::{LookupKey, lookup_key, tr};
 use crate::assets::AssetManager;
+use crate::assets::i18n::{LookupKey, lookup_key};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
@@ -36,12 +36,30 @@ struct LabeledColor {
 }
 
 const JUDGMENT_INFO: [LabeledColor; 6] = [
-    LabeledColor { label: lookup_key("Gameplay", "JudgmentFantastic"), color: color::JUDGMENT_RGBA[0] },
-    LabeledColor { label: lookup_key("Gameplay", "JudgmentExcellent"), color: color::JUDGMENT_RGBA[1] },
-    LabeledColor { label: lookup_key("Gameplay", "JudgmentGreat"), color: color::JUDGMENT_RGBA[2] },
-    LabeledColor { label: lookup_key("Gameplay", "JudgmentDecent"), color: color::JUDGMENT_RGBA[3] },
-    LabeledColor { label: lookup_key("Gameplay", "JudgmentWayOff"), color: color::JUDGMENT_RGBA[4] },
-    LabeledColor { label: lookup_key("Gameplay", "JudgmentMiss"), color: color::JUDGMENT_RGBA[5] },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentFantastic"),
+        color: color::JUDGMENT_RGBA[0],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentExcellent"),
+        color: color::JUDGMENT_RGBA[1],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentGreat"),
+        color: color::JUDGMENT_RGBA[2],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentDecent"),
+        color: color::JUDGMENT_RGBA[3],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentWayOff"),
+        color: color::JUDGMENT_RGBA[4],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentMiss"),
+        color: color::JUDGMENT_RGBA[5],
+    },
 ];
 
 const RADAR_LABELS: [LookupKey; 4] = [
@@ -77,14 +95,16 @@ fn digit_text(digit: u8) -> Arc<str> {
 
 #[inline(always)]
 fn judgment_label_text(index: usize) -> Arc<str> {
-    JUDGMENT_INFO.get(index)
+    JUDGMENT_INFO
+        .get(index)
         .map(|info| info.label.get())
         .unwrap_or_else(|| Arc::from(""))
 }
 
 #[inline(always)]
 fn radar_label_text(index: usize) -> Arc<str> {
-    RADAR_LABELS.get(index)
+    RADAR_LABELS
+        .get(index)
         .map(LookupKey::get)
         .unwrap_or_else(|| Arc::from(""))
 }

@@ -5813,8 +5813,8 @@ fn sync_low_confidence_warning(confidence: Option<f64>, threshold: f64) -> Optio
             "SelectMusic",
             "SyncLowConfidenceWarning",
             &[
-                ("confidence", &confidence_pct.to_string()),
-                ("threshold", &threshold_pct.to_string()),
+                ("confidence_pct", &confidence_pct.to_string()),
+                ("threshold_pct", &threshold_pct.to_string()),
             ],
         )
         .to_string(),

@@ -808,11 +808,7 @@ fn clear_seen(seen: &mut Vec<bool>, len: usize) {
     seen.fill(false);
 }
 
-fn scan_fallback(
-    scratch: &mut FallbackScratch,
-    devs: &[Dev],
-    key_devs: &[KeyDev],
-) {
+fn scan_fallback(scratch: &mut FallbackScratch, devs: &[Dev], key_devs: &[KeyDev]) {
     clear_seen(&mut scratch.dev_seen, devs.len());
     clear_seen(&mut scratch.key_seen, key_devs.len());
     scratch.specs.clear();
@@ -1389,7 +1385,14 @@ mod tests {
             "linux-evdev:phys:usb-0000:00:14.0-1/input0"
         );
         assert_eq!(
-            uuid_key_from_parts(None, None, "Pad", Some(0x1234), Some(0xabcd), "/dev/input/event4"),
+            uuid_key_from_parts(
+                None,
+                None,
+                "Pad",
+                Some(0x1234),
+                Some(0xabcd),
+                "/dev/input/event4"
+            ),
             "linux-evdev:name:Pad|vid:1234|pid:abcd"
         );
     }

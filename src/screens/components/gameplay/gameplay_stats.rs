@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::i18n::{LookupKey, lookup_key, tr};
 use crate::assets::AssetManager;
+use crate::assets::i18n::{LookupKey, lookup_key, tr};
 use crate::engine::gfx::{BlendMode, MeshMode};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{TextCache, cached_text};
@@ -43,12 +43,30 @@ struct LabeledColor {
 }
 
 const JUDGMENT_INFO: [LabeledColor; 6] = [
-    LabeledColor { label: lookup_key("Gameplay", "JudgmentFantastic"), color: color::JUDGMENT_RGBA[0] },
-    LabeledColor { label: lookup_key("Gameplay", "JudgmentExcellent"), color: color::JUDGMENT_RGBA[1] },
-    LabeledColor { label: lookup_key("Gameplay", "JudgmentGreat"), color: color::JUDGMENT_RGBA[2] },
-    LabeledColor { label: lookup_key("Gameplay", "JudgmentDecent"), color: color::JUDGMENT_RGBA[3] },
-    LabeledColor { label: lookup_key("Gameplay", "JudgmentWayOff"), color: color::JUDGMENT_RGBA[4] },
-    LabeledColor { label: lookup_key("Gameplay", "JudgmentMiss"), color: color::JUDGMENT_RGBA[5] },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentFantastic"),
+        color: color::JUDGMENT_RGBA[0],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentExcellent"),
+        color: color::JUDGMENT_RGBA[1],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentGreat"),
+        color: color::JUDGMENT_RGBA[2],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentDecent"),
+        color: color::JUDGMENT_RGBA[3],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentWayOff"),
+        color: color::JUDGMENT_RGBA[4],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentMiss"),
+        color: color::JUDGMENT_RGBA[5],
+    },
 ];
 
 const STEP_INFO_LABELS: [LookupKey; 4] = [
@@ -65,19 +83,22 @@ const HOLDS_MINES_ROLLS_LABELS: [LookupKey; 3] = [
 ];
 
 fn step_info_label(index: usize) -> Arc<str> {
-    STEP_INFO_LABELS.get(index)
+    STEP_INFO_LABELS
+        .get(index)
         .map(LookupKey::get)
         .unwrap_or_else(|| Arc::from(""))
 }
 
 fn holds_mines_rolls_label(index: usize) -> Arc<str> {
-    HOLDS_MINES_ROLLS_LABELS.get(index)
+    HOLDS_MINES_ROLLS_LABELS
+        .get(index)
         .map(LookupKey::get)
         .unwrap_or_else(|| Arc::from(""))
 }
 
 fn judgment_label(index: usize) -> String {
-    JUDGMENT_INFO.get(index)
+    JUDGMENT_INFO
+        .get(index)
         .map(|info| info.label.get().to_string())
         .unwrap_or_default()
 }
@@ -242,7 +263,12 @@ fn cached_blue_window_label(ms: i32) -> Arc<str> {
 fn cached_peak_nps_text(peak: f32) -> Arc<str> {
     use crate::assets::i18n::tr_fmt;
     cached_text(&PEAK_NPS_CACHE, peak.to_bits(), TEXT_CACHE_LIMIT, || {
-        tr_fmt("Gameplay", "PeakNps", &[("peak_nps", &format!("{:.2}", peak.max(0.0)))]).to_string()
+        tr_fmt(
+            "Gameplay",
+            "PeakNps",
+            &[("peak_nps", &format!("{:.2}", peak.max(0.0)))],
+        )
+        .to_string()
     })
 }
 
@@ -476,7 +502,11 @@ pub fn prewarm_text_layout(
     for label in (0..4).map(step_info_label).collect::<Vec<_>>().iter() {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
-    for label in (0..3).map(holds_mines_rolls_label).collect::<Vec<_>>().iter() {
+    for label in (0..3)
+        .map(holds_mines_rolls_label)
+        .collect::<Vec<_>>()
+        .iter()
+    {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
     for player in 0..state.num_players {
