@@ -16,21 +16,20 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::Path;
 
-/// Map ASCII letters to accented equivalents for visual distinction.
+/// Map ASCII letters to accented equivalents available in both the wendy
+/// small `[alt]` page and the miso font.
+///
+/// Letters without a matching accented variant in both fonts stay unchanged.
 fn accent_char(c: char) -> char {
     match c {
-        'A' => 'À', 'B' => 'Ɓ', 'C' => 'Ç', 'D' => 'Ð', 'E' => 'È',
-        'F' => 'Ƒ', 'G' => 'Ĝ', 'H' => 'Ĥ', 'I' => 'Ì', 'J' => 'Ĵ',
-        'K' => 'Ķ', 'L' => 'Ĺ', 'M' => 'Ṁ', 'N' => 'Ñ', 'O' => 'Ò',
-        'P' => 'Þ', 'Q' => 'Ǫ', 'R' => 'Ŗ', 'S' => 'Š', 'T' => 'Ŧ',
-        'U' => 'Ù', 'V' => 'Ṽ', 'W' => 'Ŵ', 'X' => 'Ẋ', 'Y' => 'Ŷ',
-        'Z' => 'Ž',
-        'a' => 'à', 'b' => 'ƀ', 'c' => 'ç', 'd' => 'ð', 'e' => 'è',
-        'f' => 'ƒ', 'g' => 'ĝ', 'h' => 'ĥ', 'i' => 'ì', 'j' => 'ĵ',
-        'k' => 'ķ', 'l' => 'ĺ', 'm' => 'ṁ', 'n' => 'ñ', 'o' => 'ò',
-        'p' => 'þ', 'q' => 'ǫ', 'r' => 'ŗ', 's' => 'š', 't' => 'ŧ',
-        'u' => 'ù', 'v' => 'ṽ', 'w' => 'ŵ', 'x' => 'ẋ', 'y' => 'ŷ',
-        'z' => 'ž',
+        'A' => 'Á', 'C' => 'Ç', 'D' => 'Đ', 'E' => 'É',
+        'I' => 'Í', 'L' => 'Ĺ', 'N' => 'Ń', 'O' => 'Ó',
+        'R' => 'Ŕ', 'S' => 'Š', 'T' => 'Ť', 'U' => 'Ú',
+        'Y' => 'Ý', 'Z' => 'Ž',
+        'a' => 'á', 'c' => 'ç', 'd' => 'đ', 'e' => 'é',
+        'i' => 'í', 'l' => 'ĺ', 'n' => 'ń', 'o' => 'ó',
+        'r' => 'ŕ', 's' => 'š', 't' => 'ť', 'u' => 'ú',
+        'y' => 'ý', 'z' => 'ž',
         other => other,
     }
 }
@@ -87,7 +86,7 @@ fn pseudolocalize(value: &str) -> String {
     let letter_count = value.chars().filter(|c| c.is_alphabetic()).count();
     let pad = (letter_count as f32 * 0.3).ceil() as usize;
     for _ in 0..pad {
-        out.push('~');
+        out.push('_');
     }
 
     out.push(']');
