@@ -2529,6 +2529,19 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.y = value;
     }
     if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_fov")
+        .map_err(|err| err.to_string())?
+    {
+        state.fov = Some(value);
+    }
+    if let Some(value) = actor
+        .get::<Option<Table>>("__songlua_state_vanishpoint")
+        .map_err(|err| err.to_string())?
+        .and_then(|value| table_vec2(&value))
+    {
+        state.vanishpoint = Some(value);
+    }
+    if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_cropleft")
         .map_err(|err| err.to_string())?
     {
@@ -2964,6 +2977,13 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                 y: block
                     .get::<Option<f32>>("y")
                     .map_err(|err| err.to_string())?,
+                fov: block
+                    .get::<Option<f32>>("fov")
+                    .map_err(|err| err.to_string())?,
+                vanishpoint: block
+                    .get::<Option<Table>>("vanishpoint")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec2(&value)),
                 diffuse: block
                     .get::<Option<Table>>("diffuse")
                     .map_err(|err| err.to_string())?
@@ -3395,6 +3415,34 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "y", value)?;
                 }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "fov",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "fov", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "vanishpoint",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(x) = args.get(1).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let Some(y) = args.get(2).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                capture_block_set_vec2(lua, &actor, "vanishpoint", [x, y])?;
                 Ok(actor.clone())
             }
         })?,
@@ -3933,13 +3981,11 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "EnablePreserveTexture",
         "Create",
         "fardistz",
-        "fov",
         "finishtweening",
         "hibernate",
         "loop",
         "rate",
         "texturetranslate",
-        "vanishpoint",
         "wag",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
@@ -7728,6 +7774,42 @@ return Def.ActorFrame{
             [70.0 / 255.0, 70.0 / 255.0, 70.0 / 255.0, 1.0]
         );
         assert_eq!(state.effect_period, 5.0);
+    }
+
+    #[test]
+    fn compile_song_lua_captures_actorframe_perspective_state() {
+        let song_dir = test_dir("overlay-perspective");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.ActorFrame{
+        Name="PerspectiveRoot",
+        OnCommand=function(self)
+            self:fov(120)
+            self:vanishpoint(400, 120)
+        end,
+        Def.Quad{},
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Overlay Perspective"),
+        )
+        .unwrap();
+        let perspective = compiled
+            .overlays
+            .iter()
+            .find(|overlay| overlay.name.as_deref() == Some("PerspectiveRoot"))
+            .expect("expected actorframe overlay with perspective state");
+        assert!(matches!(perspective.kind, SongLuaOverlayKind::ActorFrame));
+        assert_eq!(perspective.initial_state.fov, Some(120.0));
+        assert_eq!(perspective.initial_state.vanishpoint, Some([400.0, 120.0]));
     }
 
     #[test]

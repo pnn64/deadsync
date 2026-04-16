@@ -45,6 +45,8 @@ pub enum SongLuaOverlayKind {
 pub struct SongLuaOverlayState {
     pub x: f32,
     pub y: f32,
+    pub fov: Option<f32>,
+    pub vanishpoint: Option<[f32; 2]>,
     pub diffuse: [f32; 4],
     pub visible: bool,
     pub cropleft: f32,
@@ -78,6 +80,8 @@ impl Default for SongLuaOverlayState {
         Self {
             x: 0.0,
             y: 0.0,
+            fov: None,
+            vanishpoint: None,
             diffuse: [1.0, 1.0, 1.0, 1.0],
             visible: true,
             cropleft: 0.0,
@@ -112,6 +116,8 @@ impl Default for SongLuaOverlayState {
 pub struct SongLuaOverlayStateDelta {
     pub x: Option<f32>,
     pub y: Option<f32>,
+    pub fov: Option<f32>,
+    pub vanishpoint: Option<[f32; 2]>,
     pub diffuse: Option<[f32; 4]>,
     pub visible: Option<bool>,
     pub cropleft: Option<f32>,
@@ -222,6 +228,12 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.y {
         state.y = value;
     }
+    if let Some(value) = delta.fov {
+        state.fov = Some(value);
+    }
+    if let Some(value) = delta.vanishpoint {
+        state.vanishpoint = Some(value);
+    }
     if let Some(value) = delta.diffuse {
         state.diffuse = value;
     }
@@ -313,6 +325,19 @@ fn overlay_state_lerp(
     }
     if delta.y.is_some() {
         from.y = (to.y - from.y).mul_add(t, from.y);
+    }
+    if delta.fov.is_some()
+        && let (Some(from_fov), Some(to_fov)) = (from.fov, to.fov)
+    {
+        from.fov = Some((to_fov - from_fov).mul_add(t, from_fov));
+    }
+    if delta.vanishpoint.is_some()
+        && let (Some(from_vanish), Some(to_vanish)) = (from.vanishpoint, to.vanishpoint)
+    {
+        from.vanishpoint = Some([
+            (to_vanish[0] - from_vanish[0]).mul_add(t, from_vanish[0]),
+            (to_vanish[1] - from_vanish[1]).mul_add(t, from_vanish[1]),
+        ]);
     }
     if delta.diffuse.is_some() {
         for i in 0..4 {
@@ -455,6 +480,8 @@ pub(super) fn parse_overlay_effect_mode(raw: &str) -> Option<EffectMode> {
 fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
     delta.x.is_none()
         && delta.y.is_none()
+        && delta.fov.is_none()
+        && delta.vanishpoint.is_none()
         && delta.diffuse.is_none()
         && delta.visible.is_none()
         && delta.cropleft.is_none()
@@ -489,6 +516,12 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.y.is_some() {
         into.y = from.y;
+    }
+    if from.fov.is_some() {
+        into.fov = from.fov;
+    }
+    if from.vanishpoint.is_some() {
+        into.vanishpoint = from.vanishpoint;
     }
     if from.diffuse.is_some() {
         into.diffuse = from.diffuse;
@@ -596,6 +629,8 @@ pub(super) fn overlay_delta_intersection(
     }
     copy_pair!(x);
     copy_pair!(y);
+    copy_pair!(fov);
+    copy_pair!(vanishpoint);
     copy_pair!(diffuse);
     copy_pair!(visible);
     copy_pair!(cropleft);
