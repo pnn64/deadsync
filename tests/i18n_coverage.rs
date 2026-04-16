@@ -9,6 +9,8 @@ use deadsync::config::SimpleIni;
 use std::collections::BTreeSet;
 use std::path::Path;
 
+const SKIP_MARKER: &str = "@skip";
+
 fn extract_keys(ini: &SimpleIni) -> BTreeSet<(String, String)> {
     let mut keys = BTreeSet::new();
     for (section, props) in ini.sections() {
@@ -17,6 +19,37 @@ fn extract_keys(ini: &SimpleIni) -> BTreeSet<(String, String)> {
         }
         for key in props.keys() {
             keys.insert((section.clone(), key.clone()));
+        }
+    }
+    keys
+}
+
+/// Keys present in the language file with a real translation or `@skip`.
+fn extract_covered_keys(ini: &SimpleIni) -> BTreeSet<(String, String)> {
+    let mut keys = BTreeSet::new();
+    for (section, props) in ini.sections() {
+        if section == "Meta" {
+            continue;
+        }
+        for (key, _value) in props {
+            keys.insert((section.clone(), key.clone()));
+        }
+    }
+    keys
+}
+
+/// Keys present in the language file that are NOT `@skip` — i.e. keys that
+/// would actually be loaded into the active translation map at runtime.
+fn extract_translated_keys(ini: &SimpleIni) -> BTreeSet<(String, String)> {
+    let mut keys = BTreeSet::new();
+    for (section, props) in ini.sections() {
+        if section == "Meta" {
+            continue;
+        }
+        for (key, value) in props {
+            if value.trim() != SKIP_MARKER {
+                keys.insert((section.clone(), key.clone()));
+            }
         }
     }
     keys
@@ -97,7 +130,7 @@ fn no_stale_keys_in_translations() {
 
     for path in language_files() {
         let lang = load_ini(&path);
-        let lang_keys = extract_keys(&lang);
+        let lang_keys = extract_covered_keys(&lang);
         let stale: Vec<_> = lang_keys.difference(&en_keys).collect();
 
         if !stale.is_empty() {
@@ -153,10 +186,13 @@ fn print_translation_coverage_report() {
 
     for path in language_files() {
         let lang = load_ini(&path);
-        let lang_keys = extract_keys(&lang);
-        let translated = en_keys.intersection(&lang_keys).count();
+        let covered_keys = extract_covered_keys(&lang);
+        let translated_keys = extract_translated_keys(&lang);
+        let covered = en_keys.intersection(&covered_keys).count();
+        let translated = en_keys.intersection(&translated_keys).count();
+        let skipped = covered - translated;
         let coverage = if total > 0 {
-            (translated as f64 / total as f64) * 100.0
+            (covered as f64 / total as f64) * 100.0
         } else {
             0.0
         };
@@ -170,13 +206,19 @@ fn print_translation_coverage_report() {
             .get("Meta", "NativeName")
             .unwrap_or_else(|| stem.clone());
 
-        let missing: Vec<_> = en_keys.difference(&lang_keys).collect();
+        let missing: Vec<_> = en_keys.difference(&covered_keys).collect();
+        let skip_note = if skipped > 0 {
+            format!("  ({skipped} @skip)")
+        } else {
+            String::new()
+        };
         println!(
-            "{:<16} {:>10} {:>6} {:>8.1}%",
+            "{:<16} {:>10} {:>6} {:>8.1}%{}",
             format!("{stem} ({native})"),
-            translated,
+            covered,
             total,
-            coverage
+            coverage,
+            skip_note,
         );
 
         if !missing.is_empty() && missing.len() <= 20 {
@@ -184,7 +226,10 @@ fn print_translation_coverage_report() {
                 println!("    missing: [{s}] {k}");
             }
         } else if !missing.is_empty() {
-            println!("    {} missing keys (run with --nocapture to see full list)", missing.len());
+            println!(
+                "    {} missing keys (run with --nocapture to see full list)",
+                missing.len()
+            );
         }
     }
     println!();

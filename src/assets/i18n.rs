@@ -43,6 +43,10 @@ fn load_ini_to_map(path: &Path) -> HashMap<Box<str>, HashMap<Box<str>, Arc<str>>
     for (section, props) in ini.sections() {
         let entries = sections.entry(section.as_str().into()).or_default();
         for (key, value) in props {
+            // @skip means "intentionally use English fallback for this key"
+            if value.trim() == "@skip" {
+                continue;
+            }
             entries.insert(key.as_str().into(), Arc::from(value.as_str()));
         }
     }
