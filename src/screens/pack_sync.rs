@@ -1045,13 +1045,22 @@ fn result_text(row: &RowState, min_confidence: f64) -> String {
             }
         }
         RowDisposition::Eligible | RowDisposition::BelowThreshold => {
-            format!(
-                "{:+.2} ms\n{}% confidence",
-                row.final_bias_ms.unwrap_or(0.0),
-                confidence_pct
+            tr_fmt(
+                "PackSync",
+                "ResultConfidenceFormat",
+                &[
+                    ("bias", &format!("{:+.2}", row.final_bias_ms.unwrap_or(0.0))),
+                    ("confidence", &confidence_pct.to_string()),
+                ],
             )
+            .to_string()
         }
-        RowDisposition::NoChange => format!("0.00 ms\n{}% confidence", confidence_pct),
+        RowDisposition::NoChange => tr_fmt(
+            "PackSync",
+            "ResultNoChangeFormat",
+            &[("confidence", &confidence_pct.to_string())],
+        )
+        .to_string(),
         RowDisposition::Failed => row
             .error_text
             .as_deref()
