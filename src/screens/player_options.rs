@@ -279,6 +279,152 @@ const P2: usize = 1;
 const MATCH_NOTESKIN_LABEL: &str = "MatchNoteSkinLabel";
 const NO_TAP_EXPLOSION_LABEL: &str = "NoTapExplosionLabel";
 
+use crate::game::profile::{
+    AttackMode, BackgroundFilter, ComboColors, ComboFont, ComboMode, DataVisualizations,
+    ErrorBarTrim, HideLightType, LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator,
+    MiniIndicatorScoreType, Perspective, TargetScoreSetting, TimingWindowsOption, TurnOption,
+};
+
+/// MiniIndicator variants in row-choice order (index ↔ enum).
+const MINI_INDICATOR_VARIANTS: [MiniIndicator; 7] = [
+    MiniIndicator::None,
+    MiniIndicator::SubtractiveScoring,
+    MiniIndicator::PredictiveScoring,
+    MiniIndicator::PaceScoring,
+    MiniIndicator::RivalScoring,
+    MiniIndicator::Pacemaker,
+    MiniIndicator::StreamProg,
+];
+
+const TURN_OPTION_VARIANTS: [TurnOption; 9] = [
+    TurnOption::None,
+    TurnOption::Mirror,
+    TurnOption::Left,
+    TurnOption::Right,
+    TurnOption::LRMirror,
+    TurnOption::UDMirror,
+    TurnOption::Shuffle,
+    TurnOption::Blender,
+    TurnOption::Random,
+];
+
+const BACKGROUND_FILTER_VARIANTS: [BackgroundFilter; 4] = [
+    BackgroundFilter::Off,
+    BackgroundFilter::Dark,
+    BackgroundFilter::Darker,
+    BackgroundFilter::Darkest,
+];
+
+const PERSPECTIVE_VARIANTS: [Perspective; 5] = [
+    Perspective::Overhead,
+    Perspective::Hallway,
+    Perspective::Distant,
+    Perspective::Incoming,
+    Perspective::Space,
+];
+
+const COMBO_FONT_VARIANTS: [ComboFont; 8] = [
+    ComboFont::Wendy,
+    ComboFont::ArialRounded,
+    ComboFont::Asap,
+    ComboFont::BebasNeue,
+    ComboFont::SourceCode,
+    ComboFont::Work,
+    ComboFont::WendyCursed,
+    ComboFont::None,
+];
+
+const COMBO_COLORS_VARIANTS: [ComboColors; 5] = [
+    ComboColors::Glow,
+    ComboColors::Solid,
+    ComboColors::Rainbow,
+    ComboColors::RainbowScroll,
+    ComboColors::None,
+];
+
+const COMBO_MODE_VARIANTS: [ComboMode; 2] = [
+    ComboMode::FullCombo,
+    ComboMode::CurrentCombo,
+];
+
+const DATA_VISUALIZATIONS_VARIANTS: [DataVisualizations; 3] = [
+    DataVisualizations::None,
+    DataVisualizations::TargetScoreGraph,
+    DataVisualizations::StepStatistics,
+];
+
+const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 14] = [
+    TargetScoreSetting::CMinus,
+    TargetScoreSetting::C,
+    TargetScoreSetting::CPlus,
+    TargetScoreSetting::BMinus,
+    TargetScoreSetting::B,
+    TargetScoreSetting::BPlus,
+    TargetScoreSetting::AMinus,
+    TargetScoreSetting::A,
+    TargetScoreSetting::APlus,
+    TargetScoreSetting::SMinus,
+    TargetScoreSetting::S,
+    TargetScoreSetting::SPlus,
+    TargetScoreSetting::MachineBest,
+    TargetScoreSetting::PersonalBest,
+];
+
+const LIFE_METER_TYPE_VARIANTS: [LifeMeterType; 3] = [
+    LifeMeterType::Standard,
+    LifeMeterType::Surround,
+    LifeMeterType::Vertical,
+];
+
+const ERROR_BAR_TRIM_VARIANTS: [ErrorBarTrim; 4] = [
+    ErrorBarTrim::Off,
+    ErrorBarTrim::Fantastic,
+    ErrorBarTrim::Excellent,
+    ErrorBarTrim::Great,
+];
+
+const MEASURE_COUNTER_VARIANTS: [MeasureCounter; 6] = [
+    MeasureCounter::None,
+    MeasureCounter::Eighth,
+    MeasureCounter::Twelfth,
+    MeasureCounter::Sixteenth,
+    MeasureCounter::TwentyFourth,
+    MeasureCounter::ThirtySecond,
+];
+
+const MEASURE_LINES_VARIANTS: [MeasureLines; 4] = [
+    MeasureLines::Off,
+    MeasureLines::Measure,
+    MeasureLines::Quarter,
+    MeasureLines::Eighth,
+];
+
+const TIMING_WINDOWS_VARIANTS: [TimingWindowsOption; 4] = [
+    TimingWindowsOption::None,
+    TimingWindowsOption::WayOffs,
+    TimingWindowsOption::DecentsAndWayOffs,
+    TimingWindowsOption::FantasticsAndExcellents,
+];
+
+const MINI_INDICATOR_SCORE_TYPE_VARIANTS: [MiniIndicatorScoreType; 3] = [
+    MiniIndicatorScoreType::Itg,
+    MiniIndicatorScoreType::Ex,
+    MiniIndicatorScoreType::HardEx,
+];
+
+const ATTACK_MODE_VARIANTS: [AttackMode; 3] = [
+    AttackMode::On,
+    AttackMode::Random,
+    AttackMode::Off,
+];
+
+const HIDE_LIGHT_TYPE_VARIANTS: [HideLightType; 4] = [
+    HideLightType::NoHideLights,
+    HideLightType::HideAllLights,
+    HideLightType::HideMarqueeLights,
+    HideLightType::HideBassLights,
+];
+
 #[inline(always)]
 fn active_player_indices(active: [bool; PLAYER_SLOTS]) -> impl Iterator<Item = usize> {
     [P1, P2]
@@ -2032,12 +2178,11 @@ fn apply_profile_defaults(
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
     // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::BackgroundFilter) {
-        row.selected_choice_index[player_idx] = match profile.background_filter {
-            crate::game::profile::BackgroundFilter::Off => 0,
-            crate::game::profile::BackgroundFilter::Dark => 1,
-            crate::game::profile::BackgroundFilter::Darker => 2,
-            crate::game::profile::BackgroundFilter::Darkest => 3,
-        };
+        row.selected_choice_index[player_idx] = BACKGROUND_FILTER_VARIANTS
+            .iter()
+            .position(|&v| v == profile.background_filter)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     // Initialize Judgment Font row from profile setting
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::JudgmentFont) {
@@ -2124,31 +2269,25 @@ fn apply_profile_defaults(
     }
     // Initialize Combo Font row from profile setting
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboFont) {
-        row.selected_choice_index[player_idx] = match profile.combo_font {
-            crate::game::profile::ComboFont::Wendy => 0,
-            crate::game::profile::ComboFont::ArialRounded => 1,
-            crate::game::profile::ComboFont::Asap => 2,
-            crate::game::profile::ComboFont::BebasNeue => 3,
-            crate::game::profile::ComboFont::SourceCode => 4,
-            crate::game::profile::ComboFont::Work => 5,
-            crate::game::profile::ComboFont::WendyCursed => 6,
-            crate::game::profile::ComboFont::None => 7,
-        };
+        row.selected_choice_index[player_idx] = COMBO_FONT_VARIANTS
+            .iter()
+            .position(|&v| v == profile.combo_font)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboColors) {
-        row.selected_choice_index[player_idx] = match profile.combo_colors {
-            crate::game::profile::ComboColors::Glow => 0,
-            crate::game::profile::ComboColors::Solid => 1,
-            crate::game::profile::ComboColors::Rainbow => 2,
-            crate::game::profile::ComboColors::RainbowScroll => 3,
-            crate::game::profile::ComboColors::None => 4,
-        };
+        row.selected_choice_index[player_idx] = COMBO_COLORS_VARIANTS
+            .iter()
+            .position(|&v| v == profile.combo_colors)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboColorMode) {
-        row.selected_choice_index[player_idx] = match profile.combo_mode {
-            crate::game::profile::ComboMode::FullCombo => 0,
-            crate::game::profile::ComboMode::CurrentCombo => 1,
-        };
+        row.selected_choice_index[player_idx] = COMBO_MODE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.combo_mode)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::CarryCombo) {
         row.selected_choice_index[player_idx] = if profile.carry_combo_between_songs {
@@ -2178,13 +2317,11 @@ fn apply_profile_defaults(
     }
     // Initialize Perspective row from profile setting (Overhead, Hallway, Distant, Incoming, Space).
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Perspective) {
-        row.selected_choice_index[player_idx] = match profile.perspective {
-            crate::game::profile::Perspective::Overhead => 0,
-            crate::game::profile::Perspective::Hallway => 1,
-            crate::game::profile::Perspective::Distant => 2,
-            crate::game::profile::Perspective::Incoming => 3,
-            crate::game::profile::Perspective::Space => 4,
-        };
+        row.selected_choice_index[player_idx] = PERSPECTIVE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.perspective)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     // Initialize NoteField Offset X from profile (0..50, non-negative; P1 uses negative sign at render time)
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::NoteFieldOffsetX) {
@@ -2317,37 +2454,25 @@ fn apply_profile_defaults(
         }
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::DataVisualizations) {
-        row.selected_choice_index[player_idx] = match profile.data_visualizations {
-            crate::game::profile::DataVisualizations::None => 0,
-            crate::game::profile::DataVisualizations::TargetScoreGraph => 1,
-            crate::game::profile::DataVisualizations::StepStatistics => 2,
-        };
+        row.selected_choice_index[player_idx] = DATA_VISUALIZATIONS_VARIANTS
+            .iter()
+            .position(|&v| v == profile.data_visualizations)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::TargetScore) {
-        row.selected_choice_index[player_idx] = match profile.target_score {
-            crate::game::profile::TargetScoreSetting::CMinus => 0,
-            crate::game::profile::TargetScoreSetting::C => 1,
-            crate::game::profile::TargetScoreSetting::CPlus => 2,
-            crate::game::profile::TargetScoreSetting::BMinus => 3,
-            crate::game::profile::TargetScoreSetting::B => 4,
-            crate::game::profile::TargetScoreSetting::BPlus => 5,
-            crate::game::profile::TargetScoreSetting::AMinus => 6,
-            crate::game::profile::TargetScoreSetting::A => 7,
-            crate::game::profile::TargetScoreSetting::APlus => 8,
-            crate::game::profile::TargetScoreSetting::SMinus => 9,
-            crate::game::profile::TargetScoreSetting::S => 10,
-            crate::game::profile::TargetScoreSetting::SPlus => 11,
-            crate::game::profile::TargetScoreSetting::MachineBest => 12,
-            crate::game::profile::TargetScoreSetting::PersonalBest => 13,
-        }
-        .min(row.choices.len().saturating_sub(1));
+        row.selected_choice_index[player_idx] = TARGET_SCORE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.target_score)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::LifeMeterType) {
-        row.selected_choice_index[player_idx] = match profile.lifemeter_type {
-            crate::game::profile::LifeMeterType::Standard => 0,
-            crate::game::profile::LifeMeterType::Surround => 1,
-            crate::game::profile::LifeMeterType::Vertical => 2,
-        };
+        row.selected_choice_index[player_idx] = LIFE_METER_TYPE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.lifemeter_type)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if profile.rainbow_max {
         life_bar_options_active_mask |= 1u8 << 0;
@@ -2372,12 +2497,11 @@ fn apply_profile_defaults(
         }
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ErrorBarTrim) {
-        row.selected_choice_index[player_idx] = match profile.error_bar_trim {
-            crate::game::profile::ErrorBarTrim::Off => 0,
-            crate::game::profile::ErrorBarTrim::Fantastic => 1,
-            crate::game::profile::ErrorBarTrim::Excellent => 2,
-            crate::game::profile::ErrorBarTrim::Great => 3,
-        };
+        row.selected_choice_index[player_idx] = ERROR_BAR_TRIM_VARIANTS
+            .iter()
+            .position(|&v| v == profile.error_bar_trim)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if profile.error_bar_up {
         error_bar_options_active_mask |= 1u8 << 0;
@@ -2400,14 +2524,11 @@ fn apply_profile_defaults(
     }
     // Initialize Measure Counter rows (zmod semantics).
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::MeasureCounter) {
-        row.selected_choice_index[player_idx] = match profile.measure_counter {
-            crate::game::profile::MeasureCounter::None => 0,
-            crate::game::profile::MeasureCounter::Eighth => 1,
-            crate::game::profile::MeasureCounter::Twelfth => 2,
-            crate::game::profile::MeasureCounter::Sixteenth => 3,
-            crate::game::profile::MeasureCounter::TwentyFourth => 4,
-            crate::game::profile::MeasureCounter::ThirtySecond => 5,
-        };
+        row.selected_choice_index[player_idx] = MEASURE_COUNTER_VARIANTS
+            .iter()
+            .position(|&v| v == profile.measure_counter)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows
         .iter_mut()
@@ -2448,39 +2569,29 @@ fn apply_profile_defaults(
         }
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::MeasureLines) {
-        row.selected_choice_index[player_idx] = match profile.measure_lines {
-            crate::game::profile::MeasureLines::Off => 0,
-            crate::game::profile::MeasureLines::Measure => 1,
-            crate::game::profile::MeasureLines::Quarter => 2,
-            crate::game::profile::MeasureLines::Eighth => 3,
-        };
+        row.selected_choice_index[player_idx] = MEASURE_LINES_VARIANTS
+            .iter()
+            .position(|&v| v == profile.measure_lines)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     // Initialize Turn row from profile setting.
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Turn) {
-        row.selected_choice_index[player_idx] = match profile.turn_option {
-            crate::game::profile::TurnOption::None => 0,
-            crate::game::profile::TurnOption::Mirror => 1,
-            crate::game::profile::TurnOption::Left => 2,
-            crate::game::profile::TurnOption::Right => 3,
-            crate::game::profile::TurnOption::LRMirror => 4,
-            crate::game::profile::TurnOption::UDMirror => 5,
-            crate::game::profile::TurnOption::Shuffle => 6,
-            crate::game::profile::TurnOption::Blender => 7,
-            crate::game::profile::TurnOption::Random => 8,
-        }
-        .min(row.choices.len().saturating_sub(1));
+        row.selected_choice_index[player_idx] = TURN_OPTION_VARIANTS
+            .iter()
+            .position(|&v| v == profile.turn_option)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::RescoreEarlyHits) {
         row.selected_choice_index[player_idx] = if profile.rescore_early_hits { 1 } else { 0 };
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::TimingWindows) {
-        row.selected_choice_index[player_idx] = match profile.timing_windows {
-            crate::game::profile::TimingWindowsOption::None => 0,
-            crate::game::profile::TimingWindowsOption::WayOffs => 1,
-            crate::game::profile::TimingWindowsOption::DecentsAndWayOffs => 2,
-            crate::game::profile::TimingWindowsOption::FantasticsAndExcellents => 3,
-        }
-        .min(row.choices.len().saturating_sub(1));
+        row.selected_choice_index[player_idx] = TIMING_WINDOWS_VARIANTS
+            .iter()
+            .position(|&v| v == profile.timing_windows)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if profile.track_early_judgments {
         results_extras_active_mask |= 1u8 << 0;
@@ -2499,24 +2610,18 @@ fn apply_profile_defaults(
         }
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::MiniIndicator) {
-        row.selected_choice_index[player_idx] = match profile.mini_indicator {
-            crate::game::profile::MiniIndicator::None => 0,
-            crate::game::profile::MiniIndicator::SubtractiveScoring => 1,
-            crate::game::profile::MiniIndicator::PredictiveScoring => 2,
-            crate::game::profile::MiniIndicator::PaceScoring => 3,
-            crate::game::profile::MiniIndicator::RivalScoring => 4,
-            crate::game::profile::MiniIndicator::Pacemaker => 5,
-            crate::game::profile::MiniIndicator::StreamProg => 6,
-        }
-        .min(row.choices.len().saturating_sub(1));
+        row.selected_choice_index[player_idx] = MINI_INDICATOR_VARIANTS
+            .iter()
+            .position(|&v| v == profile.mini_indicator)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::IndicatorScoreType) {
-        row.selected_choice_index[player_idx] = match profile.mini_indicator_score_type {
-            crate::game::profile::MiniIndicatorScoreType::Itg => 0,
-            crate::game::profile::MiniIndicatorScoreType::Ex => 1,
-            crate::game::profile::MiniIndicatorScoreType::HardEx => 2,
-        }
-        .min(row.choices.len().saturating_sub(1));
+        row.selected_choice_index[player_idx] = MINI_INDICATOR_SCORE_TYPE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.mini_indicator_score_type)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows
         .iter_mut()
@@ -2804,19 +2909,18 @@ fn apply_profile_defaults(
         }
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Attacks) {
-        row.selected_choice_index[player_idx] = match profile.attack_mode {
-            crate::game::profile::AttackMode::On => 0,
-            crate::game::profile::AttackMode::Random => 1,
-            crate::game::profile::AttackMode::Off => 2,
-        };
+        row.selected_choice_index[player_idx] = ATTACK_MODE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.attack_mode)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::HideLightType) {
-        row.selected_choice_index[player_idx] = match profile.hide_light_type {
-            crate::game::profile::HideLightType::NoHideLights => 0,
-            crate::game::profile::HideLightType::HideAllLights => 1,
-            crate::game::profile::HideLightType::HideMarqueeLights => 2,
-            crate::game::profile::HideLightType::HideBassLights => 3,
-        };
+        row.selected_choice_index[player_idx] = HIDE_LIGHT_TYPE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.hide_light_type)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     (
         scroll_active_mask,
@@ -4317,18 +4421,10 @@ fn change_choice_for_player(
         let speed_mod = speed_mod.clone();
         sync_profile_scroll_speed(&mut state.player_profiles[player_idx], &speed_mod);
     } else if id == RowId::Turn {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::TurnOption::None,
-            1 => crate::game::profile::TurnOption::Mirror,
-            2 => crate::game::profile::TurnOption::Left,
-            3 => crate::game::profile::TurnOption::Right,
-            4 => crate::game::profile::TurnOption::LRMirror,
-            5 => crate::game::profile::TurnOption::UDMirror,
-            6 => crate::game::profile::TurnOption::Shuffle,
-            7 => crate::game::profile::TurnOption::Blender,
-            8 => crate::game::profile::TurnOption::Random,
-            _ => crate::game::profile::TurnOption::None,
-        };
+        let setting = TURN_OPTION_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(TurnOption::None);
         state.player_profiles[player_idx].turn_option = setting;
         if should_persist {
             crate::game::profile::update_turn_option_for_side(persist_side, setting);
@@ -4336,24 +4432,19 @@ fn change_choice_for_player(
     } else if id == RowId::Accel || id == RowId::Effect || id == RowId::Appearance {
         // Multi-select rows toggled with Start; Left/Right only moves cursor.
     } else if id == RowId::Attacks {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::AttackMode::On,
-            1 => crate::game::profile::AttackMode::Random,
-            2 => crate::game::profile::AttackMode::Off,
-            _ => crate::game::profile::AttackMode::On,
-        };
+        let setting = ATTACK_MODE_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(AttackMode::On);
         state.player_profiles[player_idx].attack_mode = setting;
         if should_persist {
             crate::game::profile::update_attack_mode_for_side(persist_side, setting);
         }
     } else if id == RowId::HideLightType {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::HideLightType::NoHideLights,
-            1 => crate::game::profile::HideLightType::HideAllLights,
-            2 => crate::game::profile::HideLightType::HideMarqueeLights,
-            3 => crate::game::profile::HideLightType::HideBassLights,
-            _ => crate::game::profile::HideLightType::NoHideLights,
-        };
+        let setting = HIDE_LIGHT_TYPE_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(HideLightType::NoHideLights);
         state.player_profiles[player_idx].hide_light_type = setting;
         if should_persist {
             crate::game::profile::update_hide_light_type_for_side(persist_side, setting);
@@ -4365,12 +4456,10 @@ fn change_choice_for_player(
             crate::game::profile::update_rescore_early_hits_for_side(persist_side, enabled);
         }
     } else if id == RowId::TimingWindows {
-        let setting = match row.selected_choice_index[player_idx] {
-            1 => crate::game::profile::TimingWindowsOption::WayOffs,
-            2 => crate::game::profile::TimingWindowsOption::DecentsAndWayOffs,
-            3 => crate::game::profile::TimingWindowsOption::FantasticsAndExcellents,
-            _ => crate::game::profile::TimingWindowsOption::None,
-        };
+        let setting = TIMING_WINDOWS_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(TimingWindowsOption::None);
         state.player_profiles[player_idx].timing_windows = setting;
         if should_persist {
             crate::game::profile::update_timing_windows_for_side(persist_side, setting);
@@ -4393,22 +4482,15 @@ fn change_choice_for_player(
             }
         }
     } else if id == RowId::MiniIndicator {
-        // Choice indices are fixed by construction order in build_advanced_rows:
-        // 0=None, 1=Subtractive, 2=Predictive, 3=Pace, 4=Rival, 5=Pacemaker, 6=StreamProg
         let choice_idx = row.selected_choice_index[player_idx]
             .min(row.choices.len().saturating_sub(1));
-        let mini_indicator = match choice_idx {
-            1 => crate::game::profile::MiniIndicator::SubtractiveScoring,
-            2 => crate::game::profile::MiniIndicator::PredictiveScoring,
-            3 => crate::game::profile::MiniIndicator::PaceScoring,
-            4 => crate::game::profile::MiniIndicator::RivalScoring,
-            5 => crate::game::profile::MiniIndicator::Pacemaker,
-            6 => crate::game::profile::MiniIndicator::StreamProg,
-            _ => crate::game::profile::MiniIndicator::None,
-        };
+        let mini_indicator = MINI_INDICATOR_VARIANTS
+            .get(choice_idx)
+            .copied()
+            .unwrap_or(MiniIndicator::None);
         let subtractive_scoring =
-            mini_indicator == crate::game::profile::MiniIndicator::SubtractiveScoring;
-        let pacemaker = mini_indicator == crate::game::profile::MiniIndicator::Pacemaker;
+            mini_indicator == MiniIndicator::SubtractiveScoring;
+        let pacemaker = mini_indicator == MiniIndicator::Pacemaker;
         state.player_profiles[player_idx].mini_indicator = mini_indicator;
         state.player_profiles[player_idx].subtractive_scoring = subtractive_scoring;
         state.player_profiles[player_idx].pacemaker = pacemaker;
@@ -4426,16 +4508,10 @@ fn change_choice_for_player(
         }
         visibility_changed = true;
     } else if id == RowId::IndicatorScoreType {
-        let choice = row
-            .choices
+        let score_type = MINI_INDICATOR_SCORE_TYPE_VARIANTS
             .get(row.selected_choice_index[player_idx])
-            .map(String::as_str)
-            .unwrap_or("ITG");
-        let score_type = match choice {
-            "EX" => crate::game::profile::MiniIndicatorScoreType::Ex,
-            "H.EX" => crate::game::profile::MiniIndicatorScoreType::HardEx,
-            _ => crate::game::profile::MiniIndicatorScoreType::Itg,
-        };
+            .copied()
+            .unwrap_or(MiniIndicatorScoreType::Itg);
         state.player_profiles[player_idx].mini_indicator_score_type = score_type;
         if should_persist {
             crate::game::profile::update_mini_indicator_score_type_for_side(
@@ -4453,13 +4529,10 @@ fn change_choice_for_player(
             );
         }
     } else if id == RowId::BackgroundFilter {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::BackgroundFilter::Off,
-            1 => crate::game::profile::BackgroundFilter::Dark,
-            2 => crate::game::profile::BackgroundFilter::Darker,
-            3 => crate::game::profile::BackgroundFilter::Darkest,
-            _ => crate::game::profile::BackgroundFilter::Darkest,
-        };
+        let setting = BACKGROUND_FILTER_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(BackgroundFilter::Darkest);
         state.player_profiles[player_idx].background_filter = setting;
         if should_persist {
             crate::game::profile::update_background_filter_for_side(persist_side, setting);
@@ -4475,14 +4548,10 @@ fn change_choice_for_player(
             }
         }
     } else if id == RowId::Perspective {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::Perspective::Overhead,
-            1 => crate::game::profile::Perspective::Hallway,
-            2 => crate::game::profile::Perspective::Distant,
-            3 => crate::game::profile::Perspective::Incoming,
-            4 => crate::game::profile::Perspective::Space,
-            _ => crate::game::profile::Perspective::Overhead,
-        };
+        let setting = PERSPECTIVE_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(Perspective::Overhead);
         state.player_profiles[player_idx].perspective = setting;
         if should_persist {
             crate::game::profile::update_perspective_for_side(persist_side, setting);
@@ -4602,12 +4671,10 @@ fn change_choice_for_player(
             crate::game::profile::update_judgment_back_for_side(persist_side, enabled);
         }
     } else if id == RowId::LifeMeterType {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::LifeMeterType::Standard,
-            1 => crate::game::profile::LifeMeterType::Surround,
-            2 => crate::game::profile::LifeMeterType::Vertical,
-            _ => crate::game::profile::LifeMeterType::Standard,
-        };
+        let setting = LIFE_METER_TYPE_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(LifeMeterType::Standard);
         state.player_profiles[player_idx].lifemeter_type = setting;
         if should_persist {
             crate::game::profile::update_lifemeter_type_for_side(persist_side, setting);
@@ -4615,35 +4682,20 @@ fn change_choice_for_player(
     } else if id == RowId::LifeBarOptions {
         // Multi-select row toggled with Start; Left/Right only moves cursor.
     } else if id == RowId::DataVisualizations {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::DataVisualizations::None,
-            1 => crate::game::profile::DataVisualizations::TargetScoreGraph,
-            2 => crate::game::profile::DataVisualizations::StepStatistics,
-            _ => crate::game::profile::DataVisualizations::None,
-        };
+        let setting = DATA_VISUALIZATIONS_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(DataVisualizations::None);
         state.player_profiles[player_idx].data_visualizations = setting;
         if should_persist {
             crate::game::profile::update_data_visualizations_for_side(persist_side, setting);
         }
         visibility_changed = true;
     } else if id == RowId::TargetScore {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::TargetScoreSetting::CMinus,
-            1 => crate::game::profile::TargetScoreSetting::C,
-            2 => crate::game::profile::TargetScoreSetting::CPlus,
-            3 => crate::game::profile::TargetScoreSetting::BMinus,
-            4 => crate::game::profile::TargetScoreSetting::B,
-            5 => crate::game::profile::TargetScoreSetting::BPlus,
-            6 => crate::game::profile::TargetScoreSetting::AMinus,
-            7 => crate::game::profile::TargetScoreSetting::A,
-            8 => crate::game::profile::TargetScoreSetting::APlus,
-            9 => crate::game::profile::TargetScoreSetting::SMinus,
-            10 => crate::game::profile::TargetScoreSetting::S,
-            11 => crate::game::profile::TargetScoreSetting::SPlus,
-            12 => crate::game::profile::TargetScoreSetting::MachineBest,
-            13 => crate::game::profile::TargetScoreSetting::PersonalBest,
-            _ => crate::game::profile::TargetScoreSetting::S,
-        };
+        let setting = TARGET_SCORE_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(TargetScoreSetting::S);
         state.player_profiles[player_idx].target_score = setting;
         if should_persist {
             crate::game::profile::update_target_score_for_side(persist_side, setting);
@@ -4657,28 +4709,20 @@ fn change_choice_for_player(
     } else if id == RowId::ErrorBar {
         // Multi-select row toggled with Start; Left/Right only moves cursor.
     } else if id == RowId::ErrorBarTrim {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::ErrorBarTrim::Off,
-            1 => crate::game::profile::ErrorBarTrim::Fantastic,
-            2 => crate::game::profile::ErrorBarTrim::Excellent,
-            3 => crate::game::profile::ErrorBarTrim::Great,
-            _ => crate::game::profile::ErrorBarTrim::Off,
-        };
+        let setting = ERROR_BAR_TRIM_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(ErrorBarTrim::Off);
         state.player_profiles[player_idx].error_bar_trim = setting;
         if should_persist {
             crate::game::profile::update_error_bar_trim_for_side(persist_side, setting);
         }
     } else if id == RowId::MeasureCounter {
         visibility_changed = true;
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::MeasureCounter::None,
-            1 => crate::game::profile::MeasureCounter::Eighth,
-            2 => crate::game::profile::MeasureCounter::Twelfth,
-            3 => crate::game::profile::MeasureCounter::Sixteenth,
-            4 => crate::game::profile::MeasureCounter::TwentyFourth,
-            5 => crate::game::profile::MeasureCounter::ThirtySecond,
-            _ => crate::game::profile::MeasureCounter::None,
-        };
+        let setting = MEASURE_COUNTER_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(MeasureCounter::None);
         state.player_profiles[player_idx].measure_counter = setting;
         if should_persist {
             crate::game::profile::update_measure_counter_for_side(persist_side, setting);
@@ -4693,13 +4737,10 @@ fn change_choice_for_player(
             );
         }
     } else if id == RowId::MeasureLines {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::MeasureLines::Off,
-            1 => crate::game::profile::MeasureLines::Measure,
-            2 => crate::game::profile::MeasureLines::Quarter,
-            3 => crate::game::profile::MeasureLines::Eighth,
-            _ => crate::game::profile::MeasureLines::Off,
-        };
+        let setting = MEASURE_LINES_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(MeasureLines::Off);
         state.player_profiles[player_idx].measure_lines = setting;
         if should_persist {
             crate::game::profile::update_measure_lines_for_side(persist_side, setting);
@@ -4718,41 +4759,29 @@ fn change_choice_for_player(
         }
         visibility_changed = true;
     } else if id == RowId::ComboFont {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::ComboFont::Wendy,
-            1 => crate::game::profile::ComboFont::ArialRounded,
-            2 => crate::game::profile::ComboFont::Asap,
-            3 => crate::game::profile::ComboFont::BebasNeue,
-            4 => crate::game::profile::ComboFont::SourceCode,
-            5 => crate::game::profile::ComboFont::Work,
-            6 => crate::game::profile::ComboFont::WendyCursed,
-            7 => crate::game::profile::ComboFont::None,
-            _ => crate::game::profile::ComboFont::Wendy,
-        };
+        let setting = COMBO_FONT_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(ComboFont::Wendy);
         state.player_profiles[player_idx].combo_font = setting;
         if should_persist {
             crate::game::profile::update_combo_font_for_side(persist_side, setting);
         }
         visibility_changed = true;
     } else if id == RowId::ComboColors {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::ComboColors::Glow,
-            1 => crate::game::profile::ComboColors::Solid,
-            2 => crate::game::profile::ComboColors::Rainbow,
-            3 => crate::game::profile::ComboColors::RainbowScroll,
-            4 => crate::game::profile::ComboColors::None,
-            _ => crate::game::profile::ComboColors::Glow,
-        };
+        let setting = COMBO_COLORS_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(ComboColors::Glow);
         state.player_profiles[player_idx].combo_colors = setting;
         if should_persist {
             crate::game::profile::update_combo_colors_for_side(persist_side, setting);
         }
     } else if id == RowId::ComboColorMode {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::ComboMode::FullCombo,
-            1 => crate::game::profile::ComboMode::CurrentCombo,
-            _ => crate::game::profile::ComboMode::FullCombo,
-        };
+        let setting = COMBO_MODE_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(ComboMode::FullCombo);
         state.player_profiles[player_idx].combo_mode = setting;
         if should_persist {
             crate::game::profile::update_combo_mode_for_side(persist_side, setting);
