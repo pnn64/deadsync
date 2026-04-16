@@ -3,7 +3,7 @@ use crate::engine::gfx::{
     SamplerWrap, Texture as RendererTexture, TextureHandleMap,
 };
 use crate::engine::space::ortho_for_window;
-use cgmath::{Matrix4, Vector4};
+use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use image::RgbaImage;
 use log::info;
 use std::{
@@ -27,7 +27,7 @@ pub struct State {
     _context: softbuffer::Context<Arc<Window>>,
     surface: softbuffer::Surface<Arc<Window>, Arc<Window>>,
     window_size: PhysicalSize<u32>,
-    projection: Matrix4<f32>,
+    projection: Matrix4,
     thread_hint: Option<usize>,
 }
 
@@ -394,8 +394,8 @@ struct ScreenVertexTexColor {
 
 #[inline(always)]
 fn rasterize_sprite(
-    proj: &Matrix4<f32>,
-    transform: &Matrix4<f32>,
+    proj: &Matrix4,
+    transform: &Matrix4,
     tint: [f32; 4],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
@@ -420,8 +420,8 @@ fn rasterize_sprite(
         let c = local_offset_rot_sin_cos[1];
         let ox = c.mul_add(local_offset[0], -(s * local_offset[1]));
         let oy = s.mul_add(local_offset[0], c * local_offset[1]);
-        adjusted.w.x += ox;
-        adjusted.w.y += oy;
+        adjusted.w_axis.x += ox;
+        adjusted.w_axis.y += oy;
     }
     let mvp = *proj * adjusted;
 
@@ -493,8 +493,8 @@ fn rasterize_sprite(
 }
 
 fn rasterize_mesh_triangles(
-    proj: &Matrix4<f32>,
-    transform: &Matrix4<f32>,
+    proj: &Matrix4,
+    transform: &Matrix4,
     vertices: &[crate::engine::gfx::MeshVertex],
     blend: BlendMode,
     width: usize,
@@ -555,8 +555,8 @@ fn rasterize_mesh_triangles(
 }
 
 fn rasterize_textured_mesh_triangles(
-    proj: &Matrix4<f32>,
-    transform: &Matrix4<f32>,
+    proj: &Matrix4,
+    transform: &Matrix4,
     vertices: &[crate::engine::gfx::TexturedMeshVertex],
     tint: [f32; 4],
     uv_scale: [f32; 2],

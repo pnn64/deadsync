@@ -5,7 +5,7 @@ use crate::engine::gfx::{
     draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use crate::engine::space::ortho_for_window;
-use cgmath::Matrix4;
+use glam::Mat4 as Matrix4;
 use image::RgbaImage;
 use log::{debug, info, warn};
 use raw_window_handle::{
@@ -206,7 +206,7 @@ pub struct State {
     pub device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    projection: Matrix4<f32>,
+    projection: Matrix4,
     bind_layout: wgpu::BindGroupLayout,
     samplers: HashMap<SamplerDesc, wgpu::Sampler>,
     shader: wgpu::ShaderModule,
@@ -688,11 +688,7 @@ fn log_wgpu_adapter_info(api: Api, adapter: &wgpu::Adapter) {
     );
 }
 
-fn init_uniform_proj(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    projection: Matrix4<f32>,
-) -> ProjState {
+fn init_uniform_proj(device: &wgpu::Device, queue: &wgpu::Queue, projection: Matrix4) -> ProjState {
     let align = device.limits().min_uniform_buffer_offset_alignment as u64;
     let stride = if align > 0 {
         PROJ_BYTES.div_ceil(align) * align
@@ -706,7 +702,7 @@ fn init_uniform_proj(
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    let proj_array: [[f32; 4]; 4] = projection.into();
+    let proj_array = projection.to_cols_array_2d();
     queue.write_buffer(&buffer, 0, cast_slice(&proj_array));
 
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -1411,7 +1407,7 @@ pub fn draw(
 }
 
 #[inline(always)]
-fn upload_projections(state: &mut State, cameras: &[Matrix4<f32>]) {
+fn upload_projections(state: &mut State, cameras: &[Matrix4]) {
     let ProjState::Uniform { .. } = state.proj else {
         return;
     };
@@ -1422,12 +1418,12 @@ fn upload_projections(state: &mut State, cameras: &[Matrix4<f32>]) {
         return;
     };
     for (i, &vp) in cameras.iter().enumerate() {
-        let arr: [[f32; 4]; 4] = vp.into();
+        let arr = vp.to_cols_array_2d();
         let offset = (i as u64) * *stride;
         state.queue.write_buffer(buffer, offset, cast_slice(&arr));
     }
     let fallback_offset = (cameras.len() as u64) * *stride;
-    let fallback: [[f32; 4]; 4] = state.projection.into();
+    let fallback = state.projection.to_cols_array_2d();
     state
         .queue
         .write_buffer(buffer, fallback_offset, cast_slice(&fallback));
@@ -1438,13 +1434,13 @@ fn set_camera(
     proj: &ProjState,
     camera: u8,
     camera_count: usize,
-    cameras: &[Matrix4<f32>],
-    fallback: Matrix4<f32>,
+    cameras: &[Matrix4],
+    fallback: Matrix4,
 ) {
     match proj {
         ProjState::Immediates => {
             let vp = cameras.get(camera as usize).copied().unwrap_or(fallback);
-            let vp_array: [[f32; 4]; 4] = vp.into();
+            let vp_array = vp.to_cols_array_2d();
             pass.set_immediates(0, cast_slice(&vp_array));
         }
         ProjState::Uniform { group, stride, .. } => {
@@ -1580,7 +1576,7 @@ fn reconfigure_surface(state: &mut State) {
     state.surface.configure(&state.device, &state.config);
 
     if matches!(state.proj, ProjState::Uniform { .. }) {
-        let fallback: [[f32; 4]; 4] = state.projection.into();
+        let fallback = state.projection.to_cols_array_2d();
         if let ProjState::Uniform { buffer, .. } = &state.proj {
             state.queue.write_buffer(buffer, 0, cast_slice(&fallback));
         }

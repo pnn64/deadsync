@@ -23,7 +23,7 @@ use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ScreenAction};
-use cgmath::{Deg, Matrix4, Vector3};
+use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -1915,7 +1915,7 @@ fn song_lua_capture_transform_matrix(
     extra_offset: [f32; 2],
     overlay_space_width: f32,
     overlay_space_height: f32,
-) -> Option<Matrix4<f32>> {
+) -> Option<Matrix4> {
     let x_scale = screen_width() / overlay_space_width.max(1.0);
     let y_scale = screen_height() / overlay_space_height.max(1.0);
     let translate_x = (state.x - 0.5 * overlay_space_width) * x_scale + extra_offset[0];
@@ -1932,8 +1932,8 @@ fn song_lua_capture_transform_matrix(
     }
     Some(
         Matrix4::from_translation(Vector3::new(translate_x, -translate_y, 0.0))
-            * Matrix4::from_angle_z(Deg(state.rot_z_deg))
-            * Matrix4::from_nonuniform_scale(scale_x, scale_y, 1.0),
+            * Matrix4::from_rotation_z(state.rot_z_deg.to_radians())
+            * Matrix4::from_scale(Vector3::new(scale_x, scale_y, 1.0)),
     )
 }
 
@@ -1988,7 +1988,7 @@ fn song_lua_build_capture_actor(
         overlay_space_height,
     ) {
         return Some(Actor::Camera {
-            view_proj: cgmath::ortho(
+            view_proj: Matrix4::orthographic_rh_gl(
                 -0.5 * screen_width(),
                 0.5 * screen_width(),
                 -0.5 * screen_height(),
@@ -2239,13 +2239,13 @@ fn build_song_lua_overlay_actor(
     }
 }
 
-fn song_lua_player_skew_x_matrix(amount: f32) -> Matrix4<f32> {
-    Matrix4::new(
+fn song_lua_player_skew_x_matrix(amount: f32) -> Matrix4 {
+    Matrix4::from_cols_array(&[
         1.0, 0.0, 0.0, 0.0, //
         amount, 1.0, 0.0, 0.0, //
         0.0, 0.0, 1.0, 0.0, //
         0.0, 0.0, 0.0, 1.0,
-    )
+    ])
 }
 
 #[inline(always)]
@@ -2491,7 +2491,7 @@ fn song_lua_player_transform_matrix(
     skew_x: f32,
     zoom_x: f32,
     zoom_y: f32,
-) -> Option<Matrix4<f32>> {
+) -> Option<Matrix4> {
     if !playfield_center_x.is_finite()
         || !rotation_z_deg.is_finite()
         || !skew_x.is_finite()
@@ -2532,9 +2532,9 @@ fn song_lua_player_transform_matrix(
     let pivot_y = 0.5 * screen_height() - screen_center_y();
     Some(
         Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
-            * Matrix4::from_angle_z(Deg(rotation_z_deg))
+            * Matrix4::from_rotation_z(rotation_z_deg.to_radians())
             * song_lua_player_skew_x_matrix(skew_x)
-            * Matrix4::from_nonuniform_scale(zoom_x, zoom_y, 1.0)
+            * Matrix4::from_scale(Vector3::new(zoom_x, zoom_y, 1.0))
             * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0)),
     )
 }
@@ -2568,7 +2568,7 @@ fn apply_song_lua_player_transform(
     // notefield::build may already wrap the lane render in a perspective camera.
     // Multiply those cameras in place, and only wrap plain HUD actors here, so
     // the Lua transform affects the whole bundle without being shadowed.
-    let root_camera = cgmath::ortho(
+    let root_camera = Matrix4::orthographic_rh_gl(
         -0.5 * screen_width(),
         0.5 * screen_width(),
         -0.5 * screen_height(),

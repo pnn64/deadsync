@@ -5,7 +5,7 @@ pub mod draw_prep;
 #[cfg(not(target_pointer_width = "32"))]
 use crate::engine::gfx::backends::vulkan;
 use crate::engine::gfx::backends::{opengl, software, wgpu_core};
-use cgmath::Matrix4;
+use glam::Mat4 as Matrix4;
 use glow::HasContext;
 use image::RgbaImage;
 use std::{
@@ -26,14 +26,14 @@ pub const INVALID_TMESH_CACHE_KEY: TMeshCacheKey = 0;
 #[derive(Clone)]
 pub struct RenderList<'a> {
     pub clear_color: [f32; 4],
-    pub cameras: Vec<Matrix4<f32>>,
+    pub cameras: Vec<Matrix4>,
     pub objects: Vec<RenderObject<'a>>,
 }
 #[derive(Clone)]
 pub struct RenderObject<'a> {
     pub object_type: ObjectType<'a>,
     pub texture_handle: TextureHandle,
-    pub transform: Matrix4<f32>,
+    pub transform: Matrix4,
     pub blend: BlendMode,
     pub z: i16,
     pub order: u32,

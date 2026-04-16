@@ -7,7 +7,7 @@ use crate::engine::gfx::{
     },
 };
 use crate::engine::space::ortho_for_window;
-use cgmath::Matrix4;
+use glam::Mat4 as Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
 use glutin::{
     config::{Api as ConfigApi, Config, ConfigTemplateBuilder},
@@ -110,7 +110,7 @@ pub struct State {
     tmesh_mvp_location: UniformLocation,
     tmesh_texture_location: UniformLocation,
     texture_location: UniformLocation,
-    projection: Matrix4<f32>,
+    projection: Matrix4,
     window_size: (u32, u32),
     // A single, shared set of buffers for a unit quad.
     shared_vao: glow::VertexArray,
@@ -872,7 +872,7 @@ pub fn draw(
                         last_sprite_instance_start = Some(run.instance_start);
                     }
 
-                    let mvp_array: [[f32; 4]; 4] = cam.into();
+                    let mvp_array = cam.to_cols_array_2d();
                     gl.uniform_matrix_4_f32_slice(
                         Some(&state.mvp_location),
                         false,
@@ -923,7 +923,7 @@ pub fn draw(
                         last_tmesh_source = None;
                     }
 
-                    let mvp_array: [[f32; 4]; 4] = cam.into();
+                    let mvp_array = cam.to_cols_array_2d();
                     gl.uniform_matrix_4_f32_slice(
                         Some(&state.mesh_mvp_location),
                         false,
@@ -1058,7 +1058,7 @@ pub fn draw(
                         .get(run.camera as usize)
                         .copied()
                         .unwrap_or(state.projection);
-                    let mvp_array: [[f32; 4]; 4] = cam.into();
+                    let mvp_array = cam.to_cols_array_2d();
                     gl.uniform_matrix_4_f32_slice(
                         Some(&state.tmesh_mvp_location),
                         false,

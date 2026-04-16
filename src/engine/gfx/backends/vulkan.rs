@@ -15,7 +15,7 @@ use ash::{
     khr::{calibrated_timestamps, surface, swapchain},
     vk,
 };
-use cgmath::Matrix4;
+use glam::Mat4 as Matrix4;
 use image::RgbaImage;
 use log::{debug, error, info, warn};
 use std::{collections::HashMap, error::Error, ffi, mem, sync::Arc, time::Instant};
@@ -199,7 +199,7 @@ pub struct State {
     window_size: PhysicalSize<u32>,
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
-    projection: Matrix4<f32>,
+    projection: Matrix4,
     instance_ring: Option<BufferResource>, // one big VB for all frames
     instance_ring_ptr: *mut InstanceData,  // persistently mapped pointer
     instance_capacity_instances: usize,    // total instances across ring
@@ -1703,7 +1703,9 @@ pub fn draw(
                             .get(run.camera as usize)
                             .copied()
                             .unwrap_or(state.projection);
-                        let pc = ProjPush { proj: vp.into() };
+                        let pc = ProjPush {
+                            proj: vp.to_cols_array_2d(),
+                        };
                         device.cmd_push_constants(
                             cmd,
                             state.sprite_pipeline_layout,
@@ -1750,7 +1752,9 @@ pub fn draw(
                             .get(draw.camera as usize)
                             .copied()
                             .unwrap_or(state.projection);
-                        let pc = ProjPush { proj: vp.into() };
+                        let pc = ProjPush {
+                            proj: vp.to_cols_array_2d(),
+                        };
                         device.cmd_push_constants(
                             cmd,
                             state.mesh_pipeline_layout,
@@ -1816,7 +1820,9 @@ pub fn draw(
                             .get(draw.camera as usize)
                             .copied()
                             .unwrap_or(state.projection);
-                        let pc = ProjPush { proj: vp.into() };
+                        let pc = ProjPush {
+                            proj: vp.to_cols_array_2d(),
+                        };
                         device.cmd_push_constants(
                             cmd,
                             state.textured_mesh_pipeline_layout,

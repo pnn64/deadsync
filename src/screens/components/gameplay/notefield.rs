@@ -32,7 +32,7 @@ use crate::game::{
     scroll::ScrollSpeedSetting,
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
-use cgmath::{Deg, Matrix4, Point3, Vector3};
+use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 use rssp::streams::StreamSegment;
 use std::array::from_fn;
 use std::cell::RefCell;
@@ -2516,36 +2516,32 @@ fn zmod_mini_indicator_text(
 }
 
 #[inline(always)]
-fn rage_frustum(l: f32, r: f32, b: f32, t: f32, zn: f32, zf: f32) -> Matrix4<f32> {
+fn rage_frustum(l: f32, r: f32, b: f32, t: f32, zn: f32, zf: f32) -> Matrix4 {
     let a = (r + l) / (r - l);
     let bb = (t + b) / (t - b);
     let c = -(zf + zn) / (zf - zn);
     let d = -(2.0 * zf * zn) / (zf - zn);
     // Match ITGmania's RageDisplay::GetFrustumMatrix (OpenGL-style frustum matrix).
     //
-    // Note: cgmath::Matrix4::new takes elements in column-major order.
-    Matrix4::new(
-        // column 0
+    // Note: `glam::Mat4::from_cols_array` takes elements in column-major order.
+    Matrix4::from_cols_array(&[
         2.0 * zn / (r - l),
         0.0,
         0.0,
         0.0,
-        // column 1
         0.0,
         2.0 * zn / (t - b),
         0.0,
         0.0,
-        // column 2
         a,
         bb,
         c,
         -1.0,
-        // column 3
         0.0,
         0.0,
         d,
         0.0,
-    )
+    ])
 }
 
 fn notefield_view_proj(
@@ -2556,7 +2552,7 @@ fn notefield_view_proj(
     tilt: f32,
     skew: f32,
     reverse: bool,
-) -> Option<Matrix4<f32>> {
+) -> Option<Matrix4> {
     if !screen_w.is_finite() || !screen_h.is_finite() || screen_w <= 0.0 || screen_h <= 0.0 {
         return None;
     }
@@ -2593,9 +2589,9 @@ fn notefield_view_proj(
     let t = (vp_y - half_h) / dist;
     let proj = rage_frustum(l, r, b, t, near, far);
 
-    let eye = Point3::new(-vp_x + half_w, -vp_y + half_h, dist);
-    let at = Point3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
-    let view = Matrix4::look_at_rh(eye, at, Vector3::unit_y());
+    let eye = Vector3::new(-vp_x + half_w, -vp_y + half_h, dist);
+    let at = Vector3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
+    let view = Matrix4::look_at_rh(eye, at, Vector3::Y);
 
     // ITGmania: PlayerNoteFieldPositioner applies tilt/zoom/y_offset on the NoteField actor.
     let reverse_mult = if reverse { -1.0 } else { 1.0 };
@@ -2615,16 +2611,16 @@ fn notefield_view_proj(
     let pivot_y = half_h - center_y;
     // Convert our world coords (centered, y-up) back into the SM-style screen
     // coords (top-left, y-down) expected by the menu perspective camera.
-    let world_to_screen = Matrix4::new(
+    let world_to_screen = Matrix4::from_cols_array(&[
         1.0, 0.0, 0.0, 0.0, //
         0.0, -1.0, 0.0, 0.0, //
         0.0, 0.0, 1.0, 0.0, //
         half_w, half_h, 0.0, 1.0,
-    );
+    ]);
     let field = Matrix4::from_translation(Vector3::new(0.0, y_offset_world, 0.0))
         * Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
-        * Matrix4::from_angle_x(Deg(tilt_deg))
-        * Matrix4::from_nonuniform_scale(tilt_scale, tilt_scale, 1.0)
+        * Matrix4::from_rotation_x(tilt_deg.to_radians())
+        * Matrix4::from_scale(Vector3::new(tilt_scale, tilt_scale, 1.0))
         * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0));
 
     Some((proj * view) * world_to_screen * field)

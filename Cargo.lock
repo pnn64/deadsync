@@ -193,15 +193,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
-name = "approx"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f2a05fd1bd10b2527e20a2cd32d8873d115b8b39fe219ee25f42a8aca6ba278"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -579,16 +570,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cgmath"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a98d30140e3296250832bbaaff83b27dcd6fa3cc70fb6f1f3e5c9c0023b5317"
-dependencies = [
- "approx",
- "num-traits",
-]
-
-[[package]]
 name = "chacha20"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -956,7 +937,7 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "deadsync"
-version = "0.3.448"
+version = "0.3.449"
 dependencies = [
  "alsa",
  "ash",
@@ -964,13 +945,13 @@ dependencies = [
  "bincode",
  "bitflags 2.11.1",
  "bytemuck",
- "cgmath",
  "chrono",
  "claxon",
  "coreaudio-rs",
  "directories",
  "env_logger",
  "fs_extra",
+ "glam",
  "glob",
  "glow",
  "glutin",
@@ -1456,6 +1437,12 @@ dependencies = [
  "log",
  "xml-rs",
 ]
+
+[[package]]
+name = "glam"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
 
 [[package]]
 name = "glob"

@@ -1,4 +1,4 @@
-use cgmath::Matrix4;
+use glam::Mat4 as Matrix4;
 use std::cell::Cell;
 
 // -----------------------------------------------------------------------------
@@ -134,11 +134,11 @@ pub fn metrics_for_window(px_w: u32, px_h: u32) -> Metrics {
 // Ortho for current window (also stores CURRENT_PIXEL + CURRENT_METRICS)
 // -----------------------------------------------------------------------------
 #[inline(always)]
-pub fn ortho_for_window(width: u32, height: u32) -> Matrix4<f32> {
+pub fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
     set_current_window_px(width, height);
     let m = metrics_for_window(width, height);
     set_current_metrics(m);
-    cgmath::ortho(m.left, m.right, m.bottom, m.top, -1.0, 1.0)
+    Matrix4::orthographic_rh_gl(m.left, m.right, m.bottom, m.top, -1.0, 1.0)
 }
 
 // -----------------------------------------------------------------------------
