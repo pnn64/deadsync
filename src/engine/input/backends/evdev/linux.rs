@@ -4,7 +4,6 @@ use super::{
 };
 use crate::engine::input::RawKeyboardEvent;
 use log::{debug, warn};
-use std::collections::HashSet;
 use std::ffi::{CStr, c_char, c_void};
 use std::fs;
 use std::io::ErrorKind;
@@ -169,6 +168,13 @@ struct DevSpec {
     name: String,
     vendor_id: Option<u16>,
     product_id: Option<u16>,
+}
+
+#[derive(Default)]
+struct FallbackScratch {
+    dev_seen: Vec<bool>,
+    key_seen: Vec<bool>,
+    specs: Vec<DevSpec>,
 }
 
 #[derive(Default)]
@@ -747,38 +753,44 @@ fn fallback_spec_from_event_path(path: &str) -> Option<DevSpec> {
     class.and_then(|class| dev_spec_from_event_path(path, class))
 }
 
-fn scan_live_event_paths() -> HashSet<String> {
-    let mut out = HashSet::new();
-    if let Ok(entries) = fs::read_dir("/dev/input") {
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            if name.to_string_lossy().starts_with("event") {
-                out.insert(entry.path().to_string_lossy().to_string());
-            }
-        }
-    }
-    out
+#[inline(always)]
+fn clear_seen(seen: &mut Vec<bool>, len: usize) {
+    seen.resize(len, false);
+    seen.fill(false);
 }
 
-fn scan_fallback_specs(open_paths: &HashSet<String>) -> Vec<DevSpec> {
-    let mut out = Vec::new();
+fn scan_fallback(
+    scratch: &mut FallbackScratch,
+    devs: &[Dev],
+    key_devs: &[KeyDev],
+) {
+    clear_seen(&mut scratch.dev_seen, devs.len());
+    clear_seen(&mut scratch.key_seen, key_devs.len());
+    scratch.specs.clear();
+
     if let Ok(entries) = fs::read_dir("/dev/input") {
         for entry in entries.flatten() {
             let name = entry.file_name();
             if !name.to_string_lossy().starts_with("event") {
                 continue;
             }
-            let path = entry.path().to_string_lossy().to_string();
-            if open_paths.contains(&path) {
+            let path_buf = entry.path();
+            let path = path_buf.to_string_lossy();
+            if let Some(idx) = devs.iter().position(|dev| dev.path == path.as_ref()) {
+                scratch.dev_seen[idx] = true;
                 continue;
             }
-            if let Some(spec) = fallback_spec_from_event_path(&path) {
-                out.push(spec);
+            if let Some(idx) = key_devs.iter().position(|dev| dev.path == path.as_ref()) {
+                scratch.key_seen[idx] = true;
+                continue;
             }
+            let Some(spec) = fallback_spec_from_event_path(path.as_ref()) else {
+                continue;
+            };
+            scratch.specs.push(spec);
         }
     }
-    out.sort_unstable_by(|a, b| a.path.cmp(&b.path));
-    out
+    scratch.specs.sort_unstable_by(|a, b| a.path.cmp(&b.path));
 }
 
 fn remove_dev_by_path(
@@ -906,17 +918,16 @@ fn refresh_fallback(
     devs: &mut Vec<Dev>,
     key_devs: &mut Vec<KeyDev>,
     next_id: &mut u32,
+    scratch: &mut FallbackScratch,
     scan_keyboards: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
 ) {
-    let live_paths = scan_live_event_paths();
-    let mut remove = Vec::new();
-    for (idx, dev) in devs.iter().enumerate() {
-        if !live_paths.contains(&dev.path) {
-            remove.push(idx);
+    scan_fallback(scratch, devs, key_devs);
+
+    for idx in (0..devs.len()).rev() {
+        if scratch.dev_seen[idx] {
+            continue;
         }
-    }
-    for &idx in remove.iter().rev() {
         let dev = devs.swap_remove(idx);
         emit_sys(GpSystemEvent::Disconnected {
             name: dev.name,
@@ -925,22 +936,15 @@ fn refresh_fallback(
             initial: false,
         });
     }
-    let mut key_remove = Vec::new();
-    for (idx, dev) in key_devs.iter().enumerate() {
-        if !live_paths.contains(&dev.path) {
-            key_remove.push(idx);
+    for idx in (0..key_devs.len()).rev() {
+        if scratch.key_seen[idx] {
+            continue;
         }
-    }
-    for &idx in key_remove.iter().rev() {
         key_devs.swap_remove(idx);
     }
+
     publish_keyboard_backend_state(key_devs);
-    let open_paths = devs
-        .iter()
-        .map(|dev| dev.path.clone())
-        .chain(key_devs.iter().map(|dev| dev.path.clone()))
-        .collect::<HashSet<_>>();
-    for spec in scan_fallback_specs(&open_paths) {
+    for spec in scratch.specs.drain(..) {
         match spec.class {
             DevClass::Pad => add_dev_if_new(spec, devs, next_id, false, emit_sys),
             DevClass::Keyboard if scan_keyboards => add_key_dev_if_new(spec, key_devs, None),
@@ -983,6 +987,7 @@ fn run_inner(
     let discovery = init_discovery();
     let mut devs: Vec<Dev> = Vec::new();
     let mut key_devs: Vec<KeyDev> = Vec::new();
+    let mut fallback = FallbackScratch::default();
     let mut keyboard_startup = KeyboardStartupStats::default();
     let mut next_id = 0u32;
 
@@ -1001,7 +1006,8 @@ fn run_inner(
             }
         }
         Discovery::Inotify(_) | Discovery::None => {
-            for spec in scan_fallback_specs(&HashSet::new()) {
+            scan_fallback(&mut fallback, &devs, &key_devs);
+            for spec in fallback.specs.drain(..) {
                 match spec.class {
                     DevClass::Pad => {
                         add_dev_if_new(spec, &mut devs, &mut next_id, true, &mut emit_sys)
@@ -1272,6 +1278,7 @@ fn run_inner(
                 &mut devs,
                 &mut key_devs,
                 &mut next_id,
+                &mut fallback,
                 scan_keyboards,
                 &mut emit_sys,
             );
