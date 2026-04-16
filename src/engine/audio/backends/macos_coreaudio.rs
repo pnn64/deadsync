@@ -440,6 +440,5 @@ fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {
     if sample_rate_hz == 0 {
         return 0;
     }
-    ((u128::from(frames) * 1_000_000_000u128) / u128::from(sample_rate_hz))
-        .min(u128::from(u64::MAX)) as u64
+    (u64::from(frames) * 1_000_000_000) / u64::from(sample_rate_hz)
 }

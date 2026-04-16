@@ -594,5 +594,5 @@ unsafe fn zero_port(api: &JackApi, port: *mut JackPortRaw, nframes: JackNFrames)
 
 #[inline(always)]
 fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {
-    ((frames as u128) * 1_000_000_000u128 / sample_rate_hz.max(1) as u128) as u64
+    (u64::from(frames) * 1_000_000_000) / u64::from(sample_rate_hz.max(1))
 }
