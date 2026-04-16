@@ -85,6 +85,7 @@ const CREDITS: &[CreditLine] = &[
     section("DeadSync Gold Patrons"),
     name("Wafles"),
     name("nabulator"),
+    name("Reikwaza"),
     spacer(),
     spacer(),
     section("DeadSync Supporters"),
