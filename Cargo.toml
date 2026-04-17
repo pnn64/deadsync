@@ -177,6 +177,10 @@ lto = true
 debug = false
 panic = "abort"
 
+[profile.local]
+inherits = "release"
+lto = "thin"
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 
