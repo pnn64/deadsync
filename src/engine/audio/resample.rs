@@ -481,25 +481,27 @@ fn music_decoder_thread_loop(
 
         let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
         let mut in_planar = PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES);
+        let mut pkt_buf = Vec::new();
 
-        while let Ok(pkt_opt) = reader.read_dec_packet_itl() {
+        loop {
             if stop.load(Ordering::Relaxed) {
                 break 'main_loop;
             }
-            let p = match pkt_opt {
-                Some(p) if !p.is_empty() => p,
-                Some(_) => continue,
-                None => break,
-            };
-            let mut slice = &p[..];
+            if !reader.read_dec_packet_into(&mut pkt_buf)? {
+                break;
+            }
+            if pkt_buf.is_empty() {
+                continue;
+            }
+            let mut slice = &pkt_buf[..];
             if to_drop_in > 0 {
-                let pkt_frames = (p.len() / in_ch) as u64;
+                let pkt_frames = (pkt_buf.len() / in_ch) as u64;
                 if to_drop_in >= pkt_frames {
                     to_drop_in -= pkt_frames;
                     continue;
                 }
                 let drop_samples = (to_drop_in as usize) * in_ch;
-                slice = &p[drop_samples..];
+                slice = &pkt_buf[drop_samples..];
                 to_drop_in = 0;
             }
             in_planar.push_i16_interleaved(slice, in_ch);
@@ -662,13 +664,14 @@ pub(super) fn load_and_resample_sfx(
 
     let mut in_planar = PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES);
     let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
+    let mut pkt_buf = Vec::new();
     let mut resampled_data = Vec::new();
 
-    while let Some(pck_samples) = reader.read_dec_packet_itl()? {
-        if pck_samples.is_empty() {
+    while reader.read_dec_packet_into(&mut pkt_buf)? {
+        if pkt_buf.is_empty() {
             continue;
         }
-        in_planar.push_i16_interleaved(&pck_samples, in_ch);
+        in_planar.push_i16_interleaved(&pkt_buf, in_ch);
         loop {
             let need = resampler.input_frames_next();
             if in_planar.available_frames() < need {

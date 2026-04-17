@@ -59,13 +59,14 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         pending: None,
         cursor_frames: 0,
     };
-    let Some(first_packet) = reader.decode_next_packet()? else {
+    let mut first_packet = Vec::new();
+    if !reader.decode_next_packet_into(&mut first_packet)? {
         return Err(format!(
             "WAV '{}' contained no decodable audio frames",
             path.display()
         )
         .into());
-    };
+    }
     reader.pending = Some(first_packet);
     Ok(OpenFile {
         reader,
@@ -82,22 +83,24 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
 }
 
 impl Reader {
-    pub(crate) fn read_dec_packet_itl(
+    pub(crate) fn read_dec_packet_into(
         &mut self,
-    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(packet) = self.pending.take() {
+        out: &mut Vec<i16>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(mut packet) = self.pending.take() {
             self.cursor_frames = self
                 .cursor_frames
                 .saturating_add((packet.len() / self.spec.channels) as u64);
-            return Ok(Some(packet));
+            std::mem::swap(out, &mut packet);
+            return Ok(true);
         }
-        let Some(packet) = self.decode_next_packet()? else {
-            return Ok(None);
+        if !self.decode_next_packet_into(out)? {
+            return Ok(false);
         };
         self.cursor_frames = self
             .cursor_frames
-            .saturating_add((packet.len() / self.spec.channels) as u64);
-        Ok(Some(packet))
+            .saturating_add((out.len() / self.spec.channels) as u64);
+        Ok(true)
     }
 
     pub(crate) fn seek_frame(
@@ -114,18 +117,21 @@ impl Reader {
         Ok(())
     }
 
-    fn decode_next_packet(
+    fn decode_next_packet_into(
         &mut self,
-    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
+        out: &mut Vec<i16>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let frames_left = self.spec.frames_total.saturating_sub(self.cursor_frames);
         if frames_left == 0 {
-            return Ok(None);
+            out.clear();
+            return Ok(false);
         }
         let frames = frames_left.min(WAV_PACKET_FRAMES as u64) as usize;
         let bytes = frames.saturating_mul(self.spec.block_align);
         self.packet_buf.resize(bytes, 0);
         self.reader.read_exact(&mut self.packet_buf)?;
-        decode_packet(&self.packet_buf, self.spec).map(Some)
+        decode_packet_into(&self.packet_buf, self.spec, out)?;
+        Ok(true)
     }
 }
 
@@ -273,21 +279,23 @@ fn parse_extensible_encoding(
     }
 }
 
-fn decode_packet(
+fn decode_packet_into(
     bytes: &[u8],
     spec: Spec,
-) -> Result<Vec<i16>, Box<dyn std::error::Error + Send + Sync>> {
+    out: &mut Vec<i16>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if !bytes.len().is_multiple_of(spec.bytes_per_sample) {
         return Err("WAV packet ended mid-sample".into());
     }
-    let mut out = Vec::with_capacity(bytes.len() / spec.bytes_per_sample);
+    out.clear();
+    out.reserve(bytes.len() / spec.bytes_per_sample);
     for sample in bytes.chunks_exact(spec.bytes_per_sample) {
         out.push(match spec.encoding {
             Encoding::Pcm => pcm_to_i16(sample)?,
             Encoding::Float => float_to_i16(sample)?,
         });
     }
-    Ok(out)
+    Ok(())
 }
 
 fn pcm_to_i16(sample: &[u8]) -> Result<i16, Box<dyn std::error::Error + Send + Sync>> {

@@ -23,15 +23,16 @@ pub(crate) enum Reader {
 }
 
 impl Reader {
-    pub(crate) fn read_dec_packet_itl(
+    pub(crate) fn read_dec_packet_into(
         &mut self,
-    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
+        out: &mut Vec<i16>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         match self {
-            Self::Flac(reader) => reader.read_dec_packet_itl(),
-            Self::Mp3(reader) => reader.read_dec_packet_itl(),
-            Self::Ogg(reader) => reader.read_dec_packet_itl(),
-            Self::Opus(reader) => reader.read_dec_packet_itl(),
-            Self::Wav(reader) => reader.read_dec_packet_itl(),
+            Self::Flac(reader) => reader.read_dec_packet_into(out),
+            Self::Mp3(reader) => reader.read_dec_packet_into(out),
+            Self::Ogg(reader) => reader.read_dec_packet_into(out),
+            Self::Opus(reader) => reader.read_dec_packet_into(out),
+            Self::Wav(reader) => reader.read_dec_packet_into(out),
         }
     }
 

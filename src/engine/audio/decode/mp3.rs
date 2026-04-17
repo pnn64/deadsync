@@ -73,23 +73,28 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
 }
 
 impl<R: std::io::Read> Reader<R> {
-    pub(crate) fn read_dec_packet_itl(
+    pub(crate) fn read_dec_packet_into(
         &mut self,
-    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(frame) = self.pending.take() {
+        out: &mut Vec<i16>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(mut frame) = self.pending.take() {
             self.cursor_frames = self
                 .cursor_frames
                 .saturating_add((frame.len() / self.channels.max(1)) as u64);
-            return Ok(Some(frame));
+            std::mem::swap(out, &mut frame);
+            return Ok(true);
         }
         let Some(frame) = next_audio_frame(&mut self.decoder)? else {
-            return Ok(None);
+            out.clear();
+            return Ok(false);
         };
         self.validate_frame(&frame)?;
         self.cursor_frames = self
             .cursor_frames
             .saturating_add((frame.data.len() / self.channels.max(1)) as u64);
-        Ok(Some(frame.data))
+        let mut data = frame.data;
+        std::mem::swap(out, &mut data);
+        Ok(true)
     }
 
     pub(crate) fn seek_frame(

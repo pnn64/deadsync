@@ -65,13 +65,14 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         decoded_frames: 0,
         ended: false,
     };
-    let Some(first_packet) = reader.decode_next_packet()? else {
+    let mut first_packet = Vec::new();
+    if !reader.decode_next_packet_into(&mut first_packet)? {
         return Err(format!(
             "Opus '{}' contained no decodable audio frames",
             path.display()
         )
         .into());
-    };
+    }
     reader.pending = Some(first_packet);
     Ok(OpenFile {
         reader,
@@ -104,22 +105,24 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
 }
 
 impl Reader {
-    pub(crate) fn read_dec_packet_itl(
+    pub(crate) fn read_dec_packet_into(
         &mut self,
-    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(packet) = self.pending.take() {
+        out: &mut Vec<i16>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(mut packet) = self.pending.take() {
             self.cursor_frames = self
                 .cursor_frames
                 .saturating_add((packet.len() / self.channels) as u64);
-            return Ok(Some(packet));
+            std::mem::swap(out, &mut packet);
+            return Ok(true);
         }
-        let Some(packet) = self.decode_next_packet()? else {
-            return Ok(None);
+        if !self.decode_next_packet_into(out)? {
+            return Ok(false);
         };
         self.cursor_frames = self
             .cursor_frames
-            .saturating_add((packet.len() / self.channels) as u64);
-        Ok(Some(packet))
+            .saturating_add((out.len() / self.channels) as u64);
+        Ok(true)
     }
 
     pub(crate) fn seek_frame(
@@ -161,9 +164,10 @@ impl Reader {
         self.cursor_frames = first_packet_granule.saturating_sub(self.pre_skip_frames as u64);
 
         for packet in packets {
-            let Some(decoded) = self.decode_packet(packet)? else {
+            let mut decoded = Vec::new();
+            if !self.decode_packet_into(packet, &mut decoded)? {
                 continue;
-            };
+            }
             if self.finish_seek_packet(decoded, target_frame) {
                 return Ok(());
             }
@@ -172,22 +176,26 @@ impl Reader {
         self.seek_frame_linear(target_frame)
     }
 
-    fn decode_next_packet(
+    fn decode_next_packet_into(
         &mut self,
-    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
+        out: &mut Vec<i16>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         if self.ended {
-            return Ok(None);
+            out.clear();
+            return Ok(false);
         }
         loop {
             let Some(packet) = self.reader.read_packet()? else {
                 self.ended = true;
-                return Ok(None);
+                out.clear();
+                return Ok(false);
             };
-            if let Some(decoded) = self.decode_packet(packet)? {
-                return Ok(Some(decoded));
+            if self.decode_packet_into(packet, out)? {
+                return Ok(true);
             }
             if self.ended {
-                return Ok(None);
+                out.clear();
+                return Ok(false);
             }
         }
     }
@@ -203,9 +211,10 @@ impl Reader {
             let packet = if let Some(packet) = self.pending.take() {
                 packet
             } else {
-                let Some(packet) = self.decode_next_packet()? else {
+                let mut packet = Vec::new();
+                if !self.decode_next_packet_into(&mut packet)? {
                     return Ok(());
-                };
+                }
                 packet
             };
             if self.finish_seek_packet(packet, target_frame) {
@@ -261,10 +270,11 @@ impl Reader {
         }
     }
 
-    fn decode_packet(
+    fn decode_packet_into(
         &mut self,
         packet: Packet,
-    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
+        out: &mut Vec<i16>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         if packet.stream_serial() != self.stream_serial {
             return Err("chained Ogg Opus streams are unsupported".into());
         }
@@ -272,7 +282,8 @@ impl Reader {
             if packet.last_in_stream() {
                 self.ended = true;
             }
-            return Ok(None);
+            out.clear();
+            return Ok(false);
         }
         let wanted_frames = self
             .decoder
@@ -295,22 +306,25 @@ impl Reader {
             self.ended = true;
         }
         if valid_frames == 0 {
-            return Ok(None);
+            out.clear();
+            return Ok(false);
         }
         let skip = self.skip_frames.min(valid_frames);
         self.skip_frames -= skip;
         if skip == valid_frames {
-            return Ok(None);
+            out.clear();
+            return Ok(false);
         }
         let start = skip * self.channels;
         let end = valid_frames * self.channels;
-        let mut out = Vec::with_capacity(end - start);
+        out.clear();
+        out.reserve(end - start);
         out.extend(
             self.decode_buf[start..end]
                 .iter()
                 .map(|&sample| sample as i16),
         );
-        Ok(Some(out))
+        Ok(true)
     }
 }
 

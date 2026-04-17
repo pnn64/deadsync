@@ -236,7 +236,8 @@ fn init_row_tweens(
             visible_idx += 1;
             f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
         } else {
-            let anchor = row_map.display_order()
+            let anchor = row_map
+                .display_order()
                 .get(i)
                 .and_then(|&id| row_map.get(id))
                 .and_then(|row| match conditional_row_parent(row.id) {
@@ -585,11 +586,7 @@ impl RowMap {
 
     fn insert(&mut self, row: Row) {
         let idx = row.id.index();
-        debug_assert!(
-            self.rows[idx].is_none(),
-            "duplicate RowId {:?}",
-            row.id
-        );
+        debug_assert!(self.rows[idx].is_none(), "duplicate RowId {:?}", row.id);
         self.rows[idx] = Some(row);
     }
 
@@ -630,7 +627,9 @@ impl RowMap {
     /// Safe access by display index.
     #[inline(always)]
     pub fn get_at(&self, display_idx: usize) -> Option<&Row> {
-        self.display_order.get(display_idx).and_then(|&id| self.get(id))
+        self.display_order
+            .get(display_idx)
+            .and_then(|&id| self.get(id))
     }
 }
 
@@ -1390,304 +1389,304 @@ fn build_main_rows(
         };
     let mut b = RowBuilder::new();
     b.push(Row {
-            id: RowId::TypeOfSpeedMod,
-            name: lookup_key("PlayerOptions", "TypeOfSpeedMod"),
-            choices: vec![
-                tr("PlayerOptions", "SpeedModTypeX").to_string(),
-                tr("PlayerOptions", "SpeedModTypeC").to_string(),
-                tr("PlayerOptions", "SpeedModTypeM").to_string(),
-            ],
-            selected_choice_index: [match speed_mod.mod_type.as_str() {
-                "X" => 0,
-                "C" => 1,
-                "M" => 2,
-                _ => 1, // Default to C
-            }; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "TypeOfSpeedModHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::TypeOfSpeedMod,
+        name: lookup_key("PlayerOptions", "TypeOfSpeedMod"),
+        choices: vec![
+            tr("PlayerOptions", "SpeedModTypeX").to_string(),
+            tr("PlayerOptions", "SpeedModTypeC").to_string(),
+            tr("PlayerOptions", "SpeedModTypeM").to_string(),
+        ],
+        selected_choice_index: [match speed_mod.mod_type.as_str() {
+            "X" => 0,
+            "C" => 1,
+            "M" => 2,
+            _ => 1, // Default to C
+        }; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "TypeOfSpeedModHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::SpeedMod,
-            name: lookup_key("PlayerOptions", "SpeedMod"),
-            choices: vec![speed_mod_value_str], // Display only the current value
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "SpeedModHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::SpeedMod,
+        name: lookup_key("PlayerOptions", "SpeedMod"),
+        choices: vec![speed_mod_value_str], // Display only the current value
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "SpeedModHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Mini,
-            name: lookup_key("PlayerOptions", "Mini"),
-            choices: (-100..=150).map(|v| format!("{v}%")).collect(),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "MiniHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::Mini,
+        name: lookup_key("PlayerOptions", "Mini"),
+        choices: (-100..=150).map(|v| format!("{v}%")).collect(),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "MiniHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Perspective,
-            name: lookup_key("PlayerOptions", "Perspective"),
-            choices: vec![
-                tr("PlayerOptions", "PerspectiveOverhead").to_string(),
-                tr("PlayerOptions", "PerspectiveHallway").to_string(),
-                tr("PlayerOptions", "PerspectiveDistant").to_string(),
-                tr("PlayerOptions", "PerspectiveIncoming").to_string(),
-                tr("PlayerOptions", "PerspectiveSpace").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "PerspectiveHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::Perspective,
+        name: lookup_key("PlayerOptions", "Perspective"),
+        choices: vec![
+            tr("PlayerOptions", "PerspectiveOverhead").to_string(),
+            tr("PlayerOptions", "PerspectiveHallway").to_string(),
+            tr("PlayerOptions", "PerspectiveDistant").to_string(),
+            tr("PlayerOptions", "PerspectiveIncoming").to_string(),
+            tr("PlayerOptions", "PerspectiveSpace").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "PerspectiveHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::NoteSkin,
-            name: lookup_key("PlayerOptions", "NoteSkin"),
-            choices: if noteskin_names.is_empty() {
-                vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()]
-            } else {
-                noteskin_names.to_vec()
-            },
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "NoteSkinHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::NoteSkin,
+        name: lookup_key("PlayerOptions", "NoteSkin"),
+        choices: if noteskin_names.is_empty() {
+            vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()]
+        } else {
+            noteskin_names.to_vec()
+        },
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "NoteSkinHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::MineSkin,
-            name: lookup_key("PlayerOptions", "MineSkin"),
-            choices: build_noteskin_override_choices(noteskin_names),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "MineSkinHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::MineSkin,
+        name: lookup_key("PlayerOptions", "MineSkin"),
+        choices: build_noteskin_override_choices(noteskin_names),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "MineSkinHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ReceptorSkin,
-            name: lookup_key("PlayerOptions", "ReceptorSkin"),
-            choices: build_noteskin_override_choices(noteskin_names),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "ReceptorSkinHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::ReceptorSkin,
+        name: lookup_key("PlayerOptions", "ReceptorSkin"),
+        choices: build_noteskin_override_choices(noteskin_names),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "ReceptorSkinHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::TapExplosionSkin,
-            name: lookup_key("PlayerOptions", "TapExplosionSkin"),
-            choices: build_tap_explosion_noteskin_choices(noteskin_names),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "TapExplosionSkinHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::TapExplosionSkin,
+        name: lookup_key("PlayerOptions", "TapExplosionSkin"),
+        choices: build_tap_explosion_noteskin_choices(noteskin_names),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "TapExplosionSkinHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::JudgmentFont,
-            name: lookup_key("PlayerOptions", "JudgmentFont"),
-            choices: assets::judgment_texture_choices()
-                .iter()
-                .map(|choice| choice.label.clone())
-                .collect(),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "JudgmentFontHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::JudgmentFont,
+        name: lookup_key("PlayerOptions", "JudgmentFont"),
+        choices: assets::judgment_texture_choices()
+            .iter()
+            .map(|choice| choice.label.clone())
+            .collect(),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "JudgmentFontHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::JudgmentOffsetX,
-            name: lookup_key("PlayerOptions", "JudgmentOffsetX"),
-            choices: hud_offset_choices(),
-            selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "JudgmentOffsetXHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::JudgmentOffsetX,
+        name: lookup_key("PlayerOptions", "JudgmentOffsetX"),
+        choices: hud_offset_choices(),
+        selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "JudgmentOffsetXHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::JudgmentOffsetY,
-            name: lookup_key("PlayerOptions", "JudgmentOffsetY"),
-            choices: hud_offset_choices(),
-            selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "JudgmentOffsetYHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::JudgmentOffsetY,
+        name: lookup_key("PlayerOptions", "JudgmentOffsetY"),
+        choices: hud_offset_choices(),
+        selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "JudgmentOffsetYHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ComboFont,
-            name: lookup_key("PlayerOptions", "ComboFont"),
-            choices: vec![
-                tr("PlayerOptions", "ComboFontWendy").to_string(),
-                tr("PlayerOptions", "ComboFontArialRounded").to_string(),
-                tr("PlayerOptions", "ComboFontAsap").to_string(),
-                tr("PlayerOptions", "ComboFontBebasNeue").to_string(),
-                tr("PlayerOptions", "ComboFontSourceCode").to_string(),
-                tr("PlayerOptions", "ComboFontWork").to_string(),
-                tr("PlayerOptions", "ComboFontWendyCursed").to_string(),
-                tr("PlayerOptions", "ComboFontNone").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "ComboFontHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::ComboFont,
+        name: lookup_key("PlayerOptions", "ComboFont"),
+        choices: vec![
+            tr("PlayerOptions", "ComboFontWendy").to_string(),
+            tr("PlayerOptions", "ComboFontArialRounded").to_string(),
+            tr("PlayerOptions", "ComboFontAsap").to_string(),
+            tr("PlayerOptions", "ComboFontBebasNeue").to_string(),
+            tr("PlayerOptions", "ComboFontSourceCode").to_string(),
+            tr("PlayerOptions", "ComboFontWork").to_string(),
+            tr("PlayerOptions", "ComboFontWendyCursed").to_string(),
+            tr("PlayerOptions", "ComboFontNone").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "ComboFontHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ComboOffsetX,
-            name: lookup_key("PlayerOptions", "ComboOffsetX"),
-            choices: hud_offset_choices(),
-            selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "ComboOffsetXHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::ComboOffsetX,
+        name: lookup_key("PlayerOptions", "ComboOffsetX"),
+        choices: hud_offset_choices(),
+        selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "ComboOffsetXHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ComboOffsetY,
-            name: lookup_key("PlayerOptions", "ComboOffsetY"),
-            choices: hud_offset_choices(),
-            selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "ComboOffsetYHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::ComboOffsetY,
+        name: lookup_key("PlayerOptions", "ComboOffsetY"),
+        choices: hud_offset_choices(),
+        selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "ComboOffsetYHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::HoldJudgment,
-            name: lookup_key("PlayerOptions", "HoldJudgment"),
-            choices: assets::hold_judgment_texture_choices()
-                .iter()
-                .map(|choice| choice.label.clone())
-                .collect(),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "HoldJudgmentHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::HoldJudgment,
+        name: lookup_key("PlayerOptions", "HoldJudgment"),
+        choices: assets::hold_judgment_texture_choices()
+            .iter()
+            .map(|choice| choice.label.clone())
+            .collect(),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "HoldJudgmentHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::BackgroundFilter,
-            name: lookup_key("PlayerOptions", "BackgroundFilter"),
-            choices: vec![
-                tr("PlayerOptions", "BackgroundFilterOff").to_string(),
-                tr("PlayerOptions", "BackgroundFilterDark").to_string(),
-                tr("PlayerOptions", "BackgroundFilterDarker").to_string(),
-                tr("PlayerOptions", "BackgroundFilterDarkest").to_string(),
-            ],
-            selected_choice_index: [3; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "BackgroundFilterHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::BackgroundFilter,
+        name: lookup_key("PlayerOptions", "BackgroundFilter"),
+        choices: vec![
+            tr("PlayerOptions", "BackgroundFilterOff").to_string(),
+            tr("PlayerOptions", "BackgroundFilterDark").to_string(),
+            tr("PlayerOptions", "BackgroundFilterDarker").to_string(),
+            tr("PlayerOptions", "BackgroundFilterDarkest").to_string(),
+        ],
+        selected_choice_index: [3; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "BackgroundFilterHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::NoteFieldOffsetX,
-            name: lookup_key("PlayerOptions", "NoteFieldOffsetX"),
-            choices: (0..=50).map(|v| v.to_string()).collect(),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "NoteFieldOffsetXHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::NoteFieldOffsetX,
+        name: lookup_key("PlayerOptions", "NoteFieldOffsetX"),
+        choices: (0..=50).map(|v| v.to_string()).collect(),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "NoteFieldOffsetXHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::NoteFieldOffsetY,
-            name: lookup_key("PlayerOptions", "NoteFieldOffsetY"),
-            choices: (-50..=50).map(|v| v.to_string()).collect(),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "NoteFieldOffsetYHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::NoteFieldOffsetY,
+        name: lookup_key("PlayerOptions", "NoteFieldOffsetY"),
+        choices: (-50..=50).map(|v| v.to_string()).collect(),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "NoteFieldOffsetYHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::VisualDelay,
-            name: lookup_key("PlayerOptions", "VisualDelay"),
-            choices: (-100..=100).map(|v| format!("{v}ms")).collect(),
-            selected_choice_index: [100; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "VisualDelayHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::VisualDelay,
+        name: lookup_key("PlayerOptions", "VisualDelay"),
+        choices: (-100..=100).map(|v| format!("{v}ms")).collect(),
+        selected_choice_index: [100; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "VisualDelayHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::GlobalOffsetShift,
-            name: lookup_key("PlayerOptions", "GlobalOffsetShift"),
-            choices: (-100..=100).map(|v| format!("{v}ms")).collect(),
-            selected_choice_index: [100; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "GlobalOffsetShiftHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::GlobalOffsetShift,
+        name: lookup_key("PlayerOptions", "GlobalOffsetShift"),
+        choices: (-100..=100).map(|v| format!("{v}ms")).collect(),
+        selected_choice_index: [100; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "GlobalOffsetShiftHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::MusicRate,
-            name: lookup_key("PlayerOptions", "MusicRate"),
-            choices: vec![fmt_music_rate(session_music_rate.clamp(0.5, 3.0))],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "MusicRateHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::MusicRate,
+        name: lookup_key("PlayerOptions", "MusicRate"),
+        choices: vec![fmt_music_rate(session_music_rate.clamp(0.5, 3.0))],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "MusicRateHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Stepchart,
-            name: lookup_key("PlayerOptions", "Stepchart"),
-            choices: stepchart_choices,
-            selected_choice_index: initial_stepchart_choice_index,
-            help: tr("PlayerOptionsHelp", "StepchartHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: Some(stepchart_choice_indices),
+        id: RowId::Stepchart,
+        name: lookup_key("PlayerOptions", "Stepchart"),
+        choices: stepchart_choices,
+        selected_choice_index: initial_stepchart_choice_index,
+        help: tr("PlayerOptionsHelp", "StepchartHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: Some(stepchart_choice_indices),
     });
     b.push(Row {
-            id: RowId::WhatComesNext,
-            name: lookup_key("PlayerOptions", "WhatComesNext"),
-            choices: what_comes_next_choices(OptionsPane::Main, return_screen),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: tr("PlayerOptionsHelp", "WhatComesNextHelp")
-                .split("\\n")
-                .map(|s| s.to_string())
-                .collect(),
-            choice_difficulty_indices: None,
+        id: RowId::WhatComesNext,
+        name: lookup_key("PlayerOptions", "WhatComesNext"),
+        choices: what_comes_next_choices(OptionsPane::Main, return_screen),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "WhatComesNextHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Exit,
-            name: lookup_key("Common", "Exit"),
-            choices: vec![tr("Common", "Exit").to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![String::new()],
-            choice_difficulty_indices: None,
+        id: RowId::Exit,
+        name: lookup_key("Common", "Exit"),
+        choices: vec![tr("Common", "Exit").to_string()],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![String::new()],
+        choice_difficulty_indices: None,
     });
     b.finish()
 }
@@ -1705,454 +1704,454 @@ fn build_advanced_rows(return_screen: Screen) -> RowMap {
 
     let mut b = RowBuilder::new();
     b.push(Row {
-            id: RowId::Turn,
-            name: lookup_key("PlayerOptions", "Turn"),
-            choices: vec![
-                tr("PlayerOptions", "TurnNone").to_string(),
-                tr("PlayerOptions", "TurnMirror").to_string(),
-                tr("PlayerOptions", "TurnLeft").to_string(),
-                tr("PlayerOptions", "TurnRight").to_string(),
-                tr("PlayerOptions", "TurnLRMirror").to_string(),
-                tr("PlayerOptions", "TurnUDMirror").to_string(),
-                tr("PlayerOptions", "TurnShuffle").to_string(),
-                tr("PlayerOptions", "TurnBlender").to_string(),
-                tr("PlayerOptions", "TurnRandom").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "TurnHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::Turn,
+        name: lookup_key("PlayerOptions", "Turn"),
+        choices: vec![
+            tr("PlayerOptions", "TurnNone").to_string(),
+            tr("PlayerOptions", "TurnMirror").to_string(),
+            tr("PlayerOptions", "TurnLeft").to_string(),
+            tr("PlayerOptions", "TurnRight").to_string(),
+            tr("PlayerOptions", "TurnLRMirror").to_string(),
+            tr("PlayerOptions", "TurnUDMirror").to_string(),
+            tr("PlayerOptions", "TurnShuffle").to_string(),
+            tr("PlayerOptions", "TurnBlender").to_string(),
+            tr("PlayerOptions", "TurnRandom").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "TurnHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Scroll,
-            name: lookup_key("PlayerOptions", "Scroll"),
-            choices: vec![
-                tr("PlayerOptions", "ScrollReverse").to_string(),
-                tr("PlayerOptions", "ScrollSplit").to_string(),
-                tr("PlayerOptions", "ScrollAlternate").to_string(),
-                tr("PlayerOptions", "ScrollCross").to_string(),
-                tr("PlayerOptions", "ScrollCentered").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "ScrollHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::Scroll,
+        name: lookup_key("PlayerOptions", "Scroll"),
+        choices: vec![
+            tr("PlayerOptions", "ScrollReverse").to_string(),
+            tr("PlayerOptions", "ScrollSplit").to_string(),
+            tr("PlayerOptions", "ScrollAlternate").to_string(),
+            tr("PlayerOptions", "ScrollCross").to_string(),
+            tr("PlayerOptions", "ScrollCentered").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "ScrollHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Hide,
-            name: lookup_key("PlayerOptions", "Hide"),
-            choices: vec![
-                tr("PlayerOptions", "HideTargets").to_string(),
-                tr("PlayerOptions", "HideBackground").to_string(),
-                tr("PlayerOptions", "HideCombo").to_string(),
-                tr("PlayerOptions", "HideLife").to_string(),
-                tr("PlayerOptions", "HideScore").to_string(),
-                tr("PlayerOptions", "HideDanger").to_string(),
-                tr("PlayerOptions", "HideComboExplosions").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "HideHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::Hide,
+        name: lookup_key("PlayerOptions", "Hide"),
+        choices: vec![
+            tr("PlayerOptions", "HideTargets").to_string(),
+            tr("PlayerOptions", "HideBackground").to_string(),
+            tr("PlayerOptions", "HideCombo").to_string(),
+            tr("PlayerOptions", "HideLife").to_string(),
+            tr("PlayerOptions", "HideScore").to_string(),
+            tr("PlayerOptions", "HideDanger").to_string(),
+            tr("PlayerOptions", "HideComboExplosions").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "HideHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::LifeMeterType,
-            name: lookup_key("PlayerOptions", "LifeMeterType"),
-            choices: vec![
-                tr("PlayerOptions", "LifeMeterTypeStandard").to_string(),
-                tr("PlayerOptions", "LifeMeterTypeSurround").to_string(),
-                tr("PlayerOptions", "LifeMeterTypeVertical").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "LifeMeterTypeHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::LifeMeterType,
+        name: lookup_key("PlayerOptions", "LifeMeterType"),
+        choices: vec![
+            tr("PlayerOptions", "LifeMeterTypeStandard").to_string(),
+            tr("PlayerOptions", "LifeMeterTypeSurround").to_string(),
+            tr("PlayerOptions", "LifeMeterTypeVertical").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "LifeMeterTypeHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::LifeBarOptions,
-            name: lookup_key("PlayerOptions", "LifeBarOptions"),
-            choices: vec![
-                tr("PlayerOptions", "LifeBarOptionsRainbowMax").to_string(),
-                tr("PlayerOptions", "LifeBarOptionsResponsiveColors").to_string(),
-                tr("PlayerOptions", "LifeBarOptionsShowLifePercentage").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "LifeBarOptionsHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::LifeBarOptions,
+        name: lookup_key("PlayerOptions", "LifeBarOptions"),
+        choices: vec![
+            tr("PlayerOptions", "LifeBarOptionsRainbowMax").to_string(),
+            tr("PlayerOptions", "LifeBarOptionsResponsiveColors").to_string(),
+            tr("PlayerOptions", "LifeBarOptionsShowLifePercentage").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "LifeBarOptionsHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::DataVisualizations,
-            name: lookup_key("PlayerOptions", "DataVisualizations"),
-            choices: vec![
-                tr("PlayerOptions", "DataVisualizationsNone").to_string(),
-                tr("PlayerOptions", "DataVisualizationsTargetScoreGraph").to_string(),
-                tr("PlayerOptions", "DataVisualizationsStepStatistics").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "DataVisualizationsHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::DataVisualizations,
+        name: lookup_key("PlayerOptions", "DataVisualizations"),
+        choices: vec![
+            tr("PlayerOptions", "DataVisualizationsNone").to_string(),
+            tr("PlayerOptions", "DataVisualizationsTargetScoreGraph").to_string(),
+            tr("PlayerOptions", "DataVisualizationsStepStatistics").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "DataVisualizationsHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::DensityGraphBackground,
-            name: lookup_key("PlayerOptions", "DensityGraphBackground"),
-            choices: vec![
-                tr("PlayerOptions", "DensityGraphBackgroundSolid").to_string(),
-                tr("PlayerOptions", "DensityGraphBackgroundTransparent").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "DensityGraphBackgroundHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::DensityGraphBackground,
+        name: lookup_key("PlayerOptions", "DensityGraphBackground"),
+        choices: vec![
+            tr("PlayerOptions", "DensityGraphBackgroundSolid").to_string(),
+            tr("PlayerOptions", "DensityGraphBackgroundTransparent").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "DensityGraphBackgroundHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::TargetScore,
-            name: lookup_key("PlayerOptions", "TargetScore"),
-            choices: vec![
-                tr("PlayerOptions", "TargetScoreCMinus").to_string(),
-                tr("PlayerOptions", "TargetScoreC").to_string(),
-                tr("PlayerOptions", "TargetScoreCPlus").to_string(),
-                tr("PlayerOptions", "TargetScoreBMinus").to_string(),
-                tr("PlayerOptions", "TargetScoreB").to_string(),
-                tr("PlayerOptions", "TargetScoreBPlus").to_string(),
-                tr("PlayerOptions", "TargetScoreAMinus").to_string(),
-                tr("PlayerOptions", "TargetScoreA").to_string(),
-                tr("PlayerOptions", "TargetScoreAPlus").to_string(),
-                tr("PlayerOptions", "TargetScoreSMinus").to_string(),
-                tr("PlayerOptions", "TargetScoreS").to_string(),
-                tr("PlayerOptions", "TargetScoreSPlus").to_string(),
-                tr("PlayerOptions", "TargetScoreMachineBest").to_string(),
-                tr("PlayerOptions", "TargetScorePersonalBest").to_string(),
-            ],
-            selected_choice_index: [10; PLAYER_SLOTS], // S by default
-            help: vec![tr("PlayerOptionsHelp", "TargetScoreHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::TargetScore,
+        name: lookup_key("PlayerOptions", "TargetScore"),
+        choices: vec![
+            tr("PlayerOptions", "TargetScoreCMinus").to_string(),
+            tr("PlayerOptions", "TargetScoreC").to_string(),
+            tr("PlayerOptions", "TargetScoreCPlus").to_string(),
+            tr("PlayerOptions", "TargetScoreBMinus").to_string(),
+            tr("PlayerOptions", "TargetScoreB").to_string(),
+            tr("PlayerOptions", "TargetScoreBPlus").to_string(),
+            tr("PlayerOptions", "TargetScoreAMinus").to_string(),
+            tr("PlayerOptions", "TargetScoreA").to_string(),
+            tr("PlayerOptions", "TargetScoreAPlus").to_string(),
+            tr("PlayerOptions", "TargetScoreSMinus").to_string(),
+            tr("PlayerOptions", "TargetScoreS").to_string(),
+            tr("PlayerOptions", "TargetScoreSPlus").to_string(),
+            tr("PlayerOptions", "TargetScoreMachineBest").to_string(),
+            tr("PlayerOptions", "TargetScorePersonalBest").to_string(),
+        ],
+        selected_choice_index: [10; PLAYER_SLOTS], // S by default
+        help: vec![tr("PlayerOptionsHelp", "TargetScoreHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ActionOnMissedTarget,
-            name: lookup_key("PlayerOptions", "TargetScoreMissPolicy"),
-            choices: vec![
-                tr("PlayerOptions", "TargetScoreMissPolicyNothing").to_string(),
-                tr("PlayerOptions", "TargetScoreMissPolicyFail").to_string(),
-                tr("PlayerOptions", "TargetScoreMissPolicyRestartSong").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "TargetScoreMissPolicyHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::ActionOnMissedTarget,
+        name: lookup_key("PlayerOptions", "TargetScoreMissPolicy"),
+        choices: vec![
+            tr("PlayerOptions", "TargetScoreMissPolicyNothing").to_string(),
+            tr("PlayerOptions", "TargetScoreMissPolicyFail").to_string(),
+            tr("PlayerOptions", "TargetScoreMissPolicyRestartSong").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "TargetScoreMissPolicyHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::MiniIndicator,
-            name: lookup_key("PlayerOptions", "MiniIndicator"),
-            choices: vec![
-                tr("PlayerOptions", "MiniIndicatorNone").to_string(),
-                tr("PlayerOptions", "MiniIndicatorSubtractiveScoring").to_string(),
-                tr("PlayerOptions", "MiniIndicatorPredictiveScoring").to_string(),
-                tr("PlayerOptions", "MiniIndicatorPaceScoring").to_string(),
-                tr("PlayerOptions", "MiniIndicatorRivalScoring").to_string(),
-                tr("PlayerOptions", "MiniIndicatorPacemaker").to_string(),
-                tr("PlayerOptions", "MiniIndicatorStreamProg").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "MiniIndicatorHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::MiniIndicator,
+        name: lookup_key("PlayerOptions", "MiniIndicator"),
+        choices: vec![
+            tr("PlayerOptions", "MiniIndicatorNone").to_string(),
+            tr("PlayerOptions", "MiniIndicatorSubtractiveScoring").to_string(),
+            tr("PlayerOptions", "MiniIndicatorPredictiveScoring").to_string(),
+            tr("PlayerOptions", "MiniIndicatorPaceScoring").to_string(),
+            tr("PlayerOptions", "MiniIndicatorRivalScoring").to_string(),
+            tr("PlayerOptions", "MiniIndicatorPacemaker").to_string(),
+            tr("PlayerOptions", "MiniIndicatorStreamProg").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "MiniIndicatorHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::IndicatorScoreType,
-            name: lookup_key("PlayerOptions", "IndicatorScoreType"),
-            choices: vec![
-                tr("PlayerOptions", "IndicatorScoreTypeITG").to_string(),
-                tr("PlayerOptions", "IndicatorScoreTypeEX").to_string(),
-                tr("PlayerOptions", "IndicatorScoreTypeHEX").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "IndicatorScoreTypeHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::IndicatorScoreType,
+        name: lookup_key("PlayerOptions", "IndicatorScoreType"),
+        choices: vec![
+            tr("PlayerOptions", "IndicatorScoreTypeITG").to_string(),
+            tr("PlayerOptions", "IndicatorScoreTypeEX").to_string(),
+            tr("PlayerOptions", "IndicatorScoreTypeHEX").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "IndicatorScoreTypeHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::GameplayExtras,
-            name: lookup_key("PlayerOptions", "GameplayExtras"),
-            choices: gameplay_extras_choices,
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "GameplayExtrasHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::GameplayExtras,
+        name: lookup_key("PlayerOptions", "GameplayExtras"),
+        choices: gameplay_extras_choices,
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "GameplayExtrasHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ComboColors,
-            name: lookup_key("PlayerOptions", "ComboColors"),
-            choices: vec![
-                tr("PlayerOptions", "ComboColorsGlow").to_string(),
-                tr("PlayerOptions", "ComboColorsSolid").to_string(),
-                tr("PlayerOptions", "ComboColorsRainbow").to_string(),
-                tr("PlayerOptions", "ComboColorsRainbowScroll").to_string(),
-                tr("PlayerOptions", "ComboColorsNone").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "ComboColorsHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::ComboColors,
+        name: lookup_key("PlayerOptions", "ComboColors"),
+        choices: vec![
+            tr("PlayerOptions", "ComboColorsGlow").to_string(),
+            tr("PlayerOptions", "ComboColorsSolid").to_string(),
+            tr("PlayerOptions", "ComboColorsRainbow").to_string(),
+            tr("PlayerOptions", "ComboColorsRainbowScroll").to_string(),
+            tr("PlayerOptions", "ComboColorsNone").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "ComboColorsHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ComboColorMode,
-            name: lookup_key("PlayerOptions", "ComboColorMode"),
-            choices: vec![
-                tr("PlayerOptions", "ComboColorModeFullCombo").to_string(),
-                tr("PlayerOptions", "ComboColorModeCurrentCombo").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "ComboColorModeHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::ComboColorMode,
+        name: lookup_key("PlayerOptions", "ComboColorMode"),
+        choices: vec![
+            tr("PlayerOptions", "ComboColorModeFullCombo").to_string(),
+            tr("PlayerOptions", "ComboColorModeCurrentCombo").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "ComboColorModeHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::CarryCombo,
-            name: lookup_key("PlayerOptions", "CarryCombo"),
-            choices: vec![
-                tr("PlayerOptions", "CarryComboNo").to_string(),
-                tr("PlayerOptions", "CarryComboYes").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "CarryComboHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::CarryCombo,
+        name: lookup_key("PlayerOptions", "CarryCombo"),
+        choices: vec![
+            tr("PlayerOptions", "CarryComboNo").to_string(),
+            tr("PlayerOptions", "CarryComboYes").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "CarryComboHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::JudgmentTilt,
-            name: lookup_key("PlayerOptions", "JudgmentTilt"),
-            choices: vec![
-                tr("PlayerOptions", "JudgmentTiltNo").to_string(),
-                tr("PlayerOptions", "JudgmentTiltYes").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "JudgmentTiltHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::JudgmentTilt,
+        name: lookup_key("PlayerOptions", "JudgmentTilt"),
+        choices: vec![
+            tr("PlayerOptions", "JudgmentTiltNo").to_string(),
+            tr("PlayerOptions", "JudgmentTiltYes").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "JudgmentTiltHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::JudgmentTiltIntensity,
-            name: lookup_key("PlayerOptions", "JudgmentTiltIntensity"),
-            choices: tilt_intensity_choices(),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "JudgmentTiltIntensityHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::JudgmentTiltIntensity,
+        name: lookup_key("PlayerOptions", "JudgmentTiltIntensity"),
+        choices: tilt_intensity_choices(),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "JudgmentTiltIntensityHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::JudgmentBehindArrows,
-            name: lookup_key("PlayerOptions", "JudgmentBehindArrows"),
-            choices: vec![
-                tr("PlayerOptions", "JudgmentBehindArrowsOff").to_string(),
-                tr("PlayerOptions", "JudgmentBehindArrowsOn").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "JudgmentBehindArrowsHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::JudgmentBehindArrows,
+        name: lookup_key("PlayerOptions", "JudgmentBehindArrows"),
+        choices: vec![
+            tr("PlayerOptions", "JudgmentBehindArrowsOff").to_string(),
+            tr("PlayerOptions", "JudgmentBehindArrowsOn").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "JudgmentBehindArrowsHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::OffsetIndicator,
-            name: lookup_key("PlayerOptions", "OffsetIndicator"),
-            choices: vec![
-                tr("PlayerOptions", "OffsetIndicatorOff").to_string(),
-                tr("PlayerOptions", "OffsetIndicatorOn").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "OffsetIndicatorHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::OffsetIndicator,
+        name: lookup_key("PlayerOptions", "OffsetIndicator"),
+        choices: vec![
+            tr("PlayerOptions", "OffsetIndicatorOff").to_string(),
+            tr("PlayerOptions", "OffsetIndicatorOn").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "OffsetIndicatorHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ErrorBar,
-            name: lookup_key("PlayerOptions", "ErrorBar"),
-            choices: vec![
-                tr("PlayerOptions", "ErrorBarColorful").to_string(),
-                tr("PlayerOptions", "ErrorBarMonochrome").to_string(),
-                tr("PlayerOptions", "ErrorBarText").to_string(),
-                tr("PlayerOptions", "ErrorBarHighlight").to_string(),
-                tr("PlayerOptions", "ErrorBarAverage").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "ErrorBarHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::ErrorBar,
+        name: lookup_key("PlayerOptions", "ErrorBar"),
+        choices: vec![
+            tr("PlayerOptions", "ErrorBarColorful").to_string(),
+            tr("PlayerOptions", "ErrorBarMonochrome").to_string(),
+            tr("PlayerOptions", "ErrorBarText").to_string(),
+            tr("PlayerOptions", "ErrorBarHighlight").to_string(),
+            tr("PlayerOptions", "ErrorBarAverage").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "ErrorBarHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ErrorBarTrim,
-            name: lookup_key("PlayerOptions", "ErrorBarTrim"),
-            choices: vec![
-                tr("PlayerOptions", "ErrorBarTrimOff").to_string(),
-                tr("PlayerOptions", "ErrorBarTrimFantastic").to_string(),
-                tr("PlayerOptions", "ErrorBarTrimExcellent").to_string(),
-                tr("PlayerOptions", "ErrorBarTrimGreat").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "ErrorBarTrimHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::ErrorBarTrim,
+        name: lookup_key("PlayerOptions", "ErrorBarTrim"),
+        choices: vec![
+            tr("PlayerOptions", "ErrorBarTrimOff").to_string(),
+            tr("PlayerOptions", "ErrorBarTrimFantastic").to_string(),
+            tr("PlayerOptions", "ErrorBarTrimExcellent").to_string(),
+            tr("PlayerOptions", "ErrorBarTrimGreat").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "ErrorBarTrimHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ErrorBarOptions,
-            name: lookup_key("PlayerOptions", "ErrorBarOptions"),
-            choices: vec![
-                tr("PlayerOptions", "ErrorBarOptionsMoveUp").to_string(),
-                tr("PlayerOptions", "ErrorBarOptionsMultiTick").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "ErrorBarOptionsHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::ErrorBarOptions,
+        name: lookup_key("PlayerOptions", "ErrorBarOptions"),
+        choices: vec![
+            tr("PlayerOptions", "ErrorBarOptionsMoveUp").to_string(),
+            tr("PlayerOptions", "ErrorBarOptionsMultiTick").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "ErrorBarOptionsHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ErrorBarOffsetX,
-            name: lookup_key("PlayerOptions", "ErrorBarOffsetX"),
-            choices: hud_offset_choices(),
-            selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "ErrorBarOffsetXHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::ErrorBarOffsetX,
+        name: lookup_key("PlayerOptions", "ErrorBarOffsetX"),
+        choices: hud_offset_choices(),
+        selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "ErrorBarOffsetXHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ErrorBarOffsetY,
-            name: lookup_key("PlayerOptions", "ErrorBarOffsetY"),
-            choices: hud_offset_choices(),
-            selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "ErrorBarOffsetYHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::ErrorBarOffsetY,
+        name: lookup_key("PlayerOptions", "ErrorBarOffsetY"),
+        choices: hud_offset_choices(),
+        selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "ErrorBarOffsetYHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::MeasureCounter,
-            name: lookup_key("PlayerOptions", "MeasureCounter"),
-            choices: vec![
-                tr("PlayerOptions", "MeasureCounterNone").to_string(),
-                tr("PlayerOptions", "MeasureCounter8th").to_string(),
-                tr("PlayerOptions", "MeasureCounter12th").to_string(),
-                tr("PlayerOptions", "MeasureCounter16th").to_string(),
-                tr("PlayerOptions", "MeasureCounter24th").to_string(),
-                tr("PlayerOptions", "MeasureCounter32nd").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "MeasureCounterHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::MeasureCounter,
+        name: lookup_key("PlayerOptions", "MeasureCounter"),
+        choices: vec![
+            tr("PlayerOptions", "MeasureCounterNone").to_string(),
+            tr("PlayerOptions", "MeasureCounter8th").to_string(),
+            tr("PlayerOptions", "MeasureCounter12th").to_string(),
+            tr("PlayerOptions", "MeasureCounter16th").to_string(),
+            tr("PlayerOptions", "MeasureCounter24th").to_string(),
+            tr("PlayerOptions", "MeasureCounter32nd").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "MeasureCounterHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::MeasureCounterLookahead,
-            name: lookup_key("PlayerOptions", "MeasureCounterLookahead"),
-            choices: vec![
-                tr("PlayerOptions", "MeasureCounterLookahead0").to_string(),
-                tr("PlayerOptions", "MeasureCounterLookahead1").to_string(),
-                tr("PlayerOptions", "MeasureCounterLookahead2").to_string(),
-                tr("PlayerOptions", "MeasureCounterLookahead3").to_string(),
-                tr("PlayerOptions", "MeasureCounterLookahead4").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "MeasureCounterLookaheadHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::MeasureCounterLookahead,
+        name: lookup_key("PlayerOptions", "MeasureCounterLookahead"),
+        choices: vec![
+            tr("PlayerOptions", "MeasureCounterLookahead0").to_string(),
+            tr("PlayerOptions", "MeasureCounterLookahead1").to_string(),
+            tr("PlayerOptions", "MeasureCounterLookahead2").to_string(),
+            tr("PlayerOptions", "MeasureCounterLookahead3").to_string(),
+            tr("PlayerOptions", "MeasureCounterLookahead4").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "MeasureCounterLookaheadHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::MeasureCounterOptions,
-            name: lookup_key("PlayerOptions", "MeasureCounterOptions"),
-            choices: vec![
-                tr("PlayerOptions", "MeasureCounterOptionsMoveLeft").to_string(),
-                tr("PlayerOptions", "MeasureCounterOptionsMoveUp").to_string(),
-                tr("PlayerOptions", "MeasureCounterOptionsVerticalLookahead").to_string(),
-                tr("PlayerOptions", "MeasureCounterOptionsBrokenRunTotal").to_string(),
-                tr("PlayerOptions", "MeasureCounterOptionsRunTimer").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "MeasureCounterOptionsHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::MeasureCounterOptions,
+        name: lookup_key("PlayerOptions", "MeasureCounterOptions"),
+        choices: vec![
+            tr("PlayerOptions", "MeasureCounterOptionsMoveLeft").to_string(),
+            tr("PlayerOptions", "MeasureCounterOptionsMoveUp").to_string(),
+            tr("PlayerOptions", "MeasureCounterOptionsVerticalLookahead").to_string(),
+            tr("PlayerOptions", "MeasureCounterOptionsBrokenRunTotal").to_string(),
+            tr("PlayerOptions", "MeasureCounterOptionsRunTimer").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "MeasureCounterOptionsHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::MeasureLines,
-            name: lookup_key("PlayerOptions", "MeasureLines"),
-            choices: vec![
-                tr("PlayerOptions", "MeasureLinesOff").to_string(),
-                tr("PlayerOptions", "MeasureLinesMeasure").to_string(),
-                tr("PlayerOptions", "MeasureLinesQuarter").to_string(),
-                tr("PlayerOptions", "MeasureLinesEighth").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "MeasureLinesHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::MeasureLines,
+        name: lookup_key("PlayerOptions", "MeasureLines"),
+        choices: vec![
+            tr("PlayerOptions", "MeasureLinesOff").to_string(),
+            tr("PlayerOptions", "MeasureLinesMeasure").to_string(),
+            tr("PlayerOptions", "MeasureLinesQuarter").to_string(),
+            tr("PlayerOptions", "MeasureLinesEighth").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "MeasureLinesHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::RescoreEarlyHits,
-            name: lookup_key("PlayerOptions", "RescoreEarlyHits"),
-            choices: vec![
-                tr("PlayerOptions", "RescoreEarlyHitsNo").to_string(),
-                tr("PlayerOptions", "RescoreEarlyHitsYes").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "RescoreEarlyHitsHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::RescoreEarlyHits,
+        name: lookup_key("PlayerOptions", "RescoreEarlyHits"),
+        choices: vec![
+            tr("PlayerOptions", "RescoreEarlyHitsNo").to_string(),
+            tr("PlayerOptions", "RescoreEarlyHitsYes").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "RescoreEarlyHitsHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::EarlyDecentWayOffOptions,
-            name: lookup_key("PlayerOptions", "EarlyDecentWayOffOptions"),
-            choices: vec![
-                tr("PlayerOptions", "EarlyDecentWayOffOptionsHideJudgments").to_string(),
-                tr(
-                    "PlayerOptions",
-                    "EarlyDecentWayOffOptionsHideNoteFieldFlash",
-                )
-                .to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "EarlyDecentWayOffOptionsHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::EarlyDecentWayOffOptions,
+        name: lookup_key("PlayerOptions", "EarlyDecentWayOffOptions"),
+        choices: vec![
+            tr("PlayerOptions", "EarlyDecentWayOffOptionsHideJudgments").to_string(),
+            tr(
+                "PlayerOptions",
+                "EarlyDecentWayOffOptionsHideNoteFieldFlash",
+            )
+            .to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "EarlyDecentWayOffOptionsHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::ResultsExtras,
-            name: lookup_key("PlayerOptions", "ResultsExtras"),
-            choices: vec![tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "ResultsExtrasHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::ResultsExtras,
+        name: lookup_key("PlayerOptions", "ResultsExtras"),
+        choices: vec![tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string()],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "ResultsExtrasHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::TimingWindows,
-            name: lookup_key("PlayerOptions", "TimingWindows"),
-            choices: vec![
-                tr("PlayerOptions", "TimingWindowsNone").to_string(),
-                tr("PlayerOptions", "TimingWindowsWayOffs").to_string(),
-                tr("PlayerOptions", "TimingWindowsDecentsAndWayOffs").to_string(),
-                tr("PlayerOptions", "TimingWindowsFantasticsAndExcellents").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "TimingWindowsHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::TimingWindows,
+        name: lookup_key("PlayerOptions", "TimingWindows"),
+        choices: vec![
+            tr("PlayerOptions", "TimingWindowsNone").to_string(),
+            tr("PlayerOptions", "TimingWindowsWayOffs").to_string(),
+            tr("PlayerOptions", "TimingWindowsDecentsAndWayOffs").to_string(),
+            tr("PlayerOptions", "TimingWindowsFantasticsAndExcellents").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "TimingWindowsHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::FAPlusOptions,
-            name: lookup_key("PlayerOptions", "FAPlusOptions"),
-            choices: vec![
-                tr("PlayerOptions", "FAPlusOptionsDisplayFAPlusWindow").to_string(),
-                tr("PlayerOptions", "FAPlusOptionsDisplayEXScore").to_string(),
-                tr("PlayerOptions", "FAPlusOptionsDisplayHEXScore").to_string(),
-                tr("PlayerOptions", "FAPlusOptionsDisplayFAPlusPane").to_string(),
-                tr("PlayerOptions", "FAPlusOptions10msBlueWindow").to_string(),
-                tr("PlayerOptions", "FAPlusOptions1510msSplit").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "FAPlusOptionsHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::FAPlusOptions,
+        name: lookup_key("PlayerOptions", "FAPlusOptions"),
+        choices: vec![
+            tr("PlayerOptions", "FAPlusOptionsDisplayFAPlusWindow").to_string(),
+            tr("PlayerOptions", "FAPlusOptionsDisplayEXScore").to_string(),
+            tr("PlayerOptions", "FAPlusOptionsDisplayHEXScore").to_string(),
+            tr("PlayerOptions", "FAPlusOptionsDisplayFAPlusPane").to_string(),
+            tr("PlayerOptions", "FAPlusOptions10msBlueWindow").to_string(),
+            tr("PlayerOptions", "FAPlusOptions1510msSplit").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "FAPlusOptionsHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::CustomBlueFantasticWindow,
-            name: lookup_key("PlayerOptions", "CustomBlueFantasticWindow"),
-            choices: vec![
-                tr("PlayerOptions", "CustomBlueFantasticWindowNo").to_string(),
-                tr("PlayerOptions", "CustomBlueFantasticWindowYes").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "CustomBlueFantasticWindowHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::CustomBlueFantasticWindow,
+        name: lookup_key("PlayerOptions", "CustomBlueFantasticWindow"),
+        choices: vec![
+            tr("PlayerOptions", "CustomBlueFantasticWindowNo").to_string(),
+            tr("PlayerOptions", "CustomBlueFantasticWindowYes").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "CustomBlueFantasticWindowHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::CustomBlueFantasticWindowMs,
-            name: lookup_key("PlayerOptions", "CustomBlueFantasticWindowMs"),
-            choices: custom_fantastic_window_choices(),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "CustomBlueFantasticWindowMsHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::CustomBlueFantasticWindowMs,
+        name: lookup_key("PlayerOptions", "CustomBlueFantasticWindowMs"),
+        choices: custom_fantastic_window_choices(),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "CustomBlueFantasticWindowMsHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::WhatComesNext,
-            name: lookup_key("PlayerOptions", "WhatComesNext"),
-            choices: what_comes_next_choices(OptionsPane::Advanced, return_screen),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "WhatComesNextAdvancedHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::WhatComesNext,
+        name: lookup_key("PlayerOptions", "WhatComesNext"),
+        choices: what_comes_next_choices(OptionsPane::Advanced, return_screen),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "WhatComesNextAdvancedHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Exit,
-            name: lookup_key("Common", "Exit"),
-            choices: vec![tr("Common", "Exit").to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![String::new()],
-            choice_difficulty_indices: None,
+        id: RowId::Exit,
+        name: lookup_key("Common", "Exit"),
+        choices: vec![tr("Common", "Exit").to_string()],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![String::new()],
+        choice_difficulty_indices: None,
     });
     b.finish()
 }
@@ -2160,142 +2159,142 @@ fn build_advanced_rows(return_screen: Screen) -> RowMap {
 fn build_uncommon_rows(return_screen: Screen) -> RowMap {
     let mut b = RowBuilder::new();
     b.push(Row {
-            id: RowId::Insert,
-            name: lookup_key("PlayerOptions", "Insert"),
-            choices: vec![
-                tr("PlayerOptions", "InsertWide").to_string(),
-                tr("PlayerOptions", "InsertBig").to_string(),
-                tr("PlayerOptions", "InsertQuick").to_string(),
-                tr("PlayerOptions", "InsertBMRize").to_string(),
-                tr("PlayerOptions", "InsertSkippy").to_string(),
-                tr("PlayerOptions", "InsertEcho").to_string(),
-                tr("PlayerOptions", "InsertStomp").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "InsertHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::Insert,
+        name: lookup_key("PlayerOptions", "Insert"),
+        choices: vec![
+            tr("PlayerOptions", "InsertWide").to_string(),
+            tr("PlayerOptions", "InsertBig").to_string(),
+            tr("PlayerOptions", "InsertQuick").to_string(),
+            tr("PlayerOptions", "InsertBMRize").to_string(),
+            tr("PlayerOptions", "InsertSkippy").to_string(),
+            tr("PlayerOptions", "InsertEcho").to_string(),
+            tr("PlayerOptions", "InsertStomp").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "InsertHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Remove,
-            name: lookup_key("PlayerOptions", "Remove"),
-            choices: vec![
-                tr("PlayerOptions", "RemoveLittle").to_string(),
-                tr("PlayerOptions", "RemoveNoMines").to_string(),
-                tr("PlayerOptions", "RemoveNoHolds").to_string(),
-                tr("PlayerOptions", "RemoveNoJumps").to_string(),
-                tr("PlayerOptions", "RemoveNoHands").to_string(),
-                tr("PlayerOptions", "RemoveNoQuads").to_string(),
-                tr("PlayerOptions", "RemoveNoLifts").to_string(),
-                tr("PlayerOptions", "RemoveNoFakes").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "RemoveHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::Remove,
+        name: lookup_key("PlayerOptions", "Remove"),
+        choices: vec![
+            tr("PlayerOptions", "RemoveLittle").to_string(),
+            tr("PlayerOptions", "RemoveNoMines").to_string(),
+            tr("PlayerOptions", "RemoveNoHolds").to_string(),
+            tr("PlayerOptions", "RemoveNoJumps").to_string(),
+            tr("PlayerOptions", "RemoveNoHands").to_string(),
+            tr("PlayerOptions", "RemoveNoQuads").to_string(),
+            tr("PlayerOptions", "RemoveNoLifts").to_string(),
+            tr("PlayerOptions", "RemoveNoFakes").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "RemoveHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Holds,
-            name: lookup_key("PlayerOptions", "Holds"),
-            choices: vec![
-                tr("PlayerOptions", "HoldsPlanted").to_string(),
-                tr("PlayerOptions", "HoldsFloored").to_string(),
-                tr("PlayerOptions", "HoldsTwister").to_string(),
-                tr("PlayerOptions", "HoldsNoRolls").to_string(),
-                tr("PlayerOptions", "HoldsToRolls").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "HoldsHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::Holds,
+        name: lookup_key("PlayerOptions", "Holds"),
+        choices: vec![
+            tr("PlayerOptions", "HoldsPlanted").to_string(),
+            tr("PlayerOptions", "HoldsFloored").to_string(),
+            tr("PlayerOptions", "HoldsTwister").to_string(),
+            tr("PlayerOptions", "HoldsNoRolls").to_string(),
+            tr("PlayerOptions", "HoldsToRolls").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "HoldsHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Accel,
-            name: lookup_key("PlayerOptions", "Accel"),
-            choices: vec![
-                tr("PlayerOptions", "AccelBoost").to_string(),
-                tr("PlayerOptions", "AccelBrake").to_string(),
-                tr("PlayerOptions", "AccelWave").to_string(),
-                tr("PlayerOptions", "AccelExpand").to_string(),
-                tr("PlayerOptions", "AccelBoomerang").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "AccelHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::Accel,
+        name: lookup_key("PlayerOptions", "Accel"),
+        choices: vec![
+            tr("PlayerOptions", "AccelBoost").to_string(),
+            tr("PlayerOptions", "AccelBrake").to_string(),
+            tr("PlayerOptions", "AccelWave").to_string(),
+            tr("PlayerOptions", "AccelExpand").to_string(),
+            tr("PlayerOptions", "AccelBoomerang").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "AccelHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Effect,
-            name: lookup_key("PlayerOptions", "Effect"),
-            choices: vec![
-                tr("PlayerOptions", "EffectDrunk").to_string(),
-                tr("PlayerOptions", "EffectDizzy").to_string(),
-                tr("PlayerOptions", "EffectConfusion").to_string(),
-                tr("PlayerOptions", "EffectBig").to_string(),
-                tr("PlayerOptions", "EffectFlip").to_string(),
-                tr("PlayerOptions", "EffectInvert").to_string(),
-                tr("PlayerOptions", "EffectTornado").to_string(),
-                tr("PlayerOptions", "EffectTipsy").to_string(),
-                tr("PlayerOptions", "EffectBumpy").to_string(),
-                tr("PlayerOptions", "EffectBeat").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "EffectHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::Effect,
+        name: lookup_key("PlayerOptions", "Effect"),
+        choices: vec![
+            tr("PlayerOptions", "EffectDrunk").to_string(),
+            tr("PlayerOptions", "EffectDizzy").to_string(),
+            tr("PlayerOptions", "EffectConfusion").to_string(),
+            tr("PlayerOptions", "EffectBig").to_string(),
+            tr("PlayerOptions", "EffectFlip").to_string(),
+            tr("PlayerOptions", "EffectInvert").to_string(),
+            tr("PlayerOptions", "EffectTornado").to_string(),
+            tr("PlayerOptions", "EffectTipsy").to_string(),
+            tr("PlayerOptions", "EffectBumpy").to_string(),
+            tr("PlayerOptions", "EffectBeat").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "EffectHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Appearance,
-            name: lookup_key("PlayerOptions", "Appearance"),
-            choices: vec![
-                tr("PlayerOptions", "AppearanceHidden").to_string(),
-                tr("PlayerOptions", "AppearanceSudden").to_string(),
-                tr("PlayerOptions", "AppearanceStealth").to_string(),
-                tr("PlayerOptions", "AppearanceBlink").to_string(),
-                tr("PlayerOptions", "AppearanceRVanish").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "AppearanceHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::Appearance,
+        name: lookup_key("PlayerOptions", "Appearance"),
+        choices: vec![
+            tr("PlayerOptions", "AppearanceHidden").to_string(),
+            tr("PlayerOptions", "AppearanceSudden").to_string(),
+            tr("PlayerOptions", "AppearanceStealth").to_string(),
+            tr("PlayerOptions", "AppearanceBlink").to_string(),
+            tr("PlayerOptions", "AppearanceRVanish").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "AppearanceHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Attacks,
-            name: lookup_key("PlayerOptions", "Attacks"),
-            choices: vec![
-                tr("PlayerOptions", "AttacksOn").to_string(),
-                tr("PlayerOptions", "AttacksRandomAttacks").to_string(),
-                tr("PlayerOptions", "AttacksOff").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "AttacksHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::Attacks,
+        name: lookup_key("PlayerOptions", "Attacks"),
+        choices: vec![
+            tr("PlayerOptions", "AttacksOn").to_string(),
+            tr("PlayerOptions", "AttacksRandomAttacks").to_string(),
+            tr("PlayerOptions", "AttacksOff").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "AttacksHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::HideLightType,
-            name: lookup_key("PlayerOptions", "HideLightType"),
-            choices: vec![
-                tr("PlayerOptions", "HideLightTypeNoHideLights").to_string(),
-                tr("PlayerOptions", "HideLightTypeHideAllLights").to_string(),
-                tr("PlayerOptions", "HideLightTypeHideMarqueeLights").to_string(),
-                tr("PlayerOptions", "HideLightTypeHideBassLights").to_string(),
-            ],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![tr("PlayerOptionsHelp", "HideLightTypeHelp").to_string()],
-            choice_difficulty_indices: None,
+        id: RowId::HideLightType,
+        name: lookup_key("PlayerOptions", "HideLightType"),
+        choices: vec![
+            tr("PlayerOptions", "HideLightTypeNoHideLights").to_string(),
+            tr("PlayerOptions", "HideLightTypeHideAllLights").to_string(),
+            tr("PlayerOptions", "HideLightTypeHideMarqueeLights").to_string(),
+            tr("PlayerOptions", "HideLightTypeHideBassLights").to_string(),
+        ],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "HideLightTypeHelp").to_string()],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::WhatComesNext,
-            name: lookup_key("PlayerOptions", "WhatComesNext"),
-            choices: what_comes_next_choices(OptionsPane::Uncommon, return_screen),
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                tr("PlayerOptionsHelp", "WhatComesNextHelp1").to_string(),
-                tr("PlayerOptionsHelp", "WhatComesNextHelp2").to_string(),
-            ],
-            choice_difficulty_indices: None,
+        id: RowId::WhatComesNext,
+        name: lookup_key("PlayerOptions", "WhatComesNext"),
+        choices: what_comes_next_choices(OptionsPane::Uncommon, return_screen),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![
+            tr("PlayerOptionsHelp", "WhatComesNextHelp1").to_string(),
+            tr("PlayerOptionsHelp", "WhatComesNextHelp2").to_string(),
+        ],
+        choice_difficulty_indices: None,
     });
     b.push(Row {
-            id: RowId::Exit,
-            name: lookup_key("Common", "Exit"),
-            choices: vec![tr("Common", "Exit").to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![String::new()],
-            choice_difficulty_indices: None,
+        id: RowId::Exit,
+        name: lookup_key("Common", "Exit"),
+        choices: vec![tr("Common", "Exit").to_string()],
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![String::new()],
+        choice_difficulty_indices: None,
     });
     b.finish()
 }
@@ -3744,14 +3743,27 @@ fn row_visibility(
 
 #[inline(always)]
 fn is_row_visible(row_map: &RowMap, row_idx: usize, visibility: RowVisibility) -> bool {
-    row_map.display_order().get(row_idx).and_then(|&id| row_map.get(id)).is_some_and(|row| row_visible_with_flags(row.id, visibility))
+    row_map
+        .display_order()
+        .get(row_idx)
+        .and_then(|&id| row_map.get(id))
+        .is_some_and(|row| row_visible_with_flags(row.id, visibility))
 }
 
 fn count_visible_rows(row_map: &RowMap, visibility: RowVisibility) -> usize {
-    row_map.display_order().iter().filter_map(|&id| row_map.get(id)).filter(|row| row_visible_with_flags(row.id, visibility)).count()
+    row_map
+        .display_order()
+        .iter()
+        .filter_map(|&id| row_map.get(id))
+        .filter(|row| row_visible_with_flags(row.id, visibility))
+        .count()
 }
 
-fn row_to_visible_index(row_map: &RowMap, row_idx: usize, visibility: RowVisibility) -> Option<usize> {
+fn row_to_visible_index(
+    row_map: &RowMap,
+    row_idx: usize,
+    visibility: RowVisibility,
+) -> Option<usize> {
     if row_idx >= row_map.display_order().len() {
         return None;
     }
@@ -3767,7 +3779,11 @@ fn row_to_visible_index(row_map: &RowMap, row_idx: usize, visibility: RowVisibil
     Some(pos)
 }
 
-fn fallback_visible_row(row_map: &RowMap, row_idx: usize, visibility: RowVisibility) -> Option<usize> {
+fn fallback_visible_row(
+    row_map: &RowMap,
+    row_idx: usize,
+    visibility: RowVisibility,
+) -> Option<usize> {
     if row_map.display_order().is_empty() {
         return None;
     }
@@ -3814,7 +3830,9 @@ fn parent_anchor_visible_index(
     parent_id: RowId,
     visibility: RowVisibility,
 ) -> Option<i32> {
-    row_map.display_order().iter()
+    row_map
+        .display_order()
+        .iter()
         .position(|&id| id == parent_id)
         .and_then(|idx| row_to_visible_index(row_map, idx, visibility))
         .map(|idx| idx as i32)
@@ -3976,7 +3994,12 @@ fn arcade_row_uses_choice_focus(state: &State, player_idx: usize) -> bool {
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
-    state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)).is_some_and(row_supports_inline_nav)
+    state
+        .row_map
+        .display_order()
+        .get(row_idx)
+        .and_then(|&id| state.row_map.get(id))
+        .is_some_and(row_supports_inline_nav)
 }
 
 fn inline_choice_centers(
@@ -4005,7 +4028,11 @@ fn focused_inline_choice_index(
     row_idx: usize,
 ) -> Option<usize> {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id))?;
+    let row = state
+        .row_map
+        .display_order()
+        .get(row_idx)
+        .and_then(|&id| state.row_map.get(id))?;
     if !row_supports_inline_nav(row) {
         return None;
     }
@@ -4043,7 +4070,12 @@ fn move_inline_focus(
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
-    let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)) else {
+    let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_idx)
+        .and_then(|&id| state.row_map.get(id))
+    else {
         return false;
     };
     if !row_supports_inline_nav(row) {
@@ -4101,7 +4133,12 @@ fn commit_inline_focus_selection(
     row_idx: usize,
 ) -> bool {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)) else {
+    let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_idx)
+        .and_then(|&id| state.row_map.get(id))
+    else {
         return false;
     };
     if !row_supports_inline_nav(row) {
@@ -4137,7 +4174,12 @@ fn sync_inline_intent_from_row(
         state.inline_choice_x[idx] = f32::NAN;
         return;
     }
-    let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)) else {
+    let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_idx)
+        .and_then(|&id| state.row_map.get(id))
+    else {
         return;
     };
     if !row_supports_inline_nav(row) {
@@ -4166,7 +4208,12 @@ fn apply_inline_intent_to_row(
         state.inline_choice_x[idx] = f32::NAN;
         return;
     }
-    let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)) else {
+    let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_idx)
+        .and_then(|&id| state.row_map.get(id))
+    else {
         return;
     };
     if !row_supports_inline_nav(row) {
@@ -4314,7 +4361,11 @@ fn cursor_dest_for_player(
     if !is_row_visible(&state.row_map, row_idx, visibility) {
         row_idx = fallback_visible_row(&state.row_map, row_idx, visibility)?;
     }
-    let row = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id))?;
+    let row = state
+        .row_map
+        .display_order()
+        .get(row_idx)
+        .and_then(|&id| state.row_map.get(id))?;
 
     let y = state
         .row_tweens
@@ -5092,7 +5143,11 @@ pub fn apply_choice_delta(
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
-    if let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id))
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_idx)
+        .and_then(|&id| state.row_map.get(id))
         && row_supports_inline_nav(row)
     {
         if state.current_pane == OptionsPane::Main || row_selects_on_focus_move(row.id) {
@@ -5213,7 +5268,11 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     // If either player is on the Combo Font row, tick the preview combo once per second.
     let mut combo_row_active = false;
     for player_idx in active_player_indices(active) {
-        if let Some(row) = state.row_map.display_order().get(state.selected_row[player_idx]).and_then(|&id| state.row_map.get(id))
+        if let Some(row) = state
+            .row_map
+            .display_order()
+            .get(state.selected_row[player_idx])
+            .and_then(|&id| state.row_map.get(id))
             && row.id == RowId::ComboFont
         {
             combo_row_active = true;
@@ -5299,16 +5358,15 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
                 } else {
                     let anchor =
-                        state
-                            .row_map
-                            .get_at(i)
-                            .and_then(|row| match conditional_row_parent(row.id) {
+                        state.row_map.get_at(i).and_then(|row| {
+                            match conditional_row_parent(row.id) {
                                 Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
                                 Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
                                 Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
                                 Some(RowId::Hide) => hide_anchor_visible_idx,
                                 _ => None,
-                            });
+                            }
+                        });
                     if let Some(anchor_idx) = anchor {
                         let (anchor_f_pos, _) =
                             f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
@@ -5457,7 +5515,12 @@ fn clear_start_hold(state: &mut State, player_idx: usize) {
 fn toggle_scroll_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::Scroll {
             return;
         }
@@ -5465,7 +5528,10 @@ fn toggle_scroll_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
     let bit = if choice_index < 8 {
         1u8 << (choice_index as u8)
     } else {
@@ -5521,7 +5587,12 @@ fn toggle_scroll_row(state: &mut State, player_idx: usize) {
 fn toggle_hide_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::Hide {
             return;
         }
@@ -5529,7 +5600,10 @@ fn toggle_hide_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
     let bit = if choice_index < 8 {
         1u8 << (choice_index as u8)
     } else {
@@ -5589,7 +5663,12 @@ fn toggle_hide_row(state: &mut State, player_idx: usize) {
 fn toggle_insert_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::Insert {
             return;
         }
@@ -5597,7 +5676,10 @@ fn toggle_insert_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
     let bit = if choice_index < 7 {
         1u8 << (choice_index as u8)
     } else {
@@ -5635,7 +5717,12 @@ fn toggle_insert_row(state: &mut State, player_idx: usize) {
 fn toggle_remove_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::Remove {
             return;
         }
@@ -5643,7 +5730,10 @@ fn toggle_remove_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
     let bit = if choice_index < 8 {
         1u8 << (choice_index as u8)
     } else {
@@ -5681,7 +5771,12 @@ fn toggle_remove_row(state: &mut State, player_idx: usize) {
 fn toggle_holds_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::Holds {
             return;
         }
@@ -5689,8 +5784,18 @@ fn toggle_holds_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
-    let bit = if choice_index < state.row_map.row(state.row_map.id_at(row_index)).choices.len().min(u8::BITS as usize) {
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
+    let bit = if choice_index
+        < state
+            .row_map
+            .row(state.row_map.id_at(row_index))
+            .choices
+            .len()
+            .min(u8::BITS as usize)
+    {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -5727,7 +5832,12 @@ fn toggle_holds_row(state: &mut State, player_idx: usize) {
 fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::Accel {
             return;
         }
@@ -5735,8 +5845,18 @@ fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
-    let bit = if choice_index < state.row_map.row(state.row_map.id_at(row_index)).choices.len().min(u8::BITS as usize) {
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
+    let bit = if choice_index
+        < state
+            .row_map
+            .row(state.row_map.id_at(row_index))
+            .choices
+            .len()
+            .min(u8::BITS as usize)
+    {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -5773,7 +5893,12 @@ fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
 fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::Effect {
             return;
         }
@@ -5781,7 +5906,10 @@ fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
     let bit = if choice_index < 10 {
         1u16 << (choice_index as u16)
     } else {
@@ -5819,7 +5947,12 @@ fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
 fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::Appearance {
             return;
         }
@@ -5827,8 +5960,18 @@ fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
-    let bit = if choice_index < state.row_map.row(state.row_map.id_at(row_index)).choices.len().min(u8::BITS as usize) {
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
+    let bit = if choice_index
+        < state
+            .row_map
+            .row(state.row_map.id_at(row_index))
+            .choices
+            .len()
+            .min(u8::BITS as usize)
+    {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -5867,7 +6010,12 @@ fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
 fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::LifeBarOptions {
             return;
         }
@@ -5875,7 +6023,10 @@ fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
     let bit = if choice_index < 3 {
         1u8 << (choice_index as u8)
     } else {
@@ -5918,7 +6069,12 @@ fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
 fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::FAPlusOptions {
             return;
         }
@@ -5926,8 +6082,18 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
-    let bit = if choice_index < state.row_map.row(state.row_map.id_at(row_index)).choices.len().min(u8::BITS as usize) {
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
+    let bit = if choice_index
+        < state
+            .row_map
+            .row(state.row_map.id_at(row_index))
+            .choices
+            .len()
+            .min(u8::BITS as usize)
+    {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -5978,7 +6144,12 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
 fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::ResultsExtras {
             return;
         }
@@ -5986,7 +6157,10 @@ fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
     let bit = if choice_index < 1 {
         1u8 << (choice_index as u8)
     } else {
@@ -6023,7 +6197,12 @@ fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
 fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::ErrorBar {
             return;
         }
@@ -6031,7 +6210,10 @@ fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
     let bit = if choice_index < 5 {
         1u8 << (choice_index as u8)
     } else {
@@ -6073,7 +6255,12 @@ fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
 fn toggle_error_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::ErrorBarOptions {
             return;
         }
@@ -6081,7 +6268,10 @@ fn toggle_error_bar_options_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
     let bit = if choice_index < 2 {
         1u8 << (choice_index as u8)
     } else {
@@ -6120,7 +6310,12 @@ fn toggle_error_bar_options_row(state: &mut State, player_idx: usize) {
 fn toggle_measure_counter_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::MeasureCounterOptions {
             return;
         }
@@ -6128,7 +6323,10 @@ fn toggle_measure_counter_options_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
     let bit = if choice_index < 5 {
         1u8 << (choice_index as u8)
     } else {
@@ -6176,7 +6374,12 @@ fn toggle_measure_counter_options_row(state: &mut State, player_idx: usize) {
 fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::EarlyDecentWayOffOptions {
             return;
         }
@@ -6184,7 +6387,10 @@ fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
     let bit = if choice_index < 2 {
         1u8 << (choice_index as u8)
     } else {
@@ -6223,7 +6429,12 @@ fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
 fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::GameplayExtras {
             return;
         }
@@ -6305,7 +6516,12 @@ fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
 fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
+    if let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))
+    {
         if row.id != RowId::GameplayExtrasMore {
             return;
         }
@@ -6313,7 +6529,10 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let choice_index = state
+        .row_map
+        .row(state.row_map.id_at(row_index))
+        .selected_choice_index[idx];
     let bit = match choice_index {
         0 => 1u8 << 0, // Column Cues
         1 => 1u8 << 1, // Display Scorebox
@@ -6635,7 +6854,12 @@ fn move_arcade_horizontal_focus(
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
-    let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)) else {
+    let Some(row) = state
+        .row_map
+        .display_order()
+        .get(row_idx)
+        .and_then(|&id| state.row_map.get(id))
+    else {
         return false;
     };
     let row_supports_inline = row_supports_inline_nav(row);
@@ -6750,7 +6974,11 @@ fn handle_start_event(
     }
     let row_index = state.selected_row[player_idx].min(num_rows.saturating_sub(1));
     let should_focus_exit = state.current_pane == OptionsPane::Main && row_index + 1 < num_rows;
-    let row = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id))?;
+    let row = state
+        .row_map
+        .display_order()
+        .get(row_index)
+        .and_then(|&id| state.row_map.get(id))?;
     let id = row.id;
     let row_supports_inline = row_supports_inline_nav(row);
     if row_supports_inline {
@@ -6829,7 +7057,11 @@ fn handle_start_event(
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_index == num_rows.saturating_sub(1)
-        && let Some(what_comes_next_row) = state.row_map.display_order().get(num_rows.saturating_sub(2)).and_then(|&id| state.row_map.get(id))
+        && let Some(what_comes_next_row) = state
+            .row_map
+            .display_order()
+            .get(num_rows.saturating_sub(2))
+            .and_then(|&id| state.row_map.get(id))
         && what_comes_next_row.id == RowId::WhatComesNext
     {
         let choice_idx = what_comes_next_row.selected_choice_index[player_idx];
@@ -9068,7 +9300,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let split_help = active[P1] && active[P2];
     for player_idx in active_player_indices(active) {
         let row_idx = state.selected_row[player_idx].min(state.row_map.len().saturating_sub(1));
-        let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)) else {
+        let Some(row) = state
+            .row_map
+            .display_order()
+            .get(row_idx)
+            .and_then(|&id| state.row_map.get(id))
+        else {
             continue;
         };
         let help_text_color = color::simply_love_rgba(player_color_index(player_idx));
@@ -9144,9 +9381,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 mod tests {
     use super::{
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, NAV_INITIAL_HOLD_DELAY,
-        NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowId, SpeedMod, handle_arcade_start_event,
-        hud_offset_choices, is_row_visible, repeat_held_arcade_start, row_visibility,
-        session_active_players, sync_profile_scroll_speed, RowBuilder, RowMap,
+        NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowBuilder, RowId, RowMap, SpeedMod,
+        handle_arcade_start_event, hud_offset_choices, is_row_visible, repeat_held_arcade_start,
+        row_visibility, session_active_players, sync_profile_scroll_speed,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};

@@ -103,22 +103,27 @@ fn opened_from_inner(inner: Inner) -> Result<OpenFile, Box<dyn std::error::Error
 }
 
 impl Reader {
-    pub(crate) fn read_dec_packet_itl(
+    pub(crate) fn read_dec_packet_into(
         &mut self,
-    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(packet) = self.pending.take() {
+        out: &mut Vec<i16>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(mut packet) = self.pending.take() {
             self.cursor_frames = self
                 .cursor_frames
                 .saturating_add((packet.len() / self.channels) as u64);
-            return Ok(Some(packet));
+            std::mem::swap(out, &mut packet);
+            return Ok(true);
         }
         let Some(packet) = self.read_packet()? else {
-            return Ok(None);
+            out.clear();
+            return Ok(false);
         };
         self.cursor_frames = self
             .cursor_frames
             .saturating_add((packet.len() / self.channels) as u64);
-        Ok(Some(packet))
+        let mut packet = packet;
+        std::mem::swap(out, &mut packet);
+        Ok(true)
     }
 
     pub(crate) fn seek_frame(

@@ -38,13 +38,14 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         pending: None,
         cursor_frames: 0,
     };
-    let Some(first_packet) = reader.decode_next_packet()? else {
+    let mut first_packet = Vec::new();
+    if !reader.decode_next_packet_into(&mut first_packet)? {
         return Err(format!(
             "FLAC '{}' contained no decodable audio frames",
             path.display()
         )
         .into());
-    };
+    }
     reader.pending = Some(first_packet);
     Ok(OpenFile {
         reader,
@@ -90,16 +91,17 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
 }
 
 impl Reader {
-    pub(crate) fn read_dec_packet_itl(
+    pub(crate) fn read_dec_packet_into(
         &mut self,
-    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
-        let Some(packet) = self.take_packet()? else {
-            return Ok(None);
-        };
+        out: &mut Vec<i16>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        if !self.take_packet_into(out)? {
+            return Ok(false);
+        }
         self.cursor_frames = self
             .cursor_frames
-            .saturating_add(packet_frames(&packet, self.channels) as u64);
-        Ok(Some(packet))
+            .saturating_add(packet_frames(out, self.channels) as u64);
+        Ok(true)
     }
 
     pub(crate) fn seek_frame(
@@ -121,13 +123,29 @@ impl Reader {
     }
 
     #[inline(always)]
+    fn take_packet_into(
+        &mut self,
+        out: &mut Vec<i16>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(mut packet) = self.pending.take() {
+            std::mem::swap(out, &mut packet);
+            return Ok(true);
+        }
+        self.decode_next_packet_into(out)
+    }
+
+    #[inline(always)]
     fn take_packet(
         &mut self,
     ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(packet) = self.pending.take() {
             return Ok(Some(packet));
+        };
+        let mut packet = Vec::new();
+        if !self.decode_next_packet_into(&mut packet)? {
+            return Ok(None);
         }
-        self.decode_next_packet()
+        Ok(Some(packet))
     }
 
     fn finish_seek_packet(&mut self, packet: Vec<i16>, target_frame: u64) -> bool {
@@ -143,28 +161,31 @@ impl Reader {
         true
     }
 
-    fn decode_next_packet(
+    fn decode_next_packet_into(
         &mut self,
-    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
+        out: &mut Vec<i16>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let block = self
             .reader
             .blocks()
             .read_next_or_eof(std::mem::take(&mut self.block_buffer))?;
         let Some(block) = block else {
-            return Ok(None);
+            out.clear();
+            return Ok(false);
         };
         if let Err(err) = validate_channels(self.channels, block.channels() as usize) {
             return Err(err.into());
         }
         let frames = block.duration() as usize;
-        let mut packet = Vec::with_capacity(frames.saturating_mul(self.channels));
+        out.clear();
+        out.reserve(frames.saturating_mul(self.channels));
         for frame in 0..frames as u32 {
             for ch in 0..self.channels as u32 {
-                packet.push(sample_to_i16(block.sample(ch, frame), self.bits_per_sample));
+                out.push(sample_to_i16(block.sample(ch, frame), self.bits_per_sample));
             }
         }
         self.block_buffer = block.into_buffer();
-        Ok(Some(packet))
+        Ok(true)
     }
 }
 
