@@ -76,6 +76,9 @@ pub fn build_screen_cached<'a>(
     // `order` is already monotonically assigned, so we do not need a stable sort here.
     objects.sort_unstable_by_key(|o| (o.z, o.order));
 
+    // Present only builds render objects. Texture handles are resolved once
+    // downstream after composition so we do not repeat global texture lookups
+    // while assembling the list here.
     RenderList {
         clear_color,
         cameras,
@@ -1108,7 +1111,7 @@ fn build_actor_recursive<'a>(
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
                 },
-                texture_handle: assets::texture_handle(texture.as_ref()),
+                texture_handle: renderer::INVALID_TEXTURE_HANDLE,
                 transform,
                 blend: *blend,
                 z: 0,
@@ -1380,7 +1383,7 @@ fn build_actor_recursive<'a>(
                                 local_offset_rot_sin_cos,
                                 edge_fade,
                             },
-                            texture_handle: assets::texture_handle(stroke_key),
+                            texture_handle: renderer::INVALID_TEXTURE_HANDLE,
                             transform,
                             blend: *blend,
                             z: layer,
@@ -1842,7 +1845,7 @@ fn push_sprite<'a>(
             local_offset_rot_sin_cos,
             edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
         },
-        texture_handle: assets::texture_handle(if is_solid { "__white" } else { texture_id }),
+        texture_handle: renderer::INVALID_TEXTURE_HANDLE,
         transform,
         blend,
         z: 0,
@@ -2105,7 +2108,7 @@ fn layout_text<'a>(
                         local_offset_rot_sin_cos: [0.0, 1.0],
                         edge_fade: [0.0; 4],
                     },
-                    texture_handle: assets::texture_handle(texture_key),
+                    texture_handle: renderer::INVALID_TEXTURE_HANDLE,
                     transform,
                     blend: BlendMode::Alpha,
                     z: 0,
