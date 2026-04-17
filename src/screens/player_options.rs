@@ -174,27 +174,27 @@ fn row_layout_params() -> (f32, f32) {
 
 #[inline(always)]
 fn init_row_tweens(
-    rows: &[Row],
+    row_map: &RowMap,
     selected_row: [usize; PLAYER_SLOTS],
     active: [bool; PLAYER_SLOTS],
     hide_active_mask: [u8; PLAYER_SLOTS],
     error_bar_active_mask: [u8; PLAYER_SLOTS],
     allow_per_player_global_offsets: bool,
 ) -> Vec<RowTween> {
-    let total_rows = rows.len();
+    let total_rows = row_map.display_order().len();
     if total_rows == 0 {
         return Vec::new();
     }
 
     let (first_row_center_y, row_step) = row_layout_params();
     let visibility = row_visibility(
-        rows,
+        row_map,
         active,
         hide_active_mask,
         error_bar_active_mask,
         allow_per_player_global_offsets,
     );
-    let visible_rows = count_visible_rows(rows, visibility);
+    let visible_rows = count_visible_rows(row_map, visibility);
     if visible_rows == 0 {
         let y = first_row_center_y - row_step * 0.5;
         return (0..total_rows)
@@ -210,34 +210,35 @@ fn init_row_tweens(
 
     let selected_visible = std::array::from_fn(|player_idx| {
         let idx = selected_row[player_idx].min(total_rows.saturating_sub(1));
-        row_to_visible_index(rows, idx, visibility).unwrap_or(0)
+        row_to_visible_index(row_map, idx, visibility).unwrap_or(0)
     });
     let w = compute_row_window(visible_rows, selected_visible, active);
     let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
     let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
     let measure_counter_anchor_visible_idx =
-        parent_anchor_visible_index(rows, RowId::MeasureCounter, visibility);
+        parent_anchor_visible_index(row_map, RowId::MeasureCounter, visibility);
     let judgment_font_anchor_visible_idx =
-        parent_anchor_visible_index(rows, RowId::JudgmentFont, visibility);
+        parent_anchor_visible_index(row_map, RowId::JudgmentFont, visibility);
     let judgment_tilt_anchor_visible_idx =
-        parent_anchor_visible_index(rows, RowId::JudgmentTilt, visibility);
+        parent_anchor_visible_index(row_map, RowId::JudgmentTilt, visibility);
     let combo_font_anchor_visible_idx =
-        parent_anchor_visible_index(rows, RowId::ComboFont, visibility);
+        parent_anchor_visible_index(row_map, RowId::ComboFont, visibility);
     let error_bar_anchor_visible_idx =
-        parent_anchor_visible_index(rows, RowId::ErrorBar, visibility);
-    let hide_anchor_visible_idx = parent_anchor_visible_index(rows, RowId::Hide, visibility);
+        parent_anchor_visible_index(row_map, RowId::ErrorBar, visibility);
+    let hide_anchor_visible_idx = parent_anchor_visible_index(row_map, RowId::Hide, visibility);
 
     let mut out: Vec<RowTween> = Vec::with_capacity(total_rows);
     let mut visible_idx = 0i32;
     for i in 0..total_rows {
-        let visible = is_row_visible(rows, i, visibility);
+        let visible = is_row_visible(row_map, i, visibility);
         let (f_pos, hidden) = if visible {
             let ii = visible_idx;
             visible_idx += 1;
             f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
         } else {
-            let anchor = rows
+            let anchor = row_map.display_order()
                 .get(i)
+                .and_then(|&id| row_map.get(id))
                 .and_then(|row| match conditional_row_parent(row.id) {
                     Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
                     Some(RowId::JudgmentFont) => judgment_font_anchor_visible_idx,
@@ -465,6 +466,7 @@ impl PaneTransition {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(usize)]
 pub enum RowId {
     TypeOfSpeedMod,
     SpeedMod,
@@ -538,6 +540,126 @@ pub enum RowId {
     GameplayExtrasMore,
 }
 
+impl RowId {
+    const COUNT: usize = Self::GameplayExtrasMore as usize + 1;
+
+    #[inline(always)]
+    const fn index(self) -> usize {
+        self as usize
+    }
+}
+
+pub struct RowMap {
+    rows: [Option<Row>; RowId::COUNT],
+    display_order: Vec<RowId>,
+}
+
+impl RowMap {
+    fn new() -> Self {
+        Self {
+            rows: std::array::from_fn(|_| None),
+            display_order: Vec::new(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn get(&self, id: RowId) -> Option<&Row> {
+        self.rows[id.index()].as_ref()
+    }
+
+    #[inline(always)]
+    pub fn get_mut(&mut self, id: RowId) -> Option<&mut Row> {
+        self.rows[id.index()].as_mut()
+    }
+
+    /// Panicking accessor for rows known to exist in the current pane.
+    #[inline(always)]
+    pub fn row(&self, id: RowId) -> &Row {
+        self.rows[id.index()].as_ref().expect("row must exist")
+    }
+
+    #[inline(always)]
+    pub fn row_mut(&mut self, id: RowId) -> &mut Row {
+        self.rows[id.index()].as_mut().expect("row must exist")
+    }
+
+    fn insert(&mut self, row: Row) {
+        let idx = row.id.index();
+        debug_assert!(
+            self.rows[idx].is_none(),
+            "duplicate RowId {:?}",
+            row.id
+        );
+        self.rows[idx] = Some(row);
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.display_order.len()
+    }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.display_order.is_empty()
+    }
+
+    #[inline(always)]
+    pub fn display_order(&self) -> &[RowId] {
+        &self.display_order
+    }
+
+    /// Get the RowId at the given display index.
+    #[inline(always)]
+    pub fn id_at(&self, display_idx: usize) -> RowId {
+        self.display_order[display_idx]
+    }
+
+    /// Get the row at the given display index.
+    #[inline(always)]
+    pub fn at(&self, display_idx: usize) -> &Row {
+        self.row(self.display_order[display_idx])
+    }
+
+    /// Get a mutable reference to the row at the given display index.
+    #[inline(always)]
+    pub fn at_mut(&mut self, display_idx: usize) -> &mut Row {
+        let id = self.display_order[display_idx];
+        self.row_mut(id)
+    }
+
+    /// Safe access by display index.
+    #[inline(always)]
+    pub fn get_at(&self, display_idx: usize) -> Option<&Row> {
+        self.display_order.get(display_idx).and_then(|&id| self.get(id))
+    }
+}
+
+struct RowBuilder {
+    map: RowMap,
+    order: Vec<RowId>,
+}
+
+impl RowBuilder {
+    fn new() -> Self {
+        Self {
+            map: RowMap::new(),
+            order: Vec::new(),
+        }
+    }
+
+    fn push(&mut self, row: Row) {
+        let id = row.id;
+        self.map.insert(row);
+        self.order.push(id);
+    }
+
+    fn finish(self) -> RowMap {
+        let mut map = self.map;
+        map.display_order = self.order;
+        map
+    }
+}
+
 pub struct Row {
     pub id: RowId,
     pub name: LookupKey,
@@ -600,7 +722,7 @@ pub struct State {
     pub fixed_stepchart: Option<FixedStepchart>,
     pub chart_steps_index: [usize; PLAYER_SLOTS],
     pub chart_difficulty_index: [usize; PLAYER_SLOTS],
-    pub rows: Vec<Row>,
+    pub row_map: RowMap,
     pub selected_row: [usize; PLAYER_SLOTS],
     pub prev_selected_row: [usize; PLAYER_SLOTS],
     // For Scroll row: bitmask of which options are enabled.
@@ -1170,7 +1292,7 @@ fn build_main_rows(
     noteskin_names: &[String],
     return_screen: Screen,
     fixed_stepchart: Option<&FixedStepchart>,
-) -> Vec<Row> {
+) -> RowMap {
     let speed_mod_value_str = match speed_mod.mod_type.as_str() {
         "X" => format!("{:.2}x", speed_mod.value),
         "C" => format!("C{}", speed_mod.value as i32),
@@ -1266,8 +1388,8 @@ fn build_main_rows(
                 initial_stepchart_choice_index,
             )
         };
-    vec![
-        Row {
+    let mut b = RowBuilder::new();
+    b.push(Row {
             id: RowId::TypeOfSpeedMod,
             name: lookup_key("PlayerOptions", "TypeOfSpeedMod"),
             choices: vec![
@@ -1286,8 +1408,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::SpeedMod,
             name: lookup_key("PlayerOptions", "SpeedMod"),
             choices: vec![speed_mod_value_str], // Display only the current value
@@ -1297,8 +1419,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Mini,
             name: lookup_key("PlayerOptions", "Mini"),
             choices: (-100..=150).map(|v| format!("{v}%")).collect(),
@@ -1308,8 +1430,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Perspective,
             name: lookup_key("PlayerOptions", "Perspective"),
             choices: vec![
@@ -1325,8 +1447,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::NoteSkin,
             name: lookup_key("PlayerOptions", "NoteSkin"),
             choices: if noteskin_names.is_empty() {
@@ -1340,8 +1462,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::MineSkin,
             name: lookup_key("PlayerOptions", "MineSkin"),
             choices: build_noteskin_override_choices(noteskin_names),
@@ -1351,8 +1473,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ReceptorSkin,
             name: lookup_key("PlayerOptions", "ReceptorSkin"),
             choices: build_noteskin_override_choices(noteskin_names),
@@ -1362,8 +1484,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::TapExplosionSkin,
             name: lookup_key("PlayerOptions", "TapExplosionSkin"),
             choices: build_tap_explosion_noteskin_choices(noteskin_names),
@@ -1373,8 +1495,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::JudgmentFont,
             name: lookup_key("PlayerOptions", "JudgmentFont"),
             choices: assets::judgment_texture_choices()
@@ -1387,8 +1509,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::JudgmentOffsetX,
             name: lookup_key("PlayerOptions", "JudgmentOffsetX"),
             choices: hud_offset_choices(),
@@ -1398,8 +1520,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::JudgmentOffsetY,
             name: lookup_key("PlayerOptions", "JudgmentOffsetY"),
             choices: hud_offset_choices(),
@@ -1409,8 +1531,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ComboFont,
             name: lookup_key("PlayerOptions", "ComboFont"),
             choices: vec![
@@ -1429,8 +1551,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ComboOffsetX,
             name: lookup_key("PlayerOptions", "ComboOffsetX"),
             choices: hud_offset_choices(),
@@ -1440,8 +1562,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ComboOffsetY,
             name: lookup_key("PlayerOptions", "ComboOffsetY"),
             choices: hud_offset_choices(),
@@ -1451,8 +1573,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::HoldJudgment,
             name: lookup_key("PlayerOptions", "HoldJudgment"),
             choices: assets::hold_judgment_texture_choices()
@@ -1465,8 +1587,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::BackgroundFilter,
             name: lookup_key("PlayerOptions", "BackgroundFilter"),
             choices: vec![
@@ -1481,8 +1603,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::NoteFieldOffsetX,
             name: lookup_key("PlayerOptions", "NoteFieldOffsetX"),
             choices: (0..=50).map(|v| v.to_string()).collect(),
@@ -1492,8 +1614,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::NoteFieldOffsetY,
             name: lookup_key("PlayerOptions", "NoteFieldOffsetY"),
             choices: (-50..=50).map(|v| v.to_string()).collect(),
@@ -1503,8 +1625,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::VisualDelay,
             name: lookup_key("PlayerOptions", "VisualDelay"),
             choices: (-100..=100).map(|v| format!("{v}ms")).collect(),
@@ -1514,8 +1636,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::GlobalOffsetShift,
             name: lookup_key("PlayerOptions", "GlobalOffsetShift"),
             choices: (-100..=100).map(|v| format!("{v}ms")).collect(),
@@ -1525,8 +1647,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::MusicRate,
             name: lookup_key("PlayerOptions", "MusicRate"),
             choices: vec![fmt_music_rate(session_music_rate.clamp(0.5, 3.0))],
@@ -1536,8 +1658,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Stepchart,
             name: lookup_key("PlayerOptions", "Stepchart"),
             choices: stepchart_choices,
@@ -1547,8 +1669,8 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: Some(stepchart_choice_indices),
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::WhatComesNext,
             name: lookup_key("PlayerOptions", "WhatComesNext"),
             choices: what_comes_next_choices(OptionsPane::Main, return_screen),
@@ -1558,19 +1680,19 @@ fn build_main_rows(
                 .map(|s| s.to_string())
                 .collect(),
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Exit,
             name: lookup_key("Common", "Exit"),
             choices: vec![tr("Common", "Exit").to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![String::new()],
             choice_difficulty_indices: None,
-        },
-    ]
+    });
+    b.finish()
 }
 
-fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
+fn build_advanced_rows(return_screen: Screen) -> RowMap {
     let mut gameplay_extras_choices = vec![
         tr("PlayerOptions", "GameplayExtrasFlashColumnForMiss").to_string(),
         tr("PlayerOptions", "GameplayExtrasDensityGraphAtTop").to_string(),
@@ -1581,8 +1703,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             .push(tr("PlayerOptions", "GameplayExtrasDisplayScorebox").to_string());
     }
 
-    vec![
-        Row {
+    let mut b = RowBuilder::new();
+    b.push(Row {
             id: RowId::Turn,
             name: lookup_key("PlayerOptions", "Turn"),
             choices: vec![
@@ -1599,8 +1721,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "TurnHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Scroll,
             name: lookup_key("PlayerOptions", "Scroll"),
             choices: vec![
@@ -1613,8 +1735,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "ScrollHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Hide,
             name: lookup_key("PlayerOptions", "Hide"),
             choices: vec![
@@ -1629,8 +1751,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "HideHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::LifeMeterType,
             name: lookup_key("PlayerOptions", "LifeMeterType"),
             choices: vec![
@@ -1641,8 +1763,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "LifeMeterTypeHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::LifeBarOptions,
             name: lookup_key("PlayerOptions", "LifeBarOptions"),
             choices: vec![
@@ -1653,8 +1775,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "LifeBarOptionsHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::DataVisualizations,
             name: lookup_key("PlayerOptions", "DataVisualizations"),
             choices: vec![
@@ -1665,8 +1787,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "DataVisualizationsHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::DensityGraphBackground,
             name: lookup_key("PlayerOptions", "DensityGraphBackground"),
             choices: vec![
@@ -1676,8 +1798,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "DensityGraphBackgroundHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::TargetScore,
             name: lookup_key("PlayerOptions", "TargetScore"),
             choices: vec![
@@ -1699,8 +1821,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [10; PLAYER_SLOTS], // S by default
             help: vec![tr("PlayerOptionsHelp", "TargetScoreHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ActionOnMissedTarget,
             name: lookup_key("PlayerOptions", "TargetScoreMissPolicy"),
             choices: vec![
@@ -1711,8 +1833,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "TargetScoreMissPolicyHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::MiniIndicator,
             name: lookup_key("PlayerOptions", "MiniIndicator"),
             choices: vec![
@@ -1727,8 +1849,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "MiniIndicatorHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::IndicatorScoreType,
             name: lookup_key("PlayerOptions", "IndicatorScoreType"),
             choices: vec![
@@ -1739,16 +1861,16 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "IndicatorScoreTypeHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::GameplayExtras,
             name: lookup_key("PlayerOptions", "GameplayExtras"),
             choices: gameplay_extras_choices,
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "GameplayExtrasHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ComboColors,
             name: lookup_key("PlayerOptions", "ComboColors"),
             choices: vec![
@@ -1761,8 +1883,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "ComboColorsHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ComboColorMode,
             name: lookup_key("PlayerOptions", "ComboColorMode"),
             choices: vec![
@@ -1772,8 +1894,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "ComboColorModeHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::CarryCombo,
             name: lookup_key("PlayerOptions", "CarryCombo"),
             choices: vec![
@@ -1783,8 +1905,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "CarryComboHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::JudgmentTilt,
             name: lookup_key("PlayerOptions", "JudgmentTilt"),
             choices: vec![
@@ -1794,16 +1916,16 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "JudgmentTiltHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::JudgmentTiltIntensity,
             name: lookup_key("PlayerOptions", "JudgmentTiltIntensity"),
             choices: tilt_intensity_choices(),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "JudgmentTiltIntensityHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::JudgmentBehindArrows,
             name: lookup_key("PlayerOptions", "JudgmentBehindArrows"),
             choices: vec![
@@ -1813,8 +1935,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "JudgmentBehindArrowsHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::OffsetIndicator,
             name: lookup_key("PlayerOptions", "OffsetIndicator"),
             choices: vec![
@@ -1824,8 +1946,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "OffsetIndicatorHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ErrorBar,
             name: lookup_key("PlayerOptions", "ErrorBar"),
             choices: vec![
@@ -1838,8 +1960,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "ErrorBarHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ErrorBarTrim,
             name: lookup_key("PlayerOptions", "ErrorBarTrim"),
             choices: vec![
@@ -1851,8 +1973,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "ErrorBarTrimHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ErrorBarOptions,
             name: lookup_key("PlayerOptions", "ErrorBarOptions"),
             choices: vec![
@@ -1862,24 +1984,24 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "ErrorBarOptionsHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ErrorBarOffsetX,
             name: lookup_key("PlayerOptions", "ErrorBarOffsetX"),
             choices: hud_offset_choices(),
             selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "ErrorBarOffsetXHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ErrorBarOffsetY,
             name: lookup_key("PlayerOptions", "ErrorBarOffsetY"),
             choices: hud_offset_choices(),
             selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "ErrorBarOffsetYHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::MeasureCounter,
             name: lookup_key("PlayerOptions", "MeasureCounter"),
             choices: vec![
@@ -1893,8 +2015,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "MeasureCounterHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::MeasureCounterLookahead,
             name: lookup_key("PlayerOptions", "MeasureCounterLookahead"),
             choices: vec![
@@ -1907,8 +2029,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "MeasureCounterLookaheadHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::MeasureCounterOptions,
             name: lookup_key("PlayerOptions", "MeasureCounterOptions"),
             choices: vec![
@@ -1921,8 +2043,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "MeasureCounterOptionsHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::MeasureLines,
             name: lookup_key("PlayerOptions", "MeasureLines"),
             choices: vec![
@@ -1934,8 +2056,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "MeasureLinesHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::RescoreEarlyHits,
             name: lookup_key("PlayerOptions", "RescoreEarlyHits"),
             choices: vec![
@@ -1945,8 +2067,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "RescoreEarlyHitsHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::EarlyDecentWayOffOptions,
             name: lookup_key("PlayerOptions", "EarlyDecentWayOffOptions"),
             choices: vec![
@@ -1960,16 +2082,16 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "EarlyDecentWayOffOptionsHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::ResultsExtras,
             name: lookup_key("PlayerOptions", "ResultsExtras"),
             choices: vec![tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "ResultsExtrasHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::TimingWindows,
             name: lookup_key("PlayerOptions", "TimingWindows"),
             choices: vec![
@@ -1981,8 +2103,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "TimingWindowsHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::FAPlusOptions,
             name: lookup_key("PlayerOptions", "FAPlusOptions"),
             choices: vec![
@@ -1996,8 +2118,8 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "FAPlusOptionsHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::CustomBlueFantasticWindow,
             name: lookup_key("PlayerOptions", "CustomBlueFantasticWindow"),
             choices: vec![
@@ -2007,37 +2129,37 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "CustomBlueFantasticWindowHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::CustomBlueFantasticWindowMs,
             name: lookup_key("PlayerOptions", "CustomBlueFantasticWindowMs"),
             choices: custom_fantastic_window_choices(),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "CustomBlueFantasticWindowMsHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::WhatComesNext,
             name: lookup_key("PlayerOptions", "WhatComesNext"),
             choices: what_comes_next_choices(OptionsPane::Advanced, return_screen),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "WhatComesNextAdvancedHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Exit,
             name: lookup_key("Common", "Exit"),
             choices: vec![tr("Common", "Exit").to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![String::new()],
             choice_difficulty_indices: None,
-        },
-    ]
+    });
+    b.finish()
 }
 
-fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
-    let rows = vec![
-        Row {
+fn build_uncommon_rows(return_screen: Screen) -> RowMap {
+    let mut b = RowBuilder::new();
+    b.push(Row {
             id: RowId::Insert,
             name: lookup_key("PlayerOptions", "Insert"),
             choices: vec![
@@ -2052,8 +2174,8 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "InsertHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Remove,
             name: lookup_key("PlayerOptions", "Remove"),
             choices: vec![
@@ -2069,8 +2191,8 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "RemoveHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Holds,
             name: lookup_key("PlayerOptions", "Holds"),
             choices: vec![
@@ -2083,8 +2205,8 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "HoldsHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Accel,
             name: lookup_key("PlayerOptions", "Accel"),
             choices: vec![
@@ -2097,8 +2219,8 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "AccelHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Effect,
             name: lookup_key("PlayerOptions", "Effect"),
             choices: vec![
@@ -2116,8 +2238,8 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "EffectHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Appearance,
             name: lookup_key("PlayerOptions", "Appearance"),
             choices: vec![
@@ -2130,8 +2252,8 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "AppearanceHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Attacks,
             name: lookup_key("PlayerOptions", "Attacks"),
             choices: vec![
@@ -2142,8 +2264,8 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "AttacksHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::HideLightType,
             name: lookup_key("PlayerOptions", "HideLightType"),
             choices: vec![
@@ -2155,8 +2277,8 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![tr("PlayerOptionsHelp", "HideLightTypeHelp").to_string()],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::WhatComesNext,
             name: lookup_key("PlayerOptions", "WhatComesNext"),
             choices: what_comes_next_choices(OptionsPane::Uncommon, return_screen),
@@ -2166,17 +2288,16 @@ fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
                 tr("PlayerOptionsHelp", "WhatComesNextHelp2").to_string(),
             ],
             choice_difficulty_indices: None,
-        },
-        Row {
+    });
+    b.push(Row {
             id: RowId::Exit,
             name: lookup_key("Common", "Exit"),
             choices: vec![tr("Common", "Exit").to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![String::new()],
             choice_difficulty_indices: None,
-        },
-    ];
-    rows
+    });
+    b.finish()
 }
 
 fn build_rows(
@@ -2189,7 +2310,7 @@ fn build_rows(
     noteskin_names: &[String],
     return_screen: Screen,
     fixed_stepchart: Option<&FixedStepchart>,
-) -> Vec<Row> {
+) -> RowMap {
     match pane {
         OptionsPane::Main => build_main_rows(
             song,
@@ -2207,7 +2328,7 @@ fn build_rows(
 }
 
 fn apply_profile_defaults(
-    rows: &mut [Row],
+    row_map: &mut RowMap,
     profile: &crate::game::profile::Profile,
     player_idx: usize,
 ) -> (
@@ -2256,7 +2377,7 @@ fn apply_profile_defaults(
     let match_ns_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
     // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::BackgroundFilter) {
+    if let Some(row) = row_map.get_mut(RowId::BackgroundFilter) {
         row.selected_choice_index[player_idx] = BACKGROUND_FILTER_VARIANTS
             .iter()
             .position(|&v| v == profile.background_filter)
@@ -2264,7 +2385,7 @@ fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     // Initialize Judgment Font row from profile setting
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::JudgmentFont) {
+    if let Some(row) = row_map.get_mut(RowId::JudgmentFont) {
         row.selected_choice_index[player_idx] = assets::judgment_texture_choices()
             .iter()
             .position(|choice| {
@@ -2275,7 +2396,7 @@ fn apply_profile_defaults(
             .unwrap_or(0);
     }
     // Initialize NoteSkin row from profile setting
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::NoteSkin) {
+    if let Some(row) = row_map.get_mut(RowId::NoteSkin) {
         row.selected_choice_index[player_idx] = row
             .choices
             .iter()
@@ -2287,7 +2408,7 @@ fn apply_profile_defaults(
             })
             .unwrap_or(0);
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::MineSkin) {
+    if let Some(row) = row_map.get_mut(RowId::MineSkin) {
         row.selected_choice_index[player_idx] = profile.mine_noteskin.as_ref().map_or_else(
             || {
                 row.choices
@@ -2308,7 +2429,7 @@ fn apply_profile_defaults(
             },
         );
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ReceptorSkin) {
+    if let Some(row) = row_map.get_mut(RowId::ReceptorSkin) {
         row.selected_choice_index[player_idx] = profile.receptor_noteskin.as_ref().map_or_else(
             || {
                 row.choices
@@ -2329,7 +2450,7 @@ fn apply_profile_defaults(
             },
         );
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::TapExplosionSkin) {
+    if let Some(row) = row_map.get_mut(RowId::TapExplosionSkin) {
         row.selected_choice_index[player_idx] =
             profile.tap_explosion_noteskin.as_ref().map_or_else(
                 || {
@@ -2359,28 +2480,28 @@ fn apply_profile_defaults(
             );
     }
     // Initialize Combo Font row from profile setting
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboFont) {
+    if let Some(row) = row_map.get_mut(RowId::ComboFont) {
         row.selected_choice_index[player_idx] = COMBO_FONT_VARIANTS
             .iter()
             .position(|&v| v == profile.combo_font)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboColors) {
+    if let Some(row) = row_map.get_mut(RowId::ComboColors) {
         row.selected_choice_index[player_idx] = COMBO_COLORS_VARIANTS
             .iter()
             .position(|&v| v == profile.combo_colors)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboColorMode) {
+    if let Some(row) = row_map.get_mut(RowId::ComboColorMode) {
         row.selected_choice_index[player_idx] = COMBO_MODE_VARIANTS
             .iter()
             .position(|&v| v == profile.combo_mode)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::CarryCombo) {
+    if let Some(row) = row_map.get_mut(RowId::CarryCombo) {
         row.selected_choice_index[player_idx] = if profile.carry_combo_between_songs {
             1
         } else {
@@ -2388,7 +2509,7 @@ fn apply_profile_defaults(
         };
     }
     // Initialize Hold Judgment row from profile setting (Love, mute, ITG2, None)
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::HoldJudgment) {
+    if let Some(row) = row_map.get_mut(RowId::HoldJudgment) {
         row.selected_choice_index[player_idx] = assets::hold_judgment_texture_choices()
             .iter()
             .position(|choice| {
@@ -2399,7 +2520,7 @@ fn apply_profile_defaults(
             .unwrap_or(0);
     }
     // Initialize Mini row from profile (range -100..150, stored as percent).
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Mini) {
+    if let Some(row) = row_map.get_mut(RowId::Mini) {
         let val = profile.mini_percent.clamp(-100, 150);
         let needle = format!("{val}%");
         if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
@@ -2407,7 +2528,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Perspective row from profile setting (Overhead, Hallway, Distant, Incoming, Space).
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Perspective) {
+    if let Some(row) = row_map.get_mut(RowId::Perspective) {
         row.selected_choice_index[player_idx] = PERSPECTIVE_VARIANTS
             .iter()
             .position(|&v| v == profile.perspective)
@@ -2415,7 +2536,7 @@ fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     // Initialize NoteField Offset X from profile (0..50, non-negative; P1 uses negative sign at render time)
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::NoteFieldOffsetX) {
+    if let Some(row) = row_map.get_mut(RowId::NoteFieldOffsetX) {
         let val = profile.note_field_offset_x.clamp(0, 50);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
@@ -2423,7 +2544,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize NoteField Offset Y from profile (-50..50)
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::NoteFieldOffsetY) {
+    if let Some(row) = row_map.get_mut(RowId::NoteFieldOffsetY) {
         let val = profile.note_field_offset_y.clamp(-50, 50);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
@@ -2431,7 +2552,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Judgment Offset X from profile (HUD offset range)
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::JudgmentOffsetX) {
+    if let Some(row) = row_map.get_mut(RowId::JudgmentOffsetX) {
         let val = profile
             .judgment_offset_x
             .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
@@ -2441,7 +2562,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Judgment Offset Y from profile (HUD offset range)
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::JudgmentOffsetY) {
+    if let Some(row) = row_map.get_mut(RowId::JudgmentOffsetY) {
         let val = profile
             .judgment_offset_y
             .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
@@ -2451,7 +2572,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Combo Offset X from profile (HUD offset range)
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboOffsetX) {
+    if let Some(row) = row_map.get_mut(RowId::ComboOffsetX) {
         let val = profile.combo_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
@@ -2459,7 +2580,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Combo Offset Y from profile (HUD offset range)
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboOffsetY) {
+    if let Some(row) = row_map.get_mut(RowId::ComboOffsetY) {
         let val = profile.combo_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
@@ -2467,7 +2588,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Error Bar Offset X from profile (HUD offset range)
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ErrorBarOffsetX) {
+    if let Some(row) = row_map.get_mut(RowId::ErrorBarOffsetX) {
         let val = profile
             .error_bar_offset_x
             .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
@@ -2477,7 +2598,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Error Bar Offset Y from profile (HUD offset range)
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ErrorBarOffsetY) {
+    if let Some(row) = row_map.get_mut(RowId::ErrorBarOffsetY) {
         let val = profile
             .error_bar_offset_y
             .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
@@ -2487,14 +2608,14 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Visual Delay from profile (-100..100ms)
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::VisualDelay) {
+    if let Some(row) = row_map.get_mut(RowId::VisualDelay) {
         let val = profile.visual_delay_ms.clamp(-100, 100);
         let needle = format!("{val}ms");
         if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
             row.selected_choice_index[player_idx] = idx;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::GlobalOffsetShift) {
+    if let Some(row) = row_map.get_mut(RowId::GlobalOffsetShift) {
         let val = profile.global_offset_shift_ms.clamp(-100, 100);
         let needle = format!("{val}ms");
         if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
@@ -2502,13 +2623,10 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Judgment Tilt rows from profile (Simply Love semantics).
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::JudgmentTilt) {
+    if let Some(row) = row_map.get_mut(RowId::JudgmentTilt) {
         row.selected_choice_index[player_idx] = if profile.judgment_tilt { 1 } else { 0 };
     }
-    if let Some(row) = rows
-        .iter_mut()
-        .find(|r| r.id == RowId::JudgmentTiltIntensity)
-    {
+    if let Some(row) = row_map.get_mut(RowId::JudgmentTiltIntensity) {
         let stepped = round_to_step(
             profile
                 .tilt_multiplier
@@ -2524,17 +2642,14 @@ fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows
-        .iter_mut()
-        .find(|r| r.id == RowId::JudgmentBehindArrows)
-    {
+    if let Some(row) = row_map.get_mut(RowId::JudgmentBehindArrows) {
         row.selected_choice_index[player_idx] = if profile.judgment_back { 1 } else { 0 };
     }
     // Initialize Error Bar rows from profile (Simply Love semantics).
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::OffsetIndicator) {
+    if let Some(row) = row_map.get_mut(RowId::OffsetIndicator) {
         row.selected_choice_index[player_idx] = if profile.error_ms_display { 1 } else { 0 };
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ErrorBar) {
+    if let Some(row) = row_map.get_mut(RowId::ErrorBar) {
         if error_bar_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2547,21 +2662,21 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::DataVisualizations) {
+    if let Some(row) = row_map.get_mut(RowId::DataVisualizations) {
         row.selected_choice_index[player_idx] = DATA_VISUALIZATIONS_VARIANTS
             .iter()
             .position(|&v| v == profile.data_visualizations)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::TargetScore) {
+    if let Some(row) = row_map.get_mut(RowId::TargetScore) {
         row.selected_choice_index[player_idx] = TARGET_SCORE_VARIANTS
             .iter()
             .position(|&v| v == profile.target_score)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::LifeMeterType) {
+    if let Some(row) = row_map.get_mut(RowId::LifeMeterType) {
         row.selected_choice_index[player_idx] = LIFE_METER_TYPE_VARIANTS
             .iter()
             .position(|&v| v == profile.lifemeter_type)
@@ -2577,7 +2692,7 @@ fn apply_profile_defaults(
     if profile.show_life_percent {
         life_bar_options_active_mask |= 1u8 << 2;
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::LifeBarOptions) {
+    if let Some(row) = row_map.get_mut(RowId::LifeBarOptions) {
         if life_bar_options_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2590,7 +2705,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ErrorBarTrim) {
+    if let Some(row) = row_map.get_mut(RowId::ErrorBarTrim) {
         row.selected_choice_index[player_idx] = ERROR_BAR_TRIM_VARIANTS
             .iter()
             .position(|&v| v == profile.error_bar_trim)
@@ -2603,7 +2718,7 @@ fn apply_profile_defaults(
     if profile.error_bar_multi_tick {
         error_bar_options_active_mask |= 1u8 << 1;
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ErrorBarOptions) {
+    if let Some(row) = row_map.get_mut(RowId::ErrorBarOptions) {
         if error_bar_options_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2617,17 +2732,14 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Measure Counter rows (zmod semantics).
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::MeasureCounter) {
+    if let Some(row) = row_map.get_mut(RowId::MeasureCounter) {
         row.selected_choice_index[player_idx] = MEASURE_COUNTER_VARIANTS
             .iter()
             .position(|&v| v == profile.measure_counter)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows
-        .iter_mut()
-        .find(|r| r.id == RowId::MeasureCounterLookahead)
-    {
+    if let Some(row) = row_map.get_mut(RowId::MeasureCounterLookahead) {
         row.selected_choice_index[player_idx] = (profile.measure_counter_lookahead.min(4) as usize)
             .min(row.choices.len().saturating_sub(1));
     }
@@ -2646,10 +2758,7 @@ fn apply_profile_defaults(
     if profile.run_timer {
         measure_counter_options_active_mask |= 1u8 << 4;
     }
-    if let Some(row) = rows
-        .iter_mut()
-        .find(|r| r.id == RowId::MeasureCounterOptions)
-    {
+    if let Some(row) = row_map.get_mut(RowId::MeasureCounterOptions) {
         if measure_counter_options_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2662,7 +2771,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::MeasureLines) {
+    if let Some(row) = row_map.get_mut(RowId::MeasureLines) {
         row.selected_choice_index[player_idx] = MEASURE_LINES_VARIANTS
             .iter()
             .position(|&v| v == profile.measure_lines)
@@ -2670,17 +2779,17 @@ fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     // Initialize Turn row from profile setting.
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Turn) {
+    if let Some(row) = row_map.get_mut(RowId::Turn) {
         row.selected_choice_index[player_idx] = TURN_OPTION_VARIANTS
             .iter()
             .position(|&v| v == profile.turn_option)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::RescoreEarlyHits) {
+    if let Some(row) = row_map.get_mut(RowId::RescoreEarlyHits) {
         row.selected_choice_index[player_idx] = if profile.rescore_early_hits { 1 } else { 0 };
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::TimingWindows) {
+    if let Some(row) = row_map.get_mut(RowId::TimingWindows) {
         row.selected_choice_index[player_idx] = TIMING_WINDOWS_VARIANTS
             .iter()
             .position(|&v| v == profile.timing_windows)
@@ -2690,7 +2799,7 @@ fn apply_profile_defaults(
     if profile.track_early_judgments {
         results_extras_active_mask |= 1u8 << 0;
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ResultsExtras) {
+    if let Some(row) = row_map.get_mut(RowId::ResultsExtras) {
         if results_extras_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2703,24 +2812,21 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::MiniIndicator) {
+    if let Some(row) = row_map.get_mut(RowId::MiniIndicator) {
         row.selected_choice_index[player_idx] = MINI_INDICATOR_VARIANTS
             .iter()
             .position(|&v| v == profile.mini_indicator)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::IndicatorScoreType) {
+    if let Some(row) = row_map.get_mut(RowId::IndicatorScoreType) {
         row.selected_choice_index[player_idx] = MINI_INDICATOR_SCORE_TYPE_VARIANTS
             .iter()
             .position(|&v| v == profile.mini_indicator_score_type)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows
-        .iter_mut()
-        .find(|r| r.id == RowId::EarlyDecentWayOffOptions)
-    {
+    if let Some(row) = row_map.get_mut(RowId::EarlyDecentWayOffOptions) {
         if profile.hide_early_dw_judgments {
             early_dw_active_mask |= 1u8 << 0;
         }
@@ -2741,7 +2847,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize FA+ Options row from profile (independent toggles).
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::FAPlusOptions) {
+    if let Some(row) = row_map.get_mut(RowId::FAPlusOptions) {
         // Cursor always starts on the first option; toggled state is reflected visually.
         row.selected_choice_index[player_idx] = 0;
     }
@@ -2763,20 +2869,14 @@ fn apply_profile_defaults(
     if profile.split_15_10ms {
         fa_plus_active_mask |= 1u8 << 5;
     }
-    if let Some(row) = rows
-        .iter_mut()
-        .find(|r| r.id == RowId::CustomBlueFantasticWindow)
-    {
+    if let Some(row) = row_map.get_mut(RowId::CustomBlueFantasticWindow) {
         row.selected_choice_index[player_idx] = if profile.custom_fantastic_window {
             1
         } else {
             0
         };
     }
-    if let Some(row) = rows
-        .iter_mut()
-        .find(|r| r.id == RowId::CustomBlueFantasticWindowMs)
-    {
+    if let Some(row) = row_map.get_mut(RowId::CustomBlueFantasticWindowMs) {
         let ms = crate::game::profile::clamp_custom_fantastic_window_ms(
             profile.custom_fantastic_window_ms,
         );
@@ -2801,7 +2901,7 @@ fn apply_profile_defaults(
         gameplay_extras_active_mask |= 1u8 << 3;
         gameplay_extras_more_active_mask |= 1u8 << 1;
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::GameplayExtras) {
+    if let Some(row) = row_map.get_mut(RowId::GameplayExtras) {
         if gameplay_extras_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2814,10 +2914,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows
-        .iter_mut()
-        .find(|r| r.id == RowId::DensityGraphBackground)
-    {
+    if let Some(row) = row_map.get_mut(RowId::DensityGraphBackground) {
         row.selected_choice_index[player_idx] = if profile.transparent_density_graph_bg {
             1
         } else {
@@ -2826,7 +2923,7 @@ fn apply_profile_defaults(
     }
 
     // Initialize Gameplay Extras (More) row from profile (multi-choice toggle group).
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::GameplayExtrasMore) {
+    if let Some(row) = row_map.get_mut(RowId::GameplayExtrasMore) {
         if gameplay_extras_more_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2862,7 +2959,7 @@ fn apply_profile_defaults(
     if profile.hide_combo_explosions {
         hide_active_mask |= 1u8 << 6;
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Hide) {
+    if let Some(row) = row_map.get_mut(RowId::Hide) {
         if hide_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2877,7 +2974,7 @@ fn apply_profile_defaults(
     }
 
     // Initialize Scroll row from profile setting (multi-choice toggle group).
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Scroll) {
+    if let Some(row) = row_map.get_mut(RowId::Scroll) {
         use crate::game::profile::ScrollOption;
         // Choice indices are fixed by construction order in build_advanced_rows:
         // 0=Reverse, 1=Split, 2=Alternate, 3=Cross, 4=Centered
@@ -2912,7 +3009,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Insert) {
+    if let Some(row) = row_map.get_mut(RowId::Insert) {
         insert_active_mask =
             crate::game::profile::normalize_insert_mask(profile.insert_active_mask);
         if insert_active_mask != 0 {
@@ -2927,7 +3024,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Remove) {
+    if let Some(row) = row_map.get_mut(RowId::Remove) {
         remove_active_mask =
             crate::game::profile::normalize_remove_mask(profile.remove_active_mask);
         if remove_active_mask != 0 {
@@ -2942,7 +3039,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Holds) {
+    if let Some(row) = row_map.get_mut(RowId::Holds) {
         holds_active_mask = crate::game::profile::normalize_holds_mask(profile.holds_active_mask);
         if holds_active_mask != 0 {
             let first_idx = (0..row.choices.len())
@@ -2956,7 +3053,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Accel) {
+    if let Some(row) = row_map.get_mut(RowId::Accel) {
         accel_effects_active_mask =
             crate::game::profile::normalize_accel_effects_mask(profile.accel_effects_active_mask);
         if accel_effects_active_mask != 0 {
@@ -2971,7 +3068,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Effect) {
+    if let Some(row) = row_map.get_mut(RowId::Effect) {
         visual_effects_active_mask =
             crate::game::profile::normalize_visual_effects_mask(profile.visual_effects_active_mask);
         if visual_effects_active_mask != 0 {
@@ -2986,7 +3083,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Appearance) {
+    if let Some(row) = row_map.get_mut(RowId::Appearance) {
         appearance_effects_active_mask = crate::game::profile::normalize_appearance_effects_mask(
             profile.appearance_effects_active_mask,
         );
@@ -3002,14 +3099,14 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Attacks) {
+    if let Some(row) = row_map.get_mut(RowId::Attacks) {
         row.selected_choice_index[player_idx] = ATTACK_MODE_VARIANTS
             .iter()
             .position(|&v| v == profile.attack_mode)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::HideLightType) {
+    if let Some(row) = row_map.get_mut(RowId::HideLightType) {
         row.selected_choice_index[player_idx] = HIDE_LIGHT_TYPE_VARIANTS
             .iter()
             .position(|&v| v == profile.hide_light_type)
@@ -3093,7 +3190,7 @@ pub fn init(
     });
 
     let noteskin_names = discover_noteskin_names();
-    let mut rows = build_rows(
+    let mut row_map = build_rows(
         &song,
         &speed_mod_p1,
         chart_steps_index,
@@ -3123,7 +3220,7 @@ pub fn init(
         error_bar_active_mask_p1,
         error_bar_options_active_mask_p1,
         measure_counter_options_active_mask_p1,
-    ) = apply_profile_defaults(&mut rows, &player_profiles[P1], P1);
+    ) = apply_profile_defaults(&mut row_map, &player_profiles[P1], P1);
     let (
         scroll_active_mask_p2,
         hide_active_mask_p2,
@@ -3142,7 +3239,7 @@ pub fn init(
         error_bar_active_mask_p2,
         error_bar_options_active_mask_p2,
         measure_counter_options_active_mask_p2,
-    ) = apply_profile_defaults(&mut rows, &player_profiles[P2], P2);
+    ) = apply_profile_defaults(&mut row_map, &player_profiles[P2], P2);
 
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
     let mut initial_noteskin_names = vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()];
@@ -3194,7 +3291,7 @@ pub fn init(
         });
     let active = session_active_players();
     let row_tweens = init_row_tweens(
-        &rows,
+        &row_map,
         [0; PLAYER_SLOTS],
         active,
         [hide_active_mask_p1, hide_active_mask_p2],
@@ -3207,7 +3304,7 @@ pub fn init(
         fixed_stepchart,
         chart_steps_index,
         chart_difficulty_index,
-        rows,
+        row_map,
         selected_row: [0; PLAYER_SLOTS],
         prev_selected_row: [0; PLAYER_SLOTS],
         scroll_active_mask: [scroll_active_mask_p1, scroll_active_mask_p2],
@@ -3465,8 +3562,8 @@ fn conditional_row_parent(id: RowId) -> Option<RowId> {
     None
 }
 
-fn measure_counter_children_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.id == RowId::MeasureCounter) else {
+fn measure_counter_children_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = row_map.get(RowId::MeasureCounter) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3481,8 +3578,8 @@ fn measure_counter_children_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) 
     !any_active
 }
 
-fn judgment_offsets_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.id == RowId::JudgmentFont) else {
+fn judgment_offsets_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = row_map.get(RowId::JudgmentFont) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3499,8 +3596,8 @@ fn judgment_offsets_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool 
 }
 
 #[inline(always)]
-fn judgment_tilt_intensity_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.id == RowId::JudgmentTilt) else {
+fn judgment_tilt_intensity_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = row_map.get(RowId::JudgmentTilt) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3515,8 +3612,8 @@ fn judgment_tilt_intensity_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -
     !any_active
 }
 
-fn combo_offsets_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.id == RowId::ComboFont) else {
+fn combo_offsets_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = row_map.get(RowId::ComboFont) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3546,11 +3643,8 @@ fn error_bar_children_visible(
     !any_active
 }
 
-fn custom_fantastic_window_ms_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows
-        .iter()
-        .find(|r| r.id == RowId::CustomBlueFantasticWindow)
-    else {
+fn custom_fantastic_window_ms_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = row_map.get(RowId::CustomBlueFantasticWindow) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3565,8 +3659,8 @@ fn custom_fantastic_window_ms_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]
     !any_active
 }
 
-fn density_graph_background_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.id == RowId::DataVisualizations) else {
+fn density_graph_background_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = row_map.get(RowId::DataVisualizations) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3608,8 +3702,8 @@ fn lifebar_rows_visible(
     !any_active
 }
 
-fn indicator_score_type_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.id == RowId::MiniIndicator) else {
+fn indicator_score_type_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = row_map.get(RowId::MiniIndicator) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3627,83 +3721,80 @@ fn indicator_score_type_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> b
 
 #[inline(always)]
 fn row_visibility(
-    rows: &[Row],
+    row_map: &RowMap,
     active: [bool; PLAYER_SLOTS],
     hide_active_mask: [u8; PLAYER_SLOTS],
     error_bar_active_mask: [u8; PLAYER_SLOTS],
     allow_per_player_global_offsets: bool,
 ) -> RowVisibility {
     RowVisibility {
-        show_measure_counter_children: measure_counter_children_visible(rows, active),
-        show_judgment_offsets: judgment_offsets_visible(rows, active),
-        show_judgment_tilt_intensity: judgment_tilt_intensity_visible(rows, active),
-        show_combo_offsets: combo_offsets_visible(rows, active),
+        show_measure_counter_children: measure_counter_children_visible(row_map, active),
+        show_judgment_offsets: judgment_offsets_visible(row_map, active),
+        show_judgment_tilt_intensity: judgment_tilt_intensity_visible(row_map, active),
+        show_combo_offsets: combo_offsets_visible(row_map, active),
         show_error_bar_children: error_bar_children_visible(active, error_bar_active_mask),
-        show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(rows, active),
-        show_density_graph_background: density_graph_background_visible(rows, active),
+        show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(row_map, active),
+        show_density_graph_background: density_graph_background_visible(row_map, active),
         show_combo_rows: combo_rows_visible(active, hide_active_mask),
         show_lifebar_rows: lifebar_rows_visible(active, hide_active_mask),
-        show_indicator_score_type: indicator_score_type_visible(rows, active),
+        show_indicator_score_type: indicator_score_type_visible(row_map, active),
         show_global_offset_shift: allow_per_player_global_offsets,
     }
 }
 
 #[inline(always)]
-fn is_row_visible(rows: &[Row], row_idx: usize, visibility: RowVisibility) -> bool {
-    rows.get(row_idx)
-        .is_some_and(|row| row_visible_with_flags(row.id, visibility))
+fn is_row_visible(row_map: &RowMap, row_idx: usize, visibility: RowVisibility) -> bool {
+    row_map.display_order().get(row_idx).and_then(|&id| row_map.get(id)).is_some_and(|row| row_visible_with_flags(row.id, visibility))
 }
 
-fn count_visible_rows(rows: &[Row], visibility: RowVisibility) -> usize {
-    rows.iter()
-        .filter(|row| row_visible_with_flags(row.id, visibility))
-        .count()
+fn count_visible_rows(row_map: &RowMap, visibility: RowVisibility) -> usize {
+    row_map.display_order().iter().filter_map(|&id| row_map.get(id)).filter(|row| row_visible_with_flags(row.id, visibility)).count()
 }
 
-fn row_to_visible_index(rows: &[Row], row_idx: usize, visibility: RowVisibility) -> Option<usize> {
-    if row_idx >= rows.len() {
+fn row_to_visible_index(row_map: &RowMap, row_idx: usize, visibility: RowVisibility) -> Option<usize> {
+    if row_idx >= row_map.display_order().len() {
         return None;
     }
-    if !is_row_visible(rows, row_idx, visibility) {
+    if !is_row_visible(row_map, row_idx, visibility) {
         return None;
     }
     let mut pos = 0usize;
     for i in 0..row_idx {
-        if is_row_visible(rows, i, visibility) {
+        if is_row_visible(row_map, i, visibility) {
             pos += 1;
         }
     }
     Some(pos)
 }
 
-fn fallback_visible_row(rows: &[Row], row_idx: usize, visibility: RowVisibility) -> Option<usize> {
-    if rows.is_empty() {
+fn fallback_visible_row(row_map: &RowMap, row_idx: usize, visibility: RowVisibility) -> Option<usize> {
+    if row_map.display_order().is_empty() {
         return None;
     }
-    let start = row_idx.min(rows.len().saturating_sub(1));
-    for i in start..rows.len() {
-        if is_row_visible(rows, i, visibility) {
+    let start = row_idx.min(row_map.display_order().len().saturating_sub(1));
+    for i in start..row_map.display_order().len() {
+        if is_row_visible(row_map, i, visibility) {
             return Some(i);
         }
     }
     (0..start)
         .rev()
-        .find(|&i| is_row_visible(rows, i, visibility))
+        .find(|&i| is_row_visible(row_map, i, visibility))
 }
 
 fn next_visible_row(
-    rows: &[Row],
+    row_map: &RowMap,
     current_row: usize,
     dir: NavDirection,
     visibility: RowVisibility,
 ) -> Option<usize> {
-    if rows.is_empty() {
+    if row_map.display_order().is_empty() {
         return None;
     }
-    let len = rows.len();
+    let len = row_map.display_order().len();
     let mut idx = current_row.min(len.saturating_sub(1));
-    if !is_row_visible(rows, idx, visibility) {
-        idx = fallback_visible_row(rows, idx, visibility)?;
+    if !is_row_visible(row_map, idx, visibility) {
+        idx = fallback_visible_row(row_map, idx, visibility)?;
     }
     for _ in 0..len {
         idx = match dir {
@@ -3711,7 +3802,7 @@ fn next_visible_row(
             NavDirection::Down => (idx + 1) % len,
             NavDirection::Left | NavDirection::Right => return Some(idx),
         };
-        if is_row_visible(rows, idx, visibility) {
+        if is_row_visible(row_map, idx, visibility) {
             return Some(idx);
         }
     }
@@ -3719,13 +3810,13 @@ fn next_visible_row(
 }
 
 fn parent_anchor_visible_index(
-    rows: &[Row],
+    row_map: &RowMap,
     parent_id: RowId,
     visibility: RowVisibility,
 ) -> Option<i32> {
-    rows.iter()
-        .position(|row| row.id == parent_id)
-        .and_then(|idx| row_to_visible_index(rows, idx, visibility))
+    row_map.display_order().iter()
+        .position(|&id| id == parent_id)
+        .and_then(|idx| row_to_visible_index(row_map, idx, visibility))
         .map(|idx| idx as i32)
 }
 
@@ -3758,25 +3849,25 @@ fn f_pos_for_visible_idx(
 }
 
 fn sync_selected_rows_with_visibility(state: &mut State, active: [bool; PLAYER_SLOTS]) {
-    if state.rows.is_empty() {
+    if state.row_map.is_empty() {
         state.selected_row = [0; PLAYER_SLOTS];
         state.prev_selected_row = [0; PLAYER_SLOTS];
         return;
     }
     let visibility = row_visibility(
-        &state.rows,
+        &state.row_map,
         active,
         state.hide_active_mask,
         state.error_bar_active_mask,
         state.allow_per_player_global_offsets,
     );
     for player_idx in [P1, P2] {
-        let idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
-        if is_row_visible(&state.rows, idx, visibility) {
+        let idx = state.selected_row[player_idx].min(state.row_map.len().saturating_sub(1));
+        if is_row_visible(&state.row_map, idx, visibility) {
             state.selected_row[player_idx] = idx;
             continue;
         }
-        if let Some(fallback) = fallback_visible_row(&state.rows, idx, visibility) {
+        if let Some(fallback) = fallback_visible_row(&state.row_map, idx, visibility) {
             state.selected_row[player_idx] = fallback;
             if active[player_idx] {
                 state.prev_selected_row[player_idx] = fallback;
@@ -3873,8 +3964,8 @@ fn row_allows_arcade_next_row(state: &State, row_idx: usize) -> bool {
     arcade_options_navigation_active()
         && pane_uses_arcade_next_row(state.current_pane)
         && state
-            .rows
-            .get(row_idx)
+            .row_map
+            .get_at(row_idx)
             .is_some_and(|row| row.id != RowId::Exit && row_supports_inline_nav(row))
 }
 
@@ -3884,8 +3975,8 @@ fn arcade_row_uses_choice_focus(state: &State, player_idx: usize) -> bool {
         return false;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_idx = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
-    state.rows.get(row_idx).is_some_and(row_supports_inline_nav)
+    let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
+    state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)).is_some_and(row_supports_inline_nav)
 }
 
 fn inline_choice_centers(
@@ -3914,7 +4005,7 @@ fn focused_inline_choice_index(
     row_idx: usize,
 ) -> Option<usize> {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row = state.rows.get(row_idx)?;
+    let row = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id))?;
     if !row_supports_inline_nav(row) {
         return None;
     }
@@ -3947,12 +4038,12 @@ fn move_inline_focus(
     player_idx: usize,
     delta: isize,
 ) -> bool {
-    if state.rows.is_empty() || delta == 0 {
+    if state.row_map.is_empty() || delta == 0 {
         return false;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_idx = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
-    let Some(row) = state.rows.get(row_idx) else {
+    let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
+    let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)) else {
         return false;
     };
     if !row_supports_inline_nav(row) {
@@ -4010,7 +4101,7 @@ fn commit_inline_focus_selection(
     row_idx: usize,
 ) -> bool {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let Some(row) = state.rows.get(row_idx) else {
+    let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)) else {
         return false;
     };
     if !row_supports_inline_nav(row) {
@@ -4020,15 +4111,17 @@ fn commit_inline_focus_selection(
         return false;
     };
     let is_shared = row_is_shared(row.id);
-    if let Some(row) = state.rows.get_mut(row_idx) {
-        if is_shared {
-            let changed = row.selected_choice_index.iter().any(|&v| v != focus_idx);
-            row.selected_choice_index = [focus_idx; PLAYER_SLOTS];
+    if let Some(&row_id) = state.row_map.display_order().get(row_idx) {
+        if let Some(row) = state.row_map.get_mut(row_id) {
+            if is_shared {
+                let changed = row.selected_choice_index.iter().any(|&v| v != focus_idx);
+                row.selected_choice_index = [focus_idx; PLAYER_SLOTS];
+                return changed;
+            }
+            let changed = row.selected_choice_index[idx] != focus_idx;
+            row.selected_choice_index[idx] = focus_idx;
             return changed;
         }
-        let changed = row.selected_choice_index[idx] != focus_idx;
-        row.selected_choice_index[idx] = focus_idx;
-        return changed;
     }
     false
 }
@@ -4044,7 +4137,7 @@ fn sync_inline_intent_from_row(
         state.inline_choice_x[idx] = f32::NAN;
         return;
     }
-    let Some(row) = state.rows.get(row_idx) else {
+    let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)) else {
         return;
     };
     if !row_supports_inline_nav(row) {
@@ -4073,7 +4166,7 @@ fn apply_inline_intent_to_row(
         state.inline_choice_x[idx] = f32::NAN;
         return;
     }
-    let Some(row) = state.rows.get(row_idx) else {
+    let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)) else {
         return;
     };
     if !row_supports_inline_nav(row) {
@@ -4104,19 +4197,19 @@ fn move_selection_vertical(
     player_idx: usize,
     dir: NavDirection,
 ) {
-    if !matches!(dir, NavDirection::Up | NavDirection::Down) || state.rows.is_empty() {
+    if !matches!(dir, NavDirection::Up | NavDirection::Down) || state.row_map.is_empty() {
         return;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     sync_selected_rows_with_visibility(state, active);
     let visibility = row_visibility(
-        &state.rows,
+        &state.row_map,
         active,
         state.hide_active_mask,
         state.error_bar_active_mask,
         state.allow_per_player_global_offsets,
     );
-    let current_row = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
+    let current_row = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
     if !state.inline_choice_x[idx].is_finite() {
         if let Some((anchor_x, _, _, _)) = cursor_dest_for_player(state, asset_manager, idx) {
             state.inline_choice_x[idx] = anchor_x;
@@ -4124,7 +4217,7 @@ fn move_selection_vertical(
             sync_inline_intent_from_row(state, asset_manager, idx, current_row);
         }
     }
-    if let Some(next_row) = next_visible_row(&state.rows, current_row, dir, visibility) {
+    if let Some(next_row) = next_visible_row(&state.row_map, current_row, dir, visibility) {
         state.selected_row[idx] = next_row;
         state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, next_row);
         apply_inline_intent_to_row(state, asset_manager, idx, next_row);
@@ -4206,22 +4299,22 @@ fn cursor_dest_for_player(
     asset_manager: &AssetManager,
     player_idx: usize,
 ) -> Option<(f32, f32, f32, f32)> {
-    if state.rows.is_empty() {
+    if state.row_map.is_empty() {
         return None;
     }
     let player_idx = player_idx.min(PLAYER_SLOTS - 1);
     let visibility = row_visibility(
-        &state.rows,
+        &state.row_map,
         session_active_players(),
         state.hide_active_mask,
         state.error_bar_active_mask,
         state.allow_per_player_global_offsets,
     );
-    let mut row_idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
-    if !is_row_visible(&state.rows, row_idx, visibility) {
-        row_idx = fallback_visible_row(&state.rows, row_idx, visibility)?;
+    let mut row_idx = state.selected_row[player_idx].min(state.row_map.len().saturating_sub(1));
+    if !is_row_visible(&state.row_map, row_idx, visibility) {
+        row_idx = fallback_visible_row(&state.row_map, row_idx, visibility)?;
     }
-    let row = state.rows.get(row_idx)?;
+    let row = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id))?;
 
     let y = state
         .row_tweens
@@ -4395,12 +4488,12 @@ fn change_choice_for_player(
     player_idx: usize,
     delta: isize,
 ) {
-    if state.rows.is_empty() {
+    if state.row_map.is_empty() {
         return;
     }
     let player_idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
-    let id = state.rows[row_index].id;
+    let row_index = state.selected_row[player_idx].min(state.row_map.len().saturating_sub(1));
+    let id = state.row_map.row(state.row_map.id_at(row_index)).id;
     if id == RowId::Exit {
         return;
     }
@@ -4408,7 +4501,7 @@ fn change_choice_for_player(
 
     // Shared row: Music Rate
     if id == RowId::MusicRate {
-        let row = &mut state.rows[row_index];
+        let row = state.row_map.row_mut(state.row_map.id_at(row_index));
         let increment = 0.01f32;
         let min_rate = 0.05f32;
         let max_rate = 3.00f32;
@@ -4452,7 +4545,7 @@ fn change_choice_for_player(
         crate::game::profile::PlayerSide::P2
     };
 
-    let row = &mut state.rows[row_index];
+    let row = state.row_map.row_mut(state.row_map.id_at(row_index));
     let num_choices = row.choices.len();
     if num_choices == 0 {
         return;
@@ -4994,12 +5087,12 @@ pub fn apply_choice_delta(
     player_idx: usize,
     delta: isize,
 ) {
-    if state.rows.is_empty() {
+    if state.row_map.is_empty() {
         return;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_idx = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
-    if let Some(row) = state.rows.get(row_idx)
+    let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
+    if let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id))
         && row_supports_inline_nav(row)
     {
         if state.current_pane == OptionsPane::Main || row_selects_on_focus_move(row.id) {
@@ -5043,7 +5136,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             continue;
         }
 
-        if state.rows.is_empty() {
+        if state.row_map.is_empty() {
             continue;
         }
         match direction {
@@ -5120,7 +5213,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     // If either player is on the Combo Font row, tick the preview combo once per second.
     let mut combo_row_active = false;
     for player_idx in active_player_indices(active) {
-        if let Some(row) = state.rows.get(state.selected_row[player_idx])
+        if let Some(row) = state.row_map.display_order().get(state.selected_row[player_idx]).and_then(|&id| state.row_map.get(id))
             && row.id == RowId::ComboFont
         {
             combo_row_active = true;
@@ -5139,13 +5232,13 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
 
     // Row frame tweening: mimic ScreenOptions::PositionRows() + OptionRow::SetDestination()
     // so rows slide smoothly as the visible window scrolls.
-    let total_rows = state.rows.len();
+    let total_rows = state.row_map.len();
     let (first_row_center_y, row_step) = row_layout_params();
     if total_rows == 0 {
         state.row_tweens.clear();
     } else if state.row_tweens.len() != total_rows {
         state.row_tweens = init_row_tweens(
-            &state.rows,
+            &state.row_map,
             state.selected_row,
             active,
             state.hide_active_mask,
@@ -5154,13 +5247,13 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         );
     } else {
         let visibility = row_visibility(
-            &state.rows,
+            &state.row_map,
             active,
             state.hide_active_mask,
             state.error_bar_active_mask,
             state.allow_per_player_global_offsets,
         );
-        let visible_rows = count_visible_rows(&state.rows, visibility);
+        let visible_rows = count_visible_rows(&state.row_map, visibility);
         if visible_rows == 0 {
             let y = first_row_center_y - row_step * 0.5;
             for tw in &mut state.row_tweens {
@@ -5184,22 +5277,22 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         } else {
             let selected_visible = std::array::from_fn(|player_idx| {
                 let row_idx = state.selected_row[player_idx].min(total_rows.saturating_sub(1));
-                row_to_visible_index(&state.rows, row_idx, visibility).unwrap_or(0)
+                row_to_visible_index(&state.row_map, row_idx, visibility).unwrap_or(0)
             });
             let w = compute_row_window(visible_rows, selected_visible, active);
             let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
             let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
             let measure_counter_anchor_visible_idx =
-                parent_anchor_visible_index(&state.rows, RowId::MeasureCounter, visibility);
+                parent_anchor_visible_index(&state.row_map, RowId::MeasureCounter, visibility);
             let judgment_tilt_anchor_visible_idx =
-                parent_anchor_visible_index(&state.rows, RowId::JudgmentTilt, visibility);
+                parent_anchor_visible_index(&state.row_map, RowId::JudgmentTilt, visibility);
             let error_bar_anchor_visible_idx =
-                parent_anchor_visible_index(&state.rows, RowId::ErrorBar, visibility);
+                parent_anchor_visible_index(&state.row_map, RowId::ErrorBar, visibility);
             let hide_anchor_visible_idx =
-                parent_anchor_visible_index(&state.rows, RowId::Hide, visibility);
+                parent_anchor_visible_index(&state.row_map, RowId::Hide, visibility);
             let mut visible_idx = 0i32;
             for i in 0..total_rows {
-                let visible = is_row_visible(&state.rows, i, visibility);
+                let visible = is_row_visible(&state.row_map, i, visibility);
                 let (f_pos, hidden) = if visible {
                     let ii = visible_idx;
                     visible_idx += 1;
@@ -5207,8 +5300,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 } else {
                     let anchor =
                         state
-                            .rows
-                            .get(i)
+                            .row_map
+                            .get_at(i)
                             .and_then(|row| match conditional_row_parent(row.id) {
                                 Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
                                 Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
@@ -5364,7 +5457,7 @@ fn clear_start_hold(state: &mut State, player_idx: usize) {
 fn toggle_scroll_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::Scroll {
             return;
         }
@@ -5372,7 +5465,7 @@ fn toggle_scroll_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
     let bit = if choice_index < 8 {
         1u8 << (choice_index as u8)
     } else {
@@ -5428,7 +5521,7 @@ fn toggle_scroll_row(state: &mut State, player_idx: usize) {
 fn toggle_hide_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::Hide {
             return;
         }
@@ -5436,7 +5529,7 @@ fn toggle_hide_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
     let bit = if choice_index < 8 {
         1u8 << (choice_index as u8)
     } else {
@@ -5496,7 +5589,7 @@ fn toggle_hide_row(state: &mut State, player_idx: usize) {
 fn toggle_insert_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::Insert {
             return;
         }
@@ -5504,7 +5597,7 @@ fn toggle_insert_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
     let bit = if choice_index < 7 {
         1u8 << (choice_index as u8)
     } else {
@@ -5542,7 +5635,7 @@ fn toggle_insert_row(state: &mut State, player_idx: usize) {
 fn toggle_remove_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::Remove {
             return;
         }
@@ -5550,7 +5643,7 @@ fn toggle_remove_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
     let bit = if choice_index < 8 {
         1u8 << (choice_index as u8)
     } else {
@@ -5588,7 +5681,7 @@ fn toggle_remove_row(state: &mut State, player_idx: usize) {
 fn toggle_holds_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::Holds {
             return;
         }
@@ -5596,8 +5689,8 @@ fn toggle_holds_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < state.rows[row_index].choices.len().min(u8::BITS as usize) {
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let bit = if choice_index < state.row_map.row(state.row_map.id_at(row_index)).choices.len().min(u8::BITS as usize) {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -5634,7 +5727,7 @@ fn toggle_holds_row(state: &mut State, player_idx: usize) {
 fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::Accel {
             return;
         }
@@ -5642,8 +5735,8 @@ fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < state.rows[row_index].choices.len().min(u8::BITS as usize) {
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let bit = if choice_index < state.row_map.row(state.row_map.id_at(row_index)).choices.len().min(u8::BITS as usize) {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -5680,7 +5773,7 @@ fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
 fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::Effect {
             return;
         }
@@ -5688,7 +5781,7 @@ fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
     let bit = if choice_index < 10 {
         1u16 << (choice_index as u16)
     } else {
@@ -5726,7 +5819,7 @@ fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
 fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::Appearance {
             return;
         }
@@ -5734,8 +5827,8 @@ fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < state.rows[row_index].choices.len().min(u8::BITS as usize) {
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let bit = if choice_index < state.row_map.row(state.row_map.id_at(row_index)).choices.len().min(u8::BITS as usize) {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -5774,7 +5867,7 @@ fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
 fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::LifeBarOptions {
             return;
         }
@@ -5782,7 +5875,7 @@ fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
     let bit = if choice_index < 3 {
         1u8 << (choice_index as u8)
     } else {
@@ -5825,7 +5918,7 @@ fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
 fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::FAPlusOptions {
             return;
         }
@@ -5833,8 +5926,8 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < state.rows[row_index].choices.len().min(u8::BITS as usize) {
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
+    let bit = if choice_index < state.row_map.row(state.row_map.id_at(row_index)).choices.len().min(u8::BITS as usize) {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -5885,7 +5978,7 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
 fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::ResultsExtras {
             return;
         }
@@ -5893,7 +5986,7 @@ fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
     let bit = if choice_index < 1 {
         1u8 << (choice_index as u8)
     } else {
@@ -5930,7 +6023,7 @@ fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
 fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::ErrorBar {
             return;
         }
@@ -5938,7 +6031,7 @@ fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
     let bit = if choice_index < 5 {
         1u8 << (choice_index as u8)
     } else {
@@ -5980,7 +6073,7 @@ fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
 fn toggle_error_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::ErrorBarOptions {
             return;
         }
@@ -5988,7 +6081,7 @@ fn toggle_error_bar_options_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
     let bit = if choice_index < 2 {
         1u8 << (choice_index as u8)
     } else {
@@ -6027,7 +6120,7 @@ fn toggle_error_bar_options_row(state: &mut State, player_idx: usize) {
 fn toggle_measure_counter_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::MeasureCounterOptions {
             return;
         }
@@ -6035,7 +6128,7 @@ fn toggle_measure_counter_options_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
     let bit = if choice_index < 5 {
         1u8 << (choice_index as u8)
     } else {
@@ -6083,7 +6176,7 @@ fn toggle_measure_counter_options_row(state: &mut State, player_idx: usize) {
 fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::EarlyDecentWayOffOptions {
             return;
         }
@@ -6091,7 +6184,7 @@ fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
     let bit = if choice_index < 2 {
         1u8 << (choice_index as u8)
     } else {
@@ -6130,7 +6223,7 @@ fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
 fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::GameplayExtras {
             return;
         }
@@ -6138,7 +6231,7 @@ fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let row = &state.rows[row_index];
+    let row = state.row_map.row(state.row_map.id_at(row_index));
     let choice_index = row.selected_choice_index[idx];
     let ge_flash = tr("PlayerOptions", "GameplayExtrasFlashColumnForMiss");
     let ge_density = tr("PlayerOptions", "GameplayExtrasDensityGraphAtTop");
@@ -6212,7 +6305,7 @@ fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
 fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
+    if let Some(row) = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id)) {
         if row.id != RowId::GameplayExtrasMore {
             return;
         }
@@ -6220,7 +6313,7 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let choice_index = state.row_map.row(state.row_map.id_at(row_index)).selected_choice_index[idx];
     let bit = match choice_index {
         0 => 1u8 << 0, // Column Cues
         1 => 1u8 << 1, // Display Scorebox
@@ -6256,7 +6349,7 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
 
 fn apply_pane(state: &mut State, pane: OptionsPane) {
     let speed_mod = &state.speed_mod[session_persisted_player_idx()];
-    let mut rows = build_rows(
+    let mut row_map = build_rows(
         &state.song,
         speed_mod,
         state.chart_steps_index,
@@ -6285,7 +6378,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         error_bar_active_mask_p1,
         error_bar_options_active_mask_p1,
         measure_counter_options_active_mask_p1,
-    ) = apply_profile_defaults(&mut rows, &state.player_profiles[P1], P1);
+    ) = apply_profile_defaults(&mut row_map, &state.player_profiles[P1], P1);
     let (
         scroll_active_mask_p2,
         hide_active_mask_p2,
@@ -6304,8 +6397,8 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         error_bar_active_mask_p2,
         error_bar_options_active_mask_p2,
         measure_counter_options_active_mask_p2,
-    ) = apply_profile_defaults(&mut rows, &state.player_profiles[P2], P2);
-    state.rows = rows;
+    ) = apply_profile_defaults(&mut row_map, &state.player_profiles[P2], P2);
+    state.row_map = row_map;
     state.scroll_active_mask = [scroll_active_mask_p1, scroll_active_mask_p2];
     state.hide_active_mask = [hide_active_mask_p1, hide_active_mask_p2];
     state.insert_active_mask = [insert_active_mask_p1, insert_active_mask_p2];
@@ -6363,7 +6456,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.help_anim_time = [0.0; PLAYER_SLOTS];
     let active = session_active_players();
     state.row_tweens = init_row_tweens(
-        &state.rows,
+        &state.row_map,
         state.selected_row,
         active,
         state.hide_active_mask,
@@ -6397,11 +6490,11 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
 }
 
 fn focus_exit_row(state: &mut State, active: [bool; PLAYER_SLOTS], player_idx: usize) {
-    if state.rows.is_empty() {
+    if state.row_map.is_empty() {
         return;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    state.selected_row[idx] = state.rows.len().saturating_sub(1);
+    state.selected_row[idx] = state.row_map.len().saturating_sub(1);
     state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, state.selected_row[idx]);
     sync_selected_rows_with_visibility(state, active);
 }
@@ -6427,7 +6520,7 @@ fn handle_nav_event(
     dir: NavDirection,
     pressed: bool,
 ) {
-    if !active[player_idx] || state.rows.is_empty() {
+    if !active[player_idx] || state.row_map.is_empty() {
         return;
     }
     if pressed {
@@ -6494,10 +6587,10 @@ fn handle_arcade_start_press(
         handle_arcade_prev_event(state, asset_manager, active, player_idx);
         return None;
     }
-    if repeated && !state.rows.is_empty() {
+    if repeated && !state.row_map.is_empty() {
         let idx = player_idx.min(PLAYER_SLOTS - 1);
-        let row_idx = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
-        if row_idx + 1 == state.rows.len() {
+        let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
+        if row_idx + 1 == state.row_map.len() {
             return None;
         }
     }
@@ -6537,12 +6630,12 @@ fn move_arcade_horizontal_focus(
     player_idx: usize,
     delta: isize,
 ) -> bool {
-    if delta == 0 || state.rows.is_empty() {
+    if delta == 0 || state.row_map.is_empty() {
         return false;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_idx = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
-    let Some(row) = state.rows.get(row_idx) else {
+    let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
+    let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)) else {
         return false;
     };
     let row_supports_inline = row_supports_inline_nav(row);
@@ -6597,7 +6690,7 @@ fn handle_arcade_prev_event(
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
 ) {
-    if !active[player_idx] || state.rows.is_empty() {
+    if !active[player_idx] || state.row_map.is_empty() {
         return;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
@@ -6621,7 +6714,7 @@ fn handle_arcade_start_event(
         return None;
     }
     sync_selected_rows_with_visibility(state, active);
-    let num_rows = state.rows.len();
+    let num_rows = state.row_map.len();
     if num_rows == 0 {
         return None;
     }
@@ -6651,13 +6744,13 @@ fn handle_start_event(
         return None;
     }
     sync_selected_rows_with_visibility(state, active);
-    let num_rows = state.rows.len();
+    let num_rows = state.row_map.len();
     if num_rows == 0 {
         return None;
     }
     let row_index = state.selected_row[player_idx].min(num_rows.saturating_sub(1));
     let should_focus_exit = state.current_pane == OptionsPane::Main && row_index + 1 < num_rows;
-    let row = state.rows.get(row_index)?;
+    let row = state.row_map.display_order().get(row_index).and_then(|&id| state.row_map.get(id))?;
     let id = row.id;
     let row_supports_inline = row_supports_inline_nav(row);
     if row_supports_inline {
@@ -6736,7 +6829,7 @@ fn handle_start_event(
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_index == num_rows.saturating_sub(1)
-        && let Some(what_comes_next_row) = state.rows.get(num_rows.saturating_sub(2))
+        && let Some(what_comes_next_row) = state.row_map.display_order().get(num_rows.saturating_sub(2)).and_then(|&id| state.row_map.get(id))
         && what_comes_next_row.id == RowId::WhatComesNext
     {
         let choice_idx = what_comes_next_row.selected_choice_index[player_idx];
@@ -7132,7 +7225,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let help_box_w = widescale(614.0, 792.0);
     let help_box_x = widescale(13.0, 30.666);
     let help_box_bottom_y = screen_height() - 36.0;
-    let total_rows = state.rows.len();
+    let total_rows = state.row_map.len();
     let frame_h = ROW_HEIGHT;
     let (fallback_y0, fallback_row_step) = row_layout_params();
     let row_alpha_cutoff: f32 = 0.001;
@@ -7181,7 +7274,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         let is_active = (active[P1] && item_idx == state.selected_row[P1])
             || (active[P2] && item_idx == state.selected_row[P2]);
-        let row = &state.rows[item_idx];
+        let row = state.row_map.row(state.row_map.id_at(item_idx));
         let active_bg = color::rgba_hex("#333333");
         let inactive_bg_base = color::rgba_hex("#071016");
         let bg_color = if is_active {
@@ -8974,8 +9067,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     const REVEAL_DURATION: f32 = 0.5;
     let split_help = active[P1] && active[P2];
     for player_idx in active_player_indices(active) {
-        let row_idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
-        let Some(row) = state.rows.get(row_idx) else {
+        let row_idx = state.selected_row[player_idx].min(state.row_map.len().saturating_sub(1));
+        let Some(row) = state.row_map.display_order().get(row_idx).and_then(|&id| state.row_map.get(id)) else {
             continue;
         };
         let help_text_color = color::simply_love_rgba(player_color_index(player_idx));
@@ -9053,7 +9146,7 @@ mod tests {
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, NAV_INITIAL_HOLD_DELAY,
         NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowId, SpeedMod, handle_arcade_start_event,
         hud_offset_choices, is_row_visible, repeat_held_arcade_start, row_visibility,
-        session_active_players, sync_profile_scroll_speed,
+        session_active_players, sync_profile_scroll_speed, RowBuilder, RowMap,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -9085,6 +9178,17 @@ mod tests {
             help: Vec::new(),
             choice_difficulty_indices: None,
         }
+    }
+
+    fn test_row_map(rows: Vec<Row>) -> RowMap {
+        let mut map = RowMap::new();
+        let mut order = Vec::new();
+        for row in rows {
+            let id = row.id;
+            map.insert(row);
+            order.push(id);
+        }
+        (map, order)
     }
 
     #[test]
@@ -9122,7 +9226,7 @@ mod tests {
     #[test]
     fn error_bar_offsets_hide_with_empty_error_bar_mask() {
         ensure_i18n();
-        let rows = vec![
+        let row_map = test_row_map(vec![
             test_row(
                 RowId::ErrorBar,
                 lookup_key("PlayerOptions", "ErrorBar"),
@@ -9135,18 +9239,18 @@ mod tests {
                 &["0"],
                 [0, 0],
             ),
-        ];
-        let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0], false);
-        assert!(!is_row_visible(&rows, 1, visibility));
+        ]);
+        let visibility = row_visibility(&row_map, [true, false], [0, 0], [0, 0], false);
+        assert!(!is_row_visible(&row_map, 1, visibility));
 
-        let visibility = row_visibility(&rows, [true, false], [0, 0], [1, 0], false);
-        assert!(is_row_visible(&rows, 1, visibility));
+        let visibility = row_visibility(&row_map, [true, false], [0, 0], [1, 0], false);
+        assert!(is_row_visible(&row_map, 1, visibility));
     }
 
     #[test]
     fn judgment_offsets_hide_when_judgment_font_is_none() {
         ensure_i18n();
-        let rows = vec![
+        let row_map = test_row_map(vec![
             test_row(
                 RowId::JudgmentFont,
                 lookup_key("PlayerOptions", "JudgmentFont"),
@@ -9159,11 +9263,11 @@ mod tests {
                 &["0"],
                 [0, 0],
             ),
-        ];
-        let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0], false);
-        assert!(!is_row_visible(&rows, 1, visibility));
+        ]);
+        let visibility = row_visibility(&row_map, [true, false], [0, 0], [0, 0], false);
+        assert!(!is_row_visible(&row_map, 1, visibility));
 
-        let rows = vec![
+        let row_map = test_row_map(vec![
             test_row(
                 RowId::JudgmentFont,
                 lookup_key("PlayerOptions", "JudgmentFont"),
@@ -9176,15 +9280,15 @@ mod tests {
                 &["0"],
                 [0, 0],
             ),
-        ];
-        let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0], false);
-        assert!(is_row_visible(&rows, 1, visibility));
+        ]);
+        let visibility = row_visibility(&row_map, [true, false], [0, 0], [0, 0], false);
+        assert!(is_row_visible(&row_map, 1, visibility));
     }
 
     #[test]
     fn combo_offsets_hide_when_all_active_players_use_none_font() {
         ensure_i18n();
-        let rows = vec![
+        let row_map = test_row_map(vec![
             test_row(
                 RowId::ComboFont,
                 lookup_key("PlayerOptions", "ComboFont"),
@@ -9197,11 +9301,11 @@ mod tests {
                 &["0"],
                 [0, 0],
             ),
-        ];
-        let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0], false);
-        assert!(!is_row_visible(&rows, 1, visibility));
+        ]);
+        let visibility = row_visibility(&row_map, [true, true], [0, 0], [0, 0], false);
+        assert!(!is_row_visible(&row_map, 1, visibility));
 
-        let rows = vec![
+        let row_map = test_row_map(vec![
             test_row(
                 RowId::ComboFont,
                 lookup_key("PlayerOptions", "ComboFont"),
@@ -9214,9 +9318,9 @@ mod tests {
                 &["0"],
                 [0, 0],
             ),
-        ];
-        let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0], false);
-        assert!(is_row_visible(&rows, 1, visibility));
+        ]);
+        let visibility = row_visibility(&row_map, [true, true], [0, 0], [0, 0], false);
+        assert!(is_row_visible(&row_map, 1, visibility));
     }
 
     #[test]
@@ -9279,7 +9383,7 @@ mod tests {
 
         let mut state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
         let active = session_active_players();
-        let last_row = state.rows.len().saturating_sub(1);
+        let last_row = state.row_map.len().saturating_sub(1);
         state.selected_row[P1] = last_row;
         state.prev_selected_row[P1] = last_row;
 
