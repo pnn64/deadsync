@@ -7,7 +7,7 @@ use crate::engine::present::actors::{
 };
 use crate::engine::present::anim::{EffectClock, EffectMode, EffectState};
 use crate::engine::present::compose;
-use crate::engine::present::font::{Font, Glyph};
+use crate::engine::present::font::{self, Font, Glyph};
 use crate::engine::space::Metrics;
 use glam::Mat4 as Matrix4;
 use serde::{Deserialize, Serialize};
@@ -398,6 +398,7 @@ pub fn replay_case(case: &ComposeCase) -> Result<ReplayCase, Box<dyn Error>> {
             .ok_or_else(|| format!("missing leaked font name '{name}'"))?;
         fonts.insert(leaked, font_runtime(font, &name_map));
     }
+    font::refresh_chain_keys(&mut fonts);
 
     let actors = case
         .actors
@@ -730,6 +731,8 @@ fn font_runtime(font: &FontSnapshot, name_map: &HashMap<String, &'static str>) -
             .fallback_font_name
             .as_ref()
             .and_then(|name| name_map.get(name).copied()),
+        cache_tag: 0,
+        chain_key: 0,
         default_stroke_color: font.default_stroke_color,
         stroke_texture_map: font
             .stroke_texture_map

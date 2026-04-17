@@ -475,6 +475,9 @@ const fn saturating_u32(value: usize) -> u32 {
 }
 
 fn font_chain_key(font: &font::Font, fonts: &HashMap<&'static str, font::Font>) -> u64 {
+    if font.chain_key != 0 {
+        return font.chain_key;
+    }
     let mut hasher = DefaultHasher::new();
     let mut current = Some(font);
     while let Some(font) = current {

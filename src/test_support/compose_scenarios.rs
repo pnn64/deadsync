@@ -4,7 +4,7 @@ use crate::engine::present::actors::{
     Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent,
 };
 use crate::engine::present::anim::{EffectMode, EffectState};
-use crate::engine::present::font::{Font, Glyph};
+use crate::engine::present::font::{self, Font, Glyph};
 use crate::engine::space::{Metrics, metrics_for_window};
 use crate::test_support::density_graph_bench;
 use crate::test_support::density_graph_life_bench;
@@ -349,6 +349,7 @@ pub(crate) fn bench_fonts() -> HashMap<&'static str, Font> {
     ] {
         fonts.insert(name, bench_font());
     }
+    font::refresh_chain_keys(&mut fonts);
     fonts
 }
 
@@ -368,6 +369,8 @@ fn bench_font() -> Font {
         line_spacing: 20,
         height: 18,
         fallback_font_name: None,
+        cache_tag: 0,
+        chain_key: 0,
         default_stroke_color: [0.05, 0.05, 0.05, 1.0],
         stroke_texture_map,
         texture_hints_map: HashMap::new(),

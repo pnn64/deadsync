@@ -171,8 +171,11 @@ impl AssetManager {
         }
     }
 
-    pub fn register_font(&mut self, name: &'static str, font: Font) {
+    pub fn register_font(&mut self, name: &'static str, mut font: Font) {
+        font.cache_tag = 0;
+        font.chain_key = 0;
         self.fonts.insert(name, font);
+        font::refresh_chain_keys(&mut self.fonts);
     }
 
     pub const fn fonts(&self) -> &HashMap<&'static str, Font> {

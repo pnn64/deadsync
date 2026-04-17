@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt;
 use std::fs;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -531,6 +532,8 @@ pub struct Font {
     pub line_spacing: i32, // draw units (from main/default page)
     pub height: i32,       // draw units (baseline - top)
     pub fallback_font_name: Option<&'static str>,
+    pub cache_tag: u64,
+    pub chain_key: u64,
     pub default_stroke_color: [f32; 4],
     pub stroke_texture_map: HashMap<String, String>,
     pub texture_hints_map: HashMap<String, String>,
@@ -539,6 +542,62 @@ pub struct Font {
 pub struct FontLoadData {
     pub font: Font,
     pub required_textures: Vec<PathBuf>,
+}
+
+fn compute_chain_key(start_name: &'static str, fonts: &HashMap<&'static str, Font>) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    let mut current = Some(start_name);
+    let mut depth = 0usize;
+    let max_depth = fonts.len().max(1);
+
+    while let Some(name) = current {
+        name.hash(&mut hasher);
+        let Some(font) = fonts.get(name) else {
+            break;
+        };
+        font.cache_tag.hash(&mut hasher);
+        current = font.fallback_font_name;
+        depth += 1;
+        if depth > max_depth {
+            break;
+        }
+    }
+
+    let key = hasher.finish();
+    if key == 0 { 1 } else { key }
+}
+
+pub fn refresh_chain_keys(fonts: &mut HashMap<&'static str, Font>) {
+    let mut names = fonts.keys().copied().collect::<Vec<_>>();
+    names.sort_unstable();
+
+    let mut next_tag = fonts
+        .values()
+        .map(|font| font.cache_tag)
+        .max()
+        .unwrap_or(0)
+        .wrapping_add(1)
+        .max(1);
+
+    for name in &names {
+        let Some(font) = fonts.get_mut(name) else {
+            continue;
+        };
+        if font.cache_tag == 0 {
+            font.cache_tag = next_tag;
+            next_tag = next_tag.wrapping_add(1).max(1);
+        }
+    }
+
+    let chain_keys = names
+        .iter()
+        .map(|name| (*name, compute_chain_key(name, fonts)))
+        .collect::<Vec<_>>();
+    for (name, chain_key) in chain_keys {
+        if let Some(font) = fonts.get_mut(name) {
+            font.chain_key = chain_key;
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -2500,6 +2559,8 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
         height: default_page_metrics.0,
         line_spacing: default_page_metrics.1,
         fallback_font_name: None,
+        cache_tag: 0,
+        chain_key: 0,
         default_stroke_color,
         stroke_texture_map,
         texture_hints_map,
