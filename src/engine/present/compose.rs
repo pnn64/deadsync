@@ -7,8 +7,9 @@ use crate::engine::space::Metrics;
 use glam::{Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3};
 use smallvec::SmallVec;
 use std::collections::HashMap;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{BuildHasherDefault, DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
+use twox_hash::XxHash64;
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
@@ -121,6 +122,10 @@ struct OwnedLayoutEntry {
     last_used: u64,
 }
 
+type TextLayoutHasher = BuildHasherDefault<XxHash64>;
+type OwnedLayoutMap = HashMap<Box<str>, OwnedLayoutEntry, TextLayoutHasher>;
+type SharedAliasMap = HashMap<usize, Arc<str>, TextLayoutHasher>;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct TextLayoutKey {
     font_key: u64,
@@ -147,8 +152,8 @@ pub enum TextLayoutOverflowPolicy {
 }
 
 pub struct TextLayoutCache {
-    owned_entries: HashMap<TextLayoutKey, HashMap<Box<str>, OwnedLayoutEntry>>,
-    shared_aliases: HashMap<TextLayoutKey, HashMap<usize, Arc<str>>>,
+    owned_entries: HashMap<TextLayoutKey, OwnedLayoutMap, TextLayoutHasher>,
+    shared_aliases: HashMap<TextLayoutKey, SharedAliasMap, TextLayoutHasher>,
     entry_count: usize,
     alias_count: usize,
     max_entries: usize,
@@ -157,6 +162,7 @@ pub struct TextLayoutCache {
     frame_stats: TextLayoutFrameStats,
     overflow_policy: TextLayoutOverflowPolicy,
     uncached_layout: Option<Box<CachedTextLayout>>,
+    prune_ages: Vec<u64>,
 }
 
 impl Default for TextLayoutCache {
@@ -177,8 +183,8 @@ impl TextLayoutCache {
     pub fn new_with_policy(max_entries: usize, overflow_policy: TextLayoutOverflowPolicy) -> Self {
         let max_entries = max_entries.max(1);
         Self {
-            owned_entries: HashMap::new(),
-            shared_aliases: HashMap::new(),
+            owned_entries: HashMap::default(),
+            shared_aliases: HashMap::default(),
             entry_count: 0,
             alias_count: 0,
             max_entries,
@@ -187,6 +193,7 @@ impl TextLayoutCache {
             frame_stats: TextLayoutFrameStats::default(),
             overflow_policy,
             uncached_layout: None,
+            prune_ages: Vec::new(),
         }
     }
 
@@ -212,6 +219,7 @@ impl TextLayoutCache {
         self.use_tick = 0;
         self.frame_stats = TextLayoutFrameStats::default();
         self.uncached_layout = None;
+        self.prune_ages.clear();
     }
 
     #[inline(always)]
@@ -242,17 +250,21 @@ impl TextLayoutCache {
             .max_entries
             .saturating_sub((self.max_entries / 4).max(1));
         let remove = self.entry_count.saturating_sub(keep).max(1);
-        let mut ages = Vec::with_capacity(self.entry_count);
-        for font_entries in self.owned_entries.values() {
-            ages.extend(font_entries.values().map(|entry| entry.last_used));
-        }
-        if ages.is_empty() {
-            self.clear();
-            return;
-        }
-        let cutoff_ix = remove.saturating_sub(1).min(ages.len().saturating_sub(1));
-        ages.select_nth_unstable(cutoff_ix);
-        let cutoff = ages[cutoff_ix];
+        let cutoff = {
+            let ages = &mut self.prune_ages;
+            ages.clear();
+            ages.reserve(self.entry_count.saturating_sub(ages.capacity()));
+            for font_entries in self.owned_entries.values() {
+                ages.extend(font_entries.values().map(|entry| entry.last_used));
+            }
+            if ages.is_empty() {
+                self.clear();
+                return;
+            }
+            let cutoff_ix = remove.saturating_sub(1).min(ages.len().saturating_sub(1));
+            ages.select_nth_unstable(cutoff_ix);
+            ages[cutoff_ix]
+        };
         let mut removed = 0usize;
         self.owned_entries.retain(|_, font_entries| {
             font_entries.retain(|_, entry| {
