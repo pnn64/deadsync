@@ -38,14 +38,14 @@ pub fn fixture() -> PlayerOptionsBenchFixture {
     let mut state = player_options::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
 
     let perspective_row = state
-        .rows
+        .row_map.display_order()
         .iter()
-        .position(|row| row.id == RowId::Perspective)
+        .position(|&id| id == RowId::Perspective)
         .unwrap_or(0);
     let background_filter_row = state
-        .rows
+        .row_map.display_order()
         .iter()
-        .position(|row| row.id == RowId::BackgroundFilter)
+        .position(|&id| id == RowId::BackgroundFilter)
         .unwrap_or(perspective_row);
     state.selected_row = [perspective_row, background_filter_row];
     state.prev_selected_row = state.selected_row;
