@@ -113,6 +113,7 @@ struct CachedTextLayout {
 }
 
 type WordGlyphs = SmallVec<[CachedGlyph; 16]>;
+type AttrIndices = SmallVec<[usize; 8]>;
 
 struct OwnedLayoutEntry {
     layout: Box<CachedTextLayout>,
@@ -512,6 +513,87 @@ fn push_cached_line(
     *max_logical_width_i = (*max_logical_width_i).max(width_i32);
     *glyph_count += glyphs.len();
     lines.push(CachedLine { width_i32, glyphs });
+}
+
+#[inline(always)]
+fn attr_end(attr: &actors::TextAttribute) -> usize {
+    attr.start.saturating_add(attr.length)
+}
+
+struct TextAttrCursor<'a> {
+    attributes: &'a [actors::TextAttribute],
+    start_order: AttrIndices,
+    end_order: AttrIndices,
+    active: AttrIndices,
+    next_start: usize,
+    next_end: usize,
+}
+
+impl<'a> TextAttrCursor<'a> {
+    fn new(attributes: &'a [actors::TextAttribute]) -> Option<Self> {
+        if attributes.is_empty() {
+            return None;
+        }
+
+        let mut start_order = AttrIndices::with_capacity(attributes.len());
+        let mut end_order = AttrIndices::with_capacity(attributes.len());
+        for index in 0..attributes.len() {
+            start_order.push(index);
+            end_order.push(index);
+        }
+
+        start_order.sort_unstable_by_key(|&index| (attributes[index].start, index));
+        end_order.sort_unstable_by_key(|&index| (attr_end(&attributes[index]), index));
+
+        Some(Self {
+            attributes,
+            start_order,
+            end_order,
+            active: AttrIndices::new(),
+            next_start: 0,
+            next_end: 0,
+        })
+    }
+
+    #[inline(always)]
+    fn push_active(&mut self, attr_index: usize) {
+        let insert_at = self.active.partition_point(|&index| index < attr_index);
+        self.active.insert(insert_at, attr_index);
+    }
+
+    #[inline(always)]
+    fn remove_active(&mut self, attr_index: usize) {
+        if let Ok(index) = self.active.binary_search(&attr_index) {
+            self.active.remove(index);
+        }
+    }
+
+    #[inline(always)]
+    fn tint_for(&mut self, char_index: usize) -> [f32; 4] {
+        while self.next_end < self.end_order.len()
+            && attr_end(&self.attributes[self.end_order[self.next_end]]) <= char_index
+        {
+            let attr_index = self.end_order[self.next_end];
+            self.remove_active(attr_index);
+            self.next_end += 1;
+        }
+
+        while self.next_start < self.start_order.len()
+            && self.attributes[self.start_order[self.next_start]].start <= char_index
+        {
+            let attr_index = self.start_order[self.next_start];
+            let attr = &self.attributes[attr_index];
+            if char_index < attr_end(attr) {
+                self.push_active(attr_index);
+            }
+            self.next_start += 1;
+        }
+
+        self.active
+            .last()
+            .map(|&index| self.attributes[index].color)
+            .unwrap_or([1.0; 4])
+    }
 }
 
 fn flush_wrapped_word(
@@ -2082,19 +2164,8 @@ fn layout_text<'a>(
         logical.mul_add(scale, center)
     }
 
-    #[inline(always)]
-    fn glyph_tint(attributes: &[actors::TextAttribute], char_index: usize) -> [f32; 4] {
-        let mut tint = [1.0; 4];
-        for attr in attributes {
-            let end = attr.start.saturating_add(attr.length);
-            if (attr.start..end).contains(&char_index) {
-                tint = attr.color;
-            }
-        }
-        tint
-    }
-
     out.reserve(layout.glyph_count);
+    let mut attr_cursor = TextAttrCursor::new(attributes);
 
     for line in &layout.lines {
         pen_y_logical += font.height;
@@ -2133,7 +2204,9 @@ fn layout_text<'a>(
                 out.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
                         texture_id: std::borrow::Cow::Borrowed(texture_key),
-                        tint: glyph_tint(attributes, glyph.char_index),
+                        tint: attr_cursor
+                            .as_mut()
+                            .map_or([1.0; 4], |cursor| cursor.tint_for(glyph.char_index)),
                         uv_scale: glyph.uv_scale,
                         uv_offset: glyph.uv_offset,
                         local_offset: [0.0, 0.0],
@@ -2538,11 +2611,11 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
 #[cfg(test)]
 mod tests {
     use super::{
-        CachedTextLayout, TextLayoutCache, TextLayoutKey, TextLayoutOverflowPolicy, build_screen,
-        fold_sprite_xy_rot, wrap_text_lines_by_words,
+        CachedTextLayout, TextAttrCursor, TextLayoutCache, TextLayoutKey, TextLayoutOverflowPolicy,
+        build_screen, fold_sprite_xy_rot, wrap_text_lines_by_words,
     };
     use crate::engine::gfx::{BlendMode, MeshMode, TMeshCacheKey, TexturedMeshVertex};
-    use crate::engine::present::actors::{Actor, SizeSpec};
+    use crate::engine::present::actors::{Actor, SizeSpec, TextAttribute};
     use crate::engine::space::Metrics;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -2575,6 +2648,79 @@ mod tests {
     fn wrapwidthpixels_keeps_long_word_on_own_line() {
         let lines = wrap_text_lines_by_words("AAAA BB", 3, 1, |word| word.len() as i32);
         assert_eq!(lines, boxed_lines(&["AAAA", "BB"]));
+    }
+
+    #[test]
+    fn text_attr_cursor_uses_last_matching_attribute() {
+        let attrs = [
+            TextAttribute {
+                start: 2,
+                length: 4,
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            TextAttribute {
+                start: 3,
+                length: 2,
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
+            TextAttribute {
+                start: 2,
+                length: 1,
+                color: [0.0, 0.0, 1.0, 1.0],
+            },
+        ];
+        let mut cursor = TextAttrCursor::new(&attrs).expect("attributes should build a cursor");
+
+        assert_eq!(cursor.tint_for(0), [1.0; 4]);
+        assert_eq!(cursor.tint_for(2), [0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(cursor.tint_for(3), [0.0, 1.0, 0.0, 1.0]);
+        assert_eq!(cursor.tint_for(5), [1.0, 0.0, 0.0, 1.0]);
+        assert_eq!(cursor.tint_for(6), [1.0; 4]);
+    }
+
+    #[test]
+    fn text_attr_cursor_keeps_slice_order_precedence_with_unsorted_starts() {
+        let attrs = [
+            TextAttribute {
+                start: 5,
+                length: 1,
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
+            TextAttribute {
+                start: 0,
+                length: 10,
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+        ];
+        let mut cursor = TextAttrCursor::new(&attrs).expect("attributes should build a cursor");
+
+        assert_eq!(cursor.tint_for(5), [1.0, 0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn text_attr_cursor_handles_skipped_char_indices() {
+        let attrs = [
+            TextAttribute {
+                start: 1,
+                length: 1,
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            TextAttribute {
+                start: 2,
+                length: 3,
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
+            TextAttribute {
+                start: 5,
+                length: 2,
+                color: [0.0, 0.0, 1.0, 1.0],
+            },
+        ];
+        let mut cursor = TextAttrCursor::new(&attrs).expect("attributes should build a cursor");
+
+        assert_eq!(cursor.tint_for(0), [1.0; 4]);
+        assert_eq!(cursor.tint_for(3), [0.0, 1.0, 0.0, 1.0]);
+        assert_eq!(cursor.tint_for(6), [0.0, 0.0, 1.0, 1.0]);
     }
 
     #[test]
