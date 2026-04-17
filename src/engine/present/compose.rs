@@ -5,6 +5,7 @@ use crate::engine::present::actors::{self, Actor, SizeSpec};
 use crate::engine::present::{anim, font};
 use crate::engine::space::Metrics;
 use glam::{Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3};
+use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
@@ -105,17 +106,13 @@ struct CachedLine {
 }
 
 #[derive(Clone)]
-struct WrappedLine {
-    text: Box<str>,
-    char_indices: Vec<usize>,
-}
-
-#[derive(Clone)]
 struct CachedTextLayout {
     max_logical_width_i: i32,
     glyph_count: usize,
     lines: Vec<CachedLine>,
 }
+
+type WordGlyphs = SmallVec<[CachedGlyph; 16]>;
 
 struct OwnedLayoutEntry {
     layout: Box<CachedTextLayout>,
@@ -487,6 +484,86 @@ fn font_chain_key(font: &font::Font, fonts: &HashMap<&'static str, font::Font>) 
     hasher.finish()
 }
 
+#[inline(always)]
+fn cached_glyph(glyph: &font::Glyph, char_index: usize, draw_quad: bool) -> CachedGlyph {
+    CachedGlyph {
+        texture_key: std::ptr::from_ref(glyph.texture_key.as_str()),
+        uv_scale: glyph.uv_scale,
+        uv_offset: glyph.uv_offset,
+        size: glyph.size,
+        offset: glyph.offset,
+        advance_i32: glyph.advance_i32,
+        char_index,
+        draw_quad,
+    }
+}
+
+#[inline(always)]
+fn push_cached_line(
+    lines: &mut Vec<CachedLine>,
+    max_logical_width_i: &mut i32,
+    glyph_count: &mut usize,
+    width_i32: i32,
+    glyphs: Vec<CachedGlyph>,
+) {
+    *max_logical_width_i = (*max_logical_width_i).max(width_i32);
+    *glyph_count += glyphs.len();
+    lines.push(CachedLine { width_i32, glyphs });
+}
+
+fn flush_wrapped_word(
+    lines: &mut Vec<CachedLine>,
+    max_logical_width_i: &mut i32,
+    glyph_count: &mut usize,
+    line_width: &mut i32,
+    line_glyphs: &mut Vec<CachedGlyph>,
+    line_has_word: &mut bool,
+    word_active: &mut bool,
+    word_width: &mut i32,
+    word_first_char: usize,
+    word_space_before: &mut Option<usize>,
+    word_glyphs: &mut WordGlyphs,
+    wrap_width_pixels: i32,
+    space_glyph: Option<&font::Glyph>,
+    space_width: i32,
+    draws_space: bool,
+) {
+    if !*word_active {
+        return;
+    }
+
+    if !*line_has_word {
+        *line_width = *word_width;
+        line_glyphs.extend(word_glyphs.drain(..));
+        *line_has_word = true;
+    } else if line_width.saturating_add(space_width + *word_width) <= wrap_width_pixels {
+        *line_width += space_width + *word_width;
+        if let Some(glyph) = space_glyph {
+            line_glyphs.push(cached_glyph(
+                glyph,
+                word_space_before.unwrap_or(word_first_char.saturating_sub(1)),
+                draws_space,
+            ));
+        }
+        line_glyphs.extend(word_glyphs.drain(..));
+    } else {
+        push_cached_line(
+            lines,
+            max_logical_width_i,
+            glyph_count,
+            *line_width,
+            std::mem::take(line_glyphs),
+        );
+        *line_width = *word_width;
+        line_glyphs.extend(word_glyphs.drain(..));
+        *line_has_word = true;
+    }
+
+    *word_active = false;
+    *word_width = 0;
+    *word_space_before = None;
+}
+
 fn build_cached_text_layout(
     font: &font::Font,
     fonts: &HashMap<&'static str, font::Font>,
@@ -494,37 +571,116 @@ fn build_cached_text_layout(
     wrap_width_pixels: i32,
 ) -> CachedTextLayout {
     let draws_space = font.glyph_map.contains_key(&' ');
+    let space_glyph = font::find_glyph(font, ' ', fonts);
+    let space_width = space_glyph.map_or(0, |glyph| glyph.advance_i32);
     let mut max_logical_width_i = 0i32;
     let mut glyph_count = 0usize;
     let mut lines = Vec::new();
+    let mut start_char = 0usize;
 
-    let mut push_line = |line: WrappedLine| {
-        let mut width_i32 = 0i32;
-        let mut glyphs = Vec::with_capacity(line.char_indices.len());
-        debug_assert_eq!(line.text.chars().count(), line.char_indices.len());
-        for (ch, char_index) in line.text.chars().zip(line.char_indices.into_iter()) {
-            let Some(glyph) = font::find_glyph(font, ch, fonts) else {
-                continue;
-            };
-            width_i32 += glyph.advance_i32;
-            glyphs.push(CachedGlyph {
-                texture_key: std::ptr::from_ref(glyph.texture_key.as_str()),
-                uv_scale: glyph.uv_scale,
-                uv_offset: glyph.uv_offset,
-                size: glyph.size,
-                offset: glyph.offset,
-                advance_i32: glyph.advance_i32,
-                char_index,
-                draw_quad: ch != ' ' || draws_space,
-            });
+    for src in text.split('\n') {
+        let mut char_index = start_char;
+        if wrap_width_pixels < 0 {
+            let mut width_i32 = 0i32;
+            let mut glyphs = Vec::new();
+            for ch in src.chars() {
+                if let Some(glyph) = font::find_glyph(font, ch, fonts) {
+                    width_i32 += glyph.advance_i32;
+                    glyphs.push(cached_glyph(glyph, char_index, ch != ' ' || draws_space));
+                }
+                char_index += 1;
+            }
+            push_cached_line(
+                &mut lines,
+                &mut max_logical_width_i,
+                &mut glyph_count,
+                width_i32,
+                glyphs,
+            );
+            start_char = char_index.saturating_add(1);
+            continue;
         }
-        max_logical_width_i = max_logical_width_i.max(width_i32);
-        glyph_count += glyphs.len();
-        lines.push(CachedLine { width_i32, glyphs });
-    };
 
-    for line in wrapped_text_lines_with_indices(text, wrap_width_pixels, font, fonts) {
-        push_line(line);
+        let mut line_width = 0i32;
+        let mut line_glyphs = Vec::new();
+        let mut line_has_word = false;
+        let mut pending_space = None;
+        let mut word_active = false;
+        let mut word_width = 0i32;
+        let mut word_first_char = start_char;
+        let mut word_space_before = None;
+        let mut word_glyphs = WordGlyphs::new();
+
+        for ch in src.chars() {
+            if ch == ' ' {
+                flush_wrapped_word(
+                    &mut lines,
+                    &mut max_logical_width_i,
+                    &mut glyph_count,
+                    &mut line_width,
+                    &mut line_glyphs,
+                    &mut line_has_word,
+                    &mut word_active,
+                    &mut word_width,
+                    word_first_char,
+                    &mut word_space_before,
+                    &mut word_glyphs,
+                    wrap_width_pixels,
+                    space_glyph,
+                    space_width,
+                    draws_space,
+                );
+                pending_space.get_or_insert(char_index);
+            } else {
+                if !word_active {
+                    word_active = true;
+                    word_first_char = char_index;
+                    word_space_before = pending_space.take();
+                }
+                if let Some(glyph) = font::find_glyph(font, ch, fonts) {
+                    word_width += glyph.advance_i32;
+                    word_glyphs.push(cached_glyph(glyph, char_index, true));
+                }
+            }
+            char_index += 1;
+        }
+
+        flush_wrapped_word(
+            &mut lines,
+            &mut max_logical_width_i,
+            &mut glyph_count,
+            &mut line_width,
+            &mut line_glyphs,
+            &mut line_has_word,
+            &mut word_active,
+            &mut word_width,
+            word_first_char,
+            &mut word_space_before,
+            &mut word_glyphs,
+            wrap_width_pixels,
+            space_glyph,
+            space_width,
+            draws_space,
+        );
+
+        if line_has_word {
+            push_cached_line(
+                &mut lines,
+                &mut max_logical_width_i,
+                &mut glyph_count,
+                line_width,
+                line_glyphs,
+            );
+        } else {
+            push_cached_line(
+                &mut lines,
+                &mut max_logical_width_i,
+                &mut glyph_count,
+                0,
+                Vec::new(),
+            );
+        }
+        start_char = char_index.saturating_add(1);
     }
 
     CachedTextLayout {
@@ -532,133 +688,6 @@ fn build_cached_text_layout(
         glyph_count,
         lines,
     }
-}
-
-#[derive(Clone, Copy)]
-struct WrappedWord<'a> {
-    text: &'a str,
-    start_char: usize,
-    space_before_char: Option<usize>,
-}
-
-fn split_words_with_positions(src: &str, start_char: usize) -> Vec<WrappedWord<'_>> {
-    let mut out = Vec::new();
-    let mut word_start_byte = None;
-    let mut word_start_char = 0usize;
-    let mut word_space_before = None;
-    let mut pending_space = None;
-    let mut char_index = start_char;
-
-    for (byte_index, ch) in src.char_indices() {
-        if ch == ' ' {
-            if let Some(start_byte) = word_start_byte.take() {
-                out.push(WrappedWord {
-                    text: &src[start_byte..byte_index],
-                    start_char: word_start_char,
-                    space_before_char: word_space_before,
-                });
-            }
-            pending_space.get_or_insert(char_index);
-        } else if word_start_byte.is_none() {
-            word_start_byte = Some(byte_index);
-            word_start_char = char_index;
-            word_space_before = pending_space.take();
-        }
-        char_index += 1;
-    }
-
-    if let Some(start_byte) = word_start_byte {
-        out.push(WrappedWord {
-            text: &src[start_byte..],
-            start_char: word_start_char,
-            space_before_char: word_space_before,
-        });
-    }
-
-    out
-}
-
-#[inline(always)]
-fn raw_wrapped_line(text: &str, start_char: usize) -> WrappedLine {
-    let mut char_indices = Vec::with_capacity(text.chars().count());
-    let mut char_index = start_char;
-    for _ in text.chars() {
-        char_indices.push(char_index);
-        char_index += 1;
-    }
-    WrappedLine {
-        text: text.into(),
-        char_indices,
-    }
-}
-
-fn wrapped_text_lines_with_indices(
-    text: &str,
-    wrap_width_pixels: i32,
-    font: &font::Font,
-    fonts: &HashMap<&'static str, font::Font>,
-) -> Vec<WrappedLine> {
-    let space_width = font::measure_line_width_logical(font, " ", fonts);
-    let mut out = Vec::new();
-    let mut start_char = 0usize;
-
-    for src in text.split('\n') {
-        if wrap_width_pixels < 0 {
-            out.push(raw_wrapped_line(src, start_char));
-            start_char += src.chars().count() + 1;
-            continue;
-        }
-
-        let words = split_words_with_positions(src, start_char);
-        if words.is_empty() {
-            out.push(WrappedLine {
-                text: "".into(),
-                char_indices: Vec::new(),
-            });
-            start_char += src.chars().count() + 1;
-            continue;
-        }
-
-        let mut line = String::from(words[0].text);
-        let mut line_char_indices = (0..words[0].text.chars().count())
-            .map(|i| words[0].start_char + i)
-            .collect::<Vec<_>>();
-        let mut line_width = font::measure_line_width_logical(font, words[0].text, fonts);
-
-        for word in words.iter().skip(1) {
-            let width_to_add =
-                space_width + font::measure_line_width_logical(font, word.text, fonts);
-            if line_width + width_to_add <= wrap_width_pixels {
-                line.push(' ');
-                line_char_indices.push(
-                    word.space_before_char
-                        .unwrap_or(word.start_char.saturating_sub(1)),
-                );
-                line_char_indices
-                    .extend((0..word.text.chars().count()).map(|i| word.start_char + i));
-                line.push_str(word.text);
-                line_width += width_to_add;
-            } else {
-                out.push(WrappedLine {
-                    text: std::mem::take(&mut line).into_boxed_str(),
-                    char_indices: std::mem::take(&mut line_char_indices),
-                });
-                word.text.clone_into(&mut line);
-                line_char_indices = (0..word.text.chars().count())
-                    .map(|i| word.start_char + i)
-                    .collect();
-                line_width = font::measure_line_width_logical(font, word.text, fonts);
-            }
-        }
-
-        out.push(WrappedLine {
-            text: line.into_boxed_str(),
-            char_indices: line_char_indices,
-        });
-        start_char += src.chars().count() + 1;
-    }
-
-    out
 }
 
 #[cfg(test)]
