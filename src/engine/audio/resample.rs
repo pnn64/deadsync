@@ -6,10 +6,16 @@ use log::{debug, error, warn};
 use rubato::{
     Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
+use smallvec::SmallVec;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::thread;
+
+const OUT_FRAMES_PER_CALL: usize = 256;
+const PLANAR_INPUT_CAP_FRAMES: usize = 4096;
+const PLANAR_COMPACT_THRESHOLD_FRAMES: usize = 2048;
+const SILENCE_CHUNK_FRAMES: usize = 2048;
 
 fn push_music_block_with_map(
     sample_ring: &internal::SpscRingI16,
@@ -58,6 +64,195 @@ fn push_music_block_with_map(
         next_music_sec += chunk_frames as f64 * music_sec_per_frame;
     }
     Ok(next_music_sec)
+}
+
+struct PlanarAccum {
+    channels: Vec<Vec<f32>>,
+    start_frame: usize,
+}
+
+impl PlanarAccum {
+    fn new(channels: usize, capacity_frames: usize) -> Self {
+        let mut planar = Vec::with_capacity(channels);
+        for _ in 0..channels {
+            planar.push(Vec::with_capacity(capacity_frames));
+        }
+        Self {
+            channels: planar,
+            start_frame: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn available_frames(&self) -> usize {
+        self.channels
+            .first()
+            .map_or(0, |channel| channel.len().saturating_sub(self.start_frame))
+    }
+
+    #[inline(always)]
+    fn is_empty(&self) -> bool {
+        self.available_frames() == 0
+    }
+
+    fn push_i16_interleaved(&mut self, interleaved: &[i16], channels: usize) {
+        if interleaved.is_empty() || channels == 0 {
+            return;
+        }
+        debug_assert_eq!(channels, self.channels.len());
+        let frames = interleaved.len() / channels;
+        if frames == 0 {
+            return;
+        }
+        for channel in &mut self.channels {
+            channel.reserve(frames);
+        }
+        for frame in interleaved.chunks_exact(channels) {
+            for (channel, sample) in self.channels.iter_mut().zip(frame.iter()) {
+                channel.push(f32::from(*sample) / 32768.0);
+            }
+        }
+    }
+
+    fn consume_frames(&mut self, frames: usize) {
+        let total_frames = self.channels.first().map_or(0, Vec::len);
+        self.start_frame = (self.start_frame + frames).min(total_frames);
+        self.compact_if_needed();
+    }
+
+    fn clear(&mut self) {
+        self.start_frame = 0;
+        for channel in &mut self.channels {
+            channel.clear();
+        }
+    }
+
+    fn compact_if_needed(&mut self) {
+        if self.start_frame == 0 {
+            return;
+        }
+        let total_frames = self.channels.first().map_or(0, Vec::len);
+        let remaining_frames = total_frames.saturating_sub(self.start_frame);
+        if remaining_frames == 0 {
+            self.clear();
+            return;
+        }
+        if self.start_frame < PLANAR_COMPACT_THRESHOLD_FRAMES && self.start_frame * 2 < total_frames
+        {
+            return;
+        }
+        for channel in &mut self.channels {
+            channel.copy_within(self.start_frame.., 0);
+            channel.truncate(remaining_frames);
+        }
+        self.start_frame = 0;
+    }
+}
+
+#[inline(always)]
+fn resampler_params() -> SincInterpolationParameters {
+    SincInterpolationParameters {
+        sinc_len: 256,
+        f_cutoff: 0.95,
+        interpolation: SincInterpolationType::Linear,
+        oversampling_factor: 128,
+        window: WindowFunction::BlackmanHarris2,
+    }
+}
+
+#[inline(always)]
+fn write_resampler_output(out: &[Vec<f32>], out_ch: usize, out_tmp: &mut Vec<i16>) -> usize {
+    let produced_frames = out.first().map_or(0, Vec::len);
+    let produced_samples = produced_frames.saturating_mul(out_ch);
+    if out_tmp.len() < produced_samples {
+        out_tmp.resize(produced_samples, 0);
+    } else {
+        out_tmp.truncate(produced_samples);
+    }
+    for frame in 0..produced_frames {
+        let base = frame * out_ch;
+        for channel in 0..out_ch {
+            let sample = out[channel % out.len()][frame];
+            out_tmp[base + channel] = (sample * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
+        }
+    }
+    produced_frames
+}
+
+#[inline(always)]
+fn drop_front_samples(samples: &mut Vec<i16>, drop_samples: usize) {
+    if drop_samples == 0 {
+        return;
+    }
+    if drop_samples >= samples.len() {
+        samples.clear();
+        return;
+    }
+    let remaining = samples.len() - drop_samples;
+    samples.copy_within(drop_samples.., 0);
+    samples.truncate(remaining);
+}
+
+fn push_silence_with_map(
+    sample_ring: &internal::SpscRingI16,
+    seg_ring: &internal::SpscRingMusicSeg,
+    silence_frames: usize,
+    out_channels: usize,
+    music_start_sec: f64,
+    music_sec_per_frame: f64,
+    stop: &AtomicBool,
+) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
+    if silence_frames == 0 || out_channels == 0 {
+        return Ok(music_start_sec);
+    }
+    let mut next_music_sec = music_start_sec;
+    let silence_chunk = vec![0i16; SILENCE_CHUNK_FRAMES * out_channels];
+    let mut frames_left = silence_frames;
+    while frames_left > 0 {
+        let chunk_frames = frames_left.min(SILENCE_CHUNK_FRAMES);
+        let chunk_samples = chunk_frames * out_channels;
+        next_music_sec = push_music_block_with_map(
+            sample_ring,
+            seg_ring,
+            &silence_chunk[..chunk_samples],
+            out_channels,
+            next_music_sec,
+            music_sec_per_frame,
+            stop,
+        )?;
+        frames_left -= chunk_frames;
+    }
+    Ok(next_music_sec)
+}
+
+fn process_resampler_block<'a>(
+    resampler: &mut SincFixedOut<f32>,
+    in_planar: &'a PlanarAccum,
+    frames: usize,
+) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error + Send + Sync>> {
+    debug_assert!(frames <= in_planar.available_frames());
+    let mut input_slices = SmallVec::<[&[f32]; 2]>::with_capacity(in_planar.channels.len());
+    let start = in_planar.start_frame;
+    let end = start + frames;
+    for channel in &in_planar.channels {
+        input_slices.push(&channel[start..end]);
+    }
+    Ok(resampler.process(input_slices.as_slice(), None)?)
+}
+
+fn process_resampler_partial<'a>(
+    resampler: &mut SincFixedOut<f32>,
+    in_planar: &'a PlanarAccum,
+    frames: usize,
+) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error + Send + Sync>> {
+    debug_assert!(frames <= in_planar.available_frames());
+    let mut input_slices = SmallVec::<[&[f32]; 2]>::with_capacity(in_planar.channels.len());
+    let start = in_planar.start_frame;
+    let end = start + frames;
+    for channel in &in_planar.channels {
+        input_slices.push(&channel[start..end]);
+    }
+    Ok(resampler.process_partial(Some(input_slices.as_slice()), None)?)
 }
 
 pub(super) fn spawn_music_decoder_thread(
@@ -184,14 +379,12 @@ fn music_decoder_thread_loop(
 
     if cut.start_sec < 0.0 {
         let silence_duration_sec = -cut.start_sec;
-        let silence_samples =
-            (silence_duration_sec * f64::from(out_hz) * out_ch as f64).round() as usize;
-        if silence_samples > 0 {
-            let silence_buf = vec![0i16; silence_samples];
-            let _ = push_music_block_with_map(
+        let silence_frames = (silence_duration_sec * f64::from(out_hz)).round() as usize;
+        if silence_frames > 0 {
+            let _ = push_silence_with_map(
                 &ring,
                 &queued_music_map,
-                &silence_buf,
+                silence_frames,
                 out_ch,
                 cut.start_sec,
                 1.0 / f64::from(out_hz.max(1)),
@@ -201,25 +394,13 @@ fn music_decoder_thread_loop(
     }
 
     'main_loop: loop {
-        const OUT_FRAMES_PER_CALL: usize = 256;
         let mut current_rate_f32 = f32::from_bits(rate_bits.load(Ordering::Relaxed));
         if !current_rate_f32.is_finite() || current_rate_f32 <= 0.0 {
             current_rate_f32 = 1.0;
         }
         let mut ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
-        let mut resampler = SincFixedOut::<f32>::new(
-            ratio,
-            1.0,
-            SincInterpolationParameters {
-                sinc_len: 256,
-                f_cutoff: 0.95,
-                interpolation: SincInterpolationType::Linear,
-                oversampling_factor: 128,
-                window: WindowFunction::BlackmanHarris2,
-            },
-            OUT_FRAMES_PER_CALL,
-            in_ch,
-        )?;
+        let mut resampler =
+            SincFixedOut::<f32>::new(ratio, 1.0, resampler_params(), OUT_FRAMES_PER_CALL, in_ch)?;
 
         let start_frame_f = (cut.start_sec * f64::from(in_hz)).max(0.0);
         let start_floor = start_frame_f.floor() as u64;
@@ -298,114 +479,8 @@ fn music_decoder_thread_loop(
             false
         }
 
-        let mut out_tmp: Vec<i16> = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
-        let mut in_planar: Vec<Vec<f32>> = vec![Vec::with_capacity(4096); in_ch];
-
-        #[inline(always)]
-        fn deinterleave_accum(planar: &mut [Vec<f32>], interleaved: &[i16], channels: usize) {
-            let frames = interleaved.len() / channels;
-            for f in 0..frames {
-                let base = f * channels;
-                for c in 0..channels {
-                    planar[c].push(f32::from(interleaved[base + c]) / 32768.0);
-                }
-            }
-        }
-
-        #[inline(always)]
-        fn try_produce_blocks(
-            resampler: &mut SincFixedOut<f32>,
-            in_planar: &mut [Vec<f32>],
-            in_hz: u32,
-            out_ch: usize,
-            out_tmp: &mut Vec<i16>,
-            preroll_out_frames: &mut u64,
-            frames_emitted_total: &mut u64,
-            fade_spec: Option<(u64, u64)>,
-            frames_left_out: &mut Option<u64>,
-            next_music_output_sec: &mut f64,
-            ring: &internal::SpscRingI16,
-            seg_ring: &internal::SpscRingMusicSeg,
-            stop: &AtomicBool,
-        ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-            let mut produced_any = false;
-            loop {
-                let need = resampler.input_frames_next();
-                if in_planar.iter().any(|ch| ch.len() < need) {
-                    break;
-                }
-                let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
-                for ch in in_planar.iter() {
-                    input_slices.push(&ch[..need]);
-                }
-                let out = resampler.process(&input_slices, None)?;
-                for ch in in_planar.iter_mut() {
-                    ch.drain(0..need);
-                }
-                if out.is_empty() {
-                    break;
-                }
-                let produced_frames = out[0].len();
-                if produced_frames == 0 {
-                    break;
-                }
-                let music_sec_per_frame =
-                    (need as f64 / f64::from(in_hz.max(1))) / produced_frames as f64;
-                out_tmp.clear();
-                out_tmp.reserve(produced_frames * out_ch);
-                for (f, _) in out[0].iter().enumerate() {
-                    for c in 0..out_ch {
-                        let src = out[c % out.len()][f];
-                        let s = (src * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
-                        out_tmp.push(s);
-                    }
-                }
-                if *preroll_out_frames > 0 {
-                    let frames = out_tmp.len() / out_ch;
-                    let drop_frames = (*preroll_out_frames as usize).min(frames);
-                    let drop_samples = drop_frames * out_ch;
-                    if drop_samples > 0 {
-                        out_tmp.drain(0..drop_samples);
-                        *preroll_out_frames =
-                            (*preroll_out_frames).saturating_sub(drop_frames as u64);
-                        *next_music_output_sec += drop_frames as f64 * music_sec_per_frame;
-                    }
-                }
-                let mut finished = false;
-                if let Some(left) = frames_left_out {
-                    let frames = out_tmp.len() / out_ch;
-                    if *left == 0 {
-                        out_tmp.clear();
-                        finished = true;
-                    } else if (frames as u64) > *left {
-                        out_tmp.truncate((*left as usize) * out_ch);
-                        *left = 0;
-                        finished = true;
-                    } else {
-                        *left -= frames as u64;
-                    }
-                }
-                if !out_tmp.is_empty() {
-                    apply_fade_envelope(out_tmp, out_ch, *frames_emitted_total, fade_spec);
-                    *frames_emitted_total =
-                        (*frames_emitted_total).saturating_add((out_tmp.len() / out_ch) as u64);
-                    *next_music_output_sec = push_music_block_with_map(
-                        ring,
-                        seg_ring,
-                        out_tmp,
-                        out_ch,
-                        *next_music_output_sec,
-                        music_sec_per_frame,
-                        stop,
-                    )?;
-                    produced_any = true;
-                }
-                if finished {
-                    break;
-                }
-            }
-            Ok(produced_any)
-        }
+        let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
+        let mut in_planar = PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES);
 
         while let Ok(pkt_opt) = reader.read_dec_packet_itl() {
             if stop.load(Ordering::Relaxed) {
@@ -427,7 +502,7 @@ fn music_decoder_thread_loop(
                 slice = &p[drop_samples..];
                 to_drop_in = 0;
             }
-            deinterleave_accum(&mut in_planar, slice, in_ch);
+            in_planar.push_i16_interleaved(slice, in_ch);
             let desired_rate = f32::from_bits(rate_bits.load(Ordering::Relaxed));
             let mut desired_rate = if desired_rate.is_finite() && desired_rate > 0.0 {
                 desired_rate
@@ -441,72 +516,80 @@ fn music_decoder_thread_loop(
                 resampler = SincFixedOut::<f32>::new(
                     ratio,
                     1.0,
-                    SincInterpolationParameters {
-                        sinc_len: 256,
-                        f_cutoff: 0.95,
-                        interpolation: SincInterpolationType::Linear,
-                        oversampling_factor: 128,
-                        window: WindowFunction::BlackmanHarris2,
-                    },
+                    resampler_params(),
                     OUT_FRAMES_PER_CALL,
                     in_ch,
                 )?;
             }
-            let _ = try_produce_blocks(
-                &mut resampler,
-                &mut in_planar,
-                in_hz,
-                out_ch,
-                &mut out_tmp,
-                &mut preroll_out_frames,
-                &mut frames_emitted_total,
-                fade_spec,
-                &mut frames_left_out,
-                &mut next_music_output_sec,
-                &ring,
-                &queued_music_map,
-                &stop,
-            )?;
+            loop {
+                let need = resampler.input_frames_next();
+                if in_planar.available_frames() < need {
+                    break;
+                }
+                let out = process_resampler_block(&mut resampler, &in_planar, need)?;
+                in_planar.consume_frames(need);
+                if out.is_empty() {
+                    break;
+                }
+                let produced_frames = write_resampler_output(&out, out_ch, &mut out_tmp);
+                if produced_frames == 0 {
+                    break;
+                }
+                let music_sec_per_frame =
+                    (need as f64 / f64::from(in_hz.max(1))) / produced_frames as f64;
+                if preroll_out_frames > 0 {
+                    let drop_frames = (preroll_out_frames as usize).min(produced_frames);
+                    let drop_samples = drop_frames * out_ch;
+                    if drop_samples > 0 {
+                        drop_front_samples(&mut out_tmp, drop_samples);
+                        preroll_out_frames = preroll_out_frames.saturating_sub(drop_frames as u64);
+                        next_music_output_sec += drop_frames as f64 * music_sec_per_frame;
+                    }
+                }
+                let finished = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
+                if !out_tmp.is_empty() {
+                    apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
+                    frames_emitted_total =
+                        frames_emitted_total.saturating_add((out_tmp.len() / out_ch) as u64);
+                    next_music_output_sec = push_music_block_with_map(
+                        &ring,
+                        &queued_music_map,
+                        &out_tmp,
+                        out_ch,
+                        next_music_output_sec,
+                        music_sec_per_frame,
+                        &stop,
+                    )?;
+                }
+                if finished {
+                    break;
+                }
+            }
             if matches!(frames_left_out, Some(0)) {
                 break;
             }
         }
 
-        if !in_planar.iter().all(Vec::is_empty) {
-            let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
-            let remain = in_planar.iter().map(Vec::len).min().unwrap_or(0);
-            for ch in &in_planar {
-                input_slices.push(&ch[..remain]);
-            }
-            let out = resampler.process_partial(Some(&input_slices), None)?;
-            for ch in &mut in_planar {
-                ch.clear();
-            }
+        if !in_planar.is_empty() {
+            let remain = in_planar.available_frames();
+            let out = process_resampler_partial(&mut resampler, &in_planar, remain)?;
+            in_planar.clear();
             if !out.is_empty() {
-                let produced_frames = out[0].len();
+                let produced_frames = write_resampler_output(&out, out_ch, &mut out_tmp);
                 let music_sec_per_frame = if produced_frames == 0 {
                     0.0
                 } else {
                     (remain as f64 / f64::from(in_hz.max(1))) / produced_frames as f64
                 };
-                out_tmp.clear();
-                out_tmp.reserve(produced_frames * out_ch);
-                for (f, _) in out[0].iter().enumerate() {
-                    for c in 0..out_ch {
-                        let v = out[c % out.len()][f];
-                        let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
-                        out_tmp.push(s);
-                    }
-                }
                 if preroll_out_frames > 0 {
-                    let frames = out_tmp.len() / out_ch;
-                    let drop_frames = (preroll_out_frames as usize).min(frames);
+                    let drop_frames = (preroll_out_frames as usize).min(produced_frames);
                     let drop_samples = drop_frames * out_ch;
                     if drop_samples > 0 {
-                        out_tmp.drain(0..drop_samples);
+                        drop_front_samples(&mut out_tmp, drop_samples);
                         next_music_output_sec += drop_frames as f64 * music_sec_per_frame;
                     }
                 }
+                let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
                 if !out_tmp.is_empty() {
                     apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
                     frames_emitted_total =
@@ -526,18 +609,9 @@ fn music_decoder_thread_loop(
 
         let out_tail = resampler.process_partial::<&[f32]>(None, None)?;
         if !out_tail.is_empty() {
-            let produced_frames = out_tail[0].len();
+            let _produced_frames = write_resampler_output(&out_tail, out_ch, &mut out_tmp);
             let music_sec_per_frame = f64::from(current_rate_f32) / f64::from(out_hz.max(1));
-            out_tmp.clear();
-            out_tmp.reserve(produced_frames * out_ch);
-            for (f, _) in out_tail[0].iter().enumerate() {
-                for c in 0..out_ch {
-                    let v = out_tail[c % out_tail.len()][f];
-                    let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
-                    out_tmp.push(s);
-                }
-            }
-            let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
+            let finished = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
             if !out_tmp.is_empty() {
                 apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
                 next_music_output_sec = push_music_block_with_map(
@@ -549,6 +623,9 @@ fn music_decoder_thread_loop(
                     music_sec_per_frame,
                     &stop,
                 )?;
+            }
+            if finished {
+                break 'main_loop;
             }
         }
 
@@ -579,93 +656,51 @@ pub(super) fn load_and_resample_sfx(
     let out_ch = ENGINE.device_channels;
     let out_hz = ENGINE.device_sample_rate;
 
-    const OUT_FRAMES_PER_CALL: usize = 256;
     let ratio = f64::from(out_hz) / f64::from(in_hz);
-    let iparams = SincInterpolationParameters {
-        sinc_len: 256,
-        f_cutoff: 0.95,
-        interpolation: SincInterpolationType::Linear,
-        oversampling_factor: 128,
-        window: WindowFunction::BlackmanHarris2,
-    };
-    let mut resampler = SincFixedOut::<f32>::new(ratio, 1.0, iparams, OUT_FRAMES_PER_CALL, in_ch)?;
+    let mut resampler =
+        SincFixedOut::<f32>::new(ratio, 1.0, resampler_params(), OUT_FRAMES_PER_CALL, in_ch)?;
 
-    let mut in_planar: Vec<Vec<f32>> = vec![Vec::with_capacity(4096); in_ch];
-    let mut resampled_data: Vec<i16> = Vec::new();
+    let mut in_planar = PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES);
+    let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
+    let mut resampled_data = Vec::new();
 
     while let Some(pck_samples) = reader.read_dec_packet_itl()? {
         if pck_samples.is_empty() {
             continue;
         }
-        let frames = pck_samples.len() / in_ch;
-        for f in 0..frames {
-            let base = f * in_ch;
-            for c in 0..in_ch {
-                in_planar[c].push(f32::from(pck_samples[base + c]) / 32768.0);
-            }
-        }
+        in_planar.push_i16_interleaved(&pck_samples, in_ch);
         loop {
             let need = resampler.input_frames_next();
-            if in_planar.iter().any(|ch| ch.len() < need) {
+            if in_planar.available_frames() < need {
                 break;
             }
-            let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
-            for ch in &in_planar {
-                input_slices.push(&ch[..need]);
-            }
-            let out = resampler.process(&input_slices, None)?;
-            for ch in &mut in_planar {
-                ch.drain(0..need);
-            }
+            let out = process_resampler_block(&mut resampler, &in_planar, need)?;
+            in_planar.consume_frames(need);
             if out.is_empty() {
                 break;
             }
-            let produced_frames = out[0].len();
+            let produced_frames = write_resampler_output(&out, out_ch, &mut out_tmp);
             resampled_data.reserve(produced_frames * out_ch);
-            for (f, _) in out[0].iter().enumerate() {
-                for c in 0..out_ch {
-                    let v = out[c % out.len()][f];
-                    let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
-                    resampled_data.push(s);
-                }
-            }
+            resampled_data.extend_from_slice(&out_tmp);
         }
     }
 
-    if !in_planar.iter().all(Vec::is_empty) {
-        let remain = in_planar.iter().map(Vec::len).min().unwrap_or(0);
-        let mut input_slices: Vec<&[f32]> = Vec::with_capacity(in_planar.len());
-        for ch in &in_planar {
-            input_slices.push(&ch[..remain]);
-        }
-        let out = resampler.process_partial(Some(&input_slices), None)?;
+    if !in_planar.is_empty() {
+        let remain = in_planar.available_frames();
+        let out = process_resampler_partial(&mut resampler, &in_planar, remain)?;
         if !out.is_empty() {
-            let produced_frames = out[0].len();
-            resampled_data.reserve(produced_frames * out_ch);
-            for (f, _) in out[0].iter().enumerate() {
-                for c in 0..out_ch {
-                    let v = out[c % out.len()][f];
-                    let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
-                    resampled_data.push(s);
-                }
-            }
+            let out_frames = write_resampler_output(&out, out_ch, &mut out_tmp);
+            resampled_data.reserve(out_frames * out_ch);
+            resampled_data.extend_from_slice(&out_tmp);
         }
-        for ch in &mut in_planar {
-            ch.clear();
-        }
+        in_planar.clear();
     }
 
     let out_tail = resampler.process_partial::<&[f32]>(None, None)?;
     if !out_tail.is_empty() {
-        let produced_frames = out_tail[0].len();
+        let produced_frames = write_resampler_output(&out_tail, out_ch, &mut out_tmp);
         resampled_data.reserve(produced_frames * out_ch);
-        for (f, _) in out_tail[0].iter().enumerate() {
-            for c in 0..out_ch {
-                let v = out_tail[c % out_tail.len()][f];
-                let s = (v * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
-                resampled_data.push(s);
-            }
-        }
+        resampled_data.extend_from_slice(&out_tmp);
     }
     Ok(Arc::new(resampled_data))
 }
