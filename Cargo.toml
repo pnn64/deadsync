@@ -25,6 +25,10 @@ name = "input_e2e_bench"
 path = "tests/input_e2e/bench.rs"
 
 [[bin]]
+name = "lang_coverage"
+path = "scripts/lang_coverage.rs"
+
+[[bin]]
 name = "generate_pseudo"
 path = "scripts/generate_pseudo.rs"
 

@@ -1,0 +1,48 @@
+name: update-translation-status
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "assets/languages/*.ini"
+
+permissions:
+  contents: write
+
+jobs:
+  update-status:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-lang-coverage-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-lang-coverage-
+
+      - name: Generate TRANSLATION_STATUS.md
+        run: cargo run --bin lang_coverage -- --markdown
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add TRANSLATION_STATUS.md
+          if git diff --cached --quiet; then
+            echo "No changes to TRANSLATION_STATUS.md"
+          else
+            git commit -m "docs: auto-update TRANSLATION_STATUS.md"
+            git push
+          fi

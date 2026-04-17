@@ -42,52 +42,6 @@ Back=Back
 
 The `[Meta]` section is required and must contain a `NativeName` key — this is the language name shown in the language picker, written in the language itself (e.g. `日本語`, `Svenska`, `Español`).
 
-### Sections
-
-| Section | Purpose |
-|---------|---------|
-| `Meta` | Language metadata (`NativeName`) |
-| `Common` | Shared strings used across multiple screens (Yes, No, Back, etc.) |
-| `ScreenTitles` | Screen header bar titles (SELECT MUSIC, etc.) |
-| `Menu` | Main menu labels and network status strings |
-| `Options` | Top-level options menu item names |
-| `OptionsHelp` | Help text descriptions shown in options panes |
-| `OptionsSystem` | System options sublabels and choices |
-| `OptionsGraphics` | Graphics options sublabels and choices |
-| `OptionsSound` | Sound options sublabels and choices |
-| `OptionsInput` | Input options sublabels and choices |
-| `Mappings` | Key mapping screen strings |
-| `TestInput` | Input test screen strings |
-| `OptionsMachine` | Machine options sublabels and choices |
-| `OptionsGameplay` | Gameplay options sublabels and choices |
-| `OptionsSelectMusic` | Select music options sublabels and choices |
-| `OptionsAdvanced` | Advanced options sublabels and choices |
-| `OptionsCourse` | Course options sublabels and choices |
-| `OptionsOnlineScoring` | Online scoring options sublabels and choices |
-| `OptionsGrooveStats` | GrooveStats options sublabels and choices |
-| `OptionsScoreImport` | Score import screen strings |
-| `OptionsSyncPack` | Pack sync screen strings |
-| `OptionsNullOrDie` | Null or Die sync options sublabels and choices |
-| `PlayerOptions` | Player options sublabels and choices |
-| `PlayerOptionsHelp` | Player options help text descriptions |
-| `SelectMusic` | Music selection screen strings |
-| `PatternInfo` | Chart pattern information strings |
-| `SelectMode` | Mode selection screen strings |
-| `SelectStyle` | Style selection screen strings |
-| `SelectCourse` | Course selection screen strings |
-| `Evaluation` | Results screen labels and judgments |
-| `EvaluationSummary` | Evaluation summary screen strings |
-| `SubmitStatus` | Score submission status strings |
-| `Records` | Records display strings |
-| `Gameplay` | In-game HUD strings |
-| `GameOver` | Game over screen strings |
-| `Profiles` | Profile management screen strings |
-| `Initials` | Initials entry screen strings |
-| `PackSync` | Pack sync status strings |
-| `Init` | Loading/splash screen strings |
-| `Credits` | Credits screen strings |
-| `Lobby` | Online lobby screen strings |
-
 ### Format strings
 
 Some strings contain `{placeholder}` tokens for dynamic values:
@@ -126,9 +80,58 @@ Use [IETF BCP 47](https://en.wikipedia.org/wiki/IETF_language_tag) base codes fo
 
 You don't have to translate every key. Any missing key falls back to the English value automatically. Start with the most visible sections (`Common`, `Menu`, `ScreenTitles`) and expand from there.
 
+### Skipping keys (`@skip`)
+
+Some keys don't need translating for a given language — brand names like "GrooveStats", technical terms, or values that are identical in English. Set these to `@skip`:
+
+```ini
+[Menu]
+GrooveStatsName=@skip
+BoogieStatsName=@skip
+Gameplay=SPELA
+```
+
+At runtime, `@skip` values are treated as missing, so the English fallback is used. In coverage reports, `@skip` keys count as complete — a language that translates everything applicable and skips the rest can reach 100%.
+
+This is per-language: Swedish might skip "GrooveStats" while Japanese might transliterate it to katakana.
+
 ### User overrides
 
 Language files are resolved from the executable's `assets/languages/` directory. Users can place custom or modified `.ini` files there to override bundled translations.
+
+## Contributing a Translation
+
+### Getting started
+
+1. Fork the repository and create a branch (e.g. `i18n-add-french`)
+2. Copy `assets/languages/en.ini` to `assets/languages/{locale}.ini` (see [Locale codes](#locale-codes) for naming)
+3. Set `NativeName` in the `[Meta]` section to the language's own name (e.g. `Español`, `日本語`)
+4. Translate values (right side of `=`). Do not change keys (left side) or section names
+5. For keys that should stay in English (brand names, technical terms), set the value to `@skip` — see [Skipping keys](#skipping-keys-skip)
+
+### Testing locally
+
+```sh
+# Check coverage and see which keys are missing
+cargo run --bin lang_coverage
+
+# Run the CI validation tests
+cargo test --test i18n_coverage
+
+# Launch the game with your language to verify visually
+# (set language = {locale} in deadsync.ini, or let auto-detection pick it up)
+```
+
+### Submitting
+
+Open a PR. The CI will run the coverage tests to catch stale keys or duplicate entries. Partial translations are welcome — translate what you can and leave the rest. The app falls back to English for any missing key.
+
+### Tips
+
+- Start with the most visible sections: `[Common]`, `[Menu]`, `[ScreenTitles]`, `[SelectMusic]`
+- Format strings like `{songs} songs in {packs} groups` — translate the words but keep the `{placeholder}` names unchanged. You can reorder placeholders to match your language's word order
+- Test with longer strings — some languages (e.g. German) produce significantly longer text than English. Check that UI elements don't overflow
+- If you're unsure about a game-specific term, check [ITGmania's translations](https://github.com/itgmania/itgmania/tree/release/Themes/_fallback/Languages) for reference — both projects use GPL-3.0
 
 ## For Developers
 
@@ -195,7 +198,47 @@ String extraction is being done screen-by-screen. Each screen group gets its own
 |---|---|
 | Language selection in options screen | ⬜ Not started |
 | Second language proof (Spanish) | ⬜ Not started |
-| Translation coverage tooling | ⬜ Not started |
+| Translation coverage tooling | 🟡 In progress |
+
+## Translation Coverage Tooling
+
+An integration test suite validates language files and reports translation progress.
+
+### Running
+
+```sh
+cargo test --test i18n_coverage -- --nocapture
+```
+
+### Tests
+
+| Test | Behavior |
+|------|----------|
+| `en_ini_has_no_duplicate_keys` | **Fails** if `en.ini` contains duplicate `[Section] Key` pairs |
+| `no_stale_keys_in_translations` | **Fails** if any translation has keys that don't exist in `en.ini` (renamed/removed keys that were never cleaned up) |
+| `print_translation_coverage_report` | **Always passes** — prints a per-language coverage summary showing translated count, total, and percentage. `@skip` keys count as covered |
+
+### Example output
+
+```
+Translation Coverage Report
+============================
+Language         Translated  Total  Coverage
+--------         ----------  -----  --------
+en (English)            590    590    100.0%
+sv (Svenska)             42    590      7.1%
+    548 missing keys (run with --nocapture to see full list)
+```
+
+### What the tests catch
+
+- **Duplicate keys in `en.ini`** — a real bug since the second value silently overwrites the first
+- **Stale keys in translations** — a key was renamed or removed in `en.ini` but the old key still exists in a translation file. The translated string would never be displayed
+- **Coverage regressions** — the report makes it easy to spot if a language's coverage drops after a key restructuring
+
+### What the tests don't enforce
+
+- **Missing keys don't fail the build.** Partial translations are welcome — the app falls back to English for any missing key. Contributors can translate progressively and open PRs at any coverage level
 
 ## Language Support
 
