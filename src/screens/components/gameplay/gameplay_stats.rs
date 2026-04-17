@@ -203,7 +203,7 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
         offset_px_f,
         graph_w,
         2.0_f32,
-        [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
+        [1.0_f32, 1.0_f32, 1.0_f32, 1.0_f32],
     );
 }
 

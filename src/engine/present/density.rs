@@ -421,10 +421,17 @@ pub fn update_density_hist_mesh(
     *mesh = Some(Arc::from(verts.into_boxed_slice()));
 }
 
-#[inline(always)]
-fn density_life_vertex_count(points: &[[f32; 2]], start: usize, end: usize) -> usize {
-    const MIN_LEN_SQ: f32 = 0.000_000_01_f32;
+const DENSITY_LIFE_MIN_LEN_SQ: f32 = 0.000_000_01_f32;
+const DENSITY_LIFE_SEGMENT_VERTS: usize = 6;
+const DENSITY_LIFE_CAP_SUBDIVISIONS: usize = 4;
+const DENSITY_LIFE_CAP_VERTS: usize = DENSITY_LIFE_CAP_SUBDIVISIONS * 3;
+// Match StepMania's low-cost fallback polyline joins/caps: a quad per segment plus
+// a tiny fan at each vertex so sharp turns do not sprout stretched miters.
+const DENSITY_LIFE_CAP_DIRS: [[f32; 2]; DENSITY_LIFE_CAP_SUBDIVISIONS + 1] =
+    [[1.0, 0.0], [0.0, -1.0], [-1.0, 0.0], [0.0, 1.0], [1.0, 0.0]];
 
+#[inline(always)]
+fn density_life_segment_count(points: &[[f32; 2]], start: usize, end: usize) -> usize {
     let mut prev: Option<[f32; 2]> = None;
     let mut count = 0usize;
     for &point in &points[start..end] {
@@ -432,13 +439,86 @@ fn density_life_vertex_count(points: &[[f32; 2]], start: usize, end: usize) -> u
             let dx = point[0] - a[0];
             let dy = point[1] - a[1];
             let len_sq = dx.mul_add(dx, dy * dy);
-            if len_sq > MIN_LEN_SQ {
-                count += 6;
+            if len_sq > DENSITY_LIFE_MIN_LEN_SQ {
+                count += 1;
             }
         }
         prev = Some(point);
     }
     count
+}
+
+#[inline(always)]
+fn density_life_vertex_count(points: &[[f32; 2]], start: usize, end: usize) -> usize {
+    let point_count = end.saturating_sub(start);
+    if point_count < 2 {
+        return 0;
+    }
+    let segment_count = density_life_segment_count(points, start, end);
+    if segment_count == 0 {
+        return 0;
+    }
+    segment_count * DENSITY_LIFE_SEGMENT_VERTS + point_count * DENSITY_LIFE_CAP_VERTS
+}
+
+#[inline(always)]
+fn write_density_life_segment(
+    dst: &mut [MeshVertex],
+    written: usize,
+    a: [f32; 2],
+    b: [f32; 2],
+    half: f32,
+    color: [f32; 4],
+) -> usize {
+    let dx = b[0] - a[0];
+    let dy = b[1] - a[1];
+    let inv_len = dx.mul_add(dx, dy * dy).sqrt().recip();
+    let nx = -dy * inv_len * half;
+    let ny = dx * inv_len * half;
+    let l0 = [a[0] + nx, a[1] + ny];
+    let r0 = [a[0] - nx, a[1] - ny];
+    let l1 = [b[0] + nx, b[1] + ny];
+    let r1 = [b[0] - nx, b[1] - ny];
+
+    let verts = [
+        MeshVertex { pos: l0, color },
+        MeshVertex { pos: r0, color },
+        MeshVertex { pos: l1, color },
+        MeshVertex { pos: r0, color },
+        MeshVertex { pos: r1, color },
+        MeshVertex { pos: l1, color },
+    ];
+    dst[written..written + verts.len()].copy_from_slice(&verts);
+    written + verts.len()
+}
+
+#[inline(always)]
+fn write_density_life_cap(
+    dst: &mut [MeshVertex],
+    written: usize,
+    center: [f32; 2],
+    radius: f32,
+    color: [f32; 4],
+) -> usize {
+    let mut written = written;
+    for dirs in DENSITY_LIFE_CAP_DIRS.windows(2) {
+        let p0 = [
+            center[0] + dirs[0][0] * radius,
+            center[1] + dirs[0][1] * radius,
+        ];
+        let p1 = [
+            center[0] + dirs[1][0] * radius,
+            center[1] + dirs[1][1] * radius,
+        ];
+        let verts = [
+            MeshVertex { pos: center, color },
+            MeshVertex { pos: p0, color },
+            MeshVertex { pos: p1, color },
+        ];
+        dst[written..written + verts.len()].copy_from_slice(&verts);
+        written += verts.len();
+    }
+    written
 }
 
 #[inline(always)]
@@ -451,41 +531,23 @@ fn fill_density_life_vertices(
     half: f32,
     color: [f32; 4],
 ) -> usize {
-    const MIN_LEN_SQ: f32 = 0.000_000_01_f32;
-
     let mut prev: Option<[f32; 2]> = None;
     let mut written = 0usize;
     for &point in &points[start..end] {
         let p = [point[0] - offset, point[1]];
-        let Some(a) = prev else {
-            prev = Some(p);
-            continue;
-        };
-        let dx = p[0] - a[0];
-        let dy = p[1] - a[1];
-        let len_sq = dx.mul_add(dx, dy * dy);
-        if len_sq <= MIN_LEN_SQ {
-            continue;
+        if let Some(a) = prev {
+            let dx = p[0] - a[0];
+            let dy = p[1] - a[1];
+            let len_sq = dx.mul_add(dx, dy * dy);
+            if len_sq > DENSITY_LIFE_MIN_LEN_SQ {
+                written = write_density_life_segment(dst, written, a, p, half, color);
+            }
         }
-        let inv_len = len_sq.sqrt().recip();
-        let nx = -dy * inv_len * half;
-        let ny = dx * inv_len * half;
-        let l0 = [a[0] + nx, a[1] + ny];
-        let r0 = [a[0] - nx, a[1] - ny];
-        let l1 = [p[0] + nx, p[1] + ny];
-        let r1 = [p[0] - nx, p[1] - ny];
-
-        let verts = [
-            MeshVertex { pos: l0, color },
-            MeshVertex { pos: r0, color },
-            MeshVertex { pos: l1, color },
-            MeshVertex { pos: r0, color },
-            MeshVertex { pos: r1, color },
-            MeshVertex { pos: l1, color },
-        ];
-        dst[written..written + verts.len()].copy_from_slice(&verts);
-        written += 6;
         prev = Some(p);
+    }
+    for &point in &points[start..end] {
+        let p = [point[0] - offset, point[1]];
+        written = write_density_life_cap(dst, written, p, half, color);
     }
     written
 }
@@ -622,5 +684,41 @@ mod tests {
 
         update_density_hist_mesh(&mut mesh, None, 0.0, 120.0);
         assert!(mesh.is_none());
+    }
+
+    #[test]
+    fn update_density_life_mesh_adds_caps_for_polyline_joins() {
+        let mut mesh = None;
+        let points = [[0.0, 8.0], [12.0, 8.0], [24.0, 20.0]];
+
+        update_density_life_mesh(&mut mesh, &points, 0.0, 32.0, 2.0, [1.0, 1.0, 1.0, 1.0]);
+
+        let mesh = mesh.expect("life mesh");
+        assert_eq!(
+            mesh.len(),
+            2 * DENSITY_LIFE_SEGMENT_VERTS + 3 * DENSITY_LIFE_CAP_VERTS
+        );
+        let first_center_count = mesh.iter().filter(|v| v.pos == [0.0, 8.0]).count();
+        let mid_center_count = mesh.iter().filter(|v| v.pos == [12.0, 8.0]).count();
+        let last_center_count = mesh.iter().filter(|v| v.pos == [24.0, 20.0]).count();
+        assert_eq!(first_center_count, DENSITY_LIFE_CAP_SUBDIVISIONS);
+        assert_eq!(mid_center_count, DENSITY_LIFE_CAP_SUBDIVISIONS);
+        assert_eq!(last_center_count, DENSITY_LIFE_CAP_SUBDIVISIONS);
+    }
+
+    #[test]
+    fn update_density_life_mesh_reuses_existing_buffer_when_vertex_count_matches() {
+        let mut mesh = None;
+        let points = [[0.0, 8.0], [12.0, 8.0], [24.0, 20.0]];
+
+        update_density_life_mesh(&mut mesh, &points, 0.0, 32.0, 2.0, [1.0, 1.0, 1.0, 1.0]);
+        let expected = mesh.as_ref().expect("life mesh").to_vec();
+        let first_ptr = mesh.as_ref().expect("life mesh").as_ptr();
+
+        update_density_life_mesh(&mut mesh, &points, 0.0, 32.0, 2.0, [1.0, 1.0, 1.0, 1.0]);
+        let second_ptr = mesh.as_ref().expect("life mesh").as_ptr();
+
+        assert_eq!(first_ptr, second_ptr);
+        assert_mesh_matches(mesh.as_ref().expect("life mesh"), &expected);
     }
 }

@@ -4621,7 +4621,6 @@ fn update_density_graph(
             let denom = state.density_graph_duration.max(0.001_f32);
             let x = (((current_music_time - state.density_graph_first_second) / denom)
                 * state.density_graph_scaled_width)
-                .round()
                 .clamp(0.0_f32, state.density_graph_scaled_width);
             if x.is_finite() {
                 for player in 0..state.num_players {
