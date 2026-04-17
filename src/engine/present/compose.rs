@@ -114,6 +114,7 @@ struct CachedTextLayout {
 
 type WordGlyphs = SmallVec<[CachedGlyph; 16]>;
 type AttrIndices = SmallVec<[usize; 8]>;
+type ClipPolygon = SmallVec<[ClipVertex; 8]>;
 
 struct OwnedLayoutEntry {
     layout: Box<CachedTextLayout>,
@@ -2296,18 +2297,23 @@ fn clip_objects_range_to_world_masks(
     objects.truncate(write);
 }
 
+struct ClippedSpriteObject<'a> {
+    object_type: renderer::ObjectType<'a>,
+    transform: Matrix4,
+}
+
 #[inline(always)]
-fn sprite_object_world_area(obj: &RenderObject<'_>) -> f32 {
-    match &obj.object_type {
+fn object_world_area(object_type: &renderer::ObjectType<'_>, transform: &Matrix4) -> f32 {
+    match object_type {
         renderer::ObjectType::Sprite { .. } => {
-            let t = &obj.transform;
+            let t = transform;
             (t.x_axis.x * t.y_axis.y).abs()
         }
         renderer::ObjectType::TexturedMesh { vertices, .. } => {
             if vertices.len() < 3 {
                 return 0.0;
             }
-            let t = &obj.transform;
+            let t = transform;
             let mut area = 0.0_f32;
             let mut i = 0usize;
             while i + 2 < vertices.len() {
@@ -2325,21 +2331,21 @@ fn sprite_object_world_area(obj: &RenderObject<'_>) -> f32 {
 }
 
 fn clip_object_to_world_masks(obj: &mut RenderObject<'_>, masks: &[WorldRect]) -> bool {
-    let mut best_obj: Option<RenderObject<'_>> = None;
+    let mut best_obj: Option<ClippedSpriteObject<'_>> = None;
     let mut best_area = -1.0_f32;
     for &mask in masks {
-        let mut candidate = obj.clone();
-        if !clip_sprite_object_to_world_rect(&mut candidate, mask) {
+        let Some(candidate) = clipped_sprite_object_to_world_rect(obj, mask) else {
             continue;
-        }
-        let area = sprite_object_world_area(&candidate);
+        };
+        let area = object_world_area(&candidate.object_type, &candidate.transform);
         if area > best_area {
             best_area = area;
             best_obj = Some(candidate);
         }
     }
     if let Some(chosen) = best_obj {
-        *obj = chosen;
+        obj.object_type = chosen.object_type;
+        obj.transform = chosen.transform;
         true
     } else {
         false
@@ -2377,86 +2383,121 @@ fn clip_objects_range_to_world_rect(
 }
 
 fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect) -> bool {
-    if clip.left >= clip.right || clip.bottom >= clip.top {
+    let Some(clipped) = clipped_sprite_object_to_world_rect(obj, clip) else {
         return false;
-    }
-    let renderer::ObjectType::Sprite {
-        uv_scale,
-        uv_offset,
-        ..
-    } = &mut obj.object_type
-    else {
-        // Only sprite objects support clip-by-adjusting-UV today.
-        return true;
     };
-
-    let eps = 1e-6;
-    let t = &obj.transform;
-    if t.x_axis.y.abs() > eps
-        || t.y_axis.x.abs() > eps
-        || t.x_axis.z.abs() > eps
-        || t.y_axis.z.abs() > eps
-    {
-        return clip_rotated_sprite_object_to_world_rect(obj, clip);
-    }
-
-    let w = t.x_axis.x;
-    let h = t.y_axis.y;
-    if w <= eps || h <= eps {
-        return false;
-    }
-
-    let cx = t.w_axis.x;
-    let cy = t.w_axis.y;
-
-    let half_w = w * 0.5;
-    let half_h = h * 0.5;
-
-    let left = cx - half_w;
-    let right = cx + half_w;
-    let bottom = cy - half_h;
-    let top = cy + half_h;
-
-    let inter_left = left.max(clip.left);
-    let inter_right = right.min(clip.right);
-    let inter_bottom = bottom.max(clip.bottom);
-    let inter_top = top.min(clip.top);
-    if inter_left >= inter_right || inter_bottom >= inter_top {
-        return false;
-    }
-
-    let inv_w = 1.0 / w;
-    let inv_h = 1.0 / h;
-
-    let cl = ((inter_left - left) * inv_w).clamp(0.0, 1.0);
-    let cr = ((right - inter_right) * inv_w).clamp(0.0, 1.0);
-    let cb = ((inter_bottom - bottom) * inv_h).clamp(0.0, 1.0);
-    let ct = ((top - inter_top) * inv_h).clamp(0.0, 1.0);
-
-    let sx_crop = (1.0 - cl - cr).max(0.0);
-    let sy_crop = (1.0 - ct - cb).max(0.0);
-    if sx_crop <= eps || sy_crop <= eps {
-        return false;
-    }
-
-    uv_offset[0] += uv_scale[0] * cl;
-    uv_offset[1] += uv_scale[1] * ct;
-    uv_scale[0] *= sx_crop;
-    uv_scale[1] *= sy_crop;
-
-    let center_x = ((cl - cr) * w).mul_add(0.5, cx);
-    let center_y = ((cb - ct) * h).mul_add(0.5, cy);
-    let new_w = w * sx_crop;
-    let new_h = h * sy_crop;
-
-    obj.transform = Matrix4::from_cols_array(&[
-        new_w, 0.0, 0.0, 0.0, //
-        0.0, new_h, 0.0, 0.0, //
-        0.0, 0.0, 1.0, 0.0, //
-        center_x, center_y, 0.0, 1.0,
-    ]);
-
+    obj.object_type = clipped.object_type;
+    obj.transform = clipped.transform;
     true
+}
+
+fn clipped_sprite_object_to_world_rect<'a>(
+    obj: &RenderObject<'a>,
+    clip: WorldRect,
+) -> Option<ClippedSpriteObject<'a>> {
+    if clip.left >= clip.right || clip.bottom >= clip.top {
+        return None;
+    }
+    match &obj.object_type {
+        renderer::ObjectType::Sprite {
+            texture_id,
+            tint,
+            uv_scale,
+            uv_offset,
+            local_offset,
+            local_offset_rot_sin_cos,
+            edge_fade,
+        } => {
+            let eps = 1e-6;
+            let t = &obj.transform;
+            if t.x_axis.y.abs() > eps
+                || t.y_axis.x.abs() > eps
+                || t.x_axis.z.abs() > eps
+                || t.y_axis.z.abs() > eps
+            {
+                return clip_rotated_sprite_to_world_rect(
+                    texture_id.clone(),
+                    *tint,
+                    *uv_scale,
+                    *uv_offset,
+                    obj.transform,
+                    clip,
+                );
+            }
+
+            let w = t.x_axis.x;
+            let h = t.y_axis.y;
+            if w <= eps || h <= eps {
+                return None;
+            }
+
+            let cx = t.w_axis.x;
+            let cy = t.w_axis.y;
+
+            let half_w = w * 0.5;
+            let half_h = h * 0.5;
+
+            let left = cx - half_w;
+            let right = cx + half_w;
+            let bottom = cy - half_h;
+            let top = cy + half_h;
+
+            let inter_left = left.max(clip.left);
+            let inter_right = right.min(clip.right);
+            let inter_bottom = bottom.max(clip.bottom);
+            let inter_top = top.min(clip.top);
+            if inter_left >= inter_right || inter_bottom >= inter_top {
+                return None;
+            }
+
+            let inv_w = 1.0 / w;
+            let inv_h = 1.0 / h;
+
+            let cl = ((inter_left - left) * inv_w).clamp(0.0, 1.0);
+            let cr = ((right - inter_right) * inv_w).clamp(0.0, 1.0);
+            let cb = ((inter_bottom - bottom) * inv_h).clamp(0.0, 1.0);
+            let ct = ((top - inter_top) * inv_h).clamp(0.0, 1.0);
+
+            let sx_crop = (1.0 - cl - cr).max(0.0);
+            let sy_crop = (1.0 - ct - cb).max(0.0);
+            if sx_crop <= eps || sy_crop <= eps {
+                return None;
+            }
+
+            let uv_offset = [
+                uv_offset[0] + uv_scale[0] * cl,
+                uv_offset[1] + uv_scale[1] * ct,
+            ];
+            let uv_scale = [uv_scale[0] * sx_crop, uv_scale[1] * sy_crop];
+
+            let center_x = ((cl - cr) * w).mul_add(0.5, cx);
+            let center_y = ((cb - ct) * h).mul_add(0.5, cy);
+            let new_w = w * sx_crop;
+            let new_h = h * sy_crop;
+
+            Some(ClippedSpriteObject {
+                object_type: renderer::ObjectType::Sprite {
+                    texture_id: texture_id.clone(),
+                    tint: *tint,
+                    uv_scale,
+                    uv_offset,
+                    local_offset: *local_offset,
+                    local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
+                    edge_fade: *edge_fade,
+                },
+                transform: Matrix4::from_cols_array(&[
+                    new_w, 0.0, 0.0, 0.0, //
+                    0.0, new_h, 0.0, 0.0, //
+                    0.0, 0.0, 1.0, 0.0, //
+                    center_x, center_y, 0.0, 1.0,
+                ]),
+            })
+        }
+        _ => Some(ClippedSpriteObject {
+            object_type: obj.object_type.clone(),
+            transform: obj.transform,
+        }),
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -2492,16 +2533,16 @@ fn lerp_clip(a: ClipVertex, b: ClipVertex, t: f32) -> ClipVertex {
     }
 }
 
-fn clip_poly_edge(
+fn clip_poly_edge_into(
     poly: &[ClipVertex],
     axis: usize,
     bound: f32,
     keep_greater: bool,
-) -> Vec<ClipVertex> {
+) -> ClipPolygon {
+    let mut out = ClipPolygon::new();
     if poly.is_empty() {
-        return vec![];
+        return out;
     }
-    let mut out = Vec::with_capacity(poly.len() + 2);
     let mut prev = poly[poly.len() - 1];
     let mut prev_in = if keep_greater {
         prev.pos[axis] >= bound
@@ -2537,46 +2578,42 @@ fn clip_poly_edge(
     out
 }
 
-fn clip_polygon_to_world_rect(poly: &[ClipVertex], clip: WorldRect) -> Vec<ClipVertex> {
-    let mut p = clip_poly_edge(poly, 0, clip.left, true);
-    p = clip_poly_edge(&p, 0, clip.right, false);
-    p = clip_poly_edge(&p, 1, clip.bottom, true);
-    clip_poly_edge(&p, 1, clip.top, false)
+fn clip_polygon_to_world_rect(poly: &[ClipVertex], clip: WorldRect) -> ClipPolygon {
+    let mut p = clip_poly_edge_into(poly, 0, clip.left, true);
+    p = clip_poly_edge_into(&p, 0, clip.right, false);
+    p = clip_poly_edge_into(&p, 1, clip.bottom, true);
+    clip_poly_edge_into(&p, 1, clip.top, false)
 }
 
-fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect) -> bool {
-    let (texture_id, tint, uv_scale, uv_offset) = match &obj.object_type {
-        renderer::ObjectType::Sprite {
-            texture_id,
-            tint,
-            uv_scale,
-            uv_offset,
-            ..
-        } => (texture_id.to_string(), *tint, *uv_scale, *uv_offset),
-        _ => return true,
-    };
-
-    let t = obj.transform;
-    let quad = [
-        ([-0.5_f32, -0.5_f32], [0.0_f32, 1.0_f32]),
-        ([0.5_f32, -0.5_f32], [1.0_f32, 1.0_f32]),
-        ([0.5_f32, 0.5_f32], [1.0_f32, 0.0_f32]),
-        ([-0.5_f32, 0.5_f32], [0.0_f32, 0.0_f32]),
+fn clip_rotated_sprite_to_world_rect<'a>(
+    texture_id: std::borrow::Cow<'a, str>,
+    tint: [f32; 4],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    transform: Matrix4,
+    clip: WorldRect,
+) -> Option<ClippedSpriteObject<'a>> {
+    let poly = [
+        ClipVertex {
+            pos: world_xy(&transform, [-0.5_f32, -0.5_f32]),
+            uv: [uv_offset[0], uv_offset[1] + uv_scale[1]],
+        },
+        ClipVertex {
+            pos: world_xy(&transform, [0.5_f32, -0.5_f32]),
+            uv: [uv_offset[0] + uv_scale[0], uv_offset[1] + uv_scale[1]],
+        },
+        ClipVertex {
+            pos: world_xy(&transform, [0.5_f32, 0.5_f32]),
+            uv: [uv_offset[0] + uv_scale[0], uv_offset[1]],
+        },
+        ClipVertex {
+            pos: world_xy(&transform, [-0.5_f32, 0.5_f32]),
+            uv: [uv_offset[0], uv_offset[1]],
+        },
     ];
-    let mut poly = Vec::with_capacity(4);
-    for (local, base_uv) in quad {
-        poly.push(ClipVertex {
-            pos: world_xy(&t, local),
-            uv: [
-                uv_offset[0] + base_uv[0] * uv_scale[0],
-                uv_offset[1] + base_uv[1] * uv_scale[1],
-            ],
-        });
-    }
-
     let clipped = clip_polygon_to_world_rect(&poly, clip);
     if clipped.len() < 3 {
-        return false;
+        return None;
     }
 
     let mut out = Vec::with_capacity((clipped.len() - 2) * 3);
@@ -2594,29 +2631,35 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
         i += 1;
     }
 
-    obj.object_type = renderer::ObjectType::TexturedMesh {
-        texture_id: std::borrow::Cow::Owned(texture_id),
-        tint: [1.0; 4],
-        vertices: std::borrow::Cow::Owned(out),
-        geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
-        mode: renderer::MeshMode::Triangles,
-        uv_scale: [1.0, 1.0],
-        uv_offset: [0.0, 0.0],
-        uv_tex_shift: [0.0, 0.0],
-    };
-    obj.transform = Matrix4::IDENTITY;
-    true
+    Some(ClippedSpriteObject {
+        object_type: renderer::ObjectType::TexturedMesh {
+            texture_id,
+            tint: [1.0; 4],
+            vertices: std::borrow::Cow::Owned(out),
+            geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
+            mode: renderer::MeshMode::Triangles,
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            uv_tex_shift: [0.0, 0.0],
+        },
+        transform: Matrix4::IDENTITY,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         CachedTextLayout, TextAttrCursor, TextLayoutCache, TextLayoutKey, TextLayoutOverflowPolicy,
-        build_screen, fold_sprite_xy_rot, wrap_text_lines_by_words,
+        WorldRect, build_screen, clip_object_to_world_masks, clip_sprite_object_to_world_rect,
+        fold_sprite_xy_rot, wrap_text_lines_by_words,
     };
-    use crate::engine::gfx::{BlendMode, MeshMode, TMeshCacheKey, TexturedMeshVertex};
+    use crate::engine::gfx::{
+        BlendMode, MeshMode, ObjectType, RenderObject, TMeshCacheKey, TexturedMeshVertex,
+    };
     use crate::engine::present::actors::{Actor, SizeSpec, TextAttribute};
     use crate::engine::space::Metrics;
+    use glam::{Mat4 as Matrix4, Vec3 as Vector3};
+    use std::borrow::Cow;
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -2721,6 +2764,109 @@ mod tests {
         assert_eq!(cursor.tint_for(0), [1.0; 4]);
         assert_eq!(cursor.tint_for(3), [0.0, 1.0, 0.0, 1.0]);
         assert_eq!(cursor.tint_for(6), [0.0, 0.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn mask_clip_chooses_largest_intersection() {
+        let mut obj = RenderObject {
+            object_type: ObjectType::Sprite {
+                texture_id: Cow::Borrowed("mask-test"),
+                tint: [1.0; 4],
+                uv_scale: [1.0, 1.0],
+                uv_offset: [0.0, 0.0],
+                local_offset: [0.0, 0.0],
+                local_offset_rot_sin_cos: [0.0, 1.0],
+                edge_fade: [0.0; 4],
+            },
+            texture_handle: 0,
+            transform: Matrix4::from_cols_array(&[
+                10.0, 0.0, 0.0, 0.0, //
+                0.0, 10.0, 0.0, 0.0, //
+                0.0, 0.0, 1.0, 0.0, //
+                0.0, 0.0, 0.0, 1.0,
+            ]),
+            blend: BlendMode::Alpha,
+            z: 0,
+            order: 0,
+            camera: 0,
+        };
+
+        assert!(clip_object_to_world_masks(
+            &mut obj,
+            &[
+                WorldRect {
+                    left: -2.0,
+                    right: 2.0,
+                    bottom: -2.0,
+                    top: 2.0,
+                },
+                WorldRect {
+                    left: -5.0,
+                    right: 5.0,
+                    bottom: -5.0,
+                    top: 5.0,
+                },
+            ],
+        ));
+
+        if let ObjectType::Sprite {
+            uv_scale,
+            uv_offset,
+            ..
+        } = &obj.object_type
+        {
+            assert_eq!(*uv_scale, [1.0, 1.0]);
+            assert_eq!(*uv_offset, [0.0, 0.0]);
+        } else {
+            panic!("expected sprite to remain in fast clip path");
+        }
+        assert!((obj.transform.x_axis.x - 10.0).abs() < 0.0001);
+        assert!((obj.transform.y_axis.y - 10.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn rotated_clip_preserves_borrowed_texture_key() {
+        let mut obj = RenderObject {
+            object_type: ObjectType::Sprite {
+                texture_id: Cow::Borrowed("rot-clip"),
+                tint: [0.25, 0.5, 0.75, 1.0],
+                uv_scale: [1.0, 1.0],
+                uv_offset: [0.0, 0.0],
+                local_offset: [0.0, 0.0],
+                local_offset_rot_sin_cos: [0.0, 1.0],
+                edge_fade: [0.0; 4],
+            },
+            texture_handle: 0,
+            transform: Matrix4::from_translation(Vector3::ZERO)
+                * Matrix4::from_rotation_z(45.0_f32.to_radians())
+                * Matrix4::from_scale(Vector3::new(10.0, 10.0, 1.0)),
+            blend: BlendMode::Alpha,
+            z: 0,
+            order: 0,
+            camera: 0,
+        };
+
+        assert!(clip_sprite_object_to_world_rect(
+            &mut obj,
+            WorldRect {
+                left: -3.0,
+                right: 3.0,
+                bottom: -3.0,
+                top: 3.0,
+            },
+        ));
+
+        match &obj.object_type {
+            ObjectType::TexturedMesh {
+                texture_id,
+                vertices,
+                ..
+            } => {
+                assert!(matches!(texture_id, Cow::Borrowed("rot-clip")));
+                assert!(!vertices.is_empty());
+            }
+            _ => panic!("expected rotated clip to produce textured mesh"),
+        }
     }
 
     #[test]
