@@ -654,7 +654,7 @@ fn collect_texture_meta(
 fn collect_actor_texture_keys(actor: &Actor, out: &mut BTreeSet<String>) {
     match actor {
         Actor::Sprite { source, .. } => {
-            if let SpriteSource::Texture(key) = source {
+            if let Some(key) = source.texture_key() {
                 out.insert(key.to_string());
             }
         }
@@ -1350,6 +1350,7 @@ impl From<SizeSpecSnapshot> for SizeSpec {
 impl From<&SpriteSource> for SpriteSourceSnapshot {
     fn from(value: &SpriteSource) -> Self {
         match value {
+            SpriteSource::TextureStatic(key) => Self::Texture((*key).to_string()),
             SpriteSource::Texture(key) => Self::Texture(key.to_string()),
             SpriteSource::Solid => Self::Solid,
         }

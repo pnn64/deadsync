@@ -209,6 +209,39 @@ fn sprite_native_dims(
 ) -> (f32, f32) {
     match source {
         SpriteSource::Solid => (1.0, 1.0),
+        SpriteSource::TextureStatic(key) => {
+            let Some(meta) = assets::texture_dims(key) else {
+                return (0.0, 0.0);
+            };
+            let (mut tw, mut th) = (meta.w as f32, meta.h as f32);
+
+            if let Some([u0, v0, u1, v1]) = uv {
+                tw *= (u1 - u0).abs().max(1e-6);
+                th *= (v1 - v0).abs().max(1e-6);
+                return (tw, th);
+            }
+
+            let effective_cell = if cell.is_some() {
+                cell
+            } else {
+                let (gc, gr) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(key));
+                if gc.saturating_mul(gr) > 1 {
+                    Some((0, u32::MAX))
+                } else {
+                    None
+                }
+            };
+
+            if effective_cell.is_some() {
+                let (gc, gr) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(key));
+                let cols = gc.max(1);
+                let rows = gr.max(1);
+                tw /= cols as f32;
+                th /= rows as f32;
+            }
+
+            (tw, th)
+        }
         SpriteSource::Texture(key) => {
             let Some(meta) = assets::texture_dims(key) else {
                 return (0.0, 0.0);
@@ -561,6 +594,10 @@ fn build_sprite_like(source: SpriteSource, mods: &[Mod<'_>], site_base: u64) -> 
             let mut h = 0xcbf29ce484222325u64;
 
             match src {
+                SpriteSource::TextureStatic(key) => {
+                    mix_u64(&mut h, 0x54455854);
+                    mix_u64(&mut h, hash_bytes64(key.as_bytes()));
+                }
                 SpriteSource::Texture(key) => {
                     mix_u64(&mut h, 0x54455854);
                     mix_u64(&mut h, hash_bytes64(key.as_bytes()));
@@ -718,6 +755,11 @@ pub fn sprite<T: IntoTextureKey>(tex: T, mods: &[Mod<'_>], site_base: u64) -> Ac
         mods,
         site_base,
     )
+}
+
+#[inline(always)]
+pub fn sprite_static(tex: &'static str, mods: &[Mod<'_>], site_base: u64) -> Actor {
+    build_sprite_like(SpriteSource::TextureStatic(tex), mods, site_base)
 }
 
 #[inline(always)]
@@ -1075,6 +1117,16 @@ macro_rules! __ui_valign_from_ident {
 
 #[macro_export]
 macro_rules! act {
+    (sprite($tex:literal): $($tail:tt)+) => {{
+        let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
+        let mut __mods = ::smallvec::SmallVec::<[_; 16]>::new();
+        let mut __cur: ::core::option::Option<$crate::engine::present::anim::SegmentBuilder> = None;
+        $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
+        if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
+        if !__tw.is_empty(){ __mods.push($crate::engine::present::dsl::Mod::Tween(&__tw)); }
+        const __SITE_BASE: u64 = $crate::engine::present::runtime::site_base(file!(), line!(), column!());
+        $crate::engine::present::dsl::sprite_static($tex, &__mods, __SITE_BASE)
+    }};
     (sprite($tex:expr): $($tail:tt)+) => {{
         let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
         let mut __mods = ::smallvec::SmallVec::<[_; 16]>::new();
@@ -1544,6 +1596,9 @@ macro_rules! __dsl_apply_one {
 
     // Text properties (SM-compatible)
     (font ($n:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{ $mods.push($crate::engine::present::dsl::Mod::Font($n)); }};
+    (settext ($s:literal) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::engine::present::dsl::Mod::Content($crate::engine::present::actors::TextContent::Static($s)));
+    }};
     (settext ($s:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::engine::present::dsl::Mod::Content($crate::engine::present::actors::TextContent::from($s)));
     }};

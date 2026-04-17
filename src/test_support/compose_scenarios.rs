@@ -977,14 +977,17 @@ fn remap_font_texture_case(font: &mut Font) {
 fn remap_actor_texture_case(actors: &mut [Actor]) {
     for actor in actors {
         match actor {
-            Actor::Sprite {
-                source: SpriteSource::Texture(texture),
-                ..
-            } => *texture = Arc::<str>::from(mixed_case_texture_key(texture.as_ref())),
-            Actor::Sprite {
-                source: SpriteSource::Solid,
-                ..
-            } => {}
+            Actor::Sprite { source, .. } => match source {
+                SpriteSource::TextureStatic(texture) => {
+                    *source = SpriteSource::Texture(Arc::<str>::from(mixed_case_texture_key(
+                        texture,
+                    )));
+                }
+                SpriteSource::Texture(texture) => {
+                    *texture = Arc::<str>::from(mixed_case_texture_key(texture.as_ref()));
+                }
+                SpriteSource::Solid => {}
+            },
             Actor::TexturedMesh { texture, .. } => {
                 *texture = Arc::<str>::from(mixed_case_texture_key(texture.as_ref()));
             }

@@ -372,6 +372,7 @@ impl TextLayoutCache {
             wrap_width_pixels: wrap_width_pixels.unwrap_or(-1),
         };
         match content {
+            actors::TextContent::Static(text) => self.get_or_build_owned(key, font, fonts, text),
             actors::TextContent::Owned(text) => self.get_or_build_owned(key, font, fonts, text),
             actors::TextContent::Shared(text) => self.get_or_build_shared(key, font, fonts, text),
         }
@@ -914,10 +915,9 @@ fn build_actor_recursive<'a>(
                 return;
             }
 
-            let (is_solid, texture_name) = match source {
-                actors::SpriteSource::Solid => (true, "__white"),
-                actors::SpriteSource::Texture(name) => (false, name.as_ref()),
-            };
+            let (is_solid, texture_name) = source
+                .texture_key()
+                .map_or((true, "__white"), |name| (false, name));
 
             let mut chosen_cell = *cell;
             let mut chosen_grid = *grid;

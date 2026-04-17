@@ -30,8 +30,25 @@ pub enum SizeSpec {
 /// For `Solid`, the final color is `tint` (no sampling).
 #[derive(Clone, Debug)]
 pub enum SpriteSource {
+    TextureStatic(&'static str),
     Texture(Arc<str>),
     Solid,
+}
+
+impl SpriteSource {
+    #[inline(always)]
+    pub const fn static_texture(key: &'static str) -> Self {
+        Self::TextureStatic(key)
+    }
+
+    #[inline(always)]
+    pub fn texture_key(&self) -> Option<&str> {
+        match self {
+            Self::TextureStatic(key) => Some(key),
+            Self::Texture(key) => Some(key.as_ref()),
+            Self::Solid => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -169,14 +186,21 @@ pub struct TextAttribute {
 
 #[derive(Clone, Debug)]
 pub enum TextContent {
+    Static(&'static str),
     Owned(String),
     Shared(Arc<str>),
 }
 
 impl TextContent {
     #[inline(always)]
+    pub const fn static_str(value: &'static str) -> Self {
+        Self::Static(value)
+    }
+
+    #[inline(always)]
     pub fn as_str(&self) -> &str {
         match self {
+            Self::Static(s) => s,
             Self::Owned(s) => s.as_str(),
             Self::Shared(s) => s.as_ref(),
         }
@@ -190,7 +214,7 @@ impl TextContent {
 
 impl Default for TextContent {
     fn default() -> Self {
-        Self::Owned(String::new())
+        Self::Static("")
     }
 }
 
