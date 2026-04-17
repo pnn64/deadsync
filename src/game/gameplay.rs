@@ -3942,8 +3942,8 @@ fn trace_gameplay_update(
     trace_capacity_growth(state);
 }
 
-#[cfg(debug_assertions)]
-fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32) {
+#[cfg(test)]
+fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_sec: f32) {
     debug_assert!(
         delta_time.is_finite() && delta_time >= 0.0,
         "invalid delta_time={delta_time}"
@@ -3997,6 +3997,9 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
             state.mine_note_time_ns[player].len()
         );
         debug_assert!(state.next_mine_ix_cursor[player] <= state.mine_note_ix[player].len());
+    }
+    for player in 0..state.num_players {
+        let (start, end) = state.note_ranges[player];
         debug_assert!(
             state.mine_note_time_ns[player]
                 .windows(2)
@@ -4151,10 +4154,6 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
         debug_assert_eq!(lane_positions[col], state.lane_note_indices[col].len());
     }
 }
-
-#[cfg(not(debug_assertions))]
-#[inline(always)]
-fn debug_validate_hot_state(_state: &State, _delta_time: f32, _music_time_sec: f32) {}
 
 #[inline(always)]
 fn finalize_update_trace(
@@ -7481,8 +7480,6 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     }
     state.total_elapsed_in_screen += delta_time;
 
-    debug_validate_hot_state(state, delta_time, music_time_sec);
-
     let pre_notes_started = if trace_enabled {
         Some(Instant::now())
     } else {
@@ -7693,7 +7690,6 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         return GameplayAction::Navigate(GameplayExit::Complete);
     }
 
-    debug_validate_hot_state(state, delta_time, music_time_sec);
     finalize_update_trace(
         state,
         delta_time,
@@ -8057,6 +8053,17 @@ mod tests {
             None,
             [0; MAX_PLAYERS],
         )
+    }
+
+    #[test]
+    fn regression_state_passes_hot_state_audit() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let state = regression_state(profiles);
+        super::assert_valid_hot_state_for_tests(
+            &state,
+            0.0,
+            state.current_music_time_display,
+        );
     }
 
     fn test_row_entry(

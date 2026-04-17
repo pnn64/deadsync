@@ -88,6 +88,7 @@ fn build_hist_cols(
 
     let mut cols: Vec<HistCol> = Vec::with_capacity(measure_nps.len().saturating_add(1));
     let mut first_step_has_occurred = false;
+    let mut last_bucket: Option<i32> = None;
 
     for (i, &nps_f64) in measure_nps.iter().enumerate() {
         let nps = nps_f64 as f32;
@@ -106,6 +107,22 @@ fn build_hist_cols(
         let top_y = height - bar_h;
         let frac = (bar_h / height).abs();
         let top_color = lerp_color(frac, blue, purple);
+        // Cap histogram complexity to the rendered pixel width. Long charts can
+        // have far more measures than horizontal pixels, especially for the top
+        // gameplay NPS graph; keeping one column per pixel bucket preserves the
+        // visible shape while preventing mesh size from scaling with chart length.
+        let bucket = x.floor().clamp(i32::MIN as f32, i32::MAX as f32) as i32;
+
+        if let Some(last) = cols.last_mut()
+            && last_bucket == Some(bucket)
+        {
+            last.x = x;
+            if top_y < last.top_y {
+                last.top_y = top_y;
+                last.top_color = top_color;
+            }
+            continue;
+        }
 
         if cols.len() >= 2 {
             let a = cols[cols.len() - 1];
@@ -113,6 +130,7 @@ fn build_hist_cols(
             if a.top_y == top_y && b.top_y == top_y {
                 let last_ix = cols.len() - 1;
                 cols[last_ix].x = x;
+                last_bucket = Some(bucket);
                 continue;
             }
         }
@@ -122,6 +140,7 @@ fn build_hist_cols(
             top_y,
             top_color,
         });
+        last_bucket = Some(bucket);
     }
 
     if first_step_has_occurred && measure_nps.last().is_some_and(|&n| n != 0.0) {
@@ -684,6 +703,37 @@ mod tests {
 
         update_density_hist_mesh(&mut mesh, None, 0.0, 120.0);
         assert!(mesh.is_none());
+    }
+
+    #[test]
+    fn build_density_histogram_mesh_caps_columns_to_pixel_width() {
+        let measure_nps: Vec<f64> = (0..4096usize)
+            .map(|i| {
+                if i < 32 {
+                    0.0
+                } else {
+                    1.0 + ((i % 11) as f64) + ((i % 7) as f64 * 0.5)
+                }
+            })
+            .collect();
+        let measure_seconds: Vec<f32> = (0..measure_nps.len()).map(|i| i as f32).collect();
+        let width = 32.0;
+        let mesh = build_density_histogram_mesh(
+            &measure_nps,
+            16.0,
+            &measure_seconds,
+            0.0,
+            measure_nps.len() as f32,
+            width,
+            24.0,
+            0.0,
+            width,
+            None,
+            1.0,
+        );
+
+        // One segment per horizontal pixel bucket, plus the trailing drop to zero.
+        assert!(mesh.len() <= ((width as usize) + 1) * 6);
     }
 
     #[test]
