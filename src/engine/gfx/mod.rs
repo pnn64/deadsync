@@ -5,29 +5,35 @@ pub mod draw_prep;
 #[cfg(not(target_pointer_width = "32"))]
 use crate::engine::gfx::backends::vulkan;
 use crate::engine::gfx::backends::{opengl, software, wgpu_core};
-use cgmath::Matrix4;
+use glam::Mat4 as Matrix4;
 use glow::HasContext;
 use image::RgbaImage;
-use std::{borrow::Cow, collections::HashMap, error::Error, str::FromStr, sync::Arc};
+use std::{
+    borrow::Cow, collections::HashMap, error::Error, hash::BuildHasherDefault, str::FromStr,
+    sync::Arc,
+};
+use twox_hash::XxHash64;
 use winit::window::Window;
 
 // --- Public Data Contract ---
 pub type TextureHandle = u64;
 pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
+pub type FastU64Map<V> = HashMap<u64, V, BuildHasherDefault<XxHash64>>;
+pub type TextureHandleMap<V> = FastU64Map<V>;
 pub type TMeshCacheKey = u64;
 pub const INVALID_TMESH_CACHE_KEY: TMeshCacheKey = 0;
 
 #[derive(Clone)]
 pub struct RenderList<'a> {
     pub clear_color: [f32; 4],
-    pub cameras: Vec<Matrix4<f32>>,
+    pub cameras: Vec<Matrix4>,
     pub objects: Vec<RenderObject<'a>>,
 }
 #[derive(Clone)]
 pub struct RenderObject<'a> {
     pub object_type: ObjectType<'a>,
     pub texture_handle: TextureHandle,
-    pub transform: Matrix4<f32>,
+    pub transform: Matrix4,
     pub blend: BlendMode,
     pub z: i16,
     pub order: u32,
@@ -296,7 +302,7 @@ impl Backend {
     pub fn draw(
         &mut self,
         render_list: &RenderList<'_>,
-        textures: &HashMap<TextureHandle, Texture>,
+        textures: &TextureHandleMap<Texture>,
         apply_present_back_pressure: bool,
     ) -> Result<DrawStats, Box<dyn Error>> {
         match &mut self.0 {
@@ -478,7 +484,7 @@ impl Backend {
         }
     }
 
-    pub fn retire_textures(&mut self, textures: &mut HashMap<TextureHandle, Texture>) {
+    pub fn retire_textures(&mut self, textures: &mut TextureHandleMap<Texture>) {
         let old_textures = std::mem::take(textures);
         match &mut self.0 {
             #[cfg(not(target_pointer_width = "32"))]
@@ -525,7 +531,7 @@ impl Backend {
         }
     }
 
-    pub fn dispose_textures(&mut self, textures: &mut HashMap<TextureHandle, Texture>) {
+    pub fn dispose_textures(&mut self, textures: &mut TextureHandleMap<Texture>) {
         self.wait_for_idle();
 
         let old_textures = std::mem::take(textures);

@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
+use crate::assets::i18n::{LookupKey, lookup_key, tr};
 use crate::engine::gfx::{BlendMode, MeshMode};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{TextCache, cached_text};
@@ -33,17 +34,90 @@ thread_local! {
 
 static DIGIT_TEXT: LazyLock<[Arc<str>; 10]> =
     LazyLock::new(|| ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].map(Arc::<str>::from));
-static STEP_INFO_LABEL_TEXT: LazyLock<[Arc<str>; 4]> =
-    LazyLock::new(|| ["Song", "Artist", "Pack", "Desc"].map(Arc::<str>::from));
-static HOLDS_MINES_ROLLS_LABEL_TEXT: LazyLock<[Arc<str>; 3]> =
-    LazyLock::new(|| ["holds", "mines", "rolls"].map(Arc::<str>::from));
-static TIME_SONG_LEFT_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from(" song"));
-static TIME_REMAINING_LEFT_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from(" remaining"));
-static TIME_SONG_RIGHT_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("song "));
-static TIME_REMAINING_RIGHT_TEXT: LazyLock<Arc<str>> =
-    LazyLock::new(|| Arc::<str>::from("remaining "));
 static SLASH_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("/"));
+
+#[derive(Clone, Copy)]
+struct LabeledColor {
+    label: LookupKey,
+    color: [f32; 4],
+}
+
+const JUDGMENT_INFO: [LabeledColor; 6] = [
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentFantastic"),
+        color: color::JUDGMENT_RGBA[0],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentExcellent"),
+        color: color::JUDGMENT_RGBA[1],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentGreat"),
+        color: color::JUDGMENT_RGBA[2],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentDecent"),
+        color: color::JUDGMENT_RGBA[3],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentWayOff"),
+        color: color::JUDGMENT_RGBA[4],
+    },
+    LabeledColor {
+        label: lookup_key("Gameplay", "JudgmentMiss"),
+        color: color::JUDGMENT_RGBA[5],
+    },
+];
+
+const STEP_INFO_LABELS: [LookupKey; 4] = [
+    lookup_key("Gameplay", "SongInfoSong"),
+    lookup_key("Gameplay", "SongInfoArtist"),
+    lookup_key("Gameplay", "SongInfoPack"),
+    lookup_key("Gameplay", "SongInfoDesc"),
+];
+
+const HOLDS_MINES_ROLLS_LABELS: [LookupKey; 3] = [
+    lookup_key("Gameplay", "HoldsLabel"),
+    lookup_key("Gameplay", "MinesLabel"),
+    lookup_key("Gameplay", "RollsLabel"),
+];
+
+fn step_info_label(index: usize) -> Arc<str> {
+    STEP_INFO_LABELS
+        .get(index)
+        .map(LookupKey::get)
+        .unwrap_or_else(|| Arc::from(""))
+}
+
+fn holds_mines_rolls_label(index: usize) -> Arc<str> {
+    HOLDS_MINES_ROLLS_LABELS
+        .get(index)
+        .map(LookupKey::get)
+        .unwrap_or_else(|| Arc::from(""))
+}
+
+fn judgment_label(index: usize) -> String {
+    JUDGMENT_INFO
+        .get(index)
+        .map(|info| info.label.get().to_string())
+        .unwrap_or_default()
+}
+
+fn time_song_left_text() -> Arc<str> {
+    tr("Gameplay", "TimeSong")
+}
+
+fn time_remaining_left_text() -> Arc<str> {
+    tr("Gameplay", "TimeRemaining")
+}
+
+fn time_song_right_text() -> Arc<str> {
+    tr("Gameplay", "TimeSong")
+}
+
+fn time_remaining_right_text() -> Arc<str> {
+    tr("Gameplay", "TimeRemaining")
+}
 
 #[inline(always)]
 fn step_stats_player_idx(state: &State, player_side: profile::PlayerSide) -> usize {
@@ -179,15 +253,22 @@ fn cached_padded_runs(count: u32, digits: usize) -> (Arc<str>, Arc<str>) {
 
 #[inline(always)]
 fn cached_blue_window_label(ms: i32) -> Arc<str> {
+    use crate::assets::i18n::tr_fmt;
     cached_text(&BLUE_WINDOW_LABEL_CACHE, ms, TEXT_CACHE_LIMIT, || {
-        format!("({ms}ms)")
+        tr_fmt("Gameplay", "BlueWindowLabel", &[("ms", &ms.to_string())]).to_string()
     })
 }
 
 #[inline(always)]
 fn cached_peak_nps_text(peak: f32) -> Arc<str> {
+    use crate::assets::i18n::tr_fmt;
     cached_text(&PEAK_NPS_CACHE, peak.to_bits(), TEXT_CACHE_LIMIT, || {
-        format!("Peak NPS: {:.2}", peak.max(0.0))
+        tr_fmt(
+            "Gameplay",
+            "PeakNps",
+            &[("peak_nps", &format!("{:.2}", peak.max(0.0)))],
+        )
+        .to_string()
     })
 }
 
@@ -350,12 +431,12 @@ fn digit_text(digit: u8) -> Arc<str> {
 
 #[inline(always)]
 fn step_info_label_text(index: usize) -> Arc<str> {
-    STEP_INFO_LABEL_TEXT[index].clone()
+    step_info_label(index)
 }
 
 #[inline(always)]
 fn holds_mines_rolls_label_text(index: usize) -> Arc<str> {
-    HOLDS_MINES_ROLLS_LABEL_TEXT[index].clone()
+    holds_mines_rolls_label(index)
 }
 
 pub fn prewarm_text_layout(
@@ -413,15 +494,19 @@ pub fn prewarm_text_layout(
     let text = cached_game_time(end_seconds, mode);
     cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     let _ = cached_game_time_width_for_key(key, asset_manager);
-    cache.prewarm_text(fonts, "miso", TIME_SONG_LEFT_TEXT.as_ref(), None);
-    cache.prewarm_text(fonts, "miso", TIME_REMAINING_LEFT_TEXT.as_ref(), None);
-    cache.prewarm_text(fonts, "miso", TIME_SONG_RIGHT_TEXT.as_ref(), None);
-    cache.prewarm_text(fonts, "miso", TIME_REMAINING_RIGHT_TEXT.as_ref(), None);
+    cache.prewarm_text(fonts, "miso", &time_song_left_text(), None);
+    cache.prewarm_text(fonts, "miso", &time_remaining_left_text(), None);
+    cache.prewarm_text(fonts, "miso", &time_song_right_text(), None);
+    cache.prewarm_text(fonts, "miso", &time_remaining_right_text(), None);
     cache.prewarm_text(fonts, "miso", SLASH_TEXT.as_ref(), None);
-    for label in STEP_INFO_LABEL_TEXT.iter() {
+    for label in (0..4).map(step_info_label).collect::<Vec<_>>().iter() {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
-    for label in HOLDS_MINES_ROLLS_LABEL_TEXT.iter() {
+    for label in (0..3)
+        .map(holds_mines_rolls_label)
+        .collect::<Vec<_>>()
+        .iter()
+    {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
     for player in 0..state.num_players {
@@ -838,14 +923,7 @@ pub fn build_double_step_stats(
                         gameplay::display_judgment_count(state, 0, JudgeGrade::WayOff),
                         gameplay::display_judgment_count(state, 0, JudgeGrade::Miss),
                     ];
-                    let labels = [
-                        "FANTASTIC",
-                        "EXCELLENT",
-                        "GREAT",
-                        "DECENT",
-                        "WAY OFF",
-                        "MISS",
-                    ];
+                    let labels: Vec<String> = (0..6).map(judgment_label).collect();
                     for row_i in 0..labels.len() {
                         let local_y = y_base + (row_i as f32 * row_height);
                         let y_numbers = origin_y + (local_y * base_zoom);
@@ -878,7 +956,7 @@ pub fn build_double_step_stats(
                         }
 
                         actors.push(act!(text:
-                            font("miso"): settext(labels[row_i]):
+                            font("miso"): settext(labels[row_i].clone()):
                             align(1.0, 0.5): horizalign(right):
                             xy(label_x, y_label):
                             zoom(label_zoom):
@@ -922,14 +1000,15 @@ pub fn build_double_step_stats(
                         color::JUDGMENT_DIM_RGBA[5],
                     ];
 
+                    let fa_label = judgment_label(0);
                     let labels = [
-                        "FANTASTIC",
-                        "FANTASTIC",
-                        "EXCELLENT",
-                        "GREAT",
-                        "DECENT",
-                        "WAY OFF",
-                        "MISS",
+                        fa_label.as_str(),
+                        fa_label.as_str(),
+                        &judgment_label(1),
+                        &judgment_label(2),
+                        &judgment_label(3),
+                        &judgment_label(4),
+                        &judgment_label(5),
                     ];
                     for row_i in 0..labels.len() {
                         let local_y = y_base + (row_i as f32 * row_height);
@@ -1084,7 +1163,7 @@ pub fn build_double_step_stats(
         ));
         actors.push(act!(text:
             font("miso"):
-            settext(TIME_REMAINING_RIGHT_TEXT.clone()):
+            settext(time_remaining_right_text()):
             align(1.0, 0.5):
             horizalign(right):
             xy(label_x, base_y + 1.0 * number_zoom):
@@ -1105,7 +1184,7 @@ pub fn build_double_step_stats(
         ));
         actors.push(act!(text:
             font("miso"):
-            settext(TIME_SONG_RIGHT_TEXT.clone()):
+            settext(time_song_right_text()):
             align(1.0, 0.5):
             horizalign(right):
             xy(label_x, base_y + (20.0 * number_zoom) + 1.0 * number_zoom):
@@ -1149,42 +1228,8 @@ static JUDGMENT_ORDER: [JudgeGrade; 6] = [
     JudgeGrade::Miss,
 ];
 
-#[derive(Clone, Copy)]
-struct JudgmentDisplayInfo {
-    label: &'static str,
-    color: [f32; 4],
-}
-
-const JUDGMENT_INFO: [JudgmentDisplayInfo; judgment::JUDGE_GRADE_COUNT] = [
-    JudgmentDisplayInfo {
-        label: "FANTASTIC",
-        color: color::JUDGMENT_RGBA[0],
-    },
-    JudgmentDisplayInfo {
-        label: "EXCELLENT",
-        color: color::JUDGMENT_RGBA[1],
-    },
-    JudgmentDisplayInfo {
-        label: "GREAT",
-        color: color::JUDGMENT_RGBA[2],
-    },
-    JudgmentDisplayInfo {
-        label: "DECENT",
-        color: color::JUDGMENT_RGBA[3],
-    },
-    JudgmentDisplayInfo {
-        label: "WAY OFF",
-        color: color::JUDGMENT_RGBA[4],
-    },
-    JudgmentDisplayInfo {
-        label: "MISS",
-        color: color::JUDGMENT_RGBA[5],
-    },
-];
-
-#[inline(always)]
-const fn judgment_info(grade: JudgeGrade) -> JudgmentDisplayInfo {
-    JUDGMENT_INFO[judgment::judge_grade_ix(grade)]
+fn judgment_info(grade: JudgeGrade) -> &'static LabeledColor {
+    &JUDGMENT_INFO[judgment::judge_grade_ix(grade)]
 }
 
 fn build_banner(
@@ -1337,7 +1382,7 @@ fn build_steps_info(
     let row_h = 16.0;
     let z = 72i16;
     if !note_field_is_centered {
-        for i in 0..STEP_INFO_LABEL_TEXT.len() {
+        for i in 0..4 {
             let y = origin_y + (row_h * (i as f32 + 1.0) * group_zoom);
             actors.push(act!(text:
                 font("miso"): settext(step_info_label_text(i)):
@@ -1822,7 +1867,7 @@ fn build_side_pane(
 
                 let label_world_y = world_y + (1.0 * final_text_base_zoom);
                 let label_zoom = final_text_base_zoom * 0.833;
-                let label = info.label;
+                let label = info.label.get();
 
                 if player_side == profile::PlayerSide::P1 {
                     actors.push(act!(text:
@@ -1923,14 +1968,7 @@ fn build_side_pane(
                 let label_zoom = final_text_base_zoom * 0.833;
                 let sublabel_y = label_world_y + (12.0 * final_text_base_zoom);
                 let sublabel_zoom = final_text_base_zoom * 0.6;
-                let label = match *label_index {
-                    0 => "FANTASTIC",
-                    1 => "EXCELLENT",
-                    2 => "GREAT",
-                    3 => "DECENT",
-                    4 => "WAY OFF",
-                    _ => "MISS",
-                };
+                let label = judgment_label(*label_index);
 
                 if player_side == profile::PlayerSide::P1 {
                     actors.push(act!(text:
@@ -2056,7 +2094,7 @@ fn build_side_pane(
                     z(71):
                     diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
                 ));
-                actors.push(act!(text: font(font_name): settext(TIME_SONG_LEFT_TEXT.clone()):
+                actors.push(act!(text: font(font_name): settext(time_song_left_text()):
                     align(0.0, 0.5): horizalign(left):
                     xy(time_x + label_dir * label_offset_total, y_pos_total + 1.0):
                     zoom(text_zoom): z(71):
@@ -2069,7 +2107,7 @@ fn build_side_pane(
                     z(71):
                     diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
                 ));
-                actors.push(act!(text: font(font_name): settext(TIME_SONG_LEFT_TEXT.clone()):
+                actors.push(act!(text: font(font_name): settext(time_song_left_text()):
                     align(1.0, 0.5): horizalign(right):
                     xy(time_x + label_dir * label_offset_total, y_pos_total + 1.0):
                     zoom(text_zoom): z(71):
@@ -2094,7 +2132,7 @@ fn build_side_pane(
                     z(71):
                     diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
                 ));
-                actors.push(act!(text: font(font_name): settext(TIME_REMAINING_LEFT_TEXT.clone()):
+                actors.push(act!(text: font(font_name): settext(time_remaining_left_text()):
                     align(0.0, 0.5): horizalign(left):
                     xy(time_x + label_dir * label_offset_remaining, y_pos_remaining + 1.0):
                     zoom(text_zoom): z(71):
@@ -2107,7 +2145,7 @@ fn build_side_pane(
                     z(71):
                     diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
                 ));
-                actors.push(act!(text: font(font_name): settext(TIME_REMAINING_LEFT_TEXT.clone()):
+                actors.push(act!(text: font(font_name): settext(time_remaining_left_text()):
                     align(1.0, 0.5): horizalign(right):
                     xy(time_x + label_dir * label_offset_remaining, y_pos_remaining + 1.0):
                     zoom(text_zoom): z(71):

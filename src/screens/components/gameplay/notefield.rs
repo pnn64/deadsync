@@ -32,7 +32,7 @@ use crate::game::{
     scroll::ScrollSpeedSetting,
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
-use cgmath::{Deg, Matrix4, Point3, Vector3};
+use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 use rssp::streams::StreamSegment;
 use std::array::from_fn;
 use std::cell::RefCell;
@@ -1294,8 +1294,13 @@ fn effective_mini_value(
 }
 
 #[inline(always)]
-fn mini_judgment_zoom(mini: f32) -> f32 {
-    0.5_f32.powf(mini).min(1.0)
+fn judgment_actor_zoom(mini: f32, judgment_back: bool) -> f32 {
+    if !judgment_back {
+        return 1.0;
+    }
+    // Arrow Cloud's JudgmentBack actorframe scales with Mini; the normal
+    // front judgment actor in ITGmania/Simply Love does not.
+    ((2.0 - mini) * 0.5).clamp(0.35, 1.0)
 }
 
 #[inline(always)]
@@ -1352,7 +1357,7 @@ fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
 }
 
 #[inline(always)]
-fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
+pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
     let key = gameplay_mods_text_key(state, player_idx);
     cached_text(&GAMEPLAY_MODS_CACHE, key, TEXT_CACHE_LIMIT, || {
         let mut parts = Vec::with_capacity(32);
@@ -2516,36 +2521,32 @@ fn zmod_mini_indicator_text(
 }
 
 #[inline(always)]
-fn rage_frustum(l: f32, r: f32, b: f32, t: f32, zn: f32, zf: f32) -> Matrix4<f32> {
+fn rage_frustum(l: f32, r: f32, b: f32, t: f32, zn: f32, zf: f32) -> Matrix4 {
     let a = (r + l) / (r - l);
     let bb = (t + b) / (t - b);
     let c = -(zf + zn) / (zf - zn);
     let d = -(2.0 * zf * zn) / (zf - zn);
     // Match ITGmania's RageDisplay::GetFrustumMatrix (OpenGL-style frustum matrix).
     //
-    // Note: cgmath::Matrix4::new takes elements in column-major order.
-    Matrix4::new(
-        // column 0
+    // Note: `glam::Mat4::from_cols_array` takes elements in column-major order.
+    Matrix4::from_cols_array(&[
         2.0 * zn / (r - l),
         0.0,
         0.0,
         0.0,
-        // column 1
         0.0,
         2.0 * zn / (t - b),
         0.0,
         0.0,
-        // column 2
         a,
         bb,
         c,
         -1.0,
-        // column 3
         0.0,
         0.0,
         d,
         0.0,
-    )
+    ])
 }
 
 fn notefield_view_proj(
@@ -2556,7 +2557,7 @@ fn notefield_view_proj(
     tilt: f32,
     skew: f32,
     reverse: bool,
-) -> Option<Matrix4<f32>> {
+) -> Option<Matrix4> {
     if !screen_w.is_finite() || !screen_h.is_finite() || screen_w <= 0.0 || screen_h <= 0.0 {
         return None;
     }
@@ -2593,9 +2594,9 @@ fn notefield_view_proj(
     let t = (vp_y - half_h) / dist;
     let proj = rage_frustum(l, r, b, t, near, far);
 
-    let eye = Point3::new(-vp_x + half_w, -vp_y + half_h, dist);
-    let at = Point3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
-    let view = Matrix4::look_at_rh(eye, at, Vector3::unit_y());
+    let eye = Vector3::new(-vp_x + half_w, -vp_y + half_h, dist);
+    let at = Vector3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
+    let view = Matrix4::look_at_rh(eye, at, Vector3::Y);
 
     // ITGmania: PlayerNoteFieldPositioner applies tilt/zoom/y_offset on the NoteField actor.
     let reverse_mult = if reverse { -1.0 } else { 1.0 };
@@ -2615,16 +2616,16 @@ fn notefield_view_proj(
     let pivot_y = half_h - center_y;
     // Convert our world coords (centered, y-up) back into the SM-style screen
     // coords (top-left, y-down) expected by the menu perspective camera.
-    let world_to_screen = Matrix4::new(
+    let world_to_screen = Matrix4::from_cols_array(&[
         1.0, 0.0, 0.0, 0.0, //
         0.0, -1.0, 0.0, 0.0, //
         0.0, 0.0, 1.0, 0.0, //
         half_w, half_h, 0.0, 1.0,
-    );
+    ]);
     let field = Matrix4::from_translation(Vector3::new(0.0, y_offset_world, 0.0))
         * Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
-        * Matrix4::from_angle_x(Deg(tilt_deg))
-        * Matrix4::from_nonuniform_scale(tilt_scale, tilt_scale, 1.0)
+        * Matrix4::from_rotation_x(tilt_deg.to_radians())
+        * Matrix4::from_scale(Vector3::new(tilt_scale, tilt_scale, 1.0))
         * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0));
 
     Some((proj * view) * world_to_screen * field)
@@ -3080,9 +3081,8 @@ pub fn build_bundles(
     let judgment_x = playfield_center_x + judgment_extra_x;
     let combo_x = playfield_center_x + combo_extra_x;
     let mc_font_name = zmod_small_combo_font(profile.combo_font);
-    // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0); deadsync currently supports Mini.
-    let judgment_zoom_mod =
-        mini_judgment_zoom(mini) * hallway_judgment_zoom(perspective.tilt, perspective.skew);
+    let judgment_zoom_mod = judgment_actor_zoom(mini, profile.judgment_back)
+        * hallway_judgment_zoom(perspective.tilt, perspective.skew);
     let effect_height = field_effect_height(perspective.tilt);
     let receptor_alpha = (1.0 - visibility.dark).clamp(0.0, 1.0);
     let blind_active = visibility.blind > f32::EPSILON;
@@ -6184,7 +6184,7 @@ pub fn build_bundles(
                     let explosion_duration = 0.5_f32;
                     if elapsed <= explosion_duration {
                         let progress = (elapsed / explosion_duration).clamp(0.0, 1.0);
-                        let zoom = (2.0 - progress) * judgment_zoom_mod;
+                        let zoom = 2.0 - progress;
                         let alpha = (0.5 * (1.0 - progress)).max(0.0);
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let rotation = 90.0 * direction * progress;
@@ -6207,7 +6207,7 @@ pub fn build_bundles(
                     if elapsed <= COMBO_HUNDRED_MILESTONE_DURATION {
                         let progress = (elapsed / COMBO_HUNDRED_MILESTONE_DURATION).clamp(0.0, 1.0);
                         let eased = ease_out_quad(progress);
-                        let zoom = (0.25 + (2.0 - 0.25) * eased) * judgment_zoom_mod;
+                        let zoom = 0.25 + (2.0 - 0.25) * eased;
                         let alpha = (0.6 * (1.0 - eased)).max(0.0);
                         let rotation = 10.0 + (0.0 - 10.0) * eased;
                         push_hud_capture(
@@ -6227,8 +6227,7 @@ pub fn build_bundles(
                         let mini_duration = 0.4_f32;
                         if elapsed <= mini_duration {
                             let mini_progress = (elapsed / mini_duration).clamp(0.0, 1.0);
-                            let mini_zoom =
-                                (0.25 + (1.8 - 0.25) * mini_progress) * judgment_zoom_mod;
+                            let mini_zoom = 0.25 + (1.8 - 0.25) * mini_progress;
                             let mini_alpha = (1.0 - mini_progress).max(0.0);
                             let mini_rotation = 10.0 + (0.0 - 10.0) * mini_progress;
                             push_hud_capture(
@@ -6253,9 +6252,9 @@ pub fn build_bundles(
                     if elapsed <= COMBO_THOUSAND_MILESTONE_DURATION {
                         let progress =
                             (elapsed / COMBO_THOUSAND_MILESTONE_DURATION).clamp(0.0, 1.0);
-                        let zoom = (0.25 + (3.0 - 0.25) * progress) * judgment_zoom_mod;
+                        let zoom = 0.25 + (3.0 - 0.25) * progress;
                         let alpha = (0.7 * (1.0 - progress)).max(0.0);
-                        let x_offset = 100.0 * progress * judgment_zoom_mod;
+                        let x_offset = 100.0 * progress;
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let final_x = combo_center_x + x_offset * direction;
                             push_hud_capture(
@@ -6291,7 +6290,7 @@ pub fn build_bundles(
                     act!(text:
                         font(font_name): settext(cached_int_u32(p.miss_combo)):
                         align(0.5, 0.5): xy(combo_x, combo_y):
-                        zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
+                        zoom(0.75): horizalign(center): shadowlength(1.0):
                         diffuse(1.0, 0.0, 0.0, 1.0):
                         z(90)
                     ),
@@ -6369,7 +6368,7 @@ pub fn build_bundles(
                     act!(text:
                         font(font_name): settext(cached_int_u32(p.combo)):
                         align(0.5, 0.5): xy(combo_x, combo_y):
-                        zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
+                        zoom(0.75): horizalign(center): shadowlength(1.0):
                         diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
                         z(90)
                     ),
@@ -7254,7 +7253,7 @@ mod tests {
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         clipped_hold_body_bounds, hallway_judgment_zoom, hold_head_render_flags, hold_segment_pose,
         hold_tail_cap_bounds, hold_window_for_display_run, hud_layout_ys, hud_y,
-        lane_hold_window_bounds_by_time_ns, let_go_head_beat,
+        judgment_actor_zoom, lane_hold_window_bounds_by_time_ns, let_go_head_beat,
         maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size,
         note_window_for_display_run, note_world_z, note_x_extra, offset_center,
         predictive_itg_percents, push_transform_parts, receptor_row_center, tap_judgment_rows,
@@ -7869,6 +7868,20 @@ mod tests {
         assert!((hallway_judgment_zoom(0.0, 0.0) - 1.0).abs() <= 1e-6);
         assert!((hallway_judgment_zoom(-1.0, 1.0) - 1.0).abs() <= 1e-6);
         assert!((hallway_judgment_zoom(1.0, 0.0) - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn judgment_actor_zoom_ignores_mini_without_judgment_back() {
+        assert!((judgment_actor_zoom(0.35, false) - 1.0).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(1.5, false) - 1.0).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(-1.0, false) - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn judgment_actor_zoom_matches_arrow_cloud_judgment_back_formula() {
+        assert!((judgment_actor_zoom(0.35, true) - 0.825).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(1.5, true) - 0.35).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(-1.0, true) - 1.0).abs() <= 1e-6);
     }
 
     #[test]

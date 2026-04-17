@@ -445,6 +445,7 @@ pub enum LanguageFlag {
     Auto,
     English,
     Swedish,
+    Pseudo,
 }
 
 impl LanguageFlag {
@@ -454,6 +455,7 @@ impl LanguageFlag {
             Self::Auto => "auto",
             Self::English => "English",
             Self::Swedish => "Swedish",
+            Self::Pseudo => "Pseudo",
         }
     }
 
@@ -463,6 +465,7 @@ impl LanguageFlag {
             Self::Auto => "auto",
             Self::English => "en",
             Self::Swedish => "sv",
+            Self::Pseudo => "pseudo",
         }
     }
 }
@@ -475,6 +478,7 @@ impl FromStr for LanguageFlag {
             "auto" => Ok(Self::Auto),
             "english" | "en" => Ok(Self::English),
             "swedish" | "sv" => Ok(Self::Swedish),
+            "pseudo" => Ok(Self::Pseudo),
             _ => Err(()),
         }
     }

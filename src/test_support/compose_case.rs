@@ -9,7 +9,7 @@ use crate::engine::present::anim::{EffectClock, EffectMode, EffectState};
 use crate::engine::present::compose;
 use crate::engine::present::font::{Font, Glyph};
 use crate::engine::space::Metrics;
-use cgmath::Matrix4;
+use glam::Mat4 as Matrix4;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1295,20 +1295,12 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static>
     }
 }
 
-fn matrix_snapshot(m: &Matrix4<f32>) -> [[f32; 4]; 4] {
-    [
-        [m.x.x, m.x.y, m.x.z, m.x.w],
-        [m.y.x, m.y.y, m.y.z, m.y.w],
-        [m.z.x, m.z.y, m.z.z, m.z.w],
-        [m.w.x, m.w.y, m.w.z, m.w.w],
-    ]
+fn matrix_snapshot(m: &Matrix4) -> [[f32; 4]; 4] {
+    m.to_cols_array_2d()
 }
 
-fn matrix_runtime(m: [[f32; 4]; 4]) -> Matrix4<f32> {
-    Matrix4::new(
-        m[0][0], m[0][1], m[0][2], m[0][3], m[1][0], m[1][1], m[1][2], m[1][3], m[2][0], m[2][1],
-        m[2][2], m[2][3], m[3][0], m[3][1], m[3][2], m[3][3],
-    )
+fn matrix_runtime(m: [[f32; 4]; 4]) -> Matrix4 {
+    Matrix4::from_cols_array_2d(&m)
 }
 
 fn leak_str(value: &str) -> &'static str {

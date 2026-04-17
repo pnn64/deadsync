@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
@@ -88,9 +89,26 @@ fn format_time_spent(seconds_total: f32) -> String {
     let seconds = total % 60;
 
     if hours > 0 {
-        format!("{hours}hr. {minutes}min. {seconds}sec.")
+        tr_fmt(
+            "GameOver",
+            "TimeFormatHMS",
+            &[
+                ("hours", &hours.to_string()),
+                ("minutes", &minutes.to_string()),
+                ("seconds", &seconds.to_string()),
+            ],
+        )
+        .to_string()
     } else {
-        format!("{minutes}min. {seconds}sec.")
+        tr_fmt(
+            "GameOver",
+            "TimeFormatMS",
+            &[
+                ("minutes", &minutes.to_string()),
+                ("seconds", &seconds.to_string()),
+            ],
+        )
+        .to_string()
     }
 }
 
@@ -113,19 +131,31 @@ fn build_player_lines(
             } else {
                 0
             };
-            profile_lines.push(format!("Calories Burned Today\n{cals}"));
+            profile_lines.push(format!("{}\n{cals}", tr("GameOver", "CaloriesBurnedToday")));
         }
 
-        profile_lines.push(format!("Total Songs Played\n{total_songs_played}"));
+        profile_lines.push(format!(
+            "{}\n{total_songs_played}",
+            tr("GameOver", "TotalSongsPlayed")
+        ));
     }
 
     // General stats (no profile required)
     let stats = session_stats_for_side(side, stages);
     let general_lines: Vec<String> = vec![
-        format!("Songs Played This Game\n{}", stats.songs_played),
-        format!("Notes Hit This Game\n{}", stats.notes_hit),
         format!(
-            "Time Spent This Game\n{}",
+            "{}\n{}",
+            tr("GameOver", "SongsPlayedThisGame"),
+            stats.songs_played
+        ),
+        format!(
+            "{}\n{}",
+            tr("GameOver", "NotesHitThisGame"),
+            stats.notes_hit
+        ),
+        format!(
+            "{}\n{}",
+            tr("GameOver", "TimeSpentThisGame"),
             format_time_spent(stats.duration_seconds)
         ),
     ];
@@ -228,7 +258,7 @@ pub fn get_actors(
 
         actors.push(act!(text:
             font("wendy_white"):
-            settext("GAME"):
+            settext(tr("GameOver", "GameText")):
             align(0.5, 0.5):
             xy(cx, cy - 40.0):
             croptop(1.0): fadetop(1.0):
@@ -239,7 +269,7 @@ pub fn get_actors(
         ));
         actors.push(act!(text:
             font("wendy_white"):
-            settext("OVER"):
+            settext(tr("GameOver", "OverText")):
             align(0.5, 0.5):
             xy(cx, cy + 40.0):
             croptop(1.0): fadetop(1.0):
@@ -281,7 +311,7 @@ pub fn get_actors(
                 ));
                 actors.push(act!(text:
                     font("miso"):
-                    settext("No Avatar"):
+                    settext(tr("GameOver", "NoAvatar")):
                     align(0.5, 0.5):
                     xy(x_pos, AVATAR_Y + AVATAR_DIM - 18.0):
                     zoom(0.9):

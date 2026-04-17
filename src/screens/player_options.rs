@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
 use crate::assets::{self, AssetManager};
 use crate::engine::audio;
 use crate::engine::gfx::BlendMode;
@@ -215,15 +216,16 @@ fn init_row_tweens(
     let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
     let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
     let measure_counter_anchor_visible_idx =
-        parent_anchor_visible_index(rows, ROW_MEASURE_COUNTER, visibility);
+        parent_anchor_visible_index(rows, RowId::MeasureCounter, visibility);
     let judgment_font_anchor_visible_idx =
-        parent_anchor_visible_index(rows, ROW_JUDGMENT_FONT, visibility);
+        parent_anchor_visible_index(rows, RowId::JudgmentFont, visibility);
     let judgment_tilt_anchor_visible_idx =
-        parent_anchor_visible_index(rows, ROW_JUDGMENT_TILT, visibility);
+        parent_anchor_visible_index(rows, RowId::JudgmentTilt, visibility);
     let combo_font_anchor_visible_idx =
-        parent_anchor_visible_index(rows, ROW_COMBO_FONT, visibility);
-    let error_bar_anchor_visible_idx = parent_anchor_visible_index(rows, ROW_ERROR_BAR, visibility);
-    let hide_anchor_visible_idx = parent_anchor_visible_index(rows, ROW_HIDE, visibility);
+        parent_anchor_visible_index(rows, RowId::ComboFont, visibility);
+    let error_bar_anchor_visible_idx =
+        parent_anchor_visible_index(rows, RowId::ErrorBar, visibility);
+    let hide_anchor_visible_idx = parent_anchor_visible_index(rows, RowId::Hide, visibility);
 
     let mut out: Vec<RowTween> = Vec::with_capacity(total_rows);
     let mut visible_idx = 0i32;
@@ -234,17 +236,17 @@ fn init_row_tweens(
             visible_idx += 1;
             f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
         } else {
-            let anchor =
-                rows.get(i)
-                    .and_then(|row| match conditional_row_parent(row.name.as_str()) {
-                        Some(ROW_MEASURE_COUNTER) => measure_counter_anchor_visible_idx,
-                        Some(ROW_JUDGMENT_FONT) => judgment_font_anchor_visible_idx,
-                        Some(ROW_JUDGMENT_TILT) => judgment_tilt_anchor_visible_idx,
-                        Some(ROW_COMBO_FONT) => combo_font_anchor_visible_idx,
-                        Some(ROW_ERROR_BAR) => error_bar_anchor_visible_idx,
-                        Some(ROW_HIDE) => hide_anchor_visible_idx,
-                        _ => None,
-                    });
+            let anchor = rows
+                .get(i)
+                .and_then(|row| match conditional_row_parent(row.id) {
+                    Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
+                    Some(RowId::JudgmentFont) => judgment_font_anchor_visible_idx,
+                    Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
+                    Some(RowId::ComboFont) => combo_font_anchor_visible_idx,
+                    Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
+                    Some(RowId::Hide) => hide_anchor_visible_idx,
+                    _ => None,
+                });
             if let Some(anchor_idx) = anchor {
                 let (anchor_f_pos, _) = f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
                 (anchor_f_pos, true)
@@ -274,8 +276,148 @@ const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
 const PLAYER_SLOTS: usize = 2;
 const P1: usize = 0;
 const P2: usize = 1;
-const MATCH_NOTESKIN_LABEL: &str = "Same as NoteSkin";
-const NO_TAP_EXPLOSION_LABEL: &str = "None";
+
+const MATCH_NOTESKIN_LABEL: &str = "MatchNoteSkinLabel";
+const NO_TAP_EXPLOSION_LABEL: &str = "NoTapExplosionLabel";
+
+use crate::game::profile::{
+    AttackMode, BackgroundFilter, ComboColors, ComboFont, ComboMode, DataVisualizations,
+    ErrorBarTrim, HideLightType, LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator,
+    MiniIndicatorScoreType, Perspective, TargetScoreSetting, TimingWindowsOption, TurnOption,
+};
+
+/// MiniIndicator variants in row-choice order (index ↔ enum).
+const MINI_INDICATOR_VARIANTS: [MiniIndicator; 7] = [
+    MiniIndicator::None,
+    MiniIndicator::SubtractiveScoring,
+    MiniIndicator::PredictiveScoring,
+    MiniIndicator::PaceScoring,
+    MiniIndicator::RivalScoring,
+    MiniIndicator::Pacemaker,
+    MiniIndicator::StreamProg,
+];
+
+const TURN_OPTION_VARIANTS: [TurnOption; 9] = [
+    TurnOption::None,
+    TurnOption::Mirror,
+    TurnOption::Left,
+    TurnOption::Right,
+    TurnOption::LRMirror,
+    TurnOption::UDMirror,
+    TurnOption::Shuffle,
+    TurnOption::Blender,
+    TurnOption::Random,
+];
+
+const BACKGROUND_FILTER_VARIANTS: [BackgroundFilter; 4] = [
+    BackgroundFilter::Off,
+    BackgroundFilter::Dark,
+    BackgroundFilter::Darker,
+    BackgroundFilter::Darkest,
+];
+
+const PERSPECTIVE_VARIANTS: [Perspective; 5] = [
+    Perspective::Overhead,
+    Perspective::Hallway,
+    Perspective::Distant,
+    Perspective::Incoming,
+    Perspective::Space,
+];
+
+const COMBO_FONT_VARIANTS: [ComboFont; 8] = [
+    ComboFont::Wendy,
+    ComboFont::ArialRounded,
+    ComboFont::Asap,
+    ComboFont::BebasNeue,
+    ComboFont::SourceCode,
+    ComboFont::Work,
+    ComboFont::WendyCursed,
+    ComboFont::None,
+];
+
+const COMBO_COLORS_VARIANTS: [ComboColors; 5] = [
+    ComboColors::Glow,
+    ComboColors::Solid,
+    ComboColors::Rainbow,
+    ComboColors::RainbowScroll,
+    ComboColors::None,
+];
+
+const COMBO_MODE_VARIANTS: [ComboMode; 2] = [ComboMode::FullCombo, ComboMode::CurrentCombo];
+
+const DATA_VISUALIZATIONS_VARIANTS: [DataVisualizations; 3] = [
+    DataVisualizations::None,
+    DataVisualizations::TargetScoreGraph,
+    DataVisualizations::StepStatistics,
+];
+
+const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 14] = [
+    TargetScoreSetting::CMinus,
+    TargetScoreSetting::C,
+    TargetScoreSetting::CPlus,
+    TargetScoreSetting::BMinus,
+    TargetScoreSetting::B,
+    TargetScoreSetting::BPlus,
+    TargetScoreSetting::AMinus,
+    TargetScoreSetting::A,
+    TargetScoreSetting::APlus,
+    TargetScoreSetting::SMinus,
+    TargetScoreSetting::S,
+    TargetScoreSetting::SPlus,
+    TargetScoreSetting::MachineBest,
+    TargetScoreSetting::PersonalBest,
+];
+
+const LIFE_METER_TYPE_VARIANTS: [LifeMeterType; 3] = [
+    LifeMeterType::Standard,
+    LifeMeterType::Surround,
+    LifeMeterType::Vertical,
+];
+
+const ERROR_BAR_TRIM_VARIANTS: [ErrorBarTrim; 4] = [
+    ErrorBarTrim::Off,
+    ErrorBarTrim::Fantastic,
+    ErrorBarTrim::Excellent,
+    ErrorBarTrim::Great,
+];
+
+const MEASURE_COUNTER_VARIANTS: [MeasureCounter; 6] = [
+    MeasureCounter::None,
+    MeasureCounter::Eighth,
+    MeasureCounter::Twelfth,
+    MeasureCounter::Sixteenth,
+    MeasureCounter::TwentyFourth,
+    MeasureCounter::ThirtySecond,
+];
+
+const MEASURE_LINES_VARIANTS: [MeasureLines; 4] = [
+    MeasureLines::Off,
+    MeasureLines::Measure,
+    MeasureLines::Quarter,
+    MeasureLines::Eighth,
+];
+
+const TIMING_WINDOWS_VARIANTS: [TimingWindowsOption; 4] = [
+    TimingWindowsOption::None,
+    TimingWindowsOption::WayOffs,
+    TimingWindowsOption::DecentsAndWayOffs,
+    TimingWindowsOption::FantasticsAndExcellents,
+];
+
+const MINI_INDICATOR_SCORE_TYPE_VARIANTS: [MiniIndicatorScoreType; 3] = [
+    MiniIndicatorScoreType::Itg,
+    MiniIndicatorScoreType::Ex,
+    MiniIndicatorScoreType::HardEx,
+];
+
+const ATTACK_MODE_VARIANTS: [AttackMode; 3] = [AttackMode::On, AttackMode::Random, AttackMode::Off];
+
+const HIDE_LIGHT_TYPE_VARIANTS: [HideLightType; 4] = [
+    HideLightType::NoHideLights,
+    HideLightType::HideAllLights,
+    HideLightType::HideMarqueeLights,
+    HideLightType::HideBassLights,
+];
 
 #[inline(always)]
 fn active_player_indices(active: [bool; PLAYER_SLOTS]) -> impl Iterator<Item = usize> {
@@ -322,8 +464,83 @@ impl PaneTransition {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowId {
+    TypeOfSpeedMod,
+    SpeedMod,
+    Mini,
+    Perspective,
+    NoteSkin,
+    MineSkin,
+    ReceptorSkin,
+    TapExplosionSkin,
+    JudgmentFont,
+    JudgmentOffsetX,
+    JudgmentOffsetY,
+    ComboFont,
+    ComboOffsetX,
+    ComboOffsetY,
+    HoldJudgment,
+    BackgroundFilter,
+    NoteFieldOffsetX,
+    NoteFieldOffsetY,
+    VisualDelay,
+    GlobalOffsetShift,
+    MusicRate,
+    Stepchart,
+    WhatComesNext,
+    Exit,
+    // Advanced pane
+    Turn,
+    Scroll,
+    Hide,
+    LifeMeterType,
+    LifeBarOptions,
+    DataVisualizations,
+    DensityGraphBackground,
+    TargetScore,
+    ActionOnMissedTarget,
+    MiniIndicator,
+    IndicatorScoreType,
+    GameplayExtras,
+    ComboColors,
+    ComboColorMode,
+    CarryCombo,
+    JudgmentTilt,
+    JudgmentTiltIntensity,
+    JudgmentBehindArrows,
+    OffsetIndicator,
+    ErrorBar,
+    ErrorBarTrim,
+    ErrorBarOptions,
+    ErrorBarOffsetX,
+    ErrorBarOffsetY,
+    MeasureCounter,
+    MeasureCounterLookahead,
+    MeasureCounterOptions,
+    MeasureLines,
+    RescoreEarlyHits,
+    EarlyDecentWayOffOptions,
+    ResultsExtras,
+    TimingWindows,
+    FAPlusOptions,
+    CustomBlueFantasticWindow,
+    CustomBlueFantasticWindowMs,
+    // Uncommon pane
+    Insert,
+    Remove,
+    Holds,
+    Accel,
+    Effect,
+    Appearance,
+    Attacks,
+    HideLightType,
+    GameplayExtrasMore,
+}
+
 pub struct Row {
-    pub name: String,
+    pub id: RowId,
+    pub name: LookupKey,
     pub choices: Vec<String>,
     pub selected_choice_index: [usize; PLAYER_SLOTS],
     pub help: Vec<String>,
@@ -555,6 +772,41 @@ fn reference_bpm_for_song(song: &SongData, chart: Option<&ChartData>) -> f32 {
     }
 }
 
+/// Translate a difficulty index (0=Beginner..4=Challenge) to a localized display name.
+fn difficulty_display_name(index: usize) -> String {
+    let key = match index {
+        0 => "BeginnerDifficulty",
+        1 => "EasyDifficulty",
+        2 => "MediumDifficulty",
+        3 => "HardDifficulty",
+        4 => "ChallengeDifficulty",
+        _ => "EditDifficulty",
+    };
+    tr("SelectCourse", key).to_string()
+}
+
+fn music_rate_display_name(state: &State) -> String {
+    let p1_chart = resolve_p1_chart(&state.song, &state.chart_steps_index);
+    let is_random = p1_chart.is_some_and(|c| {
+        matches!(
+            c.display_bpm,
+            Some(crate::game::chart::ChartDisplayBpm::Random)
+        )
+    });
+    let bpm_str = if is_random {
+        "???".to_string()
+    } else {
+        let reference_bpm = reference_bpm_for_song(&state.song, p1_chart);
+        let effective_bpm = f64::from(reference_bpm) * f64::from(state.music_rate);
+        if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
+            format!("{}", effective_bpm.round() as i32)
+        } else {
+            format!("{effective_bpm:.1}")
+        }
+    };
+    tr_fmt("PlayerOptions", "MusicRate", &[("bpm", &bpm_str)]).replace("\\n", "\n")
+}
+
 #[inline(always)]
 fn display_bpm_pair_for_options(
     song: &SongData,
@@ -708,7 +960,7 @@ fn discover_noteskin_names() -> Vec<String> {
 
 fn build_noteskin_override_choices(noteskin_names: &[String]) -> Vec<String> {
     let mut choices = Vec::with_capacity(noteskin_names.len() + 1);
-    choices.push(MATCH_NOTESKIN_LABEL.to_string());
+    choices.push(tr("PlayerOptions", "MatchNoteSkinLabel").to_string());
     if noteskin_names.is_empty() {
         choices.push(crate::game::profile::NoteSkin::DEFAULT_NAME.to_string());
     } else {
@@ -719,8 +971,8 @@ fn build_noteskin_override_choices(noteskin_names: &[String]) -> Vec<String> {
 
 fn build_tap_explosion_noteskin_choices(noteskin_names: &[String]) -> Vec<String> {
     let mut choices = Vec::with_capacity(noteskin_names.len() + 2);
-    choices.push(MATCH_NOTESKIN_LABEL.to_string());
-    choices.push(NO_TAP_EXPLOSION_LABEL.to_string());
+    choices.push(tr("PlayerOptions", "MatchNoteSkinLabel").to_string());
+    choices.push(tr("PlayerOptions", "NoTapExplosionLabel").to_string());
     if noteskin_names.is_empty() {
         choices.push(crate::game::profile::NoteSkin::DEFAULT_NAME.to_string());
     } else {
@@ -878,33 +1130,33 @@ fn sync_noteskin_previews_for_player(state: &mut State, player_idx: usize) {
 }
 
 #[inline(always)]
-fn choose_different_screen_label(return_screen: Screen) -> &'static str {
+fn choose_different_screen_label(return_screen: Screen) -> String {
     match return_screen {
-        Screen::SelectCourse => "Choose a Different Course",
-        _ => "Choose a Different Song",
+        Screen::SelectCourse => tr("PlayerOptions", "ChooseDifferentCourse").to_string(),
+        _ => tr("PlayerOptions", "ChooseDifferentSong").to_string(),
     }
 }
 
 fn what_comes_next_choices(pane: OptionsPane, return_screen: Screen) -> Vec<String> {
-    let choose_different = choose_different_screen_label(return_screen).to_string();
+    let choose_different = choose_different_screen_label(return_screen);
     match pane {
         OptionsPane::Main => vec![
-            "Gameplay".to_string(),
+            tr("PlayerOptions", "WhatComesNextGameplay").to_string(),
             choose_different,
-            "Advanced Modifiers".to_string(),
-            "Uncommon Modifiers".to_string(),
+            tr("PlayerOptions", "WhatComesNextAdvancedModifiers").to_string(),
+            tr("PlayerOptions", "WhatComesNextUncommonModifiers").to_string(),
         ],
         OptionsPane::Advanced => vec![
-            "Gameplay".to_string(),
+            tr("PlayerOptions", "WhatComesNextGameplay").to_string(),
             choose_different,
-            "Main Modifiers".to_string(),
-            "Uncommon Modifiers".to_string(),
+            tr("PlayerOptions", "WhatComesNextMainModifiers").to_string(),
+            tr("PlayerOptions", "WhatComesNextUncommonModifiers").to_string(),
         ],
         OptionsPane::Uncommon => vec![
-            "Gameplay".to_string(),
+            tr("PlayerOptions", "WhatComesNextGameplay").to_string(),
             choose_different,
-            "Main Modifiers".to_string(),
-            "Advanced Modifiers".to_string(),
+            tr("PlayerOptions", "WhatComesNextMainModifiers").to_string(),
+            tr("PlayerOptions", "WhatComesNextAdvancedModifiers").to_string(),
         ],
     }
 }
@@ -947,7 +1199,7 @@ fn build_main_rows(
                     c.chart_type.eq_ignore_ascii_case(target_chart_type)
                         && c.difficulty.eq_ignore_ascii_case(file_name)
                 }) {
-                    let display_name = crate::engine::present::color::DISPLAY_DIFFICULTY_NAMES[i];
+                    let display_name = difficulty_display_name(i);
                     stepchart_choices.push(format!("{} {}", display_name, chart.meter));
                     stepchart_choice_indices.push(i);
                 }
@@ -959,16 +1211,30 @@ fn build_main_rows(
             {
                 let desc = chart.description.trim();
                 if desc.is_empty() {
-                    stepchart_choices.push(format!("Edit {}", chart.meter));
+                    stepchart_choices.push(
+                        tr_fmt(
+                            "PlayerOptions",
+                            "EditChartMeter",
+                            &[("meter", &chart.meter.to_string())],
+                        )
+                        .to_string(),
+                    );
                 } else {
-                    stepchart_choices.push(format!("Edit {} {}", desc, chart.meter));
+                    stepchart_choices.push(
+                        tr_fmt(
+                            "PlayerOptions",
+                            "EditChartDescMeter",
+                            &[("desc", desc), ("meter", &chart.meter.to_string())],
+                        )
+                        .to_string(),
+                    );
                 }
                 stepchart_choice_indices
                     .push(crate::engine::present::color::FILE_DIFFICULTY_NAMES.len() + i);
             }
             // Fallback if none found (defensive; SelectMusic filters songs by play style).
             if stepchart_choices.is_empty() {
-                stepchart_choices.push("(Current)".to_string());
+                stepchart_choices.push(tr("PlayerOptions", "CurrentStepchartLabel").to_string());
                 let base_pref = preferred_difficulty_index[session_persisted_player_idx()].min(
                     crate::engine::present::color::FILE_DIFFICULTY_NAMES
                         .len()
@@ -1002,11 +1268,12 @@ fn build_main_rows(
         };
     vec![
         Row {
-            name: "Type of Speed Mod".to_string(),
+            id: RowId::TypeOfSpeedMod,
+            name: lookup_key("PlayerOptions", "TypeOfSpeedMod"),
             choices: vec![
-                "X (multiplier)".to_string(),
-                "C (constant)".to_string(),
-                "M (maximum)".to_string(),
+                tr("PlayerOptions", "SpeedModTypeX").to_string(),
+                tr("PlayerOptions", "SpeedModTypeC").to_string(),
+                tr("PlayerOptions", "SpeedModTypeM").to_string(),
             ],
             selected_choice_index: [match speed_mod.mod_type.as_str() {
                 "X" => 0,
@@ -1014,238 +1281,288 @@ fn build_main_rows(
                 "M" => 2,
                 _ => 1, // Default to C
             }; PLAYER_SLOTS],
-            help: vec!["Change the way arrows react to changing BPMs.".to_string()],
+            help: tr("PlayerOptionsHelp", "TypeOfSpeedModHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Speed Mod".to_string(),
+            id: RowId::SpeedMod,
+            name: lookup_key("PlayerOptions", "SpeedMod"),
             choices: vec![speed_mod_value_str], // Display only the current value
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Adjust the speed at which arrows travel toward the targets.".to_string()],
+            help: tr("PlayerOptionsHelp", "SpeedModHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Mini".to_string(),
+            id: RowId::Mini,
+            name: lookup_key("PlayerOptions", "Mini"),
             choices: (-100..=150).map(|v| format!("{v}%")).collect(),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Change the size of your arrows.".to_string()],
+            help: tr("PlayerOptionsHelp", "MiniHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Perspective".to_string(),
+            id: RowId::Perspective,
+            name: lookup_key("PlayerOptions", "Perspective"),
             choices: vec![
-                "Overhead".to_string(),
-                "Hallway".to_string(),
-                "Distant".to_string(),
-                "Incoming".to_string(),
-                "Space".to_string(),
+                tr("PlayerOptions", "PerspectiveOverhead").to_string(),
+                tr("PlayerOptions", "PerspectiveHallway").to_string(),
+                tr("PlayerOptions", "PerspectiveDistant").to_string(),
+                tr("PlayerOptions", "PerspectiveIncoming").to_string(),
+                tr("PlayerOptions", "PerspectiveSpace").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Change the viewing angle of the arrow stream.".to_string()],
+            help: tr("PlayerOptionsHelp", "PerspectiveHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "NoteSkin".to_string(),
+            id: RowId::NoteSkin,
+            name: lookup_key("PlayerOptions", "NoteSkin"),
             choices: if noteskin_names.is_empty() {
                 vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()]
             } else {
                 noteskin_names.to_vec()
             },
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Change the appearance of the arrows.".to_string()],
+            help: tr("PlayerOptionsHelp", "NoteSkinHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "MineSkin".to_string(),
+            id: RowId::MineSkin,
+            name: lookup_key("PlayerOptions", "MineSkin"),
             choices: build_noteskin_override_choices(noteskin_names),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Change mine graphics independently from the main noteskin.".to_string()],
+            help: tr("PlayerOptionsHelp", "MineSkinHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "ReceptorSkin".to_string(),
+            id: RowId::ReceptorSkin,
+            name: lookup_key("PlayerOptions", "ReceptorSkin"),
             choices: build_noteskin_override_choices(noteskin_names),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Change receptor graphics independently from the main noteskin.".to_string(),
-            ],
+            help: tr("PlayerOptionsHelp", "ReceptorSkinHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "TapExplosionSkin".to_string(),
+            id: RowId::TapExplosionSkin,
+            name: lookup_key("PlayerOptions", "TapExplosionSkin"),
             choices: build_tap_explosion_noteskin_choices(noteskin_names),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Change tap explosion graphics independently from the main noteskin.".to_string(),
-            ],
+            help: tr("PlayerOptionsHelp", "TapExplosionSkinHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Judgment Font".to_string(),
+            id: RowId::JudgmentFont,
+            name: lookup_key("PlayerOptions", "JudgmentFont"),
             choices: assets::judgment_texture_choices()
                 .iter()
                 .map(|choice| choice.label.clone())
                 .collect(),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Pick your judgment font.".to_string()],
+            help: tr("PlayerOptionsHelp", "JudgmentFontHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Judgment Offset X".to_string(),
+            id: RowId::JudgmentOffsetX,
+            name: lookup_key("PlayerOptions", "JudgmentOffsetX"),
             choices: hud_offset_choices(),
             selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: vec!["Adjust the horizontal position of the judgment display.".to_string()],
+            help: tr("PlayerOptionsHelp", "JudgmentOffsetXHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Judgment Offset Y".to_string(),
+            id: RowId::JudgmentOffsetY,
+            name: lookup_key("PlayerOptions", "JudgmentOffsetY"),
             choices: hud_offset_choices(),
             selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: vec!["Adjust the vertical position of the judgment display.".to_string()],
+            help: tr("PlayerOptionsHelp", "JudgmentOffsetYHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Combo Font".to_string(),
+            id: RowId::ComboFont,
+            name: lookup_key("PlayerOptions", "ComboFont"),
             choices: vec![
-                "Wendy".to_string(),
-                "Arial Rounded".to_string(),
-                "Asap".to_string(),
-                "Bebas Neue".to_string(),
-                "Source Code".to_string(),
-                "Work".to_string(),
-                "Wendy (Cursed)".to_string(),
-                "None".to_string(),
+                tr("PlayerOptions", "ComboFontWendy").to_string(),
+                tr("PlayerOptions", "ComboFontArialRounded").to_string(),
+                tr("PlayerOptions", "ComboFontAsap").to_string(),
+                tr("PlayerOptions", "ComboFontBebasNeue").to_string(),
+                tr("PlayerOptions", "ComboFontSourceCode").to_string(),
+                tr("PlayerOptions", "ComboFontWork").to_string(),
+                tr("PlayerOptions", "ComboFontWendyCursed").to_string(),
+                tr("PlayerOptions", "ComboFontNone").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Choose the font to count your combo. This font will also be used".to_string(),
-                "for the Measure Counter if that is enabled.".to_string(),
-            ],
+            help: tr("PlayerOptionsHelp", "ComboFontHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Combo Offset X".to_string(),
+            id: RowId::ComboOffsetX,
+            name: lookup_key("PlayerOptions", "ComboOffsetX"),
             choices: hud_offset_choices(),
             selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: vec!["Adjust the horizontal position of the combo counter.".to_string()],
+            help: tr("PlayerOptionsHelp", "ComboOffsetXHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Combo Offset Y".to_string(),
+            id: RowId::ComboOffsetY,
+            name: lookup_key("PlayerOptions", "ComboOffsetY"),
             choices: hud_offset_choices(),
             selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: vec!["Adjust the vertical position of the combo counter.".to_string()],
+            help: tr("PlayerOptionsHelp", "ComboOffsetYHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Hold Judgment".to_string(),
+            id: RowId::HoldJudgment,
+            name: lookup_key("PlayerOptions", "HoldJudgment"),
             choices: assets::hold_judgment_texture_choices()
                 .iter()
                 .map(|choice| choice.label.clone())
                 .collect(),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Change the judgment graphics displayed for hold notes.".to_string()],
+            help: tr("PlayerOptionsHelp", "HoldJudgmentHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Background Filter".to_string(),
+            id: RowId::BackgroundFilter,
+            name: lookup_key("PlayerOptions", "BackgroundFilter"),
             choices: vec![
-                "Off".to_string(),
-                "Dark".to_string(),
-                "Darker".to_string(),
-                "Darkest".to_string(),
+                tr("PlayerOptions", "BackgroundFilterOff").to_string(),
+                tr("PlayerOptions", "BackgroundFilterDark").to_string(),
+                tr("PlayerOptions", "BackgroundFilterDarker").to_string(),
+                tr("PlayerOptions", "BackgroundFilterDarkest").to_string(),
             ],
             selected_choice_index: [3; PLAYER_SLOTS],
-            help: vec![
-                "Darken the underside of the playing field.".to_string(),
-                "This will partially obscure background art.".to_string(),
-            ],
+            help: tr("PlayerOptionsHelp", "BackgroundFilterHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "NoteField Offset X".to_string(),
+            id: RowId::NoteFieldOffsetX,
+            name: lookup_key("PlayerOptions", "NoteFieldOffsetX"),
             choices: (0..=50).map(|v| v.to_string()).collect(),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Adjust the horizontal position of the notefield (relative to the".to_string(),
-                "center).".to_string(),
-            ],
+            help: tr("PlayerOptionsHelp", "NoteFieldOffsetXHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "NoteField Offset Y".to_string(),
+            id: RowId::NoteFieldOffsetY,
+            name: lookup_key("PlayerOptions", "NoteFieldOffsetY"),
             choices: (-50..=50).map(|v| v.to_string()).collect(),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Adjust the vertical position of the notefield.".to_string()],
+            help: tr("PlayerOptionsHelp", "NoteFieldOffsetYHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Visual Delay".to_string(),
+            id: RowId::VisualDelay,
+            name: lookup_key("PlayerOptions", "VisualDelay"),
             choices: (-100..=100).map(|v| format!("{v}ms")).collect(),
             selected_choice_index: [100; PLAYER_SLOTS],
-            help: vec![
-                "Player specific visual delay. Negative values shifts the arrows".to_string(),
-                "upwards, while positive values move them down.".to_string(),
-            ],
+            help: tr("PlayerOptionsHelp", "VisualDelayHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: ROW_GLOBAL_OFFSET_SHIFT.to_string(),
+            id: RowId::GlobalOffsetShift,
+            name: lookup_key("PlayerOptions", "GlobalOffsetShift"),
             choices: (-100..=100).map(|v| format!("{v}ms")).collect(),
             selected_choice_index: [100; PLAYER_SLOTS],
-            help: vec![
-                "Player specific timing shift added on top of the machine global".to_string(),
-                "offset. Use this for controller-specific latency differences.".to_string(),
-            ],
+            help: tr("PlayerOptionsHelp", "GlobalOffsetShiftHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: {
-                let p1_chart = resolve_p1_chart(song, &chart_steps_index);
-                let is_random = p1_chart.is_some_and(|c| {
-                    matches!(
-                        c.display_bpm,
-                        Some(crate::game::chart::ChartDisplayBpm::Random)
-                    )
-                });
-                let bpm_str = if is_random {
-                    "???".to_string()
-                } else {
-                    let reference_bpm = reference_bpm_for_song(song, p1_chart);
-                    let effective_bpm = f64::from(reference_bpm) * f64::from(session_music_rate);
-                    if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
-                        format!("{}", effective_bpm.round() as i32)
-                    } else {
-                        format!("{effective_bpm:.1}")
-                    }
-                };
-                format!("Music Rate\nbpm: {bpm_str}")
-            },
+            id: RowId::MusicRate,
+            name: lookup_key("PlayerOptions", "MusicRate"),
             choices: vec![fmt_music_rate(session_music_rate.clamp(0.5, 3.0))],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Change the native speed of the music itself.".to_string()],
+            help: tr("PlayerOptionsHelp", "MusicRateHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Stepchart".to_string(),
+            id: RowId::Stepchart,
+            name: lookup_key("PlayerOptions", "Stepchart"),
             choices: stepchart_choices,
             selected_choice_index: initial_stepchart_choice_index,
-            help: vec!["Choose the stepchart you wish to play.".to_string()],
+            help: tr("PlayerOptionsHelp", "StepchartHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: Some(stepchart_choice_indices),
         },
         Row {
-            name: "What comes next?".to_string(),
+            id: RowId::WhatComesNext,
+            name: lookup_key("PlayerOptions", "WhatComesNext"),
             choices: what_comes_next_choices(OptionsPane::Main, return_screen),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Go back and choose a different chart or change additional".to_string(),
-                "modifiers.".to_string(),
-            ],
+            help: tr("PlayerOptionsHelp", "WhatComesNextHelp")
+                .split("\\n")
+                .map(|s| s.to_string())
+                .collect(),
             choice_difficulty_indices: None,
         },
         Row {
-            name: String::new(),
-            choices: vec!["Exit".to_string()],
+            id: RowId::Exit,
+            name: lookup_key("Common", "Exit"),
+            choices: vec![tr("Common", "Exit").to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![String::new()],
             choice_difficulty_indices: None,
@@ -1255,434 +1572,462 @@ fn build_main_rows(
 
 fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
     let mut gameplay_extras_choices = vec![
-        "Flash Column for Miss".to_string(),
-        "Density Graph at Top".to_string(),
-        "Column Cues".to_string(),
+        tr("PlayerOptions", "GameplayExtrasFlashColumnForMiss").to_string(),
+        tr("PlayerOptions", "GameplayExtrasDensityGraphAtTop").to_string(),
+        tr("PlayerOptions", "GameplayExtrasColumnCues").to_string(),
     ];
     if crate::game::scores::is_gs_get_scores_service_allowed() {
-        gameplay_extras_choices.push("Display Scorebox".to_string());
+        gameplay_extras_choices
+            .push(tr("PlayerOptions", "GameplayExtrasDisplayScorebox").to_string());
     }
 
     vec![
         Row {
-            name: "Turn".to_string(),
+            id: RowId::Turn,
+            name: lookup_key("PlayerOptions", "Turn"),
             choices: vec![
-                "None".to_string(),
-                "Mirror".to_string(),
-                "Left".to_string(),
-                "Right".to_string(),
-                "LRMirror".to_string(),
-                "UDMirror".to_string(),
-                "Shuffle".to_string(),
-                "Blender".to_string(),
-                "Random".to_string(),
+                tr("PlayerOptions", "TurnNone").to_string(),
+                tr("PlayerOptions", "TurnMirror").to_string(),
+                tr("PlayerOptions", "TurnLeft").to_string(),
+                tr("PlayerOptions", "TurnRight").to_string(),
+                tr("PlayerOptions", "TurnLRMirror").to_string(),
+                tr("PlayerOptions", "TurnUDMirror").to_string(),
+                tr("PlayerOptions", "TurnShuffle").to_string(),
+                tr("PlayerOptions", "TurnBlender").to_string(),
+                tr("PlayerOptions", "TurnRandom").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Apply simple transforms to the arrow directions.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "TurnHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Scroll".to_string(),
+            id: RowId::Scroll,
+            name: lookup_key("PlayerOptions", "Scroll"),
             choices: vec![
-                "Reverse".to_string(),
-                "Split".to_string(),
-                "Alternate".to_string(),
-                "Cross".to_string(),
-                "Centered".to_string(),
+                tr("PlayerOptions", "ScrollReverse").to_string(),
+                tr("PlayerOptions", "ScrollSplit").to_string(),
+                tr("PlayerOptions", "ScrollAlternate").to_string(),
+                tr("PlayerOptions", "ScrollCross").to_string(),
+                tr("PlayerOptions", "ScrollCentered").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Change how notes scroll relative to the receptors.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "ScrollHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Hide".to_string(),
+            id: RowId::Hide,
+            name: lookup_key("PlayerOptions", "Hide"),
             choices: vec![
-                "Targets".to_string(),
-                "Background".to_string(),
-                "Combo".to_string(),
-                "Life".to_string(),
-                "Score".to_string(),
-                "Danger".to_string(),
-                "Combo Explosions".to_string(),
+                tr("PlayerOptions", "HideTargets").to_string(),
+                tr("PlayerOptions", "HideBackground").to_string(),
+                tr("PlayerOptions", "HideCombo").to_string(),
+                tr("PlayerOptions", "HideLife").to_string(),
+                tr("PlayerOptions", "HideScore").to_string(),
+                tr("PlayerOptions", "HideDanger").to_string(),
+                tr("PlayerOptions", "HideComboExplosions").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Hide parts of the gameplay UI.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "HideHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "LifeMeter Type".to_string(),
+            id: RowId::LifeMeterType,
+            name: lookup_key("PlayerOptions", "LifeMeterType"),
             choices: vec![
-                "Standard".to_string(),
-                "Surround".to_string(),
-                "Vertical".to_string(),
+                tr("PlayerOptions", "LifeMeterTypeStandard").to_string(),
+                tr("PlayerOptions", "LifeMeterTypeSurround").to_string(),
+                tr("PlayerOptions", "LifeMeterTypeVertical").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Change the style of the lifebar.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "LifeMeterTypeHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Life Bar Options".to_string(),
+            id: RowId::LifeBarOptions,
+            name: lookup_key("PlayerOptions", "LifeBarOptions"),
             choices: vec![
-                "Rainbow Max".to_string(),
-                "Responsive Colors".to_string(),
-                "Show Life Percentage".to_string(),
+                tr("PlayerOptions", "LifeBarOptionsRainbowMax").to_string(),
+                tr("PlayerOptions", "LifeBarOptionsResponsiveColors").to_string(),
+                tr("PlayerOptions", "LifeBarOptionsShowLifePercentage").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Adjust the aesthetics of the lifebar display.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "LifeBarOptionsHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Data Visualizations".to_string(),
+            id: RowId::DataVisualizations,
+            name: lookup_key("PlayerOptions", "DataVisualizations"),
             choices: vec![
-                "None".to_string(),
-                "Target Score Graph".to_string(),
-                "Step Statistics".to_string(),
+                tr("PlayerOptions", "DataVisualizationsNone").to_string(),
+                tr("PlayerOptions", "DataVisualizationsTargetScoreGraph").to_string(),
+                tr("PlayerOptions", "DataVisualizationsStepStatistics").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Show additional graphs during gameplay and evaluation.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "DataVisualizationsHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Density Graph Background".to_string(),
-            choices: vec!["Solid".to_string(), "Transparent".to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Choose solid or transparent gameplay density graph background.".to_string(),
+            id: RowId::DensityGraphBackground,
+            name: lookup_key("PlayerOptions", "DensityGraphBackground"),
+            choices: vec![
+                tr("PlayerOptions", "DensityGraphBackgroundSolid").to_string(),
+                tr("PlayerOptions", "DensityGraphBackgroundTransparent").to_string(),
             ],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![tr("PlayerOptionsHelp", "DensityGraphBackgroundHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Target Score".to_string(),
+            id: RowId::TargetScore,
+            name: lookup_key("PlayerOptions", "TargetScore"),
             choices: vec![
-                "C-".to_string(),
-                "C".to_string(),
-                "C+".to_string(),
-                "B-".to_string(),
-                "B".to_string(),
-                "B+".to_string(),
-                "A-".to_string(),
-                "A".to_string(),
-                "A+".to_string(),
-                "S-".to_string(),
-                "S".to_string(),
-                "S+".to_string(),
-                "Machine Best".to_string(),
-                "Personal Best".to_string(),
+                tr("PlayerOptions", "TargetScoreCMinus").to_string(),
+                tr("PlayerOptions", "TargetScoreC").to_string(),
+                tr("PlayerOptions", "TargetScoreCPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreBMinus").to_string(),
+                tr("PlayerOptions", "TargetScoreB").to_string(),
+                tr("PlayerOptions", "TargetScoreBPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreAMinus").to_string(),
+                tr("PlayerOptions", "TargetScoreA").to_string(),
+                tr("PlayerOptions", "TargetScoreAPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreSMinus").to_string(),
+                tr("PlayerOptions", "TargetScoreS").to_string(),
+                tr("PlayerOptions", "TargetScoreSPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreMachineBest").to_string(),
+                tr("PlayerOptions", "TargetScorePersonalBest").to_string(),
             ],
             selected_choice_index: [10; PLAYER_SLOTS], // S by default
-            help: vec!["Choose a grade or score to chase.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "TargetScoreHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Action On Missed Target".to_string(),
+            id: RowId::ActionOnMissedTarget,
+            name: lookup_key("PlayerOptions", "TargetScoreMissPolicy"),
             choices: vec![
-                "Nothing".to_string(),
-                "Fail".to_string(),
-                "Restart Song".to_string(),
+                tr("PlayerOptions", "TargetScoreMissPolicyNothing").to_string(),
+                tr("PlayerOptions", "TargetScoreMissPolicyFail").to_string(),
+                tr("PlayerOptions", "TargetScoreMissPolicyRestartSong").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Decide what happens if you fall behind your target score.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "TargetScoreMissPolicyHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Mini Indicator".to_string(),
+            id: RowId::MiniIndicator,
+            name: lookup_key("PlayerOptions", "MiniIndicator"),
             choices: vec![
-                "None".to_string(),
-                "Subtractive Scoring".to_string(),
-                "Predictive Scoring".to_string(),
-                "Pace Scoring".to_string(),
-                "Rival Scoring".to_string(),
-                "Pacemaker".to_string(),
-                "Stream Progress".to_string(),
+                tr("PlayerOptions", "MiniIndicatorNone").to_string(),
+                tr("PlayerOptions", "MiniIndicatorSubtractiveScoring").to_string(),
+                tr("PlayerOptions", "MiniIndicatorPredictiveScoring").to_string(),
+                tr("PlayerOptions", "MiniIndicatorPaceScoring").to_string(),
+                tr("PlayerOptions", "MiniIndicatorRivalScoring").to_string(),
+                tr("PlayerOptions", "MiniIndicatorPacemaker").to_string(),
+                tr("PlayerOptions", "MiniIndicatorStreamProg").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Display subtractive, predictive, paced, rival, or stream-progress".to_string(),
-                "mini indicator on-screen.".to_string(),
-            ],
+            help: vec![tr("PlayerOptionsHelp", "MiniIndicatorHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: ROW_INDICATOR_SCORE_TYPE.to_string(),
-            choices: vec!["ITG".to_string(), "EX".to_string(), "H.EX".to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Choose which score formula the mini indicator tracks:".to_string(),
-                "ITG, EX (FA+), or H.EX (Hard EX).".to_string(),
+            id: RowId::IndicatorScoreType,
+            name: lookup_key("PlayerOptions", "IndicatorScoreType"),
+            choices: vec![
+                tr("PlayerOptions", "IndicatorScoreTypeITG").to_string(),
+                tr("PlayerOptions", "IndicatorScoreTypeEX").to_string(),
+                tr("PlayerOptions", "IndicatorScoreTypeHEX").to_string(),
             ],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![tr("PlayerOptionsHelp", "IndicatorScoreTypeHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Gameplay Extras".to_string(),
+            id: RowId::GameplayExtras,
+            name: lookup_key("PlayerOptions", "GameplayExtras"),
             choices: gameplay_extras_choices,
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Extra feedback helpers shown during gameplay.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "GameplayExtrasHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Combo Colors".to_string(),
+            id: RowId::ComboColors,
+            name: lookup_key("PlayerOptions", "ComboColors"),
             choices: vec![
-                "Glow".to_string(),
-                "Solid".to_string(),
-                "Rainbow".to_string(),
-                "RainbowScroll".to_string(),
-                "None".to_string(),
+                tr("PlayerOptions", "ComboColorsGlow").to_string(),
+                tr("PlayerOptions", "ComboColorsSolid").to_string(),
+                tr("PlayerOptions", "ComboColorsRainbow").to_string(),
+                tr("PlayerOptions", "ComboColorsRainbowScroll").to_string(),
+                tr("PlayerOptions", "ComboColorsNone").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Choose whether to show combo color by glowing, solid color, rainbow,".to_string(),
-                "or none.".to_string(),
+            help: vec![tr("PlayerOptionsHelp", "ComboColorsHelp").to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            id: RowId::ComboColorMode,
+            name: lookup_key("PlayerOptions", "ComboColorMode"),
+            choices: vec![
+                tr("PlayerOptions", "ComboColorModeFullCombo").to_string(),
+                tr("PlayerOptions", "ComboColorModeCurrentCombo").to_string(),
             ],
-            choice_difficulty_indices: None,
-        },
-        Row {
-            name: "Combo Color Mode".to_string(),
-            choices: vec!["FullCombo".to_string(), "CurrentCombo".to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Choose whether combo colors use full combo or current combo.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "ComboColorModeHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: ROW_CARRY_COMBO.to_string(),
-            choices: vec!["No".to_string(), "Yes".to_string()],
+            id: RowId::CarryCombo,
+            name: lookup_key("PlayerOptions", "CarryCombo"),
+            choices: vec![
+                tr("PlayerOptions", "CarryComboNo").to_string(),
+                tr("PlayerOptions", "CarryComboYes").to_string(),
+            ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Carry current combo into the next song.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "CarryComboHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Judgment Tilt".to_string(),
-            choices: vec!["No".to_string(), "Yes".to_string()],
+            id: RowId::JudgmentTilt,
+            name: lookup_key("PlayerOptions", "JudgmentTilt"),
+            choices: vec![
+                tr("PlayerOptions", "JudgmentTiltNo").to_string(),
+                tr("PlayerOptions", "JudgmentTiltYes").to_string(),
+            ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Toggle left/right tilt for judgment sprites.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "JudgmentTiltHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Judgment Tilt Intensity".to_string(),
+            id: RowId::JudgmentTiltIntensity,
+            name: lookup_key("PlayerOptions", "JudgmentTiltIntensity"),
             choices: tilt_intensity_choices(),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["How strongly to tilt judgments left/right.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "JudgmentTiltIntensityHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: ROW_JUDGMENT_BACK.to_string(),
-            choices: vec!["Off".to_string(), "On".to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Render judgment text, offset indicator, and error bar behind arrows.".to_string(),
-            ],
-            choice_difficulty_indices: None,
-        },
-        Row {
-            name: "Offset Indicator".to_string(),
-            choices: vec!["Off".to_string(), "On".to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Show zmod-style per-tap offset text (e.g. -4.52ms).".to_string()],
-            choice_difficulty_indices: None,
-        },
-        Row {
-            name: "Error Bar".to_string(),
+            id: RowId::JudgmentBehindArrows,
+            name: lookup_key("PlayerOptions", "JudgmentBehindArrows"),
             choices: vec![
-                "Colorful".to_string(),
-                "Monochrome".to_string(),
-                "Text".to_string(),
-                "Highlight".to_string(),
-                "Average".to_string(),
+                tr("PlayerOptions", "JudgmentBehindArrowsOff").to_string(),
+                tr("PlayerOptions", "JudgmentBehindArrowsOn").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Toggle Colorful/Monochrome bars and Text early/late indicator.".to_string(),
-            ],
+            help: vec![tr("PlayerOptionsHelp", "JudgmentBehindArrowsHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Error Bar Trim".to_string(),
+            id: RowId::OffsetIndicator,
+            name: lookup_key("PlayerOptions", "OffsetIndicator"),
             choices: vec![
-                "Off".to_string(),
-                "Fantastic".to_string(),
-                "Excellent".to_string(),
-                "Great".to_string(),
+                tr("PlayerOptions", "OffsetIndicatorOff").to_string(),
+                tr("PlayerOptions", "OffsetIndicatorOn").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Set the worst timing window that the error bar will show.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "OffsetIndicatorHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Error Bar Options".to_string(),
-            choices: vec!["Move Up".to_string(), "Multi-Tick".to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Adjust where the error bar appears and whether it shows multiple tick marks."
-                    .to_string(),
+            id: RowId::ErrorBar,
+            name: lookup_key("PlayerOptions", "ErrorBar"),
+            choices: vec![
+                tr("PlayerOptions", "ErrorBarColorful").to_string(),
+                tr("PlayerOptions", "ErrorBarMonochrome").to_string(),
+                tr("PlayerOptions", "ErrorBarText").to_string(),
+                tr("PlayerOptions", "ErrorBarHighlight").to_string(),
+                tr("PlayerOptions", "ErrorBarAverage").to_string(),
             ],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![tr("PlayerOptionsHelp", "ErrorBarHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Error Bar Offset X".to_string(),
+            id: RowId::ErrorBarTrim,
+            name: lookup_key("PlayerOptions", "ErrorBarTrim"),
+            choices: vec![
+                tr("PlayerOptions", "ErrorBarTrimOff").to_string(),
+                tr("PlayerOptions", "ErrorBarTrimFantastic").to_string(),
+                tr("PlayerOptions", "ErrorBarTrimExcellent").to_string(),
+                tr("PlayerOptions", "ErrorBarTrimGreat").to_string(),
+            ],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![tr("PlayerOptionsHelp", "ErrorBarTrimHelp").to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            id: RowId::ErrorBarOptions,
+            name: lookup_key("PlayerOptions", "ErrorBarOptions"),
+            choices: vec![
+                tr("PlayerOptions", "ErrorBarOptionsMoveUp").to_string(),
+                tr("PlayerOptions", "ErrorBarOptionsMultiTick").to_string(),
+            ],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![tr("PlayerOptionsHelp", "ErrorBarOptionsHelp").to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            id: RowId::ErrorBarOffsetX,
+            name: lookup_key("PlayerOptions", "ErrorBarOffsetX"),
             choices: hud_offset_choices(),
             selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: vec!["Adjust the horizontal position of the error bar.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "ErrorBarOffsetXHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Error Bar Offset Y".to_string(),
+            id: RowId::ErrorBarOffsetY,
+            name: lookup_key("PlayerOptions", "ErrorBarOffsetY"),
             choices: hud_offset_choices(),
             selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-            help: vec!["Adjust the vertical position of the error bar.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "ErrorBarOffsetYHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Measure Counter".to_string(),
+            id: RowId::MeasureCounter,
+            name: lookup_key("PlayerOptions", "MeasureCounter"),
             choices: vec![
-                "None".to_string(),
-                "8th".to_string(),
-                "12th".to_string(),
-                "16th".to_string(),
-                "24th".to_string(),
-                "32nd".to_string(),
+                tr("PlayerOptions", "MeasureCounterNone").to_string(),
+                tr("PlayerOptions", "MeasureCounter8th").to_string(),
+                tr("PlayerOptions", "MeasureCounter12th").to_string(),
+                tr("PlayerOptions", "MeasureCounter16th").to_string(),
+                tr("PlayerOptions", "MeasureCounter24th").to_string(),
+                tr("PlayerOptions", "MeasureCounter32nd").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Display a count of how long you have been streaming a specific type of note."
-                    .to_string(),
-            ],
+            help: vec![tr("PlayerOptionsHelp", "MeasureCounterHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Measure Counter Lookahead".to_string(),
+            id: RowId::MeasureCounterLookahead,
+            name: lookup_key("PlayerOptions", "MeasureCounterLookahead"),
             choices: vec![
-                "0".to_string(),
-                "1".to_string(),
-                "2".to_string(),
-                "3".to_string(),
-                "4".to_string(),
+                tr("PlayerOptions", "MeasureCounterLookahead0").to_string(),
+                tr("PlayerOptions", "MeasureCounterLookahead1").to_string(),
+                tr("PlayerOptions", "MeasureCounterLookahead2").to_string(),
+                tr("PlayerOptions", "MeasureCounterLookahead3").to_string(),
+                tr("PlayerOptions", "MeasureCounterLookahead4").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Set how many upcoming stream/break segments are displayed by the measure counter."
-                    .to_string(),
-            ],
+            help: vec![tr("PlayerOptionsHelp", "MeasureCounterLookaheadHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Measure Counter Options".to_string(),
+            id: RowId::MeasureCounterOptions,
+            name: lookup_key("PlayerOptions", "MeasureCounterOptions"),
             choices: vec![
-                "Move Left".to_string(),
-                "Move Up".to_string(),
-                "Vertical Lookahead".to_string(),
-                "Broken Run Total".to_string(),
-                "Run Timer".to_string(),
+                tr("PlayerOptions", "MeasureCounterOptionsMoveLeft").to_string(),
+                tr("PlayerOptions", "MeasureCounterOptionsMoveUp").to_string(),
+                tr("PlayerOptions", "MeasureCounterOptionsVerticalLookahead").to_string(),
+                tr("PlayerOptions", "MeasureCounterOptionsBrokenRunTotal").to_string(),
+                tr("PlayerOptions", "MeasureCounterOptionsRunTimer").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Change how the Measure Counter is positioned and which extra displays are enabled."
-                    .to_string(),
-            ],
+            help: vec![tr("PlayerOptionsHelp", "MeasureCounterOptionsHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Measure Lines".to_string(),
+            id: RowId::MeasureLines,
+            name: lookup_key("PlayerOptions", "MeasureLines"),
             choices: vec![
-                "Off".to_string(),
-                "Measure".to_string(),
-                "Quarter".to_string(),
-                "Eighth".to_string(),
+                tr("PlayerOptions", "MeasureLinesOff").to_string(),
+                tr("PlayerOptions", "MeasureLinesMeasure").to_string(),
+                tr("PlayerOptions", "MeasureLinesQuarter").to_string(),
+                tr("PlayerOptions", "MeasureLinesEighth").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Display horizontal lines on the notefield to indicate quantization.".to_string(),
-            ],
+            help: vec![tr("PlayerOptionsHelp", "MeasureLinesHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Rescore Early Hits".to_string(),
-            choices: vec!["No".to_string(), "Yes".to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Allow early hits of Decents and Way Offs to be rescored to better judgments."
-                    .to_string(),
-            ],
-            choice_difficulty_indices: None,
-        },
-        Row {
-            name: "Early Decent/Way Off Options".to_string(),
+            id: RowId::RescoreEarlyHits,
+            name: lookup_key("PlayerOptions", "RescoreEarlyHits"),
             choices: vec![
-                "Hide Judgments".to_string(),
-                "Hide NoteField Flash".to_string(),
+                tr("PlayerOptions", "RescoreEarlyHitsNo").to_string(),
+                tr("PlayerOptions", "RescoreEarlyHitsYes").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Set how early Decent and Way Off judgments are visually represented.".to_string(),
-            ],
+            help: vec![tr("PlayerOptionsHelp", "RescoreEarlyHitsHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: ROW_RESULTS_EXTRAS.to_string(),
-            choices: vec!["Track Early Judgments".to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Show early-hit subtotals and rescored early-hit totals on evaluation.".to_string(),
-            ],
-            choice_difficulty_indices: None,
-        },
-        Row {
-            name: "Timing Windows".to_string(),
+            id: RowId::EarlyDecentWayOffOptions,
+            name: lookup_key("PlayerOptions", "EarlyDecentWayOffOptions"),
             choices: vec![
-                "None".to_string(),
-                "Way Offs".to_string(),
-                "Decents + Way Offs".to_string(),
-                "Fantastics + Excellents".to_string(),
+                tr("PlayerOptions", "EarlyDecentWayOffOptionsHideJudgments").to_string(),
+                tr(
+                    "PlayerOptions",
+                    "EarlyDecentWayOffOptionsHideNoteFieldFlash",
+                )
+                .to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Disable or simplify specific timing windows used for judgments.".to_string(),
-            ],
+            help: vec![tr("PlayerOptionsHelp", "EarlyDecentWayOffOptionsHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "FA+ Options".to_string(),
+            id: RowId::ResultsExtras,
+            name: lookup_key("PlayerOptions", "ResultsExtras"),
+            choices: vec![tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string()],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![tr("PlayerOptionsHelp", "ResultsExtrasHelp").to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            id: RowId::TimingWindows,
+            name: lookup_key("PlayerOptions", "TimingWindows"),
             choices: vec![
-                "Display FA+ Window".to_string(),
-                "Display EX Score".to_string(),
-                "Display H.EX Score".to_string(),
-                "Display FA+ Pane".to_string(),
-                "10ms Blue Window".to_string(),
-                "15/10ms Split".to_string(),
+                tr("PlayerOptions", "TimingWindowsNone").to_string(),
+                tr("PlayerOptions", "TimingWindowsWayOffs").to_string(),
+                tr("PlayerOptions", "TimingWindowsDecentsAndWayOffs").to_string(),
+                tr("PlayerOptions", "TimingWindowsFantasticsAndExcellents").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Toggle FA+ style timing window display and EX/H.EX scoring visuals.".to_string(),
-            ],
+            help: vec![tr("PlayerOptionsHelp", "TimingWindowsHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Custom Blue Fantastic Window".to_string(),
-            choices: vec!["No".to_string(), "Yes".to_string()],
-            selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Override the default FA+ blue Fantastic split with a custom window.".to_string(),
+            id: RowId::FAPlusOptions,
+            name: lookup_key("PlayerOptions", "FAPlusOptions"),
+            choices: vec![
+                tr("PlayerOptions", "FAPlusOptionsDisplayFAPlusWindow").to_string(),
+                tr("PlayerOptions", "FAPlusOptionsDisplayEXScore").to_string(),
+                tr("PlayerOptions", "FAPlusOptionsDisplayHEXScore").to_string(),
+                tr("PlayerOptions", "FAPlusOptionsDisplayFAPlusPane").to_string(),
+                tr("PlayerOptions", "FAPlusOptions10msBlueWindow").to_string(),
+                tr("PlayerOptions", "FAPlusOptions1510msSplit").to_string(),
             ],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![tr("PlayerOptionsHelp", "FAPlusOptionsHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Custom Blue Fantastic Window (ms)".to_string(),
+            id: RowId::CustomBlueFantasticWindow,
+            name: lookup_key("PlayerOptions", "CustomBlueFantasticWindow"),
+            choices: vec![
+                tr("PlayerOptions", "CustomBlueFantasticWindowNo").to_string(),
+                tr("PlayerOptions", "CustomBlueFantasticWindowYes").to_string(),
+            ],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![tr("PlayerOptionsHelp", "CustomBlueFantasticWindowHelp").to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            id: RowId::CustomBlueFantasticWindowMs,
+            name: lookup_key("PlayerOptions", "CustomBlueFantasticWindowMs"),
             choices: custom_fantastic_window_choices(),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Pick the blue Fantastic window size in milliseconds.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "CustomBlueFantasticWindowMsHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "What comes next?".to_string(),
+            id: RowId::WhatComesNext,
+            name: lookup_key("PlayerOptions", "WhatComesNext"),
             choices: what_comes_next_choices(OptionsPane::Advanced, return_screen),
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec![
-                "Jump to gameplay, another modifier pane,".to_string(),
-                "or back to the select screen.".to_string(),
-            ],
+            help: vec![tr("PlayerOptionsHelp", "WhatComesNextAdvancedHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: String::new(),
-            choices: vec!["Exit".to_string()],
+            id: RowId::Exit,
+            name: lookup_key("Common", "Exit"),
+            choices: vec![tr("Common", "Exit").to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![String::new()],
             choice_difficulty_indices: None,
@@ -1693,129 +2038,139 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
 fn build_uncommon_rows(return_screen: Screen) -> Vec<Row> {
     let rows = vec![
         Row {
-            name: "Insert".to_string(),
+            id: RowId::Insert,
+            name: lookup_key("PlayerOptions", "Insert"),
             choices: vec![
-                "Wide".to_string(),
-                "Big".to_string(),
-                "Quick".to_string(),
-                "BMRize".to_string(),
-                "Skippy".to_string(),
-                "Echo".to_string(),
-                "Stomp".to_string(),
+                tr("PlayerOptions", "InsertWide").to_string(),
+                tr("PlayerOptions", "InsertBig").to_string(),
+                tr("PlayerOptions", "InsertQuick").to_string(),
+                tr("PlayerOptions", "InsertBMRize").to_string(),
+                tr("PlayerOptions", "InsertSkippy").to_string(),
+                tr("PlayerOptions", "InsertEcho").to_string(),
+                tr("PlayerOptions", "InsertStomp").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Add extra notes into the chart in unusual patterns.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "InsertHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Remove".to_string(),
+            id: RowId::Remove,
+            name: lookup_key("PlayerOptions", "Remove"),
             choices: vec![
-                "Little".to_string(),
-                "NoMines".to_string(),
-                "NoHolds".to_string(),
-                "NoJumps".to_string(),
-                "NoHands".to_string(),
-                "NoQuads".to_string(),
-                "NoLifts".to_string(),
-                "NoFakes".to_string(),
+                tr("PlayerOptions", "RemoveLittle").to_string(),
+                tr("PlayerOptions", "RemoveNoMines").to_string(),
+                tr("PlayerOptions", "RemoveNoHolds").to_string(),
+                tr("PlayerOptions", "RemoveNoJumps").to_string(),
+                tr("PlayerOptions", "RemoveNoHands").to_string(),
+                tr("PlayerOptions", "RemoveNoQuads").to_string(),
+                tr("PlayerOptions", "RemoveNoLifts").to_string(),
+                tr("PlayerOptions", "RemoveNoFakes").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Strip specific note types out of the chart.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "RemoveHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Holds".to_string(),
+            id: RowId::Holds,
+            name: lookup_key("PlayerOptions", "Holds"),
             choices: vec![
-                "Planted".to_string(),
-                "Floored".to_string(),
-                "Twister".to_string(),
-                "NoRolls".to_string(),
-                "HoldsToRolls".to_string(),
+                tr("PlayerOptions", "HoldsPlanted").to_string(),
+                tr("PlayerOptions", "HoldsFloored").to_string(),
+                tr("PlayerOptions", "HoldsTwister").to_string(),
+                tr("PlayerOptions", "HoldsNoRolls").to_string(),
+                tr("PlayerOptions", "HoldsToRolls").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Twist and reshape hold notes in strange ways.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "HoldsHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Accel".to_string(),
+            id: RowId::Accel,
+            name: lookup_key("PlayerOptions", "Accel"),
             choices: vec![
-                "Boost".to_string(),
-                "Brake".to_string(),
-                "Wave".to_string(),
-                "Expand".to_string(),
-                "Boomerang".to_string(),
+                tr("PlayerOptions", "AccelBoost").to_string(),
+                tr("PlayerOptions", "AccelBrake").to_string(),
+                tr("PlayerOptions", "AccelWave").to_string(),
+                tr("PlayerOptions", "AccelExpand").to_string(),
+                tr("PlayerOptions", "AccelBoomerang").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Time-based acceleration and deceleration effects.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "AccelHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Effect".to_string(),
+            id: RowId::Effect,
+            name: lookup_key("PlayerOptions", "Effect"),
             choices: vec![
-                "Drunk".to_string(),
-                "Dizzy".to_string(),
-                "Confusion".to_string(),
-                "Big".to_string(),
-                "Flip".to_string(),
-                "Invert".to_string(),
-                "Tornado".to_string(),
-                "Tipsy".to_string(),
-                "Bumpy".to_string(),
-                "Beat".to_string(),
+                tr("PlayerOptions", "EffectDrunk").to_string(),
+                tr("PlayerOptions", "EffectDizzy").to_string(),
+                tr("PlayerOptions", "EffectConfusion").to_string(),
+                tr("PlayerOptions", "EffectBig").to_string(),
+                tr("PlayerOptions", "EffectFlip").to_string(),
+                tr("PlayerOptions", "EffectInvert").to_string(),
+                tr("PlayerOptions", "EffectTornado").to_string(),
+                tr("PlayerOptions", "EffectTipsy").to_string(),
+                tr("PlayerOptions", "EffectBumpy").to_string(),
+                tr("PlayerOptions", "EffectBeat").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Wild motion applied to the note field.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "EffectHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Appearance".to_string(),
+            id: RowId::Appearance,
+            name: lookup_key("PlayerOptions", "Appearance"),
             choices: vec![
-                "Hidden".to_string(),
-                "Sudden".to_string(),
-                "Stealth".to_string(),
-                "Blink".to_string(),
-                "R.Vanish".to_string(),
+                tr("PlayerOptions", "AppearanceHidden").to_string(),
+                tr("PlayerOptions", "AppearanceSudden").to_string(),
+                tr("PlayerOptions", "AppearanceStealth").to_string(),
+                tr("PlayerOptions", "AppearanceBlink").to_string(),
+                tr("PlayerOptions", "AppearanceRVanish").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Fade or hide incoming arrows in unusual ways.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "AppearanceHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Attacks".to_string(),
+            id: RowId::Attacks,
+            name: lookup_key("PlayerOptions", "Attacks"),
             choices: vec![
-                "On".to_string(),
-                "RandomAttacks".to_string(),
-                "Off".to_string(),
+                tr("PlayerOptions", "AttacksOn").to_string(),
+                tr("PlayerOptions", "AttacksRandomAttacks").to_string(),
+                tr("PlayerOptions", "AttacksOff").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Toggle charts that include attack modifiers.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "AttacksHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "Hide Light Type".to_string(),
+            id: RowId::HideLightType,
+            name: lookup_key("PlayerOptions", "HideLightType"),
             choices: vec![
-                "NoHideLights".to_string(),
-                "HideAllLights".to_string(),
-                "HideMarqueeLights".to_string(),
-                "HideBassLights".to_string(),
+                tr("PlayerOptions", "HideLightTypeNoHideLights").to_string(),
+                tr("PlayerOptions", "HideLightTypeHideAllLights").to_string(),
+                tr("PlayerOptions", "HideLightTypeHideMarqueeLights").to_string(),
+                tr("PlayerOptions", "HideLightTypeHideBassLights").to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
-            help: vec!["Control how cabinet lights react during gameplay.".to_string()],
+            help: vec![tr("PlayerOptionsHelp", "HideLightTypeHelp").to_string()],
             choice_difficulty_indices: None,
         },
         Row {
-            name: "What comes next?".to_string(),
+            id: RowId::WhatComesNext,
+            name: lookup_key("PlayerOptions", "WhatComesNext"),
             choices: what_comes_next_choices(OptionsPane::Uncommon, return_screen),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![
-                "Jump to gameplay, another modifier pane,".to_string(),
-                "or back to the select screen.".to_string(),
+                tr("PlayerOptionsHelp", "WhatComesNextHelp1").to_string(),
+                tr("PlayerOptionsHelp", "WhatComesNextHelp2").to_string(),
             ],
             choice_difficulty_indices: None,
         },
         Row {
-            name: String::new(),
-            choices: vec!["Exit".to_string()],
+            id: RowId::Exit,
+            name: lookup_key("Common", "Exit"),
+            choices: vec![tr("Common", "Exit").to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![String::new()],
             choice_difficulty_indices: None,
@@ -1898,17 +2253,18 @@ fn apply_profile_defaults(
     }
     let mut error_bar_options_active_mask: u8 = 0;
     let mut measure_counter_options_active_mask: u8 = 0;
+    let match_ns_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
+    let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
     // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Background Filter") {
-        row.selected_choice_index[player_idx] = match profile.background_filter {
-            crate::game::profile::BackgroundFilter::Off => 0,
-            crate::game::profile::BackgroundFilter::Dark => 1,
-            crate::game::profile::BackgroundFilter::Darker => 2,
-            crate::game::profile::BackgroundFilter::Darkest => 3,
-        };
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::BackgroundFilter) {
+        row.selected_choice_index[player_idx] = BACKGROUND_FILTER_VARIANTS
+            .iter()
+            .position(|&v| v == profile.background_filter)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     // Initialize Judgment Font row from profile setting
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Judgment Font") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::JudgmentFont) {
         row.selected_choice_index[player_idx] = assets::judgment_texture_choices()
             .iter()
             .position(|choice| {
@@ -1919,7 +2275,7 @@ fn apply_profile_defaults(
             .unwrap_or(0);
     }
     // Initialize NoteSkin row from profile setting
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "NoteSkin") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::NoteSkin) {
         row.selected_choice_index[player_idx] = row
             .choices
             .iter()
@@ -1931,94 +2287,100 @@ fn apply_profile_defaults(
             })
             .unwrap_or(0);
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "MineSkin") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::MineSkin) {
         row.selected_choice_index[player_idx] = profile.mine_noteskin.as_ref().map_or_else(
             || {
                 row.choices
                     .iter()
-                    .position(|c| c == MATCH_NOTESKIN_LABEL)
+                    .position(|c| c.as_str() == match_ns_label.as_ref())
                     .unwrap_or(0)
             },
             |mine_noteskin| {
                 row.choices
                     .iter()
                     .position(|c| c.eq_ignore_ascii_case(mine_noteskin.as_str()))
-                    .or_else(|| row.choices.iter().position(|c| c == MATCH_NOTESKIN_LABEL))
+                    .or_else(|| {
+                        row.choices
+                            .iter()
+                            .position(|c| c.as_str() == match_ns_label.as_ref())
+                    })
                     .unwrap_or(0)
             },
         );
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "ReceptorSkin") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ReceptorSkin) {
         row.selected_choice_index[player_idx] = profile.receptor_noteskin.as_ref().map_or_else(
             || {
                 row.choices
                     .iter()
-                    .position(|c| c == MATCH_NOTESKIN_LABEL)
+                    .position(|c| c.as_str() == match_ns_label.as_ref())
                     .unwrap_or(0)
             },
             |receptor_noteskin| {
                 row.choices
                     .iter()
                     .position(|c| c.eq_ignore_ascii_case(receptor_noteskin.as_str()))
-                    .or_else(|| row.choices.iter().position(|c| c == MATCH_NOTESKIN_LABEL))
+                    .or_else(|| {
+                        row.choices
+                            .iter()
+                            .position(|c| c.as_str() == match_ns_label.as_ref())
+                    })
                     .unwrap_or(0)
             },
         );
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "TapExplosionSkin") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::TapExplosionSkin) {
         row.selected_choice_index[player_idx] =
             profile.tap_explosion_noteskin.as_ref().map_or_else(
                 || {
                     row.choices
                         .iter()
-                        .position(|c| c == MATCH_NOTESKIN_LABEL)
+                        .position(|c| c.as_str() == match_ns_label.as_ref())
                         .unwrap_or(0)
                 },
                 |tap_explosion_noteskin| {
                     if tap_explosion_noteskin.is_none_choice() {
                         row.choices
                             .iter()
-                            .position(|c| c == NO_TAP_EXPLOSION_LABEL)
+                            .position(|c| c.as_str() == no_tap_label.as_ref())
                             .unwrap_or(0)
                     } else {
                         row.choices
                             .iter()
                             .position(|c| c.eq_ignore_ascii_case(tap_explosion_noteskin.as_str()))
-                            .or_else(|| row.choices.iter().position(|c| c == MATCH_NOTESKIN_LABEL))
+                            .or_else(|| {
+                                row.choices
+                                    .iter()
+                                    .position(|c| c.as_str() == match_ns_label.as_ref())
+                            })
                             .unwrap_or(0)
                     }
                 },
             );
     }
     // Initialize Combo Font row from profile setting
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Font") {
-        row.selected_choice_index[player_idx] = match profile.combo_font {
-            crate::game::profile::ComboFont::Wendy => 0,
-            crate::game::profile::ComboFont::ArialRounded => 1,
-            crate::game::profile::ComboFont::Asap => 2,
-            crate::game::profile::ComboFont::BebasNeue => 3,
-            crate::game::profile::ComboFont::SourceCode => 4,
-            crate::game::profile::ComboFont::Work => 5,
-            crate::game::profile::ComboFont::WendyCursed => 6,
-            crate::game::profile::ComboFont::None => 7,
-        };
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboFont) {
+        row.selected_choice_index[player_idx] = COMBO_FONT_VARIANTS
+            .iter()
+            .position(|&v| v == profile.combo_font)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Colors") {
-        row.selected_choice_index[player_idx] = match profile.combo_colors {
-            crate::game::profile::ComboColors::Glow => 0,
-            crate::game::profile::ComboColors::Solid => 1,
-            crate::game::profile::ComboColors::Rainbow => 2,
-            crate::game::profile::ComboColors::RainbowScroll => 3,
-            crate::game::profile::ComboColors::None => 4,
-        };
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboColors) {
+        row.selected_choice_index[player_idx] = COMBO_COLORS_VARIANTS
+            .iter()
+            .position(|&v| v == profile.combo_colors)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Color Mode") {
-        row.selected_choice_index[player_idx] = match profile.combo_mode {
-            crate::game::profile::ComboMode::FullCombo => 0,
-            crate::game::profile::ComboMode::CurrentCombo => 1,
-        };
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboColorMode) {
+        row.selected_choice_index[player_idx] = COMBO_MODE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.combo_mode)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == ROW_CARRY_COMBO) {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::CarryCombo) {
         row.selected_choice_index[player_idx] = if profile.carry_combo_between_songs {
             1
         } else {
@@ -2026,7 +2388,7 @@ fn apply_profile_defaults(
         };
     }
     // Initialize Hold Judgment row from profile setting (Love, mute, ITG2, None)
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Hold Judgment") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::HoldJudgment) {
         row.selected_choice_index[player_idx] = assets::hold_judgment_texture_choices()
             .iter()
             .position(|choice| {
@@ -2037,7 +2399,7 @@ fn apply_profile_defaults(
             .unwrap_or(0);
     }
     // Initialize Mini row from profile (range -100..150, stored as percent).
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Mini") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Mini) {
         let val = profile.mini_percent.clamp(-100, 150);
         let needle = format!("{val}%");
         if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
@@ -2045,17 +2407,15 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Perspective row from profile setting (Overhead, Hallway, Distant, Incoming, Space).
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Perspective") {
-        row.selected_choice_index[player_idx] = match profile.perspective {
-            crate::game::profile::Perspective::Overhead => 0,
-            crate::game::profile::Perspective::Hallway => 1,
-            crate::game::profile::Perspective::Distant => 2,
-            crate::game::profile::Perspective::Incoming => 3,
-            crate::game::profile::Perspective::Space => 4,
-        };
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Perspective) {
+        row.selected_choice_index[player_idx] = PERSPECTIVE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.perspective)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     // Initialize NoteField Offset X from profile (0..50, non-negative; P1 uses negative sign at render time)
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "NoteField Offset X") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::NoteFieldOffsetX) {
         let val = profile.note_field_offset_x.clamp(0, 50);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
@@ -2063,7 +2423,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize NoteField Offset Y from profile (-50..50)
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "NoteField Offset Y") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::NoteFieldOffsetY) {
         let val = profile.note_field_offset_y.clamp(-50, 50);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
@@ -2071,7 +2431,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Judgment Offset X from profile (HUD offset range)
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Judgment Offset X") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::JudgmentOffsetX) {
         let val = profile
             .judgment_offset_x
             .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
@@ -2081,7 +2441,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Judgment Offset Y from profile (HUD offset range)
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Judgment Offset Y") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::JudgmentOffsetY) {
         let val = profile
             .judgment_offset_y
             .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
@@ -2091,7 +2451,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Combo Offset X from profile (HUD offset range)
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Offset X") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboOffsetX) {
         let val = profile.combo_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
@@ -2099,7 +2459,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Combo Offset Y from profile (HUD offset range)
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Offset Y") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ComboOffsetY) {
         let val = profile.combo_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
@@ -2107,7 +2467,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Error Bar Offset X from profile (HUD offset range)
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar Offset X") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ErrorBarOffsetX) {
         let val = profile
             .error_bar_offset_x
             .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
@@ -2117,7 +2477,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Error Bar Offset Y from profile (HUD offset range)
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar Offset Y") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ErrorBarOffsetY) {
         let val = profile
             .error_bar_offset_y
             .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
@@ -2127,14 +2487,14 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Visual Delay from profile (-100..100ms)
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Visual Delay") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::VisualDelay) {
         let val = profile.visual_delay_ms.clamp(-100, 100);
         let needle = format!("{val}ms");
         if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
             row.selected_choice_index[player_idx] = idx;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == ROW_GLOBAL_OFFSET_SHIFT) {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::GlobalOffsetShift) {
         let val = profile.global_offset_shift_ms.clamp(-100, 100);
         let needle = format!("{val}ms");
         if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
@@ -2142,12 +2502,12 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Judgment Tilt rows from profile (Simply Love semantics).
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Judgment Tilt") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::JudgmentTilt) {
         row.selected_choice_index[player_idx] = if profile.judgment_tilt { 1 } else { 0 };
     }
     if let Some(row) = rows
         .iter_mut()
-        .find(|r| r.name == "Judgment Tilt Intensity")
+        .find(|r| r.id == RowId::JudgmentTiltIntensity)
     {
         let stepped = round_to_step(
             profile
@@ -2164,14 +2524,17 @@ fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == ROW_JUDGMENT_BACK) {
+    if let Some(row) = rows
+        .iter_mut()
+        .find(|r| r.id == RowId::JudgmentBehindArrows)
+    {
         row.selected_choice_index[player_idx] = if profile.judgment_back { 1 } else { 0 };
     }
     // Initialize Error Bar rows from profile (Simply Love semantics).
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Offset Indicator") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::OffsetIndicator) {
         row.selected_choice_index[player_idx] = if profile.error_ms_display { 1 } else { 0 };
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ErrorBar) {
         if error_bar_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2184,38 +2547,26 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Data Visualizations") {
-        row.selected_choice_index[player_idx] = match profile.data_visualizations {
-            crate::game::profile::DataVisualizations::None => 0,
-            crate::game::profile::DataVisualizations::TargetScoreGraph => 1,
-            crate::game::profile::DataVisualizations::StepStatistics => 2,
-        };
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::DataVisualizations) {
+        row.selected_choice_index[player_idx] = DATA_VISUALIZATIONS_VARIANTS
+            .iter()
+            .position(|&v| v == profile.data_visualizations)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Target Score") {
-        row.selected_choice_index[player_idx] = match profile.target_score {
-            crate::game::profile::TargetScoreSetting::CMinus => 0,
-            crate::game::profile::TargetScoreSetting::C => 1,
-            crate::game::profile::TargetScoreSetting::CPlus => 2,
-            crate::game::profile::TargetScoreSetting::BMinus => 3,
-            crate::game::profile::TargetScoreSetting::B => 4,
-            crate::game::profile::TargetScoreSetting::BPlus => 5,
-            crate::game::profile::TargetScoreSetting::AMinus => 6,
-            crate::game::profile::TargetScoreSetting::A => 7,
-            crate::game::profile::TargetScoreSetting::APlus => 8,
-            crate::game::profile::TargetScoreSetting::SMinus => 9,
-            crate::game::profile::TargetScoreSetting::S => 10,
-            crate::game::profile::TargetScoreSetting::SPlus => 11,
-            crate::game::profile::TargetScoreSetting::MachineBest => 12,
-            crate::game::profile::TargetScoreSetting::PersonalBest => 13,
-        }
-        .min(row.choices.len().saturating_sub(1));
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::TargetScore) {
+        row.selected_choice_index[player_idx] = TARGET_SCORE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.target_score)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "LifeMeter Type") {
-        row.selected_choice_index[player_idx] = match profile.lifemeter_type {
-            crate::game::profile::LifeMeterType::Standard => 0,
-            crate::game::profile::LifeMeterType::Surround => 1,
-            crate::game::profile::LifeMeterType::Vertical => 2,
-        };
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::LifeMeterType) {
+        row.selected_choice_index[player_idx] = LIFE_METER_TYPE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.lifemeter_type)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if profile.rainbow_max {
         life_bar_options_active_mask |= 1u8 << 0;
@@ -2226,7 +2577,7 @@ fn apply_profile_defaults(
     if profile.show_life_percent {
         life_bar_options_active_mask |= 1u8 << 2;
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Life Bar Options") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::LifeBarOptions) {
         if life_bar_options_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2239,13 +2590,12 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar Trim") {
-        row.selected_choice_index[player_idx] = match profile.error_bar_trim {
-            crate::game::profile::ErrorBarTrim::Off => 0,
-            crate::game::profile::ErrorBarTrim::Fantastic => 1,
-            crate::game::profile::ErrorBarTrim::Excellent => 2,
-            crate::game::profile::ErrorBarTrim::Great => 3,
-        };
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ErrorBarTrim) {
+        row.selected_choice_index[player_idx] = ERROR_BAR_TRIM_VARIANTS
+            .iter()
+            .position(|&v| v == profile.error_bar_trim)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if profile.error_bar_up {
         error_bar_options_active_mask |= 1u8 << 0;
@@ -2253,7 +2603,7 @@ fn apply_profile_defaults(
     if profile.error_bar_multi_tick {
         error_bar_options_active_mask |= 1u8 << 1;
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar Options") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ErrorBarOptions) {
         if error_bar_options_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2267,19 +2617,16 @@ fn apply_profile_defaults(
         }
     }
     // Initialize Measure Counter rows (zmod semantics).
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Measure Counter") {
-        row.selected_choice_index[player_idx] = match profile.measure_counter {
-            crate::game::profile::MeasureCounter::None => 0,
-            crate::game::profile::MeasureCounter::Eighth => 1,
-            crate::game::profile::MeasureCounter::Twelfth => 2,
-            crate::game::profile::MeasureCounter::Sixteenth => 3,
-            crate::game::profile::MeasureCounter::TwentyFourth => 4,
-            crate::game::profile::MeasureCounter::ThirtySecond => 5,
-        };
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::MeasureCounter) {
+        row.selected_choice_index[player_idx] = MEASURE_COUNTER_VARIANTS
+            .iter()
+            .position(|&v| v == profile.measure_counter)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows
         .iter_mut()
-        .find(|r| r.name == "Measure Counter Lookahead")
+        .find(|r| r.id == RowId::MeasureCounterLookahead)
     {
         row.selected_choice_index[player_idx] = (profile.measure_counter_lookahead.min(4) as usize)
             .min(row.choices.len().saturating_sub(1));
@@ -2301,7 +2648,7 @@ fn apply_profile_defaults(
     }
     if let Some(row) = rows
         .iter_mut()
-        .find(|r| r.name == "Measure Counter Options")
+        .find(|r| r.id == RowId::MeasureCounterOptions)
     {
         if measure_counter_options_active_mask != 0 {
             let first_idx = (0..row.choices.len())
@@ -2315,45 +2662,35 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Measure Lines") {
-        row.selected_choice_index[player_idx] = match profile.measure_lines {
-            crate::game::profile::MeasureLines::Off => 0,
-            crate::game::profile::MeasureLines::Measure => 1,
-            crate::game::profile::MeasureLines::Quarter => 2,
-            crate::game::profile::MeasureLines::Eighth => 3,
-        };
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::MeasureLines) {
+        row.selected_choice_index[player_idx] = MEASURE_LINES_VARIANTS
+            .iter()
+            .position(|&v| v == profile.measure_lines)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     // Initialize Turn row from profile setting.
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Turn") {
-        row.selected_choice_index[player_idx] = match profile.turn_option {
-            crate::game::profile::TurnOption::None => 0,
-            crate::game::profile::TurnOption::Mirror => 1,
-            crate::game::profile::TurnOption::Left => 2,
-            crate::game::profile::TurnOption::Right => 3,
-            crate::game::profile::TurnOption::LRMirror => 4,
-            crate::game::profile::TurnOption::UDMirror => 5,
-            crate::game::profile::TurnOption::Shuffle => 6,
-            crate::game::profile::TurnOption::Blender => 7,
-            crate::game::profile::TurnOption::Random => 8,
-        }
-        .min(row.choices.len().saturating_sub(1));
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Turn) {
+        row.selected_choice_index[player_idx] = TURN_OPTION_VARIANTS
+            .iter()
+            .position(|&v| v == profile.turn_option)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Rescore Early Hits") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::RescoreEarlyHits) {
         row.selected_choice_index[player_idx] = if profile.rescore_early_hits { 1 } else { 0 };
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Timing Windows") {
-        row.selected_choice_index[player_idx] = match profile.timing_windows {
-            crate::game::profile::TimingWindowsOption::None => 0,
-            crate::game::profile::TimingWindowsOption::WayOffs => 1,
-            crate::game::profile::TimingWindowsOption::DecentsAndWayOffs => 2,
-            crate::game::profile::TimingWindowsOption::FantasticsAndExcellents => 3,
-        }
-        .min(row.choices.len().saturating_sub(1));
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::TimingWindows) {
+        row.selected_choice_index[player_idx] = TIMING_WINDOWS_VARIANTS
+            .iter()
+            .position(|&v| v == profile.timing_windows)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if profile.track_early_judgments {
         results_extras_active_mask |= 1u8 << 0;
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == ROW_RESULTS_EXTRAS) {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::ResultsExtras) {
         if results_extras_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2366,29 +2703,23 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Mini Indicator") {
-        row.selected_choice_index[player_idx] = match profile.mini_indicator {
-            crate::game::profile::MiniIndicator::None => 0,
-            crate::game::profile::MiniIndicator::SubtractiveScoring => 1,
-            crate::game::profile::MiniIndicator::PredictiveScoring => 2,
-            crate::game::profile::MiniIndicator::PaceScoring => 3,
-            crate::game::profile::MiniIndicator::RivalScoring => 4,
-            crate::game::profile::MiniIndicator::Pacemaker => 5,
-            crate::game::profile::MiniIndicator::StreamProg => 6,
-        }
-        .min(row.choices.len().saturating_sub(1));
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::MiniIndicator) {
+        row.selected_choice_index[player_idx] = MINI_INDICATOR_VARIANTS
+            .iter()
+            .position(|&v| v == profile.mini_indicator)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == ROW_INDICATOR_SCORE_TYPE) {
-        row.selected_choice_index[player_idx] = match profile.mini_indicator_score_type {
-            crate::game::profile::MiniIndicatorScoreType::Itg => 0,
-            crate::game::profile::MiniIndicatorScoreType::Ex => 1,
-            crate::game::profile::MiniIndicatorScoreType::HardEx => 2,
-        }
-        .min(row.choices.len().saturating_sub(1));
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::IndicatorScoreType) {
+        row.selected_choice_index[player_idx] = MINI_INDICATOR_SCORE_TYPE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.mini_indicator_score_type)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows
         .iter_mut()
-        .find(|r| r.name == "Early Decent/Way Off Options")
+        .find(|r| r.id == RowId::EarlyDecentWayOffOptions)
     {
         if profile.hide_early_dw_judgments {
             early_dw_active_mask |= 1u8 << 0;
@@ -2410,7 +2741,7 @@ fn apply_profile_defaults(
         }
     }
     // Initialize FA+ Options row from profile (independent toggles).
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "FA+ Options") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::FAPlusOptions) {
         // Cursor always starts on the first option; toggled state is reflected visually.
         row.selected_choice_index[player_idx] = 0;
     }
@@ -2434,7 +2765,7 @@ fn apply_profile_defaults(
     }
     if let Some(row) = rows
         .iter_mut()
-        .find(|r| r.name == ROW_CUSTOM_FANTASTIC_WINDOW)
+        .find(|r| r.id == RowId::CustomBlueFantasticWindow)
     {
         row.selected_choice_index[player_idx] = if profile.custom_fantastic_window {
             1
@@ -2444,7 +2775,7 @@ fn apply_profile_defaults(
     }
     if let Some(row) = rows
         .iter_mut()
-        .find(|r| r.name == ROW_CUSTOM_FANTASTIC_WINDOW_MS)
+        .find(|r| r.id == RowId::CustomBlueFantasticWindowMs)
     {
         let ms = crate::game::profile::clamp_custom_fantastic_window_ms(
             profile.custom_fantastic_window_ms,
@@ -2470,7 +2801,7 @@ fn apply_profile_defaults(
         gameplay_extras_active_mask |= 1u8 << 3;
         gameplay_extras_more_active_mask |= 1u8 << 1;
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Gameplay Extras") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::GameplayExtras) {
         if gameplay_extras_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2485,7 +2816,7 @@ fn apply_profile_defaults(
     }
     if let Some(row) = rows
         .iter_mut()
-        .find(|r| r.name == "Density Graph Background")
+        .find(|r| r.id == RowId::DensityGraphBackground)
     {
         row.selected_choice_index[player_idx] = if profile.transparent_density_graph_bg {
             1
@@ -2495,7 +2826,7 @@ fn apply_profile_defaults(
     }
 
     // Initialize Gameplay Extras (More) row from profile (multi-choice toggle group).
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Gameplay Extras (More)") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::GameplayExtrasMore) {
         if gameplay_extras_more_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2531,7 +2862,7 @@ fn apply_profile_defaults(
     if profile.hide_combo_explosions {
         hide_active_mask |= 1u8 << 6;
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Hide") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Hide) {
         if hide_active_mask != 0 {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
@@ -2546,38 +2877,26 @@ fn apply_profile_defaults(
     }
 
     // Initialize Scroll row from profile setting (multi-choice toggle group).
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Scroll") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Scroll) {
         use crate::game::profile::ScrollOption;
-        // Map profile flags onto row choice indices.
-        if profile.scroll_option.contains(ScrollOption::Reverse)
-            && let Some(idx) = row.choices.iter().position(|c| c == "Reverse")
-            && idx < 8
-        {
-            scroll_active_mask |= 1u8 << (idx as u8);
-        }
-        if profile.scroll_option.contains(ScrollOption::Split)
-            && let Some(idx) = row.choices.iter().position(|c| c == "Split")
-            && idx < 8
-        {
-            scroll_active_mask |= 1u8 << (idx as u8);
-        }
-        if profile.scroll_option.contains(ScrollOption::Alternate)
-            && let Some(idx) = row.choices.iter().position(|c| c == "Alternate")
-            && idx < 8
-        {
-            scroll_active_mask |= 1u8 << (idx as u8);
-        }
-        if profile.scroll_option.contains(ScrollOption::Cross)
-            && let Some(idx) = row.choices.iter().position(|c| c == "Cross")
-            && idx < 8
-        {
-            scroll_active_mask |= 1u8 << (idx as u8);
-        }
-        if profile.scroll_option.contains(ScrollOption::Centered)
-            && let Some(idx) = row.choices.iter().position(|c| c == "Centered")
-            && idx < 8
-        {
-            scroll_active_mask |= 1u8 << (idx as u8);
+        // Choice indices are fixed by construction order in build_advanced_rows:
+        // 0=Reverse, 1=Split, 2=Alternate, 3=Cross, 4=Centered
+        const REVERSE: usize = 0;
+        const SPLIT: usize = 1;
+        const ALTERNATE: usize = 2;
+        const CROSS: usize = 3;
+        const CENTERED: usize = 4;
+        let flags: &[(ScrollOption, usize)] = &[
+            (ScrollOption::Reverse, REVERSE),
+            (ScrollOption::Split, SPLIT),
+            (ScrollOption::Alternate, ALTERNATE),
+            (ScrollOption::Cross, CROSS),
+            (ScrollOption::Centered, CENTERED),
+        ];
+        for &(flag, idx) in flags {
+            if profile.scroll_option.contains(flag) && idx < row.choices.len() && idx < 8 {
+                scroll_active_mask |= 1u8 << (idx as u8);
+            }
         }
 
         // Cursor starts at the first active choice if any, otherwise at the first option.
@@ -2593,7 +2912,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Insert") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Insert) {
         insert_active_mask =
             crate::game::profile::normalize_insert_mask(profile.insert_active_mask);
         if insert_active_mask != 0 {
@@ -2608,7 +2927,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Remove") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Remove) {
         remove_active_mask =
             crate::game::profile::normalize_remove_mask(profile.remove_active_mask);
         if remove_active_mask != 0 {
@@ -2623,7 +2942,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Holds") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Holds) {
         holds_active_mask = crate::game::profile::normalize_holds_mask(profile.holds_active_mask);
         if holds_active_mask != 0 {
             let first_idx = (0..row.choices.len())
@@ -2637,7 +2956,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Accel") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Accel) {
         accel_effects_active_mask =
             crate::game::profile::normalize_accel_effects_mask(profile.accel_effects_active_mask);
         if accel_effects_active_mask != 0 {
@@ -2652,7 +2971,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Effect") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Effect) {
         visual_effects_active_mask =
             crate::game::profile::normalize_visual_effects_mask(profile.visual_effects_active_mask);
         if visual_effects_active_mask != 0 {
@@ -2667,7 +2986,7 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Appearance") {
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Appearance) {
         appearance_effects_active_mask = crate::game::profile::normalize_appearance_effects_mask(
             profile.appearance_effects_active_mask,
         );
@@ -2683,20 +3002,19 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = 0;
         }
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Attacks") {
-        row.selected_choice_index[player_idx] = match profile.attack_mode {
-            crate::game::profile::AttackMode::On => 0,
-            crate::game::profile::AttackMode::Random => 1,
-            crate::game::profile::AttackMode::Off => 2,
-        };
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::Attacks) {
+        row.selected_choice_index[player_idx] = ATTACK_MODE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.attack_mode)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows.iter_mut().find(|r| r.name == "Hide Light Type") {
-        row.selected_choice_index[player_idx] = match profile.hide_light_type {
-            crate::game::profile::HideLightType::NoHideLights => 0,
-            crate::game::profile::HideLightType::HideAllLights => 1,
-            crate::game::profile::HideLightType::HideMarqueeLights => 2,
-            crate::game::profile::HideLightType::HideBassLights => 3,
-        };
+    if let Some(row) = rows.iter_mut().find(|r| r.id == RowId::HideLightType) {
+        row.selected_choice_index[player_idx] = HIDE_LIGHT_TYPE_VARIANTS
+            .iter()
+            .position(|&v| v == profile.hide_light_type)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
     }
     (
         scroll_active_mask,
@@ -3047,34 +3365,6 @@ fn session_persisted_player_idx() -> usize {
     }
 }
 
-const ROW_MEASURE_COUNTER: &str = "Measure Counter";
-const ROW_MEASURE_COUNTER_LOOKAHEAD: &str = "Measure Counter Lookahead";
-const ROW_MEASURE_COUNTER_OPTIONS: &str = "Measure Counter Options";
-const ROW_JUDGMENT_FONT: &str = "Judgment Font";
-const ROW_JUDGMENT_OFFSET_X: &str = "Judgment Offset X";
-const ROW_JUDGMENT_OFFSET_Y: &str = "Judgment Offset Y";
-const ROW_JUDGMENT_TILT: &str = "Judgment Tilt";
-const ROW_JUDGMENT_TILT_INTENSITY: &str = "Judgment Tilt Intensity";
-const ROW_JUDGMENT_BACK: &str = "Judgment Behind Arrows";
-const ROW_COMBO_FONT: &str = "Combo Font";
-const ROW_COMBO_OFFSET_X: &str = "Combo Offset X";
-const ROW_COMBO_OFFSET_Y: &str = "Combo Offset Y";
-const ROW_ERROR_BAR: &str = "Error Bar";
-const ROW_ERROR_BAR_TRIM: &str = "Error Bar Trim";
-const ROW_ERROR_BAR_OPTIONS: &str = "Error Bar Options";
-const ROW_ERROR_BAR_OFFSET_X: &str = "Error Bar Offset X";
-const ROW_ERROR_BAR_OFFSET_Y: &str = "Error Bar Offset Y";
-const ROW_CUSTOM_FANTASTIC_WINDOW: &str = "Custom Blue Fantastic Window";
-const ROW_CUSTOM_FANTASTIC_WINDOW_MS: &str = "Custom Blue Fantastic Window (ms)";
-const ROW_CARRY_COMBO: &str = "Carry Combo";
-const ROW_GLOBAL_OFFSET_SHIFT: &str = "Global Offset Shift";
-const ROW_HIDE: &str = "Hide";
-const ROW_RESULTS_EXTRAS: &str = "Results Extras";
-const ROW_COMBO_COLORS: &str = "Combo Colors";
-const ROW_COMBO_COLOR_MODE: &str = "Combo Color Mode";
-const ROW_LIFEMETER_TYPE: &str = "LifeMeter Type";
-const ROW_LIFE_BAR_OPTIONS: &str = "Life Bar Options";
-const ROW_INDICATOR_SCORE_TYPE: &str = "Indicator Score Type";
 const ARCADE_NEXT_ROW_TEXT: &str = "▼";
 
 #[derive(Clone, Copy, Debug)]
@@ -3093,93 +3383,90 @@ struct RowVisibility {
 }
 
 #[inline(always)]
-fn row_visible_with_flags(row_name: &str, visibility: RowVisibility) -> bool {
-    if row_name == ROW_MEASURE_COUNTER_LOOKAHEAD || row_name == ROW_MEASURE_COUNTER_OPTIONS {
+fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bool {
+    if id == RowId::MeasureCounterLookahead || id == RowId::MeasureCounterOptions {
         return visibility.show_measure_counter_children;
     }
-    if row_name == ROW_JUDGMENT_OFFSET_X || row_name == ROW_JUDGMENT_OFFSET_Y {
+    if id == RowId::JudgmentOffsetX || id == RowId::JudgmentOffsetY {
         return visibility.show_judgment_offsets;
     }
-    if row_name == ROW_JUDGMENT_TILT_INTENSITY {
+    if id == RowId::JudgmentTiltIntensity {
         return visibility.show_judgment_tilt_intensity;
     }
-    if row_name == ROW_COMBO_OFFSET_X || row_name == ROW_COMBO_OFFSET_Y {
+    if id == RowId::ComboOffsetX || id == RowId::ComboOffsetY {
         return visibility.show_combo_offsets;
     }
-    if row_name == ROW_ERROR_BAR_TRIM
-        || row_name == ROW_ERROR_BAR_OPTIONS
-        || row_name == ROW_ERROR_BAR_OFFSET_X
-        || row_name == ROW_ERROR_BAR_OFFSET_Y
+    if id == RowId::ErrorBarTrim
+        || id == RowId::ErrorBarOptions
+        || id == RowId::ErrorBarOffsetX
+        || id == RowId::ErrorBarOffsetY
     {
         return visibility.show_error_bar_children;
     }
-    if row_name == ROW_CUSTOM_FANTASTIC_WINDOW_MS {
+    if id == RowId::CustomBlueFantasticWindowMs {
         return visibility.show_custom_fantastic_window_ms;
     }
-    if row_name == "Density Graph Background" {
+    if id == RowId::DensityGraphBackground {
         return visibility.show_density_graph_background;
     }
-    if row_name == ROW_COMBO_COLORS
-        || row_name == ROW_COMBO_COLOR_MODE
-        || row_name == ROW_CARRY_COMBO
-    {
+    if id == RowId::ComboColors || id == RowId::ComboColorMode || id == RowId::CarryCombo {
         return visibility.show_combo_rows;
     }
-    if row_name == ROW_LIFEMETER_TYPE || row_name == ROW_LIFE_BAR_OPTIONS {
+    if id == RowId::LifeMeterType || id == RowId::LifeBarOptions {
         return visibility.show_lifebar_rows;
     }
-    if row_name == ROW_INDICATOR_SCORE_TYPE {
+    if id == RowId::IndicatorScoreType {
         return visibility.show_indicator_score_type;
     }
-    if row_name == ROW_GLOBAL_OFFSET_SHIFT {
+    if id == RowId::GlobalOffsetShift {
         return visibility.show_global_offset_shift;
     }
     true
 }
 
 #[inline(always)]
-fn conditional_row_parent(row_name: &str) -> Option<&'static str> {
-    if row_name == ROW_MEASURE_COUNTER_LOOKAHEAD || row_name == ROW_MEASURE_COUNTER_OPTIONS {
-        return Some(ROW_MEASURE_COUNTER);
+fn conditional_row_parent(id: RowId) -> Option<RowId> {
+    if id == RowId::MeasureCounterLookahead || id == RowId::MeasureCounterOptions {
+        return Some(RowId::MeasureCounter);
     }
-    if row_name == ROW_JUDGMENT_OFFSET_X || row_name == ROW_JUDGMENT_OFFSET_Y {
-        return Some(ROW_JUDGMENT_FONT);
+    if id == RowId::JudgmentOffsetX || id == RowId::JudgmentOffsetY {
+        return Some(RowId::JudgmentFont);
     }
-    if row_name == ROW_JUDGMENT_TILT_INTENSITY {
-        return Some(ROW_JUDGMENT_TILT);
+    if id == RowId::JudgmentTiltIntensity {
+        return Some(RowId::JudgmentTilt);
     }
-    if row_name == ROW_COMBO_OFFSET_X || row_name == ROW_COMBO_OFFSET_Y {
-        return Some(ROW_COMBO_FONT);
+    if id == RowId::ComboOffsetX || id == RowId::ComboOffsetY {
+        return Some(RowId::ComboFont);
     }
-    if row_name == ROW_ERROR_BAR_TRIM
-        || row_name == ROW_ERROR_BAR_OPTIONS
-        || row_name == ROW_ERROR_BAR_OFFSET_X
-        || row_name == ROW_ERROR_BAR_OFFSET_Y
+    if id == RowId::ErrorBarTrim
+        || id == RowId::ErrorBarOptions
+        || id == RowId::ErrorBarOffsetX
+        || id == RowId::ErrorBarOffsetY
     {
-        return Some(ROW_ERROR_BAR);
+        return Some(RowId::ErrorBar);
     }
-    if row_name == ROW_CUSTOM_FANTASTIC_WINDOW_MS {
-        return Some(ROW_CUSTOM_FANTASTIC_WINDOW);
+    if id == RowId::CustomBlueFantasticWindowMs {
+        return Some(RowId::CustomBlueFantasticWindow);
     }
-    if row_name == "Density Graph Background" {
-        return Some("Data Visualizations");
+    if id == RowId::DensityGraphBackground {
+        return Some(RowId::DataVisualizations);
     }
-    if row_name == ROW_COMBO_COLORS
-        || row_name == ROW_COMBO_COLOR_MODE
-        || row_name == ROW_CARRY_COMBO
-        || row_name == ROW_LIFEMETER_TYPE
-        || row_name == ROW_LIFE_BAR_OPTIONS
+    if id == RowId::ComboColors
+        || id == RowId::ComboColorMode
+        || id == RowId::CarryCombo
+        || id == RowId::LifeMeterType
+        || id == RowId::LifeBarOptions
     {
-        return Some(ROW_HIDE);
+        return Some(RowId::Hide);
     }
-    if row_name == ROW_INDICATOR_SCORE_TYPE {
-        return Some("Mini Indicator");
+    if id == RowId::IndicatorScoreType {
+        return Some(RowId::MiniIndicator);
     }
     None
 }
 
 fn measure_counter_children_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.name == ROW_MEASURE_COUNTER) else {
+    let Some(row) = rows.iter().find(|r| r.id == RowId::MeasureCounter) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3195,7 +3482,7 @@ fn measure_counter_children_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) 
 }
 
 fn judgment_offsets_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.name == ROW_JUDGMENT_FONT) else {
+    let Some(row) = rows.iter().find(|r| r.id == RowId::JudgmentFont) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3203,9 +3490,9 @@ fn judgment_offsets_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool 
     for player_idx in active_player_indices(active) {
         any_active = true;
         let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
-        match row.choices.get(choice_idx) {
-            Some(choice) if choice.eq_ignore_ascii_case("None") => {}
-            _ => return true,
+        // "None" is always the last choice for font/texture rows.
+        if choice_idx != max_choice {
+            return true;
         }
     }
     !any_active
@@ -3213,7 +3500,7 @@ fn judgment_offsets_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool 
 
 #[inline(always)]
 fn judgment_tilt_intensity_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.name == ROW_JUDGMENT_TILT) else {
+    let Some(row) = rows.iter().find(|r| r.id == RowId::JudgmentTilt) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3229,7 +3516,7 @@ fn judgment_tilt_intensity_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -
 }
 
 fn combo_offsets_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.name == ROW_COMBO_FONT) else {
+    let Some(row) = rows.iter().find(|r| r.id == RowId::ComboFont) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3237,9 +3524,9 @@ fn combo_offsets_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
     for player_idx in active_player_indices(active) {
         any_active = true;
         let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
-        match row.choices.get(choice_idx) {
-            Some(choice) if choice.eq_ignore_ascii_case("None") => {}
-            _ => return true,
+        // "None" is always the last choice for font/texture rows.
+        if choice_idx != max_choice {
+            return true;
         }
     }
     !any_active
@@ -3260,7 +3547,10 @@ fn error_bar_children_visible(
 }
 
 fn custom_fantastic_window_ms_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.name == ROW_CUSTOM_FANTASTIC_WINDOW) else {
+    let Some(row) = rows
+        .iter()
+        .find(|r| r.id == RowId::CustomBlueFantasticWindow)
+    else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3276,7 +3566,7 @@ fn custom_fantastic_window_ms_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]
 }
 
 fn density_graph_background_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.name == "Data Visualizations") else {
+    let Some(row) = rows.iter().find(|r| r.id == RowId::DataVisualizations) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3319,7 +3609,7 @@ fn lifebar_rows_visible(
 }
 
 fn indicator_score_type_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
-    let Some(row) = rows.iter().find(|r| r.name == "Mini Indicator") else {
+    let Some(row) = rows.iter().find(|r| r.id == RowId::MiniIndicator) else {
         return true;
     };
     let max_choice = row.choices.len().saturating_sub(1);
@@ -3361,12 +3651,12 @@ fn row_visibility(
 #[inline(always)]
 fn is_row_visible(rows: &[Row], row_idx: usize, visibility: RowVisibility) -> bool {
     rows.get(row_idx)
-        .is_some_and(|row| row_visible_with_flags(row.name.as_str(), visibility))
+        .is_some_and(|row| row_visible_with_flags(row.id, visibility))
 }
 
 fn count_visible_rows(rows: &[Row], visibility: RowVisibility) -> usize {
     rows.iter()
-        .filter(|row| row_visible_with_flags(row.name.as_str(), visibility))
+        .filter(|row| row_visible_with_flags(row.id, visibility))
         .count()
 }
 
@@ -3430,11 +3720,11 @@ fn next_visible_row(
 
 fn parent_anchor_visible_index(
     rows: &[Row],
-    parent_name: &str,
+    parent_id: RowId,
     visibility: RowVisibility,
 ) -> Option<i32> {
     rows.iter()
-        .position(|row| row.name == parent_name)
+        .position(|row| row.id == parent_id)
         .and_then(|idx| row_to_visible_index(rows, idx, visibility))
         .map(|idx| idx as i32)
 }
@@ -3496,85 +3786,86 @@ fn sync_selected_rows_with_visibility(state: &mut State, active: [bool; PLAYER_S
 }
 
 #[inline(always)]
-fn row_is_shared(row_name: &str) -> bool {
-    row_name.is_empty() || row_name == "What comes next?" || row_name.starts_with("Music Rate")
+fn row_is_shared(id: RowId) -> bool {
+    id == RowId::Exit || id == RowId::WhatComesNext || id == RowId::MusicRate
 }
 
 #[inline(always)]
-fn row_shows_all_choices_inline(row_name: &str) -> bool {
-    row_name == "Perspective"
-        || row_name == "Background Filter"
-        || row_name == "Stepchart"
-        || row_name == "What comes next?"
-        || row_name == "Action On Missed Target"
-        || row_name == "Error Bar"
-        || row_name == "Error Bar Trim"
-        || row_name == "Error Bar Options"
-        || row_name == "Offset Indicator"
-        || row_name == ROW_JUDGMENT_BACK
-        || row_name == "Measure Counter"
-        || row_name == "Measure Counter Lookahead"
-        || row_name == "Measure Counter Options"
-        || row_name == "Measure Lines"
-        || row_name == "Timing Windows"
-        || row_name == ROW_JUDGMENT_TILT
-        || row_name == "Mini Indicator"
-        || row_name == ROW_INDICATOR_SCORE_TYPE
-        || row_name == "Turn"
-        || row_name == "Scroll"
-        || row_name == "Hide"
-        || row_name == "LifeMeter Type"
-        || row_name == "Life Bar Options"
-        || row_name == "Data Visualizations"
-        || row_name == "Density Graph Background"
-        || row_name == "Combo Colors"
-        || row_name == "Combo Color Mode"
-        || row_name == ROW_CARRY_COMBO
-        || row_name.starts_with("Gameplay Extras")
-        || row_name == ROW_RESULTS_EXTRAS
-        || row_name == "Rescore Early Hits"
-        || row_name == ROW_CUSTOM_FANTASTIC_WINDOW
-        || row_name == "Early Decent/Way Off Options"
-        || row_name == "FA+ Options"
-        || row_name == "Insert"
-        || row_name == "Remove"
-        || row_name == "Holds"
-        || row_name == "Accel"
-        || row_name == "Effect"
-        || row_name == "Appearance"
-        || row_name == "Attacks"
-        || row_name == "Hide Light Type"
+fn row_shows_all_choices_inline(id: RowId) -> bool {
+    id == RowId::Perspective
+        || id == RowId::BackgroundFilter
+        || id == RowId::Stepchart
+        || id == RowId::WhatComesNext
+        || id == RowId::ActionOnMissedTarget
+        || id == RowId::ErrorBar
+        || id == RowId::ErrorBarTrim
+        || id == RowId::ErrorBarOptions
+        || id == RowId::OffsetIndicator
+        || id == RowId::JudgmentBehindArrows
+        || id == RowId::MeasureCounter
+        || id == RowId::MeasureCounterLookahead
+        || id == RowId::MeasureCounterOptions
+        || id == RowId::MeasureLines
+        || id == RowId::TimingWindows
+        || id == RowId::JudgmentTilt
+        || id == RowId::MiniIndicator
+        || id == RowId::IndicatorScoreType
+        || id == RowId::Turn
+        || id == RowId::Scroll
+        || id == RowId::Hide
+        || id == RowId::LifeMeterType
+        || id == RowId::LifeBarOptions
+        || id == RowId::DataVisualizations
+        || id == RowId::DensityGraphBackground
+        || id == RowId::ComboColors
+        || id == RowId::ComboColorMode
+        || id == RowId::CarryCombo
+        || id == RowId::GameplayExtras
+        || id == RowId::GameplayExtrasMore
+        || id == RowId::ResultsExtras
+        || id == RowId::RescoreEarlyHits
+        || id == RowId::CustomBlueFantasticWindow
+        || id == RowId::EarlyDecentWayOffOptions
+        || id == RowId::FAPlusOptions
+        || id == RowId::Insert
+        || id == RowId::Remove
+        || id == RowId::Holds
+        || id == RowId::Accel
+        || id == RowId::Effect
+        || id == RowId::Appearance
+        || id == RowId::Attacks
+        || id == RowId::HideLightType
 }
 
 #[inline(always)]
 fn row_supports_inline_nav(row: &Row) -> bool {
-    !row.choices.is_empty() && row_shows_all_choices_inline(row.name.as_str())
+    !row.choices.is_empty() && row_shows_all_choices_inline(row.id)
 }
 
 #[inline(always)]
-fn row_toggles_with_start(row_name: &str) -> bool {
-    row_name == "Scroll"
-        || row_name == "Hide"
-        || row_name == "Insert"
-        || row_name == "Remove"
-        || row_name == "Holds"
-        || row_name == "Accel"
-        || row_name == "Effect"
-        || row_name == "Appearance"
-        || row_name == "Life Bar Options"
-        || row_name == "Gameplay Extras"
-        || row_name == "Gameplay Extras (More)"
-        || row_name == ROW_RESULTS_EXTRAS
-        || row_name == "Error Bar"
-        || row_name == "Error Bar Options"
-        || row_name == "Measure Counter Options"
-        || row_name == "FA+ Options"
-        || row_name == "Early Decent/Way Off Options"
+fn row_toggles_with_start(id: RowId) -> bool {
+    id == RowId::Scroll
+        || id == RowId::Hide
+        || id == RowId::Insert
+        || id == RowId::Remove
+        || id == RowId::Holds
+        || id == RowId::Accel
+        || id == RowId::Effect
+        || id == RowId::Appearance
+        || id == RowId::LifeBarOptions
+        || id == RowId::GameplayExtras
+        || id == RowId::GameplayExtrasMore
+        || id == RowId::ResultsExtras
+        || id == RowId::ErrorBar
+        || id == RowId::ErrorBarOptions
+        || id == RowId::MeasureCounterOptions
+        || id == RowId::FAPlusOptions
+        || id == RowId::EarlyDecentWayOffOptions
 }
 
 #[inline(always)]
-fn row_selects_on_focus_move(row_name: &str) -> bool {
-    row_name == "Stepchart"
+fn row_selects_on_focus_move(id: RowId) -> bool {
+    id == RowId::Stepchart
 }
 
 #[inline(always)]
@@ -3584,7 +3875,7 @@ fn row_allows_arcade_next_row(state: &State, row_idx: usize) -> bool {
         && state
             .rows
             .get(row_idx)
-            .is_some_and(|row| !row.name.is_empty() && row_supports_inline_nav(row))
+            .is_some_and(|row| row.id != RowId::Exit && row_supports_inline_nav(row))
 }
 
 #[inline(always)]
@@ -3728,7 +4019,7 @@ fn commit_inline_focus_selection(
     let Some(focus_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx) else {
         return false;
     };
-    let is_shared = row_is_shared(row.name.as_str());
+    let is_shared = row_is_shared(row.id);
     if let Some(row) = state.rows.get_mut(row_idx) {
         if is_shared {
             let changed = row.selected_choice_index.iter().any(|&v| v != focus_idx);
@@ -3960,7 +4251,7 @@ fn cursor_dest_for_player(
     let item_col_w = row_width - TITLE_BG_WIDTH;
     let music_rate_center_x = item_col_left + item_col_w * 0.5;
 
-    if row.name.is_empty() {
+    if row.id == RowId::Exit {
         // Exit row is shared (OptionRowExit); its cursor is centered on Speed Mod helper X.
         let choice_text = row
             .choices
@@ -3982,7 +4273,7 @@ fn cursor_dest_for_player(
         return Some((speed_mod_x, y, ring_w, ring_h));
     }
 
-    if row_shows_all_choices_inline(&row.name) {
+    if row_shows_all_choices_inline(row.id) {
         if row.choices.is_empty() {
             return None;
         }
@@ -4054,7 +4345,7 @@ fn cursor_dest_for_player(
 
     // Single value rows (ShowOneInRow).
     let mut center_x = speed_mod_x;
-    if row.name.starts_with("Music Rate") {
+    if row.id == RowId::MusicRate {
         center_x = music_rate_center_x;
     } else if player_idx == P2 {
         center_x = screen_center_x().mul_add(2.0, -center_x);
@@ -4062,14 +4353,14 @@ fn cursor_dest_for_player(
 
     let display_text = if arcade_row_focuses_next_row(state, player_idx, row_idx) {
         ARCADE_NEXT_ROW_TEXT.to_string()
-    } else if row.name == "Speed Mod" {
+    } else if row.id == RowId::SpeedMod {
         match state.speed_mod[player_idx].mod_type.as_str() {
             "X" => format!("{:.2}x", state.speed_mod[player_idx].value),
             "C" => format!("C{}", state.speed_mod[player_idx].value as i32),
             "M" => format!("M{}", state.speed_mod[player_idx].value as i32),
             _ => String::new(),
         }
-    } else if row.name == "Type of Speed Mod" {
+    } else if row.id == RowId::TypeOfSpeedMod {
         let idx = match state.speed_mod[player_idx].mod_type.as_str() {
             "X" => 0,
             "C" => 1,
@@ -4109,14 +4400,14 @@ fn change_choice_for_player(
     }
     let player_idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
-    let row_name = state.rows[row_index].name.clone();
-    if row_name.is_empty() {
+    let id = state.rows[row_index].id;
+    if id == RowId::Exit {
         return;
     }
-    let is_shared = row_is_shared(&row_name);
+    let is_shared = row_is_shared(id);
 
     // Shared row: Music Rate
-    if row_name.starts_with("Music Rate") {
+    if id == RowId::MusicRate {
         let row = &mut state.rows[row_index];
         let increment = 0.01f32;
         let min_rate = 0.05f32;
@@ -4126,26 +4417,6 @@ fn change_choice_for_player(
         state.music_rate = state.music_rate.clamp(min_rate, max_rate);
         row.choices[0] = fmt_music_rate(state.music_rate);
 
-        let p1_chart = resolve_p1_chart(&state.song, &state.chart_steps_index);
-        let is_random = p1_chart.is_some_and(|c| {
-            matches!(
-                c.display_bpm,
-                Some(crate::game::chart::ChartDisplayBpm::Random)
-            )
-        });
-        let bpm_str = if is_random {
-            "???".to_string()
-        } else {
-            let reference_bpm = reference_bpm_for_song(&state.song, p1_chart);
-            let effective_bpm = f64::from(reference_bpm) * f64::from(state.music_rate);
-            if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
-                format!("{}", effective_bpm.round() as i32)
-            } else {
-                format!("{effective_bpm:.1}")
-            }
-        };
-        row.name = format!("Music Rate\nbpm: {bpm_str}");
-
         audio::play_sfx("assets/sounds/change_value.ogg");
         crate::game::profile::set_session_music_rate(state.music_rate);
         audio::set_music_rate(state.music_rate);
@@ -4153,7 +4424,7 @@ fn change_choice_for_player(
     }
 
     // Per-player row: Speed Mod numeric
-    if row_name == "Speed Mod" {
+    if id == RowId::SpeedMod {
         let speed_mod = {
             let speed_mod = &mut state.speed_mod[player_idx];
             let (upper, increment) = match speed_mod.mod_type.as_str() {
@@ -4197,7 +4468,7 @@ fn change_choice_for_player(
         row.selected_choice_index[player_idx] = new_index;
     }
 
-    if row_name == "Type of Speed Mod" {
+    if id == RowId::TypeOfSpeedMod {
         let new_type = match row.selected_choice_index[player_idx] {
             0 => "X",
             1 => "C",
@@ -4243,73 +4514,58 @@ fn change_choice_for_player(
         speed_mod.value = new_value;
         let speed_mod = speed_mod.clone();
         sync_profile_scroll_speed(&mut state.player_profiles[player_idx], &speed_mod);
-    } else if row_name == "Turn" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::TurnOption::None,
-            1 => crate::game::profile::TurnOption::Mirror,
-            2 => crate::game::profile::TurnOption::Left,
-            3 => crate::game::profile::TurnOption::Right,
-            4 => crate::game::profile::TurnOption::LRMirror,
-            5 => crate::game::profile::TurnOption::UDMirror,
-            6 => crate::game::profile::TurnOption::Shuffle,
-            7 => crate::game::profile::TurnOption::Blender,
-            8 => crate::game::profile::TurnOption::Random,
-            _ => crate::game::profile::TurnOption::None,
-        };
+    } else if id == RowId::Turn {
+        let setting = TURN_OPTION_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(TurnOption::None);
         state.player_profiles[player_idx].turn_option = setting;
         if should_persist {
             crate::game::profile::update_turn_option_for_side(persist_side, setting);
         }
-    } else if row_name == "Accel" || row_name == "Effect" || row_name == "Appearance" {
+    } else if id == RowId::Accel || id == RowId::Effect || id == RowId::Appearance {
         // Multi-select rows toggled with Start; Left/Right only moves cursor.
-    } else if row_name == "Attacks" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::AttackMode::On,
-            1 => crate::game::profile::AttackMode::Random,
-            2 => crate::game::profile::AttackMode::Off,
-            _ => crate::game::profile::AttackMode::On,
-        };
+    } else if id == RowId::Attacks {
+        let setting = ATTACK_MODE_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(AttackMode::On);
         state.player_profiles[player_idx].attack_mode = setting;
         if should_persist {
             crate::game::profile::update_attack_mode_for_side(persist_side, setting);
         }
-    } else if row_name == "Hide Light Type" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::HideLightType::NoHideLights,
-            1 => crate::game::profile::HideLightType::HideAllLights,
-            2 => crate::game::profile::HideLightType::HideMarqueeLights,
-            3 => crate::game::profile::HideLightType::HideBassLights,
-            _ => crate::game::profile::HideLightType::NoHideLights,
-        };
+    } else if id == RowId::HideLightType {
+        let setting = HIDE_LIGHT_TYPE_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(HideLightType::NoHideLights);
         state.player_profiles[player_idx].hide_light_type = setting;
         if should_persist {
             crate::game::profile::update_hide_light_type_for_side(persist_side, setting);
         }
-    } else if row_name == "Rescore Early Hits" {
+    } else if id == RowId::RescoreEarlyHits {
         let enabled = row.selected_choice_index[player_idx] == 1;
         state.player_profiles[player_idx].rescore_early_hits = enabled;
         if should_persist {
             crate::game::profile::update_rescore_early_hits_for_side(persist_side, enabled);
         }
-    } else if row_name == "Timing Windows" {
-        let setting = match row.selected_choice_index[player_idx] {
-            1 => crate::game::profile::TimingWindowsOption::WayOffs,
-            2 => crate::game::profile::TimingWindowsOption::DecentsAndWayOffs,
-            3 => crate::game::profile::TimingWindowsOption::FantasticsAndExcellents,
-            _ => crate::game::profile::TimingWindowsOption::None,
-        };
+    } else if id == RowId::TimingWindows {
+        let setting = TIMING_WINDOWS_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(TimingWindowsOption::None);
         state.player_profiles[player_idx].timing_windows = setting;
         if should_persist {
             crate::game::profile::update_timing_windows_for_side(persist_side, setting);
         }
-    } else if row_name == ROW_CUSTOM_FANTASTIC_WINDOW {
+    } else if id == RowId::CustomBlueFantasticWindow {
         let enabled = row.selected_choice_index[player_idx] == 1;
         state.player_profiles[player_idx].custom_fantastic_window = enabled;
         if should_persist {
             crate::game::profile::update_custom_fantastic_window_for_side(persist_side, enabled);
         }
         visibility_changed = true;
-    } else if row_name == ROW_CUSTOM_FANTASTIC_WINDOW_MS {
+    } else if id == RowId::CustomBlueFantasticWindowMs {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(raw) = choice.trim_end_matches("ms").parse::<u8>()
         {
@@ -4319,24 +4575,15 @@ fn change_choice_for_player(
                 crate::game::profile::update_custom_fantastic_window_ms_for_side(persist_side, ms);
             }
         }
-    } else if row_name == "Mini Indicator" {
-        let choice = row
-            .choices
-            .get(row.selected_choice_index[player_idx])
-            .map(String::as_str)
-            .unwrap_or("None");
-        let mini_indicator = match choice {
-            "Subtractive Scoring" => crate::game::profile::MiniIndicator::SubtractiveScoring,
-            "Predictive Scoring" => crate::game::profile::MiniIndicator::PredictiveScoring,
-            "Pace Scoring" => crate::game::profile::MiniIndicator::PaceScoring,
-            "Rival Scoring" => crate::game::profile::MiniIndicator::RivalScoring,
-            "Pacemaker" => crate::game::profile::MiniIndicator::Pacemaker,
-            "Stream Progress" => crate::game::profile::MiniIndicator::StreamProg,
-            _ => crate::game::profile::MiniIndicator::None,
-        };
-        let subtractive_scoring =
-            mini_indicator == crate::game::profile::MiniIndicator::SubtractiveScoring;
-        let pacemaker = mini_indicator == crate::game::profile::MiniIndicator::Pacemaker;
+    } else if id == RowId::MiniIndicator {
+        let choice_idx =
+            row.selected_choice_index[player_idx].min(row.choices.len().saturating_sub(1));
+        let mini_indicator = MINI_INDICATOR_VARIANTS
+            .get(choice_idx)
+            .copied()
+            .unwrap_or(MiniIndicator::None);
+        let subtractive_scoring = mini_indicator == MiniIndicator::SubtractiveScoring;
+        let pacemaker = mini_indicator == MiniIndicator::Pacemaker;
         state.player_profiles[player_idx].mini_indicator = mini_indicator;
         state.player_profiles[player_idx].subtractive_scoring = subtractive_scoring;
         state.player_profiles[player_idx].pacemaker = pacemaker;
@@ -4353,17 +4600,11 @@ fn change_choice_for_player(
             );
         }
         visibility_changed = true;
-    } else if row_name == ROW_INDICATOR_SCORE_TYPE {
-        let choice = row
-            .choices
+    } else if id == RowId::IndicatorScoreType {
+        let score_type = MINI_INDICATOR_SCORE_TYPE_VARIANTS
             .get(row.selected_choice_index[player_idx])
-            .map(String::as_str)
-            .unwrap_or("ITG");
-        let score_type = match choice {
-            "EX" => crate::game::profile::MiniIndicatorScoreType::Ex,
-            "H.EX" => crate::game::profile::MiniIndicatorScoreType::HardEx,
-            _ => crate::game::profile::MiniIndicatorScoreType::Itg,
-        };
+            .copied()
+            .unwrap_or(MiniIndicatorScoreType::Itg);
         state.player_profiles[player_idx].mini_indicator_score_type = score_type;
         if should_persist {
             crate::game::profile::update_mini_indicator_score_type_for_side(
@@ -4371,7 +4612,7 @@ fn change_choice_for_player(
                 score_type,
             );
         }
-    } else if row_name == "Density Graph Background" {
+    } else if id == RowId::DensityGraphBackground {
         let transparent = row.selected_choice_index[player_idx] == 1;
         state.player_profiles[player_idx].transparent_density_graph_bg = transparent;
         if should_persist {
@@ -4380,19 +4621,16 @@ fn change_choice_for_player(
                 transparent,
             );
         }
-    } else if row_name == "Background Filter" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::BackgroundFilter::Off,
-            1 => crate::game::profile::BackgroundFilter::Dark,
-            2 => crate::game::profile::BackgroundFilter::Darker,
-            3 => crate::game::profile::BackgroundFilter::Darkest,
-            _ => crate::game::profile::BackgroundFilter::Darkest,
-        };
+    } else if id == RowId::BackgroundFilter {
+        let setting = BACKGROUND_FILTER_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(BackgroundFilter::Darkest);
         state.player_profiles[player_idx].background_filter = setting;
         if should_persist {
             crate::game::profile::update_background_filter_for_side(persist_side, setting);
         }
-    } else if row_name == "Mini" {
+    } else if id == RowId::Mini {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx]) {
             let trimmed = choice.trim_end_matches('%');
             if let Ok(val) = trimmed.parse::<i32>() {
@@ -4402,20 +4640,16 @@ fn change_choice_for_player(
                 }
             }
         }
-    } else if row_name == "Perspective" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::Perspective::Overhead,
-            1 => crate::game::profile::Perspective::Hallway,
-            2 => crate::game::profile::Perspective::Distant,
-            3 => crate::game::profile::Perspective::Incoming,
-            4 => crate::game::profile::Perspective::Space,
-            _ => crate::game::profile::Perspective::Overhead,
-        };
+    } else if id == RowId::Perspective {
+        let setting = PERSPECTIVE_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(Perspective::Overhead);
         state.player_profiles[player_idx].perspective = setting;
         if should_persist {
             crate::game::profile::update_perspective_for_side(persist_side, setting);
         }
-    } else if row_name == "NoteField Offset X" {
+    } else if id == RowId::NoteFieldOffsetX {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(raw) = choice.parse::<i32>()
         {
@@ -4424,7 +4658,7 @@ fn change_choice_for_player(
                 crate::game::profile::update_notefield_offset_x_for_side(persist_side, raw);
             }
         }
-    } else if row_name == "NoteField Offset Y" {
+    } else if id == RowId::NoteFieldOffsetY {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(raw) = choice.parse::<i32>()
         {
@@ -4433,7 +4667,7 @@ fn change_choice_for_player(
                 crate::game::profile::update_notefield_offset_y_for_side(persist_side, raw);
             }
         }
-    } else if row_name == "Judgment Offset X" {
+    } else if id == RowId::JudgmentOffsetX {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(raw) = choice.parse::<i32>()
         {
@@ -4442,7 +4676,7 @@ fn change_choice_for_player(
                 crate::game::profile::update_judgment_offset_x_for_side(persist_side, raw);
             }
         }
-    } else if row_name == "Judgment Offset Y" {
+    } else if id == RowId::JudgmentOffsetY {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(raw) = choice.parse::<i32>()
         {
@@ -4451,7 +4685,7 @@ fn change_choice_for_player(
                 crate::game::profile::update_judgment_offset_y_for_side(persist_side, raw);
             }
         }
-    } else if row_name == "Combo Offset X" {
+    } else if id == RowId::ComboOffsetX {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(raw) = choice.parse::<i32>()
         {
@@ -4460,7 +4694,7 @@ fn change_choice_for_player(
                 crate::game::profile::update_combo_offset_x_for_side(persist_side, raw);
             }
         }
-    } else if row_name == "Combo Offset Y" {
+    } else if id == RowId::ComboOffsetY {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(raw) = choice.parse::<i32>()
         {
@@ -4469,7 +4703,7 @@ fn change_choice_for_player(
                 crate::game::profile::update_combo_offset_y_for_side(persist_side, raw);
             }
         }
-    } else if row_name == "Error Bar Offset X" {
+    } else if id == RowId::ErrorBarOffsetX {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(raw) = choice.parse::<i32>()
         {
@@ -4478,7 +4712,7 @@ fn change_choice_for_player(
                 crate::game::profile::update_error_bar_offset_x_for_side(persist_side, raw);
             }
         }
-    } else if row_name == "Error Bar Offset Y" {
+    } else if id == RowId::ErrorBarOffsetY {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(raw) = choice.parse::<i32>()
         {
@@ -4487,7 +4721,7 @@ fn change_choice_for_player(
                 crate::game::profile::update_error_bar_offset_y_for_side(persist_side, raw);
             }
         }
-    } else if row_name == "Visual Delay" {
+    } else if id == RowId::VisualDelay {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(raw) = choice.trim_end_matches("ms").parse::<i32>()
         {
@@ -4496,7 +4730,7 @@ fn change_choice_for_player(
                 crate::game::profile::update_visual_delay_ms_for_side(persist_side, raw);
             }
         }
-    } else if row_name == ROW_GLOBAL_OFFSET_SHIFT {
+    } else if id == RowId::GlobalOffsetShift {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(raw) = choice.trim_end_matches("ms").parse::<i32>()
         {
@@ -4505,14 +4739,14 @@ fn change_choice_for_player(
                 crate::game::profile::update_global_offset_shift_ms_for_side(persist_side, raw);
             }
         }
-    } else if row_name == ROW_JUDGMENT_TILT {
+    } else if id == RowId::JudgmentTilt {
         let enabled = row.selected_choice_index[player_idx] == 1;
         state.player_profiles[player_idx].judgment_tilt = enabled;
         if should_persist {
             crate::game::profile::update_judgment_tilt_for_side(persist_side, enabled);
         }
         visibility_changed = true;
-    } else if row_name == "Judgment Tilt Intensity" {
+    } else if id == RowId::JudgmentTiltIntensity {
         if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
             && let Ok(mult) = choice.parse::<f32>()
         {
@@ -4523,95 +4757,70 @@ fn change_choice_for_player(
                 crate::game::profile::update_tilt_multiplier_for_side(persist_side, mult);
             }
         }
-    } else if row_name == ROW_JUDGMENT_BACK {
+    } else if id == RowId::JudgmentBehindArrows {
         let enabled = row.selected_choice_index[player_idx] != 0;
         state.player_profiles[player_idx].judgment_back = enabled;
         if should_persist {
             crate::game::profile::update_judgment_back_for_side(persist_side, enabled);
         }
-    } else if row_name == "LifeMeter Type" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::LifeMeterType::Standard,
-            1 => crate::game::profile::LifeMeterType::Surround,
-            2 => crate::game::profile::LifeMeterType::Vertical,
-            _ => crate::game::profile::LifeMeterType::Standard,
-        };
+    } else if id == RowId::LifeMeterType {
+        let setting = LIFE_METER_TYPE_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(LifeMeterType::Standard);
         state.player_profiles[player_idx].lifemeter_type = setting;
         if should_persist {
             crate::game::profile::update_lifemeter_type_for_side(persist_side, setting);
         }
-    } else if row_name == "Life Bar Options" {
+    } else if id == RowId::LifeBarOptions {
         // Multi-select row toggled with Start; Left/Right only moves cursor.
-    } else if row_name == "Data Visualizations" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::DataVisualizations::None,
-            1 => crate::game::profile::DataVisualizations::TargetScoreGraph,
-            2 => crate::game::profile::DataVisualizations::StepStatistics,
-            _ => crate::game::profile::DataVisualizations::None,
-        };
+    } else if id == RowId::DataVisualizations {
+        let setting = DATA_VISUALIZATIONS_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(DataVisualizations::None);
         state.player_profiles[player_idx].data_visualizations = setting;
         if should_persist {
             crate::game::profile::update_data_visualizations_for_side(persist_side, setting);
         }
         visibility_changed = true;
-    } else if row_name == "Target Score" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::TargetScoreSetting::CMinus,
-            1 => crate::game::profile::TargetScoreSetting::C,
-            2 => crate::game::profile::TargetScoreSetting::CPlus,
-            3 => crate::game::profile::TargetScoreSetting::BMinus,
-            4 => crate::game::profile::TargetScoreSetting::B,
-            5 => crate::game::profile::TargetScoreSetting::BPlus,
-            6 => crate::game::profile::TargetScoreSetting::AMinus,
-            7 => crate::game::profile::TargetScoreSetting::A,
-            8 => crate::game::profile::TargetScoreSetting::APlus,
-            9 => crate::game::profile::TargetScoreSetting::SMinus,
-            10 => crate::game::profile::TargetScoreSetting::S,
-            11 => crate::game::profile::TargetScoreSetting::SPlus,
-            12 => crate::game::profile::TargetScoreSetting::MachineBest,
-            13 => crate::game::profile::TargetScoreSetting::PersonalBest,
-            _ => crate::game::profile::TargetScoreSetting::S,
-        };
+    } else if id == RowId::TargetScore {
+        let setting = TARGET_SCORE_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(TargetScoreSetting::S);
         state.player_profiles[player_idx].target_score = setting;
         if should_persist {
             crate::game::profile::update_target_score_for_side(persist_side, setting);
         }
-    } else if row_name == "Offset Indicator" {
+    } else if id == RowId::OffsetIndicator {
         let enabled = row.selected_choice_index[player_idx] != 0;
         state.player_profiles[player_idx].error_ms_display = enabled;
         if should_persist {
             crate::game::profile::update_error_ms_display_for_side(persist_side, enabled);
         }
-    } else if row_name == "Error Bar" {
+    } else if id == RowId::ErrorBar {
         // Multi-select row toggled with Start; Left/Right only moves cursor.
-    } else if row_name == "Error Bar Trim" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::ErrorBarTrim::Off,
-            1 => crate::game::profile::ErrorBarTrim::Fantastic,
-            2 => crate::game::profile::ErrorBarTrim::Excellent,
-            3 => crate::game::profile::ErrorBarTrim::Great,
-            _ => crate::game::profile::ErrorBarTrim::Off,
-        };
+    } else if id == RowId::ErrorBarTrim {
+        let setting = ERROR_BAR_TRIM_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(ErrorBarTrim::Off);
         state.player_profiles[player_idx].error_bar_trim = setting;
         if should_persist {
             crate::game::profile::update_error_bar_trim_for_side(persist_side, setting);
         }
-    } else if row_name == "Measure Counter" {
+    } else if id == RowId::MeasureCounter {
         visibility_changed = true;
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::MeasureCounter::None,
-            1 => crate::game::profile::MeasureCounter::Eighth,
-            2 => crate::game::profile::MeasureCounter::Twelfth,
-            3 => crate::game::profile::MeasureCounter::Sixteenth,
-            4 => crate::game::profile::MeasureCounter::TwentyFourth,
-            5 => crate::game::profile::MeasureCounter::ThirtySecond,
-            _ => crate::game::profile::MeasureCounter::None,
-        };
+        let setting = MEASURE_COUNTER_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(MeasureCounter::None);
         state.player_profiles[player_idx].measure_counter = setting;
         if should_persist {
             crate::game::profile::update_measure_counter_for_side(persist_side, setting);
         }
-    } else if row_name == "Measure Counter Lookahead" {
+    } else if id == RowId::MeasureCounterLookahead {
         let lookahead = (row.selected_choice_index[player_idx] as u8).min(4);
         state.player_profiles[player_idx].measure_counter_lookahead = lookahead;
         if should_persist {
@@ -4620,19 +4829,16 @@ fn change_choice_for_player(
                 lookahead,
             );
         }
-    } else if row_name == "Measure Lines" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::MeasureLines::Off,
-            1 => crate::game::profile::MeasureLines::Measure,
-            2 => crate::game::profile::MeasureLines::Quarter,
-            3 => crate::game::profile::MeasureLines::Eighth,
-            _ => crate::game::profile::MeasureLines::Off,
-        };
+    } else if id == RowId::MeasureLines {
+        let setting = MEASURE_LINES_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(MeasureLines::Off);
         state.player_profiles[player_idx].measure_lines = setting;
         if should_persist {
             crate::game::profile::update_measure_lines_for_side(persist_side, setting);
         }
-    } else if row_name == ROW_JUDGMENT_FONT {
+    } else if id == RowId::JudgmentFont {
         let setting = assets::judgment_texture_choices()
             .get(row.selected_choice_index[player_idx])
             .map(|choice| crate::game::profile::JudgmentGraphic::new(&choice.key))
@@ -4645,53 +4851,41 @@ fn change_choice_for_player(
             );
         }
         visibility_changed = true;
-    } else if row_name == ROW_COMBO_FONT {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::ComboFont::Wendy,
-            1 => crate::game::profile::ComboFont::ArialRounded,
-            2 => crate::game::profile::ComboFont::Asap,
-            3 => crate::game::profile::ComboFont::BebasNeue,
-            4 => crate::game::profile::ComboFont::SourceCode,
-            5 => crate::game::profile::ComboFont::Work,
-            6 => crate::game::profile::ComboFont::WendyCursed,
-            7 => crate::game::profile::ComboFont::None,
-            _ => crate::game::profile::ComboFont::Wendy,
-        };
+    } else if id == RowId::ComboFont {
+        let setting = COMBO_FONT_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(ComboFont::Wendy);
         state.player_profiles[player_idx].combo_font = setting;
         if should_persist {
             crate::game::profile::update_combo_font_for_side(persist_side, setting);
         }
         visibility_changed = true;
-    } else if row_name == "Combo Colors" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::ComboColors::Glow,
-            1 => crate::game::profile::ComboColors::Solid,
-            2 => crate::game::profile::ComboColors::Rainbow,
-            3 => crate::game::profile::ComboColors::RainbowScroll,
-            4 => crate::game::profile::ComboColors::None,
-            _ => crate::game::profile::ComboColors::Glow,
-        };
+    } else if id == RowId::ComboColors {
+        let setting = COMBO_COLORS_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(ComboColors::Glow);
         state.player_profiles[player_idx].combo_colors = setting;
         if should_persist {
             crate::game::profile::update_combo_colors_for_side(persist_side, setting);
         }
-    } else if row_name == "Combo Color Mode" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::ComboMode::FullCombo,
-            1 => crate::game::profile::ComboMode::CurrentCombo,
-            _ => crate::game::profile::ComboMode::FullCombo,
-        };
+    } else if id == RowId::ComboColorMode {
+        let setting = COMBO_MODE_VARIANTS
+            .get(row.selected_choice_index[player_idx])
+            .copied()
+            .unwrap_or(ComboMode::FullCombo);
         state.player_profiles[player_idx].combo_mode = setting;
         if should_persist {
             crate::game::profile::update_combo_mode_for_side(persist_side, setting);
         }
-    } else if row_name == ROW_CARRY_COMBO {
+    } else if id == RowId::CarryCombo {
         let enabled = row.selected_choice_index[player_idx] == 1;
         state.player_profiles[player_idx].carry_combo_between_songs = enabled;
         if should_persist {
             crate::game::profile::update_carry_combo_between_songs_for_side(persist_side, enabled);
         }
-    } else if row_name == "Hold Judgment" {
+    } else if id == RowId::HoldJudgment {
         let setting = assets::hold_judgment_texture_choices()
             .get(row.selected_choice_index[player_idx])
             .map(|choice| crate::game::profile::HoldJudgmentGraphic::new(&choice.key))
@@ -4705,7 +4899,7 @@ fn change_choice_for_player(
                     .clone(),
             );
         }
-    } else if row_name == "NoteSkin" {
+    } else if id == RowId::NoteSkin {
         let setting_name = row
             .choices
             .get(row.selected_choice_index[player_idx])
@@ -4717,13 +4911,14 @@ fn change_choice_for_player(
             crate::game::profile::update_noteskin_for_side(persist_side, setting.clone());
         }
         sync_noteskin_previews_for_player(state, player_idx);
-    } else if row_name == "MineSkin" {
+    } else if id == RowId::MineSkin {
+        let match_noteskin = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
         let selected = row
             .choices
             .get(row.selected_choice_index[player_idx])
             .map(String::as_str)
-            .unwrap_or(MATCH_NOTESKIN_LABEL);
-        let setting = if selected == MATCH_NOTESKIN_LABEL {
+            .unwrap_or(match_noteskin.as_ref());
+        let setting = if selected == match_noteskin.as_ref() {
             None
         } else {
             Some(crate::game::profile::NoteSkin::new(selected))
@@ -4735,13 +4930,14 @@ fn change_choice_for_player(
             crate::game::profile::update_mine_noteskin_for_side(persist_side, setting);
         }
         sync_noteskin_previews_for_player(state, player_idx);
-    } else if row_name == "ReceptorSkin" {
+    } else if id == RowId::ReceptorSkin {
+        let match_noteskin = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
         let selected = row
             .choices
             .get(row.selected_choice_index[player_idx])
             .map(String::as_str)
-            .unwrap_or(MATCH_NOTESKIN_LABEL);
-        let setting = if selected == MATCH_NOTESKIN_LABEL {
+            .unwrap_or(match_noteskin.as_ref());
+        let setting = if selected == match_noteskin.as_ref() {
             None
         } else {
             Some(crate::game::profile::NoteSkin::new(selected))
@@ -4753,15 +4949,17 @@ fn change_choice_for_player(
             crate::game::profile::update_receptor_noteskin_for_side(persist_side, setting);
         }
         sync_noteskin_previews_for_player(state, player_idx);
-    } else if row_name == "TapExplosionSkin" {
+    } else if id == RowId::TapExplosionSkin {
+        let match_noteskin = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
+        let no_tap_explosion = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
         let selected = row
             .choices
             .get(row.selected_choice_index[player_idx])
             .map(String::as_str)
-            .unwrap_or(MATCH_NOTESKIN_LABEL);
-        let setting = if selected == MATCH_NOTESKIN_LABEL {
+            .unwrap_or(match_noteskin.as_ref());
+        let setting = if selected == match_noteskin.as_ref() {
             None
-        } else if selected == NO_TAP_EXPLOSION_LABEL {
+        } else if selected == no_tap_explosion.as_ref() {
             Some(crate::game::profile::NoteSkin::none_choice())
         } else {
             Some(crate::game::profile::NoteSkin::new(selected))
@@ -4773,7 +4971,7 @@ fn change_choice_for_player(
             crate::game::profile::update_tap_explosion_noteskin_for_side(persist_side, setting);
         }
         sync_noteskin_previews_for_player(state, player_idx);
-    } else if row_name == "Stepchart"
+    } else if id == RowId::Stepchart
         && let Some(diff_indices) = &row.choice_difficulty_indices
         && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index[player_idx])
     {
@@ -4804,7 +5002,7 @@ pub fn apply_choice_delta(
     if let Some(row) = state.rows.get(row_idx)
         && row_supports_inline_nav(row)
     {
-        if state.current_pane == OptionsPane::Main || row_selects_on_focus_move(row.name.as_str()) {
+        if state.current_pane == OptionsPane::Main || row_selects_on_focus_move(row.id) {
             change_choice_for_player(state, asset_manager, idx, delta);
             return;
         }
@@ -4923,7 +5121,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     let mut combo_row_active = false;
     for player_idx in active_player_indices(active) {
         if let Some(row) = state.rows.get(state.selected_row[player_idx])
-            && row.name == "Combo Font"
+            && row.id == RowId::ComboFont
         {
             combo_row_active = true;
             break;
@@ -4992,13 +5190,13 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
             let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
             let measure_counter_anchor_visible_idx =
-                parent_anchor_visible_index(&state.rows, ROW_MEASURE_COUNTER, visibility);
+                parent_anchor_visible_index(&state.rows, RowId::MeasureCounter, visibility);
             let judgment_tilt_anchor_visible_idx =
-                parent_anchor_visible_index(&state.rows, ROW_JUDGMENT_TILT, visibility);
+                parent_anchor_visible_index(&state.rows, RowId::JudgmentTilt, visibility);
             let error_bar_anchor_visible_idx =
-                parent_anchor_visible_index(&state.rows, ROW_ERROR_BAR, visibility);
+                parent_anchor_visible_index(&state.rows, RowId::ErrorBar, visibility);
             let hide_anchor_visible_idx =
-                parent_anchor_visible_index(&state.rows, ROW_HIDE, visibility);
+                parent_anchor_visible_index(&state.rows, RowId::Hide, visibility);
             let mut visible_idx = 0i32;
             for i in 0..total_rows {
                 let visible = is_row_visible(&state.rows, i, visibility);
@@ -5007,15 +5205,17 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     visible_idx += 1;
                     f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
                 } else {
-                    let anchor = state.rows.get(i).and_then(|row| {
-                        match conditional_row_parent(row.name.as_str()) {
-                            Some(ROW_MEASURE_COUNTER) => measure_counter_anchor_visible_idx,
-                            Some(ROW_JUDGMENT_TILT) => judgment_tilt_anchor_visible_idx,
-                            Some(ROW_ERROR_BAR) => error_bar_anchor_visible_idx,
-                            Some(ROW_HIDE) => hide_anchor_visible_idx,
-                            _ => None,
-                        }
-                    });
+                    let anchor =
+                        state
+                            .rows
+                            .get(i)
+                            .and_then(|row| match conditional_row_parent(row.id) {
+                                Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
+                                Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
+                                Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
+                                Some(RowId::Hide) => hide_anchor_visible_idx,
+                                _ => None,
+                            });
                     if let Some(anchor_idx) = anchor {
                         let (anchor_f_pos, _) =
                             f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
@@ -5165,7 +5365,7 @@ fn toggle_scroll_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Scroll" {
+        if row.id != RowId::Scroll {
             return;
         }
     } else {
@@ -5229,7 +5429,7 @@ fn toggle_hide_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Hide" {
+        if row.id != RowId::Hide {
             return;
         }
     } else {
@@ -5297,7 +5497,7 @@ fn toggle_insert_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Insert" {
+        if row.id != RowId::Insert {
             return;
         }
     } else {
@@ -5343,7 +5543,7 @@ fn toggle_remove_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Remove" {
+        if row.id != RowId::Remove {
             return;
         }
     } else {
@@ -5389,7 +5589,7 @@ fn toggle_holds_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Holds" {
+        if row.id != RowId::Holds {
             return;
         }
     } else {
@@ -5435,7 +5635,7 @@ fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Accel" {
+        if row.id != RowId::Accel {
             return;
         }
     } else {
@@ -5481,7 +5681,7 @@ fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Effect" {
+        if row.id != RowId::Effect {
             return;
         }
     } else {
@@ -5527,7 +5727,7 @@ fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Appearance" {
+        if row.id != RowId::Appearance {
             return;
         }
     } else {
@@ -5575,7 +5775,7 @@ fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Life Bar Options" {
+        if row.id != RowId::LifeBarOptions {
             return;
         }
     } else {
@@ -5626,7 +5826,7 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "FA+ Options" {
+        if row.id != RowId::FAPlusOptions {
             return;
         }
     } else {
@@ -5686,7 +5886,7 @@ fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != ROW_RESULTS_EXTRAS {
+        if row.id != RowId::ResultsExtras {
             return;
         }
     } else {
@@ -5731,7 +5931,7 @@ fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Error Bar" {
+        if row.id != RowId::ErrorBar {
             return;
         }
     } else {
@@ -5781,7 +5981,7 @@ fn toggle_error_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Error Bar Options" {
+        if row.id != RowId::ErrorBarOptions {
             return;
         }
     } else {
@@ -5828,7 +6028,7 @@ fn toggle_measure_counter_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Measure Counter Options" {
+        if row.id != RowId::MeasureCounterOptions {
             return;
         }
     } else {
@@ -5884,7 +6084,7 @@ fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Early Decent/Way Off Options" {
+        if row.id != RowId::EarlyDecentWayOffOptions {
             return;
         }
     } else {
@@ -5931,7 +6131,7 @@ fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Gameplay Extras" {
+        if row.id != RowId::GameplayExtras {
             return;
         }
     } else {
@@ -5940,15 +6140,26 @@ fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
 
     let row = &state.rows[row_index];
     let choice_index = row.selected_choice_index[idx];
+    let ge_flash = tr("PlayerOptions", "GameplayExtrasFlashColumnForMiss");
+    let ge_density = tr("PlayerOptions", "GameplayExtrasDensityGraphAtTop");
+    let ge_column_cues = tr("PlayerOptions", "GameplayExtrasColumnCues");
+    let ge_scorebox = tr("PlayerOptions", "GameplayExtrasDisplayScorebox");
     let bit = row
         .choices
         .get(choice_index)
-        .map(|choice| match choice.as_str() {
-            "Flash Column for Miss" => 1u8 << 0,
-            "Density Graph at Top" => 1u8 << 1,
-            "Column Cues" => 1u8 << 2,
-            "Display Scorebox" => 1u8 << 3,
-            _ => 0,
+        .map(|choice| {
+            let choice_str = choice.as_str();
+            if choice_str == ge_flash.as_ref() {
+                1u8 << 0
+            } else if choice_str == ge_density.as_ref() {
+                1u8 << 1
+            } else if choice_str == ge_column_cues.as_ref() {
+                1u8 << 2
+            } else if choice_str == ge_scorebox.as_ref() {
+                1u8 << 3
+            } else {
+                0
+            }
         })
         .unwrap_or(0);
     if bit == 0 {
@@ -6002,7 +6213,7 @@ fn toggle_gameplay_extras_more_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
     if let Some(row) = state.rows.get(row_index) {
-        if row.name != "Gameplay Extras (More)" {
+        if row.id != RowId::GameplayExtrasMore {
             return;
         }
     } else {
@@ -6447,102 +6658,107 @@ fn handle_start_event(
     let row_index = state.selected_row[player_idx].min(num_rows.saturating_sub(1));
     let should_focus_exit = state.current_pane == OptionsPane::Main && row_index + 1 < num_rows;
     let row = state.rows.get(row_index)?;
-    let row_name = row.name.clone();
+    let id = row.id;
     let row_supports_inline = row_supports_inline_nav(row);
     if row_supports_inline {
         let changed = commit_inline_focus_selection(state, asset_manager, player_idx, row_index);
-        if changed && !row_toggles_with_start(row_name.as_str()) {
+        if changed && !row_toggles_with_start(id) {
             change_choice_for_player(state, asset_manager, player_idx, 0);
             return finish_start_without_action(state, active, player_idx, should_focus_exit);
         }
     }
-    if row_name == "Scroll" {
+    if id == RowId::Scroll {
         toggle_scroll_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Hide" {
+    if id == RowId::Hide {
         toggle_hide_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Insert" {
+    if id == RowId::Insert {
         toggle_insert_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Remove" {
+    if id == RowId::Remove {
         toggle_remove_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Holds" {
+    if id == RowId::Holds {
         toggle_holds_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Accel" {
+    if id == RowId::Accel {
         toggle_accel_effects_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Effect" {
+    if id == RowId::Effect {
         toggle_visual_effects_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Appearance" {
+    if id == RowId::Appearance {
         toggle_appearance_effects_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Life Bar Options" {
+    if id == RowId::LifeBarOptions {
         toggle_life_bar_options_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Gameplay Extras" {
+    if id == RowId::GameplayExtras {
         toggle_gameplay_extras_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Gameplay Extras (More)" {
+    if id == RowId::GameplayExtrasMore {
         toggle_gameplay_extras_more_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == ROW_RESULTS_EXTRAS {
+    if id == RowId::ResultsExtras {
         toggle_results_extras_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Error Bar" {
+    if id == RowId::ErrorBar {
         toggle_error_bar_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Error Bar Options" {
+    if id == RowId::ErrorBarOptions {
         toggle_error_bar_options_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Measure Counter Options" {
+    if id == RowId::MeasureCounterOptions {
         toggle_measure_counter_options_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "FA+ Options" {
+    if id == RowId::FAPlusOptions {
         toggle_fa_plus_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    if row_name == "Early Decent/Way Off Options" {
+    if id == RowId::EarlyDecentWayOffOptions {
         toggle_early_dw_row(state, player_idx);
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_index == num_rows.saturating_sub(1)
         && let Some(what_comes_next_row) = state.rows.get(num_rows.saturating_sub(2))
-        && what_comes_next_row.name == "What comes next?"
+        && what_comes_next_row.id == RowId::WhatComesNext
     {
         let choice_idx = what_comes_next_row.selected_choice_index[player_idx];
         if let Some(choice) = what_comes_next_row.choices.get(choice_idx) {
-            match choice.as_str() {
-                "Gameplay" => {
-                    audio::play_sfx("assets/sounds/start.ogg");
-                    return Some(ScreenAction::Navigate(Screen::Gameplay));
-                }
-                c if c == choose_different_screen_label(state.return_screen) => {
-                    audio::play_sfx("assets/sounds/start.ogg");
-                    return Some(ScreenAction::Navigate(state.return_screen));
-                }
-                "Advanced Modifiers" => switch_to_pane(state, OptionsPane::Advanced),
-                "Uncommon Modifiers" => switch_to_pane(state, OptionsPane::Uncommon),
-                "Main Modifiers" => switch_to_pane(state, OptionsPane::Main),
-                _ => {}
+            let gameplay = tr("PlayerOptions", "WhatComesNextGameplay");
+            let advanced = tr("PlayerOptions", "WhatComesNextAdvancedModifiers");
+            let uncommon = tr("PlayerOptions", "WhatComesNextUncommonModifiers");
+            let main_mods = tr("PlayerOptions", "WhatComesNextMainModifiers");
+            let choose_different = choose_different_screen_label(state.return_screen);
+            let choice_str = choice.as_str();
+            if choice_str == gameplay.as_ref() {
+                audio::play_sfx("assets/sounds/start.ogg");
+                return Some(ScreenAction::Navigate(Screen::Gameplay));
+            } else if choice_str == choose_different {
+                audio::play_sfx("assets/sounds/start.ogg");
+                return Some(ScreenAction::Navigate(state.return_screen));
+            } else if choice_str == advanced.as_ref() {
+                switch_to_pane(state, OptionsPane::Advanced);
+            } else if choice_str == uncommon.as_ref() {
+                switch_to_pane(state, OptionsPane::Uncommon);
+            } else if choice_str == main_mods.as_ref() {
+                switch_to_pane(state, OptionsPane::Main);
             }
         }
     }
@@ -6767,8 +6983,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
     }));
+    let select_modifiers = tr("ScreenTitles", "SelectModifiers");
     actors.push(screen_bar::build(ScreenBarParams {
-        title: "SELECT MODIFIERS",
+        title: &select_modifiers,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
         transparent: false,
@@ -6800,32 +7017,36 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let p2_guest =
         crate::game::profile::is_session_side_guest(crate::game::profile::PlayerSide::P2);
 
+    let insert_card = tr("Common", "InsertCard");
+    let press_start = tr("Common", "PressStart");
+
     let (footer_left, left_avatar) = if p1_joined {
         (
             Some(if p1_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p1_profile.display_name.as_str()
             }),
             if p1_guest { None } else { p1_avatar },
         )
     } else {
-        (Some("PRESS START"), None)
+        (Some(press_start.as_ref()), None)
     };
     let (footer_right, right_avatar) = if p2_joined {
         (
             Some(if p2_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p2_profile.display_name.as_str()
             }),
             if p2_guest { None } else { p2_avatar },
         )
     } else {
-        (Some("PRESS START"), None)
+        (Some(press_start.as_ref()), None)
     };
+    let event_mode = tr("Common", "EventMode");
     actors.push(screen_bar::build(ScreenBarParams {
-        title: "EVENT MODE",
+        title: &event_mode,
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,
         transparent: false,
@@ -6980,7 +7201,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             diffuse(bg_color[0], bg_color[1], bg_color[2], bg_color[3] * a):
             z(100)
         ));
-        if !row.name.is_empty() {
+        if row.id != RowId::Exit {
             actors.push(act!(quad:
                 align(0.0, 0.5): xy(row_left, current_row_y):
                 zoomto(TITLE_BG_WIDTH, frame_h):
@@ -6998,8 +7219,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
         title_color[3] *= a;
         // Handle multi-line row titles (e.g., "Music Rate\nbpm: 120")
-        if row.name.contains('\n') {
-            let lines: Vec<&str> = row.name.split('\n').collect();
+        if row.id == RowId::MusicRate {
+            let display = music_rate_display_name(state);
+            let lines: Vec<&str> = display.split('\n').collect();
             if lines.len() == 2 {
                 actors.push(act!(text: font("miso"): settext(lines[0].to_string()):
                     align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(title_zoom):
@@ -7014,7 +7236,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     z(101)
                 ));
             } else {
-                actors.push(act!(text: font("miso"): settext(row.name.clone()):
+                actors.push(act!(text: font("miso"): settext(display):
                     align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                     horizalign(left): maxwidth(title_max_w):
@@ -7022,18 +7244,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 ));
             }
         } else {
-            actors.push(act!(text: font("miso"): settext(row.name.clone()):
-                align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
-                diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                horizalign(left): maxwidth(title_max_w):
-                z(101)
-            ));
+            actors.push(
+                act!(text: font("miso"): settext(row.name.get().to_string()):
+                    align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
+                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                    horizalign(left): maxwidth(title_max_w):
+                    z(101)
+                ),
+            );
         }
         // Inactive option text color should be #808080 (alpha 1.0)
         let mut sl_gray = color::rgba_hex("#808080");
         sl_gray[3] *= a;
         // Some rows should display all choices inline
-        let show_all_choices_inline = row_shows_all_choices_inline(&row.name);
+        let show_all_choices_inline = row_shows_all_choices_inline(row.id);
         let show_arcade_next_row = arcade_next_row_visible(state, item_idx);
         // Choice area: For single-choice rows (ShowOneInRow), use ItemsLongRowP1X positioning
         // For multi-choice rows (ShowAllInRow), use ItemsStartX positioning
@@ -7044,7 +7268,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else {
             screen_center_x() + widescale(-100.0, -130.0) // ItemsLongRowP1X for single-choice rows
         };
-        if row.name.is_empty() {
+        if row.id == RowId::Exit {
             // Special case for the last "Exit" row
             let choice_text = &row.choices[row.selected_choice_index[P1]];
             let choice_color = if is_active {
@@ -7140,7 +7364,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // - For normal rows: underline the currently selected choice.
             // - For Scroll row: underline each enabled scroll mode (multi-select).
             // - For FA+ Options row: underline each enabled FA+ toggle (multi-select).
-            if row.name == "Scroll" {
+            if row.id == RowId::Scroll {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7177,7 +7401,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Hide" {
+            } else if row.id == RowId::Hide {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7214,7 +7438,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Insert" {
+            } else if row.id == RowId::Insert {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7251,7 +7475,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Remove" {
+            } else if row.id == RowId::Remove {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7288,7 +7512,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Holds" {
+            } else if row.id == RowId::Holds {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7325,7 +7549,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Accel" {
+            } else if row.id == RowId::Accel {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7362,7 +7586,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Effect" {
+            } else if row.id == RowId::Effect {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7399,7 +7623,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Appearance" {
+            } else if row.id == RowId::Appearance {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7436,7 +7660,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Life Bar Options" {
+            } else if row.id == RowId::LifeBarOptions {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7473,7 +7697,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "FA+ Options" {
+            } else if row.id == RowId::FAPlusOptions {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7510,7 +7734,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Gameplay Extras" {
+            } else if row.id == RowId::GameplayExtras {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7547,7 +7771,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Gameplay Extras (More)" {
+            } else if row.id == RowId::GameplayExtrasMore {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7584,7 +7808,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == ROW_RESULTS_EXTRAS {
+            } else if row.id == RowId::ResultsExtras {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7621,7 +7845,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Measure Counter Options" {
+            } else if row.id == RowId::MeasureCounterOptions {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7658,7 +7882,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Error Bar" {
+            } else if row.id == RowId::ErrorBar {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7695,7 +7919,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Error Bar Options" {
+            } else if row.id == RowId::ErrorBarOptions {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7732,7 +7956,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                 }
-            } else if row.name == "Early Decent/Way Off Options" {
+            } else if row.id == RowId::EarlyDecentWayOffOptions {
                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                 let offset = widescale(3.0, 4.0);
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
@@ -7879,7 +8103,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // For Music Rate, center within the item column (to match SL parity).
             let primary_player_idx = if active[P1] { P1 } else { P2 };
             let mut choice_center_x = speed_mod_x;
-            if row.name.starts_with("Music Rate") {
+            if row.id == RowId::MusicRate {
                 let item_col_left = row_left + TITLE_BG_WIDTH;
                 let item_col_w = row_width - TITLE_BG_WIDTH;
                 choice_center_x = item_col_left + item_col_w * 0.5;
@@ -7902,7 +8126,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let choice_display_text =
                         if arcade_row_focuses_next_row(state, primary_player_idx, item_idx) {
                             ARCADE_NEXT_ROW_TEXT.to_string()
-                        } else if row.name == "Speed Mod" {
+                        } else if row.id == RowId::SpeedMod {
                             match state.speed_mod[primary_player_idx].mod_type.as_str() {
                                 "X" => format!("{:.2}x", state.speed_mod[primary_player_idx].value),
                                 "C" => format!(
@@ -7989,17 +8213,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             ));
                         }
                     }
-                    let p2_text = if show_p2 && !row.name.starts_with("Music Rate") {
+                    let p2_text = if show_p2 && row.id != RowId::MusicRate {
                         if arcade_row_focuses_next_row(state, P2, item_idx) {
                             ARCADE_NEXT_ROW_TEXT.to_string()
-                        } else if row.name == "Speed Mod" {
+                        } else if row.id == RowId::SpeedMod {
                             match state.speed_mod[P2].mod_type.as_str() {
                                 "X" => format!("{:.2}x", state.speed_mod[P2].value),
                                 "C" => format!("C{}", state.speed_mod[P2].value as i32),
                                 "M" => format!("M{}", state.speed_mod[P2].value as i32),
                                 _ => String::new(),
                             }
-                        } else if row.name == "Type of Speed Mod" {
+                        } else if row.id == RowId::TypeOfSpeedMod {
                             let idx = match state.speed_mod[P2].mod_type.as_str() {
                                 "X" => 0,
                                 "C" => 1,
@@ -8016,7 +8240,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     } else {
                         String::new()
                     };
-                    if show_p2 && !row.name.starts_with("Music Rate") {
+                    if show_p2 && row.id != RowId::MusicRate {
                         let p2_choice_center_x = screen_center_x().mul_add(2.0, -choice_center_x);
                         let mut p2_w = crate::engine::present::font::measure_line_width_logical(
                             metrics_font,
@@ -8083,7 +8307,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                     // Add previews for the selected value on each side.
-                    if row.name == "Judgment Font" {
+                    if row.id == RowId::JudgmentFont {
                         let texture_for = |player_idx: usize| -> Option<&str> {
                             assets::judgment_texture_choices()
                                 .get(row.selected_choice_index[player_idx])
@@ -8123,7 +8347,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                     // Add hold judgment preview for "Hold Judgment" row showing both frames (Held and Let Go)
-                    if row.name == "Hold Judgment" {
+                    if row.id == RowId::HoldJudgment {
                         let texture_for = |player_idx: usize| -> Option<&str> {
                             assets::hold_judgment_texture_choices()
                                 .get(row.selected_choice_index[player_idx])
@@ -8173,10 +8397,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     // Match ITGmania themes that show four directional noteskin preview arrows
                     // with explicit quant offsets: Left/Down/Up/Right and 0/1/3/2 quant indices.
-                    if row.name == "NoteSkin"
-                        || row.name == "MineSkin"
-                        || row.name == "ReceptorSkin"
-                        || row.name == "TapExplosionSkin"
+                    if row.id == RowId::NoteSkin
+                        || row.id == RowId::MineSkin
+                        || row.id == RowId::ReceptorSkin
+                        || row.id == RowId::TapExplosionSkin
                     {
                         const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
                         const PREVIEW_SCALE: f32 = 0.45;
@@ -8602,7 +8826,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 ));
                             }
                         };
-                        if row.name == "NoteSkin" {
+                        if row.id == RowId::NoteSkin {
                             if let Some(ns) = state.noteskin[primary_player_idx].as_ref() {
                                 draw_noteskin_preview(
                                     ns,
@@ -8615,7 +8839,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             {
                                 draw_noteskin_preview(ns, preview_x_for(P2), &mut actors);
                             }
-                        } else if row.name == "MineSkin" {
+                        } else if row.id == RowId::MineSkin {
                             if let Some(mine_ns) = state.mine_noteskin[primary_player_idx]
                                 .as_deref()
                                 .or_else(|| state.noteskin[primary_player_idx].as_deref())
@@ -8633,7 +8857,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             {
                                 draw_mine_preview(mine_ns, preview_x_for(P2), &mut actors);
                             }
-                        } else if row.name == "ReceptorSkin" {
+                        } else if row.id == RowId::ReceptorSkin {
                             if let Some(receptor_ns) = state.receptor_noteskin[primary_player_idx]
                                 .as_deref()
                                 .or_else(|| state.noteskin[primary_player_idx].as_deref())
@@ -8652,7 +8876,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             {
                                 draw_receptor_preview(receptor_ns, preview_x_for(P2), &mut actors);
                             }
-                        } else if row.name == "TapExplosionSkin" {
+                        } else if row.id == RowId::TapExplosionSkin {
                             if !state.player_profiles[primary_player_idx]
                                 .tap_explosion_noteskin_hidden()
                                 && let Some(explosion_ns) = state.tap_explosion_noteskin
@@ -8692,23 +8916,27 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                     // Add combo preview for "Combo Font" row showing ticking numbers
-                    if row.name == "Combo Font" {
+                    if row.id == RowId::ComboFont {
                         let combo_text = state.combo_preview_count.to_string();
                         let combo_zoom = 0.45;
-                        let combo_font_for = |text: &str| -> Option<&'static str> {
-                            match text {
-                            "Wendy" => Some("wendy_combo"),
-                            "Arial Rounded" => Some("combo_arial_rounded"),
-                            "Asap" => Some("combo_asap"),
-                            "Bebas Neue" => Some("combo_bebas_neue"),
-                            "Source Code" => Some("combo_source_code"),
-                            "Work" => Some("combo_work"),
-                            "Wendy (Cursed)" => Some("combo_wendy_cursed"),
-                            "None" => None,
-                            _ => Some("wendy_combo"),
+                        // Choice indices are fixed by construction order:
+                        // 0=Wendy, 1=ArialRounded, 2=Asap, 3=BebasNeue, 4=SourceCode,
+                        // 5=Work, 6=WendyCursed, 7=None
+                        let combo_font_for = |idx: usize| -> Option<&'static str> {
+                            match idx {
+                            0 => Some("wendy_combo"),
+                            1 => Some("combo_arial_rounded"),
+                            2 => Some("combo_asap"),
+                            3 => Some("combo_bebas_neue"),
+                            4 => Some("combo_source_code"),
+                            5 => Some("combo_work"),
+                            6 => Some("combo_wendy_cursed"),
+                            _ => None,
                             }
                         };
-                        if let Some(font_name) = combo_font_for(choice_text.as_str()) {
+                        let p1_choice_idx = row.selected_choice_index[primary_player_idx]
+                            .min(row.choices.len().saturating_sub(1));
+                        if let Some(font_name) = combo_font_for(p1_choice_idx) {
                             actors.push(act!(text:
                                 font(font_name): settext(combo_text.clone()):
                                 align(0.5, 0.5):
@@ -8718,9 +8946,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 z(102)
                             ));
                         }
-                        if show_p2 && primary_player_idx != P2
-                            && let Some(font_name) = combo_font_for(p2_text.as_str())
-                        {
+                        if show_p2 && primary_player_idx != P2 {
+                            let p2_choice_idx = row.selected_choice_index[P2]
+                                .min(row.choices.len().saturating_sub(1));
+                            if let Some(font_name) = combo_font_for(p2_choice_idx) {
                             actors.push(act!(text:
                                 font(font_name): settext(combo_text):
                                 align(0.5, 0.5):
@@ -8729,6 +8958,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 diffuse(1.0, 1.0, 1.0, a):
                                 z(102)
                             ));
+                            }
                         }
                     }
                 });
@@ -8821,21 +9051,35 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 mod tests {
     use super::{
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, NAV_INITIAL_HOLD_DELAY,
-        NAV_REPEAT_SCROLL_INTERVAL, P1, ROW_COMBO_FONT, ROW_COMBO_OFFSET_X, ROW_ERROR_BAR_OFFSET_X,
-        ROW_JUDGMENT_FONT, ROW_JUDGMENT_OFFSET_X, Row, SpeedMod, handle_arcade_start_event,
+        NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowId, SpeedMod, handle_arcade_start_event,
         hud_offset_choices, is_row_visible, repeat_held_arcade_start, row_visibility,
         session_active_players, sync_profile_scroll_speed,
     };
     use crate::assets::AssetManager;
+    use crate::assets::i18n::{LookupKey, lookup_key};
     use crate::game::profile::{self, PlayStyle, PlayerSide, Profile};
     use crate::game::scroll::ScrollSpeedSetting;
     use crate::screens::Screen;
     use crate::test_support::{compose_scenarios, notefield_bench};
     use std::time::{Duration, Instant};
 
-    fn test_row(name: &str, choices: &[&str], selected_choice_index: [usize; 2]) -> Row {
+    fn ensure_i18n() {
+        use std::sync::Once;
+        static INIT: Once = Once::new();
+        INIT.call_once(|| {
+            crate::assets::i18n::init("en");
+        });
+    }
+
+    fn test_row(
+        id: RowId,
+        name: LookupKey,
+        choices: &[&str],
+        selected_choice_index: [usize; 2],
+    ) -> Row {
         Row {
-            name: name.to_string(),
+            id,
+            name,
             choices: choices.iter().map(ToString::to_string).collect(),
             selected_choice_index,
             help: Vec::new(),
@@ -8877,9 +9121,20 @@ mod tests {
 
     #[test]
     fn error_bar_offsets_hide_with_empty_error_bar_mask() {
+        ensure_i18n();
         let rows = vec![
-            test_row("Error Bar", &["Colorful"], [0, 0]),
-            test_row(ROW_ERROR_BAR_OFFSET_X, &["0"], [0, 0]),
+            test_row(
+                RowId::ErrorBar,
+                lookup_key("PlayerOptions", "ErrorBar"),
+                &["Colorful"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::ErrorBarOffsetX,
+                lookup_key("PlayerOptions", "ErrorBarOffsetX"),
+                &["0"],
+                [0, 0],
+            ),
         ];
         let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0], false);
         assert!(!is_row_visible(&rows, 1, visibility));
@@ -8890,16 +9145,37 @@ mod tests {
 
     #[test]
     fn judgment_offsets_hide_when_judgment_font_is_none() {
+        ensure_i18n();
         let rows = vec![
-            test_row(ROW_JUDGMENT_FONT, &["Love", "None"], [1, 0]),
-            test_row(ROW_JUDGMENT_OFFSET_X, &["0"], [0, 0]),
+            test_row(
+                RowId::JudgmentFont,
+                lookup_key("PlayerOptions", "JudgmentFont"),
+                &["Love", "None"],
+                [1, 0],
+            ),
+            test_row(
+                RowId::JudgmentOffsetX,
+                lookup_key("PlayerOptions", "JudgmentOffsetX"),
+                &["0"],
+                [0, 0],
+            ),
         ];
         let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0], false);
         assert!(!is_row_visible(&rows, 1, visibility));
 
         let rows = vec![
-            test_row(ROW_JUDGMENT_FONT, &["Love", "None"], [0, 0]),
-            test_row(ROW_JUDGMENT_OFFSET_X, &["0"], [0, 0]),
+            test_row(
+                RowId::JudgmentFont,
+                lookup_key("PlayerOptions", "JudgmentFont"),
+                &["Love", "None"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::JudgmentOffsetX,
+                lookup_key("PlayerOptions", "JudgmentOffsetX"),
+                &["0"],
+                [0, 0],
+            ),
         ];
         let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0], false);
         assert!(is_row_visible(&rows, 1, visibility));
@@ -8907,16 +9183,37 @@ mod tests {
 
     #[test]
     fn combo_offsets_hide_when_all_active_players_use_none_font() {
+        ensure_i18n();
         let rows = vec![
-            test_row(ROW_COMBO_FONT, &["Wendy", "None"], [1, 1]),
-            test_row(ROW_COMBO_OFFSET_X, &["0"], [0, 0]),
+            test_row(
+                RowId::ComboFont,
+                lookup_key("PlayerOptions", "ComboFont"),
+                &["Wendy", "None"],
+                [1, 1],
+            ),
+            test_row(
+                RowId::ComboOffsetX,
+                lookup_key("PlayerOptions", "ComboOffsetX"),
+                &["0"],
+                [0, 0],
+            ),
         ];
         let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0], false);
         assert!(!is_row_visible(&rows, 1, visibility));
 
         let rows = vec![
-            test_row(ROW_COMBO_FONT, &["Wendy", "None"], [1, 0]),
-            test_row(ROW_COMBO_OFFSET_X, &["0"], [0, 0]),
+            test_row(
+                RowId::ComboFont,
+                lookup_key("PlayerOptions", "ComboFont"),
+                &["Wendy", "None"],
+                [1, 0],
+            ),
+            test_row(
+                RowId::ComboOffsetX,
+                lookup_key("PlayerOptions", "ComboOffsetX"),
+                &["0"],
+                [0, 0],
+            ),
         ];
         let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0], false);
         assert!(is_row_visible(&rows, 1, visibility));
@@ -8936,6 +9233,7 @@ mod tests {
 
     #[test]
     fn held_arcade_start_keeps_advancing_rows() {
+        ensure_i18n();
         let base = notefield_bench::fixture();
         let song = base.state().song.clone();
 
@@ -8966,6 +9264,7 @@ mod tests {
 
     #[test]
     fn held_arcade_start_stops_at_exit_row() {
+        ensure_i18n();
         let base = notefield_bench::fixture();
         let song = base.state().song.clone();
 

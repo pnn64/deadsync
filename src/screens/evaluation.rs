@@ -14,6 +14,7 @@ use crate::screens::components::{
 };
 
 use crate::assets::AssetManager;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::present::font;
 use crate::game::chart::ChartData;
 use crate::game::gameplay::MAX_PLAYERS;
@@ -126,12 +127,22 @@ fn cached_bpm_text(min_bpm: f64, max_bpm: f64, music_rate: f32) -> Arc<str> {
     let max = (max_bpm * rate_f64).round() as i32;
     cached_text(&BPM_TEXT_CACHE, (min, max, rate.to_bits()), || {
         let base = if min == max {
-            format!("{min} bpm")
+            tr_fmt("Evaluation", "BpmSingle", &[("bpm", &min.to_string())]).to_string()
         } else {
-            format!("{min} - {max} bpm")
+            tr_fmt(
+                "Evaluation",
+                "BpmRange",
+                &[("min", &min.to_string()), ("max", &max.to_string())],
+            )
+            .to_string()
         };
         if (rate - 1.0).abs() > 0.001 {
-            format!("{base} ({rate:.2}x Music Rate)")
+            tr_fmt(
+                "Evaluation",
+                "BpmWithRate",
+                &[("base", &base), ("rate", &format!("{rate:.2}"))],
+            )
+            .to_string()
         } else {
             base
         }
@@ -157,40 +168,50 @@ fn cached_record_text(is_machine: bool, rank: u32) -> Arc<str> {
         (rank, if is_machine { 0 } else { 1 }),
         || {
             if is_machine {
-                format!("Machine Record {rank}")
+                tr_fmt(
+                    "Records",
+                    "MachineRecordFormat",
+                    &[("rank", &rank.to_string())],
+                )
+                .to_string()
             } else {
-                format!("Personal Record {rank}")
+                tr_fmt(
+                    "Records",
+                    "PersonalRecordFormat",
+                    &[("rank", &rank.to_string())],
+                )
+                .to_string()
             }
         },
     )
 }
 
 #[inline(always)]
-const fn submit_record_text(banner: scores::GrooveStatsSubmitRecordBanner) -> &'static str {
+fn submit_record_text(banner: scores::GrooveStatsSubmitRecordBanner) -> Arc<str> {
     match banner {
-        scores::GrooveStatsSubmitRecordBanner::PersonalBest => "Personal Best!",
-        scores::GrooveStatsSubmitRecordBanner::WorldRecord => "World Record!",
-        scores::GrooveStatsSubmitRecordBanner::WorldRecordEx => "World Record! (EX)",
+        scores::GrooveStatsSubmitRecordBanner::PersonalBest => tr("Records", "PersonalBest"),
+        scores::GrooveStatsSubmitRecordBanner::WorldRecord => tr("Records", "WorldRecord"),
+        scores::GrooveStatsSubmitRecordBanner::WorldRecordEx => tr("Records", "WorldRecordEx"),
     }
 }
 
 #[inline(always)]
-const fn groovestats_submit_status_text(status: scores::GrooveStatsSubmitUiStatus) -> &'static str {
+fn groovestats_submit_status_text(status: scores::GrooveStatsSubmitUiStatus) -> Arc<str> {
     match status {
-        scores::GrooveStatsSubmitUiStatus::Submitting => "Submitting ...",
-        scores::GrooveStatsSubmitUiStatus::Submitted => "Submitted!",
-        scores::GrooveStatsSubmitUiStatus::SubmitFailed => "Submit Failed",
-        scores::GrooveStatsSubmitUiStatus::TimedOut => "Timed Out - F5 Retry",
+        scores::GrooveStatsSubmitUiStatus::Submitting => tr("SubmitStatus", "Submitting"),
+        scores::GrooveStatsSubmitUiStatus::Submitted => tr("SubmitStatus", "Submitted"),
+        scores::GrooveStatsSubmitUiStatus::SubmitFailed => tr("SubmitStatus", "SubmitFailed"),
+        scores::GrooveStatsSubmitUiStatus::TimedOut => tr("SubmitStatus", "TimedOutRetry"),
     }
 }
 
 #[inline(always)]
-const fn arrowcloud_submit_status_text(status: scores::ArrowCloudSubmitUiStatus) -> &'static str {
+fn arrowcloud_submit_status_text(status: scores::ArrowCloudSubmitUiStatus) -> Arc<str> {
     match status {
-        scores::ArrowCloudSubmitUiStatus::Submitting => "Submitting ...",
-        scores::ArrowCloudSubmitUiStatus::Submitted => "Submitted!",
-        scores::ArrowCloudSubmitUiStatus::SubmitFailed => "Submit Failed",
-        scores::ArrowCloudSubmitUiStatus::TimedOut => "Timed Out - F5 Retry",
+        scores::ArrowCloudSubmitUiStatus::Submitting => tr("SubmitStatus", "Submitting"),
+        scores::ArrowCloudSubmitUiStatus::Submitted => tr("SubmitStatus", "Submitted"),
+        scores::ArrowCloudSubmitUiStatus::SubmitFailed => tr("SubmitStatus", "SubmitFailed"),
+        scores::ArrowCloudSubmitUiStatus::TimedOut => tr("SubmitStatus", "TimedOutRetry"),
     }
 }
 
@@ -234,11 +255,11 @@ const fn submit_footer_status_glyph(status: SubmitFooterStatus) -> &'static str 
 }
 
 #[inline(always)]
-fn submit_footer_gs_label() -> &'static str {
+fn submit_footer_gs_label() -> Arc<str> {
     if online::is_boogiestats_active() {
-        "BS"
+        tr("SubmitStatus", "BSLabel")
     } else {
-        "GS"
+        tr("SubmitStatus", "GSLabel")
     }
 }
 
@@ -246,12 +267,16 @@ fn combined_submit_footer_text(
     gs_status: SubmitFooterStatus,
     ac_status: SubmitFooterStatus,
 ) -> Arc<str> {
-    Arc::<str>::from(format!(
-        "Submitted! {} {} {} AC",
-        submit_footer_status_glyph(gs_status),
-        submit_footer_gs_label(),
-        submit_footer_status_glyph(ac_status),
-    ))
+    tr_fmt(
+        "SubmitStatus",
+        "SubmittedCombined",
+        &[
+            ("gs_glyph", submit_footer_status_glyph(gs_status)),
+            ("gs_label", &submit_footer_gs_label()),
+            ("ac_glyph", submit_footer_status_glyph(ac_status)),
+            ("ac_label", &tr("SubmitStatus", "ACLabel")),
+        ],
+    )
 }
 
 #[inline(always)]
@@ -284,7 +309,7 @@ fn submit_footer_lines(
         return Vec::new();
     }
     if gs_pending || ac_pending {
-        return vec![cached_str_ref("Submitting ...")];
+        return vec![tr("SubmitStatus", "Submitting")];
     }
     if matches!(gs_status, Some(SubmitFooterStatus::TimedOut))
         || matches!(ac_status, Some(SubmitFooterStatus::TimedOut))
@@ -293,8 +318,8 @@ fn submit_footer_lines(
         let mut lines = Vec::with_capacity(2);
         if let Some(status) = gs_status {
             lines.push(submit_footer_service_line(
-                submit_footer_gs_label(),
-                groovestats_submit_status_text(match status {
+                &submit_footer_gs_label(),
+                &groovestats_submit_status_text(match status {
                     SubmitFooterStatus::Submitting => scores::GrooveStatsSubmitUiStatus::Submitting,
                     SubmitFooterStatus::Submitted => scores::GrooveStatsSubmitUiStatus::Submitted,
                     SubmitFooterStatus::SubmitFailed => {
@@ -307,8 +332,8 @@ fn submit_footer_lines(
         }
         if let Some(status) = ac_status {
             lines.push(submit_footer_service_line(
-                "AC",
-                arrowcloud_submit_status_text(match status {
+                &tr("SubmitStatus", "ACLabel"),
+                &arrowcloud_submit_status_text(match status {
                     SubmitFooterStatus::Submitting => scores::ArrowCloudSubmitUiStatus::Submitting,
                     SubmitFooterStatus::Submitted => scores::ArrowCloudSubmitUiStatus::Submitted,
                     SubmitFooterStatus::SubmitFailed => {
@@ -327,18 +352,18 @@ fn submit_footer_lines(
             if matches!(gs_status, SubmitFooterStatus::SubmitFailed)
                 && matches!(ac_status, SubmitFooterStatus::SubmitFailed)
             {
-                vec![cached_str_ref("Submit Failed")]
+                vec![tr("SubmitStatus", "SubmitFailed")]
             } else {
                 vec![combined_submit_footer_text(gs_status, ac_status)]
             }
         }
         (Some(SubmitFooterStatus::Submitted), None)
         | (None, Some(SubmitFooterStatus::Submitted)) => {
-            vec![cached_str_ref("Submitted!")]
+            vec![tr("SubmitStatus", "Submitted")]
         }
         (Some(SubmitFooterStatus::SubmitFailed), None)
         | (None, Some(SubmitFooterStatus::SubmitFailed)) => {
-            vec![cached_str_ref("Submit Failed")]
+            vec![tr("SubmitStatus", "SubmitFailed")]
         }
         _ => Vec::new(),
     }
@@ -347,16 +372,19 @@ fn submit_footer_lines(
 #[inline(always)]
 fn cached_difficulty_text(style_label: &'static str, difficulty: &'static str) -> Arc<str> {
     cached_text(&DIFFICULTY_TEXT_CACHE, (style_label, difficulty), || {
-        format!("{style_label} / {difficulty}")
+        tr_fmt(
+            "Evaluation",
+            "DifficultyFormat",
+            &[("style", style_label), ("difficulty", difficulty)],
+        )
+        .to_string()
     })
 }
 
 #[inline(always)]
 fn cached_total_label_text(total: u32) -> Arc<str> {
     cached_text(&TOTAL_LABEL_CACHE, total, || {
-        let mut s = total.to_string();
-        s.push_str(" Total");
-        s
+        format!("{} {}", total, tr("Evaluation", "TotalLabel"))
     })
 }
 
@@ -383,7 +411,7 @@ pub struct ScoreInfo {
     pub score_percent: f64,
     pub grade: scores::Grade,
     pub speed_mod: ScrollSpeedSetting,
-    pub noteskin_name: String,
+    pub mods_text: Arc<str>,
     pub hands_achieved: u32,
     pub hands_total: u32,
     pub holds_held: u32,
@@ -404,7 +432,6 @@ pub struct ScoreInfo {
     pub graph_first_second: f32,
     pub graph_last_second: f32,
     pub music_rate: f32,
-    pub scroll_option: crate::game::profile::ScrollOption,
     pub life_history: Vec<(f32, f32)>,
     pub fail_time: Option<f32>,
     // Per-window tap counts (including FA+ W0) for display purposes.
@@ -1241,7 +1268,9 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 score_percent,
                 grade,
                 speed_mod: gs.scroll_speed[player_idx],
-                noteskin_name: prof.noteskin.to_string(),
+                mods_text: crate::screens::components::gameplay::notefield::gameplay_mods_text(
+                    &gs, player_idx,
+                ),
                 hands_achieved: p.hands_achieved,
                 hands_total: gs.hands_total[player_idx],
                 holds_held: p.holds_held,
@@ -1261,7 +1290,6 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 } else {
                     1.0
                 },
-                scroll_option: prof.scroll_option,
                 life_history: p.life_history.clone(),
                 fail_time: p.fail_time,
                 window_counts,
@@ -2378,7 +2406,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let Some(score_info) = state.score_info.iter().find_map(|s| s.as_ref()) else {
         actors.push(act!(text:
             font("wendy"):
-            settext("NO SCORE DATA AVAILABLE"):
+            settext(tr("Evaluation", "NoScoreDataAvailable")):
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             zoom(0.8): horizalign(center):
             z(100)
@@ -3286,7 +3314,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let arrow_end_y = anchor_y + 20.0;
 
                             life_children.push(act!(text:
-                                font("miso"): settext("Barely!"):
+                                font("miso"): settext(tr("Evaluation", "Barely")):
                                 align(0.5, 0.5): xy(x, text_start_y):
                                 zoom(0.75):
                                 diffuse(1.0, 1.0, 1.0, 1.0): alpha(0.0):
@@ -3434,7 +3462,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
             actors.push(act!(text:
                 font("wendy"):
-                settext("Disqualified From Ranking"):
+                settext(tr("Evaluation", "DisqualifiedFromRanking")):
                 align(0.5, 0.5):
                 xy(center_x, label_y):
                 zoom(label_zoom):
@@ -3478,7 +3506,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 };
                 actors.push(act!(text:
                     font("wendy"):
-                    settext(cached_str_ref(submit_record_text(banner))):
+                    settext(submit_record_text(banner)):
                     align(0.5, 0.5):
                     xy(x, AUTO_SUBMIT_RECORD_TEXT_Y):
                     zoom(AUTO_SUBMIT_RECORD_TEXT_ZOOM):
@@ -3533,7 +3561,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // --- "ITG" text and Pads (top right) ---
     {
         let itg_text_x = screen_width() - widescale(55.0, 62.0);
-        actors.push(act!(text: font("wendy"): settext("ITG"): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
+        actors.push(act!(text: font("wendy"): settext(tr("Evaluation", "ITGLabel")): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
         actors.extend(mode_pads::build());
     }
 

@@ -4,7 +4,7 @@ use crate::engine::gfx::{BlendMode, RenderList, RenderObject};
 use crate::engine::present::actors::{self, Actor, SizeSpec};
 use crate::engine::present::{anim, font};
 use crate::engine::space::Metrics;
-use cgmath::{Matrix4, Rad, Vector2, Vector3};
+use glam::{Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3};
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
@@ -40,8 +40,10 @@ pub fn build_screen_cached<'a>(
     text_cache: &mut TextLayoutCache,
 ) -> RenderList<'a> {
     let mut objects = Vec::with_capacity(estimate_object_count(actors));
-    let mut cameras: Vec<Matrix4<f32>> = Vec::with_capacity(4);
-    cameras.push(cgmath::ortho(m.left, m.right, m.bottom, m.top, -1.0, 1.0));
+    let mut cameras: Vec<Matrix4> = Vec::with_capacity(4);
+    cameras.push(Matrix4::orthographic_rh_gl(
+        m.left, m.right, m.bottom, m.top, -1.0, 1.0,
+    ));
     let mut order_counter: u32 = 0;
     let mut masks: Vec<WorldRect> = Vec::with_capacity(8);
 
@@ -860,7 +862,7 @@ fn build_actor_recursive<'a>(
     fonts: &'a HashMap<&'static str, font::Font>,
     base_z: i16,
     camera: u8,
-    cameras: &mut Vec<Matrix4<f32>>,
+    cameras: &mut Vec<Matrix4>,
     masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
     out: &mut Vec<RenderObject<'a>>,
@@ -1040,7 +1042,7 @@ fn build_actor_recursive<'a>(
             let base_x = m.left + rect.x;
             let base_y = m.top - rect.y;
             let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, 0.0))
-                * Matrix4::from_nonuniform_scale(1.0, -1.0, 1.0);
+                * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
 
             let before = out.len();
             out.push(renderer::RenderObject {
@@ -1092,7 +1094,7 @@ fn build_actor_recursive<'a>(
             let base_x = m.left + rect.x;
             let base_y = m.top - rect.y;
             let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, *world_z))
-                * Matrix4::from_nonuniform_scale(1.0, -1.0, 1.0);
+                * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
 
             let before = out.len();
             out.push(renderer::RenderObject {
@@ -1818,8 +1820,8 @@ fn push_sprite<'a>(
     // Sprite fast-path rendering only preserves in-plane rotation; X/Y folding
     // above already handled their SM parity.
     let transform = {
-        let r = Matrix4::from_angle_z(Rad(rot_z_deg.to_radians()));
-        let s = Matrix4::from_nonuniform_scale(size_x, size_y, 1.0);
+        let r = Matrix4::from_rotation_z(rot_z_deg.to_radians());
+        let s = Matrix4::from_scale(Vector3::new(size_x, size_y, 1.0));
         let t = Matrix4::from_translation(Vector3::new(center_x, center_y, world_z));
         t * r * s
     };
@@ -2084,10 +2086,10 @@ fn layout_text<'a>(
                 // c1 = [0, h, 0, 0]
                 // c2 = [0, 0, 1, 0]
                 // c3 = [tx, ty, 0, 1]
-                let transform = Matrix4::new(
+                let transform = Matrix4::from_cols_array(&[
                     quad_w, 0.0, 0.0, 0.0, 0.0, quad_h, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, center_x,
                     center_y, 0.0, 1.0,
-                );
+                ]);
                 // SAFETY: `glyph.texture_key` was captured from cached font storage
                 // when the layout was built and remains valid for this render-list
                 // assembly pass.
@@ -2119,7 +2121,7 @@ fn layout_text<'a>(
 }
 
 #[inline(always)]
-fn sm_rect_to_world_center_size(rect: SmRect, m: &Metrics) -> (Vector2<f32>, Vector2<f32>) {
+fn sm_rect_to_world_center_size(rect: SmRect, m: &Metrics) -> (Vector2, Vector2) {
     (
         Vector2::new(
             0.5f32.mul_add(rect.w, m.left + rect.x),
@@ -2191,7 +2193,7 @@ fn sprite_object_world_area(obj: &RenderObject<'_>) -> f32 {
     match &obj.object_type {
         renderer::ObjectType::Sprite { .. } => {
             let t = &obj.transform;
-            (t.x.x * t.y.y).abs()
+            (t.x_axis.x * t.y_axis.y).abs()
         }
         renderer::ObjectType::TexturedMesh { vertices, .. } => {
             if vertices.len() < 3 {
@@ -2282,18 +2284,22 @@ fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect)
 
     let eps = 1e-6;
     let t = &obj.transform;
-    if t.x.y.abs() > eps || t.y.x.abs() > eps || t.x.z.abs() > eps || t.y.z.abs() > eps {
+    if t.x_axis.y.abs() > eps
+        || t.y_axis.x.abs() > eps
+        || t.x_axis.z.abs() > eps
+        || t.y_axis.z.abs() > eps
+    {
         return clip_rotated_sprite_object_to_world_rect(obj, clip);
     }
 
-    let w = t.x.x;
-    let h = t.y.y;
+    let w = t.x_axis.x;
+    let h = t.y_axis.y;
     if w <= eps || h <= eps {
         return false;
     }
 
-    let cx = t.w.x;
-    let cy = t.w.y;
+    let cx = t.w_axis.x;
+    let cy = t.w_axis.y;
 
     let half_w = w * 0.5;
     let half_h = h * 0.5;
@@ -2335,12 +2341,12 @@ fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect)
     let new_w = w * sx_crop;
     let new_h = h * sy_crop;
 
-    obj.transform = Matrix4::new(
+    obj.transform = Matrix4::from_cols_array(&[
         new_w, 0.0, 0.0, 0.0, //
         0.0, new_h, 0.0, 0.0, //
         0.0, 0.0, 1.0, 0.0, //
         center_x, center_y, 0.0, 1.0,
-    );
+    ]);
 
     true
 }
@@ -2352,10 +2358,14 @@ struct ClipVertex {
 }
 
 #[inline(always)]
-fn world_xy(t: &Matrix4<f32>, p: [f32; 2]) -> [f32; 2] {
+fn world_xy(t: &Matrix4, p: [f32; 2]) -> [f32; 2] {
     [
-        t.x.x.mul_add(p[0], t.y.x.mul_add(p[1], t.w.x)),
-        t.x.y.mul_add(p[0], t.y.y.mul_add(p[1], t.w.y)),
+        t.x_axis
+            .x
+            .mul_add(p[0], t.y_axis.x.mul_add(p[1], t.w_axis.x)),
+        t.x_axis
+            .y
+            .mul_add(p[0], t.y_axis.y.mul_add(p[1], t.w_axis.y)),
     ]
 }
 
@@ -2486,7 +2496,7 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
     };
-    obj.transform = Matrix4::from_scale(1.0);
+    obj.transform = Matrix4::IDENTITY;
     true
 }
 

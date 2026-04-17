@@ -1,7 +1,8 @@
 use crate::assets::AssetManager;
 use crate::config::dirs;
 use crate::engine::gfx::{
-    Backend, INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerFilter, SamplerWrap, TextureHandle,
+    Backend, FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerFilter, SamplerWrap,
+    TextureHandle,
 };
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{debug, warn};
@@ -490,8 +491,8 @@ static SHEET_DIMS: std::sync::LazyLock<RwLock<HashMap<String, (u32, u32)>>> =
 static TEXTURE_HANDLES: std::sync::LazyLock<RwLock<HashMap<String, TextureHandle>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
-static TEXTURE_HANDLE_ALIASES: std::sync::LazyLock<RwLock<HashMap<u64, TextureHandle>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+static TEXTURE_HANDLE_ALIASES: std::sync::LazyLock<RwLock<FastU64Map<TextureHandle>>> =
+    std::sync::LazyLock::new(|| RwLock::new(FastU64Map::default()));
 
 #[derive(Clone)]
 pub(crate) struct GeneratedTexture {
@@ -505,7 +506,7 @@ static GENERATED_TEXTURES_PENDING: std::sync::LazyLock<Mutex<HashSet<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
 
 fn note_texture_handle_alias(
-    aliases: &mut HashMap<u64, TextureHandle>,
+    aliases: &mut FastU64Map<TextureHandle>,
     key: &str,
     handle: TextureHandle,
 ) {
@@ -521,7 +522,7 @@ fn note_texture_handle_alias(
 
 fn rebuild_texture_handle_aliases(
     handles: &HashMap<String, TextureHandle>,
-    aliases: &mut HashMap<u64, TextureHandle>,
+    aliases: &mut FastU64Map<TextureHandle>,
 ) {
     aliases.clear();
     aliases.reserve(handles.len());

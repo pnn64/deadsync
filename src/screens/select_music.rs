@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager};
 use crate::config::{
     self, BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
@@ -91,16 +92,8 @@ const ENTERING_OPTIONS_TOTAL_SECONDS: f32 = ENTERING_OPTIONS_FADE_OUT_SECONDS
     + ENTERING_OPTIONS_FADE_IN_SECONDS
     + ENTERING_OPTIONS_HOLD_SECONDS;
 
-const PRESS_START_FOR_OPTIONS_TEXT: &str = "Press &START; for options";
-const ENTERING_OPTIONS_TEXT: &str = "Entering Options...";
-
 // Simply Love BGAnimations/ScreenSelectMusic overlay/EscapeFromEventMode.lua prompt.
 const SL_EXIT_PROMPT_BG_ALPHA: f32 = 0.925;
-const SL_EXIT_PROMPT_TEXT: &str = "Do you want to exit this game?";
-const SL_EXIT_PROMPT_NO_LABEL: &str = "No";
-const SL_EXIT_PROMPT_YES_LABEL: &str = "Yes";
-const SL_EXIT_PROMPT_NO_INFO: &str = "Keep playing.";
-const SL_EXIT_PROMPT_YES_INFO: &str = "I'm finished.";
 const SL_EXIT_PROMPT_CHOICE_Y: f32 = 250.0;
 const SL_EXIT_PROMPT_CHOICE_X_OFFSET: f32 = 100.0;
 const SL_EXIT_PROMPT_PROMPT_Y_OFFSET: f32 = -70.0;
@@ -155,8 +148,6 @@ const MENU_CHORD_RIGHT: u8 = 1 << 1;
 // Simply Love [ScreenSelectMusic] [MusicWheel]: RecentSongsToShow=30.
 const RECENT_SONGS_TO_SHOW: usize = 30;
 const POPULAR_SONGS_TO_SHOW: usize = 50;
-const RECENT_SORT_HEADER: &str = "Recently Played";
-const POPULAR_SORT_HEADER: &str = "Most Popular";
 const AUTO_STAMINA_MIN_METER: u32 = 11;
 const AUTO_STAMINA_MIN_STREAM_PERCENT: f32 = 10.0;
 const AUTO_STAMINA_MAX_CROSSOVERS: u32 = 9;
@@ -219,9 +210,7 @@ fn cached_u32_text(value: u32) -> Arc<str> {
 #[inline(always)]
 fn cached_total_label_text(total: u32) -> Arc<str> {
     cached_text(&TOTAL_LABEL_CACHE, total, || {
-        let mut s = total.to_string();
-        s.push_str(" Total");
-        s
+        format!("{} {}", total, tr("SelectMusic", "TotalLabel"))
     })
 }
 
@@ -275,17 +264,35 @@ fn cached_chart_info_text(
     }
     let matrix_rating_rounded = (matrix_rating * 100.0).round() / 100.0;
     let matrix_rating_text = if meter >= 11 && matrix_rating_rounded > 0.0 {
-        format!("MR: {matrix_rating_rounded:.2}")
+        tr_fmt(
+            "SelectMusic",
+            "MrValue",
+            &[("value", &format!("{matrix_rating_rounded:.2}"))],
+        )
+        .to_string()
     } else {
-        "MR: N/A".to_string()
+        tr("SelectMusic", "MrNotAvailable").to_string()
     };
     cached_text(
         &CHART_INFO_CACHE,
         (mask, meter, peak_nps.to_bits(), matrix_rating.to_bits()),
         || match mask {
             0b10 => matrix_rating_text,
-            0b11 => format!("PNPS: {peak_nps:.1} | {matrix_rating_text}"),
-            _ => format!("Peak NPS: {peak_nps:.1}"),
+            0b11 => tr_fmt(
+                "SelectMusic",
+                "PnpsAndMr",
+                &[
+                    ("peak_nps", &format!("{peak_nps:.1}")),
+                    ("mr", &matrix_rating_text),
+                ],
+            )
+            .to_string(),
+            _ => tr_fmt(
+                "SelectMusic",
+                "PeakNpsOnly",
+                &[("peak_nps", &format!("{peak_nps:.1}"))],
+            )
+            .to_string(),
         },
     )
 }
@@ -294,7 +301,12 @@ fn cached_chart_info_text(
 fn cached_stamina_mono_text(percent: f64) -> Arc<str> {
     let percent = if percent.is_finite() { percent } else { 0.0 };
     cached_text(&STAMINA_MONO_CACHE, percent.to_bits(), || {
-        format!("{percent:.1}% Mono")
+        tr_fmt(
+            "SelectMusic",
+            "StaminaMono",
+            &[("percent", &format!("{percent:.1}"))],
+        )
+        .to_string()
     })
 }
 
@@ -302,7 +314,12 @@ fn cached_stamina_mono_text(percent: f64) -> Arc<str> {
 fn cached_stamina_candles_text(percent: f64) -> Arc<str> {
     let percent = if percent.is_finite() { percent } else { 0.0 };
     cached_text(&STAMINA_CANDLES_CACHE, percent.to_bits(), || {
-        format!("{percent:.1}% Candles")
+        tr_fmt(
+            "SelectMusic",
+            "StaminaCandles",
+            &[("percent", &format!("{percent:.1}"))],
+        )
+        .to_string()
     })
 }
 
@@ -673,7 +690,7 @@ fn cached_music_rate_banner_text(rate: f32) -> Arc<str> {
         let rate_text = fmt_music_rate(rate);
         let mut text = String::with_capacity(rate_text.len() + 12);
         text.push_str(rate_text.as_ref());
-        text.push_str("x Music Rate");
+        text.push_str(&tr("SelectMusic", "MusicRateSuffix"));
         text
     })
 }
@@ -1454,8 +1471,8 @@ fn alpha_group_bucket_from_text(text: &str) -> u8 {
 fn alpha_group_meta_from_text(text: &str) -> (u8, String) {
     let bucket = alpha_group_bucket_from_text(text);
     let label = match bucket {
-        0 => "Other".to_string(),
-        1 => "0-9".to_string(),
+        0 => tr("SelectMusic", "AlphaGroupOther").to_string(),
+        1 => tr("SelectMusic", "AlphaGroupDigits").to_string(),
         b => ((b'A' + b.saturating_sub(2)) as char).to_string(),
     };
     (bucket, label)
@@ -1475,8 +1492,8 @@ fn title_group_bucket(song: &SongData) -> u8 {
 fn title_group_label(song: &SongData) -> String {
     let bucket = title_group_bucket(song);
     match bucket {
-        0 => "Other".to_string(),
-        1 => "0-9".to_string(),
+        0 => tr("SelectMusic", "AlphaGroupOther").to_string(),
+        1 => tr("SelectMusic", "AlphaGroupDigits").to_string(),
         b => ((b'A' + b.saturating_sub(2)) as char).to_string(),
     }
 }
@@ -1585,8 +1602,6 @@ fn build_artist_grouped_entries(
     (entries, counts)
 }
 
-const UNKNOWN_GENRE_HEADER: &str = "Unknown Genre";
-
 fn build_genre_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
 ) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
@@ -1600,7 +1615,7 @@ fn build_genre_grouped_entries(
 
     songs.sort_by_cached_key(|song| {
         let genre = if song.genre.trim().is_empty() {
-            UNKNOWN_GENRE_HEADER.to_ascii_lowercase()
+            tr("SelectMusic", "UnknownGenre").to_ascii_lowercase()
         } else {
             song.genre.to_ascii_lowercase()
         };
@@ -1614,7 +1629,7 @@ fn build_genre_grouped_entries(
 
     for song in songs {
         let group_name = if song.genre.trim().is_empty() {
-            UNKNOWN_GENRE_HEADER.to_string()
+            tr("SelectMusic", "UnknownGenre").to_string()
         } else {
             song.genre.clone()
         };
@@ -1813,7 +1828,10 @@ fn song_meter_for_sort(song: &SongData, chart_type: &str) -> Option<u32> {
 
 #[inline(always)]
 fn meter_bucket_name(meter: Option<u32>) -> String {
-    meter.map_or_else(|| "N/A".to_string(), |m| format!("{:02}", m.min(99)))
+    meter.map_or_else(
+        || tr("SelectMusic", "NotAvailable").to_string(),
+        |m| format!("{:02}", m.min(99)),
+    )
 }
 
 fn build_meter_grouped_entries(
@@ -1901,7 +1919,7 @@ fn build_popularity_grouped_entries(
     let count = ranked.len();
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
     entries.push(MusicWheelEntry::PackHeader {
-        name: POPULAR_SORT_HEADER.to_string(),
+        name: tr("SelectMusic", "MostPopular").to_string(),
         original_index: 0,
         banner_path: None,
     });
@@ -1912,7 +1930,7 @@ fn build_popularity_grouped_entries(
     );
 
     let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
-    counts.insert(POPULAR_SORT_HEADER.to_string(), count);
+    counts.insert(tr("SelectMusic", "MostPopular").to_string(), count);
     (entries, counts)
 }
 
@@ -1960,7 +1978,7 @@ fn build_recent_grouped_entries(
     let count = recent_song_ixs.len();
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
     entries.push(MusicWheelEntry::PackHeader {
-        name: RECENT_SORT_HEADER.to_string(),
+        name: tr("SelectMusic", "RecentlyPlayed").to_string(),
         original_index: 0,
         banner_path: None,
     });
@@ -1971,11 +1989,9 @@ fn build_recent_grouped_entries(
     );
 
     let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
-    counts.insert(RECENT_SORT_HEADER.to_string(), count);
+    counts.insert(tr("SelectMusic", "RecentlyPlayed").to_string(), count);
     (entries, counts)
 }
-
-const TOP_GRADES_UNPLAYED_HEADER: &str = "Unplayed";
 
 fn build_top_grades_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
@@ -2031,7 +2047,7 @@ fn build_top_grades_grouped_entries(
     for (song, best) in graded_songs {
         let group_name = match best {
             Some(g) => grade_group_name(g),
-            None => TOP_GRADES_UNPLAYED_HEADER.to_string(),
+            None => tr("SelectMusic", "Unplayed").to_string(),
         };
         if current_group.as_deref() != Some(group_name.as_str()) {
             entries.push(MusicWheelEntry::PackHeader {
@@ -2139,7 +2155,7 @@ fn build_popularity_grouped_entries_for_profile(
     ranked.truncate(POPULAR_SONGS_TO_SHOW);
 
     let count = ranked.len();
-    let header = format!("{POPULAR_SORT_HEADER} (Profile)");
+    let header = format!("{} (Profile)", tr("SelectMusic", "MostPopular"));
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
     entries.push(MusicWheelEntry::PackHeader {
         name: header.clone(),
@@ -2200,7 +2216,7 @@ fn build_recent_grouped_entries_for_profile(
     }
 
     let count = recent_song_ixs.len();
-    let header = format!("{RECENT_SORT_HEADER} (Profile)");
+    let header = format!("{} (Profile)", tr("SelectMusic", "RecentlyPlayed"));
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
     entries.push(MusicWheelEntry::PackHeader {
         name: header.clone(),
@@ -2271,7 +2287,7 @@ fn build_top_grades_grouped_entries_for_side(
     for (song, best) in graded_songs {
         let group_name = match best {
             Some(g) => grade_group_name(g),
-            None => TOP_GRADES_UNPLAYED_HEADER.to_string(),
+            None => tr("SelectMusic", "Unplayed").to_string(),
         };
         if current_group.as_deref() != Some(group_name.as_str()) {
             entries.push(MusicWheelEntry::PackHeader {
@@ -2288,8 +2304,6 @@ fn build_top_grades_grouped_entries_for_side(
 
     (entries, counts)
 }
-
-const FAVORITES_SORT_HEADER: &str = "Favorites";
 
 fn build_favorites_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
@@ -2322,14 +2336,14 @@ fn build_favorites_grouped_entries(
     let count = favorite_songs.len();
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
     entries.push(MusicWheelEntry::PackHeader {
-        name: FAVORITES_SORT_HEADER.to_string(),
+        name: tr("SelectMusic", "Favorites").to_string(),
         original_index: 0,
         banner_path: None,
     });
     entries.extend(favorite_songs.into_iter().map(MusicWheelEntry::Song));
 
     let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
-    counts.insert(FAVORITES_SORT_HEADER.to_string(), count);
+    counts.insert(tr("SelectMusic", "Favorites").to_string(), count);
     (entries, counts)
 }
 
@@ -3724,14 +3738,6 @@ fn reload_progress(reload: &ReloadUiState) -> (usize, usize, f32) {
     (done, total, progress)
 }
 
-#[inline(always)]
-const fn reload_phase_label(phase: ReloadPhase) -> &'static str {
-    match phase {
-        ReloadPhase::Songs => "Loading songs...",
-        ReloadPhase::Courses => "Loading courses...",
-    }
-}
-
 fn reload_detail_lines(reload: &ReloadUiState) -> (String, String) {
     (reload.line2.clone(), reload.line3.clone())
 }
@@ -3745,12 +3751,16 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
         crate::screens::progress_count_text(done, total)
     };
     let show_speed_row = total > 0;
-    let speed_text = if elapsed > 0.0 && show_speed_row {
-        format!("Current speed: {:.1} items/s", done as f32 / elapsed)
+    let speed_text: Arc<str> = if elapsed > 0.0 && show_speed_row {
+        tr_fmt(
+            "SelectMusic",
+            "LoadingSpeed",
+            &[("speed", &format!("{:.1}", done as f32 / elapsed))],
+        )
     } else if show_speed_row {
-        "Current speed: 0.0 items/s".to_string()
+        tr_fmt("SelectMusic", "LoadingSpeed", &[("speed", "0.0")])
     } else {
-        String::new()
+        Arc::from("")
     };
     let (line2, line3) = reload_detail_lines(reload);
     let fill = color::decorative_rgba(active_color_index);
@@ -3768,9 +3778,13 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
         diffuse(0.0, 0.0, 0.0, 0.8):
         z(1450)
     ));
+    let phase_label = match reload.phase {
+        ReloadPhase::Songs => tr("Init", "LoadingSongsText"),
+        ReloadPhase::Courses => tr("Init", "LoadingCoursesText"),
+    };
     actors.push(act!(text:
         font("miso"):
-        settext(if total == 0 { "Initializing..." } else { reload_phase_label(reload.phase) }):
+        settext(if total == 0 { tr("Init", "InitializingText") } else { phase_label }):
         align(0.5, 0.5):
         xy(screen_center_x(), bar_cy - 98.0):
         zoom(1.05):
@@ -4341,14 +4355,14 @@ fn sync_overlay_apply_result(
     }
 }
 
-fn sync_graph_label(overlay: &SyncOverlayStateData) -> &'static str {
+fn sync_graph_label(overlay: &SyncOverlayStateData) -> Arc<str> {
     if overlay.graph_mode == SyncGraphMode::PostKernelFingerprint
         && (overlay.post_rows == 0
             || overlay.post_kernel.len() != overlay.post_rows.saturating_mul(overlay.cols))
     {
-        "Post-kernel fingerprint (building)"
+        tr("SelectMusic", "PostKernelBuilding")
     } else {
-        overlay.graph_mode.label()
+        Arc::from(overlay.graph_mode.label())
     }
 }
 
@@ -4371,9 +4385,9 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
     let graph_center_y = graph_y + graph_h * 0.5;
 
     let title = match overlay.phase {
-        SyncOverlayPhase::Running => "Syncing song...",
-        SyncOverlayPhase::Ready => "Sync complete",
-        SyncOverlayPhase::Failed => "Sync failed",
+        SyncOverlayPhase::Running => tr("SelectMusic", "SyncingTitle"),
+        SyncOverlayPhase::Ready => tr("SelectMusic", "SyncCompleteTitle"),
+        SyncOverlayPhase::Failed => tr("SelectMusic", "SyncFailedTitle"),
     };
     let subtitle = format!("{}  [{}]", overlay.song_title, overlay.chart_label);
     let ready_prompt_y = pane_top + pane_h - 116.0;
@@ -4512,7 +4526,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
     } else {
         actors.push(act!(text:
             font("miso"):
-            settext("Waiting for streamed analysis data..."):
+            settext(tr("SelectMusic", "WaitingForAnalysis")):
             align(0.5, 0.5):
             xy(pane_cx, graph_center_y):
             zoom(0.9):
@@ -4533,13 +4547,16 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
         ));
     }
 
-    let status_text = match overlay.phase {
+    let status_text: Arc<str> = match overlay.phase {
         SyncOverlayPhase::Running => match overlay.total_beats.max(overlay.beats_processed) {
-            0 => "Beat 0".to_string(),
-            total => format!(
-                "Beat {} out of {}",
-                overlay.beats_processed.min(total),
-                total
+            0 => tr("SelectMusic", "SyncBeatZero"),
+            total => tr_fmt(
+                "SelectMusic",
+                "SyncBeatProgress",
+                &[
+                    ("current", &overlay.beats_processed.min(total).to_string()),
+                    ("total", &total.to_string()),
+                ],
             ),
         },
         SyncOverlayPhase::Ready => {
@@ -4548,13 +4565,20 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
                 .or(overlay.preview_bias_ms)
                 .unwrap_or(0.0);
             let confidence = overlay.final_confidence.unwrap_or(0.0) * 100.0;
-            format!("Suggested sync: {bias:+.2} ms   (confidence {confidence:.0}%)")
+            tr_fmt(
+                "SelectMusic",
+                "SyncSuggestedSync",
+                &[
+                    ("bias", &format!("{bias:+.2}")),
+                    ("confidence", &format!("{confidence:.0}")),
+                ],
+            )
         }
         SyncOverlayPhase::Failed => overlay
             .error_text
             .as_deref()
-            .unwrap_or("Unknown sync analysis error")
-            .to_string(),
+            .map(Arc::from)
+            .unwrap_or_else(|| tr("SelectMusic", "SyncUnknownError")),
     };
     let status_y =
         if matches!(overlay.phase, SyncOverlayPhase::Ready) && ready_offset_line.is_some() {
@@ -4624,7 +4648,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             ));
             actors.push(act!(text:
                 font("wendy"):
-                settext("YES"):
+                settext(tr("Common", "Yes")):
                 align(0.5, 0.5):
                 xy(choice_yes_x, answer_y):
                 zoom(0.72):
@@ -4634,7 +4658,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             ));
             actors.push(act!(text:
                 font("wendy"):
-                settext("NO"):
+                settext(tr("Common", "No")):
                 align(0.5, 0.5):
                 xy(choice_no_x, answer_y):
                 zoom(0.72):
@@ -4646,7 +4670,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
         SyncOverlayPhase::Running => {
             actors.push(act!(text:
                 font("miso"):
-                settext("START/BACK/SELECT: CANCEL"):
+                settext(tr("SelectMusic", "SyncCancelHint")):
                 align(0.5, 0.5):
                 xy(pane_cx, pane_top + pane_h - 16.0):
                 zoom(0.82):
@@ -4658,7 +4682,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
         SyncOverlayPhase::Failed => {
             actors.push(act!(text:
                 font("miso"):
-                settext("START/BACK/SELECT: CLOSE"):
+                settext(tr("SelectMusic", "SyncCloseHint")):
                 align(0.5, 0.5):
                 xy(pane_cx, pane_top + pane_h - 16.0):
                 zoom(0.82):
@@ -5432,25 +5456,25 @@ fn select_music_lobby_lock_text_for(
         .iter()
         .all(|player| lobby_player_on_screen(player, "ScreenSelectMusic"));
     if any_in_eval {
-        return Some("Waiting for players to finish evaluation...".to_string());
+        return Some(tr("Lobby", "WaitingForPlayersEvaluation").to_string());
     }
     // Simply Love parity: once the lobby has a song selected, SelectMusic stays
     // unlocked until gameplay has actually started, even if the local user moves
     // to a different song first.
     if joined.song_info.is_some() {
         if any_in_gameplay && gameplay_started {
-            return Some("Waiting for players to finish gameplay...".to_string());
+            return Some(tr("Lobby", "WaitingForPlayersGameplay").to_string());
         }
         return None;
     }
     if any_in_gameplay {
-        return Some("Waiting for players to finish gameplay...".to_string());
+        return Some(tr("Lobby", "WaitingForPlayersGameplay").to_string());
     }
     if all_in_select_music {
         return None;
     }
 
-    Some("Waiting for players to sync screens...".to_string())
+    Some(tr("Lobby", "WaitingForSync").to_string())
 }
 
 fn apply_remote_lobby_song_selection(
@@ -5662,12 +5686,17 @@ fn select_music_lobby_status_text(state: &State) -> Option<String> {
         let remaining =
             (crate::game::online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
         let remaining = remaining.max(0);
-        format!(
-            "Continue holding &START; for {remaining} more second{} to disconnect...",
-            if remaining == 1 { "" } else { "s" }
+        tr_fmt(
+            "Lobby",
+            "DisconnectHoldingFormat",
+            &[
+                ("remaining", &remaining.to_string()),
+                ("s", if remaining == 1 { "" } else { "s" }),
+            ],
         )
+        .to_string()
     } else {
-        "Hold &START; to disconnect from the lobby.".to_string()
+        tr("Lobby", "DisconnectBasicPrompt").to_string()
     };
     text.push('\n');
     text.push_str(prompt.as_str());
@@ -5779,9 +5808,17 @@ fn sync_low_confidence_warning(confidence: Option<f64>, threshold: f64) -> Optio
     }
     let confidence_pct = sync_confidence_percent(Some(confidence));
     let threshold_pct = (threshold.clamp(0.0, 1.0) * 100.0).round() as u32;
-    Some(format!(
-        "Warning: confidence {confidence_pct}% is below the {threshold_pct}% pack-sync threshold.\nSingle-song sync can still save it."
-    ))
+    Some(
+        tr_fmt(
+            "SelectMusic",
+            "SyncLowConfidenceWarning",
+            &[
+                ("confidence_pct", &confidence_pct.to_string()),
+                ("threshold_pct", &threshold_pct.to_string()),
+            ],
+        )
+        .to_string(),
+    )
 }
 
 fn build_sync_save_prompt_text(overlay: &SyncOverlayStateData) -> String {
@@ -5792,8 +5829,9 @@ fn build_sync_save_prompt_text(overlay: &SyncOverlayStateData) -> String {
         prompt.push_str(&warning);
         prompt.push_str("\n\n");
     }
-    prompt.push_str("Would you like to save these changes?\n");
-    prompt.push_str("Choosing NO will discard your changes.");
+    prompt.push_str(&tr("SelectMusic", "SyncSaveQuestion"));
+    prompt.push('\n');
+    prompt.push_str(&tr("SelectMusic", "SyncDiscardWarning"));
     prompt
 }
 
@@ -5912,7 +5950,8 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
             Err(mpsc::TryRecvError::Disconnected) => {
                 if overlay.phase == SyncOverlayPhase::Running {
                     overlay.phase = SyncOverlayPhase::Failed;
-                    overlay.error_text = Some("sync worker disconnected".to_string());
+                    overlay.error_text =
+                        Some(tr("SelectMusic", "SyncWorkerDisconnected").to_string());
                 }
                 break;
             }
@@ -8024,11 +8063,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             Actor::Frame {
                 align: [0.0, 0.0], offset: [-110.0, -6.0], size: [SizeSpec::Fill, SizeSpec::Fill], background: None, z: 0,
                 children: vec![
-                    act!(text: font("miso"): settext("ARTIST"): align(1.0, 0.0): y(-11.0): maxwidth(44.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                    act!(text: font("miso"): settext(tr("SelectMusic", "ArtistLabel")): align(1.0, 0.0): y(-11.0): maxwidth(44.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
                     act!(text: font("miso"): settext(artist): align(0.0, 0.0): xy(5.0, -11.0): maxwidth(box_w - 60.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                    act!(text: font("miso"): settext("BPM"): align(1.0, 0.0): y(10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                    act!(text: font("miso"): settext(tr("SelectMusic", "BPMLabel")): align(1.0, 0.0): y(10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
                     act!(text: font("miso"): settext(bpm): align(0.0, 0.0): xy(5.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                    act!(text: font("miso"): settext("LENGTH"): align(1.0, 0.0): xy(box_w - 130.0, 10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                    act!(text: font("miso"): settext(tr("SelectMusic", "LengthLabel")): align(1.0, 0.0): xy(box_w - 130.0, 10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
                     act!(text: font("miso"): settext(len_text): align(0.0, 0.0): xy(box_w - 125.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
                 ],
             },
@@ -8112,6 +8151,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Step Artist & Steps
     let base_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
+    let steps_label = tr("SelectMusic", "StepsLabel");
     let mut push_step_artist = |y_cen: f32, x0: f32, sel_col: [f32; 4], step_artist: &str| {
         actors.extend(step_artist_bar::build(
             step_artist_bar::StepArtistBarParams {
@@ -8119,7 +8159,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 center_y: y_cen,
                 accent_color: sel_col,
                 z_base: 120,
-                label_text: "STEPS",
+                label_text: &steps_label,
                 label_max_width: 40.0,
                 artist_text: step_artist,
                 artist_x_offset: 75.0,
@@ -8433,7 +8473,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 out.push(act!(text: font("miso"): settext(names[i]): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
                 out.push(act!(text: font("miso"): settext(scores[i].clone()): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             }
-            out.push(act!(text: font("miso"): settext(if show_ex_score { "EX Score" } else { "ITG Score" }): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
+            out.push(act!(text: font("miso"): settext(if show_ex_score { tr("SelectMusic", "ExScore") } else { tr("SelectMusic", "ItgScore") }): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
         }
 
         out
@@ -8604,7 +8644,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col1_num_x,
                 0,
                 boxes.as_ref(),
-                "Boxes",
+                &tr("PatternInfo", "Boxes"),
             );
             push_pattern_line(
                 &mut actors,
@@ -8613,7 +8653,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col1_num_x,
                 1,
                 anchors.as_ref(),
-                "Anchors",
+                &tr("PatternInfo", "Anchors"),
             );
             push_pattern_line(
                 &mut actors,
@@ -8622,7 +8662,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col1_num_x,
                 2,
                 staircases.as_ref(),
-                "Staircases",
+                &tr("PatternInfo", "Staircases"),
             );
             push_pattern_line(
                 &mut actors,
@@ -8631,7 +8671,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col1_num_x,
                 3,
                 sweeps.as_ref(),
-                "Sweeps",
+                &tr("PatternInfo", "Sweeps"),
             );
 
             push_pattern_line(
@@ -8641,7 +8681,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col2_num_x,
                 0,
                 triangles.as_ref(),
-                "Triangles",
+                &tr("PatternInfo", "Triangles"),
             );
             push_pattern_line(
                 &mut actors,
@@ -8650,7 +8690,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col2_num_x,
                 1,
                 hip_breakers.as_ref(),
-                "Hip Breakers",
+                &tr("PatternInfo", "HipBreakers"),
             );
             push_pattern_line(
                 &mut actors,
@@ -8659,7 +8699,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col2_num_x,
                 2,
                 doritos.as_ref(),
-                "Doritos",
+                &tr("PatternInfo", "Doritos"),
             );
             push_pattern_line(
                 &mut actors,
@@ -8668,7 +8708,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col2_num_x,
                 3,
                 towers.as_ref(),
-                "Towers",
+                &tr("PatternInfo", "Towers"),
             );
 
             push_pattern_line(
@@ -8678,7 +8718,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col3_num_x,
                 0,
                 spirals.as_ref(),
-                "Spirals",
+                &tr("PatternInfo", "Spirals"),
             );
             push_pattern_line(
                 &mut actors,
@@ -8687,7 +8727,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 col3_num_x,
                 1,
                 copters.as_ref(),
-                "Copters",
+                &tr("PatternInfo", "Copters"),
             );
 
             let col3_label_x = col3_num_x + 3.0;
@@ -8701,7 +8741,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
             let stream_y = stamina_base_y + 3.0 * stamina_row_step;
             actors.push(act!(text: font("miso"): settext(total_stream): align(1.0, 0.5): horizalign(right): xy(col3_num_x, stream_y): maxwidth(relaxed_num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
-            actors.push(act!(text: font("miso"): settext("Total Stream"): align(0.0, 0.5): horizalign(left): xy(col3_label_x, stream_y): maxwidth(col3_label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+            actors.push(act!(text: font("miso"): settext(tr("PatternInfo", "TotalStream")): align(0.0, 0.5): horizalign(left): xy(col3_label_x, stream_y): maxwidth(col3_label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
         } else {
             let (cross, foot, side, jack, brack, stream): (
                 Arc<str>,
@@ -8741,13 +8781,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let p_v_x = pat_cx - panel_w * 0.5 + 39.0;
             let p_l_x = pat_cx - panel_w * 0.5 + 48.0;
             let p_base_y = pat_cy - 18.0;
-            let items = [
-                (cross, "Crossovers", 0_u8, 0_u8, None),
-                (foot, "Footswitches", 1_u8, 0_u8, None),
-                (side, "Sideswitches", 0_u8, 1_u8, None),
-                (jack, "Jacks", 1_u8, 1_u8, None),
-                (brack, "Brackets", 0_u8, 2_u8, None),
-                (stream, "Total Stream", 1_u8, 2_u8, Some(100.0)),
+            let items: [(Arc<str>, Arc<str>, u8, u8, Option<f32>); 6] = [
+                (cross, tr("PatternInfo", "Crossovers"), 0_u8, 0_u8, None),
+                (foot, tr("PatternInfo", "Footswitches"), 1_u8, 0_u8, None),
+                (side, tr("PatternInfo", "Sideswitches"), 0_u8, 1_u8, None),
+                (jack, tr("PatternInfo", "Jacks"), 1_u8, 1_u8, None),
+                (brack, tr("PatternInfo", "Brackets"), 0_u8, 2_u8, None),
+                (
+                    stream,
+                    tr("PatternInfo", "TotalStream"),
+                    1_u8,
+                    2_u8,
+                    Some(100.0),
+                ),
             ];
 
             for (val, lbl, c, r, mw) in items {
@@ -9210,7 +9256,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             OutPromptState::PressStartForOptions { .. } => {
                 actors.push(act!(text:
                     font("wendy"):
-                    settext(PRESS_START_FOR_OPTIONS_TEXT):
+                    settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
                     zoom(0.75):
@@ -9222,7 +9268,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 // Fade out "Press Start for options"
                 actors.push(act!(text:
                     font("wendy"):
-                    settext(PRESS_START_FOR_OPTIONS_TEXT):
+                    settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
                     zoom(0.75):
@@ -9234,7 +9280,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 // Fade in "Entering Options..." after 0.1s hibernate
                 actors.push(act!(text:
                     font("wendy"):
-                    settext(ENTERING_OPTIONS_TEXT):
+                    settext(tr("SelectMusic", "EnteringOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
                     zoom(0.75):
@@ -9273,7 +9319,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
         actors.push(act!(text:
             font("miso"):
-            settext(SL_EXIT_PROMPT_TEXT):
+            settext(tr("SelectMusic", "ExitGamePrompt")):
             align(0.5, 0.0):
             xy(screen_center_x(), screen_center_y() + SL_EXIT_PROMPT_PROMPT_Y_OFFSET):
             zoom(SL_EXIT_PROMPT_PROMPT_ZOOM):
@@ -9290,8 +9336,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             &mut actors,
             cx - SL_EXIT_PROMPT_CHOICE_X_OFFSET,
             SL_EXIT_PROMPT_CHOICE_Y,
-            SL_EXIT_PROMPT_NO_LABEL,
-            SL_EXIT_PROMPT_NO_INFO,
+            &tr("Common", "No"),
+            &tr("SelectMusic", "KeepPlayingInfo"),
             active_choice == 0,
             zoom_no,
             p2_color,
@@ -9302,8 +9348,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             &mut actors,
             cx + SL_EXIT_PROMPT_CHOICE_X_OFFSET,
             SL_EXIT_PROMPT_CHOICE_Y,
-            SL_EXIT_PROMPT_YES_LABEL,
-            SL_EXIT_PROMPT_YES_INFO,
+            &tr("Common", "Yes"),
+            &tr("SelectMusic", "FinishedInfo"),
             active_choice == 1,
             zoom_yes,
             p2_color,

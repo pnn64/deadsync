@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::tr;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
@@ -49,12 +50,13 @@ const fn choice_from_index(idx: usize) -> Choice {
 }
 
 #[inline(always)]
-const fn choice_label(choice: Choice) -> &'static str {
-    match choice {
-        Choice::Single => "1 Player",
-        Choice::Versus => "2 Players",
+fn choice_label(choice: Choice) -> String {
+    let key = match choice {
+        Choice::Single => "SinglePlayer",
+        Choice::Versus => "TwoPlayers",
         Choice::Double => "Double",
-    }
+    };
+    tr("SelectStyle", key).to_string()
 }
 
 #[inline(always)]
@@ -136,21 +138,22 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    let nav = match crate::game::profile::get_session_player_side() {
-        crate::game::profile::PlayerSide::P2 => match ev.action {
-            VirtualAction::p2_left | VirtualAction::p2_menu_left => Some(-1),
-            VirtualAction::p2_right | VirtualAction::p2_menu_right => Some(1),
-            VirtualAction::p2_start => Some(0),
-            VirtualAction::p2_back => Some(9),
-            _ => None,
-        },
-        crate::game::profile::PlayerSide::P1 => match ev.action {
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => Some(-1),
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => Some(1),
-            VirtualAction::p1_start => Some(0),
-            VirtualAction::p1_back => Some(9),
-            _ => None,
-        },
+    let nav = match ev.action {
+        VirtualAction::p1_left
+        | VirtualAction::p2_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_menu_left => Some(-1),
+
+        VirtualAction::p1_right
+        | VirtualAction::p2_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_menu_right => Some(1),
+
+        VirtualAction::p1_start | VirtualAction::p2_start => Some(0),
+
+        VirtualAction::p1_back | VirtualAction::p2_back => Some(9),
+
+        _ => None,
     };
 
     match nav {
@@ -271,8 +274,9 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
 
+    let select_style = tr("ScreenTitles", "SelectStyle");
     actors.push(screen_bar::build(ScreenBarParams {
-        title: "SELECT STYLE",
+        title: &select_style,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
         transparent: false,
@@ -304,32 +308,35 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
     let p2_guest =
         crate::game::profile::is_session_side_guest(crate::game::profile::PlayerSide::P2);
 
+    let insert_card = tr("Common", "InsertCard");
+    let press_start = tr("Common", "PressStart");
     let (footer_left, left_avatar) = if p1_joined {
         (
             Some(if p1_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p1_profile.display_name.as_str()
             }),
             if p1_guest { None } else { p1_avatar },
         )
     } else {
-        (Some("PRESS START"), None)
+        (Some(press_start.as_ref()), None)
     };
     let (footer_right, right_avatar) = if p2_joined {
         (
             Some(if p2_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p2_profile.display_name.as_str()
             }),
             if p2_guest { None } else { p2_avatar },
         )
     } else {
-        (Some("PRESS START"), None)
+        (Some(press_start.as_ref()), None)
     };
+    let event_mode = tr("Common", "EventMode");
     actors.push(screen_bar::build(ScreenBarParams {
-        title: "EVENT MODE",
+        title: &event_mode,
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,
         transparent: false,

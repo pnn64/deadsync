@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager};
 use crate::config::dirs;
 use crate::engine::audio;
@@ -78,8 +79,6 @@ const TOTAL_SONGS_ZOOM: f32 = 0.65; // SL: TotalSongs zoom(0.65)
 const MODS_ZOOM: f32 = 0.625; // SL: RecentMods zoom(0.625)
 const MODS_Y_OFF: f32 = 47.0; // SL: RecentMods xy(...,47)
 
-const JOIN_TEXT: &str = "Press &START; to join!";
-const WAITING_TEXT: &str = "Waiting ...";
 const SELECTED_NAME_Y_OFF: f32 = 160.0; // SL: SelectedProfileText y(160)
 const SELECTED_NAME_ZOOM: f32 = 1.35; // SL: SelectedProfileText zoom(1.35)
 
@@ -186,10 +185,21 @@ fn preview_noteskin_for_choice(
 
 #[inline(always)]
 fn format_total_songs_played(count: u32) -> String {
+    let count_str = count.to_string();
     if count == 1 {
-        format!("{count} Song Played")
+        tr_fmt(
+            "SelectProfile",
+            "SongPlayedSingular",
+            &[("count", &count_str)],
+        )
+        .to_string()
     } else {
-        format!("{count} Songs Played")
+        tr_fmt(
+            "SelectProfile",
+            "SongPlayedPlural",
+            &[("count", &count_str)],
+        )
+        .to_string()
     }
 }
 
@@ -228,33 +238,41 @@ fn format_recent_mods(
 
     push(speed_mod.trim());
     if scroll.contains(profile::ScrollOption::Reverse) {
-        push("Reverse");
+        let s = tr("SelectProfile", "Reverse");
+        push(&s);
     }
     if scroll.contains(profile::ScrollOption::Split) {
-        push("Split");
+        let s = tr("SelectProfile", "Split");
+        push(&s);
     }
     if scroll.contains(profile::ScrollOption::Alternate) {
-        push("Alternate");
+        let s = tr("SelectProfile", "Alternate");
+        push(&s);
     }
     if scroll.contains(profile::ScrollOption::Cross) {
-        push("Cross");
+        let s = tr("SelectProfile", "Cross");
+        push(&s);
     }
     if scroll.contains(profile::ScrollOption::Centered) {
-        push("Centered");
+        let s = tr("SelectProfile", "Centered");
+        push(&s);
     }
-    push("Overhead");
+    let overhead = tr("SelectProfile", "Overhead");
+    push(&overhead);
     push(noteskin.as_str());
     let mini_indicator_label = match mini_indicator {
         profile::MiniIndicator::None => None,
-        profile::MiniIndicator::SubtractiveScoring => Some("Subtractive Scoring"),
-        profile::MiniIndicator::PredictiveScoring => Some("Predictive Scoring"),
-        profile::MiniIndicator::PaceScoring => Some("Pace Scoring"),
-        profile::MiniIndicator::RivalScoring => Some("Rival Scoring"),
-        profile::MiniIndicator::Pacemaker => Some("Pacemaker"),
-        profile::MiniIndicator::StreamProg => Some("Stream Progress"),
+        profile::MiniIndicator::SubtractiveScoring => {
+            Some(tr("SelectProfile", "SubtractiveScoring"))
+        }
+        profile::MiniIndicator::PredictiveScoring => Some(tr("SelectProfile", "PredictiveScoring")),
+        profile::MiniIndicator::PaceScoring => Some(tr("SelectProfile", "PaceScoring")),
+        profile::MiniIndicator::RivalScoring => Some(tr("SelectProfile", "RivalScoring")),
+        profile::MiniIndicator::Pacemaker => Some(tr("SelectProfile", "Pacemaker")),
+        profile::MiniIndicator::StreamProg => Some(tr("SelectProfile", "StreamProgress")),
     };
     if let Some(label) = mini_indicator_label {
-        push(label);
+        push(&label);
     }
     out
 }
@@ -269,7 +287,7 @@ fn build_choices() -> Vec<Choice> {
     let player_options_section = profile::player_options_section(profile::get_session_play_style());
     out.push(Choice {
         kind: ActiveProfile::Guest,
-        display_name: "[ GUEST ]".to_string(),
+        display_name: tr("SelectProfile", "GuestLabel").to_string(),
         speed_mod: guest_speed_mod,
         avatar_key: None,
         total_songs: String::new(),
@@ -1312,7 +1330,11 @@ fn push_scroller_frame(
                 z(104)
             ));
 
-            let label = if is_guest { "[ GUEST ]" } else { "No Avatar" };
+            let label = if is_guest {
+                tr("SelectProfile", "GuestLabel")
+            } else {
+                tr("SelectProfile", "NoAvatar")
+            };
             out.push(act!(text:
                 align(0.5, 0.0):
                 xy(avatar_x + avatar_dim * 0.5, avatar_y + AVATAR_TEXT_Y):
@@ -1609,6 +1631,11 @@ fn build_box_actors(
         p1_ui.extend(scroller_ui);
 
         let mut join_ui: Vec<Actor> = Vec::new();
+        let join_text = if state.p1_ready {
+            tr("SelectProfile", "WaitingText")
+        } else {
+            tr("SelectProfile", "JoinText")
+        };
         push_join_prompt(
             &mut join_ui,
             p1_cx,
@@ -1617,11 +1644,7 @@ fn build_box_actors(
             border_rgba,
             inner_alpha,
             state.preview_time,
-            if state.p1_ready {
-                WAITING_TEXT
-            } else {
-                JOIN_TEXT
-            },
+            &join_text,
         );
         for a in &mut join_ui {
             apply_alpha_to_actor(a, if show_join { 1.0 } else { 0.0 });
@@ -1629,10 +1652,10 @@ fn build_box_actors(
         p1_ui.extend(join_ui);
 
         if show_selected_name {
-            let name = state
-                .choices
-                .get(state.p1_selected_index)
-                .map_or_else(|| "[ GUEST ]".to_string(), |c| c.display_name.clone());
+            let name = state.choices.get(state.p1_selected_index).map_or_else(
+                || tr("SelectProfile", "GuestLabel").to_string(),
+                |c| c.display_name.clone(),
+            );
             let a = act!(text:
                 align(0.5, 0.5):
                 xy(p1_cx, cy + SELECTED_NAME_Y_OFF):
@@ -1694,6 +1717,11 @@ fn build_box_actors(
         p2_ui.extend(scroller_ui);
 
         let mut join_ui: Vec<Actor> = Vec::new();
+        let join_text = if state.p2_ready {
+            tr("SelectProfile", "WaitingText")
+        } else {
+            tr("SelectProfile", "JoinText")
+        };
         push_join_prompt(
             &mut join_ui,
             p2_cx,
@@ -1702,11 +1730,7 @@ fn build_box_actors(
             border_rgba,
             inner_alpha,
             state.preview_time,
-            if state.p2_ready {
-                WAITING_TEXT
-            } else {
-                JOIN_TEXT
-            },
+            &join_text,
         );
         for a in &mut join_ui {
             apply_alpha_to_actor(a, if show_join { 1.0 } else { 0.0 });
@@ -1714,10 +1738,10 @@ fn build_box_actors(
         p2_ui.extend(join_ui);
 
         if show_selected_name {
-            let name = state
-                .choices
-                .get(state.p2_selected_index)
-                .map_or_else(|| "[ GUEST ]".to_string(), |c| c.display_name.clone());
+            let name = state.choices.get(state.p2_selected_index).map_or_else(
+                || tr("SelectProfile", "GuestLabel").to_string(),
+                |c| c.display_name.clone(),
+            );
             let a = act!(text:
                 align(0.5, 0.5):
                 xy(p2_cx, cy + SELECTED_NAME_Y_OFF):
@@ -1783,8 +1807,9 @@ pub fn get_actors(
     }));
 
     let fg = [1.0, 1.0, 1.0, 1.0];
+    let title = tr("ScreenTitles", "SelectProfile");
     actors.push(screen_bar::build(ScreenBarParams {
-        title: "SELECT PROFILE",
+        title: &title,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
         transparent: false,
@@ -1796,14 +1821,17 @@ pub fn get_actors(
         right_avatar: None,
     }));
 
+    let press_start = tr("Common", "PressStart");
+    let not_present = tr("SelectProfile", "NotPresent");
     let (footer_left, footer_right) = match (state.p1_joined, state.p2_joined) {
-        (false, false) => (Some("PRESS START"), Some("PRESS START")),
-        (true, false) => (None, Some("NOT PRESENT")),
-        (false, true) => (Some("NOT PRESENT"), None),
+        (false, false) => (Some(press_start.as_ref()), Some(press_start.as_ref())),
+        (true, false) => (None, Some(not_present.as_ref())),
+        (false, true) => (Some(not_present.as_ref()), None),
         (true, true) => (None, None),
     };
+    let event_mode = tr("Common", "EventMode");
     actors.push(screen_bar::build(ScreenBarParams {
-        title: "EVENT MODE",
+        title: &event_mode,
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,
         transparent: false,

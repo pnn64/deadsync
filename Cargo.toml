@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.438"
+version = "0.3.465"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -28,6 +28,10 @@ path = "tests/input_e2e/bench.rs"
 name = "lang_coverage"
 path = "scripts/lang_coverage.rs"
 
+[[bin]]
+name = "generate_pseudo"
+path = "scripts/generate_pseudo.rs"
+
 
 [features]
 pipewire-audio = ["dep:pipewire"]
@@ -43,6 +47,7 @@ rand = "0.10.1"
 chrono = "0.4.44"
 qrcodegen = "1.8.0"
 mlua = { version = "0.11.6", features = ["lua54", "vendored"] }
+rustc-hash = "2.1.2"
 
 # rssp and null-or-die
 rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
@@ -52,7 +57,7 @@ null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 softbuffer = "0.4.8"
 
 # Math
-cgmath = "0.18.0"
+glam = "0.32.1"
 bytemuck = { version = "1.25.0", features = ["derive"] }
 
 # OpenGL Dependencies
@@ -88,7 +93,7 @@ twox-hash = "2.1.2"
 rust-ini = "0.21.3"
 sys-locale = "0.3.2"
 tokio = { version = "1.52.0", features = ["rt"] }
-bitflags = "2.11.0"
+bitflags = "2.11.1"
 
 # DirectX + Input (Windows)
 [target.'cfg(windows)'.dependencies]

@@ -3,7 +3,7 @@ use crate::engine::host_time::now_nanos;
 use crate::engine::input::RawKeyboardEvent;
 use log::debug;
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
-use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::ffi::{c_char, c_void};
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -101,11 +101,17 @@ fn cfnum_i32(v: CFTypeRef) -> Option<i32> {
     ok.then_some(out)
 }
 
+#[derive(Clone, Copy)]
+struct AxisState {
+    code: u32,
+    value: i64,
+}
+
 struct PadDev {
     id: PadId,
     name: String,
     uuid: [u8; 16],
-    last_axis: HashMap<u32, i64>,
+    last_axis: Vec<AxisState>,
     dir: [bool; 4],
 }
 
@@ -175,6 +181,22 @@ struct Ctx {
     key_vendor_id: CFStringRef,
     key_product_id: CFStringRef,
     key_location_id: CFStringRef,
+}
+
+#[inline(always)]
+fn axis_changed(last_axis: &mut Vec<AxisState>, code: u32, value: i64) -> bool {
+    for axis in last_axis.iter_mut() {
+        if axis.code != code {
+            continue;
+        }
+        if axis.value == value {
+            return false;
+        }
+        axis.value = value;
+        return true;
+    }
+    last_axis.push(AxisState { code, value });
+    true
 }
 
 static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(true);
@@ -450,18 +472,22 @@ extern "C" fn on_match(
             location_id.unwrap_or(-1),
         );
         let uuid = uuid_from_bytes(name.as_bytes());
-        let id = ctx.id_by_uuid.get(&uuid).copied().unwrap_or_else(|| {
-            let id = PadId(ctx.next_id);
-            ctx.next_id += 1;
-            ctx.id_by_uuid.insert(uuid, id);
-            id
-        });
+        let id = match ctx.id_by_uuid.entry(uuid) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                let id = PadId(ctx.next_id);
+                ctx.next_id += 1;
+                *entry.insert(id)
+            }
+        };
 
         let dev = PadDev {
             id,
             name: name.clone(),
             uuid,
-            last_axis: HashMap::new(),
+            // Pads usually expose only a handful of analog elements, so a tiny
+            // linear cache is cheaper here than hashing in the input callback.
+            last_axis: Vec::with_capacity(8),
             dir: [false; 4],
         };
 
@@ -568,10 +594,9 @@ extern "C" fn on_input(
                     pressed,
                 });
             } else {
-                if dev.last_axis.get(&code).copied() == Some(v) {
+                if !axis_changed(&mut dev.last_axis, code, v) {
                     return;
                 }
-                dev.last_axis.insert(code, v);
                 (ctx.emit_pad)(PadEvent::RawAxis {
                     id: dev.id,
                     timestamp,

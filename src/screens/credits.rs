@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::tr;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
@@ -84,6 +85,7 @@ const CREDITS: &[CreditLine] = &[
     section("DeadSync Gold Patrons"),
     name("Wafles"),
     name("nabulator"),
+    name("Reikwaza"),
     spacer(),
     spacer(),
     section("DeadSync Supporters"),
@@ -96,6 +98,7 @@ const CREDITS: &[CreditLine] = &[
     name("DolphinChips"),
     name("rehtlaw"),
     name("madewithlinux"),
+    name("saucepan"),
     spacer(),
     spacer(),
     section("rssp Contributors"),
@@ -294,9 +297,10 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         ));
     }
 
+    let return_prompt = tr("Credits", "ReturnPrompt");
     actors.push(act!(text:
         font("miso"):
-        settext("Press &START; and &BACK; to return"):
+        settext(return_prompt):
         align(0.5, 0.5):
         xy(screen_center_x(), screen_h - CINEMATIC_BAR_MAX_H * 0.5):
         zoom(0.7):

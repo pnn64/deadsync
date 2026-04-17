@@ -1,6 +1,9 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
+use crate::assets::i18n::{tr, tr_fmt};
+use crate::engine::gfx::{
+    BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, TexturedMeshVertex,
+};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec, TextAlign, TextContent};
 use crate::engine::present::anim::EffectState;
@@ -22,7 +25,7 @@ use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ScreenAction};
-use cgmath::{Deg, Matrix4, Vector3};
+use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -374,12 +377,13 @@ fn gameplay_lobby_wait_text_for(
     }
 
     let mut message = if all_in_gameplay {
-        "Waiting for players to ready up...".to_string()
+        tr("Lobby", "WaitingForReadyUp").to_string()
     } else {
-        "Waiting for players to sync screens...".to_string()
+        tr("Lobby", "WaitingForSync").to_string()
     };
     if !local_players_ready {
-        message.push_str("\nPress START to ready up.");
+        message.push('\n');
+        message.push_str(&tr("Gameplay", "PressStartToReadyUp"));
     }
     Some(message)
 }
@@ -402,15 +406,22 @@ fn gameplay_lobby_wait_text(state: &State) -> Option<String> {
 fn gameplay_lobby_disconnect_prompt(state: &State) -> Option<String> {
     gameplay_lobby_wait_text(state)?;
     let Some(elapsed) = lobby_disconnect_hold_elapsed(state) else {
-        return Some("Hold &START; to disconnect from the lobby.".to_string());
+        return Some(tr("Lobby", "DisconnectBasicPrompt").to_string());
     };
     let remaining =
         (crate::game::online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
     let remaining = remaining.max(0);
-    Some(format!(
-        "Continue holding &START; for {remaining} more second{} to disconnect...",
-        if remaining == 1 { "" } else { "s" }
-    ))
+    Some(
+        tr_fmt(
+            "Lobby",
+            "DisconnectHoldingFormat",
+            &[
+                ("remaining", &remaining.to_string()),
+                ("s", if remaining == 1 { "" } else { "s" }),
+            ],
+        )
+        .to_string(),
+    )
 }
 
 fn gameplay_lobby_hud_status_text(state: &State) -> Option<String> {
@@ -561,7 +572,12 @@ fn cached_rate_text(rate: f32) -> Arc<str> {
         return empty_text();
     }
     cached_text(&RATE_TEXT_CACHE, rate.to_bits(), TEXT_CACHE_LIMIT, || {
-        format!("{rate:.2}x rate")
+        tr_fmt(
+            "Gameplay",
+            "RateDisplay",
+            &[("rate", &format!("{rate:.2}"))],
+        )
+        .to_string()
     })
 }
 
@@ -703,15 +719,20 @@ pub fn prewarm_text_layout(
     cache.prewarm_text(fonts, "miso", "Hit Tick", None);
     cache.prewarm_text(fonts, "miso", "AutoSync Song", None);
     cache.prewarm_text(fonts, "miso", "AutoSync Machine", None);
-    cache.prewarm_text(fonts, "miso", "Continue holding &START; to give up", None);
-    cache.prewarm_text(fonts, "miso", "Continue holding &BACK; to give up", None);
     cache.prewarm_text(
         fonts,
         "miso",
-        "Hold &START; to disconnect from the lobby.",
+        &tr("Gameplay", "ContinueHoldingStartGiveUp"),
         None,
     );
-    cache.prewarm_text(fonts, "miso", "Don't go back!", None);
+    cache.prewarm_text(
+        fonts,
+        "miso",
+        &tr("Gameplay", "ContinueHoldingBackGiveUp"),
+        None,
+    );
+    cache.prewarm_text(fonts, "miso", &tr("Lobby", "DisconnectBasicPrompt"), None);
+    cache.prewarm_text(fonts, "miso", &tr("Gameplay", "DontGoBack"), None);
     if let Some(text) = state.replay_status_text.as_ref() {
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     }
@@ -844,6 +865,12 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.y {
         state.y = value;
     }
+    if let Some(value) = delta.fov {
+        state.fov = Some(value);
+    }
+    if let Some(value) = delta.vanishpoint {
+        state.vanishpoint = Some(value);
+    }
     if let Some(value) = delta.diffuse {
         state.diffuse = value;
     }
@@ -943,6 +970,19 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.y.is_some() {
         from.y = (to.y - from.y).mul_add(t, from.y);
+    }
+    if delta.fov.is_some()
+        && let (Some(from_fov), Some(to_fov)) = (from.fov, to.fov)
+    {
+        from.fov = Some((to_fov - from_fov).mul_add(t, from_fov));
+    }
+    if delta.vanishpoint.is_some()
+        && let (Some(from_vanish), Some(to_vanish)) = (from.vanishpoint, to.vanishpoint)
+    {
+        from.vanishpoint = Some([
+            (to_vanish[0] - from_vanish[0]).mul_add(t, from_vanish[0]),
+            (to_vanish[1] - from_vanish[1]).mul_add(t, from_vanish[1]),
+        ]);
     }
     if delta.diffuse.is_some() {
         for i in 0..4 {
@@ -1550,14 +1590,18 @@ fn song_lua_capture_children(
             }
             _ => None,
         };
+        let camera_state =
+            song_lua_overlay_camera_state(overlays, overlay_states, overlay.parent_index);
         if let Some(actor) = build_song_lua_overlay_actor(
             overlay,
             overlay_states.get(idx).copied().unwrap_or_default(),
+            camera_state,
             asset_manager,
             0,
             source,
             overlay_space_width,
             overlay_space_height,
+            0.0,
         ) {
             out.push(actor);
         }
@@ -1896,7 +1940,7 @@ fn song_lua_capture_transform_matrix(
     extra_offset: [f32; 2],
     overlay_space_width: f32,
     overlay_space_height: f32,
-) -> Option<Matrix4<f32>> {
+) -> Option<Matrix4> {
     let x_scale = screen_width() / overlay_space_width.max(1.0);
     let y_scale = screen_height() / overlay_space_height.max(1.0);
     let translate_x = (state.x - 0.5 * overlay_space_width) * x_scale + extra_offset[0];
@@ -1913,8 +1957,8 @@ fn song_lua_capture_transform_matrix(
     }
     Some(
         Matrix4::from_translation(Vector3::new(translate_x, -translate_y, 0.0))
-            * Matrix4::from_angle_z(Deg(state.rot_z_deg))
-            * Matrix4::from_nonuniform_scale(scale_x, scale_y, 1.0),
+            * Matrix4::from_rotation_z(state.rot_z_deg.to_radians())
+            * Matrix4::from_scale(Vector3::new(scale_x, scale_y, 1.0)),
     )
 }
 
@@ -1969,7 +2013,7 @@ fn song_lua_build_capture_actor(
         overlay_space_height,
     ) {
         return Some(Actor::Camera {
-            view_proj: cgmath::ortho(
+            view_proj: Matrix4::orthographic_rh_gl(
                 -0.5 * screen_width(),
                 0.5 * screen_width(),
                 -0.5 * screen_height(),
@@ -1990,14 +2034,302 @@ fn song_lua_build_capture_actor(
     })
 }
 
+#[inline(always)]
+fn song_lua_overlay_blend(blend: SongLuaOverlayBlendMode) -> BlendMode {
+    match blend {
+        SongLuaOverlayBlendMode::Alpha => BlendMode::Alpha,
+        SongLuaOverlayBlendMode::Add => BlendMode::Add,
+    }
+}
+
+#[inline(always)]
+fn song_lua_overlay_effect_state(state: SongLuaOverlayState) -> EffectState {
+    EffectState {
+        mode: state.effect_mode,
+        color1: state.effect_color1,
+        color2: state.effect_color2,
+        period: state.effect_period.max(f32::EPSILON),
+        magnitude: state.effect_magnitude,
+        ..EffectState::default()
+    }
+}
+
+fn song_lua_apply_overlay_effect(
+    effect: EffectState,
+    total_elapsed: f32,
+    tint: &mut [f32; 4],
+    rot_deg: &mut [f32; 3],
+) {
+    let beat = total_elapsed;
+    if matches!(effect.mode, crate::engine::present::anim::EffectMode::Spin) {
+        let units = crate::engine::present::anim::effect_clock_units(effect, total_elapsed, beat);
+        rot_deg[0] = (rot_deg[0] + effect.magnitude[0] * units).rem_euclid(360.0);
+        rot_deg[1] = (rot_deg[1] + effect.magnitude[1] * units).rem_euclid(360.0);
+        rot_deg[2] = (rot_deg[2] + effect.magnitude[2] * units).rem_euclid(360.0);
+    }
+    if let Some(percent) = crate::engine::present::anim::effect_mix(effect, total_elapsed, beat)
+        && matches!(
+            effect.mode,
+            crate::engine::present::anim::EffectMode::DiffuseShift
+        )
+    {
+        let between =
+            (((percent + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5).clamp(0.0, 1.0);
+        for (idx, out) in tint.iter_mut().enumerate() {
+            let color = ((effect.color1[idx] - effect.color2[idx]) * between + effect.color2[idx])
+                .clamp(0.0, 1.0);
+            *out = (*out * color).clamp(0.0, 1.0);
+        }
+    }
+}
+
+fn song_lua_overlay_camera_state(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    mut index: Option<usize>,
+) -> Option<SongLuaOverlayState> {
+    while let Some(current) = index {
+        let overlay = overlays.get(current)?;
+        let state = overlay_states.get(current).copied()?;
+        if matches!(
+            overlay.kind,
+            SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+        ) && state.fov.is_some()
+        {
+            return Some(state);
+        }
+        index = overlay.parent_index;
+    }
+    None
+}
+
+fn song_lua_overlay_view_proj(
+    camera_state: SongLuaOverlayState,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+) -> Option<Matrix4> {
+    let mut fov_deg = camera_state.fov?;
+    if !fov_deg.is_finite() || fov_deg <= f32::EPSILON {
+        return None;
+    }
+    fov_deg = fov_deg.clamp(0.1, 179.9);
+    let width = screen_width().max(1.0);
+    let height = screen_height().max(1.0);
+    let x_scale = width / overlay_space_width.max(1.0);
+    let y_scale = height / overlay_space_height.max(1.0);
+    let vanish = camera_state
+        .vanishpoint
+        .unwrap_or([0.5 * overlay_space_width, 0.5 * overlay_space_height]);
+    let mut vanish_x = width - vanish[0] * x_scale;
+    let mut vanish_y = height - vanish[1] * y_scale;
+    vanish_x -= 0.5 * width;
+    vanish_y -= 0.5 * height;
+
+    let theta = 0.5 * fov_deg.to_radians();
+    let dist = (0.5 * width / theta.tan()).max(1.0);
+    let proj = Matrix4::frustum_rh_gl(
+        (vanish_x - 0.5 * width) / dist,
+        (vanish_x + 0.5 * width) / dist,
+        (vanish_y + 0.5 * height) / dist,
+        (vanish_y - 0.5 * height) / dist,
+        1.0,
+        dist + 1000.0,
+    );
+    let eye_x = -vanish_x + 0.5 * width;
+    let eye_y = -vanish_y + 0.5 * height;
+    let view = Matrix4::look_at_rh(
+        Vector3::new(eye_x, eye_y, dist),
+        Vector3::new(eye_x, eye_y, 0.0),
+        Vector3::new(0.0, 1.0, 0.0),
+    );
+    Some(proj * view)
+}
+
+fn song_lua_project_overlay_point(view_proj: Matrix4, point: [f32; 3]) -> Option<[f32; 2]> {
+    let clip = view_proj * Vector4::new(point[0], point[1], point[2], 1.0);
+    if !clip.w.is_finite() || clip.w <= f32::EPSILON {
+        return None;
+    }
+    let inv_w = clip.w.recip();
+    let ndc_x = clip.x * inv_w;
+    let ndc_y = clip.y * inv_w;
+    if !(ndc_x.is_finite() && ndc_y.is_finite()) {
+        return None;
+    }
+    Some([
+        (0.5 * ndc_x + 0.5) * screen_width(),
+        (0.5 - 0.5 * ndc_y) * screen_height(),
+    ])
+}
+
+fn song_lua_overlay_rect(
+    state: SongLuaOverlayState,
+    default_size: [f32; 2],
+    x_scale: f32,
+    y_scale: f32,
+    size_scale_x: f32,
+    size_scale_y: f32,
+) -> Option<([f32; 2], [f32; 2])> {
+    let (base_center, base_size) = if let Some([left, top, right, bottom]) = state.stretch_rect {
+        (
+            [
+                0.5 * (left + right) * x_scale,
+                0.5 * (top + bottom) * y_scale,
+            ],
+            [
+                (right - left).abs() * x_scale * size_scale_x,
+                (bottom - top).abs() * y_scale * size_scale_y,
+            ],
+        )
+    } else {
+        (
+            [state.x * x_scale, state.y * y_scale],
+            [
+                default_size[0] * x_scale * size_scale_x,
+                default_size[1] * y_scale * size_scale_y,
+            ],
+        )
+    };
+    if base_size[0] <= f32::EPSILON || base_size[1] <= f32::EPSILON {
+        return None;
+    }
+    let cl = state.cropleft.clamp(0.0, 1.0);
+    let cr = state.cropright.clamp(0.0, 1.0);
+    let ct = state.croptop.clamp(0.0, 1.0);
+    let cb = state.cropbottom.clamp(0.0, 1.0);
+    let sx_crop = (1.0 - cl - cr).max(0.0);
+    let sy_crop = (1.0 - ct - cb).max(0.0);
+    if sx_crop <= f32::EPSILON || sy_crop <= f32::EPSILON {
+        return None;
+    }
+    Some((
+        [
+            ((cl - cr) * base_size[0]).mul_add(0.5, base_center[0]),
+            ((cb - ct) * base_size[1]).mul_add(0.5, base_center[1]),
+        ],
+        [base_size[0] * sx_crop, base_size[1] * sy_crop],
+    ))
+}
+
+fn song_lua_overlay_uvs(
+    state: SongLuaOverlayState,
+    flip_x: bool,
+    flip_y: bool,
+    total_elapsed: f32,
+) -> [[f32; 2]; 4] {
+    let cl = state.cropleft.clamp(0.0, 1.0);
+    let cr = state.cropright.clamp(0.0, 1.0);
+    let ct = state.croptop.clamp(0.0, 1.0);
+    let cb = state.cropbottom.clamp(0.0, 1.0);
+    let [
+        mut uv_scale_x,
+        mut uv_scale_y,
+        mut uv_offset_x,
+        mut uv_offset_y,
+    ] = if let Some([u0, v0, u1, v1]) = state.custom_texture_rect {
+        [
+            (u1 - u0).abs().max(1e-6),
+            (v1 - v0).abs().max(1e-6),
+            u0.min(u1),
+            v0.min(v1),
+        ]
+    } else {
+        [1.0, 1.0, 0.0, 0.0]
+    };
+    uv_offset_x += uv_scale_x * cl;
+    uv_offset_y += uv_scale_y * ct;
+    uv_scale_x *= (1.0 - cl - cr).max(0.0);
+    uv_scale_y *= (1.0 - ct - cb).max(0.0);
+    if flip_x {
+        uv_offset_x += uv_scale_x;
+        uv_scale_x = -uv_scale_x;
+    }
+    if flip_y {
+        uv_offset_y += uv_scale_y;
+        uv_scale_y = -uv_scale_y;
+    }
+    if let Some(velocity) = state.texcoord_velocity {
+        uv_offset_x += velocity[0] * total_elapsed;
+        uv_offset_y += velocity[1] * total_elapsed;
+    }
+    [
+        [uv_offset_x, uv_offset_y],
+        [uv_offset_x + uv_scale_x, uv_offset_y],
+        [uv_offset_x + uv_scale_x, uv_offset_y + uv_scale_y],
+        [uv_offset_x, uv_offset_y + uv_scale_y],
+    ]
+}
+
+fn song_lua_projected_overlay_actor(
+    texture: Arc<str>,
+    tint: [f32; 4],
+    blend: BlendMode,
+    z: i16,
+    center: [f32; 2],
+    size: [f32; 2],
+    rot_deg: [f32; 3],
+    uv: [[f32; 2]; 4],
+    view_proj: Matrix4,
+) -> Option<Actor> {
+    let half_w = 0.5 * size[0];
+    let half_h = 0.5 * size[1];
+    if half_w <= f32::EPSILON || half_h <= f32::EPSILON {
+        return None;
+    }
+    let model = Matrix4::from_translation(Vector3::new(center[0], center[1], 0.0))
+        * Matrix4::from_rotation_x(rot_deg[0].to_radians())
+        * Matrix4::from_rotation_y(rot_deg[1].to_radians())
+        * Matrix4::from_rotation_z(rot_deg[2].to_radians());
+    let local = [
+        ([-half_w, -half_h, 0.0], uv[0]),
+        ([half_w, -half_h, 0.0], uv[1]),
+        ([half_w, half_h, 0.0], uv[2]),
+        ([-half_w, half_h, 0.0], uv[3]),
+    ];
+    let mut corners = [TexturedMeshVertex::default(); 4];
+    for (idx, (pos, uv)) in local.into_iter().enumerate() {
+        let world = model * Vector4::new(pos[0], pos[1], pos[2], 1.0);
+        corners[idx] = TexturedMeshVertex {
+            pos: song_lua_project_overlay_point(view_proj, [world.x, world.y, world.z])?,
+            uv,
+            tex_matrix_scale: [1.0, 1.0],
+            color: tint,
+        };
+    }
+    Some(Actor::TexturedMesh {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        world_z: 0.0,
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        texture,
+        tint: [1.0, 1.0, 1.0, 1.0],
+        vertices: Arc::from(
+            vec![
+                corners[0], corners[1], corners[2], corners[0], corners[2], corners[3],
+            ]
+            .into_boxed_slice(),
+        ),
+        geom_cache_key: INVALID_TMESH_CACHE_KEY,
+        mode: MeshMode::Triangles,
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        uv_tex_shift: [0.0, 0.0],
+        visible: true,
+        blend,
+        z,
+    })
+}
+
 fn build_song_lua_overlay_actor(
     overlay: &SongLuaOverlayActor,
     state: SongLuaOverlayState,
+    camera_state: Option<SongLuaOverlayState>,
     asset_manager: &AssetManager,
     z: i16,
     source: Option<Vec<Actor>>,
     overlay_space_width: f32,
     overlay_space_height: f32,
+    total_elapsed: f32,
 ) -> Option<Actor> {
     if !state.visible || state.diffuse[3] <= f32::EPSILON {
         return None;
@@ -2015,30 +2347,25 @@ fn build_song_lua_overlay_actor(
     } else {
         (overlay_scale[1], false)
     };
-    let effect = EffectState {
-        mode: state.effect_mode,
-        color1: state.effect_color1,
-        color2: state.effect_color2,
-        period: state.effect_period.max(f32::EPSILON),
-        magnitude: state.effect_magnitude,
-        ..EffectState::default()
-    };
+    let effect = song_lua_overlay_effect_state(state);
+    let overlay_blend = song_lua_overlay_blend(state.blend);
+    let perspective_view_proj = camera_state.and_then(|camera| {
+        song_lua_overlay_view_proj(camera, overlay_space_width, overlay_space_height)
+    });
     match &overlay.kind {
         SongLuaOverlayKind::ActorFrame => None,
         SongLuaOverlayKind::ActorFrameTexture => None,
         SongLuaOverlayKind::ActorProxy { .. } => {
             let source = source?;
-            let blend = match state.blend {
-                SongLuaOverlayBlendMode::Alpha => None,
-                SongLuaOverlayBlendMode::Add => Some(BlendMode::Add),
-            };
             Some(Actor::Frame {
                 align: [0.0, 0.0],
                 offset: [state.x * x_scale, state.y * y_scale],
                 size: [SizeSpec::Fill, SizeSpec::Fill],
                 children: source
                     .into_iter()
-                    .map(|actor| song_lua_style_capture_actor(actor, state.diffuse, blend, 0))
+                    .map(|actor| {
+                        song_lua_style_capture_actor(actor, state.diffuse, Some(overlay_blend), 0)
+                    })
                     .collect(),
                 background: None,
                 z,
@@ -2056,6 +2383,32 @@ fn build_song_lua_overlay_actor(
             let key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
             if !asset_manager.has_texture_key(key.as_ref()) {
                 return None;
+            }
+            if let Some(view_proj) = perspective_view_proj {
+                let tex = crate::assets::texture_dims(key.as_ref())?;
+                let size = state.size.unwrap_or([tex.w as f32, tex.h as f32]);
+                let (center, size) = song_lua_overlay_rect(
+                    state,
+                    size,
+                    x_scale,
+                    y_scale,
+                    size_scale_x,
+                    size_scale_y,
+                )?;
+                let mut tint = state.diffuse;
+                let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+                song_lua_apply_overlay_effect(effect, total_elapsed, &mut tint, &mut rot_deg);
+                return song_lua_projected_overlay_actor(
+                    key,
+                    tint,
+                    overlay_blend,
+                    z,
+                    center,
+                    size,
+                    rot_deg,
+                    song_lua_overlay_uvs(state, flip_x, flip_y, total_elapsed),
+                    view_proj,
+                );
             }
             let mut actor = if let Some([left, top, right, bottom]) = state.stretch_rect {
                 act!(sprite(key.clone()):
@@ -2104,10 +2457,7 @@ fn build_song_lua_overlay_actor(
                 *cropright = state.cropright.clamp(0.0, 1.0);
                 *croptop = state.croptop.clamp(0.0, 1.0);
                 *cropbottom = state.cropbottom.clamp(0.0, 1.0);
-                *blend = match state.blend {
-                    SongLuaOverlayBlendMode::Alpha => BlendMode::Alpha,
-                    SongLuaOverlayBlendMode::Add => BlendMode::Add,
-                };
+                *blend = overlay_blend;
                 *rot_x_deg = state.rot_x_deg;
                 *rot_y_deg = state.rot_y_deg;
                 *rot_z_deg = state.rot_z_deg;
@@ -2151,14 +2501,35 @@ fn build_song_lua_overlay_actor(
                 max_w_pre_zoom: false,
                 max_h_pre_zoom: false,
                 clip: None,
-                blend: match state.blend {
-                    SongLuaOverlayBlendMode::Alpha => BlendMode::Alpha,
-                    SongLuaOverlayBlendMode::Add => BlendMode::Add,
-                },
+                blend: overlay_blend,
                 effect,
             })
         }
         SongLuaOverlayKind::Quad => {
+            if let Some(view_proj) = perspective_view_proj {
+                let (center, size) = song_lua_overlay_rect(
+                    state,
+                    state.size.unwrap_or([1.0, 1.0]),
+                    x_scale,
+                    y_scale,
+                    size_scale_x,
+                    size_scale_y,
+                )?;
+                let mut tint = state.diffuse;
+                let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+                song_lua_apply_overlay_effect(effect, total_elapsed, &mut tint, &mut rot_deg);
+                return song_lua_projected_overlay_actor(
+                    Arc::from("__white"),
+                    tint,
+                    overlay_blend,
+                    z,
+                    center,
+                    size,
+                    rot_deg,
+                    song_lua_overlay_uvs(state, flip_x, flip_y, total_elapsed),
+                    view_proj,
+                );
+            }
             let mut actor = if let Some([left, top, right, bottom]) = state.stretch_rect {
                 act!(quad:
                     align(0.0, 0.0):
@@ -2203,10 +2574,7 @@ fn build_song_lua_overlay_actor(
                 *cropright = state.cropright.clamp(0.0, 1.0);
                 *croptop = state.croptop.clamp(0.0, 1.0);
                 *cropbottom = state.cropbottom.clamp(0.0, 1.0);
-                *blend = match state.blend {
-                    SongLuaOverlayBlendMode::Alpha => BlendMode::Alpha,
-                    SongLuaOverlayBlendMode::Add => BlendMode::Add,
-                };
+                *blend = overlay_blend;
                 *rot_x_deg = state.rot_x_deg;
                 *rot_y_deg = state.rot_y_deg;
                 *rot_z_deg = state.rot_z_deg;
@@ -2220,13 +2588,13 @@ fn build_song_lua_overlay_actor(
     }
 }
 
-fn song_lua_player_skew_x_matrix(amount: f32) -> Matrix4<f32> {
-    Matrix4::new(
+fn song_lua_player_skew_x_matrix(amount: f32) -> Matrix4 {
+    Matrix4::from_cols_array(&[
         1.0, 0.0, 0.0, 0.0, //
         amount, 1.0, 0.0, 0.0, //
         0.0, 0.0, 1.0, 0.0, //
         0.0, 0.0, 0.0, 1.0,
-    )
+    ])
 }
 
 #[inline(always)]
@@ -2472,7 +2840,7 @@ fn song_lua_player_transform_matrix(
     skew_x: f32,
     zoom_x: f32,
     zoom_y: f32,
-) -> Option<Matrix4<f32>> {
+) -> Option<Matrix4> {
     if !playfield_center_x.is_finite()
         || !rotation_z_deg.is_finite()
         || !skew_x.is_finite()
@@ -2513,9 +2881,9 @@ fn song_lua_player_transform_matrix(
     let pivot_y = 0.5 * screen_height() - screen_center_y();
     Some(
         Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
-            * Matrix4::from_angle_z(Deg(rotation_z_deg))
+            * Matrix4::from_rotation_z(rotation_z_deg.to_radians())
             * song_lua_player_skew_x_matrix(skew_x)
-            * Matrix4::from_nonuniform_scale(zoom_x, zoom_y, 1.0)
+            * Matrix4::from_scale(Vector3::new(zoom_x, zoom_y, 1.0))
             * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0)),
     )
 }
@@ -2549,7 +2917,7 @@ fn apply_song_lua_player_transform(
     // notefield::build may already wrap the lane render in a perspective camera.
     // Multiply those cameras in place, and only wrap plain HUD actors here, so
     // the Lua transform affects the whole bundle without being shadowed.
-    let root_camera = cgmath::ortho(
+    let root_camera = Matrix4::orthographic_rh_gl(
         -0.5 * screen_width(),
         0.5 * screen_width(),
         -0.5 * screen_height(),
@@ -2729,10 +3097,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         {
             let s = match key {
                 crate::game::gameplay::HoldToExitKey::Start => {
-                    Some("Continue holding &START; to give up")
+                    Some(tr("Gameplay", "ContinueHoldingStartGiveUp"))
                 }
                 crate::game::gameplay::HoldToExitKey::Back => {
-                    Some("Continue holding &BACK; to give up")
+                    Some(tr("Gameplay", "ContinueHoldingBackGiveUp"))
                 }
             };
             let alpha = (start.elapsed().as_secs_f32() / HOLD_FADE_IN_S).clamp(0.0, 1.0);
@@ -2742,15 +3110,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             match exit.kind {
                 crate::game::gameplay::ExitTransitionKind::Out => {
                     let alpha = (1.0 - t / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
-                    Some(("Continue holding &START; to give up".to_string(), alpha))
+                    Some((
+                        tr("Gameplay", "ContinueHoldingStartGiveUp").to_string(),
+                        alpha,
+                    ))
                 }
                 crate::game::gameplay::ExitTransitionKind::Cancel => {
-                    Some(("Continue holding &BACK; to give up".to_string(), 1.0))
+                    Some((tr("Gameplay", "ContinueHoldingBackGiveUp").to_string(), 1.0))
                 }
             }
         } else if let Some(at) = state.hold_to_exit_aborted_at {
             let alpha = (1.0 - at.elapsed().as_secs_f32() / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
-            Some(("Don't go back!".to_string(), alpha))
+            Some((tr("Gameplay", "DontGoBack").to_string(), alpha))
         } else {
             None
         };
@@ -3765,10 +4136,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let p1_guest = hud_snapshot.p1.guest;
     let p2_guest = hud_snapshot.p2.guest;
 
+    let insert_card_text = tr("Common", "InsertCard");
     let (p1_footer_text, p1_footer_avatar) = if p1_joined {
         (
             Some(if p1_guest {
-                "INSERT CARD"
+                &*insert_card_text
             } else {
                 hud_snapshot.p1.display_name.as_str()
             }),
@@ -3780,7 +4152,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let (p2_footer_text, p2_footer_avatar) = if p2_joined {
         (
             Some(if p2_guest {
-                "INSERT CARD"
+                &*insert_card_text
             } else {
                 hud_snapshot.p2.display_name.as_str()
             }),
@@ -3887,14 +4259,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
             _ => None,
         };
+        let camera_state = song_lua_overlay_camera_state(
+            &state.song_lua_overlays,
+            &overlay_states,
+            overlay.parent_index,
+        );
         if let Some(actor) = build_song_lua_overlay_actor(
             overlay,
             overlay_state,
+            camera_state,
             asset_manager,
             1100 + idx as i16,
             source,
             song_lua_space_width,
             song_lua_space_height,
+            state.total_elapsed_in_screen,
         ) {
             actors.push(actor);
         }
@@ -3906,6 +4285,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 mod tests {
     use super::*;
     use crate::engine::present::actors::SizeSpec;
+
+    fn ensure_i18n() {
+        crate::assets::i18n::init("en");
+    }
 
     fn test_proxy_overlay(player_index: usize) -> SongLuaOverlayActor {
         SongLuaOverlayActor {
@@ -4142,11 +4525,13 @@ mod tests {
         let actor = build_song_lua_overlay_actor(
             &overlay,
             SongLuaOverlayState::default(),
+            None,
             &AssetManager::new(),
             1234,
             Some(vec![test_source_actor()]),
             640.0,
             480.0,
+            0.0,
         )
         .expect("actor proxy should render with a source");
 
@@ -4177,11 +4562,13 @@ mod tests {
                 zoom: 0.5,
                 ..SongLuaOverlayState::default()
             },
+            None,
             &AssetManager::new(),
             321,
             None,
             640.0,
             480.0,
+            0.0,
         )
         .expect("quad overlay should render");
 
@@ -4214,6 +4601,46 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_quad_uses_textured_mesh_under_perspective_camera() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                size: Some([100.0, 50.0]),
+                rot_x_deg: 45.0,
+                ..SongLuaOverlayState::default()
+            },
+            Some(SongLuaOverlayState {
+                fov: Some(120.0),
+                ..SongLuaOverlayState::default()
+            }),
+            &AssetManager::new(),
+            654,
+            None,
+            640.0,
+            480.0,
+            0.0,
+        )
+        .expect("perspective song lua quad should render");
+
+        match actor {
+            Actor::TexturedMesh { vertices, z, .. } => {
+                assert_eq!(z, 654);
+                assert_eq!(vertices.len(), 6);
+            }
+            other => panic!("expected projected textured mesh, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn gameplay_requires_wait_for_solo_joined_lobby() {
         let joined = test_joined_lobby(vec![test_lobby_player("ScreenGameplay", false)]);
         assert!(gameplay_requires_lobby_wait_for(Some(&joined)));
@@ -4221,11 +4648,17 @@ mod tests {
 
     #[test]
     fn gameplay_wait_text_requires_ready_up_for_solo_lobby_player() {
+        ensure_i18n();
         let joined = test_joined_lobby(vec![test_lobby_player("ScreenGameplay", false)]);
 
+        let expected = format!(
+            "{}\n{}",
+            tr("Lobby", "WaitingForReadyUp"),
+            tr("Gameplay", "PressStartToReadyUp"),
+        );
         assert_eq!(
             gameplay_lobby_wait_text_for(&joined, false, None).as_deref(),
-            Some("Waiting for players to ready up...\nPress START to ready up.")
+            Some(expected.as_str())
         );
     }
 

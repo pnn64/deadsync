@@ -2,13 +2,13 @@ use super::{App, CurrentScreen, ShellState};
 use crate::act;
 use crate::assets;
 use crate::config::dirs;
+use crate::engine::gfx::TextureHandleMap;
 use crate::engine::present::actors::Actor;
 use crate::engine::space;
 use crate::game::{profile, scores};
 use crate::screens::evaluation;
 use chrono::Local;
 use log::{info, warn};
-use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -186,7 +186,7 @@ impl App {
             .asset_manager
             .remove_texture(SCREENSHOT_PREVIEW_TEXTURE_KEY)
         {
-            let mut old_map = HashMap::with_capacity(1);
+            let mut old_map = TextureHandleMap::default();
             old_map.insert(handle, old);
             backend.retire_textures(&mut old_map);
         }

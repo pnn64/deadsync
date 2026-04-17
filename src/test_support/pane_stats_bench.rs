@@ -75,7 +75,7 @@ fn bench_score_info() -> ScoreInfo {
         score_percent: 0.9765,
         grade: Grade::Tier02,
         speed_mod: ScrollSpeedSetting::CMod(700.0),
-        noteskin_name: "cel".to_string(),
+        mods_text: Arc::<str>::from("C700, Overhead, cel"),
         hands_achieved: 237,
         hands_total: 288,
         holds_held: 452,
@@ -96,7 +96,6 @@ fn bench_score_info() -> ScoreInfo {
         graph_first_second: 0.0,
         graph_last_second: 128.0,
         music_rate: 1.0,
-        scroll_option: profile::ScrollOption::Normal,
         life_history: Vec::new(),
         fail_time: None,
         window_counts: WindowCounts {

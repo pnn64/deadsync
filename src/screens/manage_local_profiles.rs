@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
+use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::{self, Actor};
@@ -12,6 +13,7 @@ use crate::screens::components::shared::screen_bar::{
 };
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
 
@@ -81,7 +83,7 @@ enum NavDirection {
 struct NameEntryState {
     mode: NameEntryMode,
     value: String,
-    error: Option<&'static str>,
+    error: Option<Arc<str>>,
     blink_t: f32,
 }
 
@@ -99,13 +101,12 @@ enum ProfileMenuAction {
     Delete,
 }
 
-#[inline(always)]
-const fn profile_menu_action_label(action: ProfileMenuAction) -> &'static str {
+fn profile_menu_action_label(action: ProfileMenuAction) -> Arc<str> {
     match action {
-        ProfileMenuAction::SetP1 => "Set P1",
-        ProfileMenuAction::SetP2 => "Set P2",
-        ProfileMenuAction::Rename => "Rename",
-        ProfileMenuAction::Delete => "Delete",
+        ProfileMenuAction::SetP1 => tr("Profiles", "SetP1"),
+        ProfileMenuAction::SetP2 => tr("Profiles", "SetP2"),
+        ProfileMenuAction::Rename => tr("Profiles", "Rename"),
+        ProfileMenuAction::Delete => tr("Profiles", "Delete"),
     }
 }
 
@@ -127,7 +128,7 @@ struct ProfileMenuState {
 struct DeleteConfirmState {
     id: String,
     display_name: String,
-    error: Option<&'static str>,
+    error: Option<Arc<str>>,
 }
 
 pub struct State {
@@ -315,14 +316,10 @@ fn default_new_profile_name(state: &State) -> String {
     "New0001".to_string()
 }
 
-fn validate_profile_name(
-    state: &State,
-    mode: &NameEntryMode,
-    name: &str,
-) -> Result<(), &'static str> {
+fn validate_profile_name(state: &State, mode: &NameEntryMode, name: &str) -> Result<(), Arc<str>> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
-        return Err("Profile name cannot be blank.");
+        return Err(tr("Profiles", "NameCannotBeBlank"));
     }
 
     let skip_id = match mode {
@@ -330,26 +327,21 @@ fn validate_profile_name(
         NameEntryMode::Rename { id } => Some(id.as_str()),
     };
     if name_conflicts(state, trimmed, skip_id) {
-        return Err(
-            "The name you chose conflicts with another profile. Please use a different name.",
-        );
+        return Err(tr("Profiles", "NameConflict"));
     }
     Ok(())
 }
 
-fn try_submit_name_entry(
-    state: &mut State,
-    entry: &NameEntryState,
-) -> Result<String, &'static str> {
+fn try_submit_name_entry(state: &mut State, entry: &NameEntryState) -> Result<String, Arc<str>> {
     validate_profile_name(state, &entry.mode, &entry.value)?;
     let trimmed = entry.value.trim();
     match &entry.mode {
         NameEntryMode::Create => {
-            profile::create_local_profile(trimmed).map_err(|_| "Failed to create profile.")
+            profile::create_local_profile(trimmed).map_err(|_| tr("Profiles", "CreateFailed"))
         }
         NameEntryMode::Rename { id } => profile::rename_local_profile(id, trimmed)
             .map(|()| id.clone())
-            .map_err(|_| "Failed to rename profile."),
+            .map_err(|_| tr("Profiles", "RenameFailed")),
     }
 }
 
@@ -527,7 +519,7 @@ fn confirm_delete(state: &mut State) {
             state.delete_confirm = Some(DeleteConfirmState {
                 id: confirm.id,
                 display_name: confirm.display_name,
-                error: Some("Failed to delete profile."),
+                error: Some(tr("Profiles", "DeleteFailed")),
             });
         }
     }
@@ -871,13 +863,13 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
     }
 }
 
-fn indicator_text(id: &str, p1_id: Option<&str>, p2_id: Option<&str>) -> Option<&'static str> {
+fn indicator_text(id: &str, p1_id: Option<&str>, p2_id: Option<&str>) -> Option<Arc<str>> {
     let is_p1 = p1_id.is_some_and(|p1| p1 == id);
     let is_p2 = p2_id.is_some_and(|p2| p2 == id);
     match (is_p1, is_p2) {
-        (true, true) => Some("P1+P2"),
-        (true, false) => Some("P1"),
-        (false, true) => Some("P2"),
+        (true, true) => Some(tr("Profiles", "P1P2Assigned")),
+        (true, false) => Some(tr("Profiles", "P1Assigned")),
+        (false, true) => Some(tr("Profiles", "P2Assigned")),
         (false, false) => None,
     }
 }
@@ -889,29 +881,25 @@ fn help_for_selected(state: &State, p1_id: Option<&str>, p2_id: Option<&str>) ->
 
     match &row.kind {
         RowKind::CreateNew => {
-            let title = "Create a new local profile.";
-            let bullets = make_bullets(&[
-                "Enter a name for the profile.",
-                "Press Start to confirm.",
-                "Press Back to cancel.",
-            ]);
+            let title = tr("Profiles", "CreateProfileTitle");
+            let b1 = tr("Profiles", "EnterProfileNamePrompt");
+            let b2 = tr("Profiles", "PressStartConfirm");
+            let b3 = tr("Profiles", "PressBackCancel");
+            let bullets = make_bullets(&[&b1, &b2, &b3]);
             (title.to_string(), bullets)
         }
-        RowKind::Exit => ("Return to Options.".to_string(), String::new()),
+        RowKind::Exit => (tr("Profiles", "ReturnToOptions").to_string(), String::new()),
         RowKind::Profile { id, display_name } => {
-            let mut title = String::new();
-            title.push_str("Local profile: ");
-            title.push_str(display_name);
+            let title =
+                tr_fmt("Profiles", "LocalProfileFormat", &[("name", display_name)]).to_string();
 
             let assigned = match indicator_text(id, p1_id, p2_id) {
-                Some(tag) => format!("Assigned: {tag}"),
-                None => "Assigned: (none)".to_string(),
+                Some(tag) => tr_fmt("Profiles", "AssignedFormat", &[("tag", &tag)]).to_string(),
+                None => tr("Profiles", "AssignedNone").to_string(),
             };
-            let bullets = make_bullets(&[
-                &format!("ID: {id}"),
-                &assigned,
-                "Press Start to open profile actions.",
-            ]);
+            let b1 = tr_fmt("Profiles", "IdFormat", &[("id", id)]).to_string();
+            let b3 = tr("Profiles", "OpenActionsPrompt");
+            let bullets = make_bullets(&[&b1, &assigned, &b3]);
             (title, bullets)
         }
     }
@@ -1019,12 +1007,13 @@ fn push_name_entry_overlay(ui: &mut Vec<Actor>, state: &State) {
         z(1002)
     ));
 
+    let name_prompt = tr("Profiles", "EnterProfileNamePrompt");
     ui.push(act!(text:
         align(0.5, 0.5):
         xy(cx, top_cy):
         font("miso"):
         zoom(1.0):
-        settext("Enter a name for the profile."):
+        settext(name_prompt):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(1003):
         horizalign(center)
@@ -1047,7 +1036,7 @@ fn push_name_entry_overlay(ui: &mut Vec<Actor>, state: &State) {
         horizalign(center)
     ));
 
-    let Some(err) = entry.error else {
+    let Some(err) = &entry.error else {
         return;
     };
     ui.push(act!(text:
@@ -1056,7 +1045,7 @@ fn push_name_entry_overlay(ui: &mut Vec<Actor>, state: &State) {
         font("miso"):
         zoom(0.9):
         maxwidth(box_w - 40.0):
-        settext(err):
+        settext(err.clone()):
         diffuse(1.0, 0.2, 0.2, 1.0):
         z(1003):
         horizalign(center)
@@ -1078,9 +1067,10 @@ fn push_delete_confirm_overlay(ui: &mut Vec<Actor>, state: &State) {
     push_overlay_backdrop(ui, w, h);
     push_overlay_box(ui, cx, cy, box_w, box_h);
 
-    let prompt = format!(
-        "Are you sure you want to delete the profile '{}'?",
-        confirm.display_name
+    let prompt = tr_fmt(
+        "Profiles",
+        "DeleteConfirmFormat",
+        &[("name", &confirm.display_name)],
     );
     ui.push(act!(text:
         align(0.5, 0.0):
@@ -1093,28 +1083,30 @@ fn push_delete_confirm_overlay(ui: &mut Vec<Actor>, state: &State) {
         z(1002):
         horizalign(center)
     ));
+    let cannot_be_undone = tr("Profiles", "CannotBeUndone");
     ui.push(act!(text:
         align(0.5, 0.0):
         xy(cx, cy - box_h * 0.5 + 58.0):
         font("miso"):
         zoom(0.9):
-        settext("This cannot be undone."):
+        settext(cannot_be_undone):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(1002):
         horizalign(center)
     ));
+    let yes_no = tr("Profiles", "YesNoPrompt");
     ui.push(act!(text:
         align(0.5, 1.0):
         xy(cx, cy + box_h * 0.5 - 10.0):
         font("miso"):
         zoom(0.9):
-        settext("Start: Yes    Back: No"):
+        settext(yes_no):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(1002):
         horizalign(center)
     ));
 
-    push_overlay_error(ui, confirm.error, cx, cy, box_w, box_h);
+    push_overlay_error(ui, confirm.error.as_ref(), cx, cy, box_w, box_h);
 }
 
 fn push_overlay_backdrop(ui: &mut Vec<Actor>, w: f32, h: f32) {
@@ -1139,7 +1131,7 @@ fn push_overlay_box(ui: &mut Vec<Actor>, cx: f32, cy: f32, w: f32, h: f32) {
 
 fn push_overlay_error(
     ui: &mut Vec<Actor>,
-    err: Option<&'static str>,
+    err: Option<&Arc<str>>,
     cx: f32,
     cy: f32,
     box_w: f32,
@@ -1154,7 +1146,7 @@ fn push_overlay_error(
         font("miso"):
         zoom(0.9):
         maxwidth(box_w - 40.0):
-        settext(err):
+        settext(err.clone()):
         diffuse(1.0, 0.2, 0.2, 1.0):
         z(1002):
         horizalign(center)
@@ -1197,11 +1189,11 @@ struct RowColors {
     black: [f32; 4],
 }
 
-fn row_label(kind: &RowKind) -> &str {
+fn row_label(kind: &RowKind) -> Arc<str> {
     match kind {
-        RowKind::CreateNew => "Create Profile",
-        RowKind::Exit => "Exit",
-        RowKind::Profile { display_name, .. } => display_name.as_str(),
+        RowKind::CreateNew => tr("Profiles", "CreateProfileButton"),
+        RowKind::Exit => tr("Common", "Exit"),
+        RowKind::Profile { display_name, .. } => Arc::from(display_name.as_str()),
     }
 }
 
@@ -1477,8 +1469,9 @@ pub fn get_actors(
     }
 
     let mut ui = Vec::new();
+    let title = tr("ScreenTitles", "ManageProfiles");
     ui.push(screen_bar::build(screen_bar::ScreenBarParams {
-        title: "MANAGE PROFILES",
+        title: &title,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
         transparent: false,

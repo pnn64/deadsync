@@ -4,6 +4,33 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 
+// ---------------------------------------------------------------------------
+// LKey — lazy localization key (const-compatible)
+// ---------------------------------------------------------------------------
+
+/// A reference to a localized string that resolves at render time via `tr()`.
+///
+/// `LookupKey` is `Copy` and can live in `const` static arrays. Call `.get()` to
+/// resolve to the current language's text. If the key is missing, falls back
+/// to English, then to `"Section.Key"`.
+#[derive(Clone, Copy)]
+pub struct LookupKey {
+    pub section: &'static str,
+    pub key: &'static str,
+}
+
+impl LookupKey {
+    /// Resolve this key to the localized string for the current language.
+    pub fn get(&self) -> Arc<str> {
+        tr(self.section, self.key)
+    }
+}
+
+/// Shorthand for constructing a `LookupKey` in const contexts.
+pub const fn lookup_key(section: &'static str, key: &'static str) -> LookupKey {
+    LookupKey { section, key }
+}
+
 /// Loaded language data: active locale strings + English fallback.
 struct LangData {
     /// Active (non-English) language strings: section -> (key -> value).
@@ -33,6 +60,29 @@ fn languages_dir_path() -> std::path::PathBuf {
         .join("languages")
 }
 
+/// Unescape INI string escape sequences (`\n`, `\t`, `\\`).
+fn unescape_ini_value(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut chars = raw.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => out.push('\n'),
+                Some('t') => out.push('\t'),
+                Some('\\') => out.push('\\'),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 fn load_ini_to_map(path: &Path) -> HashMap<Box<str>, HashMap<Box<str>, Arc<str>>> {
     let mut ini = config::SimpleIni::new();
     if let Err(e) = ini.load(path) {
@@ -47,7 +97,10 @@ fn load_ini_to_map(path: &Path) -> HashMap<Box<str>, HashMap<Box<str>, Arc<str>>
             if value.trim() == "@skip" {
                 continue;
             }
-            entries.insert(key.as_str().into(), Arc::from(value.as_str()));
+            entries.insert(
+                key.as_str().into(),
+                Arc::from(unescape_ini_value(value.as_str()).as_str()),
+            );
         }
     }
     sections
@@ -96,6 +149,9 @@ pub fn init(locale: &str) {
 /// Returns `"Section.Key"` if the key is missing from English too (makes
 /// untranslated strings visible during development).
 pub fn tr(section: &str, key: &str) -> Arc<str> {
+    #[cfg(test)]
+    ensure_test_init();
+
     let lang = LANG.get().expect("i18n not initialized").read().unwrap();
 
     if let Some(section_map) = lang.active.get(section) {
@@ -109,6 +165,17 @@ pub fn tr(section: &str, key: &str) -> Arc<str> {
         }
     }
     Arc::from(format!("{section}.{key}"))
+}
+
+#[cfg(test)]
+fn ensure_test_init() {
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+    if LANG.get().is_some() {
+        return;
+    }
+    INIT.call_once(|| init("en"));
 }
 
 /// Look up a localized string with named placeholder substitution.

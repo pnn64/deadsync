@@ -2,7 +2,7 @@ use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges,
 use crate::engine::windows_rt::{
     ThreadRole, boost_current_thread, current_host_nanos, qpc_ticks_to_nanos,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -341,6 +341,21 @@ enum Msg {
     Removed(RawGameController),
 }
 
+#[inline(always)]
+fn handle_msg(ctx: &mut Ctx, msg: Msg) {
+    match msg {
+        Msg::Added(c) => add_controller(ctx, c),
+        Msg::Removed(c) => remove_controller(ctx, c),
+    }
+}
+
+#[inline(always)]
+fn drain_msgs(rx: &mpsc::Receiver<Msg>, ctx: &mut Ctx) {
+    while let Ok(msg) = rx.try_recv() {
+        handle_msg(ctx, msg);
+    }
+}
+
 struct GamepadState {
     pad: WgiGamepad,
     buttons_prev: GamepadButtons,
@@ -405,12 +420,14 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
         return;
     }
 
-    let id = ctx.id_by_uuid.get(&uuid).copied().unwrap_or_else(|| {
-        let id = PadId(ctx.next_id);
-        ctx.next_id += 1;
-        ctx.id_by_uuid.insert(uuid, id);
-        id
-    });
+    let id = match ctx.id_by_uuid.entry(uuid) {
+        Entry::Occupied(entry) => *entry.get(),
+        Entry::Vacant(entry) => {
+            let id = PadId(ctx.next_id);
+            ctx.next_id += 1;
+            *entry.insert(id)
+        }
+    };
 
     let name = controller
         .DisplayName()
@@ -542,12 +559,12 @@ fn remove_controller(ctx: &mut Ctx, controller: RawGameController) {
     }
 }
 
-fn pump_gamepad<F>(emit_pad: &mut F, id: PadId, uuid: [u8; 16], st: &mut GamepadState) -> bool
+fn pump_gamepad<F>(emit_pad: &mut F, id: PadId, uuid: [u8; 16], st: &mut GamepadState)
 where
     F: FnMut(PadEvent),
 {
     let Ok(reading) = st.pad.GetCurrentReading() else {
-        return false;
+        return;
     };
     let polled_at = Instant::now();
     let poll_host_nanos = current_host_nanos();
@@ -565,7 +582,6 @@ where
     let rx = scale_axis(reading.RightThumbstickX);
     let ry = scale_axis(reading.RightThumbstickY);
 
-    let mut changed = false;
     let dpad = [
         pressed(reading.Buttons, GamepadButtons::DPadUp),
         pressed(reading.Buttons, GamepadButtons::DPadDown),
@@ -584,7 +600,7 @@ where
         dpad[2] || stick[2],
         dpad[3] || stick[3],
     ];
-    changed |= emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, host_nanos, want);
+    emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, host_nanos, want);
 
     for (mask, code_u32) in BTN_MAP {
         let new_pressed = pressed(reading.Buttons, mask);
@@ -592,7 +608,6 @@ where
         if new_pressed == old_pressed {
             continue;
         }
-        changed = true;
         (emit_pad)(PadEvent::RawButton {
             id,
             timestamp,
@@ -618,7 +633,6 @@ where
             continue;
         }
         st.axes_prev[i] = *v;
-        changed = true;
         (emit_pad)(PadEvent::RawAxis {
             id,
             timestamp,
@@ -636,7 +650,6 @@ where
     let rt_pressed = rt >= TRIGGER_DIGITAL_THRESH;
 
     if lt_pressed != old_lt_pressed {
-        changed = true;
         (emit_pad)(PadEvent::RawButton {
             id,
             timestamp,
@@ -648,7 +661,6 @@ where
         });
     }
     if rt_pressed != old_rt_pressed {
-        changed = true;
         (emit_pad)(PadEvent::RawButton {
             id,
             timestamp,
@@ -659,7 +671,6 @@ where
             pressed: rt_pressed,
         });
     }
-    changed
 }
 
 fn pump_raw<F>(
@@ -668,20 +679,18 @@ fn pump_raw<F>(
     uuid: [u8; 16],
     controller: &RawGameController,
     st: &mut RawState,
-) -> bool
-where
+) where
     F: FnMut(PadEvent),
 {
     let Ok(time) =
         controller.GetCurrentReading(&mut st.buttons_now, &mut st.switches, &mut st.axes)
     else {
-        return false;
+        return;
     };
     let polled_at = Instant::now();
     let poll_host_nanos = current_host_nanos();
     let (timestamp, host_nanos) = st.clock.sample_time(time, polled_at, poll_host_nanos);
 
-    let mut changed = false;
     let n = st.buttons_now.len().min(st.buttons_prev.len());
     for i in 0..n {
         if st.buttons_now[i] == st.buttons_prev[i] {
@@ -690,7 +699,6 @@ where
         let Some(code_u32) = RAW_BTN_BASE.checked_add(i as u32) else {
             continue;
         };
-        changed = true;
         (emit_pad)(PadEvent::RawButton {
             id,
             timestamp,
@@ -711,7 +719,7 @@ where
         want[2] |= x < 0;
         want[3] |= x > 0;
     }
-    changed |= emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, host_nanos, want);
+    emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, host_nanos, want);
 
     let n = st.axes.len().min(st.axes_prev.len());
     for i in 0..n {
@@ -723,7 +731,6 @@ where
         let Some(code_u32) = RAW_AXIS_BASE.checked_add(i as u32) else {
             continue;
         };
-        changed = true;
         (emit_pad)(PadEvent::RawAxis {
             id,
             timestamp,
@@ -733,7 +740,6 @@ where
             value: f32::from(v),
         });
     }
-    changed
 }
 
 fn enumerate_existing(ctx: &mut Ctx) {
@@ -805,6 +811,7 @@ pub fn run(
     // async device discovery. Treat very-early adds/removes as "initial" to avoid hotplug
     // overlays for devices that were plugged in before launch.
     const STARTUP_GRACE: Duration = Duration::from_millis(3000);
+    const POLL_INTERVAL: Duration = Duration::from_millis(1);
     let mut ctx = Ctx {
         emit_pad: Box::new(emit_pad),
         emit_sys: Box::new(emit_sys),
@@ -817,40 +824,54 @@ pub fn run(
 
     enumerate_existing(&mut ctx);
     (ctx.emit_sys)(GpSystemEvent::StartupComplete);
+    let mut next_poll = Instant::now();
 
     loop {
-        while let Ok(msg) = rx.try_recv() {
-            match msg {
-                Msg::Added(c) => add_controller(&mut ctx, c),
-                Msg::Removed(c) => remove_controller(&mut ctx, c),
-            }
-        }
-
         if ctx.devs.is_empty() {
             let Ok(msg) = rx.recv() else {
                 continue;
             };
-            match msg {
-                Msg::Added(c) => add_controller(&mut ctx, c),
-                Msg::Removed(c) => remove_controller(&mut ctx, c),
+            handle_msg(&mut ctx, msg);
+            drain_msgs(&rx, &mut ctx);
+            next_poll = Instant::now();
+            continue;
+        }
+
+        let now = Instant::now();
+        if now < next_poll {
+            match rx.recv_timeout(next_poll.saturating_duration_since(now)) {
+                Ok(msg) => {
+                    handle_msg(&mut ctx, msg);
+                    drain_msgs(&rx, &mut ctx);
+                    continue;
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => continue,
             }
+        }
+
+        drain_msgs(&rx, &mut ctx);
+        if ctx.devs.is_empty() {
+            next_poll = Instant::now();
             continue;
         }
 
         let emit_pad = &mut ctx.emit_pad;
-        let mut did_update = false;
         for dev in &mut ctx.devs {
             let id = dev.id;
             let uuid = dev.uuid;
             match &mut dev.kind {
-                Kind::Gamepad(st) => did_update |= pump_gamepad(emit_pad, id, uuid, st),
+                Kind::Gamepad(st) => {
+                    pump_gamepad(emit_pad, id, uuid, st);
+                }
                 Kind::Raw(st) => {
-                    did_update |= pump_raw(emit_pad, id, uuid, &dev.controller, st);
+                    pump_raw(emit_pad, id, uuid, &dev.controller, st);
                 }
             }
         }
-        if !did_update {
-            std::thread::yield_now();
-        }
+        // Reset the cadence from "now" instead of trying to catch up with a burst
+        // of immediate polls after a slow iteration or hotplug burst.
+        let now = Instant::now();
+        next_poll = now.checked_add(POLL_INTERVAL).unwrap_or(now);
     }
 }

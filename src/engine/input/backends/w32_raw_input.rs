@@ -3,7 +3,7 @@ use super::{
     uuid_from_bytes,
 };
 use crate::engine::windows_rt::{ThreadRole, boost_current_thread, current_host_nanos};
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::ptr;
@@ -433,7 +433,8 @@ fn hat_logical_range(preparsed: &[u8]) -> Option<(i32, i32)> {
 }
 
 fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
-    if ctx.devices.contains_key(&hkey(h)) {
+    let device_key = hkey(h);
+    if ctx.devices.contains_key(&device_key) {
         return;
     }
 
@@ -447,15 +448,26 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     let name = get_device_name(h).unwrap_or_else(|| format!("RawInput:{h:?}"));
     let uuid = uuid_from_bytes(name.as_bytes());
 
-    let id = ctx.id_by_uuid.get(&uuid).copied().unwrap_or_else(|| {
-        let id = PadId(ctx.next_id);
-        ctx.next_id += 1;
-        ctx.id_by_uuid.insert(uuid, id);
-        id
-    });
+    let id = match ctx.id_by_uuid.entry(uuid) {
+        Entry::Occupied(entry) => *entry.get(),
+        Entry::Vacant(entry) => {
+            let id = PadId(ctx.next_id);
+            ctx.next_id = ctx.next_id.saturating_add(1);
+            *entry.insert(id)
+        }
+    };
 
-    let refs = ctx.refs_by_uuid.get(&uuid).copied().unwrap_or(0);
-    ctx.refs_by_uuid.insert(uuid, refs + 1);
+    let refs = match ctx.refs_by_uuid.entry(uuid) {
+        Entry::Occupied(mut entry) => {
+            let refs = *entry.get();
+            *entry.get_mut() = refs.saturating_add(1);
+            refs
+        }
+        Entry::Vacant(entry) => {
+            entry.insert(1);
+            0
+        }
+    };
 
     let preparsed = get_preparsed(h).unwrap_or_default();
     let (hat_min, hat_max) = hat_logical_range(&preparsed).unwrap_or((0, 7));
@@ -492,7 +504,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     if refs == 0 {
         ctx.emit_connected(&dev, initial);
     }
-    ctx.devices.insert(hkey(h), dev);
+    ctx.devices.insert(device_key, dev);
 }
 
 fn remove_device(ctx: &mut Ctx, h: HANDLE) {
@@ -500,12 +512,63 @@ fn remove_device(ctx: &mut Ctx, h: HANDLE) {
         return;
     };
 
-    let refs = ctx.refs_by_uuid.get(&dev.uuid).copied().unwrap_or(0);
-    if refs <= 1 {
-        ctx.refs_by_uuid.remove(&dev.uuid);
+    let emit_disconnected = match ctx.refs_by_uuid.entry(dev.uuid) {
+        Entry::Occupied(mut entry) if *entry.get() > 1 => {
+            *entry.get_mut() -= 1;
+            false
+        }
+        Entry::Occupied(entry) => {
+            entry.remove();
+            true
+        }
+        Entry::Vacant(_) => true,
+    };
+    if emit_disconnected {
         ctx.emit_disconnected(&dev, false);
-    } else {
-        ctx.refs_by_uuid.insert(dev.uuid, refs - 1);
+    }
+}
+
+fn process_hid_reports<F>(
+    emit_pad: &mut F,
+    dev: &mut Dev,
+    timestamp: Instant,
+    host_nanos: u64,
+    buf: &mut [u8],
+    size_bytes: usize,
+) where
+    F: FnMut(PadEvent),
+{
+    if size_bytes < size_of::<RAWINPUTHEADER>() + 8 {
+        return;
+    }
+    // SAFETY: `size_bytes` was validated against the raw-input header size, and
+    // `buf` is the live owned message buffer for this WM_INPUT dispatch.
+    let base = unsafe { buf.as_mut_ptr().add(size_of::<RAWINPUTHEADER>()) };
+    // SAFETY: `base` points into `buf` and the size check above guarantees at
+    // least the HID report header fields are present.
+    let dw_size_hid = unsafe { ptr::read_unaligned(base.cast::<u32>()) as usize };
+    // SAFETY: same as above for the second HID header field.
+    let dw_count = unsafe { ptr::read_unaligned(base.add(4).cast::<u32>()) as usize };
+    // SAFETY: the HID payload starts immediately after the 8-byte HID header.
+    let data = unsafe { base.add(8) };
+    let total = dw_size_hid.saturating_mul(dw_count);
+    if size_bytes < size_of::<RAWINPUTHEADER>() + 8 + total {
+        return;
+    }
+    // SAFETY: `data` points to the HID report payload within `buf`, and the
+    // bounds check above guarantees `total` bytes are available.
+    let reports = unsafe { std::slice::from_raw_parts_mut(data, total) };
+
+    let mut idx = 0;
+    while idx < dw_count {
+        let start = idx * dw_size_hid;
+        let end = start + dw_size_hid;
+        if end > reports.len() {
+            break;
+        }
+        let report = &mut reports[start..end];
+        process_hid_report(emit_pad, dev, timestamp, host_nanos, report);
+        idx += 1;
     }
 }
 
@@ -790,37 +853,21 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
         }
 
         let dev_handle = header.hDevice;
-        if !ctx.devices.contains_key(&hkey(dev_handle)) {
-            add_device(ctx, dev_handle, false);
+        let dev_key = hkey(dev_handle);
+        {
+            let (emit_pad, buf, devices) = (&mut ctx.emit_pad, &mut ctx.buf, &mut ctx.devices);
+            if let Some(dev) = devices.get_mut(&dev_key) {
+                process_hid_reports(emit_pad, dev, timestamp, host_nanos, buf, size2 as usize);
+                return;
+            }
         }
-        let Some(dev) = ctx.devices.get_mut(&hkey(dev_handle)) else {
+
+        add_device(ctx, dev_handle, false);
+        let (emit_pad, buf, devices) = (&mut ctx.emit_pad, &mut ctx.buf, &mut ctx.devices);
+        let Some(dev) = devices.get_mut(&dev_key) else {
             return;
         };
-
-        let base = ctx.buf.as_mut_ptr().add(size_of::<RAWINPUTHEADER>());
-        if (size2 as usize) < size_of::<RAWINPUTHEADER>() + 8 {
-            return;
-        }
-        let dw_size_hid = ptr::read_unaligned(base.cast::<u32>()) as usize;
-        let dw_count = ptr::read_unaligned(base.add(4).cast::<u32>()) as usize;
-        let data = base.add(8);
-        let total = dw_size_hid.saturating_mul(dw_count);
-        if (size2 as usize) < size_of::<RAWINPUTHEADER>() + 8 + total {
-            return;
-        }
-        let reports = std::slice::from_raw_parts_mut(data, total);
-
-        let mut idx = 0;
-        while idx < dw_count {
-            let start = idx * dw_size_hid;
-            let end = start + dw_size_hid;
-            if end > reports.len() {
-                break;
-            }
-            let report = &mut reports[start..end];
-            process_hid_report(&mut ctx.emit_pad, dev, timestamp, host_nanos, report);
-            idx += 1;
-        }
+        process_hid_reports(emit_pad, dev, timestamp, host_nanos, buf, size2 as usize);
     }
 }
 

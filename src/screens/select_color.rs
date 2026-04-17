@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::i18n::tr;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 // Screen navigation handled in app
@@ -200,8 +201,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     // 2) Bars (top + bottom)
     const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+    let title = tr("ScreenTitles", "SelectAColor");
     actors.push(screen_bar::build(screen_bar::ScreenBarParams {
-        title: "SELECT A COLOR",
+        title: &title,
         title_placement: ScreenBarTitlePlacement::Left, // big title on the left
         position: ScreenBarPosition::Top,
         transparent: false,
@@ -229,32 +231,36 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let p1_guest = profile::is_session_side_guest(profile::PlayerSide::P1);
     let p2_guest = profile::is_session_side_guest(profile::PlayerSide::P2);
 
+    let insert_card = tr("Common", "InsertCard");
+    let press_start = tr("Common", "PressStart");
+
     let (footer_left, left_avatar) = if p1_joined {
         (
             Some(if p1_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p1_profile.display_name.as_str()
             }),
             if p1_guest { None } else { p1_avatar },
         )
     } else {
-        (Some("PRESS START"), None)
+        (Some(press_start.as_ref()), None)
     };
     let (footer_right, right_avatar) = if p2_joined {
         (
             Some(if p2_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p2_profile.display_name.as_str()
             }),
             if p2_guest { None } else { p2_avatar },
         )
     } else {
-        (Some("PRESS START"), None)
+        (Some(press_start.as_ref()), None)
     };
+    let event_mode = tr("Common", "EventMode");
     actors.push(screen_bar::build(screen_bar::ScreenBarParams {
-        title: "EVENT MODE",
+        title: &event_mode,
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,
         transparent: false,
@@ -551,21 +557,22 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if state.exit_requested {
         return ScreenAction::None;
     }
-    let nav = match crate::game::profile::get_session_player_side() {
-        crate::game::profile::PlayerSide::P2 => match ev.action {
-            VirtualAction::p2_left | VirtualAction::p2_menu_left => Some(Nav::Left),
-            VirtualAction::p2_right | VirtualAction::p2_menu_right => Some(Nav::Right),
-            VirtualAction::p2_start => Some(Nav::Confirm),
-            VirtualAction::p2_back => Some(Nav::Back),
-            _ => None,
-        },
-        crate::game::profile::PlayerSide::P1 => match ev.action {
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => Some(Nav::Left),
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => Some(Nav::Right),
-            VirtualAction::p1_start => Some(Nav::Confirm),
-            VirtualAction::p1_back => Some(Nav::Back),
-            _ => None,
-        },
+    let nav = match ev.action {
+        VirtualAction::p1_left
+        | VirtualAction::p2_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_menu_left => Some(Nav::Left),
+
+        VirtualAction::p1_right
+        | VirtualAction::p2_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_menu_right => Some(Nav::Right),
+
+        VirtualAction::p1_start | VirtualAction::p2_start => Some(Nav::Confirm),
+
+        VirtualAction::p1_back | VirtualAction::p2_back => Some(Nav::Back),
+
+        _ => None,
     };
 
     match nav {

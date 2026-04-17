@@ -1,6 +1,6 @@
 use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, TMeshCacheKey, TexturedMeshVertex};
 use crate::engine::present::anim;
-use cgmath::Matrix4;
+use glam::Mat4 as Matrix4;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -147,7 +147,7 @@ pub enum Actor {
     /// Camera wrapper: renders all child actors using the provided view-projection matrix.
     /// The matrix is expected to map world coordinates to clip space.
     Camera {
-        view_proj: Matrix4<f32>,
+        view_proj: Matrix4,
         children: Vec<Self>,
     },
 

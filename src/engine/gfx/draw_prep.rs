@@ -2,7 +2,7 @@ use crate::engine::gfx::{
     BlendMode, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, ObjectType,
     RenderList, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
 };
-use cgmath::{Matrix4, Vector4};
+use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use std::collections::HashMap;
 
 #[repr(C)]
@@ -188,10 +188,10 @@ impl DrawScratch {
 }
 
 #[inline(always)]
-pub fn decompose_2d(m: &Matrix4<f32>) -> ([f32; 4], [f32; 2], [f32; 2]) {
-    let center = [m.w.x, m.w.y, m.w.z, 0.0];
-    let c0 = [m.x.x, m.x.y];
-    let c1 = [m.y.x, m.y.y];
+pub fn decompose_2d(m: &Matrix4) -> ([f32; 4], [f32; 2], [f32; 2]) {
+    let center = [m.w_axis.x, m.w_axis.y, m.w_axis.z, 0.0];
+    let c0 = [m.x_axis.x, m.x_axis.y];
+    let c1 = [m.y_axis.x, m.y_axis.y];
     let sx = c0[0].hypot(c0[1]).max(1e-12);
     let sy = c1[0].hypot(c1[1]).max(1e-12);
     let cos_t = c0[0] / sx;
@@ -201,17 +201,17 @@ pub fn decompose_2d(m: &Matrix4<f32>) -> ([f32; 4], [f32; 2], [f32; 2]) {
 
 #[inline(always)]
 fn textured_instance_raw(
-    m: &Matrix4<f32>,
+    m: &Matrix4,
     tint: [f32; 4],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
 ) -> TexturedMeshInstanceRaw {
     TexturedMeshInstanceRaw {
-        model_col0: [m.x.x, m.x.y, m.x.z, m.x.w],
-        model_col1: [m.y.x, m.y.y, m.y.z, m.y.w],
-        model_col2: [m.z.x, m.z.y, m.z.z, m.z.w],
-        model_col3: [m.w.x, m.w.y, m.w.z, m.w.w],
+        model_col0: [m.x_axis.x, m.x_axis.y, m.x_axis.z, m.x_axis.w],
+        model_col1: [m.y_axis.x, m.y_axis.y, m.y_axis.z, m.y_axis.w],
+        model_col2: [m.z_axis.x, m.z_axis.y, m.z_axis.z, m.z_axis.w],
+        model_col3: [m.w_axis.x, m.w_axis.y, m.w_axis.z, m.w_axis.w],
         tint,
         uv_scale,
         uv_offset,
