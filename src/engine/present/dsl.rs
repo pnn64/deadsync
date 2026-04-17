@@ -1076,8 +1076,8 @@ macro_rules! __ui_valign_from_ident {
 #[macro_export]
 macro_rules! act {
     (sprite($tex:expr): $($tail:tt)+) => {{
-        let mut __mods = ::std::vec::Vec::new();
-        let mut __tw = ::std::vec::Vec::new();
+        let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
+        let mut __mods = ::smallvec::SmallVec::<[_; 16]>::new();
         let mut __cur: ::core::option::Option<$crate::engine::present::anim::SegmentBuilder> = None;
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
@@ -1086,8 +1086,8 @@ macro_rules! act {
         $crate::engine::present::dsl::sprite($tex, &__mods, __SITE_BASE)
     }};
     (quad: $($tail:tt)+) => {{
-        let mut __mods = ::std::vec::Vec::new();
-        let mut __tw = ::std::vec::Vec::new();
+        let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
+        let mut __mods = ::smallvec::SmallVec::<[_; 16]>::new();
         let mut __cur: ::core::option::Option<$crate::engine::present::anim::SegmentBuilder> = None;
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
@@ -1096,8 +1096,8 @@ macro_rules! act {
         $crate::engine::present::dsl::quad(&__mods, __SITE_BASE)
     }};
     (text: $($tail:tt)+) => {{
-        let mut __mods = ::std::vec::Vec::new();
-        let mut __tw = ::std::vec::Vec::new();
+        let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
+        let mut __mods = ::smallvec::SmallVec::<[_; 16]>::new();
         let mut __cur: ::core::option::Option<$crate::engine::present::anim::SegmentBuilder> = None;
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}

@@ -24,6 +24,7 @@
 //! );
 //! ```
 #![allow(unused_assignments, dead_code)]
+use smallvec::SmallVec;
 use std::collections::VecDeque;
 
 #[derive(Clone, Copy, Debug, PartialEq)] // <-- removed Eq
@@ -597,6 +598,9 @@ enum PreparedKind {
     FadeB { from: f32, to: f32 },
 }
 
+type BuildOps = SmallVec<[BuildOp; 12]>;
+type PreparedOps = SmallVec<[OpPrepared; 16]>;
+
 impl OpPrepared {
     #[inline(always)]
     fn apply_lerp(&self, s: &mut TweenState, a: f32) {
@@ -647,19 +651,19 @@ pub struct Segment {
     dur: f32,
     elapsed: f32,
     // ops requested by the user (absolute/relative); compiled to prepared ops on first tick
-    build_ops: Vec<BuildOp>,
-    prepared: Vec<OpPrepared>,
+    build_ops: BuildOps,
+    prepared: PreparedOps,
     prepared_once: bool,
 }
 
 impl Segment {
-    fn new(ease: Ease, dur: f32, build_ops: Vec<BuildOp>) -> Self {
+    fn new(ease: Ease, dur: f32, build_ops: BuildOps) -> Self {
         Self {
             ease,
             dur: dur.max(0.0),
             elapsed: 0.0,
             build_ops,
-            prepared: Vec::new(),
+            prepared: SmallVec::new(),
             prepared_once: false,
         }
     }
@@ -968,7 +972,7 @@ impl Segment {
 pub struct SegmentBuilder {
     ease: Ease,
     dur: f32,
-    ops: Vec<BuildOp>,
+    ops: BuildOps,
 }
 
 impl SegmentBuilder {
@@ -976,7 +980,7 @@ impl SegmentBuilder {
         Self {
             ease,
             dur: dur.max(0.0),
-            ops: Vec::new(),
+            ops: SmallVec::new(),
         }
     }
 
