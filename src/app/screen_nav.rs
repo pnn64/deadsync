@@ -143,14 +143,23 @@ impl App {
         )
     }
 
+    #[inline(always)]
+    pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
+        let prev = self.state.screens.current_screen;
+        self.state.screens.current_screen = target;
+        write_current_screen_file(target);
+        if prev != target {
+            self.ui_text_layout_cache.clear();
+        }
+    }
+
     pub(super) fn finish_actor_fade_out(
         &mut self,
         target_screen: CurrentScreen,
         event_loop: &ActiveEventLoop,
     ) {
         let prev = self.state.screens.current_screen;
-        self.state.screens.current_screen = target_screen;
-        write_current_screen_file(target_screen);
+        self.commit_screen_change(target_screen);
         if target_screen == CurrentScreen::SelectColor {
             select_color::on_enter(&mut self.state.screens.select_color_state);
         }
@@ -344,8 +353,7 @@ impl App {
 
         if from == CurrentScreen::Init && target == CurrentScreen::Menu {
             debug!("Instant navigation Init→Menu (out-transition handled by Init screen)");
-            self.state.screens.current_screen = target;
-            write_current_screen_file(target);
+            self.commit_screen_change(target);
             self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
             crate::engine::present::runtime::clear_all();
             return;
@@ -444,8 +452,7 @@ impl App {
         }
 
         let prev = self.state.screens.current_screen;
-        self.state.screens.current_screen = target;
-        write_current_screen_file(target);
+        self.commit_screen_change(target);
         if target != CurrentScreen::Gameplay {
             self.state.gameplay_offset_save_prompt = None;
         }
