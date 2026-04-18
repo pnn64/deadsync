@@ -1402,7 +1402,7 @@ pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
         }
         append_mod_part(&mut parts, key.dark, "Dark");
         append_mod_part(&mut parts, key.blind, "Blind");
-        append_mod_part(&mut parts, key.cover, "Cover");
+        append_mod_part(&mut parts, key.cover, "Hide BG");
 
         if let Some(name) = attack_mode_name(state.player_profiles[player_idx].attack_mode) {
             parts.push(name.to_string());
