@@ -92,10 +92,14 @@ fn apply_leaderboard_side_snapshot(
     side: &mut LeaderboardSideState,
     snapshot: scores::CachedPlayerLeaderboardData,
 ) {
-    let current_pane = side
-        .panes
-        .get(side.pane_index)
-        .map(|pane| (pane.name.clone(), pane.is_ex, pane.disabled, pane.personalized));
+    let current_pane = side.panes.get(side.pane_index).map(|pane| {
+        (
+            pane.name.clone(),
+            pane.is_ex,
+            pane.disabled,
+            pane.personalized,
+        )
+    });
 
     if snapshot.loading {
         side.loading = true;
@@ -185,7 +189,9 @@ fn overlay_selected_contains(
     selected: &[&scores::LeaderboardEntry],
     entry: &scores::LeaderboardEntry,
 ) -> bool {
-    selected.iter().any(|chosen| same_leaderboard_entry(chosen, entry))
+    selected
+        .iter()
+        .any(|chosen| same_leaderboard_entry(chosen, entry))
 }
 
 fn next_overlay_entry<'a, F>(
@@ -216,15 +222,15 @@ fn overlay_display_entries(
     if let Some(top) = next_overlay_entry(entries.as_slice(), selected.as_slice(), |_| true) {
         selected.push(top);
     }
-    if let Some(self_entry) =
-        next_overlay_entry(entries.as_slice(), selected.as_slice(), |entry| entry.is_self)
-    {
+    if let Some(self_entry) = next_overlay_entry(entries.as_slice(), selected.as_slice(), |entry| {
+        entry.is_self
+    }) {
         selected.push(self_entry);
     }
     while selected.len() < GS_LEADERBOARD_NUM_ENTRIES {
-        let Some(rival) =
-            next_overlay_entry(entries.as_slice(), selected.as_slice(), |entry| entry.is_rival)
-        else {
+        let Some(rival) = next_overlay_entry(entries.as_slice(), selected.as_slice(), |entry| {
+            entry.is_rival
+        }) else {
             break;
         };
         selected.push(rival);
@@ -454,9 +460,8 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
         let pane = side
             .panes
             .get(side.pane_index.min(side.panes.len().saturating_sub(1)));
-        let display_entries = pane.map(|pane| {
-            overlay_display_entries(player, side.chart_hash.as_deref(), pane)
-        });
+        let display_entries =
+            pane.map(|pane| overlay_display_entries(player, side.chart_hash.as_deref(), pane));
         let header_text = if side.loading {
             "GrooveStats".to_string()
         } else if let Some(p) = pane {
@@ -581,11 +586,11 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
                 if i == 0 {
                     name = GS_LEADERBOARD_DISABLED_TEXT.to_string();
                 }
-                } else if pane.is_some() {
-                    if let Some(entry) = display_entries.as_ref().and_then(|entries| entries.get(i)) {
-                        rank = format!("{}.", entry.rank);
-                        name.clone_from(&entry.name);
-                        score = format!("{:.2}%", entry.score / 100.0);
+            } else if pane.is_some() {
+                if let Some(entry) = display_entries.as_ref().and_then(|entries| entries.get(i)) {
+                    rank = format!("{}.", entry.rank);
+                    name.clone_from(&entry.name);
+                    score = format!("{:.2}%", entry.score / 100.0);
                     date = format_groovestats_date(&entry.date);
 
                     if entry.is_rival || entry.is_self {

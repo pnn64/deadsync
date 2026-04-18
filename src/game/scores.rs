@@ -2564,7 +2564,8 @@ fn fetch_arrowcloud_hard_ex_pane(
     };
     match fetch_arrowcloud_leaderboards(api_url, None, Some(max_entries)) {
         Ok(decoded) => Ok(Some(
-            arrowcloud_hard_ex_pane_from_response(decoded, false).unwrap_or_else(empty_arrowcloud_pane),
+            arrowcloud_hard_ex_pane_from_response(decoded, false)
+                .unwrap_or_else(empty_arrowcloud_pane),
         )),
         Err(error) => {
             if let Some(auth_error) = auth_error {
@@ -4520,19 +4521,22 @@ mod tests {
 
     #[test]
     fn arrowcloud_hard_ex_pane_from_response_parses_hardex_scores() {
-        let pane = arrowcloud_hard_ex_pane_from_response(ArrowCloudLeaderboardsApiResponse {
-            leaderboards: vec![ArrowCloudLeaderboardPane {
-                r#type: "HardEX".to_string(),
-                scores: vec![ArrowCloudLeaderboardEntry {
-                    rank: 7,
-                    score: 98.31,
-                    alias: "YOU".to_string(),
-                    date: "2026-04-18T12:34:56.000Z".to_string(),
-                    is_rival: false,
-                    is_self: true,
+        let pane = arrowcloud_hard_ex_pane_from_response(
+            ArrowCloudLeaderboardsApiResponse {
+                leaderboards: vec![ArrowCloudLeaderboardPane {
+                    r#type: "HardEX".to_string(),
+                    scores: vec![ArrowCloudLeaderboardEntry {
+                        rank: 7,
+                        score: 98.31,
+                        alias: "YOU".to_string(),
+                        date: "2026-04-18T12:34:56.000Z".to_string(),
+                        is_rival: false,
+                        is_self: true,
+                    }],
                 }],
-            }],
-        }, true)
+            },
+            true,
+        )
         .expect("expected HardEX pane");
 
         assert_eq!(pane.name, "ArrowCloud");
@@ -4545,32 +4549,35 @@ mod tests {
 
     #[test]
     fn arrowcloud_hard_ex_pane_from_response_ignores_non_hardex_types() {
-        let pane = arrowcloud_hard_ex_pane_from_response(ArrowCloudLeaderboardsApiResponse {
-            leaderboards: vec![
-                ArrowCloudLeaderboardPane {
-                    r#type: "EX".to_string(),
-                    scores: vec![ArrowCloudLeaderboardEntry {
-                        rank: 1,
-                        score: 99.12,
-                        alias: "AAA".to_string(),
-                        date: String::new(),
-                        is_rival: false,
-                        is_self: false,
-                    }],
-                },
-                ArrowCloudLeaderboardPane {
-                    r#type: "ITG".to_string(),
-                    scores: vec![ArrowCloudLeaderboardEntry {
-                        rank: 1,
-                        score: 98.76,
-                        alias: "BBB".to_string(),
-                        date: String::new(),
-                        is_rival: false,
-                        is_self: false,
-                    }],
-                },
-            ],
-        }, true);
+        let pane = arrowcloud_hard_ex_pane_from_response(
+            ArrowCloudLeaderboardsApiResponse {
+                leaderboards: vec![
+                    ArrowCloudLeaderboardPane {
+                        r#type: "EX".to_string(),
+                        scores: vec![ArrowCloudLeaderboardEntry {
+                            rank: 1,
+                            score: 99.12,
+                            alias: "AAA".to_string(),
+                            date: String::new(),
+                            is_rival: false,
+                            is_self: false,
+                        }],
+                    },
+                    ArrowCloudLeaderboardPane {
+                        r#type: "ITG".to_string(),
+                        scores: vec![ArrowCloudLeaderboardEntry {
+                            rank: 1,
+                            score: 98.76,
+                            alias: "BBB".to_string(),
+                            date: String::new(),
+                            is_rival: false,
+                            is_self: false,
+                        }],
+                    },
+                ],
+            },
+            true,
+        );
 
         assert!(pane.is_none());
     }
