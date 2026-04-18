@@ -7,7 +7,7 @@ use crate::config::{
 };
 use crate::engine::audio;
 use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
-use crate::engine::input::{InputEvent, PadDir, RawKeyboardEvent, VirtualAction};
+use crate::engine::input::{InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
 use crate::engine::present::color;
 use crate::engine::present::font;
@@ -6898,6 +6898,9 @@ pub fn handle_raw_key_event(
         return ScreenAction::None;
     }
     if state.test_input_overlay_visible {
+        if let Some(key) = key {
+            test_input::apply_raw_key_event(&mut state.test_input_overlay, key);
+        }
         return ScreenAction::None;
     }
     if state.profile_switch_overlay.is_some() {
@@ -6978,6 +6981,13 @@ pub fn handle_raw_key_event(
         }
     }
     ScreenAction::None
+}
+
+pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
+    if !state.test_input_overlay_visible {
+        return;
+    }
+    test_input::apply_raw_pad_event(&mut state.test_input_overlay, pad_event);
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -7424,22 +7434,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
 
     sync_lobby_select_music(state);
 
-    let overlays_block_delayed_updates = state.select_music_menu.is_visible()
-        || !matches!(
-            state.leaderboard,
-            select_music_menu::LeaderboardOverlayState::Hidden
-        )
-        || !matches!(
-            state.pack_sync_overlay,
-            crate::screens::pack_sync::OverlayState::Hidden
-        )
-        || !matches!(state.sync_overlay, SyncOverlayState::Hidden)
-        || !matches!(
-            state.replay_overlay,
-            select_music_menu::ReplayOverlayState::Hidden
-        )
-        || state.profile_switch_overlay.is_some()
-        || state.test_input_overlay_visible;
+    let overlays_block_delayed_updates = delayed_selection_updates_blocked(state);
     if overlays_block_delayed_updates && state.currently_playing_preview_path.is_some() {
         clear_preview(state);
     }
