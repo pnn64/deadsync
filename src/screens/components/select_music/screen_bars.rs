@@ -1,10 +1,11 @@
+use crate::assets::i18n::tr;
 use crate::engine::present::actors::Actor;
 use crate::game::profile;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 
-pub fn build(top_title: &'static str) -> [Actor; 2] {
+pub fn build(top_title: &str) -> [Actor; 2] {
     let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
     let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
     let p1_avatar = p1_profile
@@ -21,29 +22,33 @@ pub fn build(top_title: &'static str) -> [Actor; 2] {
     let p1_guest = profile::is_session_side_guest(profile::PlayerSide::P1);
     let p2_guest = profile::is_session_side_guest(profile::PlayerSide::P2);
 
+    let insert_card = tr("Common", "InsertCard");
+    let press_start = tr("Common", "PressStart");
+    let event_mode = tr("Common", "EventMode");
+
     let (footer_left, left_avatar) = if p1_joined {
         (
             Some(if p1_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p1_profile.display_name.as_str()
             }),
             if p1_guest { None } else { p1_avatar },
         )
     } else {
-        (Some("PRESS START"), None)
+        (Some(press_start.as_ref()), None)
     };
     let (footer_right, right_avatar) = if p2_joined {
         (
             Some(if p2_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p2_profile.display_name.as_str()
             }),
             if p2_guest { None } else { p2_avatar },
         )
     } else {
-        (Some("PRESS START"), None)
+        (Some(press_start.as_ref()), None)
     };
 
     [
@@ -60,7 +65,7 @@ pub fn build(top_title: &'static str) -> [Actor; 2] {
             right_avatar: None,
         }),
         screen_bar::build(ScreenBarParams {
-            title: "EVENT MODE",
+            title: event_mode.as_ref(),
             title_placement: ScreenBarTitlePlacement::Center,
             position: ScreenBarPosition::Bottom,
             transparent: false,
