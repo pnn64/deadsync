@@ -92,6 +92,7 @@ pub enum ObjectType {
         edge_fade: [f32; 4],
     },
     Mesh {
+        tint: [f32; 4],
         vertices: Arc<[MeshVertex]>,
         mode: MeshMode,
     },

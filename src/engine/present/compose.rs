@@ -1447,6 +1447,7 @@ fn build_actor_recursive<'a>(
             let before = out.len();
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::Mesh {
+                    tint: [1.0; 4],
                     vertices: Arc::clone(vertices),
                     mode: *mode,
                 },
@@ -1562,21 +1563,11 @@ fn build_actor_recursive<'a>(
                         shadow_tint[3] *= (*tint)[3];
                         *tint = shadow_tint;
                     }
-                    renderer::ObjectType::Mesh { vertices, .. } => {
-                        let sc = *color;
-                        let mut out = Vec::with_capacity(vertices.len());
-                        for v in vertices.iter() {
-                            out.push(renderer::MeshVertex {
-                                pos: v.pos,
-                                color: [
-                                    v.color[0] * sc[0],
-                                    v.color[1] * sc[1],
-                                    v.color[2] * sc[2],
-                                    v.color[3] * sc[3],
-                                ],
-                            });
-                        }
-                        *vertices = Arc::from(out);
+                    renderer::ObjectType::Mesh { tint, .. } => {
+                        tint[0] *= color[0];
+                        tint[1] *= color[1];
+                        tint[2] *= color[2];
+                        tint[3] *= color[3];
                     }
                     renderer::ObjectType::TexturedMesh { tint, .. } => {
                         let mut shadow_tint = *color;

@@ -25,6 +25,10 @@ fn default_textured_mesh_tint() -> [f32; 4] {
     [1.0; 4]
 }
 
+fn default_mesh_tint() -> [f32; 4] {
+    [1.0; 4]
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComposeCase {
     pub version: u32,
@@ -308,6 +312,8 @@ pub enum RenderObjectTypeSnapshot {
         edge_fade: [f32; 4],
     },
     Mesh {
+        #[serde(default = "default_mesh_tint")]
+        tint: [f32; 4],
         vertices: Vec<MeshVertex>,
         mode: MeshModeSnapshot,
     },
@@ -1234,7 +1240,12 @@ fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
                 local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
                 edge_fade: *edge_fade,
             },
-            ObjectType::Mesh { vertices, mode } => RenderObjectTypeSnapshot::Mesh {
+            ObjectType::Mesh {
+                tint,
+                vertices,
+                mode,
+            } => RenderObjectTypeSnapshot::Mesh {
+                tint: *tint,
                 vertices: vertices.to_vec(),
                 mode: MeshModeSnapshot::from(*mode),
             },
@@ -1303,7 +1314,12 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                 local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
                 edge_fade: *edge_fade,
             },
-            RenderObjectTypeSnapshot::Mesh { vertices, mode } => ObjectType::Mesh {
+            RenderObjectTypeSnapshot::Mesh {
+                tint,
+                vertices,
+                mode,
+            } => ObjectType::Mesh {
+                tint: *tint,
                 vertices: Arc::from(vertices.clone()),
                 mode: MeshMode::from(*mode),
             },

@@ -252,10 +252,15 @@ fn draw_rows(
                     buffer,
                 )
             }
-            ObjectType::Mesh { vertices, mode } => match mode {
+            ObjectType::Mesh {
+                tint,
+                vertices,
+                mode,
+            } => match mode {
                 MeshMode::Triangles => rasterize_mesh_triangles(
                     &proj,
                     &obj.transform,
+                    *tint,
                     vertices.as_ref(),
                     obj.blend,
                     width,
@@ -459,6 +464,7 @@ fn rasterize_sprite(
 fn rasterize_mesh_triangles(
     proj: &Matrix4,
     transform: &Matrix4,
+    tint: [f32; 4],
     vertices: &[crate::engine::gfx::MeshVertex],
     blend: BlendMode,
     width: usize,
@@ -497,7 +503,12 @@ fn rasterize_mesh_triangles(
             tri[i] = ScreenVertexColor {
                 x: sx,
                 y: sy,
-                color: chunk[i].color,
+                color: [
+                    chunk[i].color[0] * tint[0],
+                    chunk[i].color[1] * tint[1],
+                    chunk[i].color[2] * tint[2],
+                    chunk[i].color[3] * tint[3],
+                ],
             };
         }
 

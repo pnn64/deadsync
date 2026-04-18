@@ -397,7 +397,11 @@ where
                     camera: obj.camera,
                 });
             }
-            ObjectType::Mesh { vertices, mode } => {
+            ObjectType::Mesh {
+                tint,
+                vertices,
+                mode,
+            } => {
                 flush_sprite_run(&mut sprite_run, &mut scratch.ops);
                 if *mode != MeshMode::Triangles || vertices.is_empty() {
                     continue;
@@ -409,7 +413,12 @@ where
                     let p = obj.transform * Vector4::new(v.pos[0], v.pos[1], 0.0, 1.0);
                     scratch.mesh_vertices.push(MeshVertex {
                         pos: [p.x, p.y],
-                        color: v.color,
+                        color: [
+                            v.color[0] * tint[0],
+                            v.color[1] * tint[1],
+                            v.color[2] * tint[2],
+                            v.color[3] * tint[3],
+                        ],
                     });
                 }
 
