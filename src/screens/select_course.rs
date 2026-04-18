@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
+use crate::assets::i18n::tr;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, PadDir, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
@@ -62,14 +63,7 @@ const COURSE_TRACKLIST_RATING_BOX_H: f32 = 152.0;
 // Negative moves up, positive moves down.
 const COURSE_TRACKLIST_TEXT_Y_OFFSET: f32 = 0.0;
 const COURSE_TRACKLIST_TEXT_HEIGHT: f32 = 15.0;
-const PRESS_START_FOR_OPTIONS_TEXT: &str = "Press &START; for options";
-const ENTERING_OPTIONS_TEXT: &str = "Entering Options...";
 const SL_EXIT_PROMPT_BG_ALPHA: f32 = 0.925;
-const SL_EXIT_PROMPT_TEXT: &str = "Do you want to exit this game?";
-const SL_EXIT_PROMPT_NO_LABEL: &str = "No";
-const SL_EXIT_PROMPT_YES_LABEL: &str = "Yes";
-const SL_EXIT_PROMPT_NO_INFO: &str = "Keep playing.";
-const SL_EXIT_PROMPT_YES_INFO: &str = "I'm finished.";
 const SL_EXIT_PROMPT_CHOICE_Y: f32 = 250.0;
 const SL_EXIT_PROMPT_CHOICE_X_OFFSET: f32 = 100.0;
 const SL_EXIT_PROMPT_PROMPT_Y_OFFSET: f32 = -70.0;
@@ -350,7 +344,7 @@ fn course_group_name(path: &Path) -> String {
         .and_then(|n| n.to_str())
         .filter(|s| !s.trim().is_empty())
         .map(str::to_string)
-        .unwrap_or_else(|| "Courses".to_string())
+        .unwrap_or_else(|| tr("SelectCourse", "CoursesGroup").to_string())
 }
 
 #[inline(always)]
@@ -360,7 +354,7 @@ fn course_name(path: &Path, course: &rssp::course::CourseFile) -> String {
             .and_then(|n| n.to_str())
             .filter(|s| !s.trim().is_empty())
             .map(str::to_string)
-            .unwrap_or_else(|| "Untitled Course".to_string())
+            .unwrap_or_else(|| tr("SelectCourse", "UntitledCourse").to_string())
     } else {
         course.name.clone()
     }
@@ -394,15 +388,15 @@ fn course_steps_label(steps: &rssp::course::StepsSpec) -> String {
 fn course_entry_song_label(entry: &rssp::course::CourseEntry) -> String {
     match &entry.song {
         rssp::course::CourseSong::Fixed { song, .. } => song.clone(),
-        rssp::course::CourseSong::RandomAny => "RANDOM".to_string(),
+        rssp::course::CourseSong::RandomAny => tr("SelectCourse", "RandomLabel").to_string(),
         rssp::course::CourseSong::RandomWithinGroup { group } => format!("{group}/*"),
         rssp::course::CourseSong::SortPick { sort, index } => {
             let rank = index.saturating_add(1).max(1);
             let prefix = match sort {
-                rssp::course::SongSort::MostPlays => "BEST",
-                rssp::course::SongSort::FewestPlays => "WORST",
-                rssp::course::SongSort::TopGrades => "GRADEBEST",
-                rssp::course::SongSort::LowestGrades => "GRADEWORST",
+                rssp::course::SongSort::MostPlays => tr("SelectCourse", "BestPrefix"),
+                rssp::course::SongSort::FewestPlays => tr("SelectCourse", "WorstPrefix"),
+                rssp::course::SongSort::TopGrades => tr("SelectCourse", "TopGradesPrefix"),
+                rssp::course::SongSort::LowestGrades => tr("SelectCourse", "LowestGradesPrefix"),
             };
             format!("{prefix}{rank}")
         }
@@ -514,7 +508,7 @@ fn chart_step_artist(chart: &ChartData) -> String {
     } else if !chart.step_artist.trim().is_empty() {
         chart.step_artist.clone()
     } else {
-        "Unknown".to_string()
+        tr("SelectCourse", "UnknownStepArtist").to_string()
     }
 }
 
@@ -748,7 +742,7 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         translit_title: meta.name.clone(),
         translit_subtitle: String::new(),
         artist: if meta.scripter.trim().is_empty() {
-            "Course".to_string()
+            tr("SelectCourse", "CourseScripter").to_string()
         } else {
             meta.scripter.clone()
         },
@@ -877,7 +871,7 @@ fn build_init_data() -> InitData {
                 let mut difficulty = course_steps_label(&entry.steps);
                 let mut meter = None;
                 let mut step_artist = if course.scripter.trim().is_empty() {
-                    "Unknown".to_string()
+                    tr("SelectCourse", "UnknownStepArtist").to_string()
                 } else {
                     course.scripter.clone()
                 };
@@ -2012,7 +2006,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(screen_bars::build("SELECT COURSE"));
+    actors.extend(screen_bars::build(&tr("ScreenTitles", "SelectCourse")));
     actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
@@ -2051,7 +2045,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                     .filter(|secs| *secs > 0)
                     .unwrap_or(meta.total_length_seconds.max(0));
                 (
-                    "SONGS".to_string(),
+                    tr("SelectCourse", "SongsLabel").to_string(),
                     selected_rating
                         .map_or(0, |rating| rating.entries.len())
                         .to_string(),
@@ -2061,7 +2055,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                 )
             }
             _ => (
-                "SONGS".to_string(),
+                tr("SelectCourse", "SongsLabel").to_string(),
                 "0".to_string(),
                 "?".to_string(),
                 "0:00".to_string(),
@@ -2223,9 +2217,9 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                 children: vec![
                     act!(text: font("miso"): settext(songs_label): align(1.0, 0.0): y(-11.0): maxwidth(56.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
                     act!(text: font("miso"): settext(songs_value): align(0.0, 0.0): xy(5.0, -11.0): maxwidth(box_w - 60.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                    act!(text: font("miso"): settext("BPM"): align(1.0, 0.0): y(10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                    act!(text: font("miso"): settext(tr("SelectMusic", "BPMLabel")): align(1.0, 0.0): y(10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
                     act!(text: font("miso"): settext(bpm_text): align(0.0, 0.0): xy(5.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                    act!(text: font("miso"): settext("LENGTH"): align(1.0, 0.0): xy(box_w - 130.0, 10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
+                    act!(text: font("miso"): settext(tr("SelectMusic", "LengthLabel")): align(1.0, 0.0): xy(box_w - 130.0, 10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
                     act!(text: font("miso"): settext(len_text): align(0.0, 0.0): xy(box_w - 125.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
                 ],
             },
@@ -2264,12 +2258,12 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         }
         Some(_) => (
             "#-".to_string(),
-            "Step Artist".to_string(),
+            tr("SelectCourse", "StepArtistPlaceholder").to_string(),
             selected_diff_col.unwrap_or([0.5, 0.5, 0.5, 1.0]),
         ),
         _ => (
             "#-".to_string(),
-            "Step Artist".to_string(),
+            tr("SelectCourse", "StepArtistPlaceholder").to_string(),
             [0.5, 0.5, 0.5, 1.0],
         ),
     };
@@ -2339,7 +2333,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         let mut no_course_actor = act!(text:
             font("miso"):
-            settext("Select a course to view songs."):
+            settext(tr("SelectCourse", "SelectCourseHint")):
             align(0.0, 0.0):
             xy(list_left_x, list_start_y):
             zoom(0.72):
@@ -2493,7 +2487,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     if !matches!(selected_entry, Some(MusicWheelEntry::Song(_))) {
         actors.push(act!(text:
             font("miso"):
-            settext("Pick a course"):
+            settext(tr("SelectCourse", "PickCoursePrompt")):
             align(0.5, 0.5):
             xy(screen_center_x() - 26.0, screen_center_y() + 67.0):
             zoom(0.8):
@@ -2518,7 +2512,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             OutPromptState::PressStartForOptions { .. } => {
                 actors.push(act!(text:
                     font("wendy"):
-                    settext(PRESS_START_FOR_OPTIONS_TEXT):
+                    settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
                     zoom(0.75):
@@ -2529,7 +2523,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             OutPromptState::EnteringOptions { .. } => {
                 actors.push(act!(text:
                     font("wendy"):
-                    settext(PRESS_START_FOR_OPTIONS_TEXT):
+                    settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
                     zoom(0.75):
@@ -2539,7 +2533,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                 ));
                 actors.push(act!(text:
                     font("wendy"):
-                    settext(ENTERING_OPTIONS_TEXT):
+                    settext(tr("SelectMusic", "EnteringOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
                     zoom(0.75):
@@ -2577,7 +2571,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         ));
         actors.push(act!(text:
             font("miso"):
-            settext(SL_EXIT_PROMPT_TEXT):
+            settext(tr("SelectMusic", "ExitGamePrompt")):
             align(0.5, 0.0):
             xy(screen_center_x(), screen_center_y() + SL_EXIT_PROMPT_PROMPT_Y_OFFSET):
             zoom(SL_EXIT_PROMPT_PROMPT_ZOOM):
@@ -2590,12 +2584,16 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         let zoom_no = exit_prompt_choice_zoom(0, active_choice, switch_from, switch_elapsed);
         let zoom_yes = exit_prompt_choice_zoom(1, active_choice, switch_from, switch_elapsed);
         let cx = screen_center_x();
+        let no_label = tr("Common", "No");
+        let yes_label = tr("Common", "Yes");
+        let no_info = tr("SelectMusic", "KeepPlayingInfo");
+        let yes_info = tr("SelectMusic", "FinishedInfo");
         push_exit_prompt_choice(
             &mut actors,
             cx - SL_EXIT_PROMPT_CHOICE_X_OFFSET,
             SL_EXIT_PROMPT_CHOICE_Y,
-            SL_EXIT_PROMPT_NO_LABEL,
-            SL_EXIT_PROMPT_NO_INFO,
+            no_label.as_ref(),
+            no_info.as_ref(),
             active_choice == 0,
             zoom_no,
             p2_color,
@@ -2606,8 +2604,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             &mut actors,
             cx + SL_EXIT_PROMPT_CHOICE_X_OFFSET,
             SL_EXIT_PROMPT_CHOICE_Y,
-            SL_EXIT_PROMPT_YES_LABEL,
-            SL_EXIT_PROMPT_YES_INFO,
+            yes_label.as_ref(),
+            yes_info.as_ref(),
             active_choice == 1,
             zoom_yes,
             p2_color,

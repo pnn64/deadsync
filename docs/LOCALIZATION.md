@@ -173,32 +173,32 @@ String extraction is being done screen-by-screen. Each screen group gets its own
 | Screen | Source File(s) | Status |
 |---|---|---|
 | Main Menu | `menu.rs` | ✅ Done |
-| Options | `options.rs`, `player_options.rs` | 🟡 In progress |
-| Select Music | `select_music.rs` | ⬜ Not started |
-| Select Mode | `select_mode.rs` | ⬜ Not started |
-| Select Style | `select_style.rs` | ⬜ Not started |
-| Select Course | `select_course.rs` | ⬜ Not started |
-| Evaluation | `evaluation.rs` | ⬜ Not started |
-| Evaluation Summary | `evaluation_summary.rs` | ⬜ Not started |
-| Gameplay | `gameplay.rs` | ⬜ Not started |
-| Game Over | `gameover.rs` | ⬜ Not started |
-| Manage Local Profiles | `manage_local_profiles.rs` | ⬜ Not started |
-| Select Profile | `select_profile.rs` | ⬜ Not started |
-| Select Color | `select_color.rs` | ⬜ Not started |
-| Initials | `initials.rs` | ⬜ Not started |
-| Profile Load | `profile_load.rs` | ⬜ Not started |
-| Pack Sync | `pack_sync.rs` | ⬜ Not started |
-| Init / Splash | `init.rs` | ⬜ Not started |
-| Credits | `credits.rs` | ⬜ Not started |
-| Favorite Code | `favorite_code.rs` | ⬜ Not started |
+| Options | `options.rs`, `player_options.rs` | ✅ Done |
+| Select Music | `select_music.rs` | ✅ Done |
+| Select Mode | `select_mode.rs` | ✅ Done |
+| Select Style | `select_style.rs` | ✅ Done |
+| Select Course | `select_course.rs` | ✅ Done |
+| Evaluation | `evaluation.rs` | ✅ Done |
+| Evaluation Summary | `evaluation_summary.rs` | ✅ Done |
+| Gameplay | `gameplay.rs` | ✅ Done |
+| Game Over | `gameover.rs` | ✅ Done |
+| Manage Local Profiles | `manage_local_profiles.rs` | ✅ Done |
+| Select Profile | `select_profile.rs` | ➖ N/A (no user-facing strings) |
+| Select Color | `select_color.rs` | ✅ Done |
+| Initials | `initials.rs` | ✅ Done |
+| Profile Load | `profile_load.rs` | ✅ Done |
+| Pack Sync | `pack_sync.rs` | ✅ Done |
+| Init / Splash | `init.rs` | ✅ Done |
+| Credits | `credits.rs` | ✅ Done (proper names and license text intentionally untranslated) |
+| Favorite Code | `favorite_code.rs` | ➖ N/A (no user-facing strings) |
 
 **Remaining milestones:**
 
 | Milestone | Status |
 |---|---|
-| Language selection in options screen | ⬜ Not started |
-| Second language proof (Spanish) | ⬜ Not started |
-| Translation coverage tooling | 🟡 In progress |
+| Language selection in options screen | ✅ Done |
+| Second language proof (Swedish) | ✅ Done |
+| Translation coverage tooling | ✅ Done |
 
 ## Translation Coverage Tooling
 
