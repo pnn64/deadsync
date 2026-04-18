@@ -1021,6 +1021,20 @@ const fn literal_choice(s: &'static str) -> Choice {
     Choice::Literal(s)
 }
 
+const LANGUAGE_CHOICES: &[Choice] = &[
+    localized_choice("OptionsSystem", "EnglishLanguage"),
+    localized_choice("OptionsSystem", "GermanLanguage"),
+    localized_choice("OptionsSystem", "SpanishLanguage"),
+    localized_choice("OptionsSystem", "FrenchLanguage"),
+    localized_choice("OptionsSystem", "ItalianLanguage"),
+    localized_choice("OptionsSystem", "JapaneseLanguage"),
+    localized_choice("OptionsSystem", "PolishLanguage"),
+    localized_choice("OptionsSystem", "PortugueseBrazilLanguage"),
+    localized_choice("OptionsSystem", "RussianLanguage"),
+    localized_choice("OptionsSystem", "SwedishLanguage"),
+    localized_choice("OptionsSystem", "PseudoLanguage"),
+];
+
 #[cfg(target_os = "windows")]
 const INPUT_BACKEND_CHOICES: &[Choice] = &[
     literal_choice("W32 Raw Input"),
@@ -1126,10 +1140,7 @@ pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::Language,
         label: lookup_key("OptionsSystem", "Language"),
-        choices: &[
-            localized_choice("OptionsSystem", "EnglishLanguage"),
-            localized_choice("OptionsSystem", "SwedishLanguage"),
-        ],
+        choices: LANGUAGE_CHOICES,
         inline: false,
     },
     SubRow {
@@ -5457,15 +5468,31 @@ const fn translated_titles_from_choice(idx: usize) -> bool {
 const fn language_choice_index(flag: config::LanguageFlag) -> usize {
     match flag {
         config::LanguageFlag::Auto | config::LanguageFlag::English => 0,
-        config::LanguageFlag::Swedish => 1,
-        config::LanguageFlag::Pseudo => 2,
+        config::LanguageFlag::German => 1,
+        config::LanguageFlag::Spanish => 2,
+        config::LanguageFlag::French => 3,
+        config::LanguageFlag::Italian => 4,
+        config::LanguageFlag::Japanese => 5,
+        config::LanguageFlag::Polish => 6,
+        config::LanguageFlag::PortugueseBrazil => 7,
+        config::LanguageFlag::Russian => 8,
+        config::LanguageFlag::Swedish => 9,
+        config::LanguageFlag::Pseudo => 10,
     }
 }
 
 const fn language_flag_from_choice(idx: usize) -> config::LanguageFlag {
     match idx {
-        1 => config::LanguageFlag::Swedish,
-        2 => config::LanguageFlag::Pseudo,
+        1 => config::LanguageFlag::German,
+        2 => config::LanguageFlag::Spanish,
+        3 => config::LanguageFlag::French,
+        4 => config::LanguageFlag::Italian,
+        5 => config::LanguageFlag::Japanese,
+        6 => config::LanguageFlag::Polish,
+        7 => config::LanguageFlag::PortugueseBrazil,
+        8 => config::LanguageFlag::Russian,
+        9 => config::LanguageFlag::Swedish,
+        10 => config::LanguageFlag::Pseudo,
         _ => config::LanguageFlag::English,
     }
 }

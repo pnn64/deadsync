@@ -267,12 +267,22 @@ fn raw_os_locale() -> Option<String> {
 
 /// Normalize an OS locale string to our file-naming convention.
 ///
-/// - `"ja-JP"` -> `"ja"`
-/// - `"fr-FR"` -> `"fr"`
+/// - `"ja-JP"` -> `"ja-jp"`
+/// - `"fr-FR.UTF-8"` -> `"fr-fr"`
+/// - `"pt_BR"` -> `"pt-br"`
 /// - `"zh-TW"` / `"zh-HK"` -> `"zh-Hant"`
 /// - `"zh-CN"` / `"zh-SG"` -> `"zh-Hans"`
 fn normalize_locale(raw: &str) -> String {
-    let lower = raw.replace('_', "-").to_ascii_lowercase();
+    let lower = raw
+        .trim()
+        .split('.')
+        .next()
+        .unwrap_or(raw)
+        .split('@')
+        .next()
+        .unwrap_or(raw)
+        .replace('_', "-")
+        .to_ascii_lowercase();
 
     if lower.starts_with("zh") {
         if lower.contains("hant") || lower.contains("tw") || lower.contains("hk") {
@@ -284,7 +294,7 @@ fn normalize_locale(raw: &str) -> String {
         return "zh-Hans".to_string();
     }
 
-    lower.split('-').next().unwrap_or("en").to_string()
+    lower
 }
 
 fn locale_file_exists(code: &str) -> bool {
@@ -333,10 +343,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn normalize_locale_strips_region() {
-        assert_eq!(normalize_locale("en-US"), "en");
-        assert_eq!(normalize_locale("ja-JP"), "ja");
-        assert_eq!(normalize_locale("fr_FR"), "fr");
+    fn normalize_locale_keeps_exact_region() {
+        assert_eq!(normalize_locale("en-US"), "en-us");
+        assert_eq!(normalize_locale("ja-JP"), "ja-jp");
+        assert_eq!(normalize_locale("fr_FR.UTF-8"), "fr-fr");
+        assert_eq!(normalize_locale("pt_BR"), "pt-br");
     }
 
     #[test]

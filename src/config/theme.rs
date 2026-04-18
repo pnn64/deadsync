@@ -444,16 +444,32 @@ impl FromStr for ThemeFlag {
 pub enum LanguageFlag {
     Auto,
     English,
+    German,
+    Spanish,
+    French,
+    Italian,
+    Japanese,
+    Polish,
+    PortugueseBrazil,
+    Russian,
     Swedish,
     Pseudo,
 }
 
 impl LanguageFlag {
-    /// Returns the locale code persisted to `deadsync.ini`.
+    /// Returns the config token persisted to `deadsync.ini`.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Auto => "auto",
             Self::English => "English",
+            Self::German => "German",
+            Self::Spanish => "Spanish",
+            Self::French => "French",
+            Self::Italian => "Italian",
+            Self::Japanese => "Japanese",
+            Self::Polish => "Polish",
+            Self::PortugueseBrazil => "PortugueseBrazil",
+            Self::Russian => "Russian",
             Self::Swedish => "Swedish",
             Self::Pseudo => "Pseudo",
         }
@@ -464,6 +480,14 @@ impl LanguageFlag {
         match self {
             Self::Auto => "auto",
             Self::English => "en",
+            Self::German => "de",
+            Self::Spanish => "es",
+            Self::French => "fr",
+            Self::Italian => "it",
+            Self::Japanese => "ja",
+            Self::Polish => "pl",
+            Self::PortugueseBrazil => "pt-br",
+            Self::Russian => "ru",
             Self::Swedish => "sv",
             Self::Pseudo => "pseudo",
         }
@@ -474,9 +498,23 @@ impl FromStr for LanguageFlag {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
             "auto" => Ok(Self::Auto),
             "english" | "en" => Ok(Self::English),
+            "german" | "de" => Ok(Self::German),
+            "spanish" | "es" => Ok(Self::Spanish),
+            "french" | "fr" => Ok(Self::French),
+            "italian" | "it" => Ok(Self::Italian),
+            "japanese" | "ja" => Ok(Self::Japanese),
+            "polish" | "pl" => Ok(Self::Polish),
+            "portuguesebrazil" | "brazilianportuguese" | "ptbr" => Ok(Self::PortugueseBrazil),
+            "russian" | "ru" => Ok(Self::Russian),
             "swedish" | "sv" => Ok(Self::Swedish),
             "pseudo" => Ok(Self::Pseudo),
             _ => Err(()),
