@@ -755,6 +755,7 @@ fn font_runtime(font: &FontSnapshot, name_map: &HashMap<String, &'static str>) -
         .collect::<HashMap<_, _>>();
     Font {
         glyph_map,
+        ascii_glyphs: Box::new(std::array::from_fn(|_| None)),
         default_glyph: font.default_glyph.as_ref().map(glyph_runtime),
         line_spacing: font.line_spacing,
         height: font.height,

@@ -528,6 +528,7 @@ pub struct Glyph {
 #[derive(Debug, Clone)]
 pub struct Font {
     pub glyph_map: HashMap<char, Glyph>,
+    pub ascii_glyphs: Box<[Option<Glyph>; 128]>,
     pub default_glyph: Option<Glyph>,
     pub line_spacing: i32, // draw units (from main/default page)
     pub height: i32,       // draw units (baseline - top)
@@ -542,6 +543,11 @@ pub struct Font {
 pub struct FontLoadData {
     pub font: Font,
     pub required_textures: Vec<PathBuf>,
+}
+
+#[inline(always)]
+fn empty_ascii_glyphs() -> Box<[Option<Glyph>; 128]> {
+    Box::new(std::array::from_fn(|_| None))
 }
 
 fn compute_chain_key(start_name: &'static str, fonts: &HashMap<&'static str, Font>) -> u64 {
@@ -598,6 +604,37 @@ pub fn refresh_chain_keys(fonts: &mut HashMap<&'static str, Font>) {
             font.chain_key = chain_key;
         }
     }
+
+    let ascii_tables = names
+        .iter()
+        .map(|name| (*name, compute_ascii_glyphs(name, fonts)))
+        .collect::<Vec<_>>();
+    for (name, ascii_glyphs) in ascii_tables {
+        if let Some(font) = fonts.get_mut(name) {
+            font.ascii_glyphs = ascii_glyphs;
+        }
+    }
+}
+
+fn compute_ascii_glyphs(
+    start_name: &'static str,
+    fonts: &HashMap<&'static str, Font>,
+) -> Box<[Option<Glyph>; 128]> {
+    let Some(start_font) = fonts.get(start_name) else {
+        return empty_ascii_glyphs();
+    };
+    let default_glyph = start_font.default_glyph.clone();
+    Box::new(std::array::from_fn(|code| {
+        let c = code as u8 as char;
+        let mut current = Some(start_font);
+        while let Some(font) = current {
+            if let Some(glyph) = font.glyph_map.get(&c) {
+                return Some(glyph.clone());
+            }
+            current = font.fallback_font_name.and_then(|name| fonts.get(name));
+        }
+        default_glyph.clone()
+    }))
 }
 
 #[derive(Debug)]
@@ -2555,6 +2592,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
     let default_glyph = all_glyphs.get(&FONT_DEFAULT_CHAR).cloned();
     let font = Font {
         glyph_map: all_glyphs,
+        ascii_glyphs: empty_ascii_glyphs(),
         default_glyph,
         height: default_page_metrics.0,
         line_spacing: default_page_metrics.1,
@@ -2603,6 +2641,9 @@ pub fn find_glyph<'a>(
     c: char,
     all_fonts: &'a HashMap<&'static str, Font>,
 ) -> Option<&'a Glyph> {
+    if c.is_ascii() {
+        return start_font.ascii_glyphs[c as usize].as_ref();
+    }
     if start_font.fallback_font_name.is_none() {
         return start_font
             .glyph_map

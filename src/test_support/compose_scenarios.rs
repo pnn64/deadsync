@@ -365,6 +365,7 @@ fn bench_font() -> Font {
 
     Font {
         glyph_map,
+        ascii_glyphs: Box::new(std::array::from_fn(|_| None)),
         default_glyph: Some(bench_glyph('?')),
         line_spacing: 20,
         height: 18,
