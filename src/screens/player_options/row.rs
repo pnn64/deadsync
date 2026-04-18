@@ -1,4 +1,5 @@
 use super::*;
+use crate::game::profile::{PlayerSide, Profile};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(usize)]
@@ -76,13 +77,144 @@ pub enum RowId {
 }
 
 impl RowId {
-    const COUNT: usize = Self::GameplayExtrasMore as usize + 1;
+    pub(super) const COUNT: usize = Self::GameplayExtrasMore as usize + 1;
 
     #[inline(always)]
     pub(super) const fn index(self) -> usize {
         self as usize
     }
 }
+
+// ================================ RowBehavior types ================================
+
+/// Result of a row's reaction to a key press.
+///
+/// Kept tiny so every dispatcher arm can return one without ceremony. The
+/// shared dispatcher reads it to decide whether to play the change-value SFX
+/// and whether to re-run visibility sync.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Outcome {
+    pub persisted: bool,
+    pub changed_visibility: bool,
+}
+
+impl Outcome {
+    pub const NONE: Self = Self {
+        persisted: false,
+        changed_visibility: false,
+    };
+
+    #[inline(always)]
+    pub const fn persisted() -> Self {
+        Self {
+            persisted: true,
+            changed_visibility: false,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn persisted_with_visibility() -> Self {
+        Self {
+            persisted: true,
+            changed_visibility: true,
+        }
+    }
+}
+
+/// Static behaviour for a numeric row whose `Row::choices` already encode
+/// every legal value as a string.
+#[derive(Clone, Copy, Debug)]
+pub struct NumericBinding {
+    pub parse: fn(&str) -> Option<i32>,
+    pub apply: fn(&mut Profile, i32) -> Outcome,
+    pub persist_for_side: fn(PlayerSide, i32),
+}
+
+/// How a cycle row writes its currently selected index back to the persisted
+/// player profile.
+#[derive(Clone, Copy, Debug)]
+pub enum CycleBinding {
+    Bool(ChoiceBinding<bool>),
+    Index(ChoiceBinding<usize>),
+    NoteSkin(NoteSkinBinding),
+}
+
+/// A typed cycle binding. `apply` writes the new value into the profile and
+/// reports back via `Outcome` whether the change should also trigger a
+/// visibility re-sync. The dispatcher reads that outcome and acts on it
+/// uniformly across all binding types.
+#[derive(Clone, Copy, Debug)]
+pub struct ChoiceBinding<T: Copy + 'static> {
+    pub apply: fn(&mut Profile, T) -> Outcome,
+    pub persist_for_side: fn(PlayerSide, T),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct NoteSkinBinding {
+    pub apply: fn(&mut State, usize, &str, bool, PlayerSide),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BitmaskBinding {
+    pub toggle: fn(&mut State, usize),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CustomBinding {
+    pub apply: fn(&mut State, usize, RowId, isize) -> Outcome,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ActionRow {
+    Exit,
+    WhatComesNext,
+}
+
+/// What kind of row this is, and any state owned by the row's behaviour.
+#[derive(Clone, Copy, Debug)]
+pub enum RowBehavior {
+    Numeric(NumericBinding),
+    Cycle(CycleBinding),
+    Bitmask(BitmaskBinding),
+    Action(ActionRow),
+    Custom(CustomBinding),
+}
+
+// ============================== Helpers ================================
+
+#[inline]
+pub(super) fn parse_i32(s: &str) -> Option<i32> {
+    s.parse::<i32>().ok()
+}
+
+#[inline]
+pub(super) fn parse_i32_ms(s: &str) -> Option<i32> {
+    s.trim_end_matches("ms").parse::<i32>().ok()
+}
+
+/// Build a `ChoiceBinding<usize>` for a row whose choices map 1:1 to a static
+/// `[Enum; N]` variant table. Cuts per-binding boilerplate down to its data.
+macro_rules! index_binding {
+    ($table:expr, $default:expr, $field:ident, $persist:expr, $vis:expr) => {
+        $crate::screens::player_options::row::ChoiceBinding::<usize> {
+            apply: |p, i| {
+                p.$field = $table.get(i).copied().unwrap_or($default);
+                if $vis {
+                    $crate::screens::player_options::row::Outcome::persisted_with_visibility()
+                } else {
+                    $crate::screens::player_options::row::Outcome::persisted()
+                }
+            },
+            persist_for_side: |s, i| {
+                $persist(s, $table.get(i).copied().unwrap_or($default))
+            },
+        }
+    };
+}
+
+pub(crate) use index_binding;
+
+// ============================== RowMap =================================
 
 pub struct RowMap {
     pub(super) rows: [Option<Row>; RowId::COUNT],
@@ -195,6 +327,7 @@ impl RowBuilder {
 
 pub struct Row {
     pub id: RowId,
+    pub behavior: RowBehavior,
     pub name: LookupKey,
     pub choices: Vec<String>,
     pub selected_choice_index: [usize; PLAYER_SLOTS],
@@ -265,24 +398,8 @@ pub(super) fn row_supports_inline_nav(row: &Row) -> bool {
 }
 
 #[inline(always)]
-pub(super) fn row_toggles_with_start(id: RowId) -> bool {
-    id == RowId::Scroll
-        || id == RowId::Hide
-        || id == RowId::Insert
-        || id == RowId::Remove
-        || id == RowId::Holds
-        || id == RowId::Accel
-        || id == RowId::Effect
-        || id == RowId::Appearance
-        || id == RowId::LifeBarOptions
-        || id == RowId::GameplayExtras
-        || id == RowId::GameplayExtrasMore
-        || id == RowId::ResultsExtras
-        || id == RowId::ErrorBar
-        || id == RowId::ErrorBarOptions
-        || id == RowId::MeasureCounterOptions
-        || id == RowId::FAPlusOptions
-        || id == RowId::EarlyDecentWayOffOptions
+pub(super) fn row_toggles_with_start(row: &Row) -> bool {
+    matches!(row.behavior, RowBehavior::Bitmask(_))
 }
 
 #[inline(always)]

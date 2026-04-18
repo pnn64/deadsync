@@ -621,79 +621,15 @@ pub(super) fn handle_start_event(
         .and_then(|&id| state.row_map.get(id))?;
     let id = row.id;
     let row_supports_inline = row_supports_inline_nav(row);
+    let row_toggles = row_toggles_with_start(row);
     if row_supports_inline {
         let changed = commit_inline_focus_selection(state, asset_manager, player_idx, row_index);
-        if changed && !row_toggles_with_start(id) {
+        if changed && !row_toggles {
             change_choice_for_player(state, asset_manager, player_idx, 0);
             return finish_start_without_action(state, active, player_idx, should_focus_exit);
         }
     }
-    if id == RowId::Scroll {
-        toggle_scroll_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::Hide {
-        toggle_hide_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::Insert {
-        toggle_insert_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::Remove {
-        toggle_remove_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::Holds {
-        toggle_holds_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::Accel {
-        toggle_accel_effects_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::Effect {
-        toggle_visual_effects_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::Appearance {
-        toggle_appearance_effects_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::LifeBarOptions {
-        toggle_life_bar_options_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::GameplayExtras {
-        toggle_gameplay_extras_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::GameplayExtrasMore {
-        toggle_gameplay_extras_more_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::ResultsExtras {
-        toggle_results_extras_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::ErrorBar {
-        toggle_error_bar_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::ErrorBarOptions {
-        toggle_error_bar_options_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::MeasureCounterOptions {
-        toggle_measure_counter_options_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::FAPlusOptions {
-        toggle_fa_plus_row(state, player_idx);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
-    if id == RowId::EarlyDecentWayOffOptions {
-        toggle_early_dw_row(state, player_idx);
+    if super::choice::dispatch_behavior_toggle(state, player_idx, id) {
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_index == num_rows.saturating_sub(1)
