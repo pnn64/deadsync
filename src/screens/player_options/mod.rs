@@ -36,7 +36,7 @@ mod pane;
 mod profile;
 mod render;
 mod row;
-mod rows;
+mod panes;
 mod state;
 mod visibility;
 
@@ -65,7 +65,7 @@ use render::*;
 #[allow(unused_imports)]
 use row::*;
 #[allow(unused_imports)]
-use rows::*;
+use panes::*;
 #[allow(unused_imports)]
 use state::*;
 #[allow(unused_imports)]
