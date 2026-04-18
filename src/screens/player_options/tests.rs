@@ -4,7 +4,7 @@ use super::*;
 pub(super) mod tests {
     use super::{
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, NAV_INITIAL_HOLD_DELAY,
-        NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowBuilder, RowId, RowMap, SpeedMod,
+        NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowId, RowMap, SpeedMod,
         handle_arcade_start_event, hud_offset_choices, is_row_visible, repeat_held_arcade_start,
         row_visibility, session_active_players, sync_profile_scroll_speed,
     };
