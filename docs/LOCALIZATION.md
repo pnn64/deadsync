@@ -242,22 +242,9 @@ sv (Svenska)             42    590      7.1%
 
 ## Language Support
 
-The goal is to support all languages shipped by ITGmania, plus community contributions. Translation progress is measured as a percentage of keys translated relative to `en.ini`.
+The goal is to support all languages shipped by ITGmania, plus community contributions. DeadSync currently bundles `en`, `de`, `es`, `fr`, `it`, `ja`, `pl`, `pt-br`, `ru`, `sv`, and `pseudo`.
 
-| Language | Code | Native Name | File | Progress |
-|---|---|---|---|---|
-| English | `en` | English | `en.ini` | ✅ 100%* |
-| Spanish | `es` | Español | — | 0% |
-| French | `fr` | Français | — | 0% |
-| German | `de` | Deutsch | — | 0% |
-| Japanese | `ja` | 日本語 | — | 0% |
-| Korean | `ko` | 한국어 | — | 0% |
-| Dutch | `nl` | Nederlands | — | 0% |
-| Polish | `pl` | Polski | — | 0% |
-| Slovak | `sk` | Slovenčina | — | 0% |
-| Chinese (Traditional) | `zh-Hant` | 繁體中文 | — | 0% |
-
-\* English is the baseline language. New keys are still being extracted from the codebase — see [Extraction Progress](#extraction-progress) for current status.
+For current per-language coverage, see `TRANSLATION_STATUS.md`. English is the baseline language; other files are allowed to be partial and fall back to `en.ini` for missing keys.
 
 ## Community Translations via Weblate
 
