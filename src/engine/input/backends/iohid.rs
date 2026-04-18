@@ -3,7 +3,7 @@ use crate::engine::host_time::now_nanos;
 use crate::engine::input::RawKeyboardEvent;
 use log::debug;
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
-use std::collections::hash_map::Entry;
+use std::collections::{HashMap, hash_map::Entry};
 use std::ffi::{c_char, c_void};
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
