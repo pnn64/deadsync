@@ -4549,10 +4549,10 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
 
     let status_text: Arc<str> = match overlay.phase {
         SyncOverlayPhase::Running => match overlay.total_beats.max(overlay.beats_processed) {
-            0 => tr("SelectMusic", "SyncBeatZero"),
+            0 => tr("SelectMusic", "BeatZero"),
             total => tr_fmt(
                 "SelectMusic",
-                "SyncBeatProgress",
+                "BeatProgress",
                 &[
                     ("current", &overlay.beats_processed.min(total).to_string()),
                     ("total", &total.to_string()),

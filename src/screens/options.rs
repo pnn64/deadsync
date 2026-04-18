@@ -3049,7 +3049,7 @@ pub const NULL_OR_DIE_OPTIONS_ROWS: &[SubRow] = &[
         choices: &[
             localized_choice("OptionsNullOrDie", "SyncGraphFrequency"),
             localized_choice("OptionsNullOrDie", "SyncGraphBeatIndex"),
-            localized_choice("OptionsNullOrDie", "SyncGraphPostKernel"),
+            localized_choice("OptionsNullOrDie", "SyncGraphPostKernelFingerprint"),
         ],
         inline: false,
     },
