@@ -8,7 +8,6 @@ use std::sync::Arc;
 // PARITY[<Source>]: <mirrored behavior>. Ref: <file/symbol> when known.
 
 #[allow(dead_code)]
-#[derive(Clone)]
 pub enum Mod<'a> {
     // position
     Xy(f32, f32),
@@ -283,7 +282,10 @@ fn sprite_native_dims(
 /* ======================== SPRITE/QUAD CORE ======================== */
 
 #[inline(always)]
-fn build_sprite_like(source: SpriteSource, mods: &[Mod<'_>], site_base: u64) -> Actor {
+fn build_sprite_like<'a, I>(source: SpriteSource, mods: I, site_base: u64) -> Actor
+where
+    I: IntoIterator<Item = Mod<'a>>,
+{
     // defaults
     let (mut x, mut y, mut w, mut h) = (0.0, 0.0, 0.0, 0.0);
     let (mut hx, mut vy) = (0.5, 0.5);
@@ -320,48 +322,48 @@ fn build_sprite_like(source: SpriteSource, mods: &[Mod<'_>], site_base: u64) -> 
     for m in mods {
         match m {
             Mod::Xy(a, b) => {
-                x = *a;
-                y = *b;
+                x = a;
+                y = b;
             }
             Mod::SetX(a) => {
-                x = *a;
+                x = a;
             }
             Mod::SetY(b) => {
-                y = *b;
+                y = b;
             }
             Mod::AddX(a) => {
-                x += *a;
+                x += a;
             }
             Mod::AddY(b) => {
-                y += *b;
+                y += b;
             }
 
             Mod::HAlign(a) => {
-                hx = *a;
+                hx = a;
             }
             Mod::VAlign(b) => {
-                vy = *b;
+                vy = b;
             }
             Mod::Align(a, b) => {
-                hx = *a;
-                vy = *b;
+                hx = a;
+                vy = b;
             }
 
             Mod::Z(v) => {
-                z = *v;
+                z = v;
             }
             Mod::Tint(rgba) => {
-                tint = *rgba;
+                tint = rgba;
             }
             Mod::Alpha(a) => {
-                tint[3] = *a;
+                tint[3] = a;
             }
             Mod::Glow(rgba) => {
-                glow = *rgba;
+                glow = rgba;
             }
             Mod::StrokeColor(_) => {}
             Mod::Blend(bm) => {
-                blend = *bm;
+                blend = bm;
             }
             Mod::MaskSource => {
                 mask_source = true;
@@ -371,105 +373,105 @@ fn build_sprite_like(source: SpriteSource, mods: &[Mod<'_>], site_base: u64) -> 
             }
 
             Mod::SizePx(a, b) => {
-                w = *a;
-                h = *b;
+                w = a;
+                h = b;
             }
 
             // PARITY[StepMania Actor]: zoom commands mutate scale factors.
             Mod::Zoom(f) => {
-                sx = *f;
-                sy = *f;
+                sx = f;
+                sy = f;
             }
             Mod::ZoomX(a) => {
-                sx = *a;
+                sx = a;
             }
             Mod::ZoomY(b) => {
-                sy = *b;
+                sy = b;
             }
             Mod::AddZoomX(a) => {
-                sx += *a;
+                sx += a;
             }
             Mod::AddZoomY(b) => {
-                sy += *b;
+                sy += b;
             }
             Mod::ZoomToPx(tw, th) => {
                 let (nw, nh) = sprite_native_dims(&source, uv, cell, grid);
                 let base_w = if w == 0.0 { nw } else { w };
                 let base_h = if h == 0.0 { nh } else { h };
-                sx = if base_w == 0.0 { 0.0 } else { *tw / base_w };
-                sy = if base_h == 0.0 { 0.0 } else { *th / base_h };
+                sx = if base_w == 0.0 { 0.0 } else { tw / base_w };
+                sy = if base_h == 0.0 { 0.0 } else { th / base_h };
             }
 
             // aspect-preserving absolute sizes
             Mod::ZoomToWidth(new_w) => {
                 if w > 0.0 && h > 0.0 {
                     let aspect = h / w;
-                    w = *new_w;
+                    w = new_w;
                     h = w * aspect;
                 } else {
-                    w = *new_w;
+                    w = new_w;
                 }
             }
             Mod::ZoomToHeight(new_h) => {
                 if w > 0.0 && h > 0.0 {
                     let aspect = w / h;
-                    h = *new_h;
+                    h = new_h;
                     w = h * aspect;
                 } else {
-                    h = *new_h;
+                    h = new_h;
                 }
             }
 
             Mod::CropLeft(v) => {
-                cl = *v;
+                cl = v;
             }
             Mod::CropRight(v) => {
-                cr = *v;
+                cr = v;
             }
             Mod::CropTop(v) => {
-                ct = *v;
+                ct = v;
             }
             Mod::CropBottom(v) => {
-                cb = *v;
+                cb = v;
             }
 
             Mod::FadeLeft(v) => {
-                fl = *v;
+                fl = v;
             }
             Mod::FadeRight(v) => {
-                fr = *v;
+                fr = v;
             }
             Mod::FadeTop(v) => {
-                ft = *v;
+                ft = v;
             }
             Mod::FadeBottom(v) => {
-                fb = *v;
+                fb = v;
             }
 
             Mod::TexVel(v) => {
-                texv = Some(*v);
+                texv = Some(v);
             }
 
             Mod::Visible(v) => {
-                vis = *v;
+                vis = v;
             }
             Mod::RotX(d) => {
-                rot_x = *d;
+                rot_x = d;
             }
             Mod::RotY(d) => {
-                rot_y = *d;
+                rot_y = d;
             }
             Mod::RotZ(d) => {
-                rot_z = *d;
+                rot_z = d;
             }
             Mod::AddRotX(dd) => {
-                rot_x += *dd;
+                rot_x += dd;
             }
             Mod::AddRotY(dd) => {
-                rot_y += *dd;
+                rot_y += dd;
             }
             Mod::AddRotZ(dd) => {
-                rot_z += *dd;
+                rot_z += dd;
             }
 
             // text-only mods ignored here
@@ -483,57 +485,57 @@ fn build_sprite_like(source: SpriteSource, mods: &[Mod<'_>], site_base: u64) -> 
                 tw = Some(steps);
             }
             Mod::State(i) => {
-                cell = Some((*i, u32::MAX));
+                cell = Some((i, u32::MAX));
                 grid = None;
                 uv = None;
             }
             Mod::UvRect(r) => {
-                uv = Some(*r);
+                uv = Some(r);
                 cell = None;
                 grid = None;
             }
             Mod::Animate(v) => {
-                anim_enable = *v;
+                anim_enable = v;
             }
             Mod::StateDelay(s) => {
-                state_delay = (*s).max(0.0);
+                state_delay = s.max(0.0);
             }
 
             // PARITY[StepMania Actor]: +Y is down; flip Y in our +Y-up space for matching shadows.
             Mod::ShadowLenBoth(v) => {
-                shx = *v;
-                shy = -*v;
+                shx = v;
+                shy = -v;
             }
             Mod::ShadowLenX(v) => {
-                shx = *v;
+                shx = v;
             }
             Mod::ShadowLenY(v) => {
-                shy = -*v;
+                shy = -v;
             }
             Mod::ShadowColor(c) => {
-                shc = *c;
+                shc = c;
             }
 
             Mod::EffectClock(clock) => {
-                effect.clock = *clock;
+                effect.clock = clock;
             }
             Mod::EffectMode(mode) => {
-                effect.mode = *mode;
+                effect.mode = mode;
             }
             Mod::EffectColor1(color) => {
-                effect.color1 = *color;
+                effect.color1 = color;
             }
             Mod::EffectColor2(color) => {
-                effect.color2 = *color;
+                effect.color2 = color;
             }
             Mod::EffectPeriod(v) => {
-                if *v > 0.0 {
-                    effect.period = *v;
-                    effect.timing = [*v * 0.5, 0.0, *v * 0.5, 0.0, 0.0];
+                if v > 0.0 {
+                    effect.period = v;
+                    effect.timing = [v * 0.5, 0.0, v * 0.5, 0.0, 0.0];
                 }
             }
             Mod::EffectOffset(v) => {
-                effect.offset = *v;
+                effect.offset = v;
             }
             Mod::EffectTiming(v) => {
                 let timing = [
@@ -550,7 +552,7 @@ fn build_sprite_like(source: SpriteSource, mods: &[Mod<'_>], site_base: u64) -> 
                 }
             }
             Mod::EffectMagnitude(v) => {
-                effect.magnitude = *v;
+                effect.magnitude = v;
             }
         }
     }
@@ -749,7 +751,11 @@ fn build_sprite_like(source: SpriteSource, mods: &[Mod<'_>], site_base: u64) -> 
 }
 
 #[inline(always)]
-pub fn sprite<T: IntoTextureKey>(tex: T, mods: &[Mod<'_>], site_base: u64) -> Actor {
+pub fn sprite<'a, T, I>(tex: T, mods: I, site_base: u64) -> Actor
+where
+    T: IntoTextureKey,
+    I: IntoIterator<Item = Mod<'a>>,
+{
     build_sprite_like(
         SpriteSource::Texture(tex.into_texture_key()),
         mods,
@@ -758,19 +764,28 @@ pub fn sprite<T: IntoTextureKey>(tex: T, mods: &[Mod<'_>], site_base: u64) -> Ac
 }
 
 #[inline(always)]
-pub fn sprite_static(tex: &'static str, mods: &[Mod<'_>], site_base: u64) -> Actor {
+pub fn sprite_static<'a, I>(tex: &'static str, mods: I, site_base: u64) -> Actor
+where
+    I: IntoIterator<Item = Mod<'a>>,
+{
     build_sprite_like(SpriteSource::TextureStatic(tex), mods, site_base)
 }
 
 #[inline(always)]
-pub fn quad(mods: &[Mod<'_>], site_base: u64) -> Actor {
+pub fn quad<'a, I>(mods: I, site_base: u64) -> Actor
+where
+    I: IntoIterator<Item = Mod<'a>>,
+{
     build_sprite_like(SpriteSource::Solid, mods, site_base)
 }
 
 /* ============================== TEXT =============================== */
 
 #[inline(always)]
-pub fn text(mods: &[Mod<'_>], site_base: u64) -> Actor {
+pub fn text<'a, I>(mods: I, site_base: u64) -> Actor
+where
+    I: IntoIterator<Item = Mod<'a>>,
+{
     let (mut x, mut y) = (0.0, 0.0);
     let (mut hx, mut vy) = (0.5, 0.5);
     let mut color = [1.0, 1.0, 1.0, 1.0];
@@ -804,63 +819,63 @@ pub fn text(mods: &[Mod<'_>], site_base: u64) -> Actor {
         match m {
             // position & alignment
             Mod::Xy(a, b) => {
-                x = *a;
-                y = *b;
+                x = a;
+                y = b;
             }
             Mod::SetX(a) => {
-                x = *a;
+                x = a;
             }
             Mod::SetY(b) => {
-                y = *b;
+                y = b;
             }
             Mod::AddX(a) => {
-                x += *a;
+                x += a;
             }
             Mod::AddY(b) => {
-                y += *b;
+                y += b;
             }
 
             Mod::HAlign(a) => {
-                hx = *a;
+                hx = a;
             }
             Mod::VAlign(b) => {
-                vy = *b;
+                vy = b;
             }
             Mod::Align(a, b) => {
-                hx = *a;
-                vy = *b;
+                hx = a;
+                vy = b;
             }
 
             // color/font/text/align
             Mod::Tint(r) => {
-                color = *r;
+                color = r;
             }
             Mod::Alpha(a) => {
-                color[3] = *a;
+                color[3] = a;
             }
             Mod::Glow(r) => {
-                glow = *r;
+                glow = r;
             }
             Mod::StrokeColor(r) => {
-                stroke_color = Some(*r);
+                stroke_color = Some(r);
             }
             Mod::Font(f) => {
-                font = *f;
+                font = f;
             }
             Mod::Content(s) => {
-                content = s.clone();
+                content = s;
             }
             Mod::TAlign(a) => {
-                talign = *a;
+                talign = a;
             }
             Mod::Z(v) => {
-                z = *v;
+                z = v;
             }
 
             // zooms — if they occur after a max* for that axis, mark pre-zoom clamp
             Mod::Zoom(f) => {
-                sx = *f;
-                sy = *f;
+                sx = f;
+                sy = f;
                 if saw_max_w {
                     max_w_pre_zoom = true;
                 }
@@ -869,25 +884,25 @@ pub fn text(mods: &[Mod<'_>], site_base: u64) -> Actor {
                 }
             }
             Mod::ZoomX(a) => {
-                sx = *a;
+                sx = a;
                 if saw_max_w {
                     max_w_pre_zoom = true;
                 }
             }
             Mod::ZoomY(b) => {
-                sy = *b;
+                sy = b;
                 if saw_max_h {
                     max_h_pre_zoom = true;
                 }
             }
             Mod::AddZoomX(a) => {
-                sx += *a;
+                sx += a;
                 if saw_max_w {
                     max_w_pre_zoom = true;
                 }
             }
             Mod::AddZoomY(b) => {
-                sy += *b;
+                sy += b;
                 if saw_max_h {
                     max_h_pre_zoom = true;
                 }
@@ -895,31 +910,31 @@ pub fn text(mods: &[Mod<'_>], site_base: u64) -> Actor {
 
             // fit targets (applied later with metrics)
             Mod::ZoomToWidth(w) => {
-                fit_w = Some(*w);
+                fit_w = Some(w);
             }
             Mod::ZoomToHeight(h) => {
-                fit_h = Some(*h);
+                fit_h = Some(h);
             }
             Mod::WrapWidthPixels(w) => {
-                let wrap = *w as i32;
+                let wrap = w as i32;
                 wrap_width_pixels = (wrap >= 0).then_some(wrap);
             }
 
             // max constraints — reset the pre/post decision window
             Mod::MaxWidth(w) => {
-                max_w = Some(*w);
+                max_w = Some(w);
                 saw_max_w = true;
                 max_w_pre_zoom = false; // a new max resets the boundary
             }
             Mod::MaxHeight(h) => {
-                max_h = Some(*h);
+                max_h = Some(h);
                 saw_max_h = true;
                 max_h_pre_zoom = false; // a new max resets the boundary
             }
 
             // blend mode
             Mod::Blend(bm) => {
-                blend = *bm;
+                blend = bm;
             }
             Mod::Tween(steps) => {
                 tw = Some(steps);
@@ -927,39 +942,39 @@ pub fn text(mods: &[Mod<'_>], site_base: u64) -> Actor {
 
             // PARITY[StepMania Actor]: +Y is down; flip Y in our +Y-up space for matching shadows.
             Mod::ShadowLenBoth(v) => {
-                shx = *v;
-                shy = -*v;
+                shx = v;
+                shy = -v;
             }
             Mod::ShadowLenX(v) => {
-                shx = *v;
+                shx = v;
             }
             Mod::ShadowLenY(v) => {
-                shy = -*v;
+                shy = -v;
             }
             Mod::ShadowColor(c) => {
-                shc = *c;
+                shc = c;
             }
 
             Mod::EffectClock(clock) => {
-                effect.clock = *clock;
+                effect.clock = clock;
             }
             Mod::EffectMode(mode) => {
-                effect.mode = *mode;
+                effect.mode = mode;
             }
             Mod::EffectColor1(color1) => {
-                effect.color1 = *color1;
+                effect.color1 = color1;
             }
             Mod::EffectColor2(color2) => {
-                effect.color2 = *color2;
+                effect.color2 = color2;
             }
             Mod::EffectPeriod(v) => {
-                if *v > 0.0 {
-                    effect.period = *v;
-                    effect.timing = [*v * 0.5, 0.0, *v * 0.5, 0.0, 0.0];
+                if v > 0.0 {
+                    effect.period = v;
+                    effect.timing = [v * 0.5, 0.0, v * 0.5, 0.0, 0.0];
                 }
             }
             Mod::EffectOffset(v) => {
-                effect.offset = *v;
+                effect.offset = v;
             }
             Mod::EffectTiming(v) => {
                 let timing = [
@@ -976,7 +991,7 @@ pub fn text(mods: &[Mod<'_>], site_base: u64) -> Actor {
                 }
             }
             Mod::EffectMagnitude(v) => {
-                effect.magnitude = *v;
+                effect.magnitude = v;
             }
 
             // ignore sprite-only/text-irrelevant
@@ -1125,7 +1140,7 @@ macro_rules! act {
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
         if !__tw.is_empty(){ __mods.push($crate::engine::present::dsl::Mod::Tween(&__tw)); }
         const __SITE_BASE: u64 = $crate::engine::present::runtime::site_base(file!(), line!(), column!());
-        $crate::engine::present::dsl::sprite_static($tex, &__mods, __SITE_BASE)
+        $crate::engine::present::dsl::sprite_static($tex, __mods, __SITE_BASE)
     }};
     (sprite($tex:expr): $($tail:tt)+) => {{
         let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
@@ -1135,7 +1150,7 @@ macro_rules! act {
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
         if !__tw.is_empty(){ __mods.push($crate::engine::present::dsl::Mod::Tween(&__tw)); }
         const __SITE_BASE: u64 = $crate::engine::present::runtime::site_base(file!(), line!(), column!());
-        $crate::engine::present::dsl::sprite($tex, &__mods, __SITE_BASE)
+        $crate::engine::present::dsl::sprite($tex, __mods, __SITE_BASE)
     }};
     (quad: $($tail:tt)+) => {{
         let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
@@ -1145,7 +1160,7 @@ macro_rules! act {
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
         if !__tw.is_empty(){ __mods.push($crate::engine::present::dsl::Mod::Tween(&__tw)); }
         const __SITE_BASE: u64 = $crate::engine::present::runtime::site_base(file!(), line!(), column!());
-        $crate::engine::present::dsl::quad(&__mods, __SITE_BASE)
+        $crate::engine::present::dsl::quad(__mods, __SITE_BASE)
     }};
     (text: $($tail:tt)+) => {{
         let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
@@ -1155,7 +1170,7 @@ macro_rules! act {
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
         if !__tw.is_empty(){ __mods.push($crate::engine::present::dsl::Mod::Tween(&__tw)); }
         const __SITE_BASE: u64 = $crate::engine::present::runtime::site_base(file!(), line!(), column!());
-        $crate::engine::present::dsl::text(&__mods, __SITE_BASE)
+        $crate::engine::present::dsl::text(__mods, __SITE_BASE)
     }};
 }
 

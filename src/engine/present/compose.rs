@@ -43,6 +43,7 @@ pub fn build_screen_cached<'a>(
 ) -> RenderList<'a> {
     let mut objects = Vec::with_capacity(estimate_object_count(actors));
     let mut cameras: Vec<Matrix4> = Vec::with_capacity(4);
+    let mut texture_cache = TextureLookupCache::default();
     cameras.push(Matrix4::orthographic_rh_gl(
         m.left, m.right, m.bottom, m.top, -1.0, 1.0,
     ));
@@ -71,6 +72,7 @@ pub fn build_screen_cached<'a>(
             &mut order_counter,
             &mut objects,
             text_cache,
+            &mut texture_cache,
             total_elapsed,
         );
     }
@@ -125,6 +127,36 @@ struct OwnedLayoutEntry {
 type TextLayoutHasher = BuildHasherDefault<XxHash64>;
 type OwnedLayoutMap = HashMap<Box<str>, OwnedLayoutEntry, TextLayoutHasher>;
 type SharedAliasMap = HashMap<usize, Arc<str>, TextLayoutHasher>;
+type TextureMetaMap<'a> = HashMap<&'a str, assets::TexMeta, TextLayoutHasher>;
+type TextureSheetMap<'a> = HashMap<&'a str, (u32, u32), TextLayoutHasher>;
+
+#[derive(Default)]
+struct TextureLookupCache<'a> {
+    dims: TextureMetaMap<'a>,
+    sheets: TextureSheetMap<'a>,
+}
+
+impl<'a> TextureLookupCache<'a> {
+    #[inline(always)]
+    fn texture_dims(&mut self, key: &'a str) -> Option<assets::TexMeta> {
+        if let Some(&meta) = self.dims.get(key) {
+            return Some(meta);
+        }
+        let meta = assets::texture_dims(key)?;
+        self.dims.insert(key, meta);
+        Some(meta)
+    }
+
+    #[inline(always)]
+    fn sprite_sheet_dims(&mut self, key: &'a str) -> (u32, u32) {
+        if let Some(&dims) = self.sheets.get(key) {
+            return dims;
+        }
+        let dims = assets::sprite_sheet_dims(key);
+        self.sheets.insert(key, dims);
+        dims
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct TextLayoutKey {
@@ -253,7 +285,7 @@ impl TextLayoutCache {
         let cutoff = {
             let ages = &mut self.prune_ages;
             ages.clear();
-            ages.reserve(self.entry_count.saturating_sub(ages.capacity()));
+            ages.reserve(self.entry_count.saturating_sub(ages.len()));
             for font_entries in self.owned_entries.values() {
                 ages.extend(font_entries.values().map(|entry| entry.last_used));
             }
@@ -673,14 +705,20 @@ fn build_cached_text_layout(
     let space_width = space_glyph.map_or(0, |glyph| glyph.advance_i32);
     let mut max_logical_width_i = 0i32;
     let mut glyph_count = 0usize;
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(
+        text.as_bytes()
+            .iter()
+            .filter(|&&b| b == b'\n')
+            .count()
+            .saturating_add(1),
+    );
     let mut start_char = 0usize;
 
     for src in text.split('\n') {
         let mut char_index = start_char;
         if wrap_width_pixels < 0 {
             let mut width_i32 = 0i32;
-            let mut glyphs = Vec::new();
+            let mut glyphs = Vec::with_capacity(src.len());
             for ch in src.chars() {
                 if let Some(glyph) = font::find_glyph(font, ch, fonts) {
                     width_i32 += glyph.advance_i32;
@@ -700,7 +738,7 @@ fn build_cached_text_layout(
         }
 
         let mut line_width = 0i32;
-        let mut line_glyphs = Vec::new();
+        let mut line_glyphs = Vec::with_capacity(src.len());
         let mut line_has_word = false;
         let mut pending_space = None;
         let mut word_active = false;
@@ -998,6 +1036,7 @@ fn build_actor_recursive<'a>(
     order_counter: &mut u32,
     out: &mut Vec<RenderObject<'a>>,
     text_cache: &mut TextLayoutCache,
+    texture_cache: &mut TextureLookupCache<'a>,
     total_elapsed: f32,
 ) {
     match actor {
@@ -1050,7 +1089,8 @@ fn build_actor_recursive<'a>(
             let mut chosen_grid = *grid;
 
             if !is_solid && uv_rect.is_none() {
-                let (cols, rows) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(texture_name));
+                let (cols, rows) =
+                    grid.unwrap_or_else(|| texture_cache.sprite_sheet_dims(texture_name));
                 let total = cols.saturating_mul(rows).max(1);
 
                 let start_linear: u32 = match *cell {
@@ -1093,6 +1133,7 @@ fn build_actor_recursive<'a>(
                 chosen_cell,
                 chosen_grid,
                 effect_scale,
+                texture_cache,
             );
 
             let rect = place_rect(parent, *align, *offset, resolved_size);
@@ -1137,6 +1178,7 @@ fn build_actor_recursive<'a>(
                 *local_offset,
                 *local_offset_rot_sin_cos,
                 *texcoordvelocity,
+                texture_cache,
                 total_elapsed,
             );
             if *mask_dest {
@@ -1273,6 +1315,7 @@ fn build_actor_recursive<'a>(
                 order_counter,
                 out,
                 text_cache,
+                texture_cache,
                 total_elapsed,
             );
 
@@ -1351,6 +1394,7 @@ fn build_actor_recursive<'a>(
                     order_counter,
                     out,
                     text_cache,
+                    texture_cache,
                     total_elapsed,
                 );
             }
@@ -1587,6 +1631,7 @@ fn build_actor_recursive<'a>(
                             [0.0, 0.0],
                             [0.0, 1.0],
                             None,
+                            texture_cache,
                             total_elapsed,
                         );
                         for obj in out.iter_mut().skip(before) {
@@ -1629,6 +1674,7 @@ fn build_actor_recursive<'a>(
                             [0.0, 0.0],
                             [0.0, 1.0],
                             None,
+                            texture_cache,
                             total_elapsed,
                         );
                         for obj in out.iter_mut().skip(before) {
@@ -1656,6 +1702,7 @@ fn build_actor_recursive<'a>(
                     order_counter,
                     out,
                     text_cache,
+                    texture_cache,
                     total_elapsed,
                 );
             }
@@ -1666,29 +1713,31 @@ fn build_actor_recursive<'a>(
 /* ======================= LAYOUT HELPERS ======================= */
 
 #[inline(always)]
-fn resolve_sprite_size_like_sm(
+fn resolve_sprite_size_like_sm<'a>(
     size: [SizeSpec; 2],
     is_solid: bool,
-    texture_name: &str,
+    texture_name: &'a str,
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
     grid: Option<(u32, u32)>,
     scale: [f32; 2],
+    texture_cache: &mut TextureLookupCache<'a>,
 ) -> [SizeSpec; 2] {
     use SizeSpec::Px;
 
     #[inline(always)]
-    fn native_dims(
+    fn native_dims<'a>(
         is_solid: bool,
-        texture_name: &str,
+        texture_name: &'a str,
         uv: Option<[f32; 4]>,
         cell: Option<(u32, u32)>,
         grid: Option<(u32, u32)>,
+        texture_cache: &mut TextureLookupCache<'a>,
     ) -> (f32, f32) {
         if is_solid {
             return (1.0, 1.0);
         }
-        let Some(meta) = assets::texture_dims(texture_name) else {
+        let Some(meta) = texture_cache.texture_dims(texture_name) else {
             return (0.0, 0.0);
         };
         let (mut tw, mut th) = (meta.w as f32, meta.h as f32);
@@ -1696,7 +1745,7 @@ fn resolve_sprite_size_like_sm(
             tw *= (u1 - u0).abs().max(1e-6);
             th *= (v1 - v0).abs().max(1e-6);
         } else if cell.is_some() {
-            let (gc, gr) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(texture_name));
+            let (gc, gr) = grid.unwrap_or_else(|| texture_cache.sprite_sheet_dims(texture_name));
             let cols = gc.max(1);
             let rows = gr.max(1);
             tw /= cols as f32;
@@ -1705,7 +1754,7 @@ fn resolve_sprite_size_like_sm(
         (tw, th)
     }
 
-    let (nw, nh) = native_dims(is_solid, texture_name, uv_rect, cell, grid);
+    let (nw, nh) = native_dims(is_solid, texture_name, uv_rect, cell, grid, texture_cache);
     let aspect = if nw > 0.0 && nh > 0.0 { nh / nw } else { 1.0 };
 
     match (size[0], size[1]) {
@@ -1742,8 +1791,8 @@ fn place_rect(parent: SmRect, align: [f32; 2], offset: [f32; 2], size: [SizeSpec
 }
 
 #[inline(always)]
-fn calculate_uvs(
-    texture: &str,
+fn calculate_uvs<'a>(
+    texture: &'a str,
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
     grid: Option<(u32, u32)>,
@@ -1754,6 +1803,7 @@ fn calculate_uvs(
     ct: f32,
     cb: f32,
     texcoordvelocity: Option<[f32; 2]>,
+    texture_cache: &mut TextureLookupCache<'a>,
     total_elapsed: f32,
 ) -> ([f32; 2], [f32; 2]) {
     let (mut uv_scale, mut uv_offset) = if let Some([u0, v0, u1, v1]) = uv_rect {
@@ -1761,7 +1811,7 @@ fn calculate_uvs(
         let dv = (v1 - v0).abs().max(1e-6);
         ([du, dv], [u0.min(u1), v0.min(v1)])
     } else if let Some((cx, cy)) = cell {
-        let (gc, gr) = grid.unwrap_or_else(|| assets::sprite_sheet_dims(texture));
+        let (gc, gr) = grid.unwrap_or_else(|| texture_cache.sprite_sheet_dims(texture));
         let cols = gc.max(1);
         let rows = gr.max(1);
         let (col, row) = if cy == u32::MAX {
@@ -1859,6 +1909,7 @@ fn push_sprite<'a>(
     local_offset: [f32; 2],
     local_offset_rot_sin_cos: [f32; 2],
     texcoordvelocity: Option<[f32; 2]>,
+    texture_cache: &mut TextureLookupCache<'a>,
     total_elapsed: f32,
 ) {
     if tint[3] <= 0.0 {
@@ -1899,6 +1950,7 @@ fn push_sprite<'a>(
             ct,
             cb,
             texcoordvelocity,
+            texture_cache,
             total_elapsed,
         )
     };
