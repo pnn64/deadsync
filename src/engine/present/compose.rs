@@ -112,8 +112,10 @@ pub fn build_screen_cached_with_scratch(
         );
     }
 
-    // `order` is already monotonically assigned, so we do not need a stable sort here.
-    objects.sort_unstable_by_key(|o| (o.z, o.order));
+    // `order` is assigned monotonically during composition, so a stable z-bucket
+    // pass produces the same result as sorting by `(z, order)` when the z-range
+    // is reasonably dense.
+    sort_render_objects(&mut objects, scratch);
     scratch.masks = masks;
 
     // Texture handles are resolved during composition and cached per frame so
@@ -130,6 +132,8 @@ pub struct ComposeScratch {
     objects: Vec<RenderObject>,
     cameras: Vec<Matrix4>,
     masks: Vec<WorldRect>,
+    z_counts: Vec<usize>,
+    z_perm: Vec<usize>,
 }
 
 impl ComposeScratch {
@@ -141,6 +145,72 @@ impl ComposeScratch {
         cameras.clear();
         self.cameras = cameras;
     }
+}
+
+fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratch) {
+    if objects.len() < 2 {
+        return;
+    }
+
+    let mut min_z = objects[0].z;
+    let mut max_z = min_z;
+    let mut sorted_by_z = true;
+    let mut prev_z = min_z;
+    for obj in &objects[1..] {
+        sorted_by_z &= prev_z <= obj.z;
+        min_z = min_z.min(obj.z);
+        max_z = max_z.max(obj.z);
+        prev_z = obj.z;
+    }
+    if sorted_by_z {
+        return;
+    }
+
+    let range = (i32::from(max_z) - i32::from(min_z) + 1) as usize;
+    let dense_range_limit = objects.len().saturating_mul(8).max(256);
+    if range > dense_range_limit {
+        objects.sort_unstable_by_key(|o| (o.z, o.order));
+        return;
+    }
+
+    scratch.z_counts.clear();
+    scratch.z_counts.resize(range, 0);
+    scratch.z_perm.clear();
+    scratch.z_perm.resize(objects.len(), 0);
+
+    let min_z_i = i32::from(min_z);
+    for obj in objects.iter() {
+        scratch.z_counts[(i32::from(obj.z) - min_z_i) as usize] += 1;
+    }
+
+    let mut next = 0usize;
+    for count in &mut scratch.z_counts {
+        let bucket_len = *count;
+        *count = next;
+        next += bucket_len;
+    }
+
+    for (old_idx, obj) in objects.iter().enumerate() {
+        let bucket = (i32::from(obj.z) - min_z_i) as usize;
+        let new_idx = scratch.z_counts[bucket];
+        scratch.z_counts[bucket] = new_idx + 1;
+        scratch.z_perm[old_idx] = new_idx;
+    }
+
+    for start in 0..objects.len() {
+        let current = start;
+        while scratch.z_perm[current] != current {
+            let next = scratch.z_perm[current];
+            objects.swap(current, next);
+            scratch.z_perm.swap(current, next);
+        }
+    }
+
+    debug_assert!(
+        objects
+            .windows(2)
+            .all(|pair| (pair[0].z, pair[0].order) <= (pair[1].z, pair[1].order))
+    );
 }
 
 #[derive(Clone, Copy)]
