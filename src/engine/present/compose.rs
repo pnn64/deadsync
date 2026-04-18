@@ -232,7 +232,8 @@ struct CachedGlyph {
 #[derive(Clone)]
 struct CachedLine {
     width_i32: i32,
-    glyphs: Vec<CachedGlyph>,
+    glyph_start: usize,
+    glyph_len: usize,
 }
 
 #[derive(Clone)]
@@ -240,6 +241,7 @@ struct CachedTextLayout {
     max_logical_width_i: i32,
     glyph_count: usize,
     lines: Vec<CachedLine>,
+    glyphs: Vec<CachedGlyph>,
 }
 
 type WordGlyphs = SmallVec<[CachedGlyph; 16]>;
@@ -710,13 +712,16 @@ fn cached_glyph(
 fn push_cached_line(
     lines: &mut Vec<CachedLine>,
     max_logical_width_i: &mut i32,
-    glyph_count: &mut usize,
     width_i32: i32,
-    glyphs: Vec<CachedGlyph>,
+    glyph_start: usize,
+    glyph_end: usize,
 ) {
     *max_logical_width_i = (*max_logical_width_i).max(width_i32);
-    *glyph_count += glyphs.len();
-    lines.push(CachedLine { width_i32, glyphs });
+    lines.push(CachedLine {
+        width_i32,
+        glyph_start,
+        glyph_len: glyph_end.saturating_sub(glyph_start),
+    });
 }
 
 #[inline(always)]
@@ -804,9 +809,9 @@ fn flush_wrapped_word(
     font: &font::Font,
     lines: &mut Vec<CachedLine>,
     max_logical_width_i: &mut i32,
-    glyph_count: &mut usize,
     line_width: &mut i32,
-    line_glyphs: &mut Vec<CachedGlyph>,
+    line_glyph_start: &mut usize,
+    glyphs: &mut Vec<CachedGlyph>,
     line_has_word: &mut bool,
     word_active: &mut bool,
     word_width: &mut i32,
@@ -824,29 +829,30 @@ fn flush_wrapped_word(
 
     if !*line_has_word {
         *line_width = *word_width;
-        line_glyphs.extend(word_glyphs.drain(..));
+        glyphs.extend(word_glyphs.drain(..));
         *line_has_word = true;
     } else if line_width.saturating_add(space_width + *word_width) <= wrap_width_pixels {
         *line_width += space_width + *word_width;
         if let Some(glyph) = space_glyph {
-            line_glyphs.push(cached_glyph(
+            glyphs.push(cached_glyph(
                 font,
                 glyph,
                 word_space_before.unwrap_or(word_first_char.saturating_sub(1)),
                 draws_space,
             ));
         }
-        line_glyphs.extend(word_glyphs.drain(..));
+        glyphs.extend(word_glyphs.drain(..));
     } else {
         push_cached_line(
             lines,
             max_logical_width_i,
-            glyph_count,
             *line_width,
-            std::mem::take(line_glyphs),
+            *line_glyph_start,
+            glyphs.len(),
         );
+        *line_glyph_start = glyphs.len();
         *line_width = *word_width;
-        line_glyphs.extend(word_glyphs.drain(..));
+        glyphs.extend(word_glyphs.drain(..));
         *line_has_word = true;
     }
 
@@ -865,7 +871,6 @@ fn build_cached_text_layout(
     let space_glyph = font::find_glyph(font, ' ', fonts);
     let space_width = space_glyph.map_or(0, |glyph| glyph.advance_i32);
     let mut max_logical_width_i = 0i32;
-    let mut glyph_count = 0usize;
     let mut lines = Vec::with_capacity(
         text.as_bytes()
             .iter()
@@ -873,13 +878,14 @@ fn build_cached_text_layout(
             .count()
             .saturating_add(1),
     );
+    let mut glyphs = Vec::with_capacity(text.len());
     let mut start_char = 0usize;
 
     for src in text.split('\n') {
         let mut char_index = start_char;
         if wrap_width_pixels < 0 {
             let mut width_i32 = 0i32;
-            let mut glyphs = Vec::with_capacity(src.len());
+            let line_glyph_start = glyphs.len();
             for ch in src.chars() {
                 if let Some(glyph) = font::find_glyph(font, ch, fonts) {
                     width_i32 += glyph.advance_i32;
@@ -895,16 +901,16 @@ fn build_cached_text_layout(
             push_cached_line(
                 &mut lines,
                 &mut max_logical_width_i,
-                &mut glyph_count,
                 width_i32,
-                glyphs,
+                line_glyph_start,
+                glyphs.len(),
             );
             start_char = char_index.saturating_add(1);
             continue;
         }
 
         let mut line_width = 0i32;
-        let mut line_glyphs = Vec::with_capacity(src.len());
+        let mut line_glyph_start = glyphs.len();
         let mut line_has_word = false;
         let mut pending_space = None;
         let mut word_active = false;
@@ -919,9 +925,9 @@ fn build_cached_text_layout(
                     font,
                     &mut lines,
                     &mut max_logical_width_i,
-                    &mut glyph_count,
                     &mut line_width,
-                    &mut line_glyphs,
+                    &mut line_glyph_start,
+                    &mut glyphs,
                     &mut line_has_word,
                     &mut word_active,
                     &mut word_width,
@@ -952,9 +958,9 @@ fn build_cached_text_layout(
             font,
             &mut lines,
             &mut max_logical_width_i,
-            &mut glyph_count,
             &mut line_width,
-            &mut line_glyphs,
+            &mut line_glyph_start,
+            &mut glyphs,
             &mut line_has_word,
             &mut word_active,
             &mut word_width,
@@ -971,17 +977,17 @@ fn build_cached_text_layout(
             push_cached_line(
                 &mut lines,
                 &mut max_logical_width_i,
-                &mut glyph_count,
                 line_width,
-                line_glyphs,
+                line_glyph_start,
+                glyphs.len(),
             );
         } else {
             push_cached_line(
                 &mut lines,
                 &mut max_logical_width_i,
-                &mut glyph_count,
                 0,
-                Vec::new(),
+                glyphs.len(),
+                glyphs.len(),
             );
         }
         start_char = char_index.saturating_add(1);
@@ -989,8 +995,9 @@ fn build_cached_text_layout(
 
     CachedTextLayout {
         max_logical_width_i,
-        glyph_count,
+        glyph_count: glyphs.len(),
         lines,
+        glyphs,
     }
 }
 
@@ -2351,7 +2358,9 @@ fn layout_text<'a>(
         let mut pen_x_logical =
             start_x_logical(text_align, block_w_logical_even, line.width_i32 as f32);
 
-        for glyph in &line.glyphs {
+        let glyphs =
+            &layout.glyphs[line.glyph_start..line.glyph_start.saturating_add(line.glyph_len)];
+        for glyph in glyphs {
             let quad_w = glyph.size[0] * sx;
             let quad_h = glyph.size[1] * sy;
 
@@ -2887,6 +2896,7 @@ mod tests {
             max_logical_width_i: 0,
             glyph_count: 0,
             lines: Vec::new(),
+            glyphs: Vec::new(),
         }
     }
 
