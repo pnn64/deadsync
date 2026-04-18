@@ -2066,7 +2066,11 @@ fn lrint_ties_even(v: f32) -> f32 {
         // frac == 0.5 exactly: ties-to-even
         // Use i64 for parity check to avoid edge overflow on extreme values.
         let f_even = ((floor as i64) & 1) == 0;
-        if f_even { floor } else { floor + 1.0 }
+        if f_even {
+            floor
+        } else {
+            floor + 1.0
+        }
     }
 }
 
@@ -2713,9 +2717,9 @@ fn clip_rotated_sprite_to_world_rect<'a>(
 #[cfg(test)]
 mod tests {
     use super::{
-        CachedTextLayout, TextAttrCursor, TextLayoutCache, TextLayoutKey, TextLayoutOverflowPolicy,
-        WorldRect, build_screen, clip_object_to_world_masks, clip_sprite_object_to_world_rect,
-        fold_sprite_xy_rot, wrap_text_lines_by_words,
+        build_screen, clip_object_to_world_masks, clip_sprite_object_to_world_rect,
+        fold_sprite_xy_rot, wrap_text_lines_by_words, CachedTextLayout, TextAttrCursor,
+        TextLayoutCache, TextLayoutKey, TextLayoutOverflowPolicy, WorldRect,
     };
     use crate::engine::gfx::{
         BlendMode, MeshMode, ObjectType, RenderObject, TMeshCacheKey, TexturedMeshVertex,

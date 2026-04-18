@@ -394,6 +394,346 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
+    pub fn xy(&mut self, x: f32, y: f32) {
+        self.x = x;
+        self.y = y;
+    }
+
+    #[inline(always)]
+    pub fn x(&mut self, x: f32) {
+        self.x = x;
+    }
+
+    #[inline(always)]
+    pub fn y(&mut self, y: f32) {
+        self.y = y;
+    }
+
+    #[inline(always)]
+    pub fn addx(&mut self, dx: f32) {
+        self.x += dx;
+    }
+
+    #[inline(always)]
+    pub fn addy(&mut self, dy: f32) {
+        self.y += dy;
+    }
+
+    #[inline(always)]
+    pub fn align(&mut self, h: f32, v: f32) {
+        self.hx = h;
+        self.vy = v;
+    }
+
+    #[inline(always)]
+    pub fn halign(&mut self, h: f32) {
+        self.hx = h;
+    }
+
+    #[inline(always)]
+    pub fn valign(&mut self, v: f32) {
+        self.vy = v;
+    }
+
+    #[inline(always)]
+    pub fn z(&mut self, z: i16) {
+        self.z = z;
+    }
+
+    #[inline(always)]
+    pub fn diffuse(&mut self, rgba: [f32; 4]) {
+        self.tint = rgba;
+    }
+
+    #[inline(always)]
+    pub fn alpha(&mut self, a: f32) {
+        self.tint[3] = a;
+    }
+
+    #[inline(always)]
+    pub fn glow(&mut self, rgba: [f32; 4]) {
+        self.glow = rgba;
+    }
+
+    #[inline(always)]
+    pub fn blend(&mut self, blend: BlendMode) {
+        self.blend = blend;
+    }
+
+    #[inline(always)]
+    pub fn size(&mut self, w: f32, h: f32) {
+        self.w = w;
+        self.h = h;
+    }
+
+    #[inline(always)]
+    pub fn zoom(&mut self, f: f32) {
+        self.sx = f;
+        self.sy = f;
+    }
+
+    #[inline(always)]
+    pub fn zoomx(&mut self, x: f32) {
+        self.sx = x;
+    }
+
+    #[inline(always)]
+    pub fn zoomy(&mut self, y: f32) {
+        self.sy = y;
+    }
+
+    #[inline(always)]
+    pub fn addzoomx(&mut self, dx: f32) {
+        self.sx += dx;
+    }
+
+    #[inline(always)]
+    pub fn addzoomy(&mut self, dy: f32) {
+        self.sy += dy;
+    }
+
+    #[inline(always)]
+    pub fn zoomto(&mut self, tw: f32, th: f32) {
+        let (nw, nh) = sprite_native_dims(&self.source, self.uv, self.cell, self.grid);
+        let base_w = if self.w == 0.0 { nw } else { self.w };
+        let base_h = if self.h == 0.0 { nh } else { self.h };
+        self.sx = if base_w == 0.0 { 0.0 } else { tw / base_w };
+        self.sy = if base_h == 0.0 { 0.0 } else { th / base_h };
+    }
+
+    #[inline(always)]
+    pub fn zoomtowidth(&mut self, new_w: f32) {
+        if self.w > 0.0 && self.h > 0.0 {
+            let aspect = self.h / self.w;
+            self.w = new_w;
+            self.h = self.w * aspect;
+        } else {
+            self.w = new_w;
+        }
+    }
+
+    #[inline(always)]
+    pub fn zoomtoheight(&mut self, new_h: f32) {
+        if self.w > 0.0 && self.h > 0.0 {
+            let aspect = self.w / self.h;
+            self.h = new_h;
+            self.w = self.h * aspect;
+        } else {
+            self.h = new_h;
+        }
+    }
+
+    #[inline(always)]
+    pub fn mask_source(&mut self) {
+        self.mask_source = true;
+    }
+
+    #[inline(always)]
+    pub fn mask_dest(&mut self) {
+        self.mask_dest = true;
+    }
+
+    #[inline(always)]
+    pub fn texcoordvelocity(&mut self, vel: [f32; 2]) {
+        self.texv = Some(vel);
+    }
+
+    #[inline(always)]
+    pub fn cropleft(&mut self, v: f32) {
+        self.cl = v;
+    }
+
+    #[inline(always)]
+    pub fn cropright(&mut self, v: f32) {
+        self.cr = v;
+    }
+
+    #[inline(always)]
+    pub fn croptop(&mut self, v: f32) {
+        self.ct = v;
+    }
+
+    #[inline(always)]
+    pub fn cropbottom(&mut self, v: f32) {
+        self.cb = v;
+    }
+
+    #[inline(always)]
+    pub fn fadeleft(&mut self, v: f32) {
+        self.fl = v;
+    }
+
+    #[inline(always)]
+    pub fn faderight(&mut self, v: f32) {
+        self.fr = v;
+    }
+
+    #[inline(always)]
+    pub fn fadetop(&mut self, v: f32) {
+        self.ft = v;
+    }
+
+    #[inline(always)]
+    pub fn fadebottom(&mut self, v: f32) {
+        self.fb = v;
+    }
+
+    #[inline(always)]
+    pub fn setstate(&mut self, i: u32) {
+        self.cell = Some((i, u32::MAX));
+        self.grid = None;
+        self.uv = None;
+    }
+
+    #[inline(always)]
+    pub fn animate(&mut self, v: bool) {
+        self.anim_enable = v;
+    }
+
+    #[inline(always)]
+    pub fn setallstatedelays(&mut self, s: f32) {
+        self.state_delay = s.max(0.0);
+    }
+
+    #[inline(always)]
+    pub fn customtexturerect(&mut self, uv: [f32; 4]) {
+        self.uv = Some(uv);
+        self.cell = None;
+        self.grid = None;
+    }
+
+    #[inline(always)]
+    pub fn visible(&mut self, v: bool) {
+        self.vis = v;
+    }
+
+    #[inline(always)]
+    pub fn rotationx(&mut self, d: f32) {
+        self.rot_x = d;
+    }
+
+    #[inline(always)]
+    pub fn rotationy(&mut self, d: f32) {
+        self.rot_y = d;
+    }
+
+    #[inline(always)]
+    pub fn rotationz(&mut self, d: f32) {
+        self.rot_z = d;
+    }
+
+    #[inline(always)]
+    pub fn addrotationx(&mut self, dd: f32) {
+        self.rot_x += dd;
+    }
+
+    #[inline(always)]
+    pub fn addrotationy(&mut self, dd: f32) {
+        self.rot_y += dd;
+    }
+
+    #[inline(always)]
+    pub fn addrotationz(&mut self, dd: f32) {
+        self.rot_z += dd;
+    }
+
+    #[inline(always)]
+    pub fn shadowlength(&mut self, v: f32) {
+        self.shx = v;
+        self.shy = -v;
+    }
+
+    #[inline(always)]
+    pub fn shadowlengthx(&mut self, v: f32) {
+        self.shx = v;
+    }
+
+    #[inline(always)]
+    pub fn shadowlengthy(&mut self, v: f32) {
+        self.shy = -v;
+    }
+
+    #[inline(always)]
+    pub fn shadowcolor(&mut self, c: [f32; 4]) {
+        self.shc = c;
+    }
+
+    #[inline(always)]
+    pub fn effectclock(&mut self, clock: anim::EffectClock) {
+        self.effect.clock = clock;
+    }
+
+    #[inline(always)]
+    pub fn effectmode(&mut self, mode: anim::EffectMode) {
+        self.effect.mode = mode;
+    }
+
+    #[inline(always)]
+    pub fn effectcolor1(&mut self, color: [f32; 4]) {
+        self.effect.color1 = color;
+    }
+
+    #[inline(always)]
+    pub fn effectcolor2(&mut self, color: [f32; 4]) {
+        self.effect.color2 = color;
+    }
+
+    #[inline(always)]
+    pub fn effectperiod(&mut self, v: f32) {
+        if v > 0.0 {
+            self.effect.period = v;
+            self.effect.timing = [v * 0.5, 0.0, v * 0.5, 0.0, 0.0];
+        }
+    }
+
+    #[inline(always)]
+    pub fn effectoffset(&mut self, v: f32) {
+        self.effect.offset = v;
+    }
+
+    #[inline(always)]
+    pub fn effecttiming(&mut self, v: [f32; 5]) {
+        let timing = [
+            v[0].max(0.0),
+            v[1].max(0.0),
+            v[2].max(0.0),
+            v[3].max(0.0),
+            v[4].max(0.0),
+        ];
+        let total = timing[0] + timing[1] + timing[2] + timing[3] + timing[4];
+        if total > 0.0 {
+            self.effect.timing = timing;
+            self.effect.period = total;
+        }
+    }
+
+    #[inline(always)]
+    pub fn effectmagnitude(&mut self, v: [f32; 3]) {
+        self.effect.magnitude = v;
+    }
+
+    #[inline(always)]
+    pub fn strokecolor(&mut self, _rgba: [f32; 4]) {}
+
+    #[inline(always)]
+    pub fn font(&mut self, _font: &'static str) {}
+
+    #[inline(always)]
+    pub fn settext(&mut self, _content: TextContent) {}
+
+    #[inline(always)]
+    pub fn horizalign(&mut self, _align: TextAlign) {}
+
+    #[inline(always)]
+    pub fn wrapwidthpixels(&mut self, _w: f32) {}
+
+    #[inline(always)]
+    pub fn maxwidth(&mut self, _w: f32) {}
+
+    #[inline(always)]
+    pub fn maxheight(&mut self, _h: f32) {}
+
+    #[inline(always)]
     pub fn push<'a>(&mut self, m: Mod<'a>) {
         match m {
             Mod::Xy(a, b) => {
@@ -831,6 +1171,314 @@ impl TextBuilder {
     }
 
     #[inline(always)]
+    pub fn xy(&mut self, x: f32, y: f32) {
+        self.x = x;
+        self.y = y;
+    }
+
+    #[inline(always)]
+    pub fn x(&mut self, x: f32) {
+        self.x = x;
+    }
+
+    #[inline(always)]
+    pub fn y(&mut self, y: f32) {
+        self.y = y;
+    }
+
+    #[inline(always)]
+    pub fn addx(&mut self, dx: f32) {
+        self.x += dx;
+    }
+
+    #[inline(always)]
+    pub fn addy(&mut self, dy: f32) {
+        self.y += dy;
+    }
+
+    #[inline(always)]
+    pub fn align(&mut self, h: f32, v: f32) {
+        self.hx = h;
+        self.vy = v;
+    }
+
+    #[inline(always)]
+    pub fn halign(&mut self, h: f32) {
+        self.hx = h;
+    }
+
+    #[inline(always)]
+    pub fn valign(&mut self, v: f32) {
+        self.vy = v;
+    }
+
+    #[inline(always)]
+    pub fn diffuse(&mut self, rgba: [f32; 4]) {
+        self.color = rgba;
+    }
+
+    #[inline(always)]
+    pub fn alpha(&mut self, a: f32) {
+        self.color[3] = a;
+    }
+
+    #[inline(always)]
+    pub fn glow(&mut self, rgba: [f32; 4]) {
+        self.glow = rgba;
+    }
+
+    #[inline(always)]
+    pub fn strokecolor(&mut self, rgba: [f32; 4]) {
+        self.stroke_color = Some(rgba);
+    }
+
+    #[inline(always)]
+    pub fn font(&mut self, font: &'static str) {
+        self.font = font;
+    }
+
+    #[inline(always)]
+    pub fn settext(&mut self, content: TextContent) {
+        self.content = content;
+    }
+
+    #[inline(always)]
+    pub fn horizalign(&mut self, align: TextAlign) {
+        self.talign = align;
+    }
+
+    #[inline(always)]
+    pub fn z(&mut self, z: i16) {
+        self.z = z;
+    }
+
+    #[inline(always)]
+    pub fn zoom(&mut self, f: f32) {
+        self.sx = f;
+        self.sy = f;
+        if self.saw_max_w {
+            self.max_w_pre_zoom = true;
+        }
+        if self.saw_max_h {
+            self.max_h_pre_zoom = true;
+        }
+    }
+
+    #[inline(always)]
+    pub fn zoomx(&mut self, x: f32) {
+        self.sx = x;
+        if self.saw_max_w {
+            self.max_w_pre_zoom = true;
+        }
+    }
+
+    #[inline(always)]
+    pub fn zoomy(&mut self, y: f32) {
+        self.sy = y;
+        if self.saw_max_h {
+            self.max_h_pre_zoom = true;
+        }
+    }
+
+    #[inline(always)]
+    pub fn addzoomx(&mut self, dx: f32) {
+        self.sx += dx;
+        if self.saw_max_w {
+            self.max_w_pre_zoom = true;
+        }
+    }
+
+    #[inline(always)]
+    pub fn addzoomy(&mut self, dy: f32) {
+        self.sy += dy;
+        if self.saw_max_h {
+            self.max_h_pre_zoom = true;
+        }
+    }
+
+    #[inline(always)]
+    pub fn zoomtowidth(&mut self, w: f32) {
+        self.fit_w = Some(w);
+    }
+
+    #[inline(always)]
+    pub fn zoomtoheight(&mut self, h: f32) {
+        self.fit_h = Some(h);
+    }
+
+    #[inline(always)]
+    pub fn wrapwidthpixels(&mut self, w: f32) {
+        let wrap = w as i32;
+        self.wrap_width_pixels = (wrap >= 0).then_some(wrap);
+    }
+
+    #[inline(always)]
+    pub fn maxwidth(&mut self, w: f32) {
+        self.max_w = Some(w);
+        self.saw_max_w = true;
+        self.max_w_pre_zoom = false;
+    }
+
+    #[inline(always)]
+    pub fn maxheight(&mut self, h: f32) {
+        self.max_h = Some(h);
+        self.saw_max_h = true;
+        self.max_h_pre_zoom = false;
+    }
+
+    #[inline(always)]
+    pub fn blend(&mut self, blend: BlendMode) {
+        self.blend = blend;
+    }
+
+    #[inline(always)]
+    pub fn shadowlength(&mut self, v: f32) {
+        self.shx = v;
+        self.shy = -v;
+    }
+
+    #[inline(always)]
+    pub fn shadowlengthx(&mut self, v: f32) {
+        self.shx = v;
+    }
+
+    #[inline(always)]
+    pub fn shadowlengthy(&mut self, v: f32) {
+        self.shy = -v;
+    }
+
+    #[inline(always)]
+    pub fn shadowcolor(&mut self, c: [f32; 4]) {
+        self.shc = c;
+    }
+
+    #[inline(always)]
+    pub fn effectclock(&mut self, clock: anim::EffectClock) {
+        self.effect.clock = clock;
+    }
+
+    #[inline(always)]
+    pub fn effectmode(&mut self, mode: anim::EffectMode) {
+        self.effect.mode = mode;
+    }
+
+    #[inline(always)]
+    pub fn effectcolor1(&mut self, color: [f32; 4]) {
+        self.effect.color1 = color;
+    }
+
+    #[inline(always)]
+    pub fn effectcolor2(&mut self, color: [f32; 4]) {
+        self.effect.color2 = color;
+    }
+
+    #[inline(always)]
+    pub fn effectperiod(&mut self, v: f32) {
+        if v > 0.0 {
+            self.effect.period = v;
+            self.effect.timing = [v * 0.5, 0.0, v * 0.5, 0.0, 0.0];
+        }
+    }
+
+    #[inline(always)]
+    pub fn effectoffset(&mut self, v: f32) {
+        self.effect.offset = v;
+    }
+
+    #[inline(always)]
+    pub fn effecttiming(&mut self, v: [f32; 5]) {
+        let timing = [
+            v[0].max(0.0),
+            v[1].max(0.0),
+            v[2].max(0.0),
+            v[3].max(0.0),
+            v[4].max(0.0),
+        ];
+        let total = timing[0] + timing[1] + timing[2] + timing[3] + timing[4];
+        if total > 0.0 {
+            self.effect.timing = timing;
+            self.effect.period = total;
+        }
+    }
+
+    #[inline(always)]
+    pub fn effectmagnitude(&mut self, v: [f32; 3]) {
+        self.effect.magnitude = v;
+    }
+
+    #[inline(always)]
+    pub fn size(&mut self, _w: f32, _h: f32) {}
+
+    #[inline(always)]
+    pub fn zoomto(&mut self, _w: f32, _h: f32) {}
+
+    #[inline(always)]
+    pub fn mask_source(&mut self) {}
+
+    #[inline(always)]
+    pub fn mask_dest(&mut self) {}
+
+    #[inline(always)]
+    pub fn texcoordvelocity(&mut self, _vel: [f32; 2]) {}
+
+    #[inline(always)]
+    pub fn cropleft(&mut self, _v: f32) {}
+
+    #[inline(always)]
+    pub fn cropright(&mut self, _v: f32) {}
+
+    #[inline(always)]
+    pub fn croptop(&mut self, _v: f32) {}
+
+    #[inline(always)]
+    pub fn cropbottom(&mut self, _v: f32) {}
+
+    #[inline(always)]
+    pub fn fadeleft(&mut self, _v: f32) {}
+
+    #[inline(always)]
+    pub fn faderight(&mut self, _v: f32) {}
+
+    #[inline(always)]
+    pub fn fadetop(&mut self, _v: f32) {}
+
+    #[inline(always)]
+    pub fn fadebottom(&mut self, _v: f32) {}
+
+    #[inline(always)]
+    pub fn setstate(&mut self, _i: u32) {}
+
+    #[inline(always)]
+    pub fn animate(&mut self, _v: bool) {}
+
+    #[inline(always)]
+    pub fn setallstatedelays(&mut self, _s: f32) {}
+
+    #[inline(always)]
+    pub fn customtexturerect(&mut self, _uv: [f32; 4]) {}
+
+    #[inline(always)]
+    pub fn visible(&mut self, _v: bool) {}
+
+    #[inline(always)]
+    pub fn rotationx(&mut self, _d: f32) {}
+
+    #[inline(always)]
+    pub fn rotationy(&mut self, _d: f32) {}
+
+    #[inline(always)]
+    pub fn rotationz(&mut self, _d: f32) {}
+
+    #[inline(always)]
+    pub fn addrotationx(&mut self, _dd: f32) {}
+
+    #[inline(always)]
+    pub fn addrotationy(&mut self, _dd: f32) {}
+
+    #[inline(always)]
+    pub fn addrotationz(&mut self, _dd: f32) {}
+
+    #[inline(always)]
     pub fn push<'a>(&mut self, m: Mod<'a>) {
         match m {
             Mod::Xy(a, b) => {
@@ -1180,23 +1828,23 @@ macro_rules! __dsl_apply_one {
     // --- tweenable props ---
     (xy ($x:expr, $y:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.x(($x) as f32).y(($y) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::Xy(($x) as f32, ($y) as f32)); }
+        else { $mods.xy(($x) as f32, ($y) as f32); }
     }};
     (x ($x:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.x(($x) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::SetX(($x) as f32)); }
+        else { $mods.x(($x) as f32); }
     }};
     (y ($y:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.y(($y) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::SetY(($y) as f32)); }
+        else { $mods.y(($y) as f32); }
     }};
     (addx ($dx:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addx(($dx) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::AddX(($dx) as f32)); }
+        else { $mods.addx(($dx) as f32); }
     }};
     (addy ($dy:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addy(($dy) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::AddY(($dy) as f32)); }
+        else { $mods.addy(($dy) as f32); }
     }};
 
     // PARITY[StepMania Actor]: Center/CenterX/CenterY map to screen center globals.
@@ -1207,7 +1855,7 @@ macro_rules! __dsl_apply_one {
             seg = seg.xy(cx, cy);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::engine::present::dsl::Mod::Xy(cx, cy));
+            $mods.xy(cx, cy);
         }
     }};
     (CenterX () $mods:ident $tw:ident $cur:ident $site:ident) => {{
@@ -1216,7 +1864,7 @@ macro_rules! __dsl_apply_one {
             seg = seg.x(cx);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::engine::present::dsl::Mod::SetX(cx));
+            $mods.x(cx);
         }
     }};
     (CenterY () $mods:ident $tw:ident $cur:ident $site:ident) => {{
@@ -1225,7 +1873,7 @@ macro_rules! __dsl_apply_one {
             seg = seg.y(cy);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::engine::present::dsl::Mod::SetY(cy));
+            $mods.y(cy);
         }
     }};
 
@@ -1246,7 +1894,7 @@ macro_rules! __dsl_apply_one {
             seg = seg.diffuse(($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::engine::present::dsl::Mod::Tint([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
+            $mods.diffuse([($r) as f32,($g) as f32,($b) as f32,($a) as f32]);
         }
     }};
     (alpha ($a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
@@ -1254,7 +1902,7 @@ macro_rules! __dsl_apply_one {
             seg = seg.alpha(($a) as f32);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::engine::present::dsl::Mod::Alpha(($a) as f32));
+            $mods.alpha(($a) as f32);
         }
     }};
     (diffusealpha ($a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
@@ -1262,7 +1910,7 @@ macro_rules! __dsl_apply_one {
             seg = seg.alpha(($a) as f32);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::engine::present::dsl::Mod::Alpha(($a) as f32));
+            $mods.alpha(($a) as f32);
         }
     }};
 
@@ -1272,126 +1920,126 @@ macro_rules! __dsl_apply_one {
             seg = seg.glow(($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::engine::present::dsl::Mod::Glow([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
+            $mods.glow([($r) as f32,($g) as f32,($b) as f32,($a) as f32]);
         }
     }};
     (strokecolor ($r:expr,$g:expr,$b:expr,$a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::StrokeColor([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
+        $mods.strokecolor([($r) as f32,($g) as f32,($b) as f32,($a) as f32]);
     }};
 
     // PARITY[StepMania Actor]: shadowlength/shadowcolor command behavior.
     (shadowlength ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::ShadowLenBoth(($v) as f32));
+        $mods.shadowlength(($v) as f32);
     }};
     (shadowlengthx ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::ShadowLenX(($v) as f32));
+        $mods.shadowlengthx(($v) as f32);
     }};
     (shadowlengthy ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::ShadowLenY(($v) as f32));
+        $mods.shadowlengthy(($v) as f32);
     }};
     (shadowcolor ($r:expr, $g:expr, $b:expr, $a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::ShadowColor([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
+        $mods.shadowcolor([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]);
     }};
 
     // PARITY[StepMania/ITGmania Actor]: effect command behavior.
     (effectclock (beat) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectClock($crate::engine::present::anim::EffectClock::Beat));
+        $mods.effectclock($crate::engine::present::anim::EffectClock::Beat);
     }};
     (effectclock (time) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectClock($crate::engine::present::anim::EffectClock::Time));
+        $mods.effectclock($crate::engine::present::anim::EffectClock::Time);
     }};
     (effectclock (music) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectClock($crate::engine::present::anim::EffectClock::Time));
+        $mods.effectclock($crate::engine::present::anim::EffectClock::Time);
     }};
     (effectclock (seconds) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectClock($crate::engine::present::anim::EffectClock::Time));
+        $mods.effectclock($crate::engine::present::anim::EffectClock::Time);
     }};
     (effectclock ($raw:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let __clock_raw = ::std::format!("{}", $raw);
         let __clock = $crate::engine::present::dsl::__dsl_parse_effect_clock(__clock_raw.as_str());
-        $mods.push($crate::engine::present::dsl::Mod::EffectClock(__clock));
+        $mods.effectclock(__clock);
     }};
 
     (diffuseramp () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectMode($crate::engine::present::anim::EffectMode::DiffuseRamp));
-        $mods.push($crate::engine::present::dsl::Mod::EffectPeriod(1.0));
-        $mods.push($crate::engine::present::dsl::Mod::EffectColor1([0.0, 0.0, 0.0, 1.0]));
-        $mods.push($crate::engine::present::dsl::Mod::EffectColor2([1.0, 1.0, 1.0, 1.0]));
+        $mods.effectmode($crate::engine::present::anim::EffectMode::DiffuseRamp);
+        $mods.effectperiod(1.0);
+        $mods.effectcolor1([0.0, 0.0, 0.0, 1.0]);
+        $mods.effectcolor2([1.0, 1.0, 1.0, 1.0]);
     }};
     (diffuseshift () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectMode($crate::engine::present::anim::EffectMode::DiffuseShift));
-        $mods.push($crate::engine::present::dsl::Mod::EffectPeriod(1.0));
-        $mods.push($crate::engine::present::dsl::Mod::EffectColor1([0.0, 0.0, 0.0, 1.0]));
-        $mods.push($crate::engine::present::dsl::Mod::EffectColor2([1.0, 1.0, 1.0, 1.0]));
+        $mods.effectmode($crate::engine::present::anim::EffectMode::DiffuseShift);
+        $mods.effectperiod(1.0);
+        $mods.effectcolor1([0.0, 0.0, 0.0, 1.0]);
+        $mods.effectcolor2([1.0, 1.0, 1.0, 1.0]);
     }};
     (glowshift () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectMode($crate::engine::present::anim::EffectMode::GlowShift));
-        $mods.push($crate::engine::present::dsl::Mod::EffectPeriod(1.0));
-        $mods.push($crate::engine::present::dsl::Mod::EffectColor1([1.0, 1.0, 1.0, 0.2]));
-        $mods.push($crate::engine::present::dsl::Mod::EffectColor2([1.0, 1.0, 1.0, 0.8]));
+        $mods.effectmode($crate::engine::present::anim::EffectMode::GlowShift);
+        $mods.effectperiod(1.0);
+        $mods.effectcolor1([1.0, 1.0, 1.0, 0.2]);
+        $mods.effectcolor2([1.0, 1.0, 1.0, 0.8]);
     }};
     (pulse () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectMode($crate::engine::present::anim::EffectMode::Pulse));
-        $mods.push($crate::engine::present::dsl::Mod::EffectPeriod(2.0));
-        $mods.push($crate::engine::present::dsl::Mod::EffectMagnitude([0.5, 1.0, 0.0]));
+        $mods.effectmode($crate::engine::present::anim::EffectMode::Pulse);
+        $mods.effectperiod(2.0);
+        $mods.effectmagnitude([0.5, 1.0, 0.0]);
     }};
     (spin () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectMode($crate::engine::present::anim::EffectMode::Spin));
-        $mods.push($crate::engine::present::dsl::Mod::EffectMagnitude([0.0, 0.0, 180.0]));
+        $mods.effectmode($crate::engine::present::anim::EffectMode::Spin);
+        $mods.effectmagnitude([0.0, 0.0, 180.0]);
     }};
     (stopeffect () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectMode($crate::engine::present::anim::EffectMode::None));
+        $mods.effectmode($crate::engine::present::anim::EffectMode::None);
     }};
 
     (effectcolor1 ($r:expr,$g:expr,$b:expr,$a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectColor1([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
+        $mods.effectcolor1([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]);
     }};
     (effectcolor2 ($r:expr,$g:expr,$b:expr,$a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectColor2([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
+        $mods.effectcolor2([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]);
     }};
     (effectperiod ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectPeriod(($v) as f32));
+        $mods.effectperiod(($v) as f32);
     }};
     (effectoffset ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectOffset(($v) as f32));
+        $mods.effectoffset(($v) as f32);
     }};
     (effecttiming ($a:expr,$b:expr,$c:expr,$d:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         // ITGmania compatibility: 4-arg call is (ramp_to_half, hold_at_half, ramp_to_full, hold_at_zero).
-        $mods.push($crate::engine::present::dsl::Mod::EffectTiming([($a) as f32, ($b) as f32, ($c) as f32, 0.0, ($d) as f32]));
+        $mods.effecttiming([($a) as f32, ($b) as f32, ($c) as f32, 0.0, ($d) as f32]);
     }};
     (effecttiming ($a:expr,$b:expr,$c:expr,$d:expr,$e:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         // ITGmania compatibility: 5-arg call is (ramp_to_half, hold_at_half, ramp_to_full, hold_at_zero, hold_at_full).
-        $mods.push($crate::engine::present::dsl::Mod::EffectTiming([($a) as f32, ($b) as f32, ($c) as f32, ($e) as f32, ($d) as f32]));
+        $mods.effecttiming([($a) as f32, ($b) as f32, ($c) as f32, ($e) as f32, ($d) as f32]);
     }};
     (effectmagnitude ($x:expr,$y:expr,$z:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::EffectMagnitude([($x) as f32, ($y) as f32, ($z) as f32]));
+        $mods.effectmagnitude([($x) as f32, ($y) as f32, ($z) as f32]);
     }};
 
     // PARITY[StepMania Actor]: zoom* commands mutate scale factors.
     (zoom ($f:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let f=($f) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.zoom(f,f); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::Zoom(f)); }
+        else { $mods.zoom(f); }
     }};
     (zoomx ($f:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let f=($f) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.zoomx(f); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::ZoomX(f)); }
+        else { $mods.zoomx(f); }
     }};
     (zoomy ($f:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let f=($f) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.zoomy(f); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::ZoomY(f)); }
+        else { $mods.zoomy(f); }
     }};
     (addzoomx ($df:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let df=($df) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addzoomx(df); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::AddZoomX(df)); }
+        else { $mods.addzoomx(df); }
     }};
     (addzoomy ($df:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let df=($df) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addzoomy(df); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::AddZoomY(df)); }
+        else { $mods.addzoomy(df); }
     }};
 
     // PARITY[StepMania Actor]: `zoomto` works from unzoomed size; `setsize` sets unzoomed size.
@@ -1399,186 +2047,186 @@ macro_rules! __dsl_apply_one {
         let ww = ($w) as f32;
         let hh = ($h) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.zoomto(ww, hh); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::ZoomToPx(ww, hh)); }
+        else { $mods.zoomto(ww, hh); }
     }};
     (setsize ($w:expr, $h:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let ww = ($w) as f32;
         let hh = ($h) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.size(ww, hh); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::SizePx(ww, hh)); }
+        else { $mods.size(ww, hh); }
     }};
 
     // --- absolute size helpers preserving aspect ---------------------
     (zoomtowidth ($w:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::ZoomToWidth(($w) as f32));
+        $mods.zoomtowidth(($w) as f32);
     }};
     (zoomtoheight ($h:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::ZoomToHeight(($h) as f32));
+        $mods.zoomtoheight(($h) as f32);
     }};
     (wrapwidthpixels ($w:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::WrapWidthPixels(($w) as f32));
+        $mods.wrapwidthpixels(($w) as f32);
     }};
     // --- NEW: max constraints for text -------------------------------
     (maxwidth ($w:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::MaxWidth(($w) as f32));
+        $mods.maxwidth(($w) as f32);
     }};
     (maxheight ($h:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::MaxHeight(($h) as f32));
+        $mods.maxheight(($h) as f32);
     }};
 
     // static sprite bits / cropping / uv / blend ---------------------
     (align ($h:expr,$v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::Align(($h) as f32, ($v) as f32));
+        $mods.align(($h) as f32, ($v) as f32);
     }};
     (halign ($dir:ident) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::HAlign($crate::__ui_halign_from_ident!($dir)));
+        $mods.halign($crate::__ui_halign_from_ident!($dir));
     }};
     (halign ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::HAlign(($v) as f32));
+        $mods.halign(($v) as f32);
     }};
     (valign ($dir:ident) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::VAlign($crate::__ui_valign_from_ident!($dir)));
+        $mods.valign($crate::__ui_valign_from_ident!($dir));
     }};
     (valign ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::VAlign(($v) as f32));
+        $mods.valign(($v) as f32);
     }};
 
-    (z ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{ $mods.push($crate::engine::present::dsl::Mod::Z(($v) as i16)); }};
+    (z ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{ $mods.z(($v) as i16); }};
     (texcoordvelocity ($vx:expr,$vy:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::TexVel([($vx) as f32, ($vy) as f32]));
+        $mods.texcoordvelocity([($vx) as f32, ($vy) as f32]);
     }};
     (cropleft ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.cropleft(($v) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::CropLeft(($v) as f32)); }
+        else { $mods.cropleft(($v) as f32); }
     }};
     (cropright ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.cropright(($v) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::CropRight(($v) as f32)); }
+        else { $mods.cropright(($v) as f32); }
     }};
     (croptop ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.croptop(($v) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::CropTop(($v) as f32)); }
+        else { $mods.croptop(($v) as f32); }
     }};
     (cropbottom ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.cropbottom(($v) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::CropBottom(($v) as f32)); }
+        else { $mods.cropbottom(($v) as f32); }
     }};
     // edge fades (0..1 of visible width/height)
     (fadeleft ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let vv = ($v) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.fadeleft(vv); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::FadeLeft(vv)); }
+        else { $mods.fadeleft(vv); }
     }};
     (faderight ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let vv = ($v) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.faderight(vv); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::FadeRight(vv)); }
+        else { $mods.faderight(vv); }
     }};
     (fadetop ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let vv = ($v) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.fadetop(vv); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::FadeTop(vv)); }
+        else { $mods.fadetop(vv); }
     }};
     (fadebottom ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let vv = ($v) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.fadebottom(vv); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::FadeBottom(vv)); }
+        else { $mods.fadebottom(vv); }
     }};
     // PARITY[StepMania/ITGmania Sprite]: `setstate(i)` chooses row-major frame index.
     (setstate ($i:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::State(($i) as u32));
+        $mods.setstate(($i) as u32);
     }};
     // animation control
     (animate ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::Animate(($v) as bool));
+        $mods.animate(($v) as bool);
     }};
     (setallstatedelays ($s:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::StateDelay(($s) as f32));
+        $mods.setallstatedelays(($s) as f32);
     }};
     // PARITY[StepMania/ITGmania Sprite]: `customtexturerect` uses normalized top-left UVs.
     (customtexturerect ($u0:expr, $v0:expr, $u1:expr, $v1:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::UvRect([($u0) as f32, ($v0) as f32, ($u1) as f32, ($v1) as f32]));
+        $mods.customtexturerect([($u0) as f32, ($v0) as f32, ($u1) as f32, ($v1) as f32]);
     }};
 
     // --- visibility (immediate or inside a tween) ---
     (visible ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.set_visible(($v) as bool); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::Visible(($v) as bool)); }
+        else { $mods.visible(($v) as bool); }
     }};
 
     // --- rotation (degrees) ---
     (rotationx ($deg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let d=($deg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.rotationx(d); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::RotX(d)); }
+        else { $mods.rotationx(d); }
     }};
 
     (rotationy ($deg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let d=($deg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.rotationy(d); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::RotY(d)); }
+        else { $mods.rotationy(d); }
     }};
 
     (rotationz ($deg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let d=($deg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.rotationz(d); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::RotZ(d)); }
+        else { $mods.rotationz(d); }
     }};
 
     (addrotationx ($ddeg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let dd=($ddeg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addrotationx(dd); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::AddRotX(dd)); }
+        else { $mods.addrotationx(dd); }
     }};
 
     (addrotationy ($ddeg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let dd=($ddeg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addrotationy(dd); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::AddRotY(dd)); }
+        else { $mods.addrotationy(dd); }
     }};
 
     (addrotationz ($ddeg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let dd=($ddeg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addrotationz(dd); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::engine::present::dsl::Mod::AddRotZ(dd)); }
+        else { $mods.addrotationz(dd); }
     }};
 
     // blends: normal, add, multiply, subtract
     (blend (normal) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::Blend($crate::engine::gfx::BlendMode::Alpha));
+        $mods.blend($crate::engine::gfx::BlendMode::Alpha);
     }};
     (blend (add) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::Blend($crate::engine::gfx::BlendMode::Add));
+        $mods.blend($crate::engine::gfx::BlendMode::Add);
     }};
     (blend (multiply) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::Blend($crate::engine::gfx::BlendMode::Multiply));
+        $mods.blend($crate::engine::gfx::BlendMode::Multiply);
     }};
     (blend (subtract) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::Blend($crate::engine::gfx::BlendMode::Subtract));
+        $mods.blend($crate::engine::gfx::BlendMode::Subtract);
     }};
     (MaskSource () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::MaskSource);
+        $mods.mask_source();
     }};
     (masksource () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::MaskSource);
+        $mods.mask_source();
     }};
     (MaskDest () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::MaskDest);
+        $mods.mask_dest();
     }};
     (maskdest () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::MaskDest);
+        $mods.mask_dest();
     }};
 
     // Text properties (SM-compatible)
-    (font ($n:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{ $mods.push($crate::engine::present::dsl::Mod::Font($n)); }};
+    (font ($n:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{ $mods.font($n); }};
     (settext ($s:literal) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::Content($crate::engine::present::actors::TextContent::Static($s)));
+        $mods.settext($crate::engine::present::actors::TextContent::Static($s));
     }};
     (settext ($s:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::Content($crate::engine::present::actors::TextContent::from($s)));
+        $mods.settext($crate::engine::present::actors::TextContent::from($s));
     }};
     (horizalign ($dir:ident) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::engine::present::dsl::Mod::TAlign($crate::__ui_textalign_from_ident!($dir)));
+        $mods.horizalign($crate::__ui_textalign_from_ident!($dir));
     }};
 
     // unknown
