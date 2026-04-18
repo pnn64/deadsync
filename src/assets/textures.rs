@@ -10,7 +10,11 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, OnceLock, RwLock, mpsc},
+    sync::{
+        Arc, Mutex, OnceLock, RwLock,
+        atomic::{AtomicU64, Ordering},
+        mpsc,
+    },
 };
 
 use super::AssetError;
@@ -504,6 +508,17 @@ static GENERATED_TEXTURES: std::sync::LazyLock<RwLock<HashMap<String, GeneratedT
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 static GENERATED_TEXTURES_PENDING: std::sync::LazyLock<Mutex<HashSet<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
+static TEXTURE_REGISTRY_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+#[inline(always)]
+fn touch_texture_registry() {
+    TEXTURE_REGISTRY_GENERATION.fetch_add(1, Ordering::Relaxed);
+}
+
+#[inline(always)]
+pub fn texture_registry_generation() -> u64 {
+    TEXTURE_REGISTRY_GENERATION.load(Ordering::Relaxed)
+}
 
 fn note_texture_handle_alias(
     aliases: &mut FastU64Map<TextureHandle>,
@@ -537,8 +552,10 @@ pub(crate) fn register_texture_handle(key: &str, handle: TextureHandle) {
     let replaced = handles.insert(key.to_string(), handle);
     if replaced.is_some_and(|old| old != handle) {
         rebuild_texture_handle_aliases(&handles, &mut aliases);
+        touch_texture_registry();
     } else if replaced.is_none() {
         note_texture_handle_alias(&mut aliases, key, handle);
+        touch_texture_registry();
     }
 }
 
@@ -549,11 +566,13 @@ pub(crate) fn remove_texture_handle(key: &str) {
     }
     let mut aliases = TEXTURE_HANDLE_ALIASES.write().unwrap();
     rebuild_texture_handle_aliases(&handles, &mut aliases);
+    touch_texture_registry();
 }
 
 pub(crate) fn clear_texture_handles() {
     TEXTURE_HANDLES.write().unwrap().clear();
     TEXTURE_HANDLE_ALIASES.write().unwrap().clear();
+    touch_texture_registry();
 }
 
 pub fn register_texture_dims(key: &str, w: u32, h: u32) {
@@ -563,6 +582,7 @@ pub fn register_texture_dims(key: &str, w: u32, h: u32) {
     m.insert(key.clone(), TexMeta { w, h });
     drop(m);
     SHEET_DIMS.write().unwrap().insert(key, sheet);
+    touch_texture_registry();
 }
 
 pub fn texture_dims(key: &str) -> Option<TexMeta> {

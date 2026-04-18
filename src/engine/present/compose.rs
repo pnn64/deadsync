@@ -74,7 +74,8 @@ pub fn build_screen_cached_with_scratch(
     if cameras.capacity() < 4 {
         cameras.reserve(4 - cameras.capacity());
     }
-    let mut texture_cache = TextureLookupCache::default();
+    let mut texture_cache = std::mem::take(&mut scratch.texture_cache);
+    texture_cache.begin_frame();
     cameras.push(Matrix4::orthographic_rh_gl(
         m.left, m.right, m.bottom, m.top, -1.0, 1.0,
     ));
@@ -117,6 +118,7 @@ pub fn build_screen_cached_with_scratch(
     // is reasonably dense.
     sort_render_objects(&mut objects, scratch);
     scratch.masks = masks;
+    scratch.texture_cache = texture_cache;
 
     // Texture handles are resolved during composition and cached per frame so
     // draw prep/backends only see compact render objects.
@@ -134,6 +136,7 @@ pub struct ComposeScratch {
     masks: Vec<WorldRect>,
     z_counts: Vec<usize>,
     z_perm: Vec<usize>,
+    texture_cache: TextureLookupCache,
 }
 
 impl ComposeScratch {
@@ -251,45 +254,56 @@ struct OwnedLayoutEntry {
 type TextLayoutHasher = BuildHasherDefault<XxHash64>;
 type OwnedLayoutMap = HashMap<Box<str>, OwnedLayoutEntry, TextLayoutHasher>;
 type SharedAliasMap = HashMap<usize, Arc<str>, TextLayoutHasher>;
-type TextureMetaMap<'a> = HashMap<&'a str, assets::TexMeta, TextLayoutHasher>;
-type TextureSheetMap<'a> = HashMap<&'a str, (u32, u32), TextLayoutHasher>;
-type TextureHandleLookupMap<'a> = HashMap<&'a str, renderer::TextureHandle, TextLayoutHasher>;
+type TextureMetaMap = HashMap<String, assets::TexMeta, TextLayoutHasher>;
+type TextureSheetMap = HashMap<String, (u32, u32), TextLayoutHasher>;
+type TextureHandleLookupMap = HashMap<String, renderer::TextureHandle, TextLayoutHasher>;
 
 #[derive(Default)]
-struct TextureLookupCache<'a> {
-    dims: TextureMetaMap<'a>,
-    sheets: TextureSheetMap<'a>,
-    handles: TextureHandleLookupMap<'a>,
+struct TextureLookupCache {
+    generation: u64,
+    dims: TextureMetaMap,
+    sheets: TextureSheetMap,
+    handles: TextureHandleLookupMap,
 }
 
-impl<'a> TextureLookupCache<'a> {
+impl TextureLookupCache {
+    fn begin_frame(&mut self) {
+        let generation = assets::texture_registry_generation();
+        if self.generation != generation {
+            self.generation = generation;
+            self.dims.clear();
+            self.sheets.clear();
+            self.handles.clear();
+        }
+    }
+
     #[inline(always)]
-    fn texture_dims(&mut self, key: &'a str) -> Option<assets::TexMeta> {
+    fn texture_dims(&mut self, key: &str) -> Option<assets::TexMeta> {
         if let Some(&meta) = self.dims.get(key) {
             return Some(meta);
         }
         let meta = assets::texture_dims(key)?;
-        self.dims.insert(key, meta);
+        self.dims.insert(key.to_owned(), meta);
         Some(meta)
     }
 
     #[inline(always)]
-    fn sprite_sheet_dims(&mut self, key: &'a str) -> (u32, u32) {
+    fn sprite_sheet_dims(&mut self, key: &str) -> (u32, u32) {
         if let Some(&dims) = self.sheets.get(key) {
             return dims;
         }
         let dims = assets::sprite_sheet_dims(key);
-        self.sheets.insert(key, dims);
+        self.sheets.insert(key.to_owned(), dims);
         dims
     }
 
     #[inline(always)]
-    fn texture_handle(&mut self, key: &'a str) -> renderer::TextureHandle {
+    fn texture_handle(&mut self, key: &str) -> renderer::TextureHandle {
         if let Some(&handle) = self.handles.get(key) {
             return handle;
         }
         let handle = assets::texture_handle(key);
-        self.handles.insert(key, handle);
+        self.handles.insert(key.to_owned(), handle);
         handle
     }
 }
@@ -1156,7 +1170,7 @@ fn build_actor_recursive<'a>(
     order_counter: &mut u32,
     out: &mut Vec<RenderObject>,
     text_cache: &mut TextLayoutCache,
-    texture_cache: &mut TextureLookupCache<'a>,
+    texture_cache: &mut TextureLookupCache,
     total_elapsed: f32,
 ) {
     match actor {
@@ -1814,26 +1828,26 @@ fn build_actor_recursive<'a>(
 /* ======================= LAYOUT HELPERS ======================= */
 
 #[inline(always)]
-fn resolve_sprite_size_like_sm<'a>(
+fn resolve_sprite_size_like_sm(
     size: [SizeSpec; 2],
     is_solid: bool,
-    texture_name: &'a str,
+    texture_name: &str,
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
     grid: Option<(u32, u32)>,
     scale: [f32; 2],
-    texture_cache: &mut TextureLookupCache<'a>,
+    texture_cache: &mut TextureLookupCache,
 ) -> [SizeSpec; 2] {
     use SizeSpec::Px;
 
     #[inline(always)]
-    fn native_dims<'a>(
+    fn native_dims(
         is_solid: bool,
-        texture_name: &'a str,
+        texture_name: &str,
         uv: Option<[f32; 4]>,
         cell: Option<(u32, u32)>,
         grid: Option<(u32, u32)>,
-        texture_cache: &mut TextureLookupCache<'a>,
+        texture_cache: &mut TextureLookupCache,
     ) -> (f32, f32) {
         if is_solid {
             return (1.0, 1.0);
@@ -1892,8 +1906,8 @@ fn place_rect(parent: SmRect, align: [f32; 2], offset: [f32; 2], size: [SizeSpec
 }
 
 #[inline(always)]
-fn calculate_uvs<'a>(
-    texture: &'a str,
+fn calculate_uvs(
+    texture: &str,
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
     grid: Option<(u32, u32)>,
@@ -1904,7 +1918,7 @@ fn calculate_uvs<'a>(
     ct: f32,
     cb: f32,
     texcoordvelocity: Option<[f32; 2]>,
-    texture_cache: &mut TextureLookupCache<'a>,
+    texture_cache: &mut TextureLookupCache,
     total_elapsed: f32,
 ) -> ([f32; 2], [f32; 2]) {
     let (mut uv_scale, mut uv_offset) = if let Some([u0, v0, u1, v1]) = uv_rect {
@@ -2010,7 +2024,7 @@ fn push_sprite<'a>(
     local_offset: [f32; 2],
     local_offset_rot_sin_cos: [f32; 2],
     texcoordvelocity: Option<[f32; 2]>,
-    texture_cache: &mut TextureLookupCache<'a>,
+    texture_cache: &mut TextureLookupCache,
     total_elapsed: f32,
 ) {
     if tint[3] <= 0.0 {
@@ -2200,7 +2214,7 @@ fn layout_text<'a>(
     text_align: actors::TextAlign,
     m: &Metrics,
     text_cache: &mut TextLayoutCache,
-    texture_cache: &mut TextureLookupCache<'a>,
+    texture_cache: &mut TextureLookupCache,
     stroke_texture_keys: Option<&mut SmallVec<[Option<*const str>; 64]>>,
 ) {
     if content.as_str().is_empty() {
