@@ -413,15 +413,15 @@ fn arrowcloud_modifiers(profile: &Profile) -> ArrowCloudModifiers {
     ArrowCloudModifiers {
         visual_delay: profile.visual_delay_ms,
         acceleration: arrowcloud_mask_labels_u8(
-            profile::normalize_accel_effects_mask(profile.accel_effects_active_mask),
+            profile.accel_effects_active_mask.bits(),
             &ARROWCLOUD_ACCEL_NAMES,
         ),
         appearance: arrowcloud_mask_labels_u8(
-            profile::normalize_appearance_effects_mask(profile.appearance_effects_active_mask),
+            profile.appearance_effects_active_mask.bits(),
             &ARROWCLOUD_APPEARANCE_NAMES,
         ),
         effect: arrowcloud_mask_labels_u16(
-            profile::normalize_visual_effects_mask(profile.visual_effects_active_mask),
+            profile.visual_effects_active_mask.bits(),
             &ARROWCLOUD_EFFECT_NAMES,
         ),
         mini: profile.mini_percent.clamp(-100, 150),

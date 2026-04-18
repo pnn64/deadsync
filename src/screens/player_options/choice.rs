@@ -1,6 +1,9 @@
 use super::*;
 use crate::engine::audio;
-use crate::game::profile::{self as gp, PlayerSide};
+use crate::game::profile::{
+    self as gp, AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
+    PlayerSide, RemoveMask, VisualEffectsMask,
+};
 
 // ============================ Dispatchers ============================
 // Dispatch reads `row.behavior` to decide how to apply input.
@@ -436,14 +439,14 @@ pub(super) fn toggle_insert_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    if (state.insert_active_mask[idx] & bit) != 0 {
-        state.insert_active_mask[idx] &= !bit;
+    let mut bits = state.insert_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.insert_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.insert_active_mask[idx] =
-        crate::game::profile::normalize_insert_mask(state.insert_active_mask[idx]);
-    let mask = state.insert_active_mask[idx];
+    let mask = InsertMask::from_bits_truncate(bits);
+    state.insert_active_mask[idx] = mask;
     state.player_profiles[idx].insert_active_mask = mask;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -492,14 +495,14 @@ pub(super) fn toggle_remove_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    if (state.remove_active_mask[idx] & bit) != 0 {
-        state.remove_active_mask[idx] &= !bit;
+    let mut bits = state.remove_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.remove_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.remove_active_mask[idx] =
-        crate::game::profile::normalize_remove_mask(state.remove_active_mask[idx]);
-    let mask = state.remove_active_mask[idx];
+    let mask = RemoveMask::from_bits_truncate(bits);
+    state.remove_active_mask[idx] = mask;
     state.player_profiles[idx].remove_active_mask = mask;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -556,14 +559,14 @@ pub(super) fn toggle_holds_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    if (state.holds_active_mask[idx] & bit) != 0 {
-        state.holds_active_mask[idx] &= !bit;
+    let mut bits = state.holds_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.holds_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.holds_active_mask[idx] =
-        crate::game::profile::normalize_holds_mask(state.holds_active_mask[idx]);
-    let mask = state.holds_active_mask[idx];
+    let mask = HoldsMask::from_bits_truncate(bits);
+    state.holds_active_mask[idx] = mask;
     state.player_profiles[idx].holds_active_mask = mask;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -620,14 +623,14 @@ pub(super) fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    if (state.accel_effects_active_mask[idx] & bit) != 0 {
-        state.accel_effects_active_mask[idx] &= !bit;
+    let mut bits = state.accel_effects_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.accel_effects_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.accel_effects_active_mask[idx] =
-        crate::game::profile::normalize_accel_effects_mask(state.accel_effects_active_mask[idx]);
-    let mask = state.accel_effects_active_mask[idx];
+    let mask = AccelEffectsMask::from_bits_truncate(bits);
+    state.accel_effects_active_mask[idx] = mask;
     state.player_profiles[idx].accel_effects_active_mask = mask;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -676,14 +679,14 @@ pub(super) fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    if (state.visual_effects_active_mask[idx] & bit) != 0 {
-        state.visual_effects_active_mask[idx] &= !bit;
+    let mut bits = state.visual_effects_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.visual_effects_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.visual_effects_active_mask[idx] =
-        crate::game::profile::normalize_visual_effects_mask(state.visual_effects_active_mask[idx]);
-    let mask = state.visual_effects_active_mask[idx];
+    let mask = VisualEffectsMask::from_bits_truncate(bits);
+    state.visual_effects_active_mask[idx] = mask;
     state.player_profiles[idx].visual_effects_active_mask = mask;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -740,16 +743,14 @@ pub(super) fn toggle_appearance_effects_row(state: &mut State, player_idx: usize
         return;
     }
 
-    if (state.appearance_effects_active_mask[idx] & bit) != 0 {
-        state.appearance_effects_active_mask[idx] &= !bit;
+    let mut bits = state.appearance_effects_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.appearance_effects_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.appearance_effects_active_mask[idx] =
-        crate::game::profile::normalize_appearance_effects_mask(
-            state.appearance_effects_active_mask[idx],
-        );
-    let mask = state.appearance_effects_active_mask[idx];
+    let mask = AppearanceEffectsMask::from_bits_truncate(bits);
+    state.appearance_effects_active_mask[idx] = mask;
     state.player_profiles[idx].appearance_effects_active_mask = mask;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -981,14 +982,14 @@ pub(super) fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    if (state.error_bar_active_mask[idx] & bit) != 0 {
-        state.error_bar_active_mask[idx] &= !bit;
+    let mut bits = state.error_bar_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.error_bar_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.error_bar_active_mask[idx] =
-        crate::game::profile::normalize_error_bar_mask(state.error_bar_active_mask[idx]);
-    let mask = state.error_bar_active_mask[idx];
+    let mask = ErrorBarMask::from_bits_truncate(bits);
+    state.error_bar_active_mask[idx] = mask;
     state.player_profiles[idx].error_bar_active_mask = mask;
     state.player_profiles[idx].error_bar = crate::game::profile::error_bar_style_from_mask(mask);
     state.player_profiles[idx].error_bar_text =
