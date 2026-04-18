@@ -665,10 +665,10 @@ fn collect_texture_meta(
             continue;
         };
         for glyph in font.glyph_map.values() {
-            keys.insert(glyph.texture_key.clone());
+            keys.insert(glyph.texture_key.to_string());
         }
         if let Some(glyph) = &font.default_glyph {
-            keys.insert(glyph.texture_key.clone());
+            keys.insert(glyph.texture_key.to_string());
         }
         keys.extend(font.stroke_texture_map.keys().cloned());
         keys.extend(font.stroke_texture_map.values().cloned());
@@ -759,7 +759,12 @@ fn font_runtime(font: &FontSnapshot, name_map: &HashMap<String, &'static str>) -
             char::from_u32(entry.codepoint).map(|ch| (ch, glyph_runtime(&entry.glyph)))
         })
         .collect::<HashMap<_, _>>();
-    Font {
+    let stroke_texture_map = font
+        .stroke_texture_map
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect::<HashMap<_, _>>();
+    let mut runtime = Font {
         glyph_map,
         ascii_glyphs: Box::new(std::array::from_fn(|_| None)),
         default_glyph: font.default_glyph.as_ref().map(glyph_runtime),
@@ -772,22 +777,31 @@ fn font_runtime(font: &FontSnapshot, name_map: &HashMap<String, &'static str>) -
         cache_tag: 0,
         chain_key: 0,
         default_stroke_color: font.default_stroke_color,
-        stroke_texture_map: font
-            .stroke_texture_map
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect(),
+        stroke_texture_map,
         texture_hints_map: font
             .texture_hints_map
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect(),
+    };
+    for glyph in runtime.glyph_map.values_mut() {
+        glyph.stroke_texture_key = runtime
+            .stroke_texture_map
+            .get(glyph.texture_key.as_ref())
+            .map(|key| Arc::<str>::from(key.as_str()));
     }
+    if let Some(glyph) = runtime.default_glyph.as_mut() {
+        glyph.stroke_texture_key = runtime
+            .stroke_texture_map
+            .get(glyph.texture_key.as_ref())
+            .map(|key| Arc::<str>::from(key.as_str()));
+    }
+    runtime
 }
 
 fn glyph_snapshot(glyph: &Glyph) -> GlyphSnapshot {
     GlyphSnapshot {
-        texture_key: glyph.texture_key.clone(),
+        texture_key: glyph.texture_key.to_string(),
         tex_rect: glyph.tex_rect,
         uv_scale: glyph.uv_scale,
         uv_offset: glyph.uv_offset,
@@ -799,7 +813,8 @@ fn glyph_snapshot(glyph: &Glyph) -> GlyphSnapshot {
 
 fn glyph_runtime(glyph: &GlyphSnapshot) -> Glyph {
     Glyph {
-        texture_key: glyph.texture_key.clone(),
+        texture_key: Arc::<str>::from(glyph.texture_key.as_ref()),
+        stroke_texture_key: None,
         tex_rect: glyph.tex_rect,
         uv_scale: glyph.uv_scale,
         uv_offset: glyph.uv_offset,

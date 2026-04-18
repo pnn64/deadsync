@@ -775,17 +775,17 @@ fn font_chain_key(font: &font::Font, fonts: &HashMap<&'static str, font::Font>) 
 
 #[inline(always)]
 fn cached_glyph(
-    font: &font::Font,
+    _font: &font::Font,
     glyph: &font::Glyph,
     char_index: usize,
     draw_quad: bool,
 ) -> CachedGlyph {
     CachedGlyph {
-        texture_key: std::ptr::from_ref(glyph.texture_key.as_str()),
-        stroke_texture_key: font
-            .stroke_texture_map
-            .get(glyph.texture_key.as_str())
-            .map(|stroke_key| std::ptr::from_ref(stroke_key.as_str())),
+        texture_key: std::ptr::from_ref(glyph.texture_key.as_ref()),
+        stroke_texture_key: glyph
+            .stroke_texture_key
+            .as_ref()
+            .map(|stroke_key| std::ptr::from_ref(stroke_key.as_ref())),
         uv_scale: glyph.uv_scale,
         uv_offset: glyph.uv_offset,
         size: glyph.size,

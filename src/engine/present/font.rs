@@ -17,7 +17,7 @@ use std::fmt;
 use std::fs;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use image;
 use log::{debug, trace, warn};
@@ -515,7 +515,8 @@ pub fn replace_markers(text: &str) -> Cow<'_, str> {
 
 #[derive(Debug, Clone)]
 pub struct Glyph {
-    pub texture_key: String,
+    pub texture_key: Arc<str>,
+    pub stroke_texture_key: Option<Arc<str>>,
     pub tex_rect: [f32; 4], // px: [x0, y0, x1, y1] (texture space)
     pub uv_scale: [f32; 2],
     pub uv_offset: [f32; 2],
@@ -2539,7 +2540,10 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
             ];
 
             let glyph = Glyph {
-                texture_key: texture_key.clone(),
+                texture_key: Arc::<str>::from(texture_key.as_str()),
+                stroke_texture_key: stroke_texture_map
+                    .get(texture_key.as_str())
+                    .map(|key| Arc::<str>::from(key.as_str())),
                 tex_rect,
                 uv_scale,
                 uv_offset,

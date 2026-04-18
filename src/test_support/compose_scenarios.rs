@@ -386,7 +386,8 @@ fn bench_glyph(ch: char) -> Glyph {
     let y = row as f32 * 32.0;
     let advance = if ch == ' ' { 8.0 } else { 14.0 };
     Glyph {
-        texture_key: FONT_MAIN.to_string(),
+        texture_key: Arc::<str>::from(FONT_MAIN),
+        stroke_texture_key: Some(Arc::<str>::from(FONT_STROKE)),
         tex_rect: [x, y, x + 22.0, y + 30.0],
         uv_scale: [22.0 / 512.0, 30.0 / 256.0],
         uv_offset: [x / 512.0, y / 256.0],
@@ -524,6 +525,7 @@ fn text_ci_scenario(metrics: Metrics, mut fonts: HashMap<&'static str, Font>) ->
     for font in fonts.values_mut() {
         remap_font_texture_case(font);
     }
+    font::refresh_chain_keys(&mut fonts);
     let mut scenario = text_scenario(metrics, fonts);
     scenario.name = "text-ci";
     remap_actor_texture_case(&mut scenario.actors);
@@ -965,10 +967,18 @@ fn text_actor(
 
 fn remap_font_texture_case(font: &mut Font) {
     for glyph in font.glyph_map.values_mut() {
-        glyph.texture_key = mixed_case_texture_key(&glyph.texture_key);
+        glyph.texture_key = Arc::<str>::from(mixed_case_texture_key(glyph.texture_key.as_ref()));
+        glyph.stroke_texture_key = glyph
+            .stroke_texture_key
+            .as_ref()
+            .map(|key| Arc::<str>::from(mixed_case_texture_key(key.as_ref())));
     }
     if let Some(glyph) = font.default_glyph.as_mut() {
-        glyph.texture_key = mixed_case_texture_key(&glyph.texture_key);
+        glyph.texture_key = Arc::<str>::from(mixed_case_texture_key(glyph.texture_key.as_ref()));
+        glyph.stroke_texture_key = glyph
+            .stroke_texture_key
+            .as_ref()
+            .map(|key| Arc::<str>::from(mixed_case_texture_key(key.as_ref())));
     }
 
     let mut stroke_texture_map = HashMap::with_capacity(font.stroke_texture_map.len());
