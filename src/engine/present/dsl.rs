@@ -2,6 +2,7 @@ use crate::assets;
 use crate::engine::gfx::BlendMode;
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::engine::present::{anim, font, runtime};
+use smallvec::SmallVec;
 use std::sync::Arc;
 
 // PARITY COMMENT STANDARD:
@@ -281,200 +282,195 @@ fn sprite_native_dims(
 
 /* ======================== SPRITE/QUAD CORE ======================== */
 
-#[inline(always)]
-fn build_sprite_like<'a, I>(source: SpriteSource, mods: I, site_base: u64) -> Actor
-where
-    I: IntoIterator<Item = Mod<'a>>,
-{
-    // defaults
-    let (mut x, mut y, mut w, mut h) = (0.0, 0.0, 0.0, 0.0);
-    let (mut hx, mut vy) = (0.5, 0.5);
-    let mut tint = [1.0, 1.0, 1.0, 1.0];
-    let mut glow = [1.0, 1.0, 1.0, 0.0];
-    let mut z: i16 = 0;
-    let (mut vis, mut fx, mut fy) = (true, false, false);
-    let (mut cl, mut cr, mut ct, mut cb) = (0.0, 0.0, 0.0, 0.0);
-    let (mut fl, mut fr, mut ft, mut fb) = (0.0_f32, 0.0_f32, 0.0_f32, 0.0_f32);
-    let mut blend = BlendMode::Alpha;
-    let mut mask_source = false;
-    let mut mask_dest = false;
-    let mut rot_x = 0.0_f32;
-    let mut rot_y = 0.0_f32;
-    let mut rot_z = 0.0_f32;
-    let mut uv: Option<[f32; 4]> = None;
-    let mut cell: Option<(u32, u32)> = None;
-    let mut grid: Option<(u32, u32)> = None;
-    let mut texv: Option<[f32; 2]> = None;
-    // animation
-    let mut anim_enable = false;
-    let mut state_delay = 0.1_f32;
-    let (mut tw, _site_ignored): (Option<&[anim::Step]>, u64) = (None, 0);
-    let mut effect = anim::EffectState::default();
+#[doc(hidden)]
+pub struct SpriteBuilder {
+    source: SpriteSource,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    hx: f32,
+    vy: f32,
+    tint: [f32; 4],
+    glow: [f32; 4],
+    z: i16,
+    vis: bool,
+    fx: bool,
+    fy: bool,
+    cl: f32,
+    cr: f32,
+    ct: f32,
+    cb: f32,
+    fl: f32,
+    fr: f32,
+    ft: f32,
+    fb: f32,
+    blend: BlendMode,
+    mask_source: bool,
+    mask_dest: bool,
+    rot_x: f32,
+    rot_y: f32,
+    rot_z: f32,
+    uv: Option<[f32; 4]>,
+    cell: Option<(u32, u32)>,
+    grid: Option<(u32, u32)>,
+    texv: Option<[f32; 2]>,
+    anim_enable: bool,
+    state_delay: f32,
+    effect: anim::EffectState,
+    sx: f32,
+    sy: f32,
+    shx: f32,
+    shy: f32,
+    shc: [f32; 4],
+    tw: SmallVec<[anim::Step; 4]>,
+}
 
-    // PARITY[StepMania Actor]: keep zoom signs until final flip folding.
-    let (mut sx, mut sy) = (1.0_f32, 1.0_f32);
+impl SpriteBuilder {
+    #[inline(always)]
+    fn with_source(source: SpriteSource) -> Self {
+        Self {
+            source,
+            x: 0.0,
+            y: 0.0,
+            w: 0.0,
+            h: 0.0,
+            hx: 0.5,
+            vy: 0.5,
+            tint: [1.0, 1.0, 1.0, 1.0],
+            glow: [1.0, 1.0, 1.0, 0.0],
+            z: 0,
+            vis: true,
+            fx: false,
+            fy: false,
+            cl: 0.0,
+            cr: 0.0,
+            ct: 0.0,
+            cb: 0.0,
+            fl: 0.0,
+            fr: 0.0,
+            ft: 0.0,
+            fb: 0.0,
+            blend: BlendMode::Alpha,
+            mask_source: false,
+            mask_dest: false,
+            rot_x: 0.0,
+            rot_y: 0.0,
+            rot_z: 0.0,
+            uv: None,
+            cell: None,
+            grid: None,
+            texv: None,
+            anim_enable: false,
+            state_delay: 0.1,
+            effect: anim::EffectState::default(),
+            sx: 1.0,
+            sy: 1.0,
+            shx: 0.0,
+            shy: 0.0,
+            shc: [0.0, 0.0, 0.0, 0.5],
+            tw: SmallVec::new(),
+        }
+    }
 
-    // PARITY[StepMania Actor]: shadow defaults are length=0, color=(0,0,0,0.5).
-    let (mut shx, mut shy) = (0.0_f32, 0.0_f32);
-    let mut shc = [0.0_f32, 0.0_f32, 0.0_f32, 0.5_f32];
+    #[inline(always)]
+    pub fn texture<T: IntoTextureKey>(tex: T) -> Self {
+        Self::with_source(SpriteSource::Texture(tex.into_texture_key()))
+    }
 
-    // fold mods in order
-    for m in mods {
+    #[inline(always)]
+    pub fn static_texture(tex: &'static str) -> Self {
+        Self::with_source(SpriteSource::TextureStatic(tex))
+    }
+
+    #[inline(always)]
+    pub fn solid() -> Self {
+        Self::with_source(SpriteSource::Solid)
+    }
+
+    #[inline(always)]
+    pub fn set_tween(&mut self, steps: SmallVec<[anim::Step; 4]>) {
+        self.tw = steps;
+    }
+
+    #[inline(always)]
+    pub fn push<'a>(&mut self, m: Mod<'a>) {
         match m {
             Mod::Xy(a, b) => {
-                x = a;
-                y = b;
+                self.x = a;
+                self.y = b;
             }
-            Mod::SetX(a) => {
-                x = a;
-            }
-            Mod::SetY(b) => {
-                y = b;
-            }
-            Mod::AddX(a) => {
-                x += a;
-            }
-            Mod::AddY(b) => {
-                y += b;
-            }
-
-            Mod::HAlign(a) => {
-                hx = a;
-            }
-            Mod::VAlign(b) => {
-                vy = b;
-            }
+            Mod::SetX(a) => self.x = a,
+            Mod::SetY(b) => self.y = b,
+            Mod::AddX(a) => self.x += a,
+            Mod::AddY(b) => self.y += b,
+            Mod::HAlign(a) => self.hx = a,
+            Mod::VAlign(b) => self.vy = b,
             Mod::Align(a, b) => {
-                hx = a;
-                vy = b;
+                self.hx = a;
+                self.vy = b;
             }
-
-            Mod::Z(v) => {
-                z = v;
-            }
-            Mod::Tint(rgba) => {
-                tint = rgba;
-            }
-            Mod::Alpha(a) => {
-                tint[3] = a;
-            }
-            Mod::Glow(rgba) => {
-                glow = rgba;
-            }
+            Mod::Z(v) => self.z = v,
+            Mod::Tint(rgba) => self.tint = rgba,
+            Mod::Alpha(a) => self.tint[3] = a,
+            Mod::Glow(rgba) => self.glow = rgba,
             Mod::StrokeColor(_) => {}
-            Mod::Blend(bm) => {
-                blend = bm;
-            }
-            Mod::MaskSource => {
-                mask_source = true;
-            }
-            Mod::MaskDest => {
-                mask_dest = true;
-            }
-
+            Mod::Blend(bm) => self.blend = bm,
+            Mod::MaskSource => self.mask_source = true,
+            Mod::MaskDest => self.mask_dest = true,
             Mod::SizePx(a, b) => {
-                w = a;
-                h = b;
+                self.w = a;
+                self.h = b;
             }
-
-            // PARITY[StepMania Actor]: zoom commands mutate scale factors.
             Mod::Zoom(f) => {
-                sx = f;
-                sy = f;
+                self.sx = f;
+                self.sy = f;
             }
-            Mod::ZoomX(a) => {
-                sx = a;
-            }
-            Mod::ZoomY(b) => {
-                sy = b;
-            }
-            Mod::AddZoomX(a) => {
-                sx += a;
-            }
-            Mod::AddZoomY(b) => {
-                sy += b;
-            }
+            Mod::ZoomX(a) => self.sx = a,
+            Mod::ZoomY(b) => self.sy = b,
+            Mod::AddZoomX(a) => self.sx += a,
+            Mod::AddZoomY(b) => self.sy += b,
             Mod::ZoomToPx(tw, th) => {
-                let (nw, nh) = sprite_native_dims(&source, uv, cell, grid);
-                let base_w = if w == 0.0 { nw } else { w };
-                let base_h = if h == 0.0 { nh } else { h };
-                sx = if base_w == 0.0 { 0.0 } else { tw / base_w };
-                sy = if base_h == 0.0 { 0.0 } else { th / base_h };
+                let (nw, nh) = sprite_native_dims(&self.source, self.uv, self.cell, self.grid);
+                let base_w = if self.w == 0.0 { nw } else { self.w };
+                let base_h = if self.h == 0.0 { nh } else { self.h };
+                self.sx = if base_w == 0.0 { 0.0 } else { tw / base_w };
+                self.sy = if base_h == 0.0 { 0.0 } else { th / base_h };
             }
-
-            // aspect-preserving absolute sizes
             Mod::ZoomToWidth(new_w) => {
-                if w > 0.0 && h > 0.0 {
-                    let aspect = h / w;
-                    w = new_w;
-                    h = w * aspect;
+                if self.w > 0.0 && self.h > 0.0 {
+                    let aspect = self.h / self.w;
+                    self.w = new_w;
+                    self.h = self.w * aspect;
                 } else {
-                    w = new_w;
+                    self.w = new_w;
                 }
             }
             Mod::ZoomToHeight(new_h) => {
-                if w > 0.0 && h > 0.0 {
-                    let aspect = w / h;
-                    h = new_h;
-                    w = h * aspect;
+                if self.w > 0.0 && self.h > 0.0 {
+                    let aspect = self.w / self.h;
+                    self.h = new_h;
+                    self.w = self.h * aspect;
                 } else {
-                    h = new_h;
+                    self.h = new_h;
                 }
             }
-
-            Mod::CropLeft(v) => {
-                cl = v;
-            }
-            Mod::CropRight(v) => {
-                cr = v;
-            }
-            Mod::CropTop(v) => {
-                ct = v;
-            }
-            Mod::CropBottom(v) => {
-                cb = v;
-            }
-
-            Mod::FadeLeft(v) => {
-                fl = v;
-            }
-            Mod::FadeRight(v) => {
-                fr = v;
-            }
-            Mod::FadeTop(v) => {
-                ft = v;
-            }
-            Mod::FadeBottom(v) => {
-                fb = v;
-            }
-
-            Mod::TexVel(v) => {
-                texv = Some(v);
-            }
-
-            Mod::Visible(v) => {
-                vis = v;
-            }
-            Mod::RotX(d) => {
-                rot_x = d;
-            }
-            Mod::RotY(d) => {
-                rot_y = d;
-            }
-            Mod::RotZ(d) => {
-                rot_z = d;
-            }
-            Mod::AddRotX(dd) => {
-                rot_x += dd;
-            }
-            Mod::AddRotY(dd) => {
-                rot_y += dd;
-            }
-            Mod::AddRotZ(dd) => {
-                rot_z += dd;
-            }
-
-            // text-only mods ignored here
+            Mod::CropLeft(v) => self.cl = v,
+            Mod::CropRight(v) => self.cr = v,
+            Mod::CropTop(v) => self.ct = v,
+            Mod::CropBottom(v) => self.cb = v,
+            Mod::FadeLeft(v) => self.fl = v,
+            Mod::FadeRight(v) => self.fr = v,
+            Mod::FadeTop(v) => self.ft = v,
+            Mod::FadeBottom(v) => self.fb = v,
+            Mod::TexVel(v) => self.texv = Some(v),
+            Mod::Visible(v) => self.vis = v,
+            Mod::RotX(d) => self.rot_x = d,
+            Mod::RotY(d) => self.rot_y = d,
+            Mod::RotZ(d) => self.rot_z = d,
+            Mod::AddRotX(dd) => self.rot_x += dd,
+            Mod::AddRotY(dd) => self.rot_y += dd,
+            Mod::AddRotZ(dd) => self.rot_z += dd,
             Mod::Font(_)
             | Mod::Content(_)
             | Mod::TAlign(_)
@@ -482,61 +478,39 @@ where
             | Mod::MaxWidth(_)
             | Mod::MaxHeight(_) => {}
             Mod::Tween(steps) => {
-                tw = Some(steps);
+                self.tw.clear();
+                self.tw.extend(steps.iter().cloned());
             }
             Mod::State(i) => {
-                cell = Some((i, u32::MAX));
-                grid = None;
-                uv = None;
+                self.cell = Some((i, u32::MAX));
+                self.grid = None;
+                self.uv = None;
             }
             Mod::UvRect(r) => {
-                uv = Some(r);
-                cell = None;
-                grid = None;
+                self.uv = Some(r);
+                self.cell = None;
+                self.grid = None;
             }
-            Mod::Animate(v) => {
-                anim_enable = v;
-            }
-            Mod::StateDelay(s) => {
-                state_delay = s.max(0.0);
-            }
-
-            // PARITY[StepMania Actor]: +Y is down; flip Y in our +Y-up space for matching shadows.
+            Mod::Animate(v) => self.anim_enable = v,
+            Mod::StateDelay(s) => self.state_delay = s.max(0.0),
             Mod::ShadowLenBoth(v) => {
-                shx = v;
-                shy = -v;
+                self.shx = v;
+                self.shy = -v;
             }
-            Mod::ShadowLenX(v) => {
-                shx = v;
-            }
-            Mod::ShadowLenY(v) => {
-                shy = -v;
-            }
-            Mod::ShadowColor(c) => {
-                shc = c;
-            }
-
-            Mod::EffectClock(clock) => {
-                effect.clock = clock;
-            }
-            Mod::EffectMode(mode) => {
-                effect.mode = mode;
-            }
-            Mod::EffectColor1(color) => {
-                effect.color1 = color;
-            }
-            Mod::EffectColor2(color) => {
-                effect.color2 = color;
-            }
+            Mod::ShadowLenX(v) => self.shx = v,
+            Mod::ShadowLenY(v) => self.shy = -v,
+            Mod::ShadowColor(c) => self.shc = c,
+            Mod::EffectClock(clock) => self.effect.clock = clock,
+            Mod::EffectMode(mode) => self.effect.mode = mode,
+            Mod::EffectColor1(color) => self.effect.color1 = color,
+            Mod::EffectColor2(color) => self.effect.color2 = color,
             Mod::EffectPeriod(v) => {
                 if v > 0.0 {
-                    effect.period = v;
-                    effect.timing = [v * 0.5, 0.0, v * 0.5, 0.0, 0.0];
+                    self.effect.period = v;
+                    self.effect.timing = [v * 0.5, 0.0, v * 0.5, 0.0, 0.0];
                 }
             }
-            Mod::EffectOffset(v) => {
-                effect.offset = v;
-            }
+            Mod::EffectOffset(v) => self.effect.offset = v,
             Mod::EffectTiming(v) => {
                 let timing = [
                     v[0].max(0.0),
@@ -547,207 +521,210 @@ where
                 ];
                 let total = timing[0] + timing[1] + timing[2] + timing[3] + timing[4];
                 if total > 0.0 {
-                    effect.timing = timing;
-                    effect.period = total;
+                    self.effect.timing = timing;
+                    self.effect.period = total;
                 }
             }
-            Mod::EffectMagnitude(v) => {
-                effect.magnitude = v;
-            }
+            Mod::EffectMagnitude(v) => self.effect.magnitude = v,
         }
     }
 
-    // PARITY[StepMania Actor]: `zoomto()` is computed from unzoomed actor size.
-    // If size isn't explicitly set, use native texture size (or 1x1 for quads).
-    if tw.is_some() && w == 0.0 && h == 0.0 {
-        let (nw, nh) = sprite_native_dims(&source, uv, cell, grid);
-        w = nw;
-        h = nh;
-    }
-
-    if let Some(steps) = tw {
-        let mut init = anim::TweenState::default();
-        init.x = x;
-        init.y = y;
-        init.w = w;
-        init.h = h;
-        init.hx = hx;
-        init.vy = vy;
-        init.tint = tint;
-        init.glow = glow;
-        init.visible = vis;
-        init.flip_x = fx;
-        init.flip_y = fy;
-        init.rot_x = rot_x;
-        init.rot_y = rot_y;
-        init.rot_z = rot_z;
-        init.fade_l = fl;
-        init.fade_r = fr;
-        init.fade_t = ft;
-        init.fade_b = fb;
-        init.crop_l = cl;
-        init.crop_r = cr;
-        init.crop_t = ct;
-        init.crop_b = cb;
-        init.scale = [sx, sy];
-
-        #[inline(always)]
-        fn auto_salt(src: &SpriteSource, init: &anim::TweenState, steps: &[anim::Step]) -> u64 {
-            let mut h = 0xcbf29ce484222325u64;
-
-            match src {
-                SpriteSource::TextureStatic(key) => {
-                    mix_u64(&mut h, 0x54455854);
-                    mix_u64(&mut h, hash_bytes64(key.as_bytes()));
-                }
-                SpriteSource::Texture(key) => {
-                    mix_u64(&mut h, 0x54455854);
-                    mix_u64(&mut h, hash_bytes64(key.as_bytes()));
-                }
-                SpriteSource::Solid => {
-                    mix_u64(&mut h, 0x534F4C49);
-                }
-            }
-
-            mix_u64(&mut h, f32b_u64(init.x));
-            mix_u64(&mut h, f32b_u64(init.y));
-            mix_u64(&mut h, f32b_u64(init.w));
-            mix_u64(&mut h, f32b_u64(init.h));
-            mix_u64(&mut h, f32b_u64(init.hx));
-            mix_u64(&mut h, f32b_u64(init.vy));
-            mix_u64(&mut h, f32b_u64(init.rot_x));
-            mix_u64(&mut h, f32b_u64(init.rot_y));
-            mix_u64(&mut h, f32b_u64(init.rot_z));
-            for c in init.tint {
-                mix_u64(&mut h, f32b_u64(c));
-            }
-            for c in init.glow {
-                mix_u64(&mut h, f32b_u64(c));
-            }
-            mix_u64(&mut h, u64::from(init.visible));
-            mix_u64(&mut h, u64::from(init.flip_x));
-            mix_u64(&mut h, u64::from(init.flip_y));
-            mix_u64(&mut h, f32b_u64(init.fade_l));
-            mix_u64(&mut h, f32b_u64(init.fade_r));
-            mix_u64(&mut h, f32b_u64(init.fade_t));
-            mix_u64(&mut h, f32b_u64(init.fade_b));
-            mix_u64(&mut h, f32b_u64(init.crop_l));
-            mix_u64(&mut h, f32b_u64(init.crop_r));
-            mix_u64(&mut h, f32b_u64(init.crop_t));
-            mix_u64(&mut h, f32b_u64(init.crop_b));
-            mix_u64(&mut h, f32b_u64(init.scale[0]));
-            mix_u64(&mut h, f32b_u64(init.scale[1]));
-            for s in steps {
-                mix_u64(&mut h, s.fingerprint64());
-            }
-            h
+    #[inline(always)]
+    pub fn build(mut self, site_base: u64) -> Actor {
+        if !self.tw.is_empty() && self.w == 0.0 && self.h == 0.0 {
+            let (nw, nh) = sprite_native_dims(&self.source, self.uv, self.cell, self.grid);
+            self.w = nw;
+            self.h = nh;
         }
 
-        let salt = auto_salt(&source, &init, steps);
-        let sid = runtime::site_id(site_base, salt);
-        let s = runtime::materialize(sid, init, steps);
+        if !self.tw.is_empty() {
+            let mut init = anim::TweenState::default();
+            init.x = self.x;
+            init.y = self.y;
+            init.w = self.w;
+            init.h = self.h;
+            init.hx = self.hx;
+            init.vy = self.vy;
+            init.tint = self.tint;
+            init.glow = self.glow;
+            init.visible = self.vis;
+            init.flip_x = self.fx;
+            init.flip_y = self.fy;
+            init.rot_x = self.rot_x;
+            init.rot_y = self.rot_y;
+            init.rot_z = self.rot_z;
+            init.fade_l = self.fl;
+            init.fade_r = self.fr;
+            init.fade_t = self.ft;
+            init.fade_b = self.fb;
+            init.crop_l = self.cl;
+            init.crop_r = self.cr;
+            init.crop_t = self.ct;
+            init.crop_b = self.cb;
+            init.scale = [self.sx, self.sy];
 
-        x = s.x;
-        y = s.y;
-        w = s.w;
-        h = s.h;
-        hx = s.hx;
-        vy = s.vy;
-        tint = s.tint;
-        glow = s.glow;
-        vis = s.visible;
-        fx = s.flip_x;
-        fy = s.flip_y;
-        rot_x = s.rot_x;
-        rot_y = s.rot_y;
-        rot_z = s.rot_z;
-        fl = s.fade_l;
-        fr = s.fade_r;
-        ft = s.fade_t;
-        fb = s.fade_b;
-        cl = s.crop_l;
-        cr = s.crop_r;
-        ct = s.crop_t;
-        cb = s.crop_b;
-        sx = s.scale[0];
-        sy = s.scale[1];
-    }
+            #[inline(always)]
+            fn auto_salt(src: &SpriteSource, init: &anim::TweenState, steps: &[anim::Step]) -> u64 {
+                let mut h = 0xcbf29ce484222325u64;
 
-    // PARITY[StepMania Actor]: negative zoom flips; magnitudes stay positive.
-    if sx < 0.0 {
-        fx = !fx;
-        sx = -sx;
-    }
-    if sy < 0.0 {
-        fy = !fy;
-        sy = -sy;
-    }
+                match src {
+                    SpriteSource::TextureStatic(key) => {
+                        mix_u64(&mut h, 0x54455854);
+                        mix_u64(&mut h, hash_bytes64(key.as_bytes()));
+                    }
+                    SpriteSource::Texture(key) => {
+                        mix_u64(&mut h, 0x54455854);
+                        mix_u64(&mut h, hash_bytes64(key.as_bytes()));
+                    }
+                    SpriteSource::Solid => {
+                        mix_u64(&mut h, 0x534F4C49);
+                    }
+                }
 
-    // If size is already known, apply zoom now. Else, carry to compose.
-    //
-    // IMPORTANT: `SizeSpec::Px(0,0)` is used in compose as a sentinel meaning
-    // "use native texture dims". If a sprite had an explicit size and is then
-    // scaled to exactly 0 (e.g. `zoom(0)`), we must not let it fall back to
-    // native size on the final frame.
-    let scale_carry = if w != 0.0 || h != 0.0 {
-        w *= sx;
-        h *= sy;
-        if w == 0.0 && h == 0.0 {
-            [0.0, 0.0]
+                mix_u64(&mut h, f32b_u64(init.x));
+                mix_u64(&mut h, f32b_u64(init.y));
+                mix_u64(&mut h, f32b_u64(init.w));
+                mix_u64(&mut h, f32b_u64(init.h));
+                mix_u64(&mut h, f32b_u64(init.hx));
+                mix_u64(&mut h, f32b_u64(init.vy));
+                mix_u64(&mut h, f32b_u64(init.rot_x));
+                mix_u64(&mut h, f32b_u64(init.rot_y));
+                mix_u64(&mut h, f32b_u64(init.rot_z));
+                for c in init.tint {
+                    mix_u64(&mut h, f32b_u64(c));
+                }
+                for c in init.glow {
+                    mix_u64(&mut h, f32b_u64(c));
+                }
+                mix_u64(&mut h, u64::from(init.visible));
+                mix_u64(&mut h, u64::from(init.flip_x));
+                mix_u64(&mut h, u64::from(init.flip_y));
+                mix_u64(&mut h, f32b_u64(init.fade_l));
+                mix_u64(&mut h, f32b_u64(init.fade_r));
+                mix_u64(&mut h, f32b_u64(init.fade_t));
+                mix_u64(&mut h, f32b_u64(init.fade_b));
+                mix_u64(&mut h, f32b_u64(init.crop_l));
+                mix_u64(&mut h, f32b_u64(init.crop_r));
+                mix_u64(&mut h, f32b_u64(init.crop_t));
+                mix_u64(&mut h, f32b_u64(init.crop_b));
+                mix_u64(&mut h, f32b_u64(init.scale[0]));
+                mix_u64(&mut h, f32b_u64(init.scale[1]));
+                for s in steps {
+                    mix_u64(&mut h, s.fingerprint64());
+                }
+                h
+            }
+
+            let sid = runtime::site_id(site_base, auto_salt(&self.source, &init, &self.tw));
+            let s = runtime::materialize(sid, init, &self.tw);
+
+            self.x = s.x;
+            self.y = s.y;
+            self.w = s.w;
+            self.h = s.h;
+            self.hx = s.hx;
+            self.vy = s.vy;
+            self.tint = s.tint;
+            self.glow = s.glow;
+            self.vis = s.visible;
+            self.fx = s.flip_x;
+            self.fy = s.flip_y;
+            self.rot_x = s.rot_x;
+            self.rot_y = s.rot_y;
+            self.rot_z = s.rot_z;
+            self.fl = s.fade_l;
+            self.fr = s.fade_r;
+            self.ft = s.fade_t;
+            self.fb = s.fade_b;
+            self.cl = s.crop_l;
+            self.cr = s.crop_r;
+            self.ct = s.crop_t;
+            self.cb = s.crop_b;
+            self.sx = s.scale[0];
+            self.sy = s.scale[1];
+        }
+
+        if self.sx < 0.0 {
+            self.fx = !self.fx;
+            self.sx = -self.sx;
+        }
+        if self.sy < 0.0 {
+            self.fy = !self.fy;
+            self.sy = -self.sy;
+        }
+
+        let scale_carry = if self.w != 0.0 || self.h != 0.0 {
+            self.w *= self.sx;
+            self.h *= self.sy;
+            if self.w == 0.0 && self.h == 0.0 {
+                [0.0, 0.0]
+            } else {
+                [1.0, 1.0]
+            }
         } else {
-            [1.0, 1.0]
-        }
-    } else {
-        [sx, sy]
-    };
+            [self.sx, self.sy]
+        };
 
-    let base = Actor::Sprite {
-        align: [hx, vy],
-        offset: [x, y],
-        world_z: 0.0,
-        size: [SizeSpec::Px(w), SizeSpec::Px(h)],
-        source,
-        tint,
-        glow,
-        z,
-        cell,
-        grid,
-        uv_rect: uv,
-        visible: vis,
-        flip_x: fx,
-        flip_y: fy,
-        cropleft: cl,
-        cropright: cr,
-        croptop: ct,
-        cropbottom: cb,
-        fadeleft: fl,
-        faderight: fr,
-        fadetop: ft,
-        fadebottom: fb,
-        blend,
-        mask_source,
-        mask_dest,
-        rot_x_deg: rot_x,
-        rot_y_deg: rot_y,
-        rot_z_deg: rot_z,
-        local_offset: [0.0, 0.0],
-        local_offset_rot_sin_cos: [0.0, 1.0],
-        texcoordvelocity: texv,
-        animate: anim_enable,
-        state_delay,
-        scale: scale_carry, // NEW
-        effect,
-    };
+        let base = Actor::Sprite {
+            align: [self.hx, self.vy],
+            offset: [self.x, self.y],
+            world_z: 0.0,
+            size: [SizeSpec::Px(self.w), SizeSpec::Px(self.h)],
+            source: self.source,
+            tint: self.tint,
+            glow: self.glow,
+            z: self.z,
+            cell: self.cell,
+            grid: self.grid,
+            uv_rect: self.uv,
+            visible: self.vis,
+            flip_x: self.fx,
+            flip_y: self.fy,
+            cropleft: self.cl,
+            cropright: self.cr,
+            croptop: self.ct,
+            cropbottom: self.cb,
+            fadeleft: self.fl,
+            faderight: self.fr,
+            fadetop: self.ft,
+            fadebottom: self.fb,
+            blend: self.blend,
+            mask_source: self.mask_source,
+            mask_dest: self.mask_dest,
+            rot_x_deg: self.rot_x,
+            rot_y_deg: self.rot_y,
+            rot_z_deg: self.rot_z,
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            texcoordvelocity: self.texv,
+            animate: self.anim_enable,
+            state_delay: self.state_delay,
+            scale: scale_carry,
+            effect: self.effect,
+        };
 
-    if shx != 0.0 || shy != 0.0 {
-        Actor::Shadow {
-            len: [shx, shy],
-            color: shc,
-            child: Box::new(base),
+        if self.shx != 0.0 || self.shy != 0.0 {
+            Actor::Shadow {
+                len: [self.shx, self.shy],
+                color: self.shc,
+                child: Box::new(base),
+            }
+        } else {
+            base
         }
-    } else {
-        base
     }
+}
+
+#[inline(always)]
+fn build_sprite_like<'a, I>(source: SpriteSource, mods: I, site_base: u64) -> Actor
+where
+    I: IntoIterator<Item = Mod<'a>>,
+{
+    let mut builder = SpriteBuilder::with_source(source);
+    for m in mods {
+        builder.push(m);
+    }
+    builder.build(site_base)
 }
 
 #[inline(always)]
@@ -781,201 +758,176 @@ where
 
 /* ============================== TEXT =============================== */
 
-#[inline(always)]
-pub fn text<'a, I>(mods: I, site_base: u64) -> Actor
-where
-    I: IntoIterator<Item = Mod<'a>>,
-{
-    let (mut x, mut y) = (0.0, 0.0);
-    let (mut hx, mut vy) = (0.5, 0.5);
-    let mut color = [1.0, 1.0, 1.0, 1.0];
-    let mut glow = [1.0, 1.0, 1.0, 0.0];
-    let mut stroke_color: Option<[f32; 4]> = None;
-    let mut font: &'static str = "miso";
-    let mut content: TextContent = TextContent::default();
-    let mut talign = TextAlign::Left;
-    let mut z: i16 = 0;
+#[doc(hidden)]
+pub struct TextBuilder {
+    x: f32,
+    y: f32,
+    hx: f32,
+    vy: f32,
+    color: [f32; 4],
+    glow: [f32; 4],
+    stroke_color: Option<[f32; 4]>,
+    font: &'static str,
+    content: TextContent,
+    talign: TextAlign,
+    z: i16,
+    sx: f32,
+    sy: f32,
+    fit_w: Option<f32>,
+    fit_h: Option<f32>,
+    wrap_width_pixels: Option<i32>,
+    max_w: Option<f32>,
+    max_h: Option<f32>,
+    saw_max_w: bool,
+    saw_max_h: bool,
+    max_w_pre_zoom: bool,
+    max_h_pre_zoom: bool,
+    blend: BlendMode,
+    effect: anim::EffectState,
+    shx: f32,
+    shy: f32,
+    shc: [f32; 4],
+    tw: SmallVec<[anim::Step; 4]>,
+}
 
-    // zoom + optional fit targets
-    let (mut sx, mut sy) = (1.0_f32, 1.0_f32);
-    let (mut fit_w, mut fit_h): (Option<f32>, Option<f32>) = (None, None);
-    let mut wrap_width_pixels: Option<i32> = None;
-    let (mut max_w, mut max_h): (Option<f32>, Option<f32>) = (None, None);
+impl TextBuilder {
+    #[inline(always)]
+    pub fn new() -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+            hx: 0.5,
+            vy: 0.5,
+            color: [1.0, 1.0, 1.0, 1.0],
+            glow: [1.0, 1.0, 1.0, 0.0],
+            stroke_color: None,
+            font: "miso",
+            content: TextContent::default(),
+            talign: TextAlign::Left,
+            z: 0,
+            sx: 1.0,
+            sy: 1.0,
+            fit_w: None,
+            fit_h: None,
+            wrap_width_pixels: None,
+            max_w: None,
+            max_h: None,
+            saw_max_w: false,
+            saw_max_h: false,
+            max_w_pre_zoom: false,
+            max_h_pre_zoom: false,
+            blend: BlendMode::Alpha,
+            effect: anim::EffectState::default(),
+            shx: 0.0,
+            shy: 0.0,
+            shc: [0.0, 0.0, 0.0, 0.5],
+            tw: SmallVec::new(),
+        }
+    }
 
-    // PARITY[StepMania Actor]: track command order for maxwidth/maxheight vs zoom.
-    let (mut saw_max_w, mut saw_max_h) = (false, false);
-    let (mut max_w_pre_zoom, mut max_h_pre_zoom) = (false, false);
+    #[inline(always)]
+    pub fn set_tween(&mut self, steps: SmallVec<[anim::Step; 4]>) {
+        self.tw = steps;
+    }
 
-    // text respects blend mode
-    let mut blend = BlendMode::Alpha;
-    let mut tw: Option<&[anim::Step]> = None;
-    let mut effect = anim::EffectState::default();
-
-    // PARITY[StepMania Actor]: shadow defaults are length=0, color=(0,0,0,0.5).
-    let (mut shx, mut shy) = (0.0_f32, 0.0_f32);
-    let mut shc = [0.0_f32, 0.0_f32, 0.0_f32, 0.5_f32];
-
-    for m in mods {
+    #[inline(always)]
+    pub fn push<'a>(&mut self, m: Mod<'a>) {
         match m {
-            // position & alignment
             Mod::Xy(a, b) => {
-                x = a;
-                y = b;
+                self.x = a;
+                self.y = b;
             }
-            Mod::SetX(a) => {
-                x = a;
-            }
-            Mod::SetY(b) => {
-                y = b;
-            }
-            Mod::AddX(a) => {
-                x += a;
-            }
-            Mod::AddY(b) => {
-                y += b;
-            }
-
-            Mod::HAlign(a) => {
-                hx = a;
-            }
-            Mod::VAlign(b) => {
-                vy = b;
-            }
+            Mod::SetX(a) => self.x = a,
+            Mod::SetY(b) => self.y = b,
+            Mod::AddX(a) => self.x += a,
+            Mod::AddY(b) => self.y += b,
+            Mod::HAlign(a) => self.hx = a,
+            Mod::VAlign(b) => self.vy = b,
             Mod::Align(a, b) => {
-                hx = a;
-                vy = b;
+                self.hx = a;
+                self.vy = b;
             }
-
-            // color/font/text/align
-            Mod::Tint(r) => {
-                color = r;
-            }
-            Mod::Alpha(a) => {
-                color[3] = a;
-            }
-            Mod::Glow(r) => {
-                glow = r;
-            }
-            Mod::StrokeColor(r) => {
-                stroke_color = Some(r);
-            }
-            Mod::Font(f) => {
-                font = f;
-            }
-            Mod::Content(s) => {
-                content = s;
-            }
-            Mod::TAlign(a) => {
-                talign = a;
-            }
-            Mod::Z(v) => {
-                z = v;
-            }
-
-            // zooms — if they occur after a max* for that axis, mark pre-zoom clamp
+            Mod::Tint(r) => self.color = r,
+            Mod::Alpha(a) => self.color[3] = a,
+            Mod::Glow(r) => self.glow = r,
+            Mod::StrokeColor(r) => self.stroke_color = Some(r),
+            Mod::Font(f) => self.font = f,
+            Mod::Content(s) => self.content = s,
+            Mod::TAlign(a) => self.talign = a,
+            Mod::Z(v) => self.z = v,
             Mod::Zoom(f) => {
-                sx = f;
-                sy = f;
-                if saw_max_w {
-                    max_w_pre_zoom = true;
+                self.sx = f;
+                self.sy = f;
+                if self.saw_max_w {
+                    self.max_w_pre_zoom = true;
                 }
-                if saw_max_h {
-                    max_h_pre_zoom = true;
+                if self.saw_max_h {
+                    self.max_h_pre_zoom = true;
                 }
             }
             Mod::ZoomX(a) => {
-                sx = a;
-                if saw_max_w {
-                    max_w_pre_zoom = true;
+                self.sx = a;
+                if self.saw_max_w {
+                    self.max_w_pre_zoom = true;
                 }
             }
             Mod::ZoomY(b) => {
-                sy = b;
-                if saw_max_h {
-                    max_h_pre_zoom = true;
+                self.sy = b;
+                if self.saw_max_h {
+                    self.max_h_pre_zoom = true;
                 }
             }
             Mod::AddZoomX(a) => {
-                sx += a;
-                if saw_max_w {
-                    max_w_pre_zoom = true;
+                self.sx += a;
+                if self.saw_max_w {
+                    self.max_w_pre_zoom = true;
                 }
             }
             Mod::AddZoomY(b) => {
-                sy += b;
-                if saw_max_h {
-                    max_h_pre_zoom = true;
+                self.sy += b;
+                if self.saw_max_h {
+                    self.max_h_pre_zoom = true;
                 }
             }
-
-            // fit targets (applied later with metrics)
-            Mod::ZoomToWidth(w) => {
-                fit_w = Some(w);
-            }
-            Mod::ZoomToHeight(h) => {
-                fit_h = Some(h);
-            }
+            Mod::ZoomToWidth(w) => self.fit_w = Some(w),
+            Mod::ZoomToHeight(h) => self.fit_h = Some(h),
             Mod::WrapWidthPixels(w) => {
                 let wrap = w as i32;
-                wrap_width_pixels = (wrap >= 0).then_some(wrap);
+                self.wrap_width_pixels = (wrap >= 0).then_some(wrap);
             }
-
-            // max constraints — reset the pre/post decision window
             Mod::MaxWidth(w) => {
-                max_w = Some(w);
-                saw_max_w = true;
-                max_w_pre_zoom = false; // a new max resets the boundary
+                self.max_w = Some(w);
+                self.saw_max_w = true;
+                self.max_w_pre_zoom = false;
             }
             Mod::MaxHeight(h) => {
-                max_h = Some(h);
-                saw_max_h = true;
-                max_h_pre_zoom = false; // a new max resets the boundary
+                self.max_h = Some(h);
+                self.saw_max_h = true;
+                self.max_h_pre_zoom = false;
             }
-
-            // blend mode
-            Mod::Blend(bm) => {
-                blend = bm;
-            }
+            Mod::Blend(bm) => self.blend = bm,
             Mod::Tween(steps) => {
-                tw = Some(steps);
+                self.tw.clear();
+                self.tw.extend(steps.iter().cloned());
             }
-
-            // PARITY[StepMania Actor]: +Y is down; flip Y in our +Y-up space for matching shadows.
             Mod::ShadowLenBoth(v) => {
-                shx = v;
-                shy = -v;
+                self.shx = v;
+                self.shy = -v;
             }
-            Mod::ShadowLenX(v) => {
-                shx = v;
-            }
-            Mod::ShadowLenY(v) => {
-                shy = -v;
-            }
-            Mod::ShadowColor(c) => {
-                shc = c;
-            }
-
-            Mod::EffectClock(clock) => {
-                effect.clock = clock;
-            }
-            Mod::EffectMode(mode) => {
-                effect.mode = mode;
-            }
-            Mod::EffectColor1(color1) => {
-                effect.color1 = color1;
-            }
-            Mod::EffectColor2(color2) => {
-                effect.color2 = color2;
-            }
+            Mod::ShadowLenX(v) => self.shx = v,
+            Mod::ShadowLenY(v) => self.shy = -v,
+            Mod::ShadowColor(c) => self.shc = c,
+            Mod::EffectClock(clock) => self.effect.clock = clock,
+            Mod::EffectMode(mode) => self.effect.mode = mode,
+            Mod::EffectColor1(color1) => self.effect.color1 = color1,
+            Mod::EffectColor2(color2) => self.effect.color2 = color2,
             Mod::EffectPeriod(v) => {
                 if v > 0.0 {
-                    effect.period = v;
-                    effect.timing = [v * 0.5, 0.0, v * 0.5, 0.0, 0.0];
+                    self.effect.period = v;
+                    self.effect.timing = [v * 0.5, 0.0, v * 0.5, 0.0, 0.0];
                 }
             }
-            Mod::EffectOffset(v) => {
-                effect.offset = v;
-            }
+            Mod::EffectOffset(v) => self.effect.offset = v,
             Mod::EffectTiming(v) => {
                 let timing = [
                     v[0].max(0.0),
@@ -986,87 +938,95 @@ where
                 ];
                 let total = timing[0] + timing[1] + timing[2] + timing[3] + timing[4];
                 if total > 0.0 {
-                    effect.timing = timing;
-                    effect.period = total;
+                    self.effect.timing = timing;
+                    self.effect.period = total;
                 }
             }
-            Mod::EffectMagnitude(v) => {
-                effect.magnitude = v;
-            }
-
-            // ignore sprite-only/text-irrelevant
+            Mod::EffectMagnitude(v) => self.effect.magnitude = v,
             _ => {}
         }
     }
 
-    if let std::borrow::Cow::Owned(s) = font::replace_markers(content.as_str()) {
-        content = TextContent::Owned(s);
-    }
+    #[inline(always)]
+    pub fn build(mut self, site_base: u64) -> Actor {
+        if let std::borrow::Cow::Owned(s) = font::replace_markers(self.content.as_str()) {
+            self.content = TextContent::Owned(s);
+        }
 
-    if let Some(steps) = tw {
-        let mut init = anim::TweenState::default();
-        init.x = x;
-        init.y = y;
-        init.tint = color;
-        init.glow = glow;
-        init.scale = [sx, sy];
+        if !self.tw.is_empty() {
+            let mut init = anim::TweenState::default();
+            init.x = self.x;
+            init.y = self.y;
+            init.tint = self.color;
+            init.glow = self.glow;
+            init.scale = [self.sx, self.sy];
 
-        // Create a salt for the tween state based on the text content to ensure
-        // different text gets a different animation state.
-        let salt = {
-            let mut h = 0xcbf29ce484222325u64;
-            for &b in content.as_str().as_bytes() {
-                h ^= b as u64;
-                h = h.wrapping_mul(0x100000001b3);
-            }
-            h
+            let salt = {
+                let mut h = 0xcbf29ce484222325u64;
+                for &b in self.content.as_str().as_bytes() {
+                    h ^= b as u64;
+                    h = h.wrapping_mul(0x100000001b3);
+                }
+                h
+            };
+
+            let sid = runtime::site_id(site_base, salt);
+            let s = runtime::materialize(sid, init, &self.tw);
+
+            self.x = s.x;
+            self.y = s.y;
+            self.color = s.tint;
+            self.glow = s.glow;
+            self.sx = s.scale[0];
+            self.sy = s.scale[1];
+        }
+
+        let base = Actor::Text {
+            align: [self.hx, self.vy],
+            offset: [self.x, self.y],
+            color: self.color,
+            stroke_color: self.stroke_color,
+            glow: self.glow,
+            font: self.font,
+            content: self.content,
+            attributes: Vec::new(),
+            align_text: self.talign,
+            z: self.z,
+            scale: [self.sx, self.sy],
+            fit_width: self.fit_w,
+            fit_height: self.fit_h,
+            wrap_width_pixels: self.wrap_width_pixels,
+            max_width: self.max_w,
+            max_height: self.max_h,
+            max_w_pre_zoom: self.max_w_pre_zoom,
+            max_h_pre_zoom: self.max_h_pre_zoom,
+            clip: None,
+            blend: self.blend,
+            effect: self.effect,
         };
 
-        let sid = runtime::site_id(site_base, salt);
-        let s = runtime::materialize(sid, init, steps);
-
-        // Apply tweened state
-        x = s.x;
-        y = s.y;
-        color = s.tint;
-        glow = s.glow;
-        sx = s.scale[0];
-        sy = s.scale[1];
-    }
-
-    let base = Actor::Text {
-        align: [hx, vy],
-        offset: [x, y],
-        color,
-        stroke_color,
-        glow,
-        font,
-        content,
-        attributes: Vec::new(),
-        align_text: talign,
-        z,
-        scale: [sx, sy],
-        fit_width: fit_w,
-        fit_height: fit_h,
-        wrap_width_pixels,
-        max_width: max_w,
-        max_height: max_h,
-        max_w_pre_zoom,
-        max_h_pre_zoom,
-        clip: None,
-        blend,
-        effect,
-    };
-
-    if shx != 0.0 || shy != 0.0 {
-        Actor::Shadow {
-            len: [shx, shy],
-            color: shc,
-            child: Box::new(base),
+        if self.shx != 0.0 || self.shy != 0.0 {
+            Actor::Shadow {
+                len: [self.shx, self.shy],
+                color: self.shc,
+                child: Box::new(base),
+            }
+        } else {
+            base
         }
-    } else {
-        base
     }
+}
+
+#[inline(always)]
+pub fn text<'a, I>(mods: I, site_base: u64) -> Actor
+where
+    I: IntoIterator<Item = Mod<'a>>,
+{
+    let mut builder = TextBuilder::new();
+    for m in mods {
+        builder.push(m);
+    }
+    builder.build(site_base)
 }
 
 // ... act! and helper macros ...
@@ -1134,43 +1094,43 @@ macro_rules! __ui_valign_from_ident {
 macro_rules! act {
     (sprite($tex:literal): $($tail:tt)+) => {{
         let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
-        let mut __mods = ::smallvec::SmallVec::<[_; 16]>::new();
+        let mut __mods = $crate::engine::present::dsl::SpriteBuilder::static_texture($tex);
         let mut __cur: ::core::option::Option<$crate::engine::present::anim::SegmentBuilder> = None;
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
-        if !__tw.is_empty(){ __mods.push($crate::engine::present::dsl::Mod::Tween(&__tw)); }
+        if !__tw.is_empty(){ __mods.set_tween(__tw); }
         const __SITE_BASE: u64 = $crate::engine::present::runtime::site_base(file!(), line!(), column!());
-        $crate::engine::present::dsl::sprite_static($tex, __mods, __SITE_BASE)
+        __mods.build(__SITE_BASE)
     }};
     (sprite($tex:expr): $($tail:tt)+) => {{
         let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
-        let mut __mods = ::smallvec::SmallVec::<[_; 16]>::new();
+        let mut __mods = $crate::engine::present::dsl::SpriteBuilder::texture($tex);
         let mut __cur: ::core::option::Option<$crate::engine::present::anim::SegmentBuilder> = None;
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
-        if !__tw.is_empty(){ __mods.push($crate::engine::present::dsl::Mod::Tween(&__tw)); }
+        if !__tw.is_empty(){ __mods.set_tween(__tw); }
         const __SITE_BASE: u64 = $crate::engine::present::runtime::site_base(file!(), line!(), column!());
-        $crate::engine::present::dsl::sprite($tex, __mods, __SITE_BASE)
+        __mods.build(__SITE_BASE)
     }};
     (quad: $($tail:tt)+) => {{
         let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
-        let mut __mods = ::smallvec::SmallVec::<[_; 16]>::new();
+        let mut __mods = $crate::engine::present::dsl::SpriteBuilder::solid();
         let mut __cur: ::core::option::Option<$crate::engine::present::anim::SegmentBuilder> = None;
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
-        if !__tw.is_empty(){ __mods.push($crate::engine::present::dsl::Mod::Tween(&__tw)); }
+        if !__tw.is_empty(){ __mods.set_tween(__tw); }
         const __SITE_BASE: u64 = $crate::engine::present::runtime::site_base(file!(), line!(), column!());
-        $crate::engine::present::dsl::quad(__mods, __SITE_BASE)
+        __mods.build(__SITE_BASE)
     }};
     (text: $($tail:tt)+) => {{
         let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
-        let mut __mods = ::smallvec::SmallVec::<[_; 16]>::new();
+        let mut __mods = $crate::engine::present::dsl::TextBuilder::new();
         let mut __cur: ::core::option::Option<$crate::engine::present::anim::SegmentBuilder> = None;
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
-        if !__tw.is_empty(){ __mods.push($crate::engine::present::dsl::Mod::Tween(&__tw)); }
+        if !__tw.is_empty(){ __mods.set_tween(__tw); }
         const __SITE_BASE: u64 = $crate::engine::present::runtime::site_base(file!(), line!(), column!());
-        $crate::engine::present::dsl::text(__mods, __SITE_BASE)
+        __mods.build(__SITE_BASE)
     }};
 }
 
