@@ -43,10 +43,9 @@ pub(super) fn change_choice_for_player(
     if id == RowId::SpeedMod {
         let speed_mod = {
             let speed_mod = &mut state.speed_mod[player_idx];
-            let (upper, increment) = match speed_mod.mod_type.as_str() {
-                "X" => (20.0, 0.05),
-                "C" | "M" => (2000.0, 5.0),
-                _ => (1.0, 0.1),
+            let (upper, increment) = match speed_mod.mod_type {
+                SpeedModType::X => (20.0, 0.05),
+                SpeedModType::C | SpeedModType::M => (2000.0, 5.0),
             };
             speed_mod.value += delta as f32 * increment;
             speed_mod.value = (speed_mod.value / increment).round() * increment;
@@ -85,15 +84,11 @@ pub(super) fn change_choice_for_player(
     }
 
     if id == RowId::TypeOfSpeedMod {
-        let new_type = match row.selected_choice_index[player_idx] {
-            0 => "X",
-            1 => "C",
-            2 => "M",
-            _ => "C",
-        };
+        let new_type =
+            SpeedModType::from_choice_index(row.selected_choice_index[player_idx]);
 
         let speed_mod = &mut state.speed_mod[player_idx];
-        let old_type = speed_mod.mod_type.clone();
+        let old_type = speed_mod.mod_type;
         let old_value = speed_mod.value;
         let reference_bpm = reference_bpm_for_song(
             &state.song,
@@ -104,13 +99,12 @@ pub(super) fn change_choice_for_player(
         } else {
             1.0
         };
-        let target_bpm: f32 = match old_type.as_str() {
-            "C" | "M" => old_value,
-            "X" => (reference_bpm * rate * old_value).round(),
-            _ => 600.0,
+        let target_bpm: f32 = match old_type {
+            SpeedModType::C | SpeedModType::M => old_value,
+            SpeedModType::X => (reference_bpm * rate * old_value).round(),
         };
         let new_value = match new_type {
-            "X" => {
+            SpeedModType::X => {
                 let denom = reference_bpm * rate;
                 let raw = if denom.is_finite() && denom > 0.0 {
                     target_bpm / denom
@@ -120,13 +114,12 @@ pub(super) fn change_choice_for_player(
                 let stepped = round_to_step(raw, 0.05);
                 stepped.clamp(0.05, 20.0)
             }
-            "C" | "M" => {
+            SpeedModType::C | SpeedModType::M => {
                 let stepped = round_to_step(target_bpm, 5.0);
                 stepped.clamp(5.0, 2000.0)
             }
-            _ => 600.0,
         };
-        speed_mod.mod_type = new_type.to_string();
+        speed_mod.mod_type = new_type;
         speed_mod.value = new_value;
         let speed_mod = speed_mod.clone();
         sync_profile_scroll_speed(&mut state.player_profiles[player_idx], &speed_mod);

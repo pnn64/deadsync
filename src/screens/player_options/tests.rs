@@ -4,7 +4,7 @@ use super::*;
 pub(super) mod tests {
     use super::{
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, NAV_INITIAL_HOLD_DELAY,
-        NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowId, RowMap, SpeedMod,
+        NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowBuilder, RowId, RowMap, SpeedMod, SpeedModType,
         handle_arcade_start_event, hud_offset_choices, is_row_visible, repeat_held_arcade_start,
         row_visibility, session_active_players, sync_profile_scroll_speed,
     };
@@ -56,7 +56,7 @@ pub(super) mod tests {
         sync_profile_scroll_speed(
             &mut profile,
             &SpeedMod {
-                mod_type: "X".to_string(),
+                mod_type: SpeedModType::X,
                 value: 1.5,
             },
         );
@@ -65,7 +65,7 @@ pub(super) mod tests {
         sync_profile_scroll_speed(
             &mut profile,
             &SpeedMod {
-                mod_type: "M".to_string(),
+                mod_type: SpeedModType::M,
                 value: 750.0,
             },
         );
@@ -74,7 +74,7 @@ pub(super) mod tests {
         sync_profile_scroll_speed(
             &mut profile,
             &SpeedMod {
-                mod_type: "C".to_string(),
+                mod_type: SpeedModType::C,
                 value: 600.0,
             },
         );

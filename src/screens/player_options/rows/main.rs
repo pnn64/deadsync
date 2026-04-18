@@ -10,12 +10,7 @@ pub(super) fn build_main_rows(
     return_screen: Screen,
     fixed_stepchart: Option<&FixedStepchart>,
 ) -> RowMap {
-    let speed_mod_value_str = match speed_mod.mod_type.as_str() {
-        "X" => format!("{:.2}x", speed_mod.value),
-        "C" => format!("C{}", speed_mod.value as i32),
-        "M" => format!("M{}", speed_mod.value as i32),
-        _ => String::new(),
-    };
+    let speed_mod_value_str = speed_mod.display();
     let (stepchart_choices, stepchart_choice_indices, initial_stepchart_choice_index) =
         if let Some(fixed) = fixed_stepchart {
             let fixed_steps_idx = chart_steps_index[session_persisted_player_idx()];
@@ -114,12 +109,7 @@ pub(super) fn build_main_rows(
             tr("PlayerOptions", "SpeedModTypeC").to_string(),
             tr("PlayerOptions", "SpeedModTypeM").to_string(),
         ],
-        selected_choice_index: [match speed_mod.mod_type.as_str() {
-            "X" => 0,
-            "C" => 1,
-            "M" => 2,
-            _ => 1, // Default to C
-        }; PLAYER_SLOTS],
+        selected_choice_index: [speed_mod.mod_type.choice_index(); PLAYER_SLOTS],
         help: tr("PlayerOptionsHelp", "TypeOfSpeedModHelp")
             .split("\\n")
             .map(|s| s.to_string())

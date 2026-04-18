@@ -73,7 +73,7 @@ use visibility::*;
 
 // --- External API ---
 pub use input::{handle_input, update};
-pub use profile::SpeedMod;
+pub use profile::{SpeedMod, SpeedModType};
 pub use render::get_actors;
 pub use row::{FixedStepchart, RowId};
 pub use state::State;
@@ -99,34 +99,8 @@ pub fn init(
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
     let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
 
-    let speed_mod_p1 = match p1_profile.scroll_speed {
-        crate::game::scroll::ScrollSpeedSetting::CMod(bpm) => SpeedMod {
-            mod_type: "C".to_string(),
-            value: bpm,
-        },
-        crate::game::scroll::ScrollSpeedSetting::XMod(mult) => SpeedMod {
-            mod_type: "X".to_string(),
-            value: mult,
-        },
-        crate::game::scroll::ScrollSpeedSetting::MMod(bpm) => SpeedMod {
-            mod_type: "M".to_string(),
-            value: bpm,
-        },
-    };
-    let speed_mod_p2 = match p2_profile.scroll_speed {
-        crate::game::scroll::ScrollSpeedSetting::CMod(bpm) => SpeedMod {
-            mod_type: "C".to_string(),
-            value: bpm,
-        },
-        crate::game::scroll::ScrollSpeedSetting::XMod(mult) => SpeedMod {
-            mod_type: "X".to_string(),
-            value: mult,
-        },
-        crate::game::scroll::ScrollSpeedSetting::MMod(bpm) => SpeedMod {
-            mod_type: "M".to_string(),
-            value: bpm,
-        },
-    };
+    let speed_mod_p1 = SpeedMod::from(p1_profile.scroll_speed);
+    let speed_mod_p2 = SpeedMod::from(p2_profile.scroll_speed);
     let chart_difficulty_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
         let steps_idx = chart_steps_index[player_idx];
         let mut diff_idx = preferred_difficulty_index[player_idx].min(

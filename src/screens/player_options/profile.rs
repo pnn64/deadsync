@@ -1,28 +1,92 @@
 use super::*;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpeedModType {
+    X,
+    C,
+    M,
+}
+
+impl SpeedModType {
+    /// Index used by the `TypeOfSpeedMod` row's `choices` vector
+    /// (`["x-mod", "c-mod", "m-mod"]`).
+    #[inline(always)]
+    pub fn choice_index(self) -> usize {
+        match self {
+            Self::X => 0,
+            Self::C => 1,
+            Self::M => 2,
+        }
+    }
+
+    #[inline(always)]
+    pub fn from_choice_index(idx: usize) -> Self {
+        match idx {
+            0 => Self::X,
+            1 => Self::C,
+            2 => Self::M,
+            _ => Self::C,
+        }
+    }
+
+    /// Single-letter prefix (`"X"` / `"C"` / `"M"`) used in HUD text.
+    #[inline(always)]
+    pub fn prefix(self) -> &'static str {
+        match self {
+            Self::X => "X",
+            Self::C => "C",
+            Self::M => "M",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SpeedMod {
-    pub mod_type: String, // "X", "C", "M"
+    pub mod_type: SpeedModType,
     pub value: f32,
 }
 
-#[inline(always)]
-pub(super) fn scroll_speed_for_mod(
-    speed_mod: &SpeedMod,
-) -> crate::game::scroll::ScrollSpeedSetting {
-    match speed_mod.mod_type.as_str() {
-        "C" => crate::game::scroll::ScrollSpeedSetting::CMod(speed_mod.value),
-        "X" => crate::game::scroll::ScrollSpeedSetting::XMod(speed_mod.value),
-        "M" => crate::game::scroll::ScrollSpeedSetting::MMod(speed_mod.value),
-        _ => crate::game::scroll::ScrollSpeedSetting::default(),
+impl SpeedMod {
+    /// Player-facing display string (`"1.50x"`, `"C400"`, `"M250"`).
+    pub fn display(&self) -> String {
+        match self.mod_type {
+            SpeedModType::X => format!("{:.2}x", self.value),
+            SpeedModType::C => format!("C{}", self.value as i32),
+            SpeedModType::M => format!("M{}", self.value as i32),
+        }
+    }
+}
+
+impl From<crate::game::scroll::ScrollSpeedSetting> for SpeedMod {
+    fn from(setting: crate::game::scroll::ScrollSpeedSetting) -> Self {
+        match setting {
+            crate::game::scroll::ScrollSpeedSetting::XMod(mult) => Self {
+                mod_type: SpeedModType::X,
+                value: mult,
+            },
+            crate::game::scroll::ScrollSpeedSetting::CMod(bpm) => Self {
+                mod_type: SpeedModType::C,
+                value: bpm,
+            },
+            crate::game::scroll::ScrollSpeedSetting::MMod(bpm) => Self {
+                mod_type: SpeedModType::M,
+                value: bpm,
+            },
+        }
     }
 }
 
 #[inline(always)]
-pub(super) fn sync_profile_scroll_speed(
-    profile: &mut crate::game::profile::Profile,
-    speed_mod: &SpeedMod,
-) {
+pub(super) fn scroll_speed_for_mod(speed_mod: &SpeedMod) -> crate::game::scroll::ScrollSpeedSetting {
+    match speed_mod.mod_type {
+        SpeedModType::C => crate::game::scroll::ScrollSpeedSetting::CMod(speed_mod.value),
+        SpeedModType::X => crate::game::scroll::ScrollSpeedSetting::XMod(speed_mod.value),
+        SpeedModType::M => crate::game::scroll::ScrollSpeedSetting::MMod(speed_mod.value),
+    }
+}
+
+#[inline(always)]
+pub(super) fn sync_profile_scroll_speed(profile: &mut crate::game::profile::Profile, speed_mod: &SpeedMod) {
     profile.scroll_speed = scroll_speed_for_mod(speed_mod);
 }
 
@@ -154,23 +218,22 @@ pub(super) fn speed_mod_bpm_pair(
     music_rate: f32,
 ) -> Option<(f32, f32)> {
     let (mut lo, mut hi) = display_bpm_pair_for_options(song, chart, music_rate)?;
-    match speed_mod.mod_type.as_str() {
-        "X" => {
+    match speed_mod.mod_type {
+        SpeedModType::X => {
             lo *= speed_mod.value;
             hi *= speed_mod.value;
         }
-        "M" => {
+        SpeedModType::M => {
             if hi.abs() <= f32::EPSILON {
                 return None;
             }
             lo *= speed_mod.value / hi;
             hi = speed_mod.value;
         }
-        "C" => {
+        SpeedModType::C => {
             lo = speed_mod.value;
             hi = speed_mod.value;
         }
-        _ => {}
     }
     if lo.is_finite() && hi.is_finite() {
         Some((lo, hi))
@@ -255,3 +318,4 @@ pub(super) fn round_to_step(x: f32, step: f32) -> f32 {
     }
     (x / step).round() * step
 }
+
