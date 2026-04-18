@@ -71,38 +71,38 @@ pub(super) fn apply_profile_defaults(
     profile: &crate::game::profile::Profile,
     player_idx: usize,
 ) -> (
-    u8,
-    u8,
+    ScrollMask,
+    HideMask,
     u8,
     u8,
     u8,
     u8,
     u16,
     u8,
+    FaPlusMask,
+    EarlyDwMask,
+    GameplayExtrasMask,
+    GameplayExtrasMoreMask,
+    ResultsExtrasMask,
+    LifeBarOptionsMask,
     u8,
-    u8,
-    u8,
-    u8,
-    u8,
-    u8,
-    u8,
-    u8,
-    u8,
+    ErrorBarOptionsMask,
+    MeasureCounterOptionsMask,
 ) {
-    let mut scroll_active_mask: u8 = 0;
-    let mut hide_active_mask: u8 = 0;
+    let mut scroll_active_mask = ScrollMask::empty();
+    let mut hide_active_mask = HideMask::empty();
     let mut insert_active_mask: u8 = 0;
     let mut remove_active_mask: u8 = 0;
     let mut holds_active_mask: u8 = 0;
     let mut accel_effects_active_mask: u8 = 0;
     let mut visual_effects_active_mask: u16 = 0;
     let mut appearance_effects_active_mask: u8 = 0;
-    let mut fa_plus_active_mask: u8 = 0;
-    let mut early_dw_active_mask: u8 = 0;
-    let mut gameplay_extras_active_mask: u8 = 0;
-    let mut gameplay_extras_more_active_mask: u8 = 0;
-    let mut results_extras_active_mask: u8 = 0;
-    let mut life_bar_options_active_mask: u8 = 0;
+    let mut fa_plus_active_mask = FaPlusMask::empty();
+    let mut early_dw_active_mask = EarlyDwMask::empty();
+    let mut gameplay_extras_active_mask = GameplayExtrasMask::empty();
+    let mut gameplay_extras_more_active_mask = GameplayExtrasMoreMask::empty();
+    let mut results_extras_active_mask = ResultsExtrasMask::empty();
+    let mut life_bar_options_active_mask = LifeBarOptionsMask::empty();
     let mut error_bar_active_mask: u8 =
         crate::game::profile::normalize_error_bar_mask(profile.error_bar_active_mask);
     if error_bar_active_mask == 0 {
@@ -111,8 +111,8 @@ pub(super) fn apply_profile_defaults(
             profile.error_bar_text,
         );
     }
-    let mut error_bar_options_active_mask: u8 = 0;
-    let mut measure_counter_options_active_mask: u8 = 0;
+    let mut error_bar_options_active_mask = ErrorBarOptionsMask::empty();
+    let mut measure_counter_options_active_mask = MeasureCounterOptionsMask::empty();
     let match_ns_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
     // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
@@ -423,20 +423,20 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     if profile.rainbow_max {
-        life_bar_options_active_mask |= 1u8 << 0;
+        life_bar_options_active_mask.insert(LifeBarOptionsMask::RAINBOW_MAX);
     }
     if profile.responsive_colors {
-        life_bar_options_active_mask |= 1u8 << 1;
+        life_bar_options_active_mask.insert(LifeBarOptionsMask::RESPONSIVE_COLORS);
     }
     if profile.show_life_percent {
-        life_bar_options_active_mask |= 1u8 << 2;
+        life_bar_options_active_mask.insert(LifeBarOptionsMask::SHOW_LIFE_PERCENT);
     }
     if let Some(row) = row_map.get_mut(RowId::LifeBarOptions) {
-        if life_bar_options_active_mask != 0 {
+        if !life_bar_options_active_mask.is_empty() {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
                     let bit = 1u8 << (*i as u8);
-                    (life_bar_options_active_mask & bit) != 0
+                    (life_bar_options_active_mask.bits() & bit) != 0
                 })
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
@@ -452,17 +452,17 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     if profile.error_bar_up {
-        error_bar_options_active_mask |= 1u8 << 0;
+        error_bar_options_active_mask.insert(ErrorBarOptionsMask::MOVE_UP);
     }
     if profile.error_bar_multi_tick {
-        error_bar_options_active_mask |= 1u8 << 1;
+        error_bar_options_active_mask.insert(ErrorBarOptionsMask::MULTI_TICK);
     }
     if let Some(row) = row_map.get_mut(RowId::ErrorBarOptions) {
-        if error_bar_options_active_mask != 0 {
+        if !error_bar_options_active_mask.is_empty() {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
                     let bit = 1u8 << (*i as u8);
-                    (error_bar_options_active_mask & bit) != 0
+                    (error_bar_options_active_mask.bits() & bit) != 0
                 })
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
@@ -483,26 +483,26 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     if profile.measure_counter_left {
-        measure_counter_options_active_mask |= 1u8 << 0;
+        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::MOVE_LEFT);
     }
     if profile.measure_counter_up {
-        measure_counter_options_active_mask |= 1u8 << 1;
+        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::MOVE_UP);
     }
     if profile.measure_counter_vert {
-        measure_counter_options_active_mask |= 1u8 << 2;
+        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::VERTICAL_LOOKAHEAD);
     }
     if profile.broken_run {
-        measure_counter_options_active_mask |= 1u8 << 3;
+        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::BROKEN_RUN_TOTAL);
     }
     if profile.run_timer {
-        measure_counter_options_active_mask |= 1u8 << 4;
+        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::RUN_TIMER);
     }
     if let Some(row) = row_map.get_mut(RowId::MeasureCounterOptions) {
-        if measure_counter_options_active_mask != 0 {
+        if !measure_counter_options_active_mask.is_empty() {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
                     let bit = 1u8 << (*i as u8);
-                    (measure_counter_options_active_mask & bit) != 0
+                    (measure_counter_options_active_mask.bits() & bit) != 0
                 })
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
@@ -536,14 +536,14 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     if profile.track_early_judgments {
-        results_extras_active_mask |= 1u8 << 0;
+        results_extras_active_mask.insert(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
     }
     if let Some(row) = row_map.get_mut(RowId::ResultsExtras) {
-        if results_extras_active_mask != 0 {
+        if !results_extras_active_mask.is_empty() {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
                     let bit = 1u8 << (*i as u8);
-                    (results_extras_active_mask & bit) != 0
+                    (results_extras_active_mask.bits() & bit) != 0
                 })
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
@@ -567,17 +567,17 @@ pub(super) fn apply_profile_defaults(
     }
     if let Some(row) = row_map.get_mut(RowId::EarlyDecentWayOffOptions) {
         if profile.hide_early_dw_judgments {
-            early_dw_active_mask |= 1u8 << 0;
+            early_dw_active_mask.insert(EarlyDwMask::HIDE_JUDGMENTS);
         }
         if profile.hide_early_dw_flash {
-            early_dw_active_mask |= 1u8 << 1;
+            early_dw_active_mask.insert(EarlyDwMask::HIDE_FLASH);
         }
 
-        if early_dw_active_mask != 0 {
+        if !early_dw_active_mask.is_empty() {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
                     let bit = 1u8 << (*i as u8);
-                    (early_dw_active_mask & bit) != 0
+                    (early_dw_active_mask.bits() & bit) != 0
                 })
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
@@ -591,22 +591,22 @@ pub(super) fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = 0;
     }
     if profile.show_fa_plus_window {
-        fa_plus_active_mask |= 1u8 << 0;
+        fa_plus_active_mask.insert(FaPlusMask::WINDOW);
     }
     if profile.show_ex_score {
-        fa_plus_active_mask |= 1u8 << 1;
+        fa_plus_active_mask.insert(FaPlusMask::EX_SCORE);
     }
     if profile.show_hard_ex_score {
-        fa_plus_active_mask |= 1u8 << 2;
+        fa_plus_active_mask.insert(FaPlusMask::HARD_EX_SCORE);
     }
     if profile.show_fa_plus_pane {
-        fa_plus_active_mask |= 1u8 << 3;
+        fa_plus_active_mask.insert(FaPlusMask::PANE);
     }
     if profile.fa_plus_10ms_blue_window {
-        fa_plus_active_mask |= 1u8 << 4;
+        fa_plus_active_mask.insert(FaPlusMask::BLUE_WINDOW_10MS);
     }
     if profile.split_15_10ms {
-        fa_plus_active_mask |= 1u8 << 5;
+        fa_plus_active_mask.insert(FaPlusMask::SPLIT_15_10MS);
     }
     if let Some(row) = row_map.get_mut(RowId::CustomBlueFantasticWindow) {
         row.selected_choice_index[player_idx] = if profile.custom_fantastic_window {
@@ -627,25 +627,25 @@ pub(super) fn apply_profile_defaults(
 
     // Initialize Gameplay Extras row from profile (multi-choice toggle group).
     if profile.column_flash_on_miss {
-        gameplay_extras_active_mask |= 1u8 << 0;
+        gameplay_extras_active_mask.insert(GameplayExtrasMask::FLASH_COLUMN_FOR_MISS);
     }
     if profile.nps_graph_at_top {
-        gameplay_extras_active_mask |= 1u8 << 1;
+        gameplay_extras_active_mask.insert(GameplayExtrasMask::DENSITY_GRAPH_AT_TOP);
     }
     if profile.column_cues {
-        gameplay_extras_active_mask |= 1u8 << 2;
-        gameplay_extras_more_active_mask |= 1u8 << 0;
+        gameplay_extras_active_mask.insert(GameplayExtrasMask::COLUMN_CUES);
+        gameplay_extras_more_active_mask.insert(GameplayExtrasMoreMask::COLUMN_CUES);
     }
     if profile.display_scorebox {
-        gameplay_extras_active_mask |= 1u8 << 3;
-        gameplay_extras_more_active_mask |= 1u8 << 1;
+        gameplay_extras_active_mask.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
+        gameplay_extras_more_active_mask.insert(GameplayExtrasMoreMask::DISPLAY_SCOREBOX);
     }
     if let Some(row) = row_map.get_mut(RowId::GameplayExtras) {
-        if gameplay_extras_active_mask != 0 {
+        if !gameplay_extras_active_mask.is_empty() {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
                     let bit = 1u8 << (*i as u8);
-                    (gameplay_extras_active_mask & bit) != 0
+                    (gameplay_extras_active_mask.bits() & bit) != 0
                 })
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
@@ -663,11 +663,11 @@ pub(super) fn apply_profile_defaults(
 
     // Initialize Gameplay Extras (More) row from profile (multi-choice toggle group).
     if let Some(row) = row_map.get_mut(RowId::GameplayExtrasMore) {
-        if gameplay_extras_more_active_mask != 0 {
+        if !gameplay_extras_more_active_mask.is_empty() {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
                     let bit = 1u8 << (*i as u8);
-                    (gameplay_extras_more_active_mask & bit) != 0
+                    (gameplay_extras_more_active_mask.bits() & bit) != 0
                 })
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
@@ -678,32 +678,32 @@ pub(super) fn apply_profile_defaults(
 
     // Initialize Hide row from profile (multi-choice toggle group).
     if profile.hide_targets {
-        hide_active_mask |= 1u8 << 0;
+        hide_active_mask.insert(HideMask::TARGETS);
     }
     if profile.hide_song_bg {
-        hide_active_mask |= 1u8 << 1;
+        hide_active_mask.insert(HideMask::BACKGROUND);
     }
     if profile.hide_combo {
-        hide_active_mask |= 1u8 << 2;
+        hide_active_mask.insert(HideMask::COMBO);
     }
     if profile.hide_lifebar {
-        hide_active_mask |= 1u8 << 3;
+        hide_active_mask.insert(HideMask::LIFE);
     }
     if profile.hide_score {
-        hide_active_mask |= 1u8 << 4;
+        hide_active_mask.insert(HideMask::SCORE);
     }
     if profile.hide_danger {
-        hide_active_mask |= 1u8 << 5;
+        hide_active_mask.insert(HideMask::DANGER);
     }
     if profile.hide_combo_explosions {
-        hide_active_mask |= 1u8 << 6;
+        hide_active_mask.insert(HideMask::COMBO_EXPLOSIONS);
     }
     if let Some(row) = row_map.get_mut(RowId::Hide) {
-        if hide_active_mask != 0 {
+        if !hide_active_mask.is_empty() {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
                     let bit = 1u8 << (*i as u8);
-                    (hide_active_mask & bit) != 0
+                    (hide_active_mask.bits() & bit) != 0
                 })
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
@@ -731,16 +731,17 @@ pub(super) fn apply_profile_defaults(
         ];
         for &(flag, idx) in flags {
             if profile.scroll_option.contains(flag) && idx < row.choices.len() && idx < 8 {
-                scroll_active_mask |= 1u8 << (idx as u8);
+                scroll_active_mask
+                    .insert(ScrollMask::from_bits_truncate(1u8 << (idx as u8)));
             }
         }
 
         // Cursor starts at the first active choice if any, otherwise at the first option.
-        if scroll_active_mask != 0 {
+        if !scroll_active_mask.is_empty() {
             let first_idx = (0..row.choices.len())
                 .find(|i| {
                     let bit = 1u8 << (*i as u8);
-                    (scroll_active_mask & bit) != 0
+                    (scroll_active_mask.bits() & bit) != 0
                 })
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;

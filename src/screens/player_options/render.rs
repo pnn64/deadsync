@@ -403,7 +403,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 };
                 for player_idx in active_player_indices(active) {
-                    let mask = state.scroll_active_mask[player_idx];
+                    let mask = state.scroll_active_mask[player_idx].bits();
                     if mask == 0 {
                         continue;
                     }
@@ -440,7 +440,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 };
                 for player_idx in active_player_indices(active) {
-                    let mask = state.hide_active_mask[player_idx];
+                    let mask = state.hide_active_mask[player_idx].bits();
                     if mask == 0 {
                         continue;
                     }
@@ -699,7 +699,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 };
                 for player_idx in active_player_indices(active) {
-                    let mask = state.life_bar_options_active_mask[player_idx];
+                    let mask = state.life_bar_options_active_mask[player_idx].bits();
                     if mask == 0 {
                         continue;
                     }
@@ -736,7 +736,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 };
                 for player_idx in active_player_indices(active) {
-                    let mask = state.fa_plus_active_mask[player_idx];
+                    let mask = state.fa_plus_active_mask[player_idx].bits();
                     if mask == 0 {
                         continue;
                     }
@@ -773,7 +773,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 };
                 for player_idx in active_player_indices(active) {
-                    let mask = state.gameplay_extras_active_mask[player_idx];
+                    let mask = state.gameplay_extras_active_mask[player_idx].bits();
                     if mask == 0 {
                         continue;
                     }
@@ -810,7 +810,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 };
                 for player_idx in active_player_indices(active) {
-                    let mask = state.gameplay_extras_more_active_mask[player_idx];
+                    let mask = state.gameplay_extras_more_active_mask[player_idx].bits();
                     if mask == 0 {
                         continue;
                     }
@@ -847,7 +847,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 };
                 for player_idx in active_player_indices(active) {
-                    let mask = state.results_extras_active_mask[player_idx];
+                    let mask = state.results_extras_active_mask[player_idx].bits();
                     if mask == 0 {
                         continue;
                     }
@@ -884,7 +884,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 };
                 for player_idx in active_player_indices(active) {
-                    let mask = state.measure_counter_options_active_mask[player_idx];
+                    let mask = state.measure_counter_options_active_mask[player_idx].bits();
                     if mask == 0 {
                         continue;
                     }
@@ -958,7 +958,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 };
                 for player_idx in active_player_indices(active) {
-                    let mask = state.error_bar_options_active_mask[player_idx];
+                    let mask = state.error_bar_options_active_mask[player_idx].bits();
                     if mask == 0 {
                         continue;
                     }
@@ -995,7 +995,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 };
                 for player_idx in active_player_indices(active) {
-                    let mask = state.early_dw_active_mask[player_idx];
+                    let mask = state.early_dw_active_mask[player_idx].bits();
                     if mask == 0 {
                         continue;
                     }

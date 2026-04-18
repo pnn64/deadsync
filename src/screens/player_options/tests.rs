@@ -3,11 +3,11 @@ use super::*;
 #[cfg(test)]
 pub(super) mod tests {
     use super::{
-        HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, NAV_INITIAL_HOLD_DELAY,
-        NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowId, RowMap, SpeedMod, SpeedModType,
+        HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
+        NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType,
         handle_arcade_start_event, handle_start_event, hud_offset_choices, is_row_visible,
-        judgment_tilt_intensity_visible, repeat_held_arcade_start,
-        row_visibility, session_active_players, sync_profile_scroll_speed,
+        judgment_tilt_intensity_visible, repeat_held_arcade_start, row_visibility,
+        session_active_players, sync_profile_scroll_speed,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -100,10 +100,10 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, false], [0, 0], [0, 0], false);
+        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [0, 0], false);
         assert!(!is_row_visible(&row_map, 1, visibility));
 
-        let visibility = row_visibility(&row_map, [true, false], [0, 0], [1, 0], false);
+        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [1, 0], false);
         assert!(is_row_visible(&row_map, 1, visibility));
     }
 
@@ -124,7 +124,7 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, false], [0, 0], [0, 0], false);
+        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [0, 0], false);
         assert!(!is_row_visible(&row_map, 1, visibility));
 
         let row_map = test_row_map(vec![
@@ -141,7 +141,7 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, false], [0, 0], [0, 0], false);
+        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [0, 0], false);
         assert!(is_row_visible(&row_map, 1, visibility));
     }
 
@@ -162,7 +162,7 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, true], [0, 0], [0, 0], false);
+        let visibility = row_visibility(&row_map, [true, true], [HideMask::empty(), HideMask::empty()], [0, 0], false);
         assert!(!is_row_visible(&row_map, 1, visibility));
 
         let row_map = test_row_map(vec![
@@ -179,7 +179,7 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, true], [0, 0], [0, 0], false);
+        let visibility = row_visibility(&row_map, [true, true], [HideMask::empty(), HideMask::empty()], [0, 0], false);
         assert!(is_row_visible(&row_map, 1, visibility));
     }
 
@@ -345,13 +345,13 @@ pub(super) mod tests {
         state.pane_mut().row_map.insert(scroll_row);
         let row_index = state.pane().row_map.display_order().len() - 1;
         state.pane_mut().selected_row[P1] = row_index;
-        state.scroll_active_mask[P1] = 0;
+        state.scroll_active_mask[P1] = ScrollMask::empty();
 
         let active = session_active_players();
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_ne!(
-            state.scroll_active_mask[P1], 0,
+            state.scroll_active_mask[P1], ScrollMask::empty(),
             "Scroll bitmask should have been toggled"
         );
     }
@@ -531,7 +531,7 @@ pub(super) mod tests {
         state.pane_mut().row_map.insert(scroll_row);
         let row_index = state.pane().row_map.display_order().len() - 1;
         state.pane_mut().selected_row[P1] = row_index;
-        state.scroll_active_mask = [0, 0];
+        state.scroll_active_mask = [ScrollMask::empty(), ScrollMask::empty()];
 
         // L/R on a bitmask row returns Outcome::NONE — mask must not change,
         // and no SFX should be played (audio uninit in tests would panic).
@@ -539,7 +539,7 @@ pub(super) mod tests {
         super::change_choice_for_player(&mut state, &asset_manager, P1, -1);
 
         assert_eq!(
-            state.scroll_active_mask, [0, 0],
+            state.scroll_active_mask, [ScrollMask::empty(), ScrollMask::empty()],
             "delta on Bitmask row must not toggle the mask"
         );
         // selected_choice_index is also untouched (cycle_choice_index never runs)
