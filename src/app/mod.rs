@@ -2372,6 +2372,8 @@ pub struct App {
     dynamic_media: DynamicMedia,
     ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
     gameplay_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
+    ui_compose_scratch: crate::engine::present::compose::ComposeScratch,
+    gameplay_compose_scratch: crate::engine::present::compose::ComposeScratch,
     state: AppState,
     software_renderer_threads: u8,
     gfx_debug_enabled: bool,
@@ -2709,23 +2711,38 @@ impl App {
             upload_us = elapsed_us_since(upload_started);
         }
         let fonts = self.asset_manager.fonts();
-        let text_layout_cache = if self.state.screens.current_screen == CurrentScreen::Gameplay {
-            &mut self.gameplay_text_layout_cache
-        } else {
-            &mut self.ui_text_layout_cache
-        };
-        text_layout_cache.begin_frame_stats();
         let build_screen_started = Instant::now();
-        let mut screen = crate::engine::present::compose::build_screen_cached(
-            &actors,
-            clear_color,
-            &self.state.shell.metrics,
-            fonts,
-            total_elapsed,
-            text_layout_cache,
-        );
+        let (mut screen, text_layout) =
+            if self.state.screens.current_screen == CurrentScreen::Gameplay {
+                let text_layout_cache = &mut self.gameplay_text_layout_cache;
+                let compose_scratch = &mut self.gameplay_compose_scratch;
+                text_layout_cache.begin_frame_stats();
+                let screen = crate::engine::present::compose::build_screen_cached_with_scratch(
+                    &actors,
+                    clear_color,
+                    &self.state.shell.metrics,
+                    fonts,
+                    total_elapsed,
+                    text_layout_cache,
+                    compose_scratch,
+                );
+                (screen, text_layout_cache.frame_stats())
+            } else {
+                let text_layout_cache = &mut self.ui_text_layout_cache;
+                let compose_scratch = &mut self.ui_compose_scratch;
+                text_layout_cache.begin_frame_stats();
+                let screen = crate::engine::present::compose::build_screen_cached_with_scratch(
+                    &actors,
+                    clear_color,
+                    &self.state.shell.metrics,
+                    fonts,
+                    total_elapsed,
+                    text_layout_cache,
+                    compose_scratch,
+                );
+                (screen, text_layout_cache.frame_stats())
+            };
         let build_screen_us = elapsed_us_since(build_screen_started);
-        let text_layout = text_layout_cache.frame_stats();
         let resolve_textures_started = Instant::now();
         self.asset_manager.resolve_render_textures(&mut screen);
         let resolve_textures_us = elapsed_us_since(resolve_textures_started);
@@ -2743,6 +2760,7 @@ impl App {
         };
 
         let apply_present_back_pressure = self.apply_present_back_pressure();
+        let mut capture_screenshot = false;
         if let Some(backend) = &mut self.backend {
             if self.state.shell.screenshot_pending {
                 backend.request_screenshot();
@@ -2758,7 +2776,7 @@ impl App {
                     self.state.shell.current_frame_vpf = stats.vertices;
                     self.state.shell.last_present_stats = stats.present_stats;
                     draw_us = elapsed_us_since(draw_started);
-                    self.capture_pending_screenshot(redraw_started);
+                    capture_screenshot = true;
                 }
                 Err(e) => {
                     error!("Failed to draw frame: {e}");
@@ -2766,6 +2784,15 @@ impl App {
                     return;
                 }
             }
+            if self.state.screens.current_screen == CurrentScreen::Gameplay {
+                self.gameplay_compose_scratch
+                    .recycle_render_list(&mut screen);
+            } else {
+                self.ui_compose_scratch.recycle_render_list(&mut screen);
+            }
+        }
+        if capture_screenshot {
+            self.capture_pending_screenshot(redraw_started);
         }
         let frame_finished = Instant::now();
         let frame_seconds = frame_finished.duration_since(prev_frame_end).as_secs_f32();
@@ -2852,6 +2879,8 @@ impl App {
                 crate::engine::present::compose::TextLayoutCache::saturating(
                     GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
                 ),
+            ui_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
+            gameplay_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
             state,
             software_renderer_threads,
             gfx_debug_enabled,

@@ -1,7 +1,7 @@
 use crate::assets;
 use crate::engine::gfx as renderer;
 use crate::engine::gfx::{BlendMode, RenderList, RenderObject};
-use crate::engine::present::actors::{self, Actor, SizeSpec};
+use crate::engine::present::actors::{self, SizeSpec};
 use crate::engine::present::{anim, font};
 use crate::engine::space::Metrics;
 use glam::{Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3};
@@ -41,14 +41,44 @@ pub fn build_screen_cached<'a>(
     total_elapsed: f32,
     text_cache: &mut TextLayoutCache,
 ) -> RenderList<'a> {
-    let mut objects = Vec::with_capacity(estimate_object_count(actors));
-    let mut cameras: Vec<Matrix4> = Vec::with_capacity(4);
+    let mut scratch = ComposeScratch::default();
+    build_screen_cached_with_scratch(
+        actors,
+        clear_color,
+        m,
+        fonts,
+        total_elapsed,
+        text_cache,
+        &mut scratch,
+    )
+}
+
+#[inline(always)]
+pub fn build_screen_cached_with_scratch<'a>(
+    actors: &'a [actors::Actor],
+    clear_color: [f32; 4],
+    m: &Metrics,
+    fonts: &'a HashMap<&'static str, font::Font>,
+    total_elapsed: f32,
+    text_cache: &mut TextLayoutCache,
+    scratch: &mut ComposeScratch,
+) -> RenderList<'a> {
+    let mut objects = Vec::with_capacity(scratch.object_capacity_hint(actors.len()));
+    let mut cameras = std::mem::take(&mut scratch.cameras);
+    cameras.clear();
+    if cameras.capacity() < 4 {
+        cameras.reserve(4 - cameras.capacity());
+    }
     let mut texture_cache = TextureLookupCache::default();
     cameras.push(Matrix4::orthographic_rh_gl(
         m.left, m.right, m.bottom, m.top, -1.0, 1.0,
     ));
     let mut order_counter: u32 = 0;
-    let mut masks: Vec<WorldRect> = Vec::with_capacity(8);
+    let mut masks = std::mem::take(&mut scratch.masks);
+    masks.clear();
+    if masks.capacity() < 8 {
+        masks.reserve(8 - masks.capacity());
+    }
 
     let root_rect = SmRect {
         x: 0.0,
@@ -79,6 +109,8 @@ pub fn build_screen_cached<'a>(
 
     // `order` is already monotonically assigned, so we do not need a stable sort here.
     objects.sort_unstable_by_key(|o| (o.z, o.order));
+    scratch.object_capacity = objects.capacity();
+    scratch.masks = masks;
 
     // Present only builds render objects. Texture handles are resolved once
     // downstream after composition so we do not repeat global texture lookups
@@ -87,6 +119,29 @@ pub fn build_screen_cached<'a>(
         clear_color,
         cameras,
         objects,
+    }
+}
+
+#[derive(Default)]
+pub struct ComposeScratch {
+    object_capacity: usize,
+    cameras: Vec<Matrix4>,
+    masks: Vec<WorldRect>,
+}
+
+impl ComposeScratch {
+    #[inline(always)]
+    fn object_capacity_hint(&self, actor_count: usize) -> usize {
+        self.object_capacity
+            .max(actor_count.saturating_mul(4))
+            .max(64)
+    }
+
+    pub fn recycle_render_list(&mut self, render: &mut RenderList<'_>) {
+        self.object_capacity = self.object_capacity.max(render.objects.capacity());
+        let mut cameras = std::mem::take(&mut render.cameras);
+        cameras.clear();
+        self.cameras = cameras;
     }
 }
 
@@ -873,40 +928,6 @@ unsafe fn str_from_cached_ptr<'a>(ptr: *const str) -> &'a str {
     // SAFETY: callers only pass pointers captured from cached font glyph storage
     // that outlives the returned borrow for the duration of render-list assembly.
     unsafe { &*ptr }
-}
-
-#[inline(always)]
-fn estimate_object_count(actors: &[Actor]) -> usize {
-    #[inline(always)]
-    fn count_actor(actor: &Actor) -> usize {
-        match actor {
-            Actor::Sprite { visible, .. } => usize::from(*visible),
-            Actor::Text { content, .. } => content.len() * 2,
-            Actor::Mesh {
-                visible, vertices, ..
-            } => usize::from(*visible && !vertices.is_empty()),
-            Actor::TexturedMesh {
-                visible, vertices, ..
-            } => usize::from(*visible && !vertices.is_empty()),
-            Actor::Frame {
-                children,
-                background,
-                ..
-            } => children
-                .iter()
-                .fold(usize::from(background.is_some()), |sum, child| {
-                    sum.saturating_add(count_actor(child))
-                }),
-            Actor::Camera { children, .. } => children
-                .iter()
-                .fold(0usize, |sum, child| sum.saturating_add(count_actor(child))),
-            Actor::Shadow { child, .. } => count_actor(child),
-        }
-    }
-
-    actors
-        .iter()
-        .fold(0usize, |sum, actor| sum.saturating_add(count_actor(actor)))
 }
 
 /* ======================= ACTOR -> OBJECT CONVERSION ======================= */
@@ -2066,11 +2087,7 @@ fn lrint_ties_even(v: f32) -> f32 {
         // frac == 0.5 exactly: ties-to-even
         // Use i64 for parity check to avoid edge overflow on extreme values.
         let f_even = ((floor as i64) & 1) == 0;
-        if f_even {
-            floor
-        } else {
-            floor + 1.0
-        }
+        if f_even { floor } else { floor + 1.0 }
     }
 }
 
@@ -2717,9 +2734,9 @@ fn clip_rotated_sprite_to_world_rect<'a>(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_screen, clip_object_to_world_masks, clip_sprite_object_to_world_rect,
-        fold_sprite_xy_rot, wrap_text_lines_by_words, CachedTextLayout, TextAttrCursor,
-        TextLayoutCache, TextLayoutKey, TextLayoutOverflowPolicy, WorldRect,
+        CachedTextLayout, TextAttrCursor, TextLayoutCache, TextLayoutKey, TextLayoutOverflowPolicy,
+        WorldRect, build_screen, clip_object_to_world_masks, clip_sprite_object_to_world_rect,
+        fold_sprite_xy_rot, wrap_text_lines_by_words,
     };
     use crate::engine::gfx::{
         BlendMode, MeshMode, ObjectType, RenderObject, TMeshCacheKey, TexturedMeshVertex,
