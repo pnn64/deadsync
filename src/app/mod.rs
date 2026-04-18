@@ -1781,7 +1781,7 @@ fn prewarm_gameplay_text_layout_cache(
 
     let stats = cache.frame_stats();
     debug!(
-        "Gameplay text cache prewarm: entries={} aliases={} elapsed_ms={:.3}",
+        "Gameplay text cache prewarm: entries={} shared={} elapsed_ms={:.3}",
         stats.owned_entries,
         stats.shared_aliases,
         started.elapsed().as_secs_f64() * 1000.0,

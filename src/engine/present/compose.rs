@@ -253,9 +253,15 @@ struct OwnedLayoutEntry {
     last_used: u64,
 }
 
+struct SharedLayoutEntry {
+    _owner: Arc<str>,
+    layout: Box<CachedTextLayout>,
+    last_used: u64,
+}
+
 type TextLayoutHasher = BuildHasherDefault<XxHash64>;
 type OwnedLayoutMap = HashMap<Box<str>, OwnedLayoutEntry, TextLayoutHasher>;
-type SharedAliasMap = HashMap<usize, Arc<str>, TextLayoutHasher>;
+type SharedAliasMap = HashMap<usize, SharedLayoutEntry, TextLayoutHasher>;
 type TextureMetaMap = HashMap<String, assets::TexMeta, TextLayoutHasher>;
 type TextureSheetMap = HashMap<String, (u32, u32), TextLayoutHasher>;
 type TextureHandleLookupMap = HashMap<String, renderer::TextureHandle, TextLayoutHasher>;
@@ -372,7 +378,7 @@ impl TextLayoutCache {
             entry_count: 0,
             alias_count: 0,
             max_entries,
-            max_aliases: max_entries.saturating_mul(8),
+            max_aliases: max_entries,
             use_tick: 0,
             frame_stats: TextLayoutFrameStats::default(),
             overflow_policy,
@@ -383,7 +389,7 @@ impl TextLayoutCache {
 
     pub fn configure(&mut self, max_entries: usize, overflow_policy: TextLayoutOverflowPolicy) {
         self.max_entries = max_entries.max(1);
-        self.max_aliases = self.max_entries.saturating_mul(8);
+        self.max_aliases = self.max_entries;
         self.overflow_policy = overflow_policy;
     }
 
@@ -464,8 +470,48 @@ impl TextLayoutCache {
         }
         self.frame_stats.prunes = self.frame_stats.prunes.saturating_add(1);
         self.entry_count = self.entry_count.saturating_sub(removed);
-        self.shared_aliases.clear();
-        self.alias_count = 0;
+    }
+
+    fn prune_shared_aliases(&mut self) {
+        if self.alias_count < self.max_aliases {
+            return;
+        }
+        let keep = self
+            .max_aliases
+            .saturating_sub((self.max_aliases / 4).max(1));
+        let remove = self.alias_count.saturating_sub(keep).max(1);
+        let cutoff = {
+            let ages = &mut self.prune_ages;
+            ages.clear();
+            ages.reserve(self.alias_count.saturating_sub(ages.len()));
+            for font_entries in self.shared_aliases.values() {
+                ages.extend(font_entries.values().map(|entry| entry.last_used));
+            }
+            if ages.is_empty() {
+                self.shared_aliases.clear();
+                self.alias_count = 0;
+                return;
+            }
+            let cutoff_ix = remove.saturating_sub(1).min(ages.len().saturating_sub(1));
+            ages.select_nth_unstable(cutoff_ix);
+            ages[cutoff_ix]
+        };
+        let mut removed = 0usize;
+        self.shared_aliases.retain(|_, font_entries| {
+            font_entries.retain(|_, entry| {
+                let drop = removed < remove && entry.last_used <= cutoff;
+                removed += usize::from(drop);
+                !drop
+            });
+            !font_entries.is_empty()
+        });
+        if removed == 0 {
+            self.shared_aliases.clear();
+            self.alias_count = 0;
+            return;
+        }
+        self.frame_stats.prunes = self.frame_stats.prunes.saturating_add(1);
+        self.alias_count = self.alias_count.saturating_sub(removed);
     }
 
     #[inline(always)]
@@ -484,6 +530,30 @@ impl TextLayoutCache {
     #[inline(always)]
     fn owned_layout(&self, key: TextLayoutKey, text: &str) -> Option<&CachedTextLayout> {
         Some(self.owned_entries.get(&key)?.get(text)?.layout.as_ref())
+    }
+
+    #[inline(always)]
+    fn touch_shared_layout(&mut self, key: TextLayoutKey, text_key: usize, tick: u64) -> bool {
+        let Some(entry) = self
+            .shared_aliases
+            .get_mut(&key)
+            .and_then(|font_entries| font_entries.get_mut(&text_key))
+        else {
+            return false;
+        };
+        entry.last_used = tick;
+        true
+    }
+
+    #[inline(always)]
+    fn shared_layout(&self, key: TextLayoutKey, text_key: usize) -> Option<&CachedTextLayout> {
+        Some(
+            self.shared_aliases
+                .get(&key)?
+                .get(&text_key)?
+                .layout
+                .as_ref(),
+        )
     }
 
     #[inline(always)]
@@ -535,6 +605,38 @@ impl TextLayoutCache {
         );
         debug_assert!(replaced.is_none());
         self.entry_count += usize::from(replaced.is_none());
+        true
+    }
+
+    fn insert_shared_layout(
+        &mut self,
+        key: TextLayoutKey,
+        text_key: usize,
+        text: Arc<str>,
+        layout: CachedTextLayout,
+        tick: u64,
+    ) -> bool {
+        if self.alias_count >= self.max_aliases {
+            match self.overflow_policy {
+                TextLayoutOverflowPolicy::PruneOwnedEntries => {
+                    self.prune_shared_aliases();
+                }
+                TextLayoutOverflowPolicy::Saturating => {
+                    self.uncached_layout = Some(Box::new(layout));
+                    return false;
+                }
+            }
+        }
+        let replaced = self.shared_aliases.entry(key).or_default().insert(
+            text_key,
+            SharedLayoutEntry {
+                _owner: text,
+                layout: Box::new(layout),
+                last_used: tick,
+            },
+        );
+        debug_assert!(replaced.is_none());
+        self.alias_count += usize::from(replaced.is_none());
         true
     }
 
@@ -607,59 +709,44 @@ impl TextLayoutCache {
         let tick = self.next_use_tick();
         let text_key = Arc::as_ptr(text) as *const () as usize;
         let text_ref = text.as_ref();
-        if self
-            .shared_aliases
-            .get(&key)
-            .and_then(|font_entries| font_entries.get(&text_key))
-            .is_some()
-        {
-            if self.touch_owned_layout(key, text_ref, tick) {
-                self.frame_stats.shared_hits = self.frame_stats.shared_hits.saturating_add(1);
+        if self.touch_shared_layout(key, text_key, tick) {
+            self.frame_stats.shared_hits = self.frame_stats.shared_hits.saturating_add(1);
+            return self
+                .shared_layout(key, text_key)
+                .expect("shared text layout cache entry touched");
+        }
+
+        if self.touch_owned_layout(key, text_ref, tick) {
+            self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
+            if self.alias_count >= self.max_aliases
+                && self.overflow_policy == TextLayoutOverflowPolicy::Saturating
+            {
                 return self
                     .owned_layout(key, text_ref)
-                    .expect("shared text layout alias touched");
+                    .expect("owned text layout cache entry available");
             }
-            self.shared_aliases
-                .entry(key)
-                .or_default()
-                .remove(&text_key);
-            self.alias_count = self.alias_count.saturating_sub(1);
+            let layout = self
+                .owned_layout(key, text_ref)
+                .expect("owned text layout cache entry touched")
+                .clone();
+            if self.insert_shared_layout(key, text_key, Arc::clone(text), layout, tick) {
+                return self
+                    .shared_layout(key, text_key)
+                    .expect("shared text layout cache entry inserted from owned layout");
+            }
+            return self
+                .owned_layout(key, text_ref)
+                .expect("owned text layout cache entry available");
         }
-        let aliasable = if self.touch_owned_layout(key, text_ref, tick) {
-            self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
-            true
+
+        let layout = build_cached_text_layout(font, fonts, text_ref, key.wrap_width_pixels);
+        self.record_layout_build(&layout);
+        if self.insert_shared_layout(key, text_key, Arc::clone(text), layout, tick) {
+            self.shared_layout(key, text_key)
+                .expect("shared text layout cache entry inserted")
         } else {
-            let layout = build_cached_text_layout(font, fonts, text_ref, key.wrap_width_pixels);
-            self.record_layout_build(&layout);
-            self.insert_owned_layout(key, text_ref, layout, tick)
-        };
-        if !aliasable {
-            return self.uncached_layout_ref();
+            self.uncached_layout_ref()
         }
-        if self.alias_count >= self.max_aliases {
-            match self.overflow_policy {
-                TextLayoutOverflowPolicy::PruneOwnedEntries => {
-                    self.shared_aliases.clear();
-                    self.alias_count = 0;
-                }
-                TextLayoutOverflowPolicy::Saturating => {
-                    return self
-                        .owned_layout(key, text_ref)
-                        .expect("shared text layout cache entry available");
-                }
-            }
-        }
-        if self
-            .shared_aliases
-            .entry(key)
-            .or_default()
-            .insert(text_key, text.clone())
-            .is_none()
-        {
-            self.alias_count += 1;
-        }
-        self.owned_layout(key, text_ref)
-            .expect("shared text layout cache entry aliased")
     }
 }
 
