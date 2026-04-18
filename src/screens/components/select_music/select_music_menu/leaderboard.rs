@@ -5,6 +5,7 @@ use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 use crate::game::scores;
+use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
 
 const GS_LEADERBOARD_NUM_ENTRIES: usize = 13;
 const GS_LEADERBOARD_ROW_HEIGHT: f32 = 24.0;
@@ -69,7 +70,13 @@ fn gs_machine_pane(chart_hash: Option<&str>) -> scores::LeaderboardPane {
         entries,
         is_ex: false,
         disabled: false,
+        personalized: true,
     }
+}
+
+#[inline(always)]
+fn should_show_overlay_pane(pane: &scores::LeaderboardPane) -> bool {
+    !pane.is_arrowcloud() || pane.personalized
 }
 
 fn gs_error_text(error: &str) -> String {
@@ -88,7 +95,7 @@ fn apply_leaderboard_side_snapshot(
     let current_pane = side
         .panes
         .get(side.pane_index)
-        .map(|pane| (pane.name.clone(), pane.is_ex, pane.disabled));
+        .map(|pane| (pane.name.clone(), pane.is_ex, pane.disabled, pane.personalized));
 
     if snapshot.loading {
         side.loading = true;
@@ -110,7 +117,12 @@ fn apply_leaderboard_side_snapshot(
         return;
     }
 
-    let mut panes = snapshot.data.map_or_else(Vec::new, |data| data.panes);
+    let mut panes = snapshot.data.map_or_else(Vec::new, |data| {
+        data.panes
+            .into_iter()
+            .filter(should_show_overlay_pane)
+            .collect()
+    });
     if let Some(machine) = side.machine_pane.clone() {
         panes.push(machine);
     }
@@ -121,10 +133,15 @@ fn apply_leaderboard_side_snapshot(
     }
 
     side.error_text = None;
-    if let Some((name, is_ex, disabled)) = current_pane {
+    if let Some((name, is_ex, disabled, personalized)) = current_pane {
         side.pane_index = panes
             .iter()
-            .position(|pane| pane.name == name && pane.is_ex == is_ex && pane.disabled == disabled)
+            .position(|pane| {
+                pane.name == name
+                    && pane.is_ex == is_ex
+                    && pane.disabled == disabled
+                    && pane.personalized == personalized
+            })
             .unwrap_or(side.pane_index.min(panes.len().saturating_sub(1)));
     } else {
         side.pane_index = 0;
@@ -156,6 +173,71 @@ fn refresh_leaderboard_side_from_cache(
         return;
     };
     apply_leaderboard_side_snapshot(side, snapshot);
+}
+
+#[inline(always)]
+fn same_leaderboard_entry(a: &scores::LeaderboardEntry, b: &scores::LeaderboardEntry) -> bool {
+    a.rank == b.rank && a.name.eq_ignore_ascii_case(b.name.as_str())
+}
+
+#[inline(always)]
+fn overlay_selected_contains(
+    selected: &[&scores::LeaderboardEntry],
+    entry: &scores::LeaderboardEntry,
+) -> bool {
+    selected.iter().any(|chosen| same_leaderboard_entry(chosen, entry))
+}
+
+fn next_overlay_entry<'a, F>(
+    entries: &'a [scores::LeaderboardEntry],
+    selected: &[&'a scores::LeaderboardEntry],
+    include: F,
+) -> Option<&'a scores::LeaderboardEntry>
+where
+    F: Fn(&scores::LeaderboardEntry) -> bool,
+{
+    entries
+        .iter()
+        .filter(|entry| include(entry) && !overlay_selected_contains(selected, entry))
+        .min_by_key(|entry| entry.rank)
+}
+
+fn overlay_display_entries(
+    side: profile::PlayerSide,
+    chart_hash: Option<&str>,
+    pane: &scores::LeaderboardPane,
+) -> Vec<scores::LeaderboardEntry> {
+    let entries = entries_with_local_self_state(side, chart_hash, pane);
+    if entries.len() <= GS_LEADERBOARD_NUM_ENTRIES {
+        return entries;
+    }
+
+    let mut selected = Vec::with_capacity(GS_LEADERBOARD_NUM_ENTRIES);
+    if let Some(top) = next_overlay_entry(entries.as_slice(), selected.as_slice(), |_| true) {
+        selected.push(top);
+    }
+    if let Some(self_entry) =
+        next_overlay_entry(entries.as_slice(), selected.as_slice(), |entry| entry.is_self)
+    {
+        selected.push(self_entry);
+    }
+    while selected.len() < GS_LEADERBOARD_NUM_ENTRIES {
+        let Some(rival) =
+            next_overlay_entry(entries.as_slice(), selected.as_slice(), |entry| entry.is_rival)
+        else {
+            break;
+        };
+        selected.push(rival);
+    }
+    while selected.len() < GS_LEADERBOARD_NUM_ENTRIES {
+        let Some(entry) = next_overlay_entry(entries.as_slice(), selected.as_slice(), |_| true)
+        else {
+            break;
+        };
+        selected.push(entry);
+    }
+    selected.sort_unstable_by_key(|entry| entry.rank);
+    selected.into_iter().cloned().collect()
 }
 
 pub fn show_leaderboard_overlay(
@@ -366,10 +448,15 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
         horizalign(center)
     ));
 
-    let mut draw_panel = |side: &LeaderboardSideState, center_x: f32| {
+    let mut draw_panel = |side: &LeaderboardSideState,
+                          center_x: f32,
+                          player: profile::PlayerSide| {
         let pane = side
             .panes
             .get(side.pane_index.min(side.panes.len().saturating_sub(1)));
+        let display_entries = pane.map(|pane| {
+            overlay_display_entries(player, side.chart_hash.as_deref(), pane)
+        });
         let header_text = if side.loading {
             "GrooveStats".to_string()
         } else if let Some(p) = pane {
@@ -494,11 +581,11 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
                 if i == 0 {
                     name = GS_LEADERBOARD_DISABLED_TEXT.to_string();
                 }
-            } else if let Some(current) = pane {
-                if let Some(entry) = current.entries.get(i) {
-                    rank = format!("{}.", entry.rank);
-                    name.clone_from(&entry.name);
-                    score = format!("{:.2}%", entry.score / 100.0);
+                } else if pane.is_some() {
+                    if let Some(entry) = display_entries.as_ref().and_then(|entries| entries.get(i)) {
+                        rank = format!("{}.", entry.rank);
+                        name.clone_from(&entry.name);
+                        score = format!("{:.2}%", entry.score / 100.0);
                     date = format_groovestats_date(&entry.date);
 
                     if entry.is_rival || entry.is_self {
@@ -524,7 +611,11 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
                     if entry.is_fail {
                         score_col = [1.0, 0.0, 0.0, 1.0];
                     }
-                } else if i == 0 && current.entries.is_empty() {
+                } else if i == 0
+                    && display_entries
+                        .as_ref()
+                        .is_none_or(|entries| entries.is_empty())
+                {
                     name = GS_LEADERBOARD_NO_SCORES_TEXT.to_string();
                 }
             }
@@ -625,18 +716,20 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
 
     if joined_count <= 1 {
         if overlay.p1.joined {
-            draw_panel(&overlay.p1, screen_center_x());
+            draw_panel(&overlay.p1, screen_center_x(), profile::PlayerSide::P1);
         } else if overlay.p2.joined {
-            draw_panel(&overlay.p2, screen_center_x());
+            draw_panel(&overlay.p2, screen_center_x(), profile::PlayerSide::P2);
         }
     } else {
         draw_panel(
             &overlay.p1,
             screen_center_x() - GS_LEADERBOARD_PANE_SIDE_OFFSET,
+            profile::PlayerSide::P1,
         );
         draw_panel(
             &overlay.p2,
             screen_center_x() + GS_LEADERBOARD_PANE_SIDE_OFFSET,
+            profile::PlayerSide::P2,
         );
     }
 
