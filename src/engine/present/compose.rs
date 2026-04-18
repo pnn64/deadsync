@@ -247,6 +247,7 @@ struct CachedTextLayout {
 type WordGlyphs = SmallVec<[CachedGlyph; 16]>;
 type AttrIndices = SmallVec<[usize; 8]>;
 type ClipPolygon = SmallVec<[ClipVertex; 8]>;
+type ClippedMesh = SmallVec<[renderer::TexturedMeshVertex; 18]>;
 
 struct OwnedLayoutEntry {
     layout: Box<CachedTextLayout>,
@@ -2928,7 +2929,7 @@ fn clip_rotated_sprite_to_world_rect(
         return None;
     }
 
-    let mut out = Vec::with_capacity((clipped.len() - 2) * 3);
+    let mut out = ClippedMesh::new();
     let base = clipped[0];
     let mut i = 1usize;
     while i + 1 < clipped.len() {
@@ -2946,7 +2947,7 @@ fn clip_rotated_sprite_to_world_rect(
     Some(ClippedSpriteObject {
         object_type: renderer::ObjectType::TexturedMesh {
             tint: [1.0; 4],
-            vertices: Arc::from(out),
+            vertices: Arc::from(out.as_slice()),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             mode: renderer::MeshMode::Triangles,
             uv_scale: [1.0, 1.0],
