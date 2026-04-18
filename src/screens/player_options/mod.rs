@@ -115,7 +115,7 @@ pub fn init(
     });
 
     let noteskin_names = discover_noteskin_names();
-    let mut row_map = build_rows(
+    let mut main_row_map = build_rows(
         &song,
         &speed_mod_p1,
         chart_steps_index,
@@ -126,7 +126,31 @@ pub fn init(
         return_screen,
         fixed_stepchart.as_ref(),
     );
+    let mut advanced_row_map = build_rows(
+        &song,
+        &speed_mod_p1,
+        chart_steps_index,
+        preferred_difficulty_index,
+        session_music_rate,
+        OptionsPane::Advanced,
+        &noteskin_names,
+        return_screen,
+        fixed_stepchart.as_ref(),
+    );
+    let mut uncommon_row_map = build_rows(
+        &song,
+        &speed_mod_p1,
+        chart_steps_index,
+        preferred_difficulty_index,
+        session_music_rate,
+        OptionsPane::Uncommon,
+        &noteskin_names,
+        return_screen,
+        fixed_stepchart.as_ref(),
+    );
     let player_profiles = [p1_profile.clone(), p2_profile.clone()];
+    // Masks are computed from the profile and are identical regardless of
+    // which pane's row_map is passed, so capture them from the Main call.
     let (
         scroll_active_mask_p1,
         hide_active_mask_p1,
@@ -145,7 +169,7 @@ pub fn init(
         error_bar_active_mask_p1,
         error_bar_options_active_mask_p1,
         measure_counter_options_active_mask_p1,
-    ) = apply_profile_defaults(&mut row_map, &player_profiles[P1], P1);
+    ) = apply_profile_defaults(&mut main_row_map, &player_profiles[P1], P1);
     let (
         scroll_active_mask_p2,
         hide_active_mask_p2,
@@ -164,7 +188,12 @@ pub fn init(
         error_bar_active_mask_p2,
         error_bar_options_active_mask_p2,
         measure_counter_options_active_mask_p2,
-    ) = apply_profile_defaults(&mut row_map, &player_profiles[P2], P2);
+    ) = apply_profile_defaults(&mut main_row_map, &player_profiles[P2], P2);
+    // Populate selected_choice_index for the other panes (mask returns dropped).
+    let _ = apply_profile_defaults(&mut advanced_row_map, &player_profiles[P1], P1);
+    let _ = apply_profile_defaults(&mut advanced_row_map, &player_profiles[P2], P2);
+    let _ = apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P1], P1);
+    let _ = apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P2], P2);
 
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
     let mut initial_noteskin_names = vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()];
@@ -215,23 +244,28 @@ pub fn init(
             )
         });
     let active = session_active_players();
-    let row_tweens = init_row_tweens(
-        &row_map,
+    let main_row_tweens = init_row_tweens(
+        &main_row_map,
         [0; PLAYER_SLOTS],
         active,
         [hide_active_mask_p1, hide_active_mask_p2],
         [error_bar_active_mask_p1, error_bar_active_mask_p2],
         allow_per_player_global_offsets,
     );
+    let mut panes = [
+        PaneState::new(main_row_map),
+        PaneState::new(advanced_row_map),
+        PaneState::new(uncommon_row_map),
+    ];
+    panes[OptionsPane::Main.index()].row_tweens = main_row_tweens;
+    panes[OptionsPane::Main.index()].arcade_row_focus = [true; PLAYER_SLOTS];
     State {
         song,
         return_screen,
         fixed_stepchart,
         chart_steps_index,
         chart_difficulty_index,
-        row_map,
-        selected_row: [0; PLAYER_SLOTS],
-        prev_selected_row: [0; PLAYER_SLOTS],
+        panes,
         scroll_active_mask: [scroll_active_mask_p1, scroll_active_mask_p2],
         hide_active_mask: [hide_active_mask_p1, hide_active_mask_p2],
         insert_active_mask: [insert_active_mask_p1, insert_active_mask_p2],
@@ -278,8 +312,6 @@ pub fn init(
         nav_key_last_scrolled_at: [None; PLAYER_SLOTS],
         start_held_since: [None; PLAYER_SLOTS],
         start_last_triggered_at: [None; PLAYER_SLOTS],
-        inline_choice_x: [f32::NAN; PLAYER_SLOTS],
-        arcade_row_focus: [true; PLAYER_SLOTS],
         allow_per_player_global_offsets,
         player_profiles,
         noteskin_names,
@@ -293,17 +325,6 @@ pub fn init(
         help_anim_time: [0.0; PLAYER_SLOTS],
         combo_preview_count: 0,
         combo_preview_elapsed: 0.0,
-        cursor_initialized: [false; PLAYER_SLOTS],
-        cursor_from_x: [0.0; PLAYER_SLOTS],
-        cursor_from_y: [0.0; PLAYER_SLOTS],
-        cursor_from_w: [0.0; PLAYER_SLOTS],
-        cursor_from_h: [0.0; PLAYER_SLOTS],
-        cursor_to_x: [0.0; PLAYER_SLOTS],
-        cursor_to_y: [0.0; PLAYER_SLOTS],
-        cursor_to_w: [0.0; PLAYER_SLOTS],
-        cursor_to_h: [0.0; PLAYER_SLOTS],
-        cursor_t: [1.0; PLAYER_SLOTS],
-        row_tweens,
         pane_transition: PaneTransition::None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
     }

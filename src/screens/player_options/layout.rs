@@ -245,28 +245,28 @@ pub(super) fn cursor_dest_for_player(
     asset_manager: &AssetManager,
     player_idx: usize,
 ) -> Option<(f32, f32, f32, f32)> {
-    if state.row_map.is_empty() {
+    if state.pane().row_map.is_empty() {
         return None;
     }
     let player_idx = player_idx.min(PLAYER_SLOTS - 1);
     let visibility = row_visibility(
-        &state.row_map,
+        &state.pane().row_map,
         session_active_players(),
         state.hide_active_mask,
         state.error_bar_active_mask,
         state.allow_per_player_global_offsets,
     );
-    let mut row_idx = state.selected_row[player_idx].min(state.row_map.len().saturating_sub(1));
-    if !is_row_visible(&state.row_map, row_idx, visibility) {
-        row_idx = fallback_visible_row(&state.row_map, row_idx, visibility)?;
+    let mut row_idx = state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
+    if !is_row_visible(&state.pane().row_map, row_idx, visibility) {
+        row_idx = fallback_visible_row(&state.pane().row_map, row_idx, visibility)?;
     }
-    let row = state
+    let row = state.pane()
         .row_map
         .display_order()
         .get(row_idx)
-        .and_then(|&id| state.row_map.get(id))?;
+        .and_then(|&id| state.pane().row_map.get(id))?;
 
-    let y = state
+    let y = state.pane()
         .row_tweens
         .get(row_idx)
         .map(|tw| tw.to_y)

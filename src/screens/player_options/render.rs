@@ -159,7 +159,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let help_box_w = widescale(614.0, 792.0);
     let help_box_x = widescale(13.0, 30.666);
     let help_box_bottom_y = screen_height() - 36.0;
-    let total_rows = state.row_map.len();
+    let total_rows = state.pane().row_map.len();
     let frame_h = ROW_HEIGHT;
     let (fallback_y0, fallback_row_step) = row_layout_params();
     let row_alpha_cutoff: f32 = 0.001;
@@ -174,23 +174,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Keep header labels bounded to the title column so they never overlap option values.
     let title_max_w = (TITLE_BG_WIDTH - title_left_pad - 5.0).max(0.0);
     let cursor_now = |player_idx: usize| -> Option<(f32, f32, f32, f32)> {
-        if player_idx >= PLAYER_SLOTS || !state.cursor_initialized[player_idx] {
+        if player_idx >= PLAYER_SLOTS || !state.pane().cursor_initialized[player_idx] {
             return None;
         }
-        let t = state.cursor_t[player_idx].clamp(0.0, 1.0);
-        let x = (state.cursor_to_x[player_idx] - state.cursor_from_x[player_idx])
-            .mul_add(t, state.cursor_from_x[player_idx]);
-        let y = (state.cursor_to_y[player_idx] - state.cursor_from_y[player_idx])
-            .mul_add(t, state.cursor_from_y[player_idx]);
-        let w = (state.cursor_to_w[player_idx] - state.cursor_from_w[player_idx])
-            .mul_add(t, state.cursor_from_w[player_idx]);
-        let h = (state.cursor_to_h[player_idx] - state.cursor_from_h[player_idx])
-            .mul_add(t, state.cursor_from_h[player_idx]);
+        let t = state.pane().cursor_t[player_idx].clamp(0.0, 1.0);
+        let x = (state.pane().cursor_to_x[player_idx] - state.pane().cursor_from_x[player_idx])
+            .mul_add(t, state.pane().cursor_from_x[player_idx]);
+        let y = (state.pane().cursor_to_y[player_idx] - state.pane().cursor_from_y[player_idx])
+            .mul_add(t, state.pane().cursor_from_y[player_idx]);
+        let w = (state.pane().cursor_to_w[player_idx] - state.pane().cursor_from_w[player_idx])
+            .mul_add(t, state.pane().cursor_from_w[player_idx]);
+        let h = (state.pane().cursor_to_h[player_idx] - state.pane().cursor_from_h[player_idx])
+            .mul_add(t, state.pane().cursor_from_h[player_idx]);
         Some((x, y, w, h))
     };
 
     for item_idx in 0..total_rows {
-        let (current_row_y, row_alpha) = state
+        let (current_row_y, row_alpha) = state.pane()
             .row_tweens
             .get(item_idx)
             .map(|tw| (tw.y(), tw.a()))
@@ -206,9 +206,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
         let a = row_alpha;
 
-        let is_active = (active[P1] && item_idx == state.selected_row[P1])
-            || (active[P2] && item_idx == state.selected_row[P2]);
-        let row = state.row_map.row(state.row_map.id_at(item_idx));
+        let is_active = (active[P1] && item_idx == state.pane().selected_row[P1])
+            || (active[P2] && item_idx == state.pane().selected_row[P2]);
+        let row = state.pane().row_map.row(state.pane().row_map.id_at(item_idx));
         let active_bg = color::rgba_hex("#333333");
         let inactive_bg_base = color::rgba_hex("#071016");
         let bg_color = if is_active {
@@ -314,7 +314,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if is_active {
                 let border_w = widescale(2.0, 2.5);
                 for player_idx in active_player_indices(active) {
-                    if state.selected_row[player_idx] != item_idx {
+                    if state.pane().selected_row[player_idx] != item_idx {
                         continue;
                     }
                     let Some((center_x, center_y, ring_w, ring_h)) = cursor_now(player_idx) else {
@@ -1054,7 +1054,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if !widths.is_empty() {
                 let border_w = widescale(2.0, 2.5);
                 for player_idx in active_player_indices(active) {
-                    if state.selected_row[player_idx] != item_idx {
+                    if state.pane().selected_row[player_idx] != item_idx {
                         continue;
                     }
                     let Some((center_x, center_y, ring_w, ring_h)) = cursor_now(player_idx) else {
@@ -1191,7 +1191,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         z(101)
                     ));
                     // Encircling cursor around the active option value (programmatic border)
-                    if active[primary_player_idx] && state.selected_row[primary_player_idx] == item_idx {
+                    if active[primary_player_idx] && state.pane().selected_row[primary_player_idx] == item_idx {
                         let border_w = widescale(2.0, 2.5);
                         if let Some((center_x, center_y, ring_w, ring_h)) =
                             cursor_now(primary_player_idx)
@@ -1276,7 +1276,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
                             z(101)
                         ));
-                        if active[P2] && state.selected_row[P2] == item_idx {
+                        if active[P2] && state.pane().selected_row[P2] == item_idx {
                             let border_w = widescale(2.0, 2.5);
                             if let Some((center_x, center_y, ring_w, ring_h)) = cursor_now(P2) {
                                 let left = center_x - ring_w * 0.5;
@@ -1980,12 +1980,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     const REVEAL_DURATION: f32 = 0.5;
     let split_help = active[P1] && active[P2];
     for player_idx in active_player_indices(active) {
-        let row_idx = state.selected_row[player_idx].min(state.row_map.len().saturating_sub(1));
-        let Some(row) = state
+        let row_idx = state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
+        let Some(row) = state.pane()
             .row_map
             .display_order()
             .get(row_idx)
-            .and_then(|&id| state.row_map.get(id))
+            .and_then(|&id| state.pane().row_map.get(id))
         else {
             continue;
         };

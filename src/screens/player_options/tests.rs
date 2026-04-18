@@ -212,9 +212,9 @@ pub(super) mod tests {
 
         let mut state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
         let active = session_active_players();
-        let first_row = state.selected_row[P1];
+        let first_row = state.pane().selected_row[P1];
         assert!(handle_arcade_start_event(&mut state, &asset_manager, active, P1).is_none());
-        let second_row = state.selected_row[P1];
+        let second_row = state.pane().selected_row[P1];
         assert!(second_row > first_row);
 
         let now = Instant::now();
@@ -223,7 +223,7 @@ pub(super) mod tests {
             Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
 
         assert!(repeat_held_arcade_start(&mut state, &asset_manager, active, P1, now).is_none());
-        assert!(state.selected_row[P1] > second_row);
+        assert!(state.pane().selected_row[P1] > second_row);
     }
 
     #[test]
@@ -243,9 +243,9 @@ pub(super) mod tests {
 
         let mut state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
         let active = session_active_players();
-        let last_row = state.row_map.len().saturating_sub(1);
-        state.selected_row[P1] = last_row;
-        state.prev_selected_row[P1] = last_row;
+        let last_row = state.pane().row_map.len().saturating_sub(1);
+        state.pane_mut().selected_row[P1] = last_row;
+        state.pane_mut().prev_selected_row[P1] = last_row;
 
         let now = Instant::now();
         state.start_held_since[P1] = Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
@@ -253,7 +253,7 @@ pub(super) mod tests {
             Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
 
         assert!(repeat_held_arcade_start(&mut state, &asset_manager, active, P1, now).is_none());
-        assert_eq!(state.selected_row[P1], last_row);
+        assert_eq!(state.pane().selected_row[P1], last_row);
     }
 
     fn setup_state() -> (super::State, AssetManager) {
@@ -275,7 +275,7 @@ pub(super) mod tests {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
 
-        let row_index = state
+        let row_index = state.pane()
             .row_map
             .display_order()
             .iter()
@@ -283,9 +283,9 @@ pub(super) mod tests {
             .expect("BackgroundFilter should be in Main pane");
 
         // Pre-set to Off (index 0) so we can detect a write
-        state.row_map.get_mut(RowId::BackgroundFilter).unwrap().selected_choice_index[P1] = 0;
+        state.pane_mut().row_map.get_mut(RowId::BackgroundFilter).unwrap().selected_choice_index[P1] = 0;
         state.player_profiles[P1].background_filter = BackgroundFilter::Darkest;
-        state.selected_row[P1] = row_index;
+        state.pane_mut().selected_row[P1] = row_index;
 
         // delta=0 should still apply the current choice
         super::change_choice_for_player(&mut state, &asset_manager, P1, 0);
@@ -302,19 +302,19 @@ pub(super) mod tests {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
 
-        let row_index = state
+        let row_index = state.pane()
             .row_map
             .display_order()
             .iter()
             .position(|&id| id == RowId::WhatComesNext)
             .expect("WhatComesNext should be in Main pane");
 
-        state.selected_row[P1] = row_index;
-        let initial = state.row_map.get(RowId::WhatComesNext).unwrap().selected_choice_index[P1];
+        state.pane_mut().selected_row[P1] = row_index;
+        let initial = state.pane().row_map.get(RowId::WhatComesNext).unwrap().selected_choice_index[P1];
 
         super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
 
-        let row = state.row_map.get(RowId::WhatComesNext).unwrap();
+        let row = state.pane().row_map.get(RowId::WhatComesNext).unwrap();
         let n = row.choices.len();
         let expected = (initial + 1) % n;
         assert_eq!(row.selected_choice_index[0], expected, "P1 slot should advance");
@@ -341,10 +341,10 @@ pub(super) mod tests {
             help: Vec::new(),
             choice_difficulty_indices: None,
         };
-        state.row_map.display_order.push(RowId::Scroll);
-        state.row_map.insert(scroll_row);
-        let row_index = state.row_map.display_order().len() - 1;
-        state.selected_row[P1] = row_index;
+        state.pane_mut().row_map.display_order.push(RowId::Scroll);
+        state.pane_mut().row_map.insert(scroll_row);
+        let row_index = state.pane().row_map.display_order().len() - 1;
+        state.pane_mut().selected_row[P1] = row_index;
         state.scroll_active_mask[P1] = 0;
 
         let active = session_active_players();
@@ -384,23 +384,23 @@ pub(super) mod tests {
             &["1.0", "2.0"],
             [0, 0],
         );
-        state.row_map.display_order.push(RowId::JudgmentTilt);
-        state.row_map.insert(tilt_row);
-        state.row_map.display_order.push(RowId::JudgmentTiltIntensity);
-        state.row_map.insert(tilt_intensity_row);
+        state.pane_mut().row_map.display_order.push(RowId::JudgmentTilt);
+        state.pane_mut().row_map.insert(tilt_row);
+        state.pane_mut().row_map.display_order.push(RowId::JudgmentTiltIntensity);
+        state.pane_mut().row_map.insert(tilt_intensity_row);
 
-        let row_index = state
+        let row_index = state.pane()
             .row_map
             .display_order()
             .iter()
             .position(|&id| id == RowId::JudgmentTilt)
             .unwrap();
-        state.selected_row[P1] = row_index;
+        state.pane_mut().selected_row[P1] = row_index;
 
         let active = session_active_players();
         // Initially JudgmentTilt=0 (off) so JudgmentTiltIntensity should be hidden.
         assert!(
-            !judgment_tilt_intensity_visible(&state.row_map, active),
+            !judgment_tilt_intensity_visible(&state.pane().row_map, active),
             "JudgmentTiltIntensity should start hidden"
         );
 
@@ -408,7 +408,7 @@ pub(super) mod tests {
         super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
 
         assert!(
-            judgment_tilt_intensity_visible(&state.row_map, active),
+            judgment_tilt_intensity_visible(&state.pane().row_map, active),
             "JudgmentTiltIntensity should be visible after enabling JudgmentTilt"
         );
     }
@@ -418,7 +418,7 @@ pub(super) mod tests {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
 
-        let row_index = state
+        let row_index = state.pane()
             .row_map
             .display_order()
             .iter()
@@ -426,15 +426,15 @@ pub(super) mod tests {
             .expect("BackgroundFilter should be in Main pane");
 
         // Pin both slots at index 0 so a P1 advance is unambiguously detectable.
-        let row = state.row_map.get_mut(RowId::BackgroundFilter).unwrap();
+        let row = state.pane_mut().row_map.get_mut(RowId::BackgroundFilter).unwrap();
         row.selected_choice_index = [0, 0];
         let n = row.choices.len();
         assert!(n >= 2, "BackgroundFilter should have at least 2 choices");
-        state.selected_row[P1] = row_index;
+        state.pane_mut().selected_row[P1] = row_index;
 
         super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
 
-        let row = state.row_map.get(RowId::BackgroundFilter).unwrap();
+        let row = state.pane().row_map.get(RowId::BackgroundFilter).unwrap();
         assert_eq!(row.selected_choice_index[0], 1, "P1 should have advanced");
         assert_eq!(
             row.selected_choice_index[1], 0,
@@ -447,15 +447,15 @@ pub(super) mod tests {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
 
-        let row_index = state
+        let row_index = state.pane()
             .row_map
             .display_order()
             .iter()
             .position(|&id| id == RowId::BackgroundFilter)
             .expect("BackgroundFilter should be in Main pane");
-        state.selected_row[P1] = row_index;
+        state.pane_mut().selected_row[P1] = row_index;
 
-        let n = state
+        let n = state.pane()
             .row_map
             .get(RowId::BackgroundFilter)
             .unwrap()
@@ -464,19 +464,19 @@ pub(super) mod tests {
         assert!(n >= 2, "wrap test needs at least 2 choices");
 
         // Forward wrap: last → 0
-        state.row_map.get_mut(RowId::BackgroundFilter).unwrap().selected_choice_index[P1] = n - 1;
+        state.pane_mut().row_map.get_mut(RowId::BackgroundFilter).unwrap().selected_choice_index[P1] = n - 1;
         super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
         assert_eq!(
-            state.row_map.get(RowId::BackgroundFilter).unwrap().selected_choice_index[P1],
+            state.pane().row_map.get(RowId::BackgroundFilter).unwrap().selected_choice_index[P1],
             0,
             "delta=+1 at last index should wrap to 0"
         );
 
         // Backward wrap: 0 → last
-        state.row_map.get_mut(RowId::BackgroundFilter).unwrap().selected_choice_index[P1] = 0;
+        state.pane_mut().row_map.get_mut(RowId::BackgroundFilter).unwrap().selected_choice_index[P1] = 0;
         super::change_choice_for_player(&mut state, &asset_manager, P1, -1);
         assert_eq!(
-            state.row_map.get(RowId::BackgroundFilter).unwrap().selected_choice_index[P1],
+            state.pane().row_map.get(RowId::BackgroundFilter).unwrap().selected_choice_index[P1],
             n - 1,
             "delta=-1 at index 0 should wrap to last"
         );
@@ -487,22 +487,22 @@ pub(super) mod tests {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
 
-        let row_index = state
+        let row_index = state.pane()
             .row_map
             .display_order()
             .iter()
             .position(|&id| id == RowId::Exit)
             .expect("Exit should be in Main pane");
-        state.selected_row[P1] = row_index;
+        state.pane_mut().selected_row[P1] = row_index;
 
-        let before = state.row_map.get(RowId::Exit).unwrap().selected_choice_index;
+        let before = state.pane().row_map.get(RowId::Exit).unwrap().selected_choice_index;
 
         // Action::Exit returns Outcome::NONE so the dispatcher must not panic,
         // mutate the row, or play SFX (which would panic — audio uninit in tests).
         super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
         super::change_choice_for_player(&mut state, &asset_manager, P1, -3);
 
-        let after = state.row_map.get(RowId::Exit).unwrap().selected_choice_index;
+        let after = state.pane().row_map.get(RowId::Exit).unwrap().selected_choice_index;
         assert_eq!(before, after, "Action::Exit must not advance its own choice index");
     }
 
@@ -527,10 +527,10 @@ pub(super) mod tests {
             help: Vec::new(),
             choice_difficulty_indices: None,
         };
-        state.row_map.display_order.push(RowId::Scroll);
-        state.row_map.insert(scroll_row);
-        let row_index = state.row_map.display_order().len() - 1;
-        state.selected_row[P1] = row_index;
+        state.pane_mut().row_map.display_order.push(RowId::Scroll);
+        state.pane_mut().row_map.insert(scroll_row);
+        let row_index = state.pane().row_map.display_order().len() - 1;
+        state.pane_mut().selected_row[P1] = row_index;
         state.scroll_active_mask = [0, 0];
 
         // L/R on a bitmask row returns Outcome::NONE — mask must not change,
@@ -544,7 +544,7 @@ pub(super) mod tests {
         );
         // selected_choice_index is also untouched (cycle_choice_index never runs)
         assert_eq!(
-            state.row_map.get(RowId::Scroll).unwrap().selected_choice_index,
+            state.pane().row_map.get(RowId::Scroll).unwrap().selected_choice_index,
             [2, 0],
             "Bitmask delta must not advance the row's selected_choice_index either"
         );

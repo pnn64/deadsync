@@ -27,7 +27,7 @@ pub(super) fn cycle_choice_index(
     row_id: RowId,
     delta: isize,
 ) -> Option<usize> {
-    let row = state.row_map.get_mut(row_id)?;
+    let row = state.pane_mut().row_map.get_mut(row_id)?;
     let n = row.choices.len();
     if n == 0 {
         return None;
@@ -47,15 +47,15 @@ pub(super) fn dispatch_behavior_delta(
     player_idx: usize,
     delta: isize,
 ) {
-    if state.row_map.is_empty() {
+    if state.pane().row_map.is_empty() {
         return;
     }
     let player_idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[player_idx].min(state.row_map.len().saturating_sub(1));
-    let Some(&id) = state.row_map.display_order().get(row_index) else {
+    let row_index = state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
+    let Some(&id) = state.pane().row_map.display_order().get(row_index) else {
         return;
     };
-    let Some(behavior) = state.row_map.get(id).map(|r| r.behavior) else {
+    let Some(behavior) = state.pane().row_map.get(id).map(|r| r.behavior) else {
         return;
     };
 
@@ -84,7 +84,7 @@ pub(super) fn dispatch_behavior_delta(
 /// Returns true if the dispatcher handled the row (Bitmask behavior), false
 /// otherwise.
 pub(super) fn dispatch_behavior_toggle(state: &mut State, player_idx: usize, id: RowId) -> bool {
-    let Some(RowBehavior::Bitmask(b)) = state.row_map.get(id).map(|r| r.behavior) else {
+    let Some(RowBehavior::Bitmask(b)) = state.pane().row_map.get(id).map(|r| r.behavior) else {
         return false;
     };
     (b.toggle)(state, player_idx);
@@ -102,7 +102,7 @@ fn apply_numeric(
         Some(i) => i,
         None => return Outcome::NONE,
     };
-    let choice = state
+    let choice = state.pane()
         .row_map
         .get(id)
         .and_then(|r| r.choices.get(new_index))
@@ -150,7 +150,7 @@ fn apply_cycle(
             outcome
         }
         CycleBinding::NoteSkin(n) => {
-            let choice = state
+            let choice = state.pane()
                 .row_map
                 .get(id)
                 .and_then(|r| r.choices.get(new_index))
@@ -172,7 +172,7 @@ fn apply_what_comes_next_cycle(
         Some(i) => i,
         None => return Outcome::NONE,
     };
-    if let Some(row) = state.row_map.get_mut(id) {
+    if let Some(row) = state.pane_mut().row_map.get_mut(id) {
         for slot in 0..PLAYER_SLOTS {
             row.selected_choice_index[slot] = new_index;
         }
@@ -197,16 +197,16 @@ pub fn apply_choice_delta(
     player_idx: usize,
     delta: isize,
 ) {
-    if state.row_map.is_empty() {
+    if state.pane().row_map.is_empty() {
         return;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
-    if let Some(row) = state
+    let row_idx = state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_idx)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
         && row_supports_inline_nav(row)
     {
         if state.current_pane == OptionsPane::Main || row_selects_on_focus_move(row.id) {
@@ -223,12 +223,12 @@ pub fn apply_choice_delta(
 
 pub(super) fn toggle_scroll_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::Scroll {
             return;
@@ -237,9 +237,9 @@ pub(super) fn toggle_scroll_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index < 8 {
         1u8 << (choice_index as u8)
@@ -295,12 +295,12 @@ pub(super) fn toggle_scroll_row(state: &mut State, player_idx: usize) {
 
 pub(super) fn toggle_hide_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::Hide {
             return;
@@ -309,9 +309,9 @@ pub(super) fn toggle_hide_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index < 8 {
         1u8 << (choice_index as u8)
@@ -371,12 +371,12 @@ pub(super) fn toggle_hide_row(state: &mut State, player_idx: usize) {
 
 pub(super) fn toggle_insert_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::Insert {
             return;
@@ -385,9 +385,9 @@ pub(super) fn toggle_insert_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index < 7 {
         1u8 << (choice_index as u8)
@@ -425,12 +425,12 @@ pub(super) fn toggle_insert_row(state: &mut State, player_idx: usize) {
 
 pub(super) fn toggle_remove_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::Remove {
             return;
@@ -439,9 +439,9 @@ pub(super) fn toggle_remove_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index < 8 {
         1u8 << (choice_index as u8)
@@ -479,12 +479,12 @@ pub(super) fn toggle_remove_row(state: &mut State, player_idx: usize) {
 
 pub(super) fn toggle_holds_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::Holds {
             return;
@@ -493,14 +493,14 @@ pub(super) fn toggle_holds_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index
-        < state
+        < state.pane()
             .row_map
-            .row(state.row_map.id_at(row_index))
+            .row(state.pane().row_map.id_at(row_index))
             .choices
             .len()
             .min(u8::BITS as usize)
@@ -540,12 +540,12 @@ pub(super) fn toggle_holds_row(state: &mut State, player_idx: usize) {
 
 pub(super) fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::Accel {
             return;
@@ -554,14 +554,14 @@ pub(super) fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index
-        < state
+        < state.pane()
             .row_map
-            .row(state.row_map.id_at(row_index))
+            .row(state.pane().row_map.id_at(row_index))
             .choices
             .len()
             .min(u8::BITS as usize)
@@ -601,12 +601,12 @@ pub(super) fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
 
 pub(super) fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::Effect {
             return;
@@ -615,9 +615,9 @@ pub(super) fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index < 10 {
         1u16 << (choice_index as u16)
@@ -655,12 +655,12 @@ pub(super) fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
 
 pub(super) fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::Appearance {
             return;
@@ -669,14 +669,14 @@ pub(super) fn toggle_appearance_effects_row(state: &mut State, player_idx: usize
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index
-        < state
+        < state.pane()
             .row_map
-            .row(state.row_map.id_at(row_index))
+            .row(state.pane().row_map.id_at(row_index))
             .choices
             .len()
             .min(u8::BITS as usize)
@@ -718,12 +718,12 @@ pub(super) fn toggle_appearance_effects_row(state: &mut State, player_idx: usize
 
 pub(super) fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::LifeBarOptions {
             return;
@@ -732,9 +732,9 @@ pub(super) fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) 
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index < 3 {
         1u8 << (choice_index as u8)
@@ -777,12 +777,12 @@ pub(super) fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) 
 
 pub(super) fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::FAPlusOptions {
             return;
@@ -791,14 +791,14 @@ pub(super) fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index
-        < state
+        < state.pane()
             .row_map
-            .row(state.row_map.id_at(row_index))
+            .row(state.pane().row_map.id_at(row_index))
             .choices
             .len()
             .min(u8::BITS as usize)
@@ -852,12 +852,12 @@ pub(super) fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
 
 pub(super) fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::ResultsExtras {
             return;
@@ -866,9 +866,9 @@ pub(super) fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index < 1 {
         1u8 << (choice_index as u8)
@@ -905,12 +905,12 @@ pub(super) fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
 
 pub(super) fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::ErrorBar {
             return;
@@ -919,9 +919,9 @@ pub(super) fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index < 5 {
         1u8 << (choice_index as u8)
@@ -963,12 +963,12 @@ pub(super) fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
 
 pub(super) fn toggle_error_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::ErrorBarOptions {
             return;
@@ -977,9 +977,9 @@ pub(super) fn toggle_error_bar_options_row(state: &mut State, player_idx: usize)
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index < 2 {
         1u8 << (choice_index as u8)
@@ -1018,12 +1018,12 @@ pub(super) fn toggle_error_bar_options_row(state: &mut State, player_idx: usize)
 
 pub(super) fn toggle_measure_counter_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::MeasureCounterOptions {
             return;
@@ -1032,9 +1032,9 @@ pub(super) fn toggle_measure_counter_options_row(state: &mut State, player_idx: 
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index < 5 {
         1u8 << (choice_index as u8)
@@ -1082,12 +1082,12 @@ pub(super) fn toggle_measure_counter_options_row(state: &mut State, player_idx: 
 
 pub(super) fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::EarlyDecentWayOffOptions {
             return;
@@ -1096,9 +1096,9 @@ pub(super) fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state
+    let choice_index = state.pane()
         .row_map
-        .row(state.row_map.id_at(row_index))
+        .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index < 2 {
         1u8 << (choice_index as u8)
@@ -1137,12 +1137,12 @@ pub(super) fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
 
 pub(super) fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state
+    let row_index = state.pane().selected_row[idx];
+    if let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     {
         if row.id != RowId::GameplayExtras {
             return;
@@ -1151,7 +1151,7 @@ pub(super) fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let row = state.row_map.row(state.row_map.id_at(row_index));
+    let row = state.pane().row_map.row(state.pane().row_map.id_at(row_index));
     let choice_index = row.selected_choice_index[idx];
     let ge_flash = tr("PlayerOptions", "GameplayExtrasFlashColumnForMiss");
     let ge_density = tr("PlayerOptions", "GameplayExtrasDensityGraphAtTop");
@@ -1223,123 +1223,31 @@ pub(super) fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
 }
 
 pub(super) fn apply_pane(state: &mut State, pane: OptionsPane) {
-    let speed_mod = &state.speed_mod[session_persisted_player_idx()];
-    let mut row_map = build_rows(
-        &state.song,
-        speed_mod,
-        state.chart_steps_index,
-        state.chart_difficulty_index,
-        state.music_rate,
-        pane,
-        &state.noteskin_names,
-        state.return_screen,
-        state.fixed_stepchart.as_ref(),
-    );
-    let (
-        scroll_active_mask_p1,
-        hide_active_mask_p1,
-        insert_active_mask_p1,
-        remove_active_mask_p1,
-        holds_active_mask_p1,
-        accel_effects_active_mask_p1,
-        visual_effects_active_mask_p1,
-        appearance_effects_active_mask_p1,
-        fa_plus_active_mask_p1,
-        early_dw_active_mask_p1,
-        gameplay_extras_active_mask_p1,
-        gameplay_extras_more_active_mask_p1,
-        results_extras_active_mask_p1,
-        life_bar_options_active_mask_p1,
-        error_bar_active_mask_p1,
-        error_bar_options_active_mask_p1,
-        measure_counter_options_active_mask_p1,
-    ) = apply_profile_defaults(&mut row_map, &state.player_profiles[P1], P1);
-    let (
-        scroll_active_mask_p2,
-        hide_active_mask_p2,
-        insert_active_mask_p2,
-        remove_active_mask_p2,
-        holds_active_mask_p2,
-        accel_effects_active_mask_p2,
-        visual_effects_active_mask_p2,
-        appearance_effects_active_mask_p2,
-        fa_plus_active_mask_p2,
-        early_dw_active_mask_p2,
-        gameplay_extras_active_mask_p2,
-        gameplay_extras_more_active_mask_p2,
-        results_extras_active_mask_p2,
-        life_bar_options_active_mask_p2,
-        error_bar_active_mask_p2,
-        error_bar_options_active_mask_p2,
-        measure_counter_options_active_mask_p2,
-    ) = apply_profile_defaults(&mut row_map, &state.player_profiles[P2], P2);
-    state.row_map = row_map;
-    state.scroll_active_mask = [scroll_active_mask_p1, scroll_active_mask_p2];
-    state.hide_active_mask = [hide_active_mask_p1, hide_active_mask_p2];
-    state.insert_active_mask = [insert_active_mask_p1, insert_active_mask_p2];
-    state.remove_active_mask = [remove_active_mask_p1, remove_active_mask_p2];
-    state.holds_active_mask = [holds_active_mask_p1, holds_active_mask_p2];
-    state.accel_effects_active_mask = [accel_effects_active_mask_p1, accel_effects_active_mask_p2];
-    state.visual_effects_active_mask =
-        [visual_effects_active_mask_p1, visual_effects_active_mask_p2];
-    state.appearance_effects_active_mask = [
-        appearance_effects_active_mask_p1,
-        appearance_effects_active_mask_p2,
-    ];
-    state.fa_plus_active_mask = [fa_plus_active_mask_p1, fa_plus_active_mask_p2];
-    state.early_dw_active_mask = [early_dw_active_mask_p1, early_dw_active_mask_p2];
-    state.gameplay_extras_active_mask = [
-        gameplay_extras_active_mask_p1,
-        gameplay_extras_active_mask_p2,
-    ];
-    state.gameplay_extras_more_active_mask = [
-        gameplay_extras_more_active_mask_p1,
-        gameplay_extras_more_active_mask_p2,
-    ];
-    state.results_extras_active_mask =
-        [results_extras_active_mask_p1, results_extras_active_mask_p2];
-    state.life_bar_options_active_mask = [
-        life_bar_options_active_mask_p1,
-        life_bar_options_active_mask_p2,
-    ];
-    state.error_bar_active_mask = [error_bar_active_mask_p1, error_bar_active_mask_p2];
-    state.error_bar_options_active_mask = [
-        error_bar_options_active_mask_p1,
-        error_bar_options_active_mask_p2,
-    ];
-    state.measure_counter_options_active_mask = [
-        measure_counter_options_active_mask_p1,
-        measure_counter_options_active_mask_p2,
-    ];
+    // Row_maps are pre-built at init() and live in `State::panes`, so a
+    // pane switch does not rebuild rows or recompute masks (masks are kept up
+    // to date incrementally by toggle handlers). Switching is now a structural
+    // operation: change the active pane, reset the destination pane's cursor
+    // to the top, and recompute its row tweens for the new layout.
     state.current_pane = pane;
-    state.selected_row = [0; PLAYER_SLOTS];
-    state.prev_selected_row = [0; PLAYER_SLOTS];
-    state.inline_choice_x = [f32::NAN; PLAYER_SLOTS];
-    state.arcade_row_focus = [false; PLAYER_SLOTS];
+    state.pane_mut().reset_cursor();
     state.start_held_since = [None; PLAYER_SLOTS];
     state.start_last_triggered_at = [None; PLAYER_SLOTS];
-    state.cursor_initialized = [false; PLAYER_SLOTS];
-    state.cursor_from_x = [0.0; PLAYER_SLOTS];
-    state.cursor_from_y = [0.0; PLAYER_SLOTS];
-    state.cursor_from_w = [0.0; PLAYER_SLOTS];
-    state.cursor_from_h = [0.0; PLAYER_SLOTS];
-    state.cursor_to_x = [0.0; PLAYER_SLOTS];
-    state.cursor_to_y = [0.0; PLAYER_SLOTS];
-    state.cursor_to_w = [0.0; PLAYER_SLOTS];
-    state.cursor_to_h = [0.0; PLAYER_SLOTS];
-    state.cursor_t = [1.0; PLAYER_SLOTS];
     state.help_anim_time = [0.0; PLAYER_SLOTS];
     let active = session_active_players();
-    state.row_tweens = init_row_tweens(
-        &state.row_map,
-        state.selected_row,
+    let hide = state.hide_active_mask;
+    let error_bar = state.error_bar_active_mask;
+    let allow = state.allow_per_player_global_offsets;
+    let p = state.pane_mut();
+    p.row_tweens = init_row_tweens(
+        &p.row_map,
+        p.selected_row,
         active,
-        state.hide_active_mask,
-        state.error_bar_active_mask,
-        state.allow_per_player_global_offsets,
+        hide,
+        error_bar,
+        allow,
     );
-    state.arcade_row_focus = std::array::from_fn(|player_idx| {
-        row_allows_arcade_next_row(state, state.selected_row[player_idx])
+    state.pane_mut().arcade_row_focus = std::array::from_fn(|player_idx| {
+        row_allows_arcade_next_row(state, state.pane().selected_row[player_idx])
     });
 }
 
