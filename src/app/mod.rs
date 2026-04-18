@@ -2743,9 +2743,7 @@ impl App {
                 (screen, text_layout_cache.frame_stats())
             };
         let build_screen_us = elapsed_us_since(build_screen_started);
-        let resolve_textures_started = Instant::now();
-        self.asset_manager.resolve_render_textures(&mut screen);
-        let resolve_textures_us = elapsed_us_since(resolve_textures_started);
+        let resolve_textures_us = 0;
         let compose_us: u32 = actor_build_us
             .saturating_add(build_screen_us)
             .saturating_add(resolve_textures_us);

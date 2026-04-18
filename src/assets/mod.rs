@@ -4,8 +4,7 @@ mod textures;
 
 use crate::config::dirs;
 use crate::engine::gfx::{
-    Backend, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, SamplerDesc, Texture as GfxTexture,
-    TextureHandle, TextureHandleMap,
+    Backend, SamplerDesc, Texture as GfxTexture, TextureHandle, TextureHandleMap,
 };
 use crate::engine::present::font::{self, Font, FontLoadData, FontParseError};
 use image::RgbaImage;
@@ -204,34 +203,6 @@ impl AssetManager {
         clear_texture_handles();
         self.uploaded_texture_dims.clear();
         std::mem::take(&mut self.textures)
-    }
-
-    #[inline(always)]
-    pub fn texture_handle_for_key(&self, key: &str) -> TextureHandle {
-        texture_handle(key)
-    }
-
-    pub fn resolve_render_textures(&self, render: &mut RenderList<'_>) {
-        #[inline(always)]
-        fn texture_key<'a>(obj: &'a crate::engine::gfx::RenderObject<'a>) -> Option<&'a str> {
-            match &obj.object_type {
-                ObjectType::Sprite { texture_id, .. }
-                | ObjectType::TexturedMesh { texture_id, .. } => Some(texture_id.as_ref()),
-                ObjectType::Mesh { .. } => None,
-            }
-        }
-
-        let objects = &mut render.objects;
-        let mut last_handle = INVALID_TEXTURE_HANDLE;
-        for idx in 0..objects.len() {
-            let handle = match texture_key(&objects[idx]) {
-                Some(key) if idx > 0 && texture_key(&objects[idx - 1]) == Some(key) => last_handle,
-                Some(key) => self.texture_handle_for_key(key),
-                None => INVALID_TEXTURE_HANDLE,
-            };
-            objects[idx].texture_handle = handle;
-            last_handle = handle;
-        }
     }
 
     pub fn with_fonts<F, R>(&self, f: F) -> R

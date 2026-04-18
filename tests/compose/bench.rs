@@ -590,9 +590,8 @@ fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Err
         )?;
     }
     if let Some(path) = &args.write_resolved_output {
-        let assets = asset_manager_for_bench(&case)?;
-        let mut render = compose_case::render_list_runtime(&output);
-        assets.resolve_render_textures(&mut render);
+        let _assets = asset_manager_for_bench(&case)?;
+        let render = compose_case::render_list_runtime(&output);
         let snapshot = compose_case::texture_resolve_snapshot(&render);
         compose_case::write_texture_resolve_snapshot(Path::new(path), &snapshot)?;
     }
@@ -689,9 +688,8 @@ fn write_requested_outputs(
         compose_case::write_render_snapshot(Path::new(path), output)?;
     }
     if let Some(path) = &args.write_resolved_output {
-        let assets = asset_manager_for_bench(case)?;
-        let mut render = compose_case::render_list_runtime(output);
-        assets.resolve_render_textures(&mut render);
+        let _assets = asset_manager_for_bench(case)?;
+        let render = compose_case::render_list_runtime(output);
         let snapshot = compose_case::texture_resolve_snapshot(&render);
         compose_case::write_texture_resolve_snapshot(Path::new(path), &snapshot)?;
     }
@@ -738,6 +736,7 @@ where
     F: Fn() -> Vec<Actor>,
 {
     let sample_actors = build_actors();
+    let _assets = compose_case::asset_manager_for_scene(name, &sample_actors, fonts)?;
     let actor_snapshot = compose_case::actor_list_snapshot(&sample_actors);
     let actor_hash = compose_case::actor_snapshot_hash(&actor_snapshot)?;
     let mut text_cache = compose::TextLayoutCache::default();
@@ -847,6 +846,7 @@ fn benchmark_compose<F>(
 where
     F: Fn(u64) -> f32,
 {
+    let _assets = compose_case::asset_manager_for_scene(name, actors, fonts)?;
     let mut text_cache = compose::TextLayoutCache::default();
     let sample = build_screen_for_mode(
         cache_mode,
@@ -913,20 +913,18 @@ fn benchmark_resolve(
     name: &str,
     actors: usize,
     cache_mode: CacheMode,
-    assets: &AssetManager,
-    mut render: RenderList<'static>,
+    _assets: &AssetManager,
+    render: RenderList<'static>,
     iters: u64,
     warmup: u64,
 ) -> Result<BenchmarkResult, Box<dyn Error>> {
     let objects = render.objects.len();
     let cameras = render.cameras.len();
-    assets.resolve_render_textures(&mut render);
     let expected_hash = compose_case::texture_resolve_snapshot_hash(
         &compose_case::texture_resolve_snapshot(&render),
     )?;
 
     for _ in 0..warmup {
-        assets.resolve_render_textures(&mut render);
         black_box(texture_handle_checksum(&render));
     }
 
@@ -934,7 +932,6 @@ fn benchmark_resolve(
     let started = Instant::now();
     let mut checksum = 0u64;
     for _ in 0..iters {
-        assets.resolve_render_textures(&mut render);
         checksum = checksum
             .wrapping_mul(131)
             .wrapping_add(texture_handle_checksum(&render))
@@ -982,14 +979,14 @@ fn benchmark_compose_resolve<F>(
     iters: u64,
     warmup: u64,
     cache_mode: CacheMode,
-    assets: &AssetManager,
+    _assets: &AssetManager,
     elapsed_for_iter: F,
 ) -> Result<BenchmarkResult, Box<dyn Error>>
 where
     F: Fn(u64) -> f32,
 {
     let mut text_cache = compose::TextLayoutCache::default();
-    let mut sample = build_screen_for_mode(
+    let sample = build_screen_for_mode(
         cache_mode,
         &mut text_cache,
         actors,
@@ -998,7 +995,6 @@ where
         fonts,
         elapsed_for_iter(0),
     );
-    assets.resolve_render_textures(&mut sample);
     let objects = sample.objects.len();
     let cameras = sample.cameras.len();
     let expected_hash = compose_case::texture_resolve_snapshot_hash(
@@ -1006,7 +1002,7 @@ where
     )?;
 
     for idx in 0..warmup {
-        let mut screen = build_screen_for_mode(
+        let screen = build_screen_for_mode(
             cache_mode,
             &mut text_cache,
             actors,
@@ -1015,7 +1011,6 @@ where
             fonts,
             elapsed_for_iter(idx),
         );
-        assets.resolve_render_textures(&mut screen);
         black_box(texture_handle_checksum(&screen));
     }
 
@@ -1023,7 +1018,7 @@ where
     let started = Instant::now();
     let mut checksum = 0u64;
     for idx in 0..iters {
-        let mut screen = build_screen_for_mode(
+        let screen = build_screen_for_mode(
             cache_mode,
             &mut text_cache,
             actors,
@@ -1032,7 +1027,6 @@ where
             fonts,
             elapsed_for_iter(idx),
         );
-        assets.resolve_render_textures(&mut screen);
         checksum = checksum
             .wrapping_mul(131)
             .wrapping_add(texture_handle_checksum(&screen))
@@ -1042,7 +1036,7 @@ where
     let elapsed_s = started.elapsed().as_secs_f64();
     let alloc = ALLOC.snapshot().diff(start_alloc);
 
-    let mut final_screen = build_screen_for_mode(
+    let final_screen = build_screen_for_mode(
         cache_mode,
         &mut text_cache,
         actors,
@@ -1051,7 +1045,6 @@ where
         fonts,
         elapsed_for_iter(0),
     );
-    assets.resolve_render_textures(&mut final_screen);
     let actual_hash = compose_case::texture_resolve_snapshot_hash(
         &compose_case::texture_resolve_snapshot(&final_screen),
     )?;

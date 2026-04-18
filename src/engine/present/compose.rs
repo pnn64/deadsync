@@ -112,9 +112,8 @@ pub fn build_screen_cached_with_scratch<'a>(
     scratch.object_capacity = objects.capacity();
     scratch.masks = masks;
 
-    // Present only builds render objects. Texture handles are resolved once
-    // downstream after composition so we do not repeat global texture lookups
-    // while assembling the list here.
+    // Texture handles are resolved during composition and cached per frame so
+    // draw prep/backends only see compact render objects.
     RenderList {
         clear_color,
         cameras,
@@ -148,6 +147,7 @@ impl ComposeScratch {
 #[derive(Clone, Copy)]
 struct CachedGlyph {
     texture_key: *const str,
+    stroke_texture_key: Option<*const str>,
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     size: [f32; 2],
@@ -184,11 +184,13 @@ type OwnedLayoutMap = HashMap<Box<str>, OwnedLayoutEntry, TextLayoutHasher>;
 type SharedAliasMap = HashMap<usize, Arc<str>, TextLayoutHasher>;
 type TextureMetaMap<'a> = HashMap<&'a str, assets::TexMeta, TextLayoutHasher>;
 type TextureSheetMap<'a> = HashMap<&'a str, (u32, u32), TextLayoutHasher>;
+type TextureHandleLookupMap<'a> = HashMap<&'a str, renderer::TextureHandle, TextLayoutHasher>;
 
 #[derive(Default)]
 struct TextureLookupCache<'a> {
     dims: TextureMetaMap<'a>,
     sheets: TextureSheetMap<'a>,
+    handles: TextureHandleLookupMap<'a>,
 }
 
 impl<'a> TextureLookupCache<'a> {
@@ -210,6 +212,16 @@ impl<'a> TextureLookupCache<'a> {
         let dims = assets::sprite_sheet_dims(key);
         self.sheets.insert(key, dims);
         dims
+    }
+
+    #[inline(always)]
+    fn texture_handle(&mut self, key: &'a str) -> renderer::TextureHandle {
+        if let Some(&handle) = self.handles.get(key) {
+            return handle;
+        }
+        let handle = assets::texture_handle(key);
+        self.handles.insert(key, handle);
+        handle
     }
 }
 
@@ -589,9 +601,18 @@ fn font_chain_key(font: &font::Font, fonts: &HashMap<&'static str, font::Font>) 
 }
 
 #[inline(always)]
-fn cached_glyph(glyph: &font::Glyph, char_index: usize, draw_quad: bool) -> CachedGlyph {
+fn cached_glyph(
+    font: &font::Font,
+    glyph: &font::Glyph,
+    char_index: usize,
+    draw_quad: bool,
+) -> CachedGlyph {
     CachedGlyph {
         texture_key: std::ptr::from_ref(glyph.texture_key.as_str()),
+        stroke_texture_key: font
+            .stroke_texture_map
+            .get(glyph.texture_key.as_str())
+            .map(|stroke_key| std::ptr::from_ref(stroke_key.as_str())),
         uv_scale: glyph.uv_scale,
         uv_offset: glyph.uv_offset,
         size: glyph.size,
@@ -697,6 +718,7 @@ impl<'a> TextAttrCursor<'a> {
 }
 
 fn flush_wrapped_word(
+    font: &font::Font,
     lines: &mut Vec<CachedLine>,
     max_logical_width_i: &mut i32,
     glyph_count: &mut usize,
@@ -725,6 +747,7 @@ fn flush_wrapped_word(
         *line_width += space_width + *word_width;
         if let Some(glyph) = space_glyph {
             line_glyphs.push(cached_glyph(
+                font,
                 glyph,
                 word_space_before.unwrap_or(word_first_char.saturating_sub(1)),
                 draws_space,
@@ -777,7 +800,12 @@ fn build_cached_text_layout(
             for ch in src.chars() {
                 if let Some(glyph) = font::find_glyph(font, ch, fonts) {
                     width_i32 += glyph.advance_i32;
-                    glyphs.push(cached_glyph(glyph, char_index, ch != ' ' || draws_space));
+                    glyphs.push(cached_glyph(
+                        font,
+                        glyph,
+                        char_index,
+                        ch != ' ' || draws_space,
+                    ));
                 }
                 char_index += 1;
             }
@@ -805,6 +833,7 @@ fn build_cached_text_layout(
         for ch in src.chars() {
             if ch == ' ' {
                 flush_wrapped_word(
+                    font,
                     &mut lines,
                     &mut max_logical_width_i,
                     &mut glyph_count,
@@ -830,13 +859,14 @@ fn build_cached_text_layout(
                 }
                 if let Some(glyph) = font::find_glyph(font, ch, fonts) {
                     word_width += glyph.advance_i32;
-                    word_glyphs.push(cached_glyph(glyph, char_index, true));
+                    word_glyphs.push(cached_glyph(font, glyph, char_index, true));
                 }
             }
             char_index += 1;
         }
 
         flush_wrapped_word(
+            font,
             &mut lines,
             &mut max_logical_width_i,
             &mut glyph_count,
@@ -1292,7 +1322,6 @@ fn build_actor_recursive<'a>(
             let before = out.len();
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::TexturedMesh {
-                    texture_id: std::borrow::Cow::Borrowed(texture.as_ref()),
                     tint: *tint,
                     vertices: std::borrow::Cow::Borrowed(vertices.as_ref()),
                     geom_cache_key: *geom_cache_key,
@@ -1301,7 +1330,7 @@ fn build_actor_recursive<'a>(
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
                 },
-                texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                texture_handle: texture_cache.texture_handle(texture.as_ref()),
                 transform,
                 blend: *blend,
                 z: 0,
@@ -1449,7 +1478,11 @@ fn build_actor_recursive<'a>(
                 let mut effect_color = *color;
                 let mut effect_scale = *scale;
                 apply_effect_to_text(*effect, total_elapsed, &mut effect_color, &mut effect_scale);
+                let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
+                stroke_rgba[3] *= effect_color[3];
+                let needs_stroke = stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty();
                 let before = out.len();
+                let mut stroke_texture_keys = SmallVec::<[Option<*const str>; 64]>::new();
                 layout_text(
                     out,
                     fm,
@@ -1472,6 +1505,12 @@ fn build_actor_recursive<'a>(
                     *align_text,
                     m,
                     text_cache,
+                    texture_cache,
+                    if needs_stroke {
+                        Some(&mut stroke_texture_keys)
+                    } else {
+                        None
+                    },
                 );
                 if let Some([x, y, w, h]) = *clip {
                     let clip_sm = SmRect {
@@ -1481,21 +1520,28 @@ fn build_actor_recursive<'a>(
                         h,
                     };
                     let clip_world = sm_rect_to_world_edges(clip_sm, m);
-                    clip_objects_range_to_world_rect(out, before, clip_world);
+                    if needs_stroke {
+                        clip_objects_range_with_keys_to_world_rect(
+                            out,
+                            &mut stroke_texture_keys,
+                            before,
+                            clip_world,
+                        );
+                    } else {
+                        clip_objects_range_to_world_rect(out, before, clip_world);
+                    }
                 }
                 let end = out.len();
                 let layer = base_z.saturating_add(*z);
-                let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
-                stroke_rgba[3] *= effect_color[3];
-                if stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty() {
+                if needs_stroke {
                     out.reserve(end - before);
-                    let mut cached_texture_ptr: *const u8 = std::ptr::null();
-                    let mut cached_texture_len = 0usize;
-                    let mut cached_stroke: Option<&str> = None;
                     let mut idx = before;
-                    while idx < end {
+                    for &stroke_ptr in &stroke_texture_keys {
+                        let Some(stroke_ptr) = stroke_ptr else {
+                            idx += 1;
+                            continue;
+                        };
                         let (
-                            stroke_key,
                             transform,
                             uv_scale,
                             uv_offset,
@@ -1506,7 +1552,6 @@ fn build_actor_recursive<'a>(
                             RenderObject {
                                 object_type:
                                     renderer::ObjectType::Sprite {
-                                        texture_id,
                                         uv_scale,
                                         uv_offset,
                                         local_offset,
@@ -1516,58 +1561,24 @@ fn build_actor_recursive<'a>(
                                     },
                                 transform,
                                 ..
-                            } => {
-                                let texture_key = texture_id.as_ref();
-                                let texture_bytes = texture_key.as_bytes();
-                                let stroke_key = if texture_bytes.len() == cached_texture_len
-                                    && !cached_texture_ptr.is_null()
-                                    && {
-                                        // Glyph texture keys are borrowed from font storage, so this
-                                        // cached byte slice stays valid across pushes after reserve().
-                                        // SAFETY: `cached_texture_ptr` and `cached_texture_len` are
-                                        // only refreshed from `texture_key.as_bytes()` values that
-                                        // live for the duration of the cached layout. The pointer is
-                                        // never used after either cached value changes.
-                                        let cached_bytes = unsafe {
-                                            std::slice::from_raw_parts(
-                                                cached_texture_ptr,
-                                                cached_texture_len,
-                                            )
-                                        };
-                                        cached_bytes == texture_bytes
-                                    } {
-                                    cached_stroke
-                                } else {
-                                    cached_texture_ptr = texture_bytes.as_ptr();
-                                    cached_texture_len = texture_bytes.len();
-                                    cached_stroke = fm
-                                        .stroke_texture_map
-                                        .get(texture_key)
-                                        .map(std::string::String::as_str);
-                                    cached_stroke
-                                };
-                                let Some(stroke_key) = stroke_key else {
-                                    idx += 1;
-                                    continue;
-                                };
-                                (
-                                    stroke_key,
-                                    *transform,
-                                    *uv_scale,
-                                    *uv_offset,
-                                    *local_offset,
-                                    *local_offset_rot_sin_cos,
-                                    *edge_fade,
-                                )
-                            }
+                            } => (
+                                *transform,
+                                *uv_scale,
+                                *uv_offset,
+                                *local_offset,
+                                *local_offset_rot_sin_cos,
+                                *edge_fade,
+                            ),
                             _ => {
                                 idx += 1;
                                 continue;
                             }
                         };
+                        // SAFETY: `stroke_ptr` was captured from immutable font storage while
+                        // building the cached text layout and stays valid for this compose pass.
+                        let stroke_key = unsafe { str_from_cached_ptr(stroke_ptr) };
                         out.push(RenderObject {
                             object_type: renderer::ObjectType::Sprite {
-                                texture_id: std::borrow::Cow::Borrowed(stroke_key),
                                 tint: stroke_rgba,
                                 uv_scale,
                                 uv_offset,
@@ -1575,7 +1586,7 @@ fn build_actor_recursive<'a>(
                                 local_offset_rot_sin_cos,
                                 edge_fade,
                             },
-                            texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                            texture_handle: texture_cache.texture_handle(stroke_key),
                             transform,
                             blend: *blend,
                             z: layer,
@@ -2029,15 +2040,10 @@ fn push_sprite<'a>(
         t * r * s
     };
 
-    let final_texture_id = if is_solid {
-        std::borrow::Cow::Borrowed("__white")
-    } else {
-        std::borrow::Cow::Borrowed(texture_id)
-    };
+    let texture_key = if is_solid { "__white" } else { texture_id };
 
     out.push(renderer::RenderObject {
         object_type: renderer::ObjectType::Sprite {
-            texture_id: final_texture_id,
             tint,
             uv_scale,
             uv_offset,
@@ -2045,7 +2051,7 @@ fn push_sprite<'a>(
             local_offset_rot_sin_cos,
             edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
         },
-        texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+        texture_handle: texture_cache.texture_handle(texture_key),
         transform,
         blend,
         z: 0,
@@ -2125,6 +2131,8 @@ fn layout_text<'a>(
     text_align: actors::TextAlign,
     m: &Metrics,
     text_cache: &mut TextLayoutCache,
+    texture_cache: &mut TextureLookupCache<'a>,
+    stroke_texture_keys: Option<&mut SmallVec<[Option<*const str>; 64]>>,
 ) {
     if content.as_str().is_empty() {
         return;
@@ -2252,6 +2260,7 @@ fn layout_text<'a>(
 
     out.reserve(layout.glyph_count);
     let mut attr_cursor = TextAttrCursor::new(attributes);
+    let mut stroke_texture_keys = stroke_texture_keys;
 
     for line in &layout.lines {
         pen_y_logical += font.height;
@@ -2289,7 +2298,6 @@ fn layout_text<'a>(
 
                 out.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
-                        texture_id: std::borrow::Cow::Borrowed(texture_key),
                         tint: attr_cursor
                             .as_mut()
                             .map_or([1.0; 4], |cursor| cursor.tint_for(glyph.char_index)),
@@ -2299,13 +2307,16 @@ fn layout_text<'a>(
                         local_offset_rot_sin_cos: [0.0, 1.0],
                         edge_fade: [0.0; 4],
                     },
-                    texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                    texture_handle: texture_cache.texture_handle(texture_key),
                     transform,
                     blend: BlendMode::Alpha,
                     z: 0,
                     order: 0,
                     camera: 0,
                 });
+                if let Some(keys) = stroke_texture_keys.as_mut() {
+                    (*keys).push(glyph.stroke_texture_key);
+                }
             }
 
             pen_x_logical += glyph.advance_i32;
@@ -2467,6 +2478,48 @@ fn clip_objects_range_to_world_rect(
     objects.truncate(write);
 }
 
+fn clip_objects_range_with_keys_to_world_rect(
+    objects: &mut Vec<RenderObject<'_>>,
+    keys: &mut SmallVec<[Option<*const str>; 64]>,
+    start: usize,
+    clip: WorldRect,
+) {
+    if start >= objects.len() {
+        keys.clear();
+        return;
+    }
+    if clip.left >= clip.right || clip.bottom >= clip.top {
+        objects.truncate(start);
+        keys.clear();
+        return;
+    }
+
+    debug_assert_eq!(keys.len(), objects.len().saturating_sub(start));
+
+    let len = objects.len();
+    let mut write = start;
+    let mut key_write = 0usize;
+    for read in start..len {
+        let keep = {
+            let obj = &mut objects[read];
+            clip_sprite_object_to_world_rect(obj, clip)
+        };
+        if keep {
+            let key_read = read - start;
+            if write != read {
+                objects.swap(write, read);
+            }
+            if key_write != key_read {
+                keys.swap(key_write, key_read);
+            }
+            write += 1;
+            key_write += 1;
+        }
+    }
+    objects.truncate(write);
+    keys.truncate(key_write);
+}
+
 fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect) -> bool {
     let Some(clipped) = clipped_sprite_object_to_world_rect(obj, clip) else {
         return false;
@@ -2485,7 +2538,6 @@ fn clipped_sprite_object_to_world_rect<'a>(
     }
     match &obj.object_type {
         renderer::ObjectType::Sprite {
-            texture_id,
             tint,
             uv_scale,
             uv_offset,
@@ -2501,7 +2553,6 @@ fn clipped_sprite_object_to_world_rect<'a>(
                 || t.y_axis.z.abs() > eps
             {
                 return clip_rotated_sprite_to_world_rect(
-                    texture_id.clone(),
                     *tint,
                     *uv_scale,
                     *uv_offset,
@@ -2562,7 +2613,6 @@ fn clipped_sprite_object_to_world_rect<'a>(
 
             Some(ClippedSpriteObject {
                 object_type: renderer::ObjectType::Sprite {
-                    texture_id: texture_id.clone(),
                     tint: *tint,
                     uv_scale,
                     uv_offset,
@@ -2670,14 +2720,13 @@ fn clip_polygon_to_world_rect(poly: &[ClipVertex], clip: WorldRect) -> ClipPolyg
     clip_poly_edge_into(&p, 1, clip.top, false)
 }
 
-fn clip_rotated_sprite_to_world_rect<'a>(
-    texture_id: std::borrow::Cow<'a, str>,
+fn clip_rotated_sprite_to_world_rect(
     tint: [f32; 4],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     transform: Matrix4,
     clip: WorldRect,
-) -> Option<ClippedSpriteObject<'a>> {
+) -> Option<ClippedSpriteObject<'static>> {
     let poly = [
         ClipVertex {
             pos: world_xy(&transform, [-0.5_f32, -0.5_f32]),
@@ -2718,7 +2767,6 @@ fn clip_rotated_sprite_to_world_rect<'a>(
 
     Some(ClippedSpriteObject {
         object_type: renderer::ObjectType::TexturedMesh {
-            texture_id,
             tint: [1.0; 4],
             vertices: std::borrow::Cow::Owned(out),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
@@ -2744,7 +2792,6 @@ mod tests {
     use crate::engine::present::actors::{Actor, SizeSpec, TextAttribute};
     use crate::engine::space::Metrics;
     use glam::{Mat4 as Matrix4, Vec3 as Vector3};
-    use std::borrow::Cow;
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -2855,7 +2902,6 @@ mod tests {
     fn mask_clip_chooses_largest_intersection() {
         let mut obj = RenderObject {
             object_type: ObjectType::Sprite {
-                texture_id: Cow::Borrowed("mask-test"),
                 tint: [1.0; 4],
                 uv_scale: [1.0, 1.0],
                 uv_offset: [0.0, 0.0],
@@ -2910,10 +2956,9 @@ mod tests {
     }
 
     #[test]
-    fn rotated_clip_preserves_borrowed_texture_key() {
+    fn rotated_clip_preserves_texture_handle() {
         let mut obj = RenderObject {
             object_type: ObjectType::Sprite {
-                texture_id: Cow::Borrowed("rot-clip"),
                 tint: [0.25, 0.5, 0.75, 1.0],
                 uv_scale: [1.0, 1.0],
                 uv_offset: [0.0, 0.0],
@@ -2921,7 +2966,7 @@ mod tests {
                 local_offset_rot_sin_cos: [0.0, 1.0],
                 edge_fade: [0.0; 4],
             },
-            texture_handle: 0,
+            texture_handle: 17,
             transform: Matrix4::from_translation(Vector3::ZERO)
                 * Matrix4::from_rotation_z(45.0_f32.to_radians())
                 * Matrix4::from_scale(Vector3::new(10.0, 10.0, 1.0)),
@@ -2942,12 +2987,8 @@ mod tests {
         ));
 
         match &obj.object_type {
-            ObjectType::TexturedMesh {
-                texture_id,
-                vertices,
-                ..
-            } => {
-                assert!(matches!(texture_id, Cow::Borrowed("rot-clip")));
+            ObjectType::TexturedMesh { vertices, .. } => {
+                assert_eq!(obj.texture_handle, 17);
                 assert!(!vertices.is_empty());
             }
             _ => panic!("expected rotated clip to produce textured mesh"),

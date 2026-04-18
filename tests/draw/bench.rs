@@ -2,11 +2,10 @@ use deadsync::engine::gfx::draw_prep::{
     self, DrawOp, DrawScratch, PrepareStats, SpriteInstanceRaw, TexturedMeshInstanceRaw,
     TexturedMeshSource, TexturedMeshVertexRaw,
 };
-use deadsync::engine::gfx::{BlendMode, MeshMode, MeshVertex, RenderList, TextureHandle};
+use deadsync::engine::gfx::{BlendMode, MeshMode, MeshVertex, RenderList};
 use deadsync::engine::present::compose;
 use deadsync::test_support::{compose_case, compose_scenarios};
 use std::alloc::{GlobalAlloc, Layout, System};
-use std::collections::HashMap;
 use std::error::Error;
 use std::hash::Hasher;
 use std::hint::black_box;
@@ -318,14 +317,13 @@ fn benchmark_draw(
     render: &RenderList<'_>,
     iters: u64,
     warmup: u64,
-    flip_texture_keys: bool,
+    _flip_texture_keys: bool,
     expect_plan_hash: Option<&str>,
     write_plan: Option<&str>,
     verification: Option<VerificationResult>,
 ) -> Result<BenchmarkResult, Box<dyn Error>> {
-    let texture_ids = texture_ids(render, flip_texture_keys);
     let mut render = render.clone();
-    resolve_texture_handles(&mut render, &texture_ids);
+    ensure_texture_handles(&mut render);
     let initial = build_plan(&render)?;
     let plan_hash = plan_snapshot_hash(&initial.snapshot)?;
     if let Some(expected) = expect_plan_hash
@@ -515,68 +513,24 @@ fn plan_snapshot_hash(snapshot: &PlanSnapshot) -> Result<String, Box<dyn Error>>
     Ok(format!("{:016x}", hasher.finish()))
 }
 
-fn texture_ids(render: &RenderList<'_>, flip_texture_keys: bool) -> HashMap<String, u64> {
-    let mut ids = HashMap::new();
-    let mut next_id = 1u64;
-    for obj in &render.objects {
-        let key = match &obj.object_type {
-            deadsync::engine::gfx::ObjectType::Sprite { texture_id, .. } => {
-                Some(texture_id.as_ref())
-            }
-            deadsync::engine::gfx::ObjectType::TexturedMesh { texture_id, .. } => {
-                Some(texture_id.as_ref())
-            }
-            deadsync::engine::gfx::ObjectType::Mesh { .. } => None,
-        };
-        let Some(key) = key else {
-            continue;
-        };
-        let key = if flip_texture_keys {
-            flip_ascii_case(key)
-        } else {
-            key.to_string()
-        };
-        if ids.contains_key(key.as_str()) {
+fn ensure_texture_handles(render: &mut RenderList<'_>) {
+    let mut next_handle = 1u64;
+    for obj in &mut render.objects {
+        if obj.texture_handle != deadsync::engine::gfx::INVALID_TEXTURE_HANDLE {
             continue;
         }
-        ids.insert(key, next_id);
-        next_id = next_id.wrapping_add(1).max(1);
-    }
-    ids
-}
-
-fn resolve_texture_handles(render: &mut RenderList<'_>, textures: &HashMap<String, TextureHandle>) {
-    for obj in &mut render.objects {
         obj.texture_handle = match &obj.object_type {
-            deadsync::engine::gfx::ObjectType::Sprite { texture_id, .. }
-            | deadsync::engine::gfx::ObjectType::TexturedMesh { texture_id, .. } => textures
-                .get(texture_id.as_ref())
-                .copied()
-                .or_else(|| {
-                    textures.iter().find_map(|(candidate, texture)| {
-                        candidate
-                            .eq_ignore_ascii_case(texture_id.as_ref())
-                            .then_some(*texture)
-                    })
-                })
-                .unwrap_or(deadsync::engine::gfx::INVALID_TEXTURE_HANDLE),
+            deadsync::engine::gfx::ObjectType::Sprite { .. }
+            | deadsync::engine::gfx::ObjectType::TexturedMesh { .. } => {
+                let handle = next_handle;
+                next_handle = next_handle.wrapping_add(1).max(1);
+                handle
+            }
             deadsync::engine::gfx::ObjectType::Mesh { .. } => {
                 deadsync::engine::gfx::INVALID_TEXTURE_HANDLE
             }
         };
     }
-}
-
-fn flip_ascii_case(s: &str) -> String {
-    let mut out = Vec::with_capacity(s.len());
-    for b in s.bytes() {
-        out.push(match b {
-            b'a'..=b'z' => b - 32,
-            b'A'..=b'Z' => b + 32,
-            _ => b,
-        });
-    }
-    String::from_utf8(out).expect("ascii flip should preserve utf8")
 }
 
 fn blend_name(blend: BlendMode) -> &'static str {

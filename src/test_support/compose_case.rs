@@ -279,6 +279,7 @@ pub struct TextureResolveSnapshot {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TextureResolveObjectSnapshot {
+    #[serde(default)]
     pub texture_id: Option<String>,
     pub texture_handle: crate::engine::gfx::TextureHandle,
 }
@@ -286,6 +287,8 @@ pub struct TextureResolveObjectSnapshot {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RenderObjectSnapshot {
     pub object_type: RenderObjectTypeSnapshot,
+    #[serde(default)]
+    pub texture_handle: crate::engine::gfx::TextureHandle,
     pub transform: [[f32; 4]; 4],
     pub blend: BlendModeSnapshot,
     pub z: i16,
@@ -296,7 +299,8 @@ pub struct RenderObjectSnapshot {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RenderObjectTypeSnapshot {
     Sprite {
-        texture_id: String,
+        #[serde(default)]
+        texture_id: Option<String>,
         tint: [f32; 4],
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
@@ -309,7 +313,8 @@ pub enum RenderObjectTypeSnapshot {
         mode: MeshModeSnapshot,
     },
     TexturedMesh {
-        texture_id: String,
+        #[serde(default)]
+        texture_id: Option<String>,
         #[serde(default = "default_textured_mesh_tint")]
         tint: [f32; 4],
         vertices: Vec<TexturedMeshVertex>,
@@ -340,6 +345,7 @@ pub fn capture_case(
 ) -> Result<(ComposeCase, RenderListSnapshot), Box<dyn Error>> {
     let font_names = collect_font_names(actors, fonts);
     let textures = collect_texture_meta(actors, fonts, &font_names);
+    let _assets = asset_manager_for_scene(screen, actors, fonts)?;
     let font_snapshots = font_names
         .iter()
         .filter_map(|name| {
@@ -419,6 +425,7 @@ pub fn replay_case(case: &ComposeCase) -> Result<ReplayCase, Box<dyn Error>> {
 
 pub fn render_case_output(case: &ComposeCase) -> Result<RenderListSnapshot, Box<dyn Error>> {
     let replay = replay_case(case)?;
+    let _assets = asset_manager_for_scene(&replay.screen, &replay.actors, &replay.fonts)?;
     Ok(render_list_snapshot(&compose::build_screen(
         &replay.actors,
         replay.clear_color,
@@ -436,6 +443,31 @@ pub fn asset_manager_for_case_lowercase(
     case: &ComposeCase,
 ) -> Result<assets::AssetManager, Box<dyn Error>> {
     asset_manager_for_case_impl(case, str::to_ascii_lowercase)
+}
+
+pub fn asset_manager_for_scene(
+    screen: &str,
+    actors: &[Actor],
+    fonts: &HashMap<&'static str, Font>,
+) -> Result<assets::AssetManager, Box<dyn Error>> {
+    let font_names = collect_font_names(actors, fonts);
+    let textures = collect_texture_meta(actors, fonts, &font_names);
+    let mut assets = assets::AssetManager::new();
+    let map_key: fn(&str) -> String = if screen.ends_with("-ci") {
+        str::to_ascii_lowercase
+    } else {
+        ToString::to_string
+    };
+    for key in textures
+        .keys()
+        .map(String::as_str)
+        .chain(["__white", "__black"])
+        .map(map_key)
+        .collect::<BTreeSet<_>>()
+    {
+        assets.reserve_texture_handle(key);
+    }
+    Ok(assets)
 }
 
 fn asset_manager_for_case_impl(
@@ -1187,7 +1219,6 @@ fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
     RenderObjectSnapshot {
         object_type: match &render.object_type {
             ObjectType::Sprite {
-                texture_id,
                 tint,
                 uv_scale,
                 uv_offset,
@@ -1195,7 +1226,7 @@ fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
                 local_offset_rot_sin_cos,
                 edge_fade,
             } => RenderObjectTypeSnapshot::Sprite {
-                texture_id: texture_id.to_string(),
+                texture_id: None,
                 tint: *tint,
                 uv_scale: *uv_scale,
                 uv_offset: *uv_offset,
@@ -1208,7 +1239,6 @@ fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
                 mode: MeshModeSnapshot::from(*mode),
             },
             ObjectType::TexturedMesh {
-                texture_id,
                 tint,
                 vertices,
                 mode,
@@ -1217,7 +1247,7 @@ fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
                 uv_tex_shift,
                 ..
             } => RenderObjectTypeSnapshot::TexturedMesh {
-                texture_id: texture_id.to_string(),
+                texture_id: None,
                 tint: *tint,
                 vertices: vertices.to_vec(),
                 mode: MeshModeSnapshot::from(*mode),
@@ -1226,6 +1256,7 @@ fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
                 uv_tex_shift: *uv_tex_shift,
             },
         },
+        texture_handle: render.texture_handle,
         transform: matrix_snapshot(&render.transform),
         blend: BlendModeSnapshot::from(render.blend),
         z: render.z,
@@ -1236,29 +1267,35 @@ fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
 
 fn texture_resolve_object_snapshot(render: &RenderObject<'_>) -> TextureResolveObjectSnapshot {
     TextureResolveObjectSnapshot {
-        texture_id: match &render.object_type {
-            ObjectType::Sprite { texture_id, .. } | ObjectType::TexturedMesh { texture_id, .. } => {
-                Some(texture_id.as_ref().to_string())
-            }
-            ObjectType::Mesh { .. } => None,
-        },
+        texture_id: None,
         texture_handle: render.texture_handle,
     }
 }
 
 fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static> {
+    let texture_handle = if render.texture_handle != crate::engine::gfx::INVALID_TEXTURE_HANDLE {
+        render.texture_handle
+    } else {
+        match &render.object_type {
+            RenderObjectTypeSnapshot::Sprite { texture_id, .. }
+            | RenderObjectTypeSnapshot::TexturedMesh { texture_id, .. } => texture_id
+                .as_deref()
+                .map(crate::assets::texture_handle)
+                .unwrap_or(crate::engine::gfx::INVALID_TEXTURE_HANDLE),
+            RenderObjectTypeSnapshot::Mesh { .. } => crate::engine::gfx::INVALID_TEXTURE_HANDLE,
+        }
+    };
     RenderObject {
         object_type: match &render.object_type {
             RenderObjectTypeSnapshot::Sprite {
-                texture_id,
                 tint,
                 uv_scale,
                 uv_offset,
                 local_offset,
                 local_offset_rot_sin_cos,
                 edge_fade,
+                ..
             } => ObjectType::Sprite {
-                texture_id: Cow::Owned(texture_id.clone()),
                 tint: *tint,
                 uv_scale: *uv_scale,
                 uv_offset: *uv_offset,
@@ -1271,15 +1308,14 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static>
                 mode: MeshMode::from(*mode),
             },
             RenderObjectTypeSnapshot::TexturedMesh {
-                texture_id,
                 tint,
                 vertices,
                 mode,
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
+                ..
             } => ObjectType::TexturedMesh {
-                texture_id: Cow::Owned(texture_id.clone()),
                 tint: *tint,
                 vertices: Cow::Owned(vertices.clone()),
                 geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
@@ -1289,7 +1325,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static>
                 uv_tex_shift: *uv_tex_shift,
             },
         },
-        texture_handle: crate::engine::gfx::INVALID_TEXTURE_HANDLE,
+        texture_handle,
         transform: matrix_runtime(render.transform),
         blend: BlendMode::from(render.blend),
         z: render.z,

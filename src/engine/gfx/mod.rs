@@ -87,7 +87,6 @@ pub enum MeshMode {
 #[derive(Clone)]
 pub enum ObjectType<'a> {
     Sprite {
-        texture_id: Cow<'a, str>,
         tint: [f32; 4],
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
@@ -101,7 +100,6 @@ pub enum ObjectType<'a> {
     },
     #[allow(dead_code)]
     TexturedMesh {
-        texture_id: Cow<'a, str>,
         tint: [f32; 4],
         vertices: Cow<'a, [TexturedMeshVertex]>,
         geom_cache_key: TMeshCacheKey,
