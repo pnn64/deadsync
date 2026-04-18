@@ -142,4 +142,3 @@ pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
     });
     b.finish()
 }
-

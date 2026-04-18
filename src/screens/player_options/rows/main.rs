@@ -408,4 +408,3 @@ pub(super) fn build_main_rows(
     });
     b.finish()
 }
-

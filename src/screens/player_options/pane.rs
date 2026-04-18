@@ -1,4 +1,3 @@
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NavDirection {
     Up,
@@ -36,4 +35,3 @@ impl PaneTransition {
         !matches!(self, Self::None)
     }
 }
-

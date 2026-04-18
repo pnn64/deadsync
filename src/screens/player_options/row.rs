@@ -289,4 +289,3 @@ pub(super) fn row_toggles_with_start(id: RowId) -> bool {
 pub(super) fn row_selects_on_focus_move(id: RowId) -> bool {
     id == RowId::Stepchart
 }
-

@@ -98,7 +98,10 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     None
 }
 
-pub(super) fn measure_counter_children_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+pub(super) fn measure_counter_children_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+) -> bool {
     let Some(row) = row_map.get(RowId::MeasureCounter) else {
         return true;
     };
@@ -132,7 +135,10 @@ pub(super) fn judgment_offsets_visible(row_map: &RowMap, active: [bool; PLAYER_S
 }
 
 #[inline(always)]
-pub(super) fn judgment_tilt_intensity_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+pub(super) fn judgment_tilt_intensity_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+) -> bool {
     let Some(row) = row_map.get(RowId::JudgmentTilt) else {
         return true;
     };
@@ -179,7 +185,10 @@ pub(super) fn error_bar_children_visible(
     !any_active
 }
 
-pub(super) fn custom_fantastic_window_ms_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+pub(super) fn custom_fantastic_window_ms_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+) -> bool {
     let Some(row) = row_map.get(RowId::CustomBlueFantasticWindow) else {
         return true;
     };
@@ -195,7 +204,10 @@ pub(super) fn custom_fantastic_window_ms_visible(row_map: &RowMap, active: [bool
     !any_active
 }
 
-pub(super) fn density_graph_background_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+pub(super) fn density_graph_background_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+) -> bool {
     let Some(row) = row_map.get(RowId::DataVisualizations) else {
         return true;
     };
@@ -211,7 +223,10 @@ pub(super) fn density_graph_background_visible(row_map: &RowMap, active: [bool; 
     !any_active
 }
 
-pub(super) fn combo_rows_visible(active: [bool; PLAYER_SLOTS], hide_active_mask: [u8; PLAYER_SLOTS]) -> bool {
+pub(super) fn combo_rows_visible(
+    active: [bool; PLAYER_SLOTS],
+    hide_active_mask: [u8; PLAYER_SLOTS],
+) -> bool {
     let mut any_active = false;
     for player_idx in active_player_indices(active) {
         any_active = true;
@@ -427,4 +442,3 @@ pub(super) fn arcade_row_uses_choice_focus(state: &State, player_idx: usize) -> 
         .and_then(|&id| state.row_map.get(id))
         .is_some_and(row_supports_inline_nav)
 }
-

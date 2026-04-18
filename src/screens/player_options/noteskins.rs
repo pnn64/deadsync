@@ -56,7 +56,10 @@ pub(super) fn build_noteskin_cache(
     cache
 }
 
-pub(super) fn push_noteskin_name_once(names: &mut Vec<String>, skin: &crate::game::profile::NoteSkin) {
+pub(super) fn push_noteskin_name_once(
+    names: &mut Vec<String>,
+    skin: &crate::game::profile::NoteSkin,
+) {
     if skin.is_none_choice() {
         return;
     }
@@ -190,4 +193,3 @@ pub(super) fn sync_noteskin_previews_for_player(state: &mut State, player_idx: u
         cols_per_player,
     );
 }
-

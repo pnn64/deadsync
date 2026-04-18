@@ -431,4 +431,3 @@ pub(super) fn cursor_dest_for_player(
     let ring_h = draw_h + pad_y * 2.0;
     Some((center_x, y, ring_w, ring_h))
 }
-

@@ -119,7 +119,8 @@ pub(super) const COMBO_COLORS_VARIANTS: [ComboColors; 5] = [
     ComboColors::None,
 ];
 
-pub(super) const COMBO_MODE_VARIANTS: [ComboMode; 2] = [ComboMode::FullCombo, ComboMode::CurrentCombo];
+pub(super) const COMBO_MODE_VARIANTS: [ComboMode; 2] =
+    [ComboMode::FullCombo, ComboMode::CurrentCombo];
 
 pub(super) const DATA_VISUALIZATIONS_VARIANTS: [DataVisualizations; 3] = [
     DataVisualizations::None,
@@ -186,7 +187,8 @@ pub(super) const MINI_INDICATOR_SCORE_TYPE_VARIANTS: [MiniIndicatorScoreType; 3]
     MiniIndicatorScoreType::HardEx,
 ];
 
-pub(super) const ATTACK_MODE_VARIANTS: [AttackMode; 3] = [AttackMode::On, AttackMode::Random, AttackMode::Off];
+pub(super) const ATTACK_MODE_VARIANTS: [AttackMode; 3] =
+    [AttackMode::On, AttackMode::Random, AttackMode::Off];
 
 pub(super) const HIDE_LIGHT_TYPE_VARIANTS: [HideLightType; 4] = [
     HideLightType::NoHideLights,
@@ -196,4 +198,3 @@ pub(super) const HIDE_LIGHT_TYPE_VARIANTS: [HideLightType; 4] = [
 ];
 
 pub(super) const ARCADE_NEXT_ROW_TEXT: &str = "▼";
-

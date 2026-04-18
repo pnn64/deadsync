@@ -113,9 +113,8 @@ pub fn build_screen_cached_with_scratch(
         );
     }
 
-    // `order` is assigned monotonically during composition, so a stable z-bucket
-    // pass produces the same result as sorting by `(z, order)` when the z-range
-    // is reasonably dense.
+    // Prefer the dense stable z-bucket pass for common dense ranges, but fall
+    // back to `(z, order)` sorting when insertion order and draw order differ.
     sort_render_objects(&mut objects, scratch);
     scratch.masks = masks;
     scratch.texture_cache = texture_cache;
@@ -158,14 +157,21 @@ fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratc
     let mut min_z = objects[0].z;
     let mut max_z = min_z;
     let mut sorted_by_z = true;
-    let mut prev_z = min_z;
+    let mut sorted_by_key = true;
+    let mut prev_key = (min_z, objects[0].order);
     for obj in &objects[1..] {
-        sorted_by_z &= prev_z <= obj.z;
+        let key = (obj.z, obj.order);
+        sorted_by_z &= prev_key.0 <= obj.z;
+        sorted_by_key &= prev_key <= key;
         min_z = min_z.min(obj.z);
         max_z = max_z.max(obj.z);
-        prev_z = obj.z;
+        prev_key = key;
+    }
+    if sorted_by_key {
+        return;
     }
     if sorted_by_z {
+        objects.sort_unstable_by_key(|o| (o.z, o.order));
         return;
     }
 
@@ -207,6 +213,15 @@ fn sort_render_objects(objects: &mut [RenderObject], scratch: &mut ComposeScratc
             objects.swap(current, next);
             scratch.z_perm.swap(current, next);
         }
+    }
+
+    if objects
+        .windows(2)
+        .any(|pair| (pair[0].z, pair[0].order) > (pair[1].z, pair[1].order))
+    {
+        // Some compose paths append later objects before assigning their final
+        // draw order, so stable z-bucketing alone is not always sufficient.
+        objects.sort_unstable_by_key(|o| (o.z, o.order));
     }
 
     debug_assert!(
@@ -2961,9 +2976,10 @@ fn clip_rotated_sprite_to_world_rect(
 #[cfg(test)]
 mod tests {
     use super::{
-        CachedTextLayout, TextAttrCursor, TextLayoutCache, TextLayoutKey, TextLayoutOverflowPolicy,
-        WorldRect, build_screen, clip_object_to_world_masks, clip_sprite_object_to_world_rect,
-        fold_sprite_xy_rot, wrap_text_lines_by_words,
+        CachedTextLayout, ComposeScratch, TextAttrCursor, TextLayoutCache, TextLayoutKey,
+        TextLayoutOverflowPolicy, WorldRect, build_screen, clip_object_to_world_masks,
+        clip_sprite_object_to_world_rect, fold_sprite_xy_rot, sort_render_objects,
+        wrap_text_lines_by_words,
     };
     use crate::engine::gfx::{
         BlendMode, MeshMode, ObjectType, RenderObject, TMeshCacheKey, TexturedMeshVertex,
@@ -2984,6 +3000,25 @@ mod tests {
             glyph_count: 0,
             lines: Vec::new(),
             glyphs: Vec::new(),
+        }
+    }
+
+    fn test_render_object(z: i16, order: u32) -> RenderObject {
+        RenderObject {
+            object_type: ObjectType::Sprite {
+                tint: [1.0; 4],
+                uv_scale: [1.0, 1.0],
+                uv_offset: [0.0, 0.0],
+                local_offset: [0.0, 0.0],
+                local_offset_rot_sin_cos: [0.0, 1.0],
+                edge_fade: [0.0; 4],
+            },
+            texture_handle: 0,
+            transform: Matrix4::IDENTITY,
+            blend: BlendMode::Alpha,
+            z,
+            order,
+            camera: 0,
         }
     }
 
@@ -3216,6 +3251,39 @@ mod tests {
         assert_eq!(cache.frame_stats.prunes, 0);
         assert!(cache.owned_layout(key, "beta").is_none());
         assert!(cache.uncached_layout.is_some());
+    }
+
+    #[test]
+    fn sort_render_objects_repairs_equal_z_order() {
+        let mut objects = vec![test_render_object(5, 2), test_render_object(5, 1)];
+        let mut scratch = ComposeScratch::default();
+
+        sort_render_objects(&mut objects, &mut scratch);
+
+        let keys = objects
+            .iter()
+            .map(|obj| (obj.z, obj.order))
+            .collect::<Vec<_>>();
+        assert_eq!(keys, vec![(5, 1), (5, 2)]);
+    }
+
+    #[test]
+    fn sort_render_objects_falls_back_when_dense_buckets_keep_bad_order() {
+        let mut objects = vec![
+            test_render_object(5, 3),
+            test_render_object(4, 0),
+            test_render_object(5, 1),
+            test_render_object(5, 2),
+        ];
+        let mut scratch = ComposeScratch::default();
+
+        sort_render_objects(&mut objects, &mut scratch);
+
+        let keys = objects
+            .iter()
+            .map(|obj| (obj.z, obj.order))
+            .collect::<Vec<_>>();
+        assert_eq!(keys, vec![(4, 0), (5, 1), (5, 2), (5, 3)]);
     }
 
     #[test]

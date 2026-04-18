@@ -26,44 +26,57 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 // --- Submodules ---
+mod choice;
 mod constants;
-mod pane;
-mod row;
-mod state;
+mod inline_nav;
+mod input;
 mod layout;
 mod noteskins;
+mod pane;
 mod profile;
-mod visibility;
-mod inline_nav;
-mod rows;
-mod choice;
-mod input;
 mod render;
+mod row;
+mod rows;
+mod state;
+mod visibility;
 
 #[cfg(test)]
 mod tests;
 
 // Re-import every submodule so legacy code in this file resolves.
-#[allow(unused_imports)] use constants::*;
-#[allow(unused_imports)] use pane::*;
-#[allow(unused_imports)] use row::*;
-#[allow(unused_imports)] use state::*;
-#[allow(unused_imports)] use layout::*;
-#[allow(unused_imports)] use noteskins::*;
-#[allow(unused_imports)] use profile::*;
-#[allow(unused_imports)] use visibility::*;
-#[allow(unused_imports)] use inline_nav::*;
-#[allow(unused_imports)] use rows::*;
-#[allow(unused_imports)] use choice::*;
-#[allow(unused_imports)] use input::*;
-#[allow(unused_imports)] use render::*;
+#[allow(unused_imports)]
+use choice::*;
+#[allow(unused_imports)]
+use constants::*;
+#[allow(unused_imports)]
+use inline_nav::*;
+#[allow(unused_imports)]
+use input::*;
+#[allow(unused_imports)]
+use layout::*;
+#[allow(unused_imports)]
+use noteskins::*;
+#[allow(unused_imports)]
+use pane::*;
+#[allow(unused_imports)]
+use profile::*;
+#[allow(unused_imports)]
+use render::*;
+#[allow(unused_imports)]
+use row::*;
+#[allow(unused_imports)]
+use rows::*;
+#[allow(unused_imports)]
+use state::*;
+#[allow(unused_imports)]
+use visibility::*;
 
 // --- External API ---
-pub use state::{State};
-pub use profile::{SpeedMod};
+pub use input::{handle_input, update};
+pub use profile::SpeedMod;
+pub use render::get_actors;
 pub use row::{FixedStepchart, RowId};
-pub use input::{update, handle_input};
-pub use render::{get_actors};
+pub use state::State;
 
 #[inline(always)]
 fn active_player_indices(active: [bool; PLAYER_SLOTS]) -> impl Iterator<Item = usize> {
@@ -399,4 +412,3 @@ fn session_persisted_player_idx() -> usize {
         }
     }
 }
-

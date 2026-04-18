@@ -464,4 +464,3 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
     });
     b.finish()
 }
-

@@ -2078,4 +2078,3 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
     actors
 }
-

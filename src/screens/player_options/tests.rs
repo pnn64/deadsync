@@ -254,4 +254,3 @@ pub(super) mod tests {
         assert_eq!(state.selected_row[P1], last_row);
     }
 }
-

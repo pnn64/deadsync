@@ -132,4 +132,3 @@ pub struct State {
     pub(super) pane_transition: PaneTransition,
     pub(super) menu_lr_chord: screen_input::MenuLrChordTracker,
 }
-

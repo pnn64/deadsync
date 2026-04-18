@@ -937,4 +937,3 @@ pub fn handle_input(
     }
     ScreenAction::None
 }
-

@@ -7,7 +7,9 @@ pub struct SpeedMod {
 }
 
 #[inline(always)]
-pub(super) fn scroll_speed_for_mod(speed_mod: &SpeedMod) -> crate::game::scroll::ScrollSpeedSetting {
+pub(super) fn scroll_speed_for_mod(
+    speed_mod: &SpeedMod,
+) -> crate::game::scroll::ScrollSpeedSetting {
     match speed_mod.mod_type.as_str() {
         "C" => crate::game::scroll::ScrollSpeedSetting::CMod(speed_mod.value),
         "X" => crate::game::scroll::ScrollSpeedSetting::XMod(speed_mod.value),
@@ -17,7 +19,10 @@ pub(super) fn scroll_speed_for_mod(speed_mod: &SpeedMod) -> crate::game::scroll:
 }
 
 #[inline(always)]
-pub(super) fn sync_profile_scroll_speed(profile: &mut crate::game::profile::Profile, speed_mod: &SpeedMod) {
+pub(super) fn sync_profile_scroll_speed(
+    profile: &mut crate::game::profile::Profile,
+    speed_mod: &SpeedMod,
+) {
     profile.scroll_speed = scroll_speed_for_mod(speed_mod);
 }
 
@@ -250,4 +255,3 @@ pub(super) fn round_to_step(x: f32, step: f32) -> f32 {
     }
     (x / step).round() * step
 }
-

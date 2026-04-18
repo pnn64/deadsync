@@ -872,4 +872,3 @@ pub(super) fn apply_profile_defaults(
         measure_counter_options_active_mask,
     )
 }
-

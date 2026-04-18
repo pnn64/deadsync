@@ -1,5 +1,9 @@
 use super::*;
-use crate::game::profile::{AttackMode, BackgroundFilter, ComboColors, ComboFont, ComboMode, DataVisualizations, ErrorBarTrim, HideLightType, LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorScoreType, Perspective, TargetScoreSetting, TimingWindowsOption, TurnOption};
+use crate::game::profile::{
+    AttackMode, BackgroundFilter, ComboColors, ComboFont, ComboMode, DataVisualizations,
+    ErrorBarTrim, HideLightType, LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator,
+    MiniIndicatorScoreType, Perspective, TargetScoreSetting, TimingWindowsOption, TurnOption,
+};
 
 pub(super) fn change_choice_for_player(
     state: &mut State,
@@ -1825,4 +1829,3 @@ pub(super) fn switch_to_pane(state: &mut State, pane: OptionsPane) {
         },
     };
 }
-

@@ -270,7 +270,11 @@ pub(super) fn move_selection_vertical(
 }
 
 #[inline(always)]
-pub(super) fn measure_option_text(asset_manager: &AssetManager, text: &str, zoom: f32) -> (f32, f32) {
+pub(super) fn measure_option_text(
+    asset_manager: &AssetManager,
+    text: &str,
+    zoom: f32,
+) -> (f32, f32) {
     let mut out_w = 40.0_f32;
     let mut out_h = 16.0_f32;
     asset_manager.with_fonts(|all_fonts| {
@@ -321,7 +325,11 @@ pub(super) fn arcade_next_row_visible(state: &State, row_idx: usize) -> bool {
 }
 
 #[inline(always)]
-pub(super) fn arcade_row_focuses_next_row(state: &State, player_idx: usize, row_idx: usize) -> bool {
+pub(super) fn arcade_row_focuses_next_row(
+    state: &State,
+    player_idx: usize,
+    row_idx: usize,
+) -> bool {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     row_allows_arcade_next_row(state, row_idx)
         && state.arcade_row_focus[idx]
@@ -338,4 +346,3 @@ pub(super) fn arcade_next_row_layout(
     let left_x = inline_choice_left_x_for_row(state, row_idx) - draw_w - arcade_next_row_gap_x();
     (left_x, draw_w, draw_h)
 }
-
