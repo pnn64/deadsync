@@ -14,13 +14,13 @@ use twox_hash::XxHash64;
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
 #[inline(always)]
-pub fn build_screen<'a>(
-    actors: &'a [actors::Actor],
+pub fn build_screen(
+    actors: &[actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &'a HashMap<&'static str, font::Font>,
+    fonts: &HashMap<&'static str, font::Font>,
     total_elapsed: f32,
-) -> RenderList<'a> {
+) -> RenderList {
     let mut text_cache = TextLayoutCache::default();
     build_screen_cached(
         actors,
@@ -33,14 +33,14 @@ pub fn build_screen<'a>(
 }
 
 #[inline(always)]
-pub fn build_screen_cached<'a>(
-    actors: &'a [actors::Actor],
+pub fn build_screen_cached(
+    actors: &[actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &'a HashMap<&'static str, font::Font>,
+    fonts: &HashMap<&'static str, font::Font>,
     total_elapsed: f32,
     text_cache: &mut TextLayoutCache,
-) -> RenderList<'a> {
+) -> RenderList {
     let mut scratch = ComposeScratch::default();
     build_screen_cached_with_scratch(
         actors,
@@ -54,16 +54,21 @@ pub fn build_screen_cached<'a>(
 }
 
 #[inline(always)]
-pub fn build_screen_cached_with_scratch<'a>(
-    actors: &'a [actors::Actor],
+pub fn build_screen_cached_with_scratch(
+    actors: &[actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &'a HashMap<&'static str, font::Font>,
+    fonts: &HashMap<&'static str, font::Font>,
     total_elapsed: f32,
     text_cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
-) -> RenderList<'a> {
-    let mut objects = Vec::with_capacity(scratch.object_capacity_hint(actors.len()));
+) -> RenderList {
+    let mut objects = std::mem::take(&mut scratch.objects);
+    objects.clear();
+    let object_capacity = actors.len().saturating_mul(4).max(64);
+    if objects.capacity() < object_capacity {
+        objects.reserve(object_capacity - objects.capacity());
+    }
     let mut cameras = std::mem::take(&mut scratch.cameras);
     cameras.clear();
     if cameras.capacity() < 4 {
@@ -109,7 +114,6 @@ pub fn build_screen_cached_with_scratch<'a>(
 
     // `order` is already monotonically assigned, so we do not need a stable sort here.
     objects.sort_unstable_by_key(|o| (o.z, o.order));
-    scratch.object_capacity = objects.capacity();
     scratch.masks = masks;
 
     // Texture handles are resolved during composition and cached per frame so
@@ -123,21 +127,16 @@ pub fn build_screen_cached_with_scratch<'a>(
 
 #[derive(Default)]
 pub struct ComposeScratch {
-    object_capacity: usize,
+    objects: Vec<RenderObject>,
     cameras: Vec<Matrix4>,
     masks: Vec<WorldRect>,
 }
 
 impl ComposeScratch {
-    #[inline(always)]
-    fn object_capacity_hint(&self, actor_count: usize) -> usize {
-        self.object_capacity
-            .max(actor_count.saturating_mul(4))
-            .max(64)
-    }
-
-    pub fn recycle_render_list(&mut self, render: &mut RenderList<'_>) {
-        self.object_capacity = self.object_capacity.max(render.objects.capacity());
+    pub fn recycle_render_list(&mut self, render: &mut RenderList) {
+        let mut objects = std::mem::take(&mut render.objects);
+        objects.clear();
+        self.objects = objects;
         let mut cameras = std::mem::take(&mut render.cameras);
         cameras.clear();
         self.cameras = cameras;
@@ -1085,7 +1084,7 @@ fn build_actor_recursive<'a>(
     cameras: &mut Vec<Matrix4>,
     masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
-    out: &mut Vec<RenderObject<'a>>,
+    out: &mut Vec<RenderObject>,
     text_cache: &mut TextLayoutCache,
     texture_cache: &mut TextureLookupCache<'a>,
     total_elapsed: f32,
@@ -1270,7 +1269,7 @@ fn build_actor_recursive<'a>(
             let before = out.len();
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::Mesh {
-                    vertices: std::borrow::Cow::Borrowed(vertices.as_ref()),
+                    vertices: Arc::clone(vertices),
                     mode: *mode,
                 },
                 texture_handle: renderer::INVALID_TEXTURE_HANDLE,
@@ -1323,7 +1322,7 @@ fn build_actor_recursive<'a>(
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::TexturedMesh {
                     tint: *tint,
-                    vertices: std::borrow::Cow::Borrowed(vertices.as_ref()),
+                    vertices: Arc::clone(vertices),
                     geom_cache_key: *geom_cache_key,
                     mode: *mode,
                     uv_scale: *uv_scale,
@@ -1399,7 +1398,7 @@ fn build_actor_recursive<'a>(
                                 ],
                             });
                         }
-                        *vertices = std::borrow::Cow::Owned(out);
+                        *vertices = Arc::from(out);
                     }
                     renderer::ObjectType::TexturedMesh { tint, .. } => {
                         let mut shadow_tint = *color;
@@ -1913,7 +1912,7 @@ fn fold_sprite_xy_rot(
 
 #[inline(always)]
 fn push_sprite<'a>(
-    out: &mut Vec<renderer::RenderObject<'a>>,
+    out: &mut Vec<renderer::RenderObject>,
     camera: u8,
     rect: SmRect,
     m: &Metrics,
@@ -2110,7 +2109,7 @@ const fn quantize_up_even_i32(v: i32) -> i32 {
 }
 
 fn layout_text<'a>(
-    out: &mut Vec<RenderObject<'a>>,
+    out: &mut Vec<RenderObject>,
     font: &'a font::Font,
     fonts: &'a HashMap<&'static str, font::Font>,
     content: &actors::TextContent,
@@ -2361,7 +2360,7 @@ fn sm_rect_to_world_edges(rect: SmRect, m: &Metrics) -> WorldRect {
 }
 
 fn clip_objects_range_to_world_masks(
-    objects: &mut Vec<RenderObject<'_>>,
+    objects: &mut Vec<RenderObject>,
     start: usize,
     masks: &[WorldRect],
 ) {
@@ -2393,13 +2392,13 @@ fn clip_objects_range_to_world_masks(
     objects.truncate(write);
 }
 
-struct ClippedSpriteObject<'a> {
-    object_type: renderer::ObjectType<'a>,
+struct ClippedSpriteObject {
+    object_type: renderer::ObjectType,
     transform: Matrix4,
 }
 
 #[inline(always)]
-fn object_world_area(object_type: &renderer::ObjectType<'_>, transform: &Matrix4) -> f32 {
+fn object_world_area(object_type: &renderer::ObjectType, transform: &Matrix4) -> f32 {
     match object_type {
         renderer::ObjectType::Sprite { .. } => {
             let t = transform;
@@ -2426,8 +2425,8 @@ fn object_world_area(object_type: &renderer::ObjectType<'_>, transform: &Matrix4
     }
 }
 
-fn clip_object_to_world_masks(obj: &mut RenderObject<'_>, masks: &[WorldRect]) -> bool {
-    let mut best_obj: Option<ClippedSpriteObject<'_>> = None;
+fn clip_object_to_world_masks(obj: &mut RenderObject, masks: &[WorldRect]) -> bool {
+    let mut best_obj: Option<ClippedSpriteObject> = None;
     let mut best_area = -1.0_f32;
     for &mask in masks {
         let Some(candidate) = clipped_sprite_object_to_world_rect(obj, mask) else {
@@ -2449,7 +2448,7 @@ fn clip_object_to_world_masks(obj: &mut RenderObject<'_>, masks: &[WorldRect]) -
 }
 
 fn clip_objects_range_to_world_rect(
-    objects: &mut Vec<RenderObject<'_>>,
+    objects: &mut Vec<RenderObject>,
     start: usize,
     clip: WorldRect,
 ) {
@@ -2479,7 +2478,7 @@ fn clip_objects_range_to_world_rect(
 }
 
 fn clip_objects_range_with_keys_to_world_rect(
-    objects: &mut Vec<RenderObject<'_>>,
+    objects: &mut Vec<RenderObject>,
     keys: &mut SmallVec<[Option<*const str>; 64]>,
     start: usize,
     clip: WorldRect,
@@ -2520,7 +2519,7 @@ fn clip_objects_range_with_keys_to_world_rect(
     keys.truncate(key_write);
 }
 
-fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect) -> bool {
+fn clip_sprite_object_to_world_rect(obj: &mut RenderObject, clip: WorldRect) -> bool {
     let Some(clipped) = clipped_sprite_object_to_world_rect(obj, clip) else {
         return false;
     };
@@ -2529,10 +2528,10 @@ fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect)
     true
 }
 
-fn clipped_sprite_object_to_world_rect<'a>(
-    obj: &RenderObject<'a>,
+fn clipped_sprite_object_to_world_rect(
+    obj: &RenderObject,
     clip: WorldRect,
-) -> Option<ClippedSpriteObject<'a>> {
+) -> Option<ClippedSpriteObject> {
     if clip.left >= clip.right || clip.bottom >= clip.top {
         return None;
     }
@@ -2726,7 +2725,7 @@ fn clip_rotated_sprite_to_world_rect(
     uv_offset: [f32; 2],
     transform: Matrix4,
     clip: WorldRect,
-) -> Option<ClippedSpriteObject<'static>> {
+) -> Option<ClippedSpriteObject> {
     let poly = [
         ClipVertex {
             pos: world_xy(&transform, [-0.5_f32, -0.5_f32]),
@@ -2768,7 +2767,7 @@ fn clip_rotated_sprite_to_world_rect(
     Some(ClippedSpriteObject {
         object_type: renderer::ObjectType::TexturedMesh {
             tint: [1.0; 4],
-            vertices: std::borrow::Cow::Owned(out),
+            vertices: Arc::from(out),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             mode: renderer::MeshMode::Triangles,
             uv_scale: [1.0, 1.0],

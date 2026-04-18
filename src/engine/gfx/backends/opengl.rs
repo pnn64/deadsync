@@ -651,7 +651,7 @@ pub const fn request_screenshot(_state: &mut State) {}
 
 pub fn draw(
     state: &mut State,
-    render_list: &RenderList<'_>,
+    render_list: &RenderList,
     textures: &TextureHandleMap<RendererTexture>,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {

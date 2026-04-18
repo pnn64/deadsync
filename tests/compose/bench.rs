@@ -697,15 +697,15 @@ fn write_requested_outputs(
 }
 
 #[inline(always)]
-fn build_screen_for_mode<'a>(
+fn build_screen_for_mode(
     cache_mode: CacheMode,
     text_cache: &mut compose::TextLayoutCache,
-    actors: &'a [Actor],
+    actors: &[Actor],
     clear_color: [f32; 4],
     metrics: &deadsync::engine::space::Metrics,
-    fonts: &'a HashMap<&'static str, deadsync::engine::present::font::Font>,
+    fonts: &HashMap<&'static str, deadsync::engine::present::font::Font>,
     total_elapsed: f32,
-) -> RenderList<'a> {
+) -> RenderList {
     match cache_mode {
         CacheMode::Fresh => {
             compose::build_screen(actors, clear_color, metrics, fonts, total_elapsed)
@@ -914,7 +914,7 @@ fn benchmark_resolve(
     actors: usize,
     cache_mode: CacheMode,
     _assets: &AssetManager,
-    render: RenderList<'static>,
+    render: RenderList,
     iters: u64,
     warmup: u64,
 ) -> Result<BenchmarkResult, Box<dyn Error>> {
@@ -1075,7 +1075,7 @@ where
     })
 }
 
-fn texture_handle_checksum(render: &RenderList<'_>) -> u64 {
+fn texture_handle_checksum(render: &RenderList) -> u64 {
     render.objects.iter().fold(0u64, |acc, obj| {
         acc.wrapping_mul(131)
             .wrapping_add(obj.texture_handle)

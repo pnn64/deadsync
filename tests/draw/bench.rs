@@ -314,7 +314,7 @@ fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Err
 
 fn benchmark_draw(
     name: &str,
-    render: &RenderList<'_>,
+    render: &RenderList,
     iters: u64,
     warmup: u64,
     _flip_texture_keys: bool,
@@ -391,7 +391,7 @@ struct BuiltPlan {
     snapshot: PlanSnapshot,
 }
 
-fn build_plan(render: &RenderList<'_>) -> Result<BuiltPlan, Box<dyn Error>> {
+fn build_plan(render: &RenderList) -> Result<BuiltPlan, Box<dyn Error>> {
     let mut scratch = DrawScratch::with_capacity(256, 1024, 1024, 256, 64);
     let stats = draw_prep::prepare(render, &mut scratch, |_, _| true);
     Ok(BuiltPlan {
@@ -513,7 +513,7 @@ fn plan_snapshot_hash(snapshot: &PlanSnapshot) -> Result<String, Box<dyn Error>>
     Ok(format!("{:016x}", hasher.finish()))
 }
 
-fn ensure_texture_handles(render: &mut RenderList<'_>) {
+fn ensure_texture_handles(render: &mut RenderList) {
     let mut next_handle = 1u64;
     for obj in &mut render.objects {
         if obj.texture_handle != deadsync::engine::gfx::INVALID_TEXTURE_HANDLE {

@@ -1433,7 +1433,7 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
 
 pub fn draw(
     state: &mut State,
-    render_list: &RenderList<'_>,
+    render_list: &RenderList,
     textures: &TextureHandleMap<RendererTexture>,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {

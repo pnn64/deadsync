@@ -11,7 +11,6 @@ use crate::engine::present::font::{self, Font, Glyph};
 use crate::engine::space::Metrics;
 use glam::Mat4 as Matrix4;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::error::Error;
 use std::fs;
@@ -509,7 +508,7 @@ pub fn actor_snapshot_hash(snapshot: &ActorListSnapshot) -> Result<String, Box<d
     Ok(format!("{:016x}", hasher.finish()))
 }
 
-pub fn texture_resolve_snapshot(render: &RenderList<'_>) -> TextureResolveSnapshot {
+pub fn texture_resolve_snapshot(render: &RenderList) -> TextureResolveSnapshot {
     TextureResolveSnapshot {
         objects: render
             .objects
@@ -563,7 +562,7 @@ pub fn read_render_snapshot(path: &Path) -> Result<RenderListSnapshot, Box<dyn E
     Ok(serde_json::from_slice(&bytes)?)
 }
 
-pub fn render_list_runtime(snapshot: &RenderListSnapshot) -> RenderList<'static> {
+pub fn render_list_runtime(snapshot: &RenderListSnapshot) -> RenderList {
     RenderList {
         clear_color: snapshot.clear_color,
         cameras: snapshot
@@ -1207,7 +1206,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
     }
 }
 
-pub fn render_list_snapshot(render: &RenderList<'_>) -> RenderListSnapshot {
+pub fn render_list_snapshot(render: &RenderList) -> RenderListSnapshot {
     RenderListSnapshot {
         clear_color: render.clear_color,
         cameras: render.cameras.iter().map(matrix_snapshot).collect(),
@@ -1215,7 +1214,7 @@ pub fn render_list_snapshot(render: &RenderList<'_>) -> RenderListSnapshot {
     }
 }
 
-fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
+fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
     RenderObjectSnapshot {
         object_type: match &render.object_type {
             ObjectType::Sprite {
@@ -1265,14 +1264,14 @@ fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
     }
 }
 
-fn texture_resolve_object_snapshot(render: &RenderObject<'_>) -> TextureResolveObjectSnapshot {
+fn texture_resolve_object_snapshot(render: &RenderObject) -> TextureResolveObjectSnapshot {
     TextureResolveObjectSnapshot {
         texture_id: None,
         texture_handle: render.texture_handle,
     }
 }
 
-fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static> {
+fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
     let texture_handle = if render.texture_handle != crate::engine::gfx::INVALID_TEXTURE_HANDLE {
         render.texture_handle
     } else {
@@ -1304,7 +1303,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static>
                 edge_fade: *edge_fade,
             },
             RenderObjectTypeSnapshot::Mesh { vertices, mode } => ObjectType::Mesh {
-                vertices: Cow::Owned(vertices.clone()),
+                vertices: Arc::from(vertices.clone()),
                 mode: MeshMode::from(*mode),
             },
             RenderObjectTypeSnapshot::TexturedMesh {
@@ -1317,7 +1316,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static>
                 ..
             } => ObjectType::TexturedMesh {
                 tint: *tint,
-                vertices: Cow::Owned(vertices.clone()),
+                vertices: Arc::from(vertices.clone()),
                 geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
                 mode: MeshMode::from(*mode),
                 uv_scale: *uv_scale,

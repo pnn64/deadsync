@@ -73,7 +73,7 @@ pub fn update_texture(texture: &mut Texture, image: &RgbaImage) -> Result<(), Bo
 
 pub fn draw(
     state: &mut State,
-    render_list: &RenderList<'_>,
+    render_list: &RenderList,
     textures: &TextureHandleMap<RendererTexture>,
     _apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
@@ -204,7 +204,7 @@ pub fn draw(
 }
 
 fn draw_rows(
-    objects: &[RenderObject<'_>],
+    objects: &[RenderObject],
     cameras: &[Matrix4],
     default_proj: Matrix4,
     textures: &TextureHandleMap<RendererTexture>,

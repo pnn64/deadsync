@@ -280,7 +280,7 @@ fn transient_tmesh_source(
 }
 
 pub fn prepare<EnsureCached>(
-    render_list: &RenderList<'_>,
+    render_list: &RenderList,
     scratch: &mut DrawScratch,
     mut ensure_cached_tmesh: EnsureCached,
 ) -> PrepareStats

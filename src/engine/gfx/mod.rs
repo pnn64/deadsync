@@ -8,10 +8,7 @@ use crate::engine::gfx::backends::{opengl, software, wgpu_core};
 use glam::Mat4 as Matrix4;
 use glow::HasContext;
 use image::RgbaImage;
-use std::{
-    borrow::Cow, collections::HashMap, error::Error, hash::BuildHasherDefault, str::FromStr,
-    sync::Arc,
-};
+use std::{collections::HashMap, error::Error, hash::BuildHasherDefault, str::FromStr, sync::Arc};
 use twox_hash::XxHash64;
 use winit::window::Window;
 
@@ -24,14 +21,14 @@ pub type TMeshCacheKey = u64;
 pub const INVALID_TMESH_CACHE_KEY: TMeshCacheKey = 0;
 
 #[derive(Clone)]
-pub struct RenderList<'a> {
+pub struct RenderList {
     pub clear_color: [f32; 4],
     pub cameras: Vec<Matrix4>,
-    pub objects: Vec<RenderObject<'a>>,
+    pub objects: Vec<RenderObject>,
 }
 #[derive(Clone)]
-pub struct RenderObject<'a> {
-    pub object_type: ObjectType<'a>,
+pub struct RenderObject {
+    pub object_type: ObjectType,
     pub texture_handle: TextureHandle,
     pub transform: Matrix4,
     pub blend: BlendMode,
@@ -85,7 +82,7 @@ pub enum MeshMode {
 }
 
 #[derive(Clone)]
-pub enum ObjectType<'a> {
+pub enum ObjectType {
     Sprite {
         tint: [f32; 4],
         uv_scale: [f32; 2],
@@ -95,13 +92,13 @@ pub enum ObjectType<'a> {
         edge_fade: [f32; 4],
     },
     Mesh {
-        vertices: Cow<'a, [MeshVertex]>,
+        vertices: Arc<[MeshVertex]>,
         mode: MeshMode,
     },
     #[allow(dead_code)]
     TexturedMesh {
         tint: [f32; 4],
-        vertices: Cow<'a, [TexturedMeshVertex]>,
+        vertices: Arc<[TexturedMeshVertex]>,
         geom_cache_key: TMeshCacheKey,
         mode: MeshMode,
         uv_scale: [f32; 2],
@@ -299,7 +296,7 @@ pub struct Backend(BackendImpl);
 impl Backend {
     pub fn draw(
         &mut self,
-        render_list: &RenderList<'_>,
+        render_list: &RenderList,
         textures: &TextureHandleMap<Texture>,
         apply_present_back_pressure: bool,
     ) -> Result<DrawStats, Box<dyn Error>> {
