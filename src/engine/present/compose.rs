@@ -821,6 +821,7 @@ struct TextAttrCursor<'a> {
     start_order: AttrIndices,
     end_order: AttrIndices,
     active: AttrIndices,
+    active_max: Option<usize>,
     next_start: usize,
     next_end: usize,
 }
@@ -846,6 +847,7 @@ impl<'a> TextAttrCursor<'a> {
             start_order,
             end_order,
             active: AttrIndices::new(),
+            active_max: None,
             next_start: 0,
             next_end: 0,
         })
@@ -853,14 +855,21 @@ impl<'a> TextAttrCursor<'a> {
 
     #[inline(always)]
     fn push_active(&mut self, attr_index: usize) {
-        let insert_at = self.active.partition_point(|&index| index < attr_index);
-        self.active.insert(insert_at, attr_index);
+        self.active.push(attr_index);
+        self.active_max = Some(
+            self.active_max
+                .map_or(attr_index, |max| max.max(attr_index)),
+        );
     }
 
     #[inline(always)]
     fn remove_active(&mut self, attr_index: usize) {
-        if let Ok(index) = self.active.binary_search(&attr_index) {
-            self.active.remove(index);
+        let Some(index) = self.active.iter().position(|&index| index == attr_index) else {
+            return;
+        };
+        self.active.swap_remove(index);
+        if self.active_max == Some(attr_index) {
+            self.active_max = self.active.iter().copied().max();
         }
     }
 
@@ -885,9 +894,8 @@ impl<'a> TextAttrCursor<'a> {
             self.next_start += 1;
         }
 
-        self.active
-            .last()
-            .map(|&index| self.attributes[index].color)
+        self.active_max
+            .map(|index| self.attributes[index].color)
             .unwrap_or([1.0; 4])
     }
 }
