@@ -5797,6 +5797,7 @@ pub struct State {
     graphics_prev_visible_rows: Vec<usize>,
     advanced_prev_visible_rows: Vec<usize>,
     select_music_prev_visible_rows: Vec<usize>,
+    i18n_revision: u64,
 }
 
 pub fn init() -> State {
@@ -5956,6 +5957,7 @@ pub fn init() -> State {
         graphics_prev_visible_rows: Vec::new(),
         advanced_prev_visible_rows: Vec::new(),
         select_music_prev_visible_rows: Vec::new(),
+        i18n_revision: crate::assets::i18n::revision(),
     };
 
     sync_video_renderer(&mut state, cfg.video_renderer);
@@ -7274,6 +7276,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     if shared_pack_sync::poll(&mut state.pack_sync_overlay) {
         return None;
     }
+
+    sync_i18n_cache(state);
 
     let mut pending_action: Option<ScreenAction> = None;
     // ------------------------- local submenu fade ------------------------- //
@@ -9546,6 +9550,28 @@ pub fn clear_description_layout_cache(state: &State) {
 pub fn clear_render_cache(state: &State) {
     clear_submenu_row_layout_cache(state);
     clear_description_layout_cache(state);
+}
+
+/// Refresh cached translated labels when the UI language changes.
+fn sync_i18n_cache(state: &mut State) {
+    let rev = crate::assets::i18n::revision();
+    if state.i18n_revision == rev {
+        return;
+    }
+    state.i18n_revision = rev;
+    state.display_mode_choices = build_display_mode_choices(&state.monitor_specs);
+    state.software_thread_labels = software_thread_choice_labels(&state.software_thread_choices);
+    let (si_packs, si_filters) = score_import_pack_options();
+    state.score_import_pack_choices = si_packs;
+    state.score_import_pack_filters = si_filters;
+    let (sp_packs, sp_filters) = sync_pack_options();
+    state.sync_pack_choices = sp_packs;
+    state.sync_pack_filters = sp_filters;
+    #[cfg(target_os = "linux")]
+    {
+        state.linux_backend_choices = build_linux_backend_choices();
+    }
+    clear_render_cache(state);
 }
 
 fn submenu_cursor_dest(
