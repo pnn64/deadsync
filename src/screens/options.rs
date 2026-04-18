@@ -505,7 +505,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsMachine", "GameoverScreen")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuMusic")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "KeyboardFeatures")),
-            HelpEntry::Bullet(lookup_key("OptionsMachine", "VideoBgs")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "VideoBGs")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "WriteCurrentScreen")),
         ],
     },
@@ -514,7 +514,7 @@ pub const ITEMS: &[Item] = &[
         name: lookup_key("Options", "GameplayOptions"),
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsHelp", "GameplayOptionsHelp")),
-            HelpEntry::Bullet(lookup_key("OptionsGameplay", "BgBrightness")),
+            HelpEntry::Bullet(lookup_key("OptionsGameplay", "BGBrightness")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "CenteredP1Notefield")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "ZmodRatingBox")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "BpmDecimal")),
@@ -530,7 +530,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowBreakdown")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowNativeLanguage")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "MusicWheelSpeed")),
-            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowCdTitles")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowCDTitles")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowWheelGrades")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowWheelLamps")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "NewPackBadge")),
@@ -538,7 +538,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ChartInfo")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "MusicPreviews")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowGameplayTimer")),
-            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowGsBox")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowGSBox")),
         ],
     },
     Item {
@@ -548,7 +548,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Paragraph(lookup_key("OptionsHelp", "AdvancedOptionsHelp")),
             HelpEntry::Bullet(lookup_key("OptionsAdvanced", "DefaultFailType")),
             HelpEntry::Bullet(lookup_key("OptionsAdvanced", "BannerCache")),
-            HelpEntry::Bullet(lookup_key("OptionsAdvanced", "CdTitleCache")),
+            HelpEntry::Bullet(lookup_key("OptionsAdvanced", "CDTitleCache")),
             HelpEntry::Bullet(lookup_key("OptionsAdvanced", "SongParsingThreads")),
             HelpEntry::Bullet(lookup_key("OptionsAdvanced", "CacheSongs")),
             HelpEntry::Bullet(lookup_key("OptionsAdvanced", "FastLoad")),
@@ -1440,8 +1440,8 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         id: SubRowId::FullscreenType,
         label: lookup_key("OptionsGraphics", "FullscreenType"),
         choices: &[
-            localized_choice("OptionsGraphics", "FullscreenExclusive"),
-            localized_choice("OptionsGraphics", "Borderless"),
+            localized_choice("OptionsGraphics", "FullscreenTypeExclusive"),
+            localized_choice("OptionsGraphics", "FullscreenTypeBorderless"),
         ],
         inline: true,
     },
@@ -1909,7 +1909,7 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         id: SubRowId::VideoBgs,
-        label: lookup_key("OptionsMachine", "VideoBgs"),
+        label: lookup_key("OptionsMachine", "VideoBGs"),
         choices: &[
             localized_choice("Common", "Off"),
             localized_choice("Common", "On"),
@@ -2033,7 +2033,7 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         id: ItemId::MchVideoBgs,
-        name: lookup_key("OptionsMachine", "VideoBgs"),
+        name: lookup_key("OptionsMachine", "VideoBGs"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "VideoBgsHelp",
@@ -2134,7 +2134,7 @@ pub const COURSE_OPTIONS_ITEMS: &[Item] = &[
 pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::BgBrightness,
-        label: lookup_key("OptionsGameplay", "BgBrightness"),
+        label: lookup_key("OptionsGameplay", "BGBrightness"),
         choices: &[
             literal_choice("0%"),
             literal_choice("10%"),
@@ -2194,7 +2194,7 @@ pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
 pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::GpBgBrightness,
-        name: lookup_key("OptionsGameplay", "BgBrightness"),
+        name: lookup_key("OptionsGameplay", "BGBrightness"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGameplayHelp",
             "BgBrightnessHelp",
@@ -2505,7 +2505,7 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         id: SubRowId::ShowCdTitles,
-        label: lookup_key("OptionsSelectMusic", "ShowCdTitles"),
+        label: lookup_key("OptionsSelectMusic", "ShowCDTitles"),
         choices: &[
             localized_choice("Common", "No"),
             localized_choice("Common", "Yes"),
@@ -2532,7 +2532,7 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         id: SubRowId::ItlWheelData,
-        label: lookup_key("OptionsSelectMusic", "ItlWheelData"),
+        label: lookup_key("OptionsSelectMusic", "ITLWheelData"),
         choices: &[
             localized_choice("Common", "Off"),
             localized_choice("OptionsSelectMusic", "ItlWheelScore"),
@@ -2607,7 +2607,7 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         id: SubRowId::ShowGsBox,
-        label: lookup_key("OptionsSelectMusic", "ShowGsBox"),
+        label: lookup_key("OptionsSelectMusic", "ShowGSBox"),
         choices: &[
             localized_choice("Common", "No"),
             localized_choice("Common", "Yes"),
@@ -2616,7 +2616,7 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         id: SubRowId::GsBoxPlacement,
-        label: lookup_key("OptionsSelectMusic", "GsBoxPlacement"),
+        label: lookup_key("OptionsSelectMusic", "GSBoxPlacement"),
         choices: &[
             localized_choice("Common", "Auto"),
             localized_choice("OptionsSelectMusic", "GsBoxStepPane"),
@@ -2625,7 +2625,7 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         id: SubRowId::GsBoxLeaderboards,
-        label: lookup_key("OptionsSelectMusic", "GsBoxLeaderboards"),
+        label: lookup_key("OptionsSelectMusic", "GSBoxLeaderboards"),
         choices: &[
             localized_choice("OptionsSelectMusic", "ScoreboxCycleITG"),
             localized_choice("OptionsSelectMusic", "ScoreboxCycleEX"),
@@ -2695,7 +2695,7 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         id: ItemId::SmCdTitles,
-        name: lookup_key("OptionsSelectMusic", "ShowCdTitles"),
+        name: lookup_key("OptionsSelectMusic", "ShowCDTitles"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "ShowCdTitlesHelp",
@@ -2719,7 +2719,7 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         id: ItemId::SmWheelItl,
-        name: lookup_key("OptionsSelectMusic", "ItlWheelData"),
+        name: lookup_key("OptionsSelectMusic", "ITLWheelData"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "ItlWheelDataHelp",
@@ -2783,7 +2783,7 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         id: ItemId::SmShowRivals,
-        name: lookup_key("OptionsSelectMusic", "ShowGsBox"),
+        name: lookup_key("OptionsSelectMusic", "ShowGSBox"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "ShowGsBoxHelp",
@@ -2791,7 +2791,7 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         id: ItemId::SmScoreboxPlacement,
-        name: lookup_key("OptionsSelectMusic", "GsBoxPlacement"),
+        name: lookup_key("OptionsSelectMusic", "GSBoxPlacement"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "GsBoxPlacementHelp",
@@ -2799,7 +2799,7 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         id: ItemId::SmScoreboxCycle,
-        name: lookup_key("OptionsSelectMusic", "GsBoxLeaderboards"),
+        name: lookup_key("OptionsSelectMusic", "GSBoxLeaderboards"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "GsBoxLeaderboardsHelp",
@@ -2836,7 +2836,7 @@ pub const ADVANCED_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         id: SubRowId::CdTitleCache,
-        label: lookup_key("OptionsAdvanced", "CdTitleCache"),
+        label: lookup_key("OptionsAdvanced", "CDTitleCache"),
         choices: &[
             localized_choice("Common", "Off"),
             localized_choice("Common", "On"),
@@ -2888,7 +2888,7 @@ pub const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         id: ItemId::AdvCdTitleCache,
-        name: lookup_key("OptionsAdvanced", "CdTitleCache"),
+        name: lookup_key("OptionsAdvanced", "CDTitleCache"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsAdvancedHelp",
             "CdTitleCacheHelp",
