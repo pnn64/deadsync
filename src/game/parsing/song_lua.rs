@@ -1847,26 +1847,9 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
     install_speedmod_method(lua, &table, "MMod", player.speedmod, SongLuaSpeedMod::M)?;
     install_speedmod_method(lua, &table, "AMod", player.speedmod, SongLuaSpeedMod::A)?;
     install_speedmod_method(lua, &table, "XMod", player.speedmod, SongLuaSpeedMod::X)?;
-    table.set(
-        "Mirror",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
-    )?;
-    table.set(
-        "Left",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
-    )?;
-    table.set(
-        "Right",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
-    )?;
-    table.set(
-        "Skew",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
-    )?;
-    table.set(
-        "Tilt",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
-    )?;
+    for name in ["Mirror", "Left", "Right", "Reverse", "Mini", "Skew", "Tilt"] {
+        table.set(name, create_player_option_method(lua, &table, name)?)?;
+    }
     table.set(
         "GetReversePercentForColumn",
         lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
@@ -1904,14 +1887,64 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
                     lua.create_function(|_, _args: MultiValue| Ok(()))?,
                 ));
             }
-            let owner = fallback_owner.clone();
-            Ok(Value::Function(lua.create_function(
-                move |_, _args: MultiValue| Ok(owner.clone()),
+            Ok(Value::Function(create_player_option_method(
+                lua,
+                &fallback_owner,
+                &name,
             )?))
         })?,
     )?;
     let _ = table.set_metatable(Some(mt));
     Ok(table)
+}
+
+fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<Function> {
+    let owner = owner.clone();
+    let name = name.to_ascii_lowercase();
+    lua.create_function(move |lua, args: MultiValue| {
+        let state = player_option_state(lua, &owner)?;
+        if let Some(value) = method_arg(&args, 0).cloned() {
+            state.set(name.as_str(), normalize_player_option_value(&name, value))?;
+            return Ok(Value::Table(owner.clone()));
+        }
+        Ok(state
+            .get::<Option<Value>>(name.as_str())?
+            .unwrap_or_else(|| default_player_option_value(&name)))
+    })
+}
+
+fn player_option_state(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
+    if let Some(state) = owner.get::<Option<Table>>("__songlua_player_option_state")? {
+        return Ok(state);
+    }
+    let state = lua.create_table()?;
+    owner.set("__songlua_player_option_state", state.clone())?;
+    Ok(state)
+}
+
+#[inline(always)]
+fn normalize_player_option_value(name: &str, value: Value) -> Value {
+    if player_option_uses_bool(name) {
+        return Value::Boolean(read_boolish(value).unwrap_or(false));
+    }
+    Value::Number(read_f32(value).unwrap_or(0.0) as f64)
+}
+
+#[inline(always)]
+fn default_player_option_value(name: &str) -> Value {
+    if player_option_uses_bool(name) {
+        Value::Boolean(false)
+    } else {
+        Value::Number(0.0)
+    }
+}
+
+#[inline(always)]
+fn player_option_uses_bool(name: &str) -> bool {
+    matches!(
+        name,
+        "mirror" | "left" | "right" | "stealthtype" | "stealthpastreceptors"
+    )
 }
 
 fn install_speedmod_method(
@@ -5157,6 +5190,32 @@ fn read_f32(value: Value) -> Option<f32> {
 }
 
 #[inline(always)]
+fn read_boolish(value: Value) -> Option<bool> {
+    match value {
+        Value::Boolean(value) => Some(value),
+        Value::Integer(value) => Some(value != 0),
+        Value::Number(value) => Some(value != 0.0),
+        Value::String(text) => {
+            let text = text.to_str().ok()?.trim().to_string();
+            if text.eq_ignore_ascii_case("true")
+                || text.eq_ignore_ascii_case("yes")
+                || text.eq_ignore_ascii_case("on")
+            {
+                Some(true)
+            } else if text.eq_ignore_ascii_case("false")
+                || text.eq_ignore_ascii_case("no")
+                || text.eq_ignore_ascii_case("off")
+            {
+                Some(false)
+            } else {
+                text.parse::<f32>().ok().map(|value| value != 0.0)
+            }
+        }
+        _ => None,
+    }
+}
+
+#[inline(always)]
 fn read_string(value: Value) -> Option<String> {
     match value {
         Value::String(text) => Some(text.to_str().ok()?.to_string()),
@@ -7320,6 +7379,43 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "-96:0");
+    }
+
+    #[test]
+    fn compile_song_lua_player_options_getters_return_scalars() {
+        let song_dir = test_dir("player-options-getters");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    InitCommand=function(self)
+        local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
+        if po:Reverse() ~= 0 then
+            error("expected reverse getter to default to 0")
+        end
+        if po:Mini() ~= 0 then
+            error("expected mini getter to default to 0")
+        end
+        po:Reverse(1, 1)
+        po:Mini(0.25, 1)
+        po:Mirror(true)
+        mod_actions = {
+            {1, string.format("%.2f:%.2f:%s", po:Reverse(), po:Mini(), tostring(po:Mirror())), true},
+        }
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Player Options Getters"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "1.00:0.25:true");
     }
 
     #[test]
