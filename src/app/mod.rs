@@ -2617,6 +2617,7 @@ impl App {
             self.state.shell.backquote_held,
             self.state.shell.tab_acceleration_enabled,
         );
+        crate::screens::components::shared::heart_bg::tick_global(logic_dt);
 
         self.sync_gameplay_input_capture();
         self.state.shell.update_gamepad_overlay(redraw_started);

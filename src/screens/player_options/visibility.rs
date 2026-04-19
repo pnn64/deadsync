@@ -404,7 +404,8 @@ pub(super) fn sync_selected_rows_with_visibility(state: &mut State, active: [boo
         state.allow_per_player_global_offsets,
     );
     for player_idx in [P1, P2] {
-        let idx = state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
+        let idx =
+            state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
         if is_row_visible(&state.pane().row_map, idx, visibility) {
             state.pane_mut().selected_row[player_idx] = idx;
             continue;
@@ -422,7 +423,8 @@ pub(super) fn sync_selected_rows_with_visibility(state: &mut State, active: [boo
 pub(super) fn row_allows_arcade_next_row(state: &State, row_idx: usize) -> bool {
     arcade_options_navigation_active()
         && pane_uses_arcade_next_row(state.current_pane)
-        && state.pane()
+        && state
+            .pane()
             .row_map
             .get_at(row_idx)
             .is_some_and(|row| row.id != RowId::Exit && row_supports_inline_nav(row))
@@ -435,7 +437,8 @@ pub(super) fn arcade_row_uses_choice_focus(state: &State, player_idx: usize) -> 
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_idx = state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));
-    state.pane()
+    state
+        .pane()
         .row_map
         .display_order()
         .get(row_idx)

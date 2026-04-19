@@ -26,7 +26,8 @@ pub(super) fn focused_inline_choice_index(
     row_idx: usize,
 ) -> Option<usize> {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row = state.pane()
+    let row = state
+        .pane()
         .row_map
         .display_order()
         .get(row_idx)
@@ -68,7 +69,8 @@ pub(super) fn move_inline_focus(
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_idx = state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));
-    let Some(row) = state.pane()
+    let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_idx)
@@ -131,7 +133,8 @@ pub(super) fn commit_inline_focus_selection(
     row_idx: usize,
 ) -> bool {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let Some(row) = state.pane()
+    let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_idx)
@@ -172,7 +175,8 @@ pub(super) fn sync_inline_intent_from_row(
         state.pane_mut().inline_choice_x[idx] = f32::NAN;
         return;
     }
-    let Some(row) = state.pane()
+    let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_idx)
@@ -206,7 +210,8 @@ pub(super) fn apply_inline_intent_to_row(
         state.pane_mut().inline_choice_x[idx] = f32::NAN;
         return;
     }
-    let Some(row) = state.pane()
+    let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_idx)
@@ -254,7 +259,8 @@ pub(super) fn move_selection_vertical(
         state.error_bar_active_mask,
         state.allow_per_player_global_offsets,
     );
-    let current_row = state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));
+    let current_row =
+        state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));
     if !state.pane().inline_choice_x[idx].is_finite() {
         if let Some((anchor_x, _, _, _)) = cursor_dest_for_player(state, asset_manager, idx) {
             state.pane_mut().inline_choice_x[idx] = anchor_x;

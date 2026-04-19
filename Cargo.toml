@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.534"
+version = "0.3.540"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -93,7 +93,7 @@ twox-hash = "2.1.2"
 # Localization
 rust-ini = "0.21.3"
 sys-locale = "0.3.2"
-tokio = { version = "1.52.0", features = ["rt"] }
+tokio = { version = "1.52.1", features = ["rt"] }
 bitflags = "2.11.1"
 
 # DirectX + Input (Windows)

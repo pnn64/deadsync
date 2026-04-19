@@ -6,17 +6,76 @@ use crate::game::profile::{self as gp, PlayerSide};
 // Dispatch reads `row.behavior` to decide how to apply input.
 
 /// Returns `(should_persist, persist_side)` for the given player index.
+///
+/// `pub(super)` so `CustomBinding` arms in `panes/main.rs` and
+/// `panes/advanced.rs` can drive their own apply + persist sequence inline.
+/// The typed bindings (`NumericBinding`, `ChoiceBinding<T>`, `NoteSkinBinding`)
+/// wrap this internally via their `apply_for_player` methods below, so the
+/// dispatcher itself never reads it.
 pub(super) fn persist_ctx(player_idx: usize) -> (bool, PlayerSide) {
     let play_style = gp::get_session_play_style();
     let persisted_idx = super::session_persisted_player_idx();
-    let should_persist =
-        play_style == gp::PlayStyle::Versus || player_idx == persisted_idx;
+    let should_persist = play_style == gp::PlayStyle::Versus || player_idx == persisted_idx;
     let side = if player_idx == P1 {
         PlayerSide::P1
     } else {
         PlayerSide::P2
     };
     (should_persist, side)
+}
+
+// ========================= Self-contained binding application =========================
+// Each typed binding owns the full "write to in-memory profile + conditionally
+// persist to the on-disk profile for the right side" dance. The dispatcher
+// hands off a freshly-computed value and reads back an `Outcome`; it does not
+// need to know about `PlayerSide`, `persist_ctx`, or `persist_for_side`.
+
+impl NumericBinding {
+    #[inline]
+    pub(super) fn apply_for_player(
+        &self,
+        state: &mut State,
+        player_idx: usize,
+        value: i32,
+    ) -> Outcome {
+        let outcome = (self.apply)(&mut state.player_profiles[player_idx], value);
+        let (should_persist, side) = persist_ctx(player_idx);
+        if should_persist {
+            (self.persist_for_side)(side, value);
+        }
+        outcome
+    }
+}
+
+impl<T: Copy + 'static> ChoiceBinding<T> {
+    #[inline]
+    pub(super) fn apply_for_player(
+        &self,
+        state: &mut State,
+        player_idx: usize,
+        value: T,
+    ) -> Outcome {
+        let outcome = (self.apply)(&mut state.player_profiles[player_idx], value);
+        let (should_persist, side) = persist_ctx(player_idx);
+        if should_persist {
+            (self.persist_for_side)(side, value);
+        }
+        outcome
+    }
+}
+
+impl NoteSkinBinding {
+    #[inline]
+    pub(super) fn apply_for_player(
+        &self,
+        state: &mut State,
+        player_idx: usize,
+        choice: &str,
+    ) -> Outcome {
+        let (should_persist, side) = persist_ctx(player_idx);
+        (self.apply)(state, player_idx, choice, should_persist, side);
+        Outcome::persisted()
+    }
 }
 
 /// Advance `selected_choice_index[player_idx]` by `delta`, wrapping. Returns
@@ -51,7 +110,8 @@ pub(super) fn dispatch_behavior_delta(
         return;
     }
     let player_idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
+    let row_index =
+        state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
     let Some(&id) = state.pane().row_map.display_order().get(row_index) else {
         return;
     };
@@ -102,7 +162,8 @@ fn apply_numeric(
         Some(i) => i,
         None => return Outcome::NONE,
     };
-    let choice = state.pane()
+    let choice = state
+        .pane()
         .row_map
         .get(id)
         .and_then(|r| r.choices.get(new_index))
@@ -113,12 +174,7 @@ fn apply_numeric(
     let Some(value) = (binding.parse)(&choice) else {
         return Outcome::persisted();
     };
-    let outcome = (binding.apply)(&mut state.player_profiles[player_idx], value);
-    let (should_persist, side) = persist_ctx(player_idx);
-    if should_persist {
-        (binding.persist_for_side)(side, value);
-    }
-    outcome
+    binding.apply_for_player(state, player_idx, value)
 }
 
 fn apply_cycle(
@@ -132,32 +188,18 @@ fn apply_cycle(
         Some(i) => i,
         None => return Outcome::NONE,
     };
-    let (should_persist, side) = persist_ctx(player_idx);
     match binding {
-        CycleBinding::Bool(b) => {
-            let value = new_index != 0;
-            let outcome = (b.apply)(&mut state.player_profiles[player_idx], value);
-            if should_persist {
-                (b.persist_for_side)(side, value);
-            }
-            outcome
-        }
-        CycleBinding::Index(i) => {
-            let outcome = (i.apply)(&mut state.player_profiles[player_idx], new_index);
-            if should_persist {
-                (i.persist_for_side)(side, new_index);
-            }
-            outcome
-        }
+        CycleBinding::Bool(b) => b.apply_for_player(state, player_idx, new_index != 0),
+        CycleBinding::Index(i) => i.apply_for_player(state, player_idx, new_index),
         CycleBinding::NoteSkin(n) => {
-            let choice = state.pane()
+            let choice = state
+                .pane()
                 .row_map
                 .get(id)
                 .and_then(|r| r.choices.get(new_index))
                 .cloned()
                 .unwrap_or_default();
-            (n.apply)(state, player_idx, &choice, should_persist, side);
-            Outcome::persisted()
+            n.apply_for_player(state, player_idx, &choice)
         }
     }
 }
@@ -202,7 +244,8 @@ pub fn apply_choice_delta(
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_idx = state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_idx)
@@ -224,7 +267,8 @@ pub fn apply_choice_delta(
 pub(super) fn toggle_scroll_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -290,7 +334,8 @@ pub(super) fn toggle_scroll_row(state: &mut State, player_idx: usize) {
 pub(super) fn toggle_hide_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -363,7 +408,8 @@ pub(super) fn toggle_hide_row(state: &mut State, player_idx: usize) {
 pub(super) fn toggle_insert_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -376,7 +422,8 @@ pub(super) fn toggle_insert_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
@@ -417,7 +464,8 @@ pub(super) fn toggle_insert_row(state: &mut State, player_idx: usize) {
 pub(super) fn toggle_remove_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -430,7 +478,8 @@ pub(super) fn toggle_remove_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
@@ -471,7 +520,8 @@ pub(super) fn toggle_remove_row(state: &mut State, player_idx: usize) {
 pub(super) fn toggle_holds_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -484,12 +534,14 @@ pub(super) fn toggle_holds_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index
-        < state.pane()
+        < state
+            .pane()
             .row_map
             .row(state.pane().row_map.id_at(row_index))
             .choices
@@ -532,7 +584,8 @@ pub(super) fn toggle_holds_row(state: &mut State, player_idx: usize) {
 pub(super) fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -545,12 +598,14 @@ pub(super) fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index
-        < state.pane()
+        < state
+            .pane()
             .row_map
             .row(state.pane().row_map.id_at(row_index))
             .choices
@@ -593,7 +648,8 @@ pub(super) fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
 pub(super) fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -606,7 +662,8 @@ pub(super) fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
@@ -647,7 +704,8 @@ pub(super) fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
 pub(super) fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -660,12 +718,14 @@ pub(super) fn toggle_appearance_effects_row(state: &mut State, player_idx: usize
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index
-        < state.pane()
+        < state
+            .pane()
             .row_map
             .row(state.pane().row_map.id_at(row_index))
             .choices
@@ -710,7 +770,8 @@ pub(super) fn toggle_appearance_effects_row(state: &mut State, player_idx: usize
 pub(super) fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -766,7 +827,8 @@ pub(super) fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) 
 pub(super) fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -779,7 +841,8 @@ pub(super) fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
@@ -837,7 +900,8 @@ pub(super) fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
 pub(super) fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -850,7 +914,8 @@ pub(super) fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
@@ -888,7 +953,8 @@ pub(super) fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
 pub(super) fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -901,7 +967,8 @@ pub(super) fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
@@ -946,7 +1013,8 @@ pub(super) fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
 pub(super) fn toggle_error_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -959,7 +1027,8 @@ pub(super) fn toggle_error_bar_options_row(state: &mut State, player_idx: usize)
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
@@ -998,7 +1067,8 @@ pub(super) fn toggle_error_bar_options_row(state: &mut State, player_idx: usize)
 pub(super) fn toggle_measure_counter_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -1011,7 +1081,8 @@ pub(super) fn toggle_measure_counter_options_row(state: &mut State, player_idx: 
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
@@ -1059,7 +1130,8 @@ pub(super) fn toggle_measure_counter_options_row(state: &mut State, player_idx: 
 pub(super) fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -1072,7 +1144,8 @@ pub(super) fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
@@ -1111,7 +1184,8 @@ pub(super) fn toggle_early_dw_row(state: &mut State, player_idx: usize) {
 pub(super) fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state.pane()
+    if let Some(row) = state
+        .pane()
         .row_map
         .display_order()
         .get(row_index)
@@ -1124,7 +1198,10 @@ pub(super) fn toggle_gameplay_extras_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let row = state.pane().row_map.row(state.pane().row_map.id_at(row_index));
+    let row = state
+        .pane()
+        .row_map
+        .row(state.pane().row_map.id_at(row_index));
     let choice_index = row.selected_choice_index[idx];
     let ge_flash = tr("PlayerOptions", "GameplayExtrasFlashColumnForMiss");
     let ge_density = tr("PlayerOptions", "GameplayExtrasDensityGraphAtTop");
@@ -1214,14 +1291,7 @@ pub(super) fn apply_pane(state: &mut State, pane: OptionsPane) {
     let error_bar = state.error_bar_active_mask;
     let allow = state.allow_per_player_global_offsets;
     let p = state.pane_mut();
-    p.row_tweens = init_row_tweens(
-        &p.row_map,
-        p.selected_row,
-        active,
-        hide,
-        error_bar,
-        allow,
-    );
+    p.row_tweens = init_row_tweens(&p.row_map, p.selected_row, active, hide, error_bar, allow);
     state.pane_mut().arcade_row_focus = std::array::from_fn(|player_idx| {
         row_allows_arcade_next_row(state, state.pane().selected_row[player_idx])
     });

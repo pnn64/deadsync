@@ -20,15 +20,6 @@ impl OptionsPane {
     pub(super) const fn index(self) -> usize {
         self as usize
     }
-
-    #[inline(always)]
-    pub(super) const fn from_index(idx: usize) -> Self {
-        match idx {
-            0 => Self::Main,
-            1 => Self::Advanced,
-            _ => Self::Uncommon,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug)]

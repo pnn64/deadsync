@@ -1,5 +1,5 @@
-use super::*;
 use super::super::row::index_binding;
+use super::*;
 use crate::game::profile as gp;
 
 // =============================== Bindings ===============================
@@ -28,42 +28,66 @@ const BACKGROUND_FILTER: ChoiceBinding<usize> = index_binding!(
 
 const JUDGMENT_OFFSET_X: NumericBinding = NumericBinding {
     parse: parse_i32,
-    apply: |p, v| { p.judgment_offset_x = v; Outcome::persisted() },
+    apply: |p, v| {
+        p.judgment_offset_x = v;
+        Outcome::persisted()
+    },
     persist_for_side: gp::update_judgment_offset_x_for_side,
 };
 const JUDGMENT_OFFSET_Y: NumericBinding = NumericBinding {
     parse: parse_i32,
-    apply: |p, v| { p.judgment_offset_y = v; Outcome::persisted() },
+    apply: |p, v| {
+        p.judgment_offset_y = v;
+        Outcome::persisted()
+    },
     persist_for_side: gp::update_judgment_offset_y_for_side,
 };
 const COMBO_OFFSET_X: NumericBinding = NumericBinding {
     parse: parse_i32,
-    apply: |p, v| { p.combo_offset_x = v; Outcome::persisted() },
+    apply: |p, v| {
+        p.combo_offset_x = v;
+        Outcome::persisted()
+    },
     persist_for_side: gp::update_combo_offset_x_for_side,
 };
 const COMBO_OFFSET_Y: NumericBinding = NumericBinding {
     parse: parse_i32,
-    apply: |p, v| { p.combo_offset_y = v; Outcome::persisted() },
+    apply: |p, v| {
+        p.combo_offset_y = v;
+        Outcome::persisted()
+    },
     persist_for_side: gp::update_combo_offset_y_for_side,
 };
 const NOTEFIELD_OFFSET_X: NumericBinding = NumericBinding {
     parse: parse_i32,
-    apply: |p, v| { p.note_field_offset_x = v; Outcome::persisted() },
+    apply: |p, v| {
+        p.note_field_offset_x = v;
+        Outcome::persisted()
+    },
     persist_for_side: gp::update_notefield_offset_x_for_side,
 };
 const NOTEFIELD_OFFSET_Y: NumericBinding = NumericBinding {
     parse: parse_i32,
-    apply: |p, v| { p.note_field_offset_y = v; Outcome::persisted() },
+    apply: |p, v| {
+        p.note_field_offset_y = v;
+        Outcome::persisted()
+    },
     persist_for_side: gp::update_notefield_offset_y_for_side,
 };
 const VISUAL_DELAY: NumericBinding = NumericBinding {
     parse: parse_i32_ms,
-    apply: |p, v| { p.visual_delay_ms = v; Outcome::persisted() },
+    apply: |p, v| {
+        p.visual_delay_ms = v;
+        Outcome::persisted()
+    },
     persist_for_side: gp::update_visual_delay_ms_for_side,
 };
 const GLOBAL_OFFSET_SHIFT: NumericBinding = NumericBinding {
     parse: parse_i32_ms,
-    apply: |p, v| { p.global_offset_shift_ms = v; Outcome::persisted() },
+    apply: |p, v| {
+        p.global_offset_shift_ms = v;
+        Outcome::persisted()
+    },
     persist_for_side: gp::update_global_offset_shift_ms_for_side,
 };
 
@@ -176,7 +200,9 @@ const SPEED_MOD: CustomBinding = CustomBinding {
 
 const TYPE_OF_SPEED_MOD: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta| {
-        let Some(new_index) = super::super::choice::cycle_choice_index(state, player_idx, row_id, delta) else {
+        let Some(new_index) =
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+        else {
             return Outcome::NONE;
         };
         let new_type = SpeedModType::from_choice_index(new_index);
@@ -222,10 +248,13 @@ const TYPE_OF_SPEED_MOD: CustomBinding = CustomBinding {
 
 const MINI: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta| {
-        let Some(new_index) = super::super::choice::cycle_choice_index(state, player_idx, row_id, delta) else {
+        let Some(new_index) =
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+        else {
             return Outcome::NONE;
         };
-        let Some(choice) = state.pane()
+        let Some(choice) = state
+            .pane()
             .row_map
             .get(row_id)
             .and_then(|r| r.choices.get(new_index))
@@ -247,7 +276,9 @@ const MINI: CustomBinding = CustomBinding {
 
 const JUDGMENT_FONT: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta| {
-        let Some(new_index) = super::super::choice::cycle_choice_index(state, player_idx, row_id, delta) else {
+        let Some(new_index) =
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+        else {
             return Outcome::NONE;
         };
         let setting = assets::judgment_texture_choices()
@@ -268,7 +299,9 @@ const JUDGMENT_FONT: CustomBinding = CustomBinding {
 
 const HOLD_JUDGMENT: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta| {
-        let Some(new_index) = super::super::choice::cycle_choice_index(state, player_idx, row_id, delta) else {
+        let Some(new_index) =
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+        else {
             return Outcome::NONE;
         };
         let setting = assets::hold_judgment_texture_choices()
@@ -280,7 +313,9 @@ const HOLD_JUDGMENT: CustomBinding = CustomBinding {
         if should_persist {
             gp::update_hold_judgment_graphic_for_side(
                 side,
-                state.player_profiles[player_idx].hold_judgment_graphic.clone(),
+                state.player_profiles[player_idx]
+                    .hold_judgment_graphic
+                    .clone(),
             );
         }
         Outcome::persisted()
@@ -289,7 +324,9 @@ const HOLD_JUDGMENT: CustomBinding = CustomBinding {
 
 const STEPCHART: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta| {
-        let Some(new_index) = super::super::choice::cycle_choice_index(state, player_idx, row_id, delta) else {
+        let Some(new_index) =
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+        else {
             return Outcome::NONE;
         };
         let difficulty_idx = {

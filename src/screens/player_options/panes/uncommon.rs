@@ -1,5 +1,5 @@
-use super::*;
 use super::super::row::index_binding;
+use super::*;
 use crate::game::profile as gp;
 
 const ATTACKS: ChoiceBinding<usize> = index_binding!(
@@ -17,9 +17,15 @@ const HIDE_LIGHT_TYPE: ChoiceBinding<usize> = index_binding!(
     false
 );
 
-const INSERT: BitmaskBinding = BitmaskBinding { toggle: super::super::choice::toggle_insert_row };
-const REMOVE: BitmaskBinding = BitmaskBinding { toggle: super::super::choice::toggle_remove_row };
-const HOLDS: BitmaskBinding = BitmaskBinding { toggle: super::super::choice::toggle_holds_row };
+const INSERT: BitmaskBinding = BitmaskBinding {
+    toggle: super::super::choice::toggle_insert_row,
+};
+const REMOVE: BitmaskBinding = BitmaskBinding {
+    toggle: super::super::choice::toggle_remove_row,
+};
+const HOLDS: BitmaskBinding = BitmaskBinding {
+    toggle: super::super::choice::toggle_holds_row,
+};
 const ACCEL: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_accel_effects_row,
 };

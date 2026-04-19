@@ -205,9 +205,7 @@ macro_rules! index_binding {
                     $crate::screens::player_options::row::Outcome::persisted()
                 }
             },
-            persist_for_side: |s, i| {
-                $persist(s, $table.get(i).copied().unwrap_or($default))
-            },
+            persist_for_side: |s, i| $persist(s, $table.get(i).copied().unwrap_or($default)),
         }
     };
 }
@@ -245,11 +243,6 @@ impl RowMap {
         self.rows[id.index()].as_ref().expect("row must exist")
     }
 
-    #[inline(always)]
-    pub fn row_mut(&mut self, id: RowId) -> &mut Row {
-        self.rows[id.index()].as_mut().expect("row must exist")
-    }
-
     pub(super) fn insert(&mut self, row: Row) {
         let idx = row.id.index();
         debug_assert!(self.rows[idx].is_none(), "duplicate RowId {:?}", row.id);
@@ -275,19 +268,6 @@ impl RowMap {
     #[inline(always)]
     pub fn id_at(&self, display_idx: usize) -> RowId {
         self.display_order[display_idx]
-    }
-
-    /// Get the row at the given display index.
-    #[inline(always)]
-    pub fn at(&self, display_idx: usize) -> &Row {
-        self.row(self.display_order[display_idx])
-    }
-
-    /// Get a mutable reference to the row at the given display index.
-    #[inline(always)]
-    pub fn at_mut(&mut self, display_idx: usize) -> &mut Row {
-        let id = self.display_order[display_idx];
-        self.row_mut(id)
     }
 
     /// Safe access by display index.

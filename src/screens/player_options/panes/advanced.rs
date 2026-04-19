@@ -1,6 +1,6 @@
-use super::*;
-use super::super::row::index_binding;
 use super::super::constants::MINI_INDICATOR_VARIANTS;
+use super::super::row::index_binding;
+use super::*;
 use crate::game::profile as gp;
 
 // =============================== Bindings ===============================
@@ -135,17 +135,27 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW: ChoiceBinding<bool> = ChoiceBinding::<bool> 
 
 const ERROR_BAR_OFFSET_X: NumericBinding = NumericBinding {
     parse: parse_i32,
-    apply: |p, v| { p.error_bar_offset_x = v; Outcome::persisted() },
+    apply: |p, v| {
+        p.error_bar_offset_x = v;
+        Outcome::persisted()
+    },
     persist_for_side: gp::update_error_bar_offset_x_for_side,
 };
 const ERROR_BAR_OFFSET_Y: NumericBinding = NumericBinding {
     parse: parse_i32,
-    apply: |p, v| { p.error_bar_offset_y = v; Outcome::persisted() },
+    apply: |p, v| {
+        p.error_bar_offset_y = v;
+        Outcome::persisted()
+    },
     persist_for_side: gp::update_error_bar_offset_y_for_side,
 };
 
-const SCROLL: BitmaskBinding = BitmaskBinding { toggle: super::super::choice::toggle_scroll_row };
-const HIDE: BitmaskBinding = BitmaskBinding { toggle: super::super::choice::toggle_hide_row };
+const SCROLL: BitmaskBinding = BitmaskBinding {
+    toggle: super::super::choice::toggle_scroll_row,
+};
+const HIDE: BitmaskBinding = BitmaskBinding {
+    toggle: super::super::choice::toggle_hide_row,
+};
 const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_life_bar_options_row,
 };
@@ -182,7 +192,9 @@ const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {
 
 const MINI_INDICATOR: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta| {
-        let Some(new_index) = super::super::choice::cycle_choice_index(state, player_idx, row_id, delta) else {
+        let Some(new_index) =
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+        else {
             return Outcome::NONE;
         };
         let mini_indicator = MINI_INDICATOR_VARIANTS
@@ -212,10 +224,13 @@ const MINI_INDICATOR: CustomBinding = CustomBinding {
 
 const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta| {
-        let Some(new_index) = super::super::choice::cycle_choice_index(state, player_idx, row_id, delta) else {
+        let Some(new_index) =
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+        else {
             return Outcome::NONE;
         };
-        let Some(choice) = state.pane()
+        let Some(choice) = state
+            .pane()
             .row_map
             .get(row_id)
             .and_then(|r| r.choices.get(new_index))
@@ -226,8 +241,8 @@ const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
         let Ok(mult) = choice.parse::<f32>() else {
             return Outcome::persisted();
         };
-        let mult = round_to_step(mult, TILT_INTENSITY_STEP)
-            .clamp(TILT_INTENSITY_MIN, TILT_INTENSITY_MAX);
+        let mult =
+            round_to_step(mult, TILT_INTENSITY_STEP).clamp(TILT_INTENSITY_MIN, TILT_INTENSITY_MAX);
         state.player_profiles[player_idx].tilt_multiplier = mult;
         let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
         if should_persist {
@@ -239,7 +254,9 @@ const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
 
 const MEASURE_COUNTER_LOOKAHEAD: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta| {
-        let Some(new_index) = super::super::choice::cycle_choice_index(state, player_idx, row_id, delta) else {
+        let Some(new_index) =
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+        else {
             return Outcome::NONE;
         };
         let lookahead = (new_index as u8).min(4);
@@ -254,10 +271,13 @@ const MEASURE_COUNTER_LOOKAHEAD: CustomBinding = CustomBinding {
 
 const CUSTOM_BLUE_FANTASTIC_WINDOW_MS: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta| {
-        let Some(new_index) = super::super::choice::cycle_choice_index(state, player_idx, row_id, delta) else {
+        let Some(new_index) =
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+        else {
             return Outcome::NONE;
         };
-        let Some(choice) = state.pane()
+        let Some(choice) = state
+            .pane()
             .row_map
             .get(row_id)
             .and_then(|r| r.choices.get(new_index))
