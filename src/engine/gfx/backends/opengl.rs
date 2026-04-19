@@ -1,6 +1,6 @@
 use crate::engine::gfx::{
-    BlendMode, DrawStats, MeshMode, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    TMeshCacheKey, Texture as RendererTexture, TextureHandleMap,
+    BlendMode, DrawStats, FastU64Map, MeshMode, RenderList, SamplerDesc, SamplerFilter,
+    SamplerWrap, TMeshCacheKey, Texture as RendererTexture, TextureHandleMap,
     draw_prep::{
         self, DrawOp, DrawScratch, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshSource,
         TexturedMeshVertexRaw,
@@ -20,7 +20,7 @@ use image::RgbaImage;
 use log::{debug, info, warn};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
 use std::{
-    collections::HashMap, error::Error, ffi::CStr, mem, num::NonZeroU32, sync::Arc, time::Instant,
+    error::Error, ffi::CStr, mem, num::NonZeroU32, sync::Arc, time::Instant,
 };
 use winit::window::Window;
 
@@ -124,7 +124,7 @@ pub struct State {
     tmesh_vbo: glow::Buffer,
     tmesh_instance_vbo: glow::Buffer,
     prep: DrawScratch,
-    cached_tmesh: HashMap<TMeshCacheKey, CachedTMeshGeom>,
+    cached_tmesh: FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     vsync_enabled: bool,
 }
@@ -440,7 +440,7 @@ pub fn init(
         tmesh_vbo,
         tmesh_instance_vbo,
         prep: DrawScratch::with_capacity(256, 1024, 1024, 256, 64),
-        cached_tmesh: HashMap::new(),
+        cached_tmesh: FastU64Map::default(),
         cached_tmesh_bytes: 0,
         vsync_enabled,
     };
@@ -593,7 +593,7 @@ pub fn update_texture(
 
 fn ensure_cached_tmesh(
     gl: &glow::Context,
-    cached_tmesh: &mut HashMap<TMeshCacheKey, CachedTMeshGeom>,
+    cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
     vertices: &[crate::engine::gfx::TexturedMeshVertex],

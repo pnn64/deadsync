@@ -1,7 +1,7 @@
 use crate::engine::gfx::{
-    BlendMode, ClockDomainTrace, DrawStats, MeshVertex, PresentModePolicy, PresentModeTrace,
-    PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey,
-    Texture as RendererTexture, TextureHandleMap,
+    BlendMode, ClockDomainTrace, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
+    PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    TMeshCacheKey, Texture as RendererTexture, TextureHandleMap,
     draw_prep::{
         self, DrawOp, DrawScratch, SpriteInstanceRaw as InstanceData,
         TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshSource,
@@ -217,7 +217,7 @@ pub struct State {
     tmesh_capacity_instances: usize,       // total textured mesh instances across ring
     per_frame_stride_tmesh_instances: usize, // textured mesh instances reserved per frame
     prep: DrawScratch,
-    cached_tmesh: HashMap<TMeshCacheKey, CachedTMeshGeom>,
+    cached_tmesh: FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
@@ -365,7 +365,7 @@ pub fn init(
         tmesh_capacity_instances: 0,
         per_frame_stride_tmesh_instances: 0,
         prep: DrawScratch::with_capacity(256, 1024, 1024, 256, 64),
-        cached_tmesh: HashMap::new(),
+        cached_tmesh: FastU64Map::default(),
         cached_tmesh_bytes: 0,
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
@@ -2854,7 +2854,7 @@ fn ensure_cached_tmesh(
     instance: &Instance,
     device: &Device,
     pdevice: vk::PhysicalDevice,
-    cached_tmesh: &mut HashMap<TMeshCacheKey, CachedTMeshGeom>,
+    cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
     vertices: &[crate::engine::gfx::TexturedMeshVertex],

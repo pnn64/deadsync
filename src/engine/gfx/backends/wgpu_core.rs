@@ -1,7 +1,7 @@
 use crate::engine::gfx::{
-    BlendMode, ClockDomainTrace, DrawStats, PresentModePolicy, PresentModeTrace, PresentStats,
-    RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey, Texture as RendererTexture,
-    TextureHandleMap,
+    BlendMode, ClockDomainTrace, DrawStats, FastU64Map, PresentModePolicy, PresentModeTrace,
+    PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey,
+    Texture as RendererTexture, TextureHandleMap,
     draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use crate::engine::space::ortho_for_window;
@@ -224,7 +224,7 @@ pub struct State {
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     prep: DrawScratch,
-    cached_tmesh: HashMap<TMeshCacheKey, CachedTMeshGeom>,
+    cached_tmesh: FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     mesh_vertex_buffer: wgpu::Buffer,
     mesh_vertex_capacity: usize,
@@ -531,7 +531,7 @@ fn init(
             tmesh_instance_capacity,
             64,
         ),
-        cached_tmesh: HashMap::new(),
+        cached_tmesh: FastU64Map::default(),
         cached_tmesh_bytes: 0,
         mesh_vertex_buffer,
         mesh_vertex_capacity,
@@ -877,7 +877,7 @@ fn pick_tex(api: Api, tex: &RendererTexture) -> Option<&Texture> {
 
 fn ensure_cached_tmesh(
     device: &wgpu::Device,
-    cached_tmesh: &mut HashMap<TMeshCacheKey, CachedTMeshGeom>,
+    cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
     vertices: &[crate::engine::gfx::TexturedMeshVertex],
