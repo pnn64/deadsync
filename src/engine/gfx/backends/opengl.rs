@@ -19,9 +19,7 @@ use glutin::{
 use image::RgbaImage;
 use log::{debug, info, warn};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
-use std::{
-    error::Error, ffi::CStr, mem, num::NonZeroU32, sync::Arc, time::Instant,
-};
+use std::{error::Error, ffi::CStr, mem, num::NonZeroU32, sync::Arc, time::Instant};
 use winit::window::Window;
 
 #[cfg(all(unix, not(target_os = "macos")))]
