@@ -6,6 +6,12 @@ use crate::game::profile::{self as gp, PlayerSide};
 // Dispatch reads `row.behavior` to decide how to apply input.
 
 /// Returns `(should_persist, persist_side)` for the given player index.
+///
+/// `pub(super)` so `CustomBinding` arms in `panes/main.rs` and
+/// `panes/advanced.rs` can drive their own apply + persist sequence inline.
+/// The typed bindings (`NumericBinding`, `ChoiceBinding<T>`, `NoteSkinBinding`)
+/// wrap this internally via their `apply_for_player` methods below, so the
+/// dispatcher itself never reads it.
 pub(super) fn persist_ctx(player_idx: usize) -> (bool, PlayerSide) {
     let play_style = gp::get_session_play_style();
     let persisted_idx = super::session_persisted_player_idx();
@@ -16,6 +22,60 @@ pub(super) fn persist_ctx(player_idx: usize) -> (bool, PlayerSide) {
         PlayerSide::P2
     };
     (should_persist, side)
+}
+
+// ========================= Self-contained binding application =========================
+// Each typed binding owns the full "write to in-memory profile + conditionally
+// persist to the on-disk profile for the right side" dance. The dispatcher
+// hands off a freshly-computed value and reads back an `Outcome`; it no longer
+// needs to know about `PlayerSide`, `persist_ctx`, or `persist_for_side`.
+
+impl NumericBinding {
+    #[inline]
+    pub(super) fn apply_for_player(
+        &self,
+        state: &mut State,
+        player_idx: usize,
+        value: i32,
+    ) -> Outcome {
+        let outcome = (self.apply)(&mut state.player_profiles[player_idx], value);
+        let (should_persist, side) = persist_ctx(player_idx);
+        if should_persist {
+            (self.persist_for_side)(side, value);
+        }
+        outcome
+    }
+}
+
+impl<T: Copy + 'static> ChoiceBinding<T> {
+    #[inline]
+    pub(super) fn apply_for_player(
+        &self,
+        state: &mut State,
+        player_idx: usize,
+        value: T,
+    ) -> Outcome {
+        let outcome = (self.apply)(&mut state.player_profiles[player_idx], value);
+        let (should_persist, side) = persist_ctx(player_idx);
+        if should_persist {
+            (self.persist_for_side)(side, value);
+        }
+        outcome
+    }
+}
+
+impl NoteSkinBinding {
+    #[inline]
+    pub(super) fn apply_for_player(
+        &self,
+        state: &mut State,
+        player_idx: usize,
+        choice: &str,
+    ) -> Outcome {
+        let (should_persist, side) = persist_ctx(player_idx);
+        (self.apply)(state, player_idx, choice, should_persist, side);
+        Outcome::persisted()
+    }
 }
 
 /// Advance `selected_choice_index[player_idx]` by `delta`, wrapping. Returns
@@ -114,12 +174,7 @@ fn apply_numeric(
     let Some(value) = (binding.parse)(&choice) else {
         return Outcome::persisted();
     };
-    let outcome = (binding.apply)(&mut state.player_profiles[player_idx], value);
-    let (should_persist, side) = persist_ctx(player_idx);
-    if should_persist {
-        (binding.persist_for_side)(side, value);
-    }
-    outcome
+    binding.apply_for_player(state, player_idx, value)
 }
 
 fn apply_cycle(
@@ -133,23 +188,9 @@ fn apply_cycle(
         Some(i) => i,
         None => return Outcome::NONE,
     };
-    let (should_persist, side) = persist_ctx(player_idx);
     match binding {
-        CycleBinding::Bool(b) => {
-            let value = new_index != 0;
-            let outcome = (b.apply)(&mut state.player_profiles[player_idx], value);
-            if should_persist {
-                (b.persist_for_side)(side, value);
-            }
-            outcome
-        }
-        CycleBinding::Index(i) => {
-            let outcome = (i.apply)(&mut state.player_profiles[player_idx], new_index);
-            if should_persist {
-                (i.persist_for_side)(side, new_index);
-            }
-            outcome
-        }
+        CycleBinding::Bool(b) => b.apply_for_player(state, player_idx, new_index != 0),
+        CycleBinding::Index(i) => i.apply_for_player(state, player_idx, new_index),
         CycleBinding::NoteSkin(n) => {
             let choice = state
                 .pane()
@@ -158,8 +199,7 @@ fn apply_cycle(
                 .and_then(|r| r.choices.get(new_index))
                 .cloned()
                 .unwrap_or_default();
-            (n.apply)(state, player_idx, &choice, should_persist, side);
-            Outcome::persisted()
+            n.apply_for_player(state, player_idx, &choice)
         }
     }
 }
