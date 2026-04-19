@@ -292,8 +292,6 @@ type ClipPolygon = SmallVec<[ClipVertex; 8]>;
 type ClippedMesh = SmallVec<[renderer::TexturedMeshVertex; 18]>;
 
 struct TextLayoutPlacement {
-    block_w_logical_even: f32,
-    block_h_logical_i: i32,
     sx: f32,
     sy: f32,
     block_center_x: f32,
@@ -931,11 +929,6 @@ fn start_x_logical(align: actors::TextAlign, block_w_logical: f32, line_w_logica
 }
 
 #[inline(always)]
-fn logical_to_world(center: f32, logical: f32, scale: f32) -> f32 {
-    logical.mul_add(scale, center)
-}
-
-#[inline(always)]
 fn text_block_height_i(font: &font::Font, num_lines: usize) -> i32 {
     if num_lines > 1 {
         font.height + ((num_lines - 1) as i32 * font.line_spacing)
@@ -1039,8 +1032,6 @@ fn resolve_text_layout_placement(
     let block_top_sm = align[1].mul_add(-block_h_px, parent.y + offset[1]);
 
     Some(TextLayoutPlacement {
-        block_w_logical_even,
-        block_h_logical_i,
         sx,
         sy,
         block_center_x: 0.5f32.mul_add(block_w_px, block_left_sm),
@@ -1235,7 +1226,7 @@ fn text_mesh_batch_builder(
 }
 
 #[inline(always)]
-fn push_text_mesh_quad(
+fn push_text_mesh_quad_with_color(
     builders: &mut Vec<TextMeshBatchBuilder>,
     texture_key: *const str,
     quad_x: f32,
@@ -1243,6 +1234,7 @@ fn push_text_mesh_quad(
     size: [f32; 2],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
+    color: [f32; 4],
 ) {
     let out = &mut text_mesh_batch_builder(builders, texture_key).vertices;
     let x0 = quad_x;
@@ -1253,7 +1245,6 @@ fn push_text_mesh_quad(
     let v0 = uv_offset[1];
     let u1 = uv_offset[0] + uv_scale[0];
     let v1 = uv_offset[1] + uv_scale[1];
-    let color = [1.0; 4];
     let tex_matrix_scale = [1.0, 1.0];
 
     out.reserve(6);
@@ -1293,6 +1284,28 @@ fn push_text_mesh_quad(
         tex_matrix_scale,
         color,
     });
+}
+
+#[inline(always)]
+fn push_text_mesh_quad(
+    builders: &mut Vec<TextMeshBatchBuilder>,
+    texture_key: *const str,
+    quad_x: f32,
+    quad_y: f32,
+    size: [f32; 2],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+) {
+    push_text_mesh_quad_with_color(
+        builders,
+        texture_key,
+        quad_x,
+        quad_y,
+        size,
+        uv_scale,
+        uv_offset,
+        [1.0; 4],
+    );
 }
 
 fn finish_text_mesh_batches(
@@ -1397,6 +1410,57 @@ fn build_text_mesh_batches(
             right: right_stroke,
         },
     )
+}
+
+fn build_attributed_text_mesh_builders(
+    font: &font::Font,
+    layout: &CachedTextLayout,
+    text_align: actors::TextAlign,
+    attributes: &[actors::TextAttribute],
+) -> Vec<TextMeshBatchBuilder> {
+    if layout.lines.is_empty() || layout.glyphs.is_empty() {
+        return Vec::new();
+    }
+
+    let block_w_logical_even = quantize_up_even_i32(layout.max_logical_width_i) as f32;
+    let block_h_logical_i = text_block_height_i(font, layout.lines.len());
+    let mut pen_y_logical = lrint_ties_even(-(block_h_logical_i as f32) * 0.5) as i32;
+    let line_padding = font.line_spacing - font.height;
+    let mut builders = Vec::new();
+    let mut attr_cursor = TextAttrCursor::new(attributes);
+
+    for line in &layout.lines {
+        pen_y_logical += font.height;
+        let baseline_local_logical = pen_y_logical as f32;
+        let mut pen_x_logical =
+            start_x_logical(text_align, block_w_logical_even, line.width_i32 as f32);
+
+        let glyphs =
+            &layout.glyphs[line.glyph_start..line.glyph_start.saturating_add(line.glyph_len)];
+        for glyph in glyphs {
+            if glyph.draw_quad && glyph.size[0].abs() >= 1e-6 && glyph.size[1].abs() >= 1e-6 {
+                let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
+                let quad_y_logical = baseline_local_logical + glyph.offset[1];
+                let color = attr_cursor
+                    .as_mut()
+                    .map_or([1.0; 4], |cursor| cursor.tint_for(glyph.char_index));
+                push_text_mesh_quad_with_color(
+                    &mut builders,
+                    glyph.texture_key,
+                    quad_x_logical,
+                    quad_y_logical,
+                    glyph.size,
+                    glyph.uv_scale,
+                    glyph.uv_offset,
+                    color,
+                );
+            }
+            pen_x_logical += glyph.advance_i32;
+        }
+        pen_y_logical += line_padding;
+    }
+
+    builders
 }
 
 fn build_cached_text_layout(
@@ -2121,24 +2185,23 @@ fn build_actor_recursive<'a>(
                         m,
                     )
                 });
-                let can_batch_text = attributes.is_empty();
                 let before = out.len();
                 let layer = base_z.saturating_add(*z);
-                let end = if can_batch_text {
-                    if let Some(placement) = resolve_text_layout_placement(
-                        fm,
-                        layout,
-                        effect_scale,
-                        *fit_width,
-                        *fit_height,
-                        *max_width,
-                        *max_height,
-                        *max_w_pre_zoom,
-                        *max_h_pre_zoom,
-                        parent,
-                        *align,
-                        *offset,
-                    ) {
+                let end = if let Some(placement) = resolve_text_layout_placement(
+                    fm,
+                    layout,
+                    effect_scale,
+                    *fit_width,
+                    *fit_height,
+                    *max_width,
+                    *max_height,
+                    *max_w_pre_zoom,
+                    *max_h_pre_zoom,
+                    parent,
+                    *align,
+                    *offset,
+                ) {
+                    if attributes.is_empty() {
                         push_text_mesh_batches(
                             out,
                             layout.fill_batches.get(*align_text),
@@ -2150,7 +2213,6 @@ fn build_actor_recursive<'a>(
                         if let Some(clip_world) = clip_world {
                             clip_objects_range_to_world_rect(out, before, clip_world);
                         }
-                        let end = out.len();
                         if needs_stroke {
                             let stroke_start = out.len();
                             push_text_mesh_batches(
@@ -2175,118 +2237,51 @@ fn build_actor_recursive<'a>(
                                 obj.camera = camera;
                             }
                         }
-                        end
                     } else {
-                        before
-                    }
-                } else {
-                    let mut stroke_texture_keys = SmallVec::<[Option<*const str>; 64]>::new();
-                    layout_text_sprites(
-                        out,
-                        fm,
-                        layout,
-                        effect_scale,
-                        *fit_width,
-                        *fit_height,
-                        *max_width,
-                        *max_height,
-                        *max_w_pre_zoom,
-                        *max_h_pre_zoom,
-                        attributes,
-                        parent,
-                        *align,
-                        *offset,
-                        *align_text,
-                        m,
-                        texture_cache,
-                        if needs_stroke {
-                            Some(&mut stroke_texture_keys)
-                        } else {
-                            None
-                        },
-                    );
-                    if let Some(clip_world) = clip_world {
-                        if needs_stroke {
-                            clip_objects_range_with_keys_to_world_rect(
-                                out,
-                                &mut stroke_texture_keys,
-                                before,
-                                clip_world,
-                            );
-                        } else {
+                        push_transient_text_mesh_builders(
+                            out,
+                            build_attributed_text_mesh_builders(
+                                fm,
+                                layout,
+                                *align_text,
+                                attributes,
+                            ),
+                            &placement,
+                            [1.0; 4],
+                            m,
+                            texture_cache,
+                        );
+                        if let Some(clip_world) = clip_world {
                             clip_objects_range_to_world_rect(out, before, clip_world);
                         }
-                    }
-                    let end = out.len();
-                    if needs_stroke {
-                        out.reserve(end - before);
-                        let mut idx = before;
-                        for &stroke_ptr in &stroke_texture_keys {
-                            let Some(stroke_ptr) = stroke_ptr else {
-                                idx += 1;
-                                continue;
-                            };
-                            let (
-                                transform,
-                                uv_scale,
-                                uv_offset,
-                                local_offset,
-                                local_offset_rot_sin_cos,
-                                edge_fade,
-                            ) = match &out[idx] {
-                                RenderObject {
-                                    object_type:
-                                        renderer::ObjectType::Sprite {
-                                            uv_scale,
-                                            uv_offset,
-                                            local_offset,
-                                            local_offset_rot_sin_cos,
-                                            edge_fade,
-                                            ..
-                                        },
-                                    transform,
-                                    ..
-                                } => (
-                                    *transform,
-                                    *uv_scale,
-                                    *uv_offset,
-                                    *local_offset,
-                                    *local_offset_rot_sin_cos,
-                                    *edge_fade,
-                                ),
-                                _ => {
-                                    idx += 1;
-                                    continue;
-                                }
-                            };
-                            // SAFETY: `stroke_ptr` was captured from immutable font storage while
-                            // building the cached text layout and stays valid for this compose pass.
-                            let stroke_key = unsafe { str_from_cached_ptr(stroke_ptr) };
-                            out.push(RenderObject {
-                                object_type: renderer::ObjectType::Sprite {
-                                    tint: stroke_rgba,
-                                    uv_scale,
-                                    uv_offset,
-                                    local_offset,
-                                    local_offset_rot_sin_cos,
-                                    edge_fade,
-                                },
-                                texture_handle: texture_cache
-                                    .texture_handle_ptr(stroke_ptr, stroke_key),
-                                transform,
-                                blend: *blend,
-                                z: layer,
-                                order: {
+                        if needs_stroke {
+                            let stroke_start = out.len();
+                            push_text_mesh_batches(
+                                out,
+                                layout.stroke_batches.get(*align_text),
+                                &placement,
+                                stroke_rgba,
+                                m,
+                                texture_cache,
+                            );
+                            if let Some(clip_world) = clip_world {
+                                clip_objects_range_to_world_rect(out, stroke_start, clip_world);
+                            }
+                            for obj in out.iter_mut().skip(stroke_start) {
+                                obj.z = layer;
+                                obj.order = {
                                     let o = *order_counter;
                                     *order_counter += 1;
                                     o
-                                },
-                                camera,
-                            });
-                            idx += 1;
+                                };
+                                obj.blend = *blend;
+                                obj.camera = camera;
+                            }
                         }
                     }
-                    end
+                    out.len()
+                } else {
+                    before
                 };
                 for obj in out.iter_mut().take(end).skip(before) {
                     obj.z = layer;
@@ -2297,15 +2292,11 @@ fn build_actor_recursive<'a>(
                     };
                     obj.blend = *blend;
                     obj.camera = camera;
-                    match &mut obj.object_type {
-                        renderer::ObjectType::Sprite { tint, .. }
-                        | renderer::ObjectType::TexturedMesh { tint, .. } => {
-                            tint[0] *= effect_color[0];
-                            tint[1] *= effect_color[1];
-                            tint[2] *= effect_color[2];
-                            tint[3] *= effect_color[3];
-                        }
-                        renderer::ObjectType::Mesh { .. } => {}
+                    if let renderer::ObjectType::TexturedMesh { tint, .. } = &mut obj.object_type {
+                        tint[0] *= effect_color[0];
+                        tint[1] *= effect_color[1];
+                        tint[2] *= effect_color[2];
+                        tint[3] *= effect_color[3];
                     }
                 }
             }
@@ -2844,118 +2835,49 @@ fn push_text_mesh_batches(
     }
 }
 
-fn layout_text_sprites(
+fn push_transient_text_mesh_builders(
     out: &mut Vec<RenderObject>,
-    font: &font::Font,
-    layout: &CachedTextLayout,
-    scale: [f32; 2],
-    fit_width: Option<f32>,
-    fit_height: Option<f32>,
-    max_width: Option<f32>,
-    max_height: Option<f32>,
-    max_w_pre_zoom: bool,
-    max_h_pre_zoom: bool,
-    attributes: &[actors::TextAttribute],
-    parent: SmRect,
-    align: [f32; 2],
-    offset: [f32; 2],
-    text_align: actors::TextAlign,
+    builders: Vec<TextMeshBatchBuilder>,
+    placement: &TextLayoutPlacement,
+    tint: [f32; 4],
     m: &Metrics,
     texture_cache: &mut TextureLookupCache,
-    stroke_texture_keys: Option<&mut SmallVec<[Option<*const str>; 64]>>,
 ) {
-    let Some(placement) = resolve_text_layout_placement(
-        font,
-        layout,
-        scale,
-        fit_width,
-        fit_height,
-        max_width,
-        max_height,
-        max_w_pre_zoom,
-        max_h_pre_zoom,
-        parent,
-        align,
-        offset,
-    ) else {
+    if builders.is_empty() || tint[3] <= 0.0 {
         return;
-    };
+    }
 
-    let mut pen_y_logical = lrint_ties_even(-(placement.block_h_logical_i as f32) * 0.5) as i32;
-    let line_padding = font.line_spacing - font.height;
+    let transform = Matrix4::from_translation(Vector3::new(
+        m.left + placement.block_center_x,
+        m.top - placement.block_center_y,
+        0.0,
+    )) * Matrix4::from_scale(Vector3::new(placement.sx, -placement.sy, 1.0));
 
-    out.reserve(layout.glyph_count);
-    let mut attr_cursor = TextAttrCursor::new(attributes);
-    let mut stroke_texture_keys = stroke_texture_keys;
-
-    for line in &layout.lines {
-        pen_y_logical += font.height;
-        let baseline_local_logical = pen_y_logical as f32;
-        let mut pen_x_logical = start_x_logical(
-            text_align,
-            placement.block_w_logical_even,
-            line.width_i32 as f32,
-        );
-
-        let glyphs =
-            &layout.glyphs[line.glyph_start..line.glyph_start.saturating_add(line.glyph_len)];
-        for glyph in glyphs {
-            let quad_w = glyph.size[0] * placement.sx;
-            let quad_h = glyph.size[1] * placement.sy;
-
-            if glyph.draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
-                let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
-                let quad_y_logical = baseline_local_logical + glyph.offset[1];
-
-                let quad_x_sm =
-                    logical_to_world(placement.block_center_x, quad_x_logical, placement.sx);
-                let quad_y_sm =
-                    logical_to_world(placement.block_center_y, quad_y_logical, placement.sy);
-
-                let center_x = m.left + quad_x_sm + quad_w * 0.5;
-                let center_y = m.top - (quad_y_sm + quad_h * 0.5);
-
-                // Optimization: T * S manually
-                // c0 = [w, 0, 0, 0]
-                // c1 = [0, h, 0, 0]
-                // c2 = [0, 0, 1, 0]
-                // c3 = [tx, ty, 0, 1]
-                let transform = Matrix4::from_cols_array(&[
-                    quad_w, 0.0, 0.0, 0.0, 0.0, quad_h, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, center_x,
-                    center_y, 0.0, 1.0,
-                ]);
-                // SAFETY: `glyph.texture_key` was captured from cached font storage
-                // when the layout was built and remains valid for this render-list
-                // assembly pass.
-                let texture_key = unsafe { str_from_cached_ptr(glyph.texture_key) };
-
-                out.push(RenderObject {
-                    object_type: renderer::ObjectType::Sprite {
-                        tint: attr_cursor
-                            .as_mut()
-                            .map_or([1.0; 4], |cursor| cursor.tint_for(glyph.char_index)),
-                        uv_scale: glyph.uv_scale,
-                        uv_offset: glyph.uv_offset,
-                        local_offset: [0.0, 0.0],
-                        local_offset_rot_sin_cos: [0.0, 1.0],
-                        edge_fade: [0.0; 4],
-                    },
-                    texture_handle: texture_cache
-                        .texture_handle_ptr(glyph.texture_key, texture_key),
-                    transform,
-                    blend: BlendMode::Alpha,
-                    z: 0,
-                    order: 0,
-                    camera: 0,
-                });
-                if let Some(keys) = stroke_texture_keys.as_mut() {
-                    (*keys).push(glyph.stroke_texture_key);
-                }
-            }
-
-            pen_x_logical += glyph.advance_i32;
+    out.reserve(builders.len());
+    for builder in builders {
+        if builder.vertices.is_empty() {
+            continue;
         }
-        pen_y_logical += line_padding;
+        // SAFETY: `builder.texture_key` is captured from immutable font storage and
+        // remains valid while the cached text layout is alive.
+        let texture_key = unsafe { str_from_cached_ptr(builder.texture_key) };
+        out.push(RenderObject {
+            object_type: renderer::ObjectType::TexturedMesh {
+                tint,
+                vertices: Arc::from(builder.vertices),
+                geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
+                mode: renderer::MeshMode::Triangles,
+                uv_scale: [1.0, 1.0],
+                uv_offset: [0.0, 0.0],
+                uv_tex_shift: [0.0, 0.0],
+            },
+            texture_handle: texture_cache.texture_handle_ptr(builder.texture_key, texture_key),
+            transform,
+            blend: BlendMode::Alpha,
+            z: 0,
+            order: 0,
+            camera: 0,
+        });
     }
 }
 
@@ -3110,48 +3032,6 @@ fn clip_objects_range_to_world_rect(
         }
     }
     objects.truncate(write);
-}
-
-fn clip_objects_range_with_keys_to_world_rect(
-    objects: &mut Vec<RenderObject>,
-    keys: &mut SmallVec<[Option<*const str>; 64]>,
-    start: usize,
-    clip: WorldRect,
-) {
-    if start >= objects.len() {
-        keys.clear();
-        return;
-    }
-    if clip.left >= clip.right || clip.bottom >= clip.top {
-        objects.truncate(start);
-        keys.clear();
-        return;
-    }
-
-    debug_assert_eq!(keys.len(), objects.len().saturating_sub(start));
-
-    let len = objects.len();
-    let mut write = start;
-    let mut key_write = 0usize;
-    for read in start..len {
-        let keep = {
-            let obj = &mut objects[read];
-            clip_sprite_object_to_world_rect(obj, clip)
-        };
-        if keep {
-            let key_read = read - start;
-            if write != read {
-                objects.swap(write, read);
-            }
-            if key_write != key_read {
-                keys.swap(key_write, key_read);
-            }
-            write += 1;
-            key_write += 1;
-        }
-    }
-    objects.truncate(write);
-    keys.truncate(key_write);
 }
 
 fn clip_sprite_object_to_world_rect(obj: &mut RenderObject, clip: WorldRect) -> bool {
@@ -4093,6 +3973,60 @@ mod tests {
                 assert_ne!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
             }
             _ => panic!("expected centered text to use batched textured mesh"),
+        }
+    }
+
+    #[test]
+    fn attributed_text_batches_into_transient_textured_mesh() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 200.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let actors = [Actor::Text {
+            align: [0.0, 0.0],
+            offset: [10.0, 20.0],
+            color: [1.0; 4],
+            stroke_color: None,
+            glow: [0.0; 4],
+            font: "test",
+            content: TextContent::static_str("AB"),
+            attributes: vec![TextAttribute {
+                start: 1,
+                length: 1,
+                color: [0.0, 1.0, 0.0, 1.0],
+            }],
+            align_text: TextAlign::Left,
+            z: 0,
+            scale: [1.0, 1.0],
+            fit_width: None,
+            fit_height: None,
+            wrap_width_pixels: None,
+            max_width: None,
+            max_height: None,
+            max_w_pre_zoom: false,
+            max_h_pre_zoom: false,
+            clip: None,
+            blend: BlendMode::Alpha,
+            effect: Default::default(),
+        }];
+        let fonts = HashMap::from([("test", test_font())]);
+        let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+
+        assert_eq!(render.objects.len(), 1);
+        match &render.objects[0].object_type {
+            ObjectType::TexturedMesh {
+                vertices,
+                geom_cache_key,
+                ..
+            } => {
+                assert_eq!(vertices.len(), 12);
+                assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
+                assert_eq!(vertices[0].color, [1.0; 4]);
+                assert_eq!(vertices[6].color, [0.0, 1.0, 0.0, 1.0]);
+            }
+            _ => panic!("expected attributed text to use transient textured mesh"),
         }
     }
 }
