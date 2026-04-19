@@ -1237,6 +1237,7 @@ fn flush_wrapped_word(
 struct TextMeshBatchBuilder {
     texture_key: *const str,
     vertices: Vec<renderer::TexturedMeshVertex>,
+    next_vertex: usize,
 }
 
 #[inline(always)]
@@ -1261,6 +1262,7 @@ fn text_mesh_batch_builder<'a>(
     builders.push(TextMeshBatchBuilder {
         texture_key,
         vertices: take_recycled_text_mesh_vertices(recycled_vertices),
+        next_vertex: 0,
     });
     builders
         .last_mut()
@@ -1461,7 +1463,6 @@ fn build_text_mesh_batches(
 }
 
 fn build_attributed_text_mesh_builders(
-    font: &font::Font,
     layout: &CachedTextLayout,
     text_align: actors::TextAlign,
     attributes: &[actors::TextAttribute],
@@ -1473,42 +1474,40 @@ fn build_attributed_text_mesh_builders(
         return;
     }
 
-    let block_w_logical_even = quantize_up_even_i32(layout.max_logical_width_i) as f32;
-    let block_h_logical_i = text_block_height_i(font, layout.lines.len());
-    let mut pen_y_logical = lrint_ties_even(-(block_h_logical_i as f32) * 0.5) as i32;
-    let line_padding = font.line_spacing - font.height;
+    let batches = layout.fill_batches.get(text_align);
+    builders.reserve(batches.len());
+    for batch in batches {
+        let mut vertices = take_recycled_text_mesh_vertices(recycled_vertices);
+        vertices.clear();
+        vertices.reserve(batch.vertices.len());
+        vertices.extend_from_slice(batch.vertices.as_ref());
+        builders.push(TextMeshBatchBuilder {
+            texture_key: batch.texture_key,
+            vertices,
+            next_vertex: 0,
+        });
+    }
+
     let mut attr_cursor = TextAttrCursor::new(attributes);
-
-    for line in &layout.lines {
-        pen_y_logical += font.height;
-        let baseline_local_logical = pen_y_logical as f32;
-        let mut pen_x_logical =
-            start_x_logical(text_align, block_w_logical_even, line.width_i32 as f32);
-
-        let glyphs =
-            &layout.glyphs[line.glyph_start..line.glyph_start.saturating_add(line.glyph_len)];
-        for glyph in glyphs {
-            if glyph.draw_quad && glyph.size[0].abs() >= 1e-6 && glyph.size[1].abs() >= 1e-6 {
-                let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
-                let quad_y_logical = baseline_local_logical + glyph.offset[1];
-                let color = attr_cursor
-                    .as_mut()
-                    .map_or([1.0; 4], |cursor| cursor.tint_for(glyph.char_index));
-                push_text_mesh_quad_with_color(
-                    builders,
-                    recycled_vertices,
-                    glyph.texture_key,
-                    quad_x_logical,
-                    quad_y_logical,
-                    glyph.size,
-                    glyph.uv_scale,
-                    glyph.uv_offset,
-                    color,
-                );
-            }
-            pen_x_logical += glyph.advance_i32;
+    for glyph in &layout.glyphs {
+        if !(glyph.draw_quad && glyph.size[0].abs() >= 1e-6 && glyph.size[1].abs() >= 1e-6) {
+            continue;
         }
-        pen_y_logical += line_padding;
+        let color = attr_cursor
+            .as_mut()
+            .map_or([1.0; 4], |cursor| cursor.tint_for(glyph.char_index));
+        let Some(builder) = builders
+            .iter_mut()
+            .find(|builder| std::ptr::addr_eq(builder.texture_key, glyph.texture_key))
+        else {
+            continue;
+        };
+        let start = builder.next_vertex;
+        let end = start.saturating_add(6).min(builder.vertices.len());
+        for vertex in &mut builder.vertices[start..end] {
+            vertex.color = color;
+        }
+        builder.next_vertex = end;
     }
 }
 
@@ -2292,7 +2291,6 @@ fn build_actor_recursive<'a>(
                     } else {
                         let (builders, recycled_vertices) = scratch.transient_text_mesh_scratch();
                         build_attributed_text_mesh_builders(
-                            fm,
                             layout,
                             *align_text,
                             attributes,
