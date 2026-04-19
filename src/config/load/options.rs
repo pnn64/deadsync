@@ -296,6 +296,10 @@ fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "WriteCurrentScreen")
         .and_then(|v| parse_bool_str(&v))
         .unwrap_or(default.write_current_screen);
+    cfg.tab_acceleration = conf
+        .get("Options", "TabAcceleration")
+        .and_then(|v| parse_bool_str(&v))
+        .unwrap_or(default.tab_acceleration);
 }
 
 fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {

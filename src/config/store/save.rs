@@ -319,6 +319,7 @@ fn push_saved_options(
     push_line(content, "Theme", cfg.theme_flag.as_str());
     push_line(content, "AssistTickVolume", cfg.assist_tick_volume);
     push_line(content, "SFXVolume", cfg.sfx_volume);
+    push_bool(content, "TabAcceleration", cfg.tab_acceleration);
     push_bool(content, "TranslatedTitles", cfg.translated_titles);
     push_line(content, "VideoRenderer", cfg.video_renderer);
     push_bool(content, "Vsync", cfg.vsync);

@@ -104,6 +104,9 @@ pub struct Config {
     pub log_to_file: bool,
     /// Write the active screen name to save/current_screen.txt on each transition.
     pub write_current_screen: bool,
+    /// Hold-Tab fast-forward (4×) for non-gameplay screens. Issue #174 / ITGmania parity.
+    /// Hold ` for slow (0.25×); both held = halt. Always disabled in Gameplay.
+    pub tab_acceleration: bool,
     /// 0=Off, 1=FPS, 2=FPS+Stutter.
     pub show_stats_mode: u8,
     pub translated_titles: bool,
@@ -265,6 +268,7 @@ impl Default for Config {
             log_level: LogLevel::Warn,
             log_to_file: true,
             write_current_screen: false,
+            tab_acceleration: true,
             show_stats_mode: 0,
             translated_titles: false,
             mine_hit_sound: true,

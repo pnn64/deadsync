@@ -140,6 +140,16 @@ P1_Back=PadCode[0x00030031]@0
 
 Legacy high-level bindings like `PadDir::Up`, `PadButton::Confirm`, and `PadN::Dir::Left` are still accepted for convenience, but low-level `PadCode[...]` bindings are the most accurate and device-agnostic way to configure controllers.
 
+#### Debug shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Tab` (hold) | Fast-forward menus and transitions at 4×. Disabled in gameplay. |
+| `` ` `` (hold) | Slow menus and transitions to 0.25×. Disabled in gameplay. |
+| `Tab` + `` ` `` | Halt menu animations. Disabled in gameplay. |
+
+These shortcuts mirror ITGmania's debug-loop modifiers and never affect timing-sensitive gameplay (note timing, scoring, music sync). Set `TabAcceleration=0` in `deadsync.ini` to disable them entirely.
+
 ### Profile & Online Features
 A `save` directory is created inside the data directory to store your personal data (see [Data Directories](#data-directories) for its location).
 
