@@ -311,7 +311,7 @@ pub fn glowshift_mix(through: f32) -> f32 {
     (((through + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5).clamp(0.0, 1.0)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct TweenState {
     pub x: f32,
     pub y: f32,

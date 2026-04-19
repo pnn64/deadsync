@@ -84,8 +84,7 @@ pub(super) fn change_choice_for_player(
     }
 
     if id == RowId::TypeOfSpeedMod {
-        let new_type =
-            SpeedModType::from_choice_index(row.selected_choice_index[player_idx]);
+        let new_type = SpeedModType::from_choice_index(row.selected_choice_index[player_idx]);
 
         let speed_mod = &mut state.speed_mod[player_idx];
         let old_type = speed_mod.mod_type;
