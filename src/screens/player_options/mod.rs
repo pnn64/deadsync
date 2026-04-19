@@ -33,10 +33,10 @@ mod input;
 mod layout;
 mod noteskins;
 mod pane;
+mod panes;
 mod profile;
 mod render;
 mod row;
-mod panes;
 mod state;
 mod visibility;
 
@@ -59,13 +59,13 @@ use noteskins::*;
 #[allow(unused_imports)]
 use pane::*;
 #[allow(unused_imports)]
+use panes::*;
+#[allow(unused_imports)]
 use profile::*;
 #[allow(unused_imports)]
 use render::*;
 #[allow(unused_imports)]
 use row::*;
-#[allow(unused_imports)]
-use panes::*;
 #[allow(unused_imports)]
 use state::*;
 #[allow(unused_imports)]

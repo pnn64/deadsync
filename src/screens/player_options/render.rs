@@ -190,7 +190,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
 
     for item_idx in 0..total_rows {
-        let (current_row_y, row_alpha) = state.pane()
+        let (current_row_y, row_alpha) = state
+            .pane()
             .row_tweens
             .get(item_idx)
             .map(|tw| (tw.y(), tw.a()))
@@ -208,7 +209,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         let is_active = (active[P1] && item_idx == state.pane().selected_row[P1])
             || (active[P2] && item_idx == state.pane().selected_row[P2]);
-        let row = state.pane().row_map.row(state.pane().row_map.id_at(item_idx));
+        let row = state
+            .pane()
+            .row_map
+            .row(state.pane().row_map.id_at(item_idx));
         let active_bg = color::rgba_hex("#333333");
         let inactive_bg_base = color::rgba_hex("#071016");
         let bg_color = if is_active {
@@ -1980,8 +1984,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     const REVEAL_DURATION: f32 = 0.5;
     let split_help = active[P1] && active[P2];
     for player_idx in active_player_indices(active) {
-        let row_idx = state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
-        let Some(row) = state.pane()
+        let row_idx =
+            state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
+        let Some(row) = state
+            .pane()
             .row_map
             .display_order()
             .get(row_idx)

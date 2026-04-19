@@ -98,7 +98,7 @@ const CREDITS: &[CreditLine] = &[
     name("Mason Boeman (maboesanman)"),
     name("DolphinChips"),
     name("rehtlaw"),
-    name("Sereni"),    
+    name("Sereni"),
     name("madewithlinux"),
     name("saucepan"),
     spacer(),

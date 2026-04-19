@@ -256,17 +256,20 @@ pub(super) fn cursor_dest_for_player(
         state.error_bar_active_mask,
         state.allow_per_player_global_offsets,
     );
-    let mut row_idx = state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
+    let mut row_idx =
+        state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
     if !is_row_visible(&state.pane().row_map, row_idx, visibility) {
         row_idx = fallback_visible_row(&state.pane().row_map, row_idx, visibility)?;
     }
-    let row = state.pane()
+    let row = state
+        .pane()
         .row_map
         .display_order()
         .get(row_idx)
         .and_then(|&id| state.pane().row_map.get(id))?;
 
-    let y = state.pane()
+    let y = state
+        .pane()
         .row_tweens
         .get(row_idx)
         .map(|tw| tw.to_y)

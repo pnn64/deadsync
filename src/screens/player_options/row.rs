@@ -205,9 +205,7 @@ macro_rules! index_binding {
                     $crate::screens::player_options::row::Outcome::persisted()
                 }
             },
-            persist_for_side: |s, i| {
-                $persist(s, $table.get(i).copied().unwrap_or($default))
-            },
+            persist_for_side: |s, i| $persist(s, $table.get(i).copied().unwrap_or($default)),
         }
     };
 }

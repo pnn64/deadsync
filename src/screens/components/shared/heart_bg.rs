@@ -2,11 +2,13 @@ use crate::act;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_height, screen_width};
-use std::sync::{Arc, OnceLock};
-use std::time::Instant;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
-// Shared start time for phase-locked animations across screens.
-static GLOBAL_T0: OnceLock<Instant> = OnceLock::new();
+// Shared UI elapsed clock advanced by `app` using post-Tab-acceleration dt so
+// the heart background stays phase-locked across screens while still honoring
+// fast/slow/paused menu animation controls.
+static GLOBAL_ELAPSED_BITS: AtomicU32 = AtomicU32::new(0.0_f32.to_bits());
 
 // ---- Constants ----
 const COLOR_ADD: [i32; 10] = [-1, 0, 0, -1, -1, -1, 0, 0, 0, 0];
@@ -38,7 +40,6 @@ const PHI: f32 = 0.618_034;
 
 #[derive(Clone)]
 pub struct State {
-    t0: Instant,
     tex_key: Arc<str>,
     variant_size: [[f32; 2]; 3],
 }
@@ -75,14 +76,13 @@ impl State {
         ];
 
         Self {
-            t0: *GLOBAL_T0.get_or_init(Instant::now),
             tex_key: Arc::<str>::from(tex_key),
             variant_size,
         }
     }
 
     pub fn build(&self, params: Params) -> Vec<Actor> {
-        self.build_at_elapsed(params, self.t0.elapsed().as_secs_f32())
+        self.build_at_elapsed(params, global_elapsed_s())
     }
 
     pub fn build_at_elapsed(&self, params: Params, elapsed_s: f32) -> Vec<Actor> {
@@ -186,5 +186,90 @@ impl State {
         }
 
         actors
+    }
+}
+
+#[inline]
+pub fn tick_global(dt: f32) {
+    if !dt.is_finite() || dt <= 0.0 {
+        return;
+    }
+    let _ = GLOBAL_ELAPSED_BITS.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |bits| {
+        let elapsed = f32::from_bits(bits);
+        let next = elapsed + dt;
+        Some(if next.is_finite() {
+            next.max(0.0).to_bits()
+        } else {
+            bits
+        })
+    });
+}
+
+#[inline]
+fn global_elapsed_s() -> f32 {
+    f32::from_bits(GLOBAL_ELAPSED_BITS.load(Ordering::Relaxed))
+}
+
+#[cfg(test)]
+fn set_global_elapsed_for_test(elapsed_s: f32) {
+    GLOBAL_ELAPSED_BITS.store(elapsed_s.max(0.0).to_bits(), Ordering::Relaxed);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const EPS: f32 = 1e-3;
+
+    fn params() -> Params {
+        Params {
+            active_color_index: 3,
+            backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
+            alpha_mul: 1.0,
+        }
+    }
+
+    fn first_heart_xy(actors: &[Actor]) -> [f32; 2] {
+        let Some(Actor::Sprite { offset, source, .. }) = actors.get(1) else {
+            panic!("missing first heart sprite");
+        };
+        assert_eq!(source.texture_key(), Some("heart.png"));
+        *offset
+    }
+
+    #[test]
+    fn build_reads_shared_elapsed_clock() {
+        set_global_elapsed_for_test(2.5);
+        let state = State::new();
+        let shared_xy = first_heart_xy(&state.build(params()));
+        let explicit_xy = first_heart_xy(&state.build_at_elapsed(params(), 2.5));
+        assert!(
+            (shared_xy[0] - explicit_xy[0]).abs() < EPS
+                && (shared_xy[1] - explicit_xy[1]).abs() < EPS,
+            "shared={shared_xy:?} explicit={explicit_xy:?}"
+        );
+    }
+
+    #[test]
+    fn tick_global_accumulates_positive_dt() {
+        set_global_elapsed_for_test(1.0);
+        tick_global(0.5);
+        assert!(
+            (global_elapsed_s() - 1.5).abs() < EPS,
+            "got {}",
+            global_elapsed_s()
+        );
+        tick_global(0.0);
+        assert!(
+            (global_elapsed_s() - 1.5).abs() < EPS,
+            "got {}",
+            global_elapsed_s()
+        );
+        tick_global(-0.25);
+        assert!(
+            (global_elapsed_s() - 1.5).abs() < EPS,
+            "got {}",
+            global_elapsed_s()
+        );
     }
 }
