@@ -1200,6 +1200,51 @@ fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     Ok(children)
 }
 
+fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    let children = lua.create_table()?;
+    for pair in actor_children(lua, actor)?.pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        children.set(key, value)?;
+    }
+    merge_actor_sequence_children(lua, actor, &children)?;
+    Ok(children)
+}
+
+fn merge_actor_sequence_children(lua: &Lua, actor: &Table, children: &Table) -> mlua::Result<()> {
+    for value in actor.sequence_values::<Value>() {
+        let Value::Table(child) = value? else {
+            continue;
+        };
+        let Some(name) = child.get::<Option<String>>("Name")? else {
+            continue;
+        };
+        if name.trim().is_empty() {
+            continue;
+        }
+        match children.get::<Option<Value>>(name.as_str())? {
+            Some(Value::Table(group))
+                if group
+                    .get::<Option<bool>>("__songlua_child_group")?
+                    .unwrap_or(false) =>
+            {
+                group.raw_set(group.raw_len() + 1, child)?;
+            }
+            Some(Value::Table(existing)) => {
+                let group = lua.create_table()?;
+                group.set("__songlua_child_group", true)?;
+                group.raw_set(1, existing)?;
+                group.raw_set(2, child)?;
+                children.set(name.as_str(), group)?;
+            }
+            Some(_) => {}
+            None => {
+                children.set(name.as_str(), child)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 fn actor_wrappers(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
         return Ok(wrappers);
@@ -2458,7 +2503,18 @@ fn read_overlay_actor(
             continue;
         }
         let message = name.trim_end_matches("MessageCommand").to_string();
-        let blocks = capture_actor_command(lua, actor, name.as_str())?;
+        let blocks = match capture_actor_command(lua, actor, name.as_str()) {
+            Ok(blocks) => blocks,
+            Err(err) => {
+                debug!(
+                    "Skipping song lua overlay message capture for {}.{}: {}",
+                    actor_debug_label(actor),
+                    name,
+                    err
+                );
+                continue;
+            }
+        };
         if !blocks.is_empty() {
             message_commands.push(SongLuaOverlayMessageCommand { message, blocks });
         }
@@ -4124,12 +4180,12 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {
                     return Ok(Value::Nil);
                 };
-                let children = actor_children(lua, &actor)?;
+                let children = actor_named_children(lua, &actor)?;
                 if let Some(child) = children.get::<Option<Table>>(name.as_str())? {
                     return Ok(Value::Table(child));
                 }
                 let child = create_named_child_actor(lua, &actor, &name)?;
-                children.set(name.as_str(), child.clone())?;
+                actor_children(lua, &actor)?.set(name.as_str(), child.clone())?;
                 Ok(Value::Table(child))
             }
         })?,
@@ -4216,7 +4272,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "GetChildren",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| actor_children(lua, &actor)
+            move |lua, _args: MultiValue| actor_named_children(lua, &actor)
         })?,
     )?;
     actor.set(
@@ -4225,7 +4281,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
                 let mut count = 0_i64;
-                for pair in actor_children(lua, &actor)?.pairs::<Value, Value>() {
+                for pair in actor_named_children(lua, &actor)?.pairs::<Value, Value>() {
                     let _ = pair?;
                     count += 1;
                 }
@@ -6224,6 +6280,84 @@ return Def.ActorFrame{
         );
         assert_eq!(overlay.message_commands[0].blocks[1].duration, 0.3);
         assert_eq!(overlay.message_commands[0].blocks[1].delta.x, Some(320.0));
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_named_children_and_duplicate_groups() {
+        let song_dir = test_dir("actor-children");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local count = 0
+        local children = self:GetChildren()
+        for _name, _child in pairs(children) do
+            count = count + 1
+        end
+        local panel = children.Panel
+        local lines = self:GetChild("Line")
+        mod_actions = {
+            {
+                1,
+                string.format("%d:%s:%d", count, panel and panel:GetName() or "nil", type(lines) == "table" and #lines or 0),
+                true,
+            },
+        }
+    end,
+    Def.ActorFrame{ Name="Panel" },
+    Def.Quad{ Name="Line" },
+    Def.Quad{ Name="Line" },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Children"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "2:Panel:2");
+    }
+
+    #[test]
+    fn compile_song_lua_skips_failing_overlay_message_commands() {
+        let song_dir = test_dir("overlay-message-error");
+        let entry = song_dir.join("default.lua");
+        let overlay_dir = song_dir.join("gfx");
+        fs::create_dir_all(&overlay_dir).unwrap();
+        fs::write(
+            overlay_dir.join("door.png"),
+            b"not-an-image-but-good-enough-for-parser",
+        )
+        .unwrap();
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Name="door",
+        Texture="gfx/door.png",
+        BreakMeMessageCommand=function(self)
+            local broken = nil
+            broken:GetName()
+        end,
+    }
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Overlay Message Error"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        assert!(compiled.overlays[0].message_commands.is_empty());
     }
 
     #[test]
