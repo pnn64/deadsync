@@ -148,11 +148,20 @@ fn gs_score_index_path_for_profile(profile_id: &str) -> PathBuf {
 
 fn load_gs_score_index(path: &Path) -> Option<HashMap<String, CachedScore>> {
     let bytes = fs::read(path).ok()?;
-    let (by_chart, _) = bincode::decode_from_slice::<HashMap<String, CachedScore>, _>(
+    let (mut by_chart, _) = bincode::decode_from_slice::<HashMap<String, CachedScore>, _>(
         &bytes,
         bincode::config::standard(),
     )
     .ok()?;
+    let mut changed = false;
+    for score in by_chart.values_mut() {
+        let fixed = fix_gs_cached_score(*score);
+        changed |= fixed != *score;
+        *score = fixed;
+    }
+    if changed {
+        save_gs_score_index(path, &by_chart);
+    }
     Some(by_chart)
 }
 
@@ -263,6 +272,7 @@ fn cached_gs_chart_hashes_for_profile(profile_id: &str) -> HashSet<String> {
 }
 
 fn set_cached_gs_score_for_profile(profile_id: &str, chart_hash: String, score: CachedScore) {
+    let score = fix_gs_cached_score(score);
     debug!("Caching GrooveStats score {score:?} for chart hash {chart_hash}");
     ensure_gs_score_cache_loaded_for_profile(profile_id);
     let snapshot = {
@@ -291,7 +301,8 @@ struct LocalScoreIndex {
     best_hard_ex: HashMap<String, BestScalar>,
 }
 
-const LOCAL_SCORE_INDEX_VERSION: u16 = 1;
+// Rebuild old indexes so stale grade-only quints are rehydrated from EX-backed play files.
+const LOCAL_SCORE_INDEX_VERSION: u16 = 2;
 
 #[derive(Debug, Clone, Encode, Decode)]
 struct LocalScoreIndexFile {
@@ -1013,6 +1024,7 @@ const fn grade_from_code(code: u8) -> Grade {
 }
 
 fn entry_from_cached(score: CachedScore, username: &str, fetched_at_ms: i64) -> GsScoreEntry {
+    let score = fix_gs_cached_score(score);
     GsScoreEntry {
         score_percent: score.score_percent,
         grade_code: grade_to_code(score.grade),
@@ -1024,12 +1036,12 @@ fn entry_from_cached(score: CachedScore, username: &str, fetched_at_ms: i64) -> 
 }
 
 fn cached_from_entry(entry: &GsScoreEntry) -> CachedScore {
-    cached_score(
+    fix_gs_cached_score(cached_score(
         grade_from_code(entry.grade_code),
         entry.score_percent,
         entry.lamp_index,
         entry.lamp_judge_count,
-    )
+    ))
 }
 
 fn decode_gs_score_entry(bytes: &[u8]) -> Option<GsScoreEntry> {
@@ -1088,7 +1100,7 @@ fn scan_gs_scores_dir(dir: &Path, best_by_chart: &mut HashMap<String, CachedScor
 
         match best_by_chart.get_mut(chart_hash) {
             Some(existing) => {
-                if cached.score_percent > existing.score_percent {
+                if is_better_itg(&cached, existing) {
                     *existing = cached;
                 }
             }
@@ -1341,13 +1353,63 @@ fn cached_score(
 }
 
 #[inline(always)]
-fn cached_local_score_from_header(h: &LocalScoreEntryHeaderV1) -> CachedScore {
+const fn non_quint_grade(grade: Grade) -> Grade {
+    match grade {
+        Grade::Quint => Grade::Tier01,
+        _ => grade,
+    }
+}
+
+#[inline(always)]
+fn fix_quint_grade_ex(grade: Grade, ex_score_percent: f64) -> Grade {
+    if grade == Grade::Failed {
+        Grade::Failed
+    } else {
+        promote_quint_grade(non_quint_grade(grade), ex_score_percent)
+    }
+}
+
+#[inline(always)]
+fn fix_quint_grade_lamp(grade: Grade, score_percent: f64, lamp_index: Option<u8>) -> Grade {
+    if grade == Grade::Failed {
+        return Grade::Failed;
+    }
+    let grade = if grade == Grade::Quint {
+        score_to_grade(score_percent.clamp(0.0, 1.0) * 10000.0)
+    } else {
+        grade
+    };
+    if lamp_index == Some(0) {
+        Grade::Quint
+    } else {
+        grade
+    }
+}
+
+#[inline(always)]
+fn fix_gs_cached_score(score: CachedScore) -> CachedScore {
     cached_score(
-        local_score_grade(h.grade_code, h.fail_time.is_some()),
-        h.score_percent,
-        h.lamp_index,
-        h.lamp_judge_count,
+        fix_quint_grade_lamp(score.grade, score.score_percent, score.lamp_index),
+        score.score_percent,
+        score.lamp_index,
+        score.lamp_judge_count,
     )
+}
+
+#[inline(always)]
+fn cached_local_score_from_header(h: &LocalScoreEntryHeaderV1) -> CachedScore {
+    let grade = fix_quint_grade_ex(
+        local_score_grade(h.grade_code, h.fail_time.is_some()),
+        h.ex_score_percent,
+    );
+    let (lamp_index, lamp_judge_count) = if grade == Grade::Quint {
+        (Some(0), None)
+    } else if h.lamp_index == Some(0) {
+        compute_local_lamp(h.judgment_counts, grade, None)
+    } else {
+        (h.lamp_index, h.lamp_judge_count)
+    };
+    cached_score(grade, h.score_percent, lamp_index, lamp_judge_count)
 }
 
 fn decode_local_score_header(bytes: &[u8]) -> Option<LocalScoreEntryHeaderV1> {
@@ -2385,6 +2447,7 @@ fn cache_gs_score_for_profile(
     score: CachedScore,
     username: &str,
 ) {
+    let score = fix_gs_cached_score(score);
     if let Some(existing) = get_cached_gs_score_for_profile(profile_id, chart_hash)
         && !(score.grade == Grade::Failed
             && existing.grade != Grade::Failed
@@ -4130,6 +4193,38 @@ mod tests {
     }
 
     #[test]
+    fn cached_from_entry_downgrades_stale_quint_without_quint_lamp() {
+        let cached = cached_from_entry(&GsScoreEntry {
+            score_percent: 1.0,
+            grade_code: grade_to_code(Grade::Quint),
+            lamp_index: Some(1),
+            lamp_judge_count: Some(3),
+            username: "Player".to_string(),
+            fetched_at_ms: 0,
+        });
+
+        assert_eq!(cached.grade, Grade::Tier01);
+        assert_eq!(cached.lamp_index, Some(1));
+        assert_eq!(cached.lamp_judge_count, Some(3));
+    }
+
+    #[test]
+    fn cached_from_entry_promotes_quint_from_quint_lamp() {
+        let cached = cached_from_entry(&GsScoreEntry {
+            score_percent: 1.0,
+            grade_code: grade_to_code(Grade::Tier01),
+            lamp_index: Some(0),
+            lamp_judge_count: None,
+            username: "Player".to_string(),
+            fetched_at_ms: 0,
+        });
+
+        assert_eq!(cached.grade, Grade::Quint);
+        assert_eq!(cached.lamp_index, Some(0));
+        assert_eq!(cached.lamp_judge_count, None);
+    }
+
+    #[test]
     fn promote_quint_grade_ignores_display_mode() {
         assert_eq!(promote_quint_grade(Grade::Tier01, 100.0), Grade::Quint);
         assert_eq!(promote_quint_grade(Grade::Tier01, 99.99), Grade::Tier01);
@@ -4317,6 +4412,68 @@ mod tests {
         assert_eq!(cached.grade, Grade::Failed);
         assert_eq!(cached.score_percent, 0.9482);
         assert_eq!(cached.lamp_index, None);
+        assert_eq!(cached.lamp_judge_count, None);
+    }
+
+    #[test]
+    fn cached_local_score_from_header_downgrades_stale_quint() {
+        let header = LocalScoreEntryHeaderV1 {
+            version: LOCAL_SCORE_VERSION_V1,
+            played_at_ms: 0,
+            music_rate: 1.0,
+            score_percent: 1.0,
+            grade_code: grade_to_code(Grade::Quint),
+            lamp_index: Some(0),
+            lamp_judge_count: None,
+            ex_score_percent: 99.71,
+            hard_ex_score_percent: 99.71,
+            judgment_counts: [320, 0, 0, 0, 0, 0],
+            holds_held: 0,
+            holds_total: 0,
+            rolls_held: 0,
+            rolls_total: 0,
+            mines_avoided: 0,
+            mines_total: 0,
+            hands_achieved: 0,
+            fail_time: None,
+            beat0_time_ns: 0,
+        };
+
+        let cached = cached_local_score_from_header(&header);
+
+        assert_eq!(cached.grade, Grade::Tier01);
+        assert_eq!(cached.lamp_index, Some(1));
+        assert_eq!(cached.lamp_judge_count, None);
+    }
+
+    #[test]
+    fn cached_local_score_from_header_promotes_perfect_ex_to_quint() {
+        let header = LocalScoreEntryHeaderV1 {
+            version: LOCAL_SCORE_VERSION_V1,
+            played_at_ms: 0,
+            music_rate: 1.0,
+            score_percent: 1.0,
+            grade_code: grade_to_code(Grade::Tier01),
+            lamp_index: Some(1),
+            lamp_judge_count: Some(2),
+            ex_score_percent: 100.0,
+            hard_ex_score_percent: 100.0,
+            judgment_counts: [320, 0, 0, 0, 0, 0],
+            holds_held: 0,
+            holds_total: 0,
+            rolls_held: 0,
+            rolls_total: 0,
+            mines_avoided: 0,
+            mines_total: 0,
+            hands_achieved: 0,
+            fail_time: None,
+            beat0_time_ns: 0,
+        };
+
+        let cached = cached_local_score_from_header(&header);
+
+        assert_eq!(cached.grade, Grade::Quint);
+        assert_eq!(cached.lamp_index, Some(0));
         assert_eq!(cached.lamp_judge_count, None);
     }
 
