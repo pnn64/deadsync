@@ -1459,23 +1459,15 @@ fn collect_hist_bins(notes: &[Note]) -> (Vec<i32>, HistMeta) {
         worst_observed_bin_abs: 0,
     };
 
-    for note in notes {
-        let Some(judgment) = note.result.as_ref() else {
-            continue;
-        };
-        if judgment.grade == JudgeGrade::Miss
-            || matches!(note.note_type, NoteType::Mine)
-            || note.is_fake
-        {
-            continue;
+    for_each_row_final_judgment(notes, |judgment| {
+        if judgment.grade != JudgeGrade::Miss {
+            let bin = bin_index_ms(judgment.time_error_ms);
+            bins.push(bin);
+            meta.max_abs = meta.max_abs.max(judgment.time_error_ms.abs());
+            meta.worst_window_ix = meta.worst_window_ix.max(hist_window_ix(judgment.grade));
+            meta.worst_observed_bin_abs = meta.worst_observed_bin_abs.max(bin.abs());
         }
-
-        let bin = bin_index_ms(judgment.time_error_ms);
-        bins.push(bin);
-        meta.max_abs = meta.max_abs.max(judgment.time_error_ms.abs());
-        meta.worst_window_ix = meta.worst_window_ix.max(hist_window_ix(judgment.grade));
-        meta.worst_observed_bin_abs = meta.worst_observed_bin_abs.max(bin.abs());
-    }
+    });
 
     (bins, meta)
 }
@@ -1729,6 +1721,22 @@ mod tests {
             hist.smoothed.len(),
             ((effective_windows_ms()[4] / HIST_BIN_MS).round() as usize * 2) + 1
         );
+    }
+
+    #[test]
+    fn histogram_ms_aggregates_rows_like_simply_love_offsets() {
+        let notes = vec![
+            test_note(10, 0, JudgeGrade::Decent, -45.0),
+            test_note(10, 1, JudgeGrade::Great, 12.0),
+            test_note(11, 0, JudgeGrade::Excellent, -6.0),
+            test_note(12, 0, JudgeGrade::Great, 12.0),
+        ];
+
+        let hist = build_histogram_ms(&notes);
+        assert_eq!(hist.bins, vec![(-6, 1), (12, 2)]);
+        assert_eq!(hist.max_count, 2);
+        assert!((hist.worst_observed_ms - 12.0).abs() < 0.0001);
+        assert!((hist.worst_window_ms - effective_windows_ms()[2]).abs() < 0.0001);
     }
 
     #[test]
