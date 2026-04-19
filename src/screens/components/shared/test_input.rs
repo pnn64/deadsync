@@ -508,6 +508,43 @@ fn push_pad(
     ));
 }
 
+fn push_polling_readout(actors: &mut Vec<Actor>, state: &State, z: f32) {
+    let (rate_source, latest_hz, max_hz) = state
+        .event_rate
+        .readout()
+        .unwrap_or_else(|| ("Waiting for raw input".to_owned(), 0, 0));
+
+    actors.push(act!(text:
+        font("miso"):
+        settext("RAW EVENT POLLING"):
+        align(1.0, 1.0):
+        xy(screen_width() - 20.0, screen_height() - 60.0):
+        zoom(0.55):
+        horizalign(right):
+        diffuse(1.0, 1.0, 1.0, 0.8):
+        z(z)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(rate_source):
+        align(1.0, 1.0):
+        xy(screen_width() - 20.0, screen_height() - 38.0):
+        zoom(0.65):
+        horizalign(right):
+        diffuse(1.0, 1.0, 1.0, 0.9):
+        z(z)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(format!("{} latest / {} max", format_hz(latest_hz), format_hz(max_hz))):
+        align(1.0, 1.0):
+        xy(screen_width() - 20.0, screen_height() - 20.0):
+        zoom(0.72):
+        horizalign(right):
+        z(z)
+    ));
+}
+
 pub fn build_test_input_screen_content(state: &State) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(51);
     let cx = screen_center_x();
@@ -562,39 +599,7 @@ pub fn build_test_input_screen_content(state: &State) -> Vec<Actor> {
         z(30)
     ));
 
-    let (rate_source, latest_hz, max_hz) = state
-        .event_rate
-        .readout()
-        .unwrap_or_else(|| ("Waiting for raw input".to_owned(), 0, 0));
-    actors.push(act!(text:
-        font("miso"):
-        settext("RAW EVENT POLLING"):
-        align(1.0, 1.0):
-        xy(screen_width() - 20.0, screen_height() - 60.0):
-        zoom(0.55):
-        horizalign(right):
-        diffuse(1.0, 1.0, 1.0, 0.8):
-        z(30)
-    ));
-    actors.push(act!(text:
-        font("miso"):
-        settext(rate_source):
-        align(1.0, 1.0):
-        xy(screen_width() - 20.0, screen_height() - 38.0):
-        zoom(0.65):
-        horizalign(right):
-        diffuse(1.0, 1.0, 1.0, 0.9):
-        z(30)
-    ));
-    actors.push(act!(text:
-        font("miso"):
-        settext(format!("{} latest / {} max", format_hz(latest_hz), format_hz(max_hz))):
-        align(1.0, 1.0):
-        xy(screen_width() - 20.0, screen_height() - 20.0):
-        zoom(0.72):
-        horizalign(right):
-        z(30)
-    ));
+    push_polling_readout(&mut actors, state, 30.0);
 
     actors
 }
@@ -605,7 +610,7 @@ pub fn build_select_music_overlay(
     show_p2: bool,
     pad_spacing: f32,
 ) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(24);
+    let mut actors = Vec::with_capacity(27);
     let cx = screen_center_x();
     // SL parity: overlay/TestInput.lua places pad AF at y = _screen.cy + 50, then
     // _modules/TestInput Pad/default.lua places the pad art at y = -80 inside that AF.
@@ -655,6 +660,8 @@ pub fn build_select_music_overlay(
         z(1453):
         horizalign(center)
     ));
+
+    push_polling_readout(&mut actors, state, 1453.0);
 
     actors
 }

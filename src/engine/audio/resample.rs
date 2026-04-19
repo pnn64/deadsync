@@ -613,7 +613,7 @@ fn music_decoder_thread_loop(
         if !out_tail.is_empty() {
             let _produced_frames = write_resampler_output(&out_tail, out_ch, &mut out_tmp);
             let music_sec_per_frame = f64::from(current_rate_f32) / f64::from(out_hz.max(1));
-            let finished = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
+            let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
             if !out_tmp.is_empty() {
                 apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
                 next_music_output_sec = push_music_block_with_map(
@@ -625,9 +625,6 @@ fn music_decoder_thread_loop(
                     music_sec_per_frame,
                     &stop,
                 )?;
-            }
-            if finished {
-                break 'main_loop;
             }
         }
 

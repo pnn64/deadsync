@@ -76,6 +76,7 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
                         name: "GrooveStats".to_string(),
                         is_ex: false,
                         disabled: false,
+                        personalized: true,
                         entries: vec![
                             leaderboard_entry(1, "WOLF", 9987.42, false, false),
                             leaderboard_entry(2, "YOU", 9975.13, false, true),
@@ -88,6 +89,7 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
                         name: "ArrowCloud".to_string(),
                         is_ex: false,
                         disabled: false,
+                        personalized: true,
                         entries: vec![
                             leaderboard_entry(1, "AC01", 98.72, false, false),
                             leaderboard_entry(2, "YOU", 98.31, false, true),

@@ -3518,7 +3518,8 @@ impl App {
             None,
         );
         po_state.music_rate = music_rate;
-        po_state.speed_mod = std::array::from_fn(|i| player_options::SpeedMod::from(scroll_speed[i]));
+        po_state.speed_mod =
+            std::array::from_fn(|i| player_options::SpeedMod::from(scroll_speed[i]));
         self.state.screens.player_options_state = Some(po_state);
         true
     }
@@ -6737,6 +6738,11 @@ impl ApplicationHandler<UserEvent> for App {
                 } else if self.state.screens.current_screen == CurrentScreen::Input {
                     crate::screens::input::handle_raw_pad_event(
                         &mut self.state.screens.input_state,
+                        &ev,
+                    );
+                } else if self.state.screens.current_screen == CurrentScreen::SelectMusic {
+                    crate::screens::select_music::handle_raw_pad_event(
+                        &mut self.state.screens.select_music_state,
                         &ev,
                     );
                 }
