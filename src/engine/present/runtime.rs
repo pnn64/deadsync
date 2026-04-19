@@ -1,4 +1,8 @@
-use std::{cell::RefCell, collections::HashMap, hash::BuildHasherDefault};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, hash_map::Entry as HashEntry},
+    hash::BuildHasherDefault,
+};
 
 use crate::engine::present::anim::{Step, TweenSeq, TweenState};
 use twox_hash::XxHash64;
@@ -16,6 +20,8 @@ struct Entry {
 struct Registry {
     map: TweenMap,
     frame: u64,
+    seen_ids: Vec<u64>,
+    stale_ids: Vec<u64>,
 }
 
 impl Default for Registry {
@@ -23,6 +29,8 @@ impl Default for Registry {
         Self {
             map: TweenMap::default(),
             frame: 0,
+            seen_ids: Vec::new(),
+            stale_ids: Vec::new(),
         }
     }
 }
@@ -43,15 +51,29 @@ pub fn tick(dt: f32) {
         let frame = r.frame.wrapping_add(1);
         r.frame = frame;
 
-        // Drop anything not seen in the current or previous frame. `wrapping_sub`
-        // keeps the one-frame grace semantics correct across `u64` wraparound.
-        r.map.retain(|_, e| {
-            let keep = seen_recently(e.last_seen_frame, frame);
-            if keep {
-                e.seq.update(dt);
+        // Dense id lists avoid scanning every hash bucket every frame. `seen_ids`
+        // contains ids materialized last frame; `stale_ids` contains ids from the
+        // frame before that, which now need one last liveness check.
+        let mut stale_ids = std::mem::take(&mut r.stale_ids);
+        for id in stale_ids.drain(..) {
+            let drop = r
+                .map
+                .get(&id)
+                .is_some_and(|entry| !seen_recently(entry.last_seen_frame, frame));
+            if drop {
+                r.map.remove(&id);
             }
-            keep
-        });
+        }
+
+        let mut seen_ids = std::mem::take(&mut r.seen_ids);
+        for &id in &seen_ids {
+            if let Some(entry) = r.map.get_mut(&id) {
+                entry.seq.update(dt);
+            }
+        }
+
+        std::mem::swap(&mut r.stale_ids, &mut seen_ids);
+        r.seen_ids = stale_ids;
     });
 }
 
@@ -61,20 +83,34 @@ pub fn materialize(id: u64, initial: TweenState, steps: &[Step]) -> TweenState {
     REG.with(|r| {
         let mut r = r.borrow_mut();
         let frame = r.frame;
-
-        let ent = r.map.entry(id).or_insert_with(|| {
-            let mut tw = TweenSeq::new(initial);
-            for s in steps {
-                tw.push_step(s.clone());
+        let mut mark_seen = false;
+        let state = match r.map.entry(id) {
+            HashEntry::Occupied(mut occupied) => {
+                let ent = occupied.get_mut();
+                if ent.last_seen_frame != frame {
+                    ent.last_seen_frame = frame;
+                    mark_seen = true;
+                }
+                *ent.seq.state()
             }
-            Entry {
-                seq: tw,
-                last_seen_frame: frame,
+            HashEntry::Vacant(vacant) => {
+                let mut tw = TweenSeq::new(initial);
+                for s in steps {
+                    tw.push_step(s.clone());
+                }
+                let state = *tw.state();
+                vacant.insert(Entry {
+                    seq: tw,
+                    last_seen_frame: frame,
+                });
+                mark_seen = true;
+                state
             }
-        });
-
-        ent.last_seen_frame = frame;
-        *ent.seq.state()
+        };
+        if mark_seen {
+            r.seen_ids.push(id);
+        }
+        state
     })
 }
 
@@ -145,6 +181,24 @@ mod tests {
         assert!(
             (state.x - 2.5).abs() < 0.0001,
             "expected x ~= 2.5, got {}",
+            state.x
+        );
+    }
+
+    #[test]
+    fn duplicate_materialize_in_frame_updates_once() {
+        reset_registry(0);
+        let steps = [anim::linear(1.0).x(10.0).build()];
+
+        let _ = materialize(1, TweenState::default(), &steps);
+        let _ = materialize(1, TweenState::default(), &steps);
+
+        tick(0.25);
+
+        let state = materialize(1, TweenState::default(), &steps);
+        assert!(
+            (state.x - 2.5).abs() < 0.0001,
+            "expected x ~= 2.5 after one update, got {}",
             state.x
         );
     }
