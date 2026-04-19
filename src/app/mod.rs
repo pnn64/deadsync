@@ -1754,9 +1754,12 @@ fn prewarm_gameplay_text_layout_cache(
     state: &mut gameplay::State,
 ) {
     let started = Instant::now();
+    // Gameplay prewarm owns the whole cache for the next song, so start from an
+    // empty working set instead of scan-pruning stale entries from older screens.
+    cache.clear();
     cache.configure(
         GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
-        crate::engine::present::compose::TextLayoutOverflowPolicy::PruneOwnedEntries,
+        crate::engine::present::compose::TextLayoutOverflowPolicy::Saturating,
     );
     cache.begin_frame_stats();
 
