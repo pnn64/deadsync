@@ -1,3 +1,4 @@
+use chrono::{Datelike, Local};
 use image::image_dimensions;
 use log::debug;
 use mlua::{Function, Lua, MultiValue, Table, Value};
@@ -842,6 +843,22 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
                 .unwrap_or(value.as_str());
             Ok(Value::String(lua.create_string(short)?))
         })?,
+    )?;
+    let now = Local::now();
+    let year = now.year();
+    let month_of_year = now.month0() as i32;
+    let day_of_month = now.day() as i32;
+    globals.set(
+        "Year",
+        lua.create_function(move |_, _args: MultiValue| Ok(year))?,
+    )?;
+    globals.set(
+        "MonthOfYear",
+        lua.create_function(move |_, _args: MultiValue| Ok(month_of_year))?,
+    )?;
+    globals.set(
+        "DayOfMonth",
+        lua.create_function(move |_, _args: MultiValue| Ok(day_of_month))?,
     )?;
     globals.set(
         "ASPECT_SCALE_FACTOR",
@@ -6540,6 +6557,44 @@ return Def.ActorFrame{}
 
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "854:480:true:true");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_date_compat_globals() {
+        let song_dir = test_dir("date-compat");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {
+        1,
+        string.format("%d:%d:%d", Year(), MonthOfYear(), DayOfMonth()),
+        true,
+    },
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Date Compat"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        let parts = compiled.messages[0]
+            .message
+            .split(':')
+            .map(|value| value.parse::<i32>().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(parts.len(), 3);
+        let now = Local::now();
+        assert_eq!(parts[0], now.year());
+        assert_eq!(parts[1], now.month0() as i32);
+        assert_eq!(parts[2], now.day() as i32);
     }
 
     #[test]
