@@ -101,14 +101,8 @@ fn main() {
         let covered_keys = extract_covered_keys(&lang);
         let covered = en_keys.intersection(&covered_keys).count();
         let skipped = count_skipped(&lang);
-        let missing: Vec<_> = en_keys
-            .difference(&covered_keys)
-            .cloned()
-            .collect();
-        let stale: Vec<_> = covered_keys
-            .difference(&en_keys)
-            .cloned()
-            .collect();
+        let missing: Vec<_> = en_keys.difference(&covered_keys).cloned().collect();
+        let stale: Vec<_> = covered_keys.difference(&en_keys).cloned().collect();
         let code = path
             .file_stem()
             .and_then(|s| s.to_str())

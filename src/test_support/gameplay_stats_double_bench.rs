@@ -3,7 +3,8 @@ use crate::engine::present::actors::Actor;
 use crate::engine::space::screen_center_x;
 use crate::game::profile;
 use crate::game::scores::{
-    CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData,
+    ArrowCloudPaneKind, CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane,
+    PlayerLeaderboardData,
 };
 use crate::game::timing::WindowCounts;
 use crate::screens::components::gameplay::gameplay_stats;
@@ -77,6 +78,7 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
                         is_ex: false,
                         disabled: false,
                         personalized: true,
+                        arrowcloud_kind: None,
                         entries: vec![
                             leaderboard_entry(1, "WOLF", 9987.42, false, false),
                             leaderboard_entry(2, "YOU", 9975.13, false, true),
@@ -90,6 +92,7 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
                         is_ex: false,
                         disabled: false,
                         personalized: true,
+                        arrowcloud_kind: Some(ArrowCloudPaneKind::HardEx),
                         entries: vec![
                             leaderboard_entry(1, "AC01", 98.72, false, false),
                             leaderboard_entry(2, "YOU", 98.31, false, true),

@@ -9,6 +9,7 @@ use std::sync::{Arc, OnceLock};
 use std::thread::LocalKey;
 
 const SCOREBOX_NUM_ENTRIES: usize = 5;
+const SCOREBOX_FETCH_NUM_ENTRIES: usize = 13;
 const SCOREBOX_LOOP_SECONDS: f32 = 5.0;
 const SCOREBOX_TRANSITION_SECONDS: f32 = 1.0;
 const SCOREBOX_W: f32 = 162.0;
@@ -96,6 +97,7 @@ struct GameplayScoreboxRow {
 #[derive(Clone, Debug)]
 struct GameplayScoreboxPane {
     kind: PaneKind,
+    is_arrowcloud: bool,
     mode_text: Arc<str>,
     border_color: [f32; 4],
     rows: [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES],
@@ -192,7 +194,13 @@ fn select_music_filtered_panes(
 #[inline(always)]
 fn pane_kind(pane: &scores::LeaderboardPane) -> PaneKind {
     if pane.is_arrowcloud() {
-        return PaneKind::HardEx;
+        return if pane.is_hard_ex() {
+            PaneKind::HardEx
+        } else if pane.is_ex {
+            PaneKind::Ex
+        } else {
+            PaneKind::Gs
+        };
     }
     if pane.is_groovestats() {
         return if pane.is_ex {
@@ -294,6 +302,21 @@ fn local_self_machine_tag(side: profile::PlayerSide) -> Option<String> {
     } else {
         Some(initials.to_string())
     }
+}
+
+fn local_self_scorebox_name(side: profile::PlayerSide) -> String {
+    let profile = profile::get_for_side(side);
+    let fallback = [
+        profile.display_name.as_str(),
+        profile.groovestats_username.as_str(),
+        profile.player_initials.as_str(),
+    ]
+    .into_iter()
+    .map(str::trim)
+    .find(|value| !value.is_empty())
+    .unwrap_or("----");
+    let tag = local_self_machine_tag(side);
+    machine_tag(tag.as_deref(), fallback)
 }
 
 fn leaderboard_entry_matches_local_self(
@@ -451,7 +474,7 @@ pub fn select_music_scorebox_view(
         return view;
     };
     let Some(snapshot) =
-        scores::get_or_fetch_player_leaderboards_for_side(hash, side, SCOREBOX_NUM_ENTRIES)
+        scores::get_or_fetch_player_leaderboards_for_side(hash, side, SCOREBOX_FETCH_NUM_ENTRIES)
     else {
         return view;
     };
@@ -494,6 +517,9 @@ pub fn select_music_scorebox_view(
     if let Some(player_entry) = entries.iter().find(|entry| entry.is_self) {
         view.player_name = machine_tag(player_entry.machine_tag.as_deref(), &player_entry.name);
         view.player_score = score_text_with_percent(player_entry.score);
+    } else if let Some((local_score_10000, _)) = local_self_score_10000(side, hash, kind) {
+        view.player_name = local_self_scorebox_name(side);
+        view.player_score = score_text_with_percent(local_score_10000);
     }
     for (idx, rival) in entries
         .iter()
@@ -557,6 +583,7 @@ fn gameplay_status_pane(side: profile::PlayerSide, text: &str) -> GameplayScoreb
     };
     GameplayScoreboxPane {
         kind,
+        is_arrowcloud: false,
         mode_text: owned_text(default_mode_text_for_side(side)),
         border_color: SCOREBOX_GS_BLUE,
         rows,
@@ -698,6 +725,7 @@ fn gameplay_pane_from_leaderboard(
     let kind = pane_kind(pane);
     GameplayScoreboxPane {
         kind,
+        is_arrowcloud: pane.is_arrowcloud(),
         mode_text: owned_text(pane_mode_text(kind, pane)),
         border_color: pane_color(kind),
         rows: scorebox_rows_for_kind(entries, kind),
@@ -792,22 +820,22 @@ fn color_with_alpha(mut rgba: [f32; 4], alpha: f32) -> [f32; 4] {
 }
 
 #[inline(always)]
-fn is_gs_logo(kind: PaneKind) -> bool {
-    matches!(kind, PaneKind::Gs | PaneKind::Ex)
+fn is_gs_logo(pane: &GameplayScoreboxPane) -> bool {
+    !pane.is_arrowcloud && matches!(pane.kind, PaneKind::Gs | PaneKind::Ex)
 }
 
 #[inline(always)]
-fn is_ex_text(kind: PaneKind) -> bool {
-    matches!(kind, PaneKind::Ex)
+fn is_ex_text(pane: &GameplayScoreboxPane) -> bool {
+    matches!(pane.kind, PaneKind::Ex)
 }
 
-fn is_arrowcloud_logo(kind: PaneKind) -> bool {
-    matches!(kind, PaneKind::HardEx)
+fn is_arrowcloud_logo(pane: &GameplayScoreboxPane) -> bool {
+    pane.is_arrowcloud
 }
 
 #[inline(always)]
-fn is_hard_ex_text(kind: PaneKind) -> bool {
-    matches!(kind, PaneKind::HardEx)
+fn is_hard_ex_text(pane: &GameplayScoreboxPane) -> bool {
+    matches!(pane.kind, PaneKind::HardEx)
 }
 
 #[inline(always)]
@@ -821,8 +849,9 @@ fn is_itl_logo(kind: PaneKind) -> bool {
 }
 
 #[inline(always)]
-fn is_fallback_text(kind: PaneKind) -> bool {
-    matches!(kind, PaneKind::Other)
+fn is_fallback_text(pane: &GameplayScoreboxPane) -> bool {
+    matches!(pane.kind, PaneKind::Other)
+        || (pane.is_arrowcloud && matches!(pane.kind, PaneKind::Gs))
 }
 
 fn logo_alpha(
@@ -1001,7 +1030,7 @@ fn push_fallback_mode_text(
     zoom: f32,
     z_base: i16,
 ) {
-    if is_fallback_text(cur.kind) {
+    if is_fallback_text(cur) {
         push_mode_text(
             actors,
             cur.mode_text.as_ref(),
@@ -1012,7 +1041,7 @@ fn push_fallback_mode_text(
             cycle.cur_alpha,
         );
     }
-    if cycle.next_idx != cycle.cur_idx && is_fallback_text(next.kind) {
+    if cycle.next_idx != cycle.cur_idx && is_fallback_text(next) {
         push_mode_text(
             actors,
             next.mode_text.as_ref(),
@@ -1028,8 +1057,8 @@ fn push_fallback_mode_text(
 fn push_gs_logo_overlay(
     actors: &mut Vec<Actor>,
     cycle: ScoreboxCycleState,
-    cur: PaneKind,
-    next: PaneKind,
+    cur: &GameplayScoreboxPane,
+    next: &GameplayScoreboxPane,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -1057,8 +1086,8 @@ fn push_gs_logo_overlay(
 fn push_arrowcloud_logo_overlay(
     actors: &mut Vec<Actor>,
     cycle: ScoreboxCycleState,
-    cur: PaneKind,
-    next: PaneKind,
+    cur: &GameplayScoreboxPane,
+    next: &GameplayScoreboxPane,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -1086,8 +1115,8 @@ fn push_arrowcloud_logo_overlay(
 fn push_ex_header_overlay(
     actors: &mut Vec<Actor>,
     cycle: ScoreboxCycleState,
-    cur: PaneKind,
-    next: PaneKind,
+    cur: &GameplayScoreboxPane,
+    next: &GameplayScoreboxPane,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -1108,8 +1137,8 @@ fn push_ex_header_overlay(
 fn push_hard_ex_header_overlay(
     actors: &mut Vec<Actor>,
     cycle: ScoreboxCycleState,
-    cur: PaneKind,
-    next: PaneKind,
+    cur: &GameplayScoreboxPane,
+    next: &GameplayScoreboxPane,
     center_x: f32,
     center_y: f32,
     zoom: f32,
@@ -1195,18 +1224,10 @@ fn push_header_overlays(
     zoom: f32,
     z_base: i16,
 ) {
-    push_gs_logo_overlay(
-        actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
-    );
-    push_arrowcloud_logo_overlay(
-        actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
-    );
-    push_ex_header_overlay(
-        actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
-    );
-    push_hard_ex_header_overlay(
-        actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
-    );
+    push_gs_logo_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
+    push_arrowcloud_logo_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
+    push_ex_header_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
+    push_hard_ex_header_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
     push_rpg_logo_overlay(
         actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
     );
@@ -1317,7 +1338,7 @@ pub fn select_music_scorebox_actors(
         return Vec::new();
     };
     let Some(snapshot) =
-        scores::get_or_fetch_player_leaderboards_for_side(hash, side, SCOREBOX_NUM_ENTRIES)
+        scores::get_or_fetch_player_leaderboards_for_side(hash, side, SCOREBOX_FETCH_NUM_ENTRIES)
     else {
         return Vec::new();
     };
@@ -1461,6 +1482,7 @@ mod tests {
             is_ex: false,
             disabled: false,
             personalized: true,
+            arrowcloud_kind: None,
         }
     }
 

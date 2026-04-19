@@ -3,6 +3,7 @@ use log::{debug, info, warn};
 use std::sync::{LazyLock, Mutex};
 
 const ARROWCLOUD_API_BASE_URL: &str = "https://api.arrowcloud.dance";
+const ARROWCLOUD_USER_URL: &str = "https://api.arrowcloud.dance/user";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionError {
@@ -36,6 +37,11 @@ pub const fn api_base_url() -> &'static str {
     ARROWCLOUD_API_BASE_URL
 }
 
+#[inline(always)]
+pub const fn user_url() -> &'static str {
+    ARROWCLOUD_USER_URL
+}
+
 pub fn submit_url(chart_hash: &str) -> Option<String> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
@@ -58,7 +64,7 @@ pub fn leaderboards_url(chart_hash: &str) -> Option<String> {
     ))
 }
 
-pub fn public_leaderboards_url(chart_hash: &str) -> Option<String> {
+pub fn legacy_leaderboards_url(chart_hash: &str) -> Option<String> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return None;
@@ -106,4 +112,35 @@ fn classify_error(message: &str) -> ConnectionError {
         return ConnectionError::HostBlocked;
     }
     ConnectionError::CannotConnect
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{leaderboards_url, legacy_leaderboards_url, user_url};
+
+    #[test]
+    fn leaderboards_url_uses_v1_chart_route() {
+        assert_eq!(
+            leaderboards_url("deadbeef").as_deref(),
+            Some("https://api.arrowcloud.dance/v1/chart/deadbeef/leaderboards")
+        );
+    }
+
+    #[test]
+    fn leaderboards_url_rejects_empty_hash() {
+        assert_eq!(leaderboards_url("   "), None);
+    }
+
+    #[test]
+    fn legacy_leaderboards_url_uses_chart_route() {
+        assert_eq!(
+            legacy_leaderboards_url("deadbeef").as_deref(),
+            Some("https://api.arrowcloud.dance/chart/deadbeef/leaderboards")
+        );
+    }
+
+    #[test]
+    fn user_url_uses_user_route() {
+        assert_eq!(user_url(), "https://api.arrowcloud.dance/user");
+    }
 }

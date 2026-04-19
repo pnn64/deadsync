@@ -71,12 +71,13 @@ fn gs_machine_pane(chart_hash: Option<&str>) -> scores::LeaderboardPane {
         is_ex: false,
         disabled: false,
         personalized: true,
+        arrowcloud_kind: None,
     }
 }
 
 #[inline(always)]
 fn should_show_overlay_pane(pane: &scores::LeaderboardPane) -> bool {
-    !pane.is_arrowcloud() || pane.personalized
+    !pane.is_arrowcloud() || pane.is_hard_ex() || pane.personalized || !pane.entries.is_empty()
 }
 
 fn gs_error_text(error: &str) -> String {
@@ -96,6 +97,7 @@ fn apply_leaderboard_side_snapshot(
         (
             pane.name.clone(),
             pane.is_ex,
+            pane.is_hard_ex(),
             pane.disabled,
             pane.personalized,
         )
@@ -137,12 +139,13 @@ fn apply_leaderboard_side_snapshot(
     }
 
     side.error_text = None;
-    if let Some((name, is_ex, disabled, personalized)) = current_pane {
+    if let Some((name, is_ex, is_hard_ex, disabled, personalized)) = current_pane {
         side.pane_index = panes
             .iter()
             .position(|pane| {
                 pane.name == name
                     && pane.is_ex == is_ex
+                    && pane.is_hard_ex() == is_hard_ex
                     && pane.disabled == disabled
                     && pane.personalized == personalized
             })
@@ -472,6 +475,10 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
         let show_ex = !side.loading
             && side.error_text.is_none()
             && pane.is_some_and(|p| p.is_ex && !p.disabled);
+        let show_itg_arrowcloud = !side.loading
+            && side.error_text.is_none()
+            && pane
+                .is_some_and(|p| p.is_arrowcloud() && !p.is_ex && !p.is_hard_ex() && !p.disabled);
         let show_hard_ex = !side.loading
             && side.error_text.is_none()
             && pane.is_some_and(|p| p.is_hard_ex() && !p.disabled);
@@ -526,6 +533,17 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
             actors.push(act!(text:
                 font("wendy"):
                 settext("EX"):
+                align(1.0, 0.5):
+                xy(center_x + pane_width * 0.5 - 16.0, header_y):
+                zoom(0.5):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(GS_LEADERBOARD_Z + 6):
+                horizalign(right)
+            ));
+        } else if show_itg_arrowcloud {
+            actors.push(act!(text:
+                font("wendy"):
+                settext("ITG"):
                 align(1.0, 0.5):
                 xy(center_x + pane_width * 0.5 - 16.0, header_y):
                 zoom(0.5):
@@ -739,4 +757,23 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
     }
 
     Some(actors)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_arrowcloud_hard_ex_pane_is_still_shown() {
+        let pane = scores::LeaderboardPane {
+            name: "ArrowCloud".to_string(),
+            entries: Vec::new(),
+            is_ex: false,
+            disabled: false,
+            personalized: false,
+            arrowcloud_kind: Some(scores::ArrowCloudPaneKind::HardEx),
+        };
+
+        assert!(should_show_overlay_pane(&pane));
+    }
 }
