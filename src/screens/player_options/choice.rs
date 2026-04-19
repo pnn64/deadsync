@@ -27,8 +27,8 @@ pub(super) fn persist_ctx(player_idx: usize) -> (bool, PlayerSide) {
 // ========================= Self-contained binding application =========================
 // Each typed binding owns the full "write to in-memory profile + conditionally
 // persist to the on-disk profile for the right side" dance. The dispatcher
-// hands off a freshly-computed value and reads back an `Outcome`; it no longer
-// needs to know about `PlayerSide`, `persist_ctx`, or `persist_for_side`.
+// hands off a freshly-computed value and reads back an `Outcome`; it does not
+// need to know about `PlayerSide`, `persist_ctx`, or `persist_for_side`.
 
 impl NumericBinding {
     #[inline]
