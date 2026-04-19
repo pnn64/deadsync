@@ -1,19 +1,30 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, hash::BuildHasherDefault};
 
 use crate::engine::present::anim::{Step, TweenSeq, TweenState};
+use twox_hash::XxHash64;
 
 const FNV_OFFSET: u64 = 0xcbf29ce484222325;
 const FNV_PRIME: u64 = 0x100000001b3;
+
+type TweenMap = HashMap<u64, Entry, BuildHasherDefault<XxHash64>>;
 
 struct Entry {
     seq: TweenSeq,
     last_seen_frame: u64,
 }
 
-#[derive(Default)]
 struct Registry {
-    map: HashMap<u64, Entry>,
+    map: TweenMap,
     frame: u64,
+}
+
+impl Default for Registry {
+    fn default() -> Self {
+        Self {
+            map: TweenMap::default(),
+            frame: 0,
+        }
+    }
 }
 
 thread_local! {
@@ -63,7 +74,7 @@ pub fn materialize(id: u64, initial: TweenState, steps: &[Step]) -> TweenState {
         });
 
         ent.last_seen_frame = frame;
-        ent.seq.state().clone()
+        *ent.seq.state()
     })
 }
 

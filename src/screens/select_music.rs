@@ -7,7 +7,7 @@ use crate::config::{
 };
 use crate::engine::audio;
 use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
-use crate::engine::input::{InputEvent, PadDir, RawKeyboardEvent, VirtualAction};
+use crate::engine::input::{InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
 use crate::engine::present::color;
 use crate::engine::present::font;
@@ -6898,6 +6898,9 @@ pub fn handle_raw_key_event(
         return ScreenAction::None;
     }
     if state.test_input_overlay_visible {
+        if let Some(key) = key {
+            test_input::apply_raw_key_event(&mut state.test_input_overlay, key);
+        }
         return ScreenAction::None;
     }
     if state.profile_switch_overlay.is_some() {
@@ -6978,6 +6981,13 @@ pub fn handle_raw_key_event(
         }
     }
     ScreenAction::None
+}
+
+pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
+    if !state.test_input_overlay_visible {
+        return;
+    }
+    test_input::apply_raw_pad_event(&mut state.test_input_overlay, pad_event);
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -7424,22 +7434,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
 
     sync_lobby_select_music(state);
 
-    let overlays_block_delayed_updates = state.select_music_menu.is_visible()
-        || !matches!(
-            state.leaderboard,
-            select_music_menu::LeaderboardOverlayState::Hidden
-        )
-        || !matches!(
-            state.pack_sync_overlay,
-            crate::screens::pack_sync::OverlayState::Hidden
-        )
-        || !matches!(state.sync_overlay, SyncOverlayState::Hidden)
-        || !matches!(
-            state.replay_overlay,
-            select_music_menu::ReplayOverlayState::Hidden
-        )
-        || state.profile_switch_overlay.is_some()
-        || state.test_input_overlay_visible;
+    let overlays_block_delayed_updates = delayed_selection_updates_blocked(state);
     if overlays_block_delayed_updates && state.currently_playing_preview_path.is_some() {
         clear_preview(state);
     }
@@ -7761,6 +7756,35 @@ fn allow_gs_fetch_for_selection(state: &State) -> bool {
     state.nav_key_held_direction.is_none()
         && state.wheel_offset_from_selection.abs() < 0.0001
         && state.time_since_selection_change >= PREVIEW_DELAY_SECONDS
+}
+
+#[inline(always)]
+fn delayed_selection_updates_blocked(state: &State) -> bool {
+    state.select_music_menu.is_visible()
+        || !matches!(
+            state.song_search,
+            select_music_menu::SongSearchState::Hidden
+        )
+        || !matches!(
+            state.leaderboard,
+            select_music_menu::LeaderboardOverlayState::Hidden
+        )
+        || !matches!(
+            state.downloads_overlay,
+            select_music_menu::DownloadsOverlayState::Hidden
+        )
+        || !matches!(state.lobby_overlay, lobby_overlay::OverlayState::Hidden)
+        || !matches!(
+            state.pack_sync_overlay,
+            crate::screens::pack_sync::OverlayState::Hidden
+        )
+        || !matches!(state.sync_overlay, SyncOverlayState::Hidden)
+        || !matches!(
+            state.replay_overlay,
+            select_music_menu::ReplayOverlayState::Hidden
+        )
+        || state.profile_switch_overlay.is_some()
+        || state.test_input_overlay_visible
 }
 
 #[inline(always)]
@@ -9500,9 +9524,9 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
 #[cfg(test)]
 mod tests {
     use super::{
-        PREVIEW_DELAY_SECONDS, WheelSortMode, build_displayed_entries, init_placeholder,
-        reset_preview_after_gameplay, select_music_lobby_lock_text_for, steps_index_for_side,
-        sync_low_confidence_warning,
+        PREVIEW_DELAY_SECONDS, WheelSortMode, build_displayed_entries,
+        delayed_selection_updates_blocked, init_placeholder, reset_preview_after_gameplay,
+        select_music_lobby_lock_text_for, steps_index_for_side, sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
     use crate::game::profile;
@@ -9614,6 +9638,32 @@ mod tests {
         reset_preview_after_gameplay(&mut state);
 
         assert_eq!(state.sort_mode, WheelSortMode::Group);
+    }
+
+    #[test]
+    fn delayed_selection_updates_are_unblocked_on_plain_wheel() {
+        let state = init_placeholder();
+
+        assert!(!delayed_selection_updates_blocked(&state));
+    }
+
+    #[test]
+    fn delayed_selection_updates_stay_blocked_for_lobby_overlay() {
+        let mut state = init_placeholder();
+        state.lobby_overlay = super::lobby_overlay::show_overlay();
+
+        assert!(delayed_selection_updates_blocked(&state));
+    }
+
+    #[test]
+    fn delayed_selection_updates_stay_blocked_for_song_search_and_downloads() {
+        let mut state = init_placeholder();
+        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        assert!(delayed_selection_updates_blocked(&state));
+
+        state.song_search = super::select_music_menu::SongSearchState::Hidden;
+        state.downloads_overlay = super::select_music_menu::show_downloads_overlay();
+        assert!(delayed_selection_updates_blocked(&state));
     }
 
     #[test]

@@ -342,7 +342,7 @@ fn local_self_score_10000(
     }
 }
 
-fn entries_with_local_self_state(
+pub(crate) fn entries_with_local_self_state(
     side: profile::PlayerSide,
     chart_hash: Option<&str>,
     pane: &scores::LeaderboardPane,
@@ -1460,6 +1460,7 @@ mod tests {
             entries,
             is_ex: false,
             disabled: false,
+            personalized: true,
         }
     }
 

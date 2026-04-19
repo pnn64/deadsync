@@ -79,7 +79,12 @@ Follow these steps to get the game running:
         ```sh
         .\target\release\deadsync.exe
         ```
-    *   **On Linux or macOS:**
+    *   **On Linux:**
+        ```sh
+        ./target/release/deadsync
+        ```
+     *  **On macOS:**
+        Before the first run, grant Input Monitoring permissions to `Terminal.app` in `System Settings > Privacy & Security > Input Monitoring`. Without this, deadsync will not receive any keystrokes. Then, run: 
         ```sh
         ./target/release/deadsync
         ```
