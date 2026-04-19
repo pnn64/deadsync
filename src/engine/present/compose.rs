@@ -275,6 +275,8 @@ struct CachedGlyph {
     offset: [f32; 2],
     advance_i32: i32,
     char_index: usize,
+    fill_batch_index: u32,
+    fill_vertex_start: u32,
     draw_quad: bool,
 }
 
@@ -944,7 +946,36 @@ fn cached_glyph(
         offset: glyph.offset,
         advance_i32: glyph.advance_i32,
         char_index,
+        fill_batch_index: 0,
+        fill_vertex_start: 0,
         draw_quad,
+    }
+}
+
+#[inline(always)]
+fn glyph_has_fill_quad(glyph: &CachedGlyph) -> bool {
+    glyph.draw_quad && glyph.size[0].abs() >= 1e-6 && glyph.size[1].abs() >= 1e-6
+}
+
+fn assign_fill_batch_slots(glyphs: &mut [CachedGlyph]) {
+    let mut batches: SmallVec<[(*const str, u32); 8]> = SmallVec::new();
+    for glyph in glyphs {
+        if !glyph_has_fill_quad(glyph) {
+            continue;
+        }
+        let batch_index = if let Some(index) = batches
+            .iter()
+            .position(|(texture_key, _)| std::ptr::addr_eq(*texture_key, glyph.texture_key))
+        {
+            index
+        } else {
+            batches.push((glyph.texture_key, 0));
+            batches.len().saturating_sub(1)
+        };
+        let (_, next_vertex) = &mut batches[batch_index];
+        glyph.fill_batch_index = batch_index as u32;
+        glyph.fill_vertex_start = *next_vertex;
+        *next_vertex = next_vertex.saturating_add(6);
     }
 }
 
@@ -1237,7 +1268,6 @@ fn flush_wrapped_word(
 struct TextMeshBatchBuilder {
     texture_key: *const str,
     vertices: Vec<renderer::TexturedMeshVertex>,
-    next_vertex: usize,
 }
 
 #[inline(always)]
@@ -1262,7 +1292,6 @@ fn text_mesh_batch_builder<'a>(
     builders.push(TextMeshBatchBuilder {
         texture_key,
         vertices: take_recycled_text_mesh_vertices(recycled_vertices),
-        next_vertex: 0,
     });
     builders
         .last_mut()
@@ -1407,7 +1436,7 @@ fn build_text_mesh_batches(
             let line_glyphs =
                 &glyphs[line.glyph_start..line.glyph_start.saturating_add(line.glyph_len)];
             for glyph in line_glyphs {
-                if glyph.draw_quad && glyph.size[0].abs() >= 1e-6 && glyph.size[1].abs() >= 1e-6 {
+                if glyph_has_fill_quad(glyph) {
                     let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
                     let quad_y_logical = baseline_local_logical + glyph.offset[1];
                     push_text_mesh_quad(
@@ -1484,30 +1513,26 @@ fn build_attributed_text_mesh_builders(
         builders.push(TextMeshBatchBuilder {
             texture_key: batch.texture_key,
             vertices,
-            next_vertex: 0,
         });
     }
 
     let mut attr_cursor = TextAttrCursor::new(attributes);
     for glyph in &layout.glyphs {
-        if !(glyph.draw_quad && glyph.size[0].abs() >= 1e-6 && glyph.size[1].abs() >= 1e-6) {
+        if !glyph_has_fill_quad(glyph) {
             continue;
         }
         let color = attr_cursor
             .as_mut()
             .map_or([1.0; 4], |cursor| cursor.tint_for(glyph.char_index));
-        let Some(builder) = builders
-            .iter_mut()
-            .find(|builder| std::ptr::addr_eq(builder.texture_key, glyph.texture_key))
-        else {
+        let Some(builder) = builders.get_mut(glyph.fill_batch_index as usize) else {
             continue;
         };
-        let start = builder.next_vertex;
+        debug_assert!(std::ptr::addr_eq(builder.texture_key, glyph.texture_key));
+        let start = glyph.fill_vertex_start as usize;
         let end = start.saturating_add(6).min(builder.vertices.len());
         for vertex in &mut builder.vertices[start..end] {
             vertex.color = color;
         }
-        builder.next_vertex = end;
     }
 }
 
@@ -1644,6 +1669,7 @@ fn build_cached_text_layout(
         start_char = char_index.saturating_add(1);
     }
 
+    assign_fill_batch_slots(&mut glyphs);
     let (fill_batches, stroke_batches) =
         build_text_mesh_batches(font, layout_seed, max_logical_width_i, &lines, &glyphs);
 
@@ -3533,6 +3559,32 @@ mod tests {
         }
     }
 
+    fn test_font_split_pages() -> Font {
+        let texture_key_a = Arc::<str>::from("test_font_page_a");
+        let texture_key_b = Arc::<str>::from("test_font_page_b");
+        let glyph_a = test_glyph(&texture_key_a);
+        let glyph_b = test_glyph(&texture_key_b);
+        let mut glyph_map = HashMap::new();
+        glyph_map.insert('A', glyph_a.clone());
+        glyph_map.insert('B', glyph_b.clone());
+        let mut ascii = std::array::from_fn(|_| None);
+        ascii['A' as usize] = Some(glyph_a);
+        ascii['B' as usize] = Some(glyph_b);
+        Font {
+            glyph_map,
+            ascii_glyphs: Box::new(ascii),
+            default_glyph: None,
+            line_spacing: 10,
+            height: 10,
+            fallback_font_name: None,
+            cache_tag: 2,
+            chain_key: 2,
+            default_stroke_color: [0.0; 4],
+            stroke_texture_map: HashMap::new(),
+            texture_hints_map: HashMap::new(),
+        }
+    }
+
     fn test_render_object(z: i16, order: u32) -> RenderObject {
         RenderObject {
             object_type: ObjectType::Sprite {
@@ -4117,6 +4169,70 @@ mod tests {
                 assert_eq!(vertices[6].color, [0.0, 1.0, 0.0, 1.0]);
             }
             _ => panic!("expected attributed text to use transient textured mesh"),
+        }
+    }
+
+    #[test]
+    fn attributed_text_keeps_colors_across_texture_batches() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 200.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let actors = [Actor::Text {
+            align: [0.0, 0.0],
+            offset: [10.0, 20.0],
+            color: [1.0; 4],
+            stroke_color: None,
+            glow: [0.0; 4],
+            font: "test",
+            content: TextContent::static_str("AB"),
+            attributes: vec![TextAttribute {
+                start: 1,
+                length: 1,
+                color: [0.0, 1.0, 0.0, 1.0],
+            }],
+            align_text: TextAlign::Left,
+            z: 0,
+            scale: [1.0, 1.0],
+            fit_width: None,
+            fit_height: None,
+            wrap_width_pixels: None,
+            max_width: None,
+            max_height: None,
+            max_w_pre_zoom: false,
+            max_h_pre_zoom: false,
+            clip: None,
+            blend: BlendMode::Alpha,
+            effect: Default::default(),
+        }];
+        let fonts = HashMap::from([("test", test_font_split_pages())]);
+        let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+
+        assert_eq!(render.objects.len(), 2);
+        match (
+            &render.objects[0].object_type,
+            &render.objects[1].object_type,
+        ) {
+            (
+                ObjectType::TexturedMesh {
+                    vertices: first_vertices,
+                    geom_cache_key: first_key,
+                    ..
+                },
+                ObjectType::TexturedMesh {
+                    vertices: second_vertices,
+                    geom_cache_key: second_key,
+                    ..
+                },
+            ) => {
+                assert_eq!(*first_key, INVALID_TMESH_CACHE_KEY);
+                assert_eq!(*second_key, INVALID_TMESH_CACHE_KEY);
+                assert_eq!(first_vertices[0].color, [1.0; 4]);
+                assert_eq!(second_vertices[0].color, [0.0, 1.0, 0.0, 1.0]);
+            }
+            _ => panic!("expected attributed text to batch into textured meshes"),
         }
     }
 }
