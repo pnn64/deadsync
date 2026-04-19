@@ -9,8 +9,8 @@ use crate::game::profile::{self as gp, PlayerSide};
 ///
 /// `pub(super)` so `CustomBinding` arms in `panes/main.rs` and
 /// `panes/advanced.rs` can drive their own apply + persist sequence inline.
-/// The typed bindings (`NumericBinding`, `ChoiceBinding<T>`, `NoteSkinBinding`)
-/// wrap this internally via their `apply_for_player` methods below, so the
+/// The typed bindings (`NumericBinding`, `ChoiceBinding<T>`) wrap this
+/// internally via their `apply_for_player` methods below, so the
 /// dispatcher itself never reads it.
 pub(super) fn persist_ctx(player_idx: usize) -> (bool, PlayerSide) {
     let play_style = gp::get_session_play_style();
@@ -61,20 +61,6 @@ impl<T: Copy + 'static> ChoiceBinding<T> {
             (self.persist_for_side)(side, value);
         }
         outcome
-    }
-}
-
-impl NoteSkinBinding {
-    #[inline]
-    pub(super) fn apply_for_player(
-        &self,
-        state: &mut State,
-        player_idx: usize,
-        choice: &str,
-    ) -> Outcome {
-        let (should_persist, side) = persist_ctx(player_idx);
-        (self.apply)(state, player_idx, choice, should_persist, side);
-        Outcome::persisted()
     }
 }
 
@@ -191,16 +177,6 @@ fn apply_cycle(
     match binding {
         CycleBinding::Bool(b) => b.apply_for_player(state, player_idx, new_index != 0),
         CycleBinding::Index(i) => i.apply_for_player(state, player_idx, new_index),
-        CycleBinding::NoteSkin(n) => {
-            let choice = state
-                .pane()
-                .row_map
-                .get(id)
-                .and_then(|r| r.choices.get(new_index))
-                .cloned()
-                .unwrap_or_default();
-            n.apply_for_player(state, player_idx, &choice)
-        }
     }
 }
 

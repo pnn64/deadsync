@@ -136,7 +136,6 @@ pub struct NumericBinding {
 pub enum CycleBinding {
     Bool(ChoiceBinding<bool>),
     Index(ChoiceBinding<usize>),
-    NoteSkin(NoteSkinBinding),
 }
 
 /// A typed cycle binding. `apply` writes the new value into the profile and
@@ -147,11 +146,6 @@ pub enum CycleBinding {
 pub struct ChoiceBinding<T: Copy + 'static> {
     pub apply: fn(&mut Profile, T) -> Outcome,
     pub persist_for_side: fn(PlayerSide, T),
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct NoteSkinBinding {
-    pub apply: fn(&mut State, usize, &str, bool, PlayerSide),
 }
 
 #[derive(Clone, Copy, Debug)]
