@@ -509,8 +509,8 @@ pub struct TextLayoutFrameStats {
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub enum TextLayoutOverflowPolicy {
-    #[default]
     PruneOwnedEntries,
+    #[default]
     Saturating,
 }
 
@@ -530,17 +530,21 @@ pub struct TextLayoutCache {
 
 impl Default for TextLayoutCache {
     fn default() -> Self {
-        Self::new(4096)
+        Self::saturating(4096)
     }
 }
 
 impl TextLayoutCache {
     pub fn new(max_entries: usize) -> Self {
-        Self::new_with_policy(max_entries, TextLayoutOverflowPolicy::PruneOwnedEntries)
+        Self::saturating(max_entries)
     }
 
     pub fn saturating(max_entries: usize) -> Self {
         Self::new_with_policy(max_entries, TextLayoutOverflowPolicy::Saturating)
+    }
+
+    pub fn pruning(max_entries: usize) -> Self {
+        Self::new_with_policy(max_entries, TextLayoutOverflowPolicy::PruneOwnedEntries)
     }
 
     pub fn new_with_policy(max_entries: usize, overflow_policy: TextLayoutOverflowPolicy) -> Self {
@@ -3983,6 +3987,17 @@ mod tests {
         assert_eq!(cache.frame_stats.prunes, 0);
         assert!(cache.owned_layout(key, "beta").is_none());
         assert!(cache.uncached_layout.is_some());
+    }
+
+    #[test]
+    fn text_layout_cache_defaults_to_saturating() {
+        assert!(TextLayoutOverflowPolicy::default() == TextLayoutOverflowPolicy::Saturating);
+        assert!(TextLayoutCache::default().overflow_policy == TextLayoutOverflowPolicy::Saturating);
+        assert!(TextLayoutCache::new(4).overflow_policy == TextLayoutOverflowPolicy::Saturating);
+        assert!(
+            TextLayoutCache::pruning(4).overflow_policy
+                == TextLayoutOverflowPolicy::PruneOwnedEntries
+        );
     }
 
     #[test]
