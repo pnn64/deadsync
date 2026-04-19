@@ -1047,6 +1047,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         lua.create_function(|_, _args: MultiValue| Ok(()))?,
     )?;
     globals.set("MESSAGEMAN", messageman)?;
+    globals.set("SM", lua.create_function(|_, _args: MultiValue| Ok(()))?)?;
     Ok(())
 }
 
@@ -2293,7 +2294,12 @@ fn install_file_loaders(lua: &Lua, song_dir: PathBuf) -> mlua::Result<()> {
 fn load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<Value> {
     let resolved = resolve_script_path(lua, song_dir, path)?;
     if is_song_lua_media_path(&resolved) {
-        return Ok(Value::Table(create_media_actor(lua, "Sprite", path)?));
+        let actor_type = if is_song_lua_audio_path(&resolved) {
+            "Sound"
+        } else {
+            "Sprite"
+        };
+        return Ok(Value::Table(create_media_actor(lua, actor_type, path)?));
     }
     load_script_file(lua, &resolved, song_dir)?.call::<Value>(())
 }
@@ -3334,7 +3340,11 @@ fn create_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table
 
 fn create_media_actor(lua: &Lua, actor_type: &'static str, path: &str) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, actor_type)?;
-    actor.set("Texture", path)?;
+    if actor_type.eq_ignore_ascii_case("Sound") {
+        actor.set("File", path)?;
+    } else {
+        actor.set("Texture", path)?;
+    }
     Ok(actor)
 }
 
@@ -4141,6 +4151,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "pause",
         "play",
         "rate",
+        "StartTransitioningScreen",
         "stop",
         "texturetranslate",
         "volume",
@@ -4245,7 +4256,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "get_column_actors",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |_, _args: MultiValue| {
                 let Value::Function(method) = actor.get::<Value>("GetColumnActors")? else {
                     return Ok(Value::Nil);
                 };
@@ -5567,8 +5578,20 @@ fn is_song_lua_video_path(path: &Path) -> bool {
 }
 
 #[inline(always)]
+fn is_song_lua_audio_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "ogg" | "mp3" | "wav" | "flac" | "opus" | "m4a" | "aac"
+            )
+        })
+}
+
+#[inline(always)]
 fn is_song_lua_media_path(path: &Path) -> bool {
-    is_song_lua_image_path(path) || is_song_lua_video_path(path)
+    is_song_lua_image_path(path) || is_song_lua_video_path(path) || is_song_lua_audio_path(path)
 }
 
 #[inline(always)]
@@ -6673,6 +6696,35 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_accepts_screen_transition_and_sm_helpers() {
+        let song_dir = test_dir("screen-transition-sm");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        SM("hello")
+        SCREENMAN:GetTopScreen():StartTransitioningScreen("SM_DoNextScreen")
+        mod_actions = {
+            {1, "ok", true},
+        }
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Screen Transition"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "ok");
+    }
+
+    #[test]
     fn compile_song_lua_exposes_common_prefsmgr_preferences() {
         let song_dir = test_dir("prefsmgr-preferences");
         let entry = song_dir.join("default.lua");
@@ -6931,6 +6983,42 @@ return Def.ActorFrame{
         let compiled = compile_song_lua(
             &entry,
             &SongLuaCompileContext::new(&song_dir, "LoadActor Video Media"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "true:true");
+    }
+
+    #[test]
+    fn compile_song_lua_loadactor_treats_binary_audio_as_media() {
+        let song_dir = test_dir("loadactor-audio-media");
+        let audio_path = song_dir.join("clip.ogg");
+        fs::write(&audio_path, [0xff_u8, 0xd8, 0x00, 0x81]).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    LoadActor("clip.ogg")..{
+        OnCommand=function(self)
+            self:play():pause():stop():load("other.ogg"):volume(0.5)
+            mod_actions = {
+                {1, string.format(
+                    "%s:%s",
+                    tostring(self.File == "clip.ogg"),
+                    tostring(self:GetTexture() == nil)
+                ), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "LoadActor Audio Media"),
         )
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
