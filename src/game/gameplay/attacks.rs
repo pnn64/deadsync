@@ -99,6 +99,7 @@ pub(super) enum SongLuaEaseMaskTarget {
     VisualDrunk,
     VisualDizzy,
     VisualConfusion,
+    VisualConfusionOffset,
     VisualFlip,
     VisualInvert,
     VisualTornado,
@@ -401,6 +402,7 @@ fn apply_runtime_mod(
         "drunk" => out.visual.drunk = attack_level(percent_value),
         "dizzy" => out.visual.dizzy = attack_level(percent_value),
         "confusion" => out.visual.confusion = attack_level(percent_value),
+        "confusionoffset" => out.visual.confusion_offset = attack_level(percent_value),
         "flip" => out.visual.flip = attack_level(percent_value),
         "invert" => out.visual.invert = attack_level(percent_value),
         "tornado" => out.visual.tornado = attack_level(percent_value),
@@ -986,6 +988,18 @@ fn append_song_lua_ease_targets(
         "confusion" => push_song_lua_ease_target(
             out,
             SongLuaEaseMaskTarget::VisualConfusion,
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        ),
+        "confusionoffset" => push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualConfusionOffset,
             start_second,
             end_second,
             sustain_end_second,
@@ -1968,7 +1982,7 @@ pub(super) fn build_song_lua_runtime_windows(
     context.global_offset_seconds = machine_global_offset_seconds;
     context.screen_width = screen_width;
     context.screen_height = screen_height;
-    context.confusion_offset_available = false;
+    context.confusion_offset_available = true;
     context.confusion_available = true;
     context.amod_available = false;
     let play_style = profile::get_session_play_style();
@@ -2505,6 +2519,7 @@ pub(super) fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualDrunk => visual.drunk = Some(value),
         SongLuaEaseMaskTarget::VisualDizzy => visual.dizzy = Some(value),
         SongLuaEaseMaskTarget::VisualConfusion => visual.confusion = Some(value),
+        SongLuaEaseMaskTarget::VisualConfusionOffset => visual.confusion_offset = Some(value),
         SongLuaEaseMaskTarget::VisualFlip => visual.flip = Some(value),
         SongLuaEaseMaskTarget::VisualInvert => visual.invert = Some(value),
         SongLuaEaseMaskTarget::VisualTornado => visual.tornado = Some(value),
@@ -2940,6 +2955,9 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                 if let Some(v) = window.visual.confusion {
                     visual.confusion = Some(v);
                 }
+                if let Some(v) = window.visual.confusion_offset {
+                    visual.confusion_offset = Some(v);
+                }
                 if let Some(v) = window.visual.flip {
                     visual.flip = Some(v);
                 }
@@ -3111,6 +3129,7 @@ pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> 
         drunk: merge_attack_value(base.drunk, attack.drunk),
         dizzy: merge_attack_value(base.dizzy, attack.dizzy),
         confusion: merge_attack_value(base.confusion, attack.confusion),
+        confusion_offset: merge_attack_value(base.confusion_offset, attack.confusion_offset),
         big: base.big,
         flip: merge_attack_value(base.flip, attack.flip),
         invert: merge_attack_value(base.invert, attack.invert),

@@ -269,6 +269,7 @@ pub struct VisualEffects {
     pub drunk: f32,
     pub dizzy: f32,
     pub confusion: f32,
+    pub confusion_offset: f32,
     pub big: f32,
     pub flip: f32,
     pub invert: f32,
@@ -285,6 +286,7 @@ impl VisualEffects {
             drunk: f32::from((mask & VISUAL_MASK_BIT_DRUNK) != 0),
             dizzy: f32::from((mask & VISUAL_MASK_BIT_DIZZY) != 0),
             confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
+            confusion_offset: 0.0,
             big: f32::from((mask & VISUAL_MASK_BIT_BIG) != 0),
             flip: f32::from((mask & VISUAL_MASK_BIT_FLIP) != 0),
             invert: f32::from((mask & VISUAL_MASK_BIT_INVERT) != 0),
@@ -478,6 +480,7 @@ struct VisualOverrides {
     drunk: Option<f32>,
     dizzy: Option<f32>,
     confusion: Option<f32>,
+    confusion_offset: Option<f32>,
     flip: Option<f32>,
     invert: Option<f32>,
     tornado: Option<f32>,
@@ -492,6 +495,7 @@ impl VisualOverrides {
         self.drunk.is_some()
             || self.dizzy.is_some()
             || self.confusion.is_some()
+            || self.confusion_offset.is_some()
             || self.flip.is_some()
             || self.invert.is_some()
             || self.tornado.is_some()
@@ -9896,6 +9900,53 @@ mod tests {
             super::song_lua_ease_window_value(&windows[1], 20.0)
                 .is_some_and(|value| (value - 1.0).abs() <= 0.000_1)
         );
+    }
+
+    #[test]
+    fn parse_song_lua_runtime_mods_scales_confusion_offset_like_itgmania() {
+        let mods = parse_song_lua_runtime_mods("*10000 -628 confusionoffset");
+        assert_eq!(mods.visual.confusion_offset, Some(-6.28));
+    }
+
+    #[test]
+    fn song_lua_confusion_offset_ease_scales_like_itgmania() {
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            eases: vec![crate::game::parsing::song_lua::SongLuaEaseWindow {
+                player: Some(1),
+                unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                start: 0.0,
+                limit: 4.0,
+                span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                target: crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(
+                    "confusionoffset".to_string(),
+                ),
+                from: -85.0,
+                to: 0.0,
+                easing: Some("outQuad".to_string()),
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            }],
+            ..Default::default()
+        };
+
+        let (windows, unsupported) =
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0);
+
+        assert_eq!(unsupported, 0);
+        assert_eq!(windows.len(), 1);
+        assert!(matches!(
+            windows[0].target,
+            super::attacks::SongLuaEaseMaskTarget::VisualConfusionOffset
+        ));
+        assert!((windows[0].from + 0.85).abs() <= 0.000_1);
+        assert!(windows[0].to.abs() <= 0.000_1);
     }
 
     #[test]

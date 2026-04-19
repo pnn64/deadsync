@@ -1243,20 +1243,37 @@ fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
 }
 
 #[inline(always)]
+fn confusion_rotation_deg(song_beat: f32, visual: VisualEffects) -> f32 {
+    let mut rotation = 0.0;
+    if visual.confusion_offset.abs() > f32::EPSILON {
+        rotation += visual.confusion_offset * (180.0 / std::f32::consts::PI);
+    }
+    if visual.confusion.abs() > f32::EPSILON {
+        let confusion = (song_beat * visual.confusion).rem_euclid(std::f32::consts::TAU);
+        rotation += confusion * (-180.0 / std::f32::consts::PI);
+    }
+    rotation
+}
+
+#[inline(always)]
+fn dizzy_rotation_deg(note_beat: f32, song_beat: f32, visual: VisualEffects) -> f32 {
+    if visual.dizzy <= f32::EPSILON {
+        return 0.0;
+    }
+    let dizzy = ((note_beat - song_beat) * visual.dizzy).rem_euclid(std::f32::consts::TAU);
+    dizzy * (180.0 / std::f32::consts::PI)
+}
+
+#[inline(always)]
 fn calc_note_rotation_z(
     visual: VisualEffects,
     note_beat: f32,
     song_beat: f32,
     is_hold_head: bool,
 ) -> f32 {
-    let mut r = 0.0;
-    if visual.confusion > f32::EPSILON {
-        let conf = song_beat.rem_euclid(2.0 * std::f32::consts::PI);
-        r += conf * (-180.0 / std::f32::consts::PI) * visual.confusion;
-    }
+    let mut r = confusion_rotation_deg(song_beat, visual);
     if visual.dizzy > f32::EPSILON && !is_hold_head {
-        let dizzy = (note_beat - song_beat).rem_euclid(2.0 * std::f32::consts::PI);
-        r += dizzy * (180.0 / std::f32::consts::PI) * visual.dizzy;
+        r += dizzy_rotation_deg(note_beat, song_beat, visual);
     }
     r
 }
@@ -3144,12 +3161,7 @@ pub fn build_bundles(
         let current_time_ns = state.current_music_time_visible_ns[player_idx];
         let current_time = song_time_ns_to_seconds(current_time_ns);
         let current_beat = state.current_beat_visible[player_idx];
-        let confusion_receptor_rot = if visual.confusion > f32::EPSILON {
-            let beat = current_beat.rem_euclid(2.0 * std::f32::consts::PI);
-            beat * (-180.0 / std::f32::consts::PI) * visual.confusion
-        } else {
-            0.0
-        };
+        let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual);
         // The column swap for Step's hold-turn section is handled at the player bundle
         // level. Keep the actual note/receptor/ghost visuals on the normal noteskin
         // path here; applying an extra local Y turn breaks model-backed arrows and hit
@@ -7251,9 +7263,10 @@ mod tests {
         MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
-        clipped_hold_body_bounds, hallway_judgment_zoom, hold_head_render_flags, hold_segment_pose,
-        hold_tail_cap_bounds, hold_window_for_display_run, hud_layout_ys, hud_y,
-        judgment_actor_zoom, lane_hold_window_bounds_by_time_ns, let_go_head_beat,
+        calc_note_rotation_z, clipped_hold_body_bounds, hallway_judgment_zoom,
+        hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
+        hold_window_for_display_run, hud_layout_ys, hud_y, judgment_actor_zoom,
+        lane_hold_window_bounds_by_time_ns, let_go_head_beat,
         maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size,
         note_window_for_display_run, note_world_z, note_x_extra, offset_center,
         predictive_itg_percents, push_transform_parts, receptor_row_center, tap_judgment_rows,
@@ -7760,6 +7773,40 @@ mod tests {
             &tornado,
         );
         assert!((center[1] - (240.0 + tipsy_y_extra(2, 1.25, visual))).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn confusion_rotation_matches_itg_scaled_formula() {
+        let visual = VisualEffects {
+            confusion: 1.5,
+            ..VisualEffects::default()
+        };
+        let rotation = calc_note_rotation_z(visual, 12.0, 3.5, true);
+        let expected = (3.5 * visual.confusion).rem_euclid(std::f32::consts::TAU)
+            * (-180.0 / std::f32::consts::PI);
+        assert!((rotation - expected).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn confusion_offset_adds_static_rotation() {
+        let visual = VisualEffects {
+            confusion_offset: std::f32::consts::PI,
+            ..VisualEffects::default()
+        };
+        let rotation = calc_note_rotation_z(visual, 12.0, 3.5, true);
+        assert!((rotation - 180.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn dizzy_rotation_matches_itg_scaled_formula() {
+        let visual = VisualEffects {
+            dizzy: 2.0,
+            ..VisualEffects::default()
+        };
+        let rotation = calc_note_rotation_z(visual, 6.75, 3.5, false);
+        let expected = ((6.75 - 3.5) * visual.dizzy).rem_euclid(std::f32::consts::TAU)
+            * (180.0 / std::f32::consts::PI);
+        assert!((rotation - expected).abs() <= 1e-6);
     }
 
     #[test]
