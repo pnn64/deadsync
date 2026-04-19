@@ -3518,20 +3518,7 @@ impl App {
             None,
         );
         po_state.music_rate = music_rate;
-        po_state.speed_mod = std::array::from_fn(|i| match scroll_speed[i] {
-            ScrollSpeedSetting::XMod(v) => player_options::SpeedMod {
-                mod_type: "X".to_string(),
-                value: v,
-            },
-            ScrollSpeedSetting::CMod(v) => player_options::SpeedMod {
-                mod_type: "C".to_string(),
-                value: v,
-            },
-            ScrollSpeedSetting::MMod(v) => player_options::SpeedMod {
-                mod_type: "M".to_string(),
-                value: v,
-            },
-        });
+        po_state.speed_mod = std::array::from_fn(|i| player_options::SpeedMod::from(scroll_speed[i]));
         self.state.screens.player_options_state = Some(po_state);
         true
     }
@@ -5527,22 +5514,20 @@ impl App {
                     |commands: &mut Vec<Command>,
                      side: profile::PlayerSide,
                      speed_mod: &player_options::SpeedMod| {
-                        let setting = match speed_mod.mod_type.as_str() {
-                            "C" => Some(ScrollSpeedSetting::CMod(speed_mod.value)),
-                            "X" => Some(ScrollSpeedSetting::XMod(speed_mod.value)),
-                            "M" => Some(ScrollSpeedSetting::MMod(speed_mod.value)),
-                            _ => None,
+                        let setting = match speed_mod.mod_type {
+                            player_options::SpeedModType::C => {
+                                ScrollSpeedSetting::CMod(speed_mod.value)
+                            }
+                            player_options::SpeedModType::X => {
+                                ScrollSpeedSetting::XMod(speed_mod.value)
+                            }
+                            player_options::SpeedModType::M => {
+                                ScrollSpeedSetting::MMod(speed_mod.value)
+                            }
                         };
 
-                        if let Some(setting) = setting {
-                            commands.push(Command::UpdateScrollSpeed { side, setting });
-                            debug!("Saved scroll speed ({side:?}): {setting}");
-                        } else {
-                            warn!(
-                                "Unsupported speed mod '{}' not saved to profile.",
-                                speed_mod.mod_type
-                            );
-                        }
+                        commands.push(Command::UpdateScrollSpeed { side, setting });
+                        debug!("Saved scroll speed ({side:?}): {setting}");
                     };
 
                 match play_style {
@@ -6106,11 +6091,16 @@ impl App {
                     }
                 }
 
-                let to_scroll_speed = |m: &player_options::SpeedMod| match m.mod_type.as_str() {
-                    "X" => crate::game::scroll::ScrollSpeedSetting::XMod(m.value),
-                    "C" => crate::game::scroll::ScrollSpeedSetting::CMod(m.value),
-                    "M" => crate::game::scroll::ScrollSpeedSetting::MMod(m.value),
-                    _ => crate::game::scroll::ScrollSpeedSetting::default(),
+                let to_scroll_speed = |m: &player_options::SpeedMod| match m.mod_type {
+                    player_options::SpeedModType::X => {
+                        crate::game::scroll::ScrollSpeedSetting::XMod(m.value)
+                    }
+                    player_options::SpeedModType::C => {
+                        crate::game::scroll::ScrollSpeedSetting::CMod(m.value)
+                    }
+                    player_options::SpeedModType::M => {
+                        crate::game::scroll::ScrollSpeedSetting::MMod(m.value)
+                    }
                 };
                 let scroll_speeds = [
                     to_scroll_speed(&po_state.speed_mod[0]),

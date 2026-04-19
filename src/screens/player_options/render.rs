@@ -123,7 +123,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let p_chart = resolve_p1_chart(&state.song, &state.chart_steps_index);
             let main_scroll =
                 speed_mod_helper_scroll_text(&state.song, p_chart, speed_mod, state.music_rate);
-            let speed_prefix = speed_mod.mod_type.as_str();
+            let speed_prefix = speed_mod.mod_type.prefix();
             let speed_text = format!("{speed_prefix}{main_scroll}");
             // zmod uses GetWidth() from the main helper actor (unzoomed width), then +w*0.4.
             let main_draw_w = measure_wendy_text_width(asset_manager, &speed_text);
@@ -1154,18 +1154,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         if arcade_row_focuses_next_row(state, primary_player_idx, item_idx) {
                             ARCADE_NEXT_ROW_TEXT.to_string()
                         } else if row.id == RowId::SpeedMod {
-                            match state.speed_mod[primary_player_idx].mod_type.as_str() {
-                                "X" => format!("{:.2}x", state.speed_mod[primary_player_idx].value),
-                                "C" => format!(
-                                    "C{}",
-                                    state.speed_mod[primary_player_idx].value as i32
-                                ),
-                                "M" => format!(
-                                    "M{}",
-                                    state.speed_mod[primary_player_idx].value as i32
-                                ),
-                                _ => String::new(),
-                            }
+                            state.speed_mod[primary_player_idx].display()
                         } else {
                             choice_text.clone()
                         };
@@ -1244,19 +1233,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         if arcade_row_focuses_next_row(state, P2, item_idx) {
                             ARCADE_NEXT_ROW_TEXT.to_string()
                         } else if row.id == RowId::SpeedMod {
-                            match state.speed_mod[P2].mod_type.as_str() {
-                                "X" => format!("{:.2}x", state.speed_mod[P2].value),
-                                "C" => format!("C{}", state.speed_mod[P2].value as i32),
-                                "M" => format!("M{}", state.speed_mod[P2].value as i32),
-                                _ => String::new(),
-                            }
+                            state.speed_mod[P2].display()
                         } else if row.id == RowId::TypeOfSpeedMod {
-                            let idx = match state.speed_mod[P2].mod_type.as_str() {
-                                "X" => 0,
-                                "C" => 1,
-                                "M" => 2,
-                                _ => 1,
-                            };
+                            let idx = state.speed_mod[P2].mod_type.choice_index();
                             row.choices.get(idx).cloned().unwrap_or_default()
                         } else {
                             let idx = row

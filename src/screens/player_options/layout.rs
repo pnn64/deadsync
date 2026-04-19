@@ -397,19 +397,9 @@ pub(super) fn cursor_dest_for_player(
     let display_text = if arcade_row_focuses_next_row(state, player_idx, row_idx) {
         ARCADE_NEXT_ROW_TEXT.to_string()
     } else if row.id == RowId::SpeedMod {
-        match state.speed_mod[player_idx].mod_type.as_str() {
-            "X" => format!("{:.2}x", state.speed_mod[player_idx].value),
-            "C" => format!("C{}", state.speed_mod[player_idx].value as i32),
-            "M" => format!("M{}", state.speed_mod[player_idx].value as i32),
-            _ => String::new(),
-        }
+        state.speed_mod[player_idx].display()
     } else if row.id == RowId::TypeOfSpeedMod {
-        let idx = match state.speed_mod[player_idx].mod_type.as_str() {
-            "X" => 0,
-            "C" => 1,
-            "M" => 2,
-            _ => 1,
-        };
+        let idx = state.speed_mod[player_idx].mod_type.choice_index();
         row.choices.get(idx).cloned().unwrap_or_default()
     } else {
         let idx = row.selected_choice_index[player_idx].min(row.choices.len().saturating_sub(1));
