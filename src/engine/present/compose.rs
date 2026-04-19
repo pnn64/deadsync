@@ -2061,9 +2061,19 @@ fn build_actor_recursive<'a>(
                 let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
                 stroke_rgba[3] *= effect_color[3];
                 let needs_stroke = stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty();
-                let can_batch_text = attributes.is_empty()
-                    && clip.is_none()
-                    && matches!(*align_text, actors::TextAlign::Left);
+                let clip_world = (*clip).map(|[x, y, w, h]| {
+                    sm_rect_to_world_edges(
+                        SmRect {
+                            x: parent.x + x,
+                            y: parent.y + y,
+                            w,
+                            h,
+                        },
+                        m,
+                    )
+                });
+                let can_batch_text =
+                    attributes.is_empty() && matches!(*align_text, actors::TextAlign::Left);
                 let before = out.len();
                 let layer = base_z.saturating_add(*z);
                 let end = if can_batch_text {
@@ -2089,6 +2099,9 @@ fn build_actor_recursive<'a>(
                             m,
                             texture_cache,
                         );
+                        if let Some(clip_world) = clip_world {
+                            clip_objects_range_to_world_rect(out, before, clip_world);
+                        }
                         let end = out.len();
                         if needs_stroke {
                             let stroke_start = out.len();
@@ -2100,6 +2113,9 @@ fn build_actor_recursive<'a>(
                                 m,
                                 texture_cache,
                             );
+                            if let Some(clip_world) = clip_world {
+                                clip_objects_range_to_world_rect(out, stroke_start, clip_world);
+                            }
                             for obj in out.iter_mut().skip(stroke_start) {
                                 obj.z = layer;
                                 obj.order = {
@@ -2141,14 +2157,7 @@ fn build_actor_recursive<'a>(
                             None
                         },
                     );
-                    if let Some([x, y, w, h]) = *clip {
-                        let clip_sm = SmRect {
-                            x: parent.x + x,
-                            y: parent.y + y,
-                            w,
-                            h,
-                        };
-                        let clip_world = sm_rect_to_world_edges(clip_sm, m);
+                    if let Some(clip_world) = clip_world {
                         if needs_stroke {
                             clip_objects_range_with_keys_to_world_rect(
                                 out,
@@ -3205,7 +3214,23 @@ fn clipped_sprite_object_to_world_rect(
                 ]),
             })
         }
-        _ => Some(ClippedSpriteObject {
+        renderer::ObjectType::TexturedMesh {
+            tint,
+            vertices,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            ..
+        } => clip_textured_mesh_to_world_rect(
+            *tint,
+            vertices.as_ref(),
+            obj.transform,
+            *uv_scale,
+            *uv_offset,
+            *uv_tex_shift,
+            clip,
+        ),
+        renderer::ObjectType::Mesh { .. } => Some(ClippedSpriteObject {
             object_type: obj.object_type.clone(),
             transform: obj.transform,
         }),
@@ -3216,6 +3241,7 @@ fn clipped_sprite_object_to_world_rect(
 struct ClipVertex {
     pos: [f32; 2],
     uv: [f32; 2],
+    color: [f32; 4],
 }
 
 #[inline(always)]
@@ -3241,6 +3267,12 @@ fn lerp_clip(a: ClipVertex, b: ClipVertex, t: f32) -> ClipVertex {
         uv: [
             (b.uv[0] - a.uv[0]).mul_add(t, a.uv[0]),
             (b.uv[1] - a.uv[1]).mul_add(t, a.uv[1]),
+        ],
+        color: [
+            (b.color[0] - a.color[0]).mul_add(t, a.color[0]),
+            (b.color[1] - a.color[1]).mul_add(t, a.color[1]),
+            (b.color[2] - a.color[2]).mul_add(t, a.color[2]),
+            (b.color[3] - a.color[3]).mul_add(t, a.color[3]),
         ],
     }
 }
@@ -3297,6 +3329,91 @@ fn clip_polygon_to_world_rect(poly: &[ClipVertex], clip: WorldRect) -> ClipPolyg
     clip_poly_edge_into(&p, 1, clip.top, false)
 }
 
+#[inline(always)]
+fn baked_tmesh_uv(
+    vertex: &renderer::TexturedMeshVertex,
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+) -> [f32; 2] {
+    [
+        vertex.uv[0].mul_add(uv_scale[0], uv_offset[0])
+            + uv_tex_shift[0] * (vertex.tex_matrix_scale[0] - 1.0),
+        vertex.uv[1].mul_add(uv_scale[1], uv_offset[1])
+            + uv_tex_shift[1] * (vertex.tex_matrix_scale[1] - 1.0),
+    ]
+}
+
+fn clip_textured_mesh_to_world_rect(
+    tint: [f32; 4],
+    vertices: &[renderer::TexturedMeshVertex],
+    transform: Matrix4,
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    clip: WorldRect,
+) -> Option<ClippedSpriteObject> {
+    if vertices.len() < 3 {
+        return None;
+    }
+
+    let mut out = Vec::with_capacity(vertices.len());
+    for tri in vertices.chunks_exact(3) {
+        let poly = [
+            ClipVertex {
+                pos: world_xy(&transform, tri[0].pos),
+                uv: baked_tmesh_uv(&tri[0], uv_scale, uv_offset, uv_tex_shift),
+                color: tri[0].color,
+            },
+            ClipVertex {
+                pos: world_xy(&transform, tri[1].pos),
+                uv: baked_tmesh_uv(&tri[1], uv_scale, uv_offset, uv_tex_shift),
+                color: tri[1].color,
+            },
+            ClipVertex {
+                pos: world_xy(&transform, tri[2].pos),
+                uv: baked_tmesh_uv(&tri[2], uv_scale, uv_offset, uv_tex_shift),
+                color: tri[2].color,
+            },
+        ];
+        let clipped = clip_polygon_to_world_rect(&poly, clip);
+        if clipped.len() < 3 {
+            continue;
+        }
+
+        let base = clipped[0];
+        let mut i = 1usize;
+        while i + 1 < clipped.len() {
+            for vertex in [base, clipped[i], clipped[i + 1]] {
+                out.push(renderer::TexturedMeshVertex {
+                    pos: vertex.pos,
+                    uv: vertex.uv,
+                    tex_matrix_scale: [1.0, 1.0],
+                    color: vertex.color,
+                });
+            }
+            i += 1;
+        }
+    }
+
+    if out.is_empty() {
+        return None;
+    }
+
+    Some(ClippedSpriteObject {
+        object_type: renderer::ObjectType::TexturedMesh {
+            tint,
+            vertices: Arc::from(out),
+            geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
+            mode: renderer::MeshMode::Triangles,
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            uv_tex_shift: [0.0, 0.0],
+        },
+        transform: Matrix4::IDENTITY,
+    })
+}
+
 fn clip_rotated_sprite_to_world_rect(
     tint: [f32; 4],
     uv_scale: [f32; 2],
@@ -3308,18 +3425,22 @@ fn clip_rotated_sprite_to_world_rect(
         ClipVertex {
             pos: world_xy(&transform, [-0.5_f32, -0.5_f32]),
             uv: [uv_offset[0], uv_offset[1] + uv_scale[1]],
+            color: [1.0; 4],
         },
         ClipVertex {
             pos: world_xy(&transform, [0.5_f32, -0.5_f32]),
             uv: [uv_offset[0] + uv_scale[0], uv_offset[1] + uv_scale[1]],
+            color: [1.0; 4],
         },
         ClipVertex {
             pos: world_xy(&transform, [0.5_f32, 0.5_f32]),
             uv: [uv_offset[0] + uv_scale[0], uv_offset[1]],
+            color: [1.0; 4],
         },
         ClipVertex {
             pos: world_xy(&transform, [-0.5_f32, 0.5_f32]),
             uv: [uv_offset[0], uv_offset[1]],
+            color: [1.0; 4],
         },
     ];
     let clipped = clip_polygon_to_world_rect(&poly, clip);
@@ -3336,7 +3457,7 @@ fn clip_rotated_sprite_to_world_rect(
                 pos: v.pos,
                 uv: v.uv,
                 tex_matrix_scale: [1.0, 1.0],
-                color: tint,
+                color: v.color,
             });
         }
         i += 1;
@@ -3344,7 +3465,7 @@ fn clip_rotated_sprite_to_world_rect(
 
     Some(ClippedSpriteObject {
         object_type: renderer::ObjectType::TexturedMesh {
-            tint: [1.0; 4],
+            tint,
             vertices: Arc::from(out.as_slice()),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             mode: renderer::MeshMode::Triangles,
@@ -3828,6 +3949,54 @@ mod tests {
                 assert_ne!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
             }
             _ => panic!("expected batched text to use textured mesh"),
+        }
+    }
+
+    #[test]
+    fn clipped_left_aligned_batched_text_stays_textured_mesh() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 200.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let actors = [Actor::Text {
+            align: [0.0, 0.0],
+            offset: [10.0, 20.0],
+            color: [1.0; 4],
+            stroke_color: None,
+            glow: [0.0; 4],
+            font: "test",
+            content: TextContent::static_str("AB"),
+            attributes: Vec::new(),
+            align_text: TextAlign::Left,
+            z: 0,
+            scale: [1.0, 1.0],
+            fit_width: None,
+            fit_height: None,
+            wrap_width_pixels: None,
+            max_width: None,
+            max_height: None,
+            max_w_pre_zoom: false,
+            max_h_pre_zoom: false,
+            clip: Some([10.0, 20.0, 4.0, 10.0]),
+            blend: BlendMode::Alpha,
+            effect: Default::default(),
+        }];
+        let fonts = HashMap::from([("test", test_font())]);
+        let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+
+        assert_eq!(render.objects.len(), 1);
+        match &render.objects[0].object_type {
+            ObjectType::TexturedMesh {
+                vertices,
+                geom_cache_key,
+                ..
+            } => {
+                assert!(!vertices.is_empty());
+                assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
+            }
+            _ => panic!("expected clipped batched text to remain textured mesh"),
         }
     }
 }
