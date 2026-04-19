@@ -118,7 +118,7 @@ pub(super) fn init_row_tweens(
     row_map: &RowMap,
     selected_row: [usize; PLAYER_SLOTS],
     active: [bool; PLAYER_SLOTS],
-    hide_active_mask: [u8; PLAYER_SLOTS],
+    hide_active_mask: [HideMask; PLAYER_SLOTS],
     error_bar_active_mask: [u8; PLAYER_SLOTS],
     allow_per_player_global_offsets: bool,
 ) -> Vec<RowTween> {

@@ -1,4 +1,112 @@
 use super::*;
+use bitflags::bitflags;
+
+bitflags! {
+    /// Active modifiers for the Scroll row.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct ScrollMask: u8 {
+        const REVERSE   = 1 << 0;
+        const SPLIT     = 1 << 1;
+        const ALTERNATE = 1 << 2;
+        const CROSS     = 1 << 3;
+        const CENTERED  = 1 << 4;
+    }
+}
+
+bitflags! {
+    /// Active toggles for the Hide row.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct HideMask: u8 {
+        const TARGETS          = 1 << 0;
+        const BACKGROUND       = 1 << 1;
+        const COMBO            = 1 << 2;
+        const LIFE             = 1 << 3;
+        const SCORE            = 1 << 4;
+        const DANGER           = 1 << 5;
+        const COMBO_EXPLOSIONS = 1 << 6;
+    }
+}
+
+bitflags! {
+    /// Active toggles for the FA+ Options row.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct FaPlusMask: u8 {
+        const WINDOW           = 1 << 0;
+        const EX_SCORE         = 1 << 1;
+        const HARD_EX_SCORE    = 1 << 2;
+        const PANE             = 1 << 3;
+        const BLUE_WINDOW_10MS = 1 << 4;
+        const SPLIT_15_10MS    = 1 << 5;
+    }
+}
+
+bitflags! {
+    /// Active toggles for the Early Decent / Way Off Options row.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct EarlyDwMask: u8 {
+        const HIDE_JUDGMENTS = 1 << 0;
+        const HIDE_FLASH     = 1 << 1;
+    }
+}
+
+bitflags! {
+    /// Active toggles for the Gameplay Extras row.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct GameplayExtrasMask: u8 {
+        const FLASH_COLUMN_FOR_MISS = 1 << 0;
+        const DENSITY_GRAPH_AT_TOP  = 1 << 1;
+        const COLUMN_CUES           = 1 << 2;
+        const DISPLAY_SCOREBOX      = 1 << 3;
+    }
+}
+
+bitflags! {
+    /// Active toggles for the Gameplay Extras (More) row.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct GameplayExtrasMoreMask: u8 {
+        const COLUMN_CUES      = 1 << 0;
+        const DISPLAY_SCOREBOX = 1 << 1;
+    }
+}
+
+bitflags! {
+    /// Active toggles for the Results Extras row.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct ResultsExtrasMask: u8 {
+        const TRACK_EARLY_JUDGMENTS = 1 << 0;
+    }
+}
+
+bitflags! {
+    /// Active toggles for the Life Bar Options row.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct LifeBarOptionsMask: u8 {
+        const RAINBOW_MAX       = 1 << 0;
+        const RESPONSIVE_COLORS = 1 << 1;
+        const SHOW_LIFE_PERCENT = 1 << 2;
+    }
+}
+
+bitflags! {
+    /// Active toggles for the Error Bar Options row.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct ErrorBarOptionsMask: u8 {
+        const MOVE_UP    = 1 << 0;
+        const MULTI_TICK = 1 << 1;
+    }
+}
+
+bitflags! {
+    /// Active toggles for the Measure Counter Options row.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct MeasureCounterOptionsMask: u8 {
+        const MOVE_LEFT          = 1 << 0;
+        const MOVE_UP            = 1 << 1;
+        const VERTICAL_LOOKAHEAD = 1 << 2;
+        const BROKEN_RUN_TOTAL   = 1 << 3;
+        const RUN_TIMER          = 1 << 4;
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct RowTween {
@@ -56,43 +164,19 @@ pub struct State {
     pub chart_steps_index: [usize; PLAYER_SLOTS],
     pub chart_difficulty_index: [usize; PLAYER_SLOTS],
     pub(super) panes: [PaneState; OptionsPane::COUNT],
-    // For Scroll row: bitmask of which options are enabled.
-    // 0 => Normal scroll (no special modifier).
-    pub scroll_active_mask: [u8; PLAYER_SLOTS],
-    // For Hide row: bitmask of which options are enabled.
-    // bit0 = Targets, bit1 = Background, bit2 = Combo, bit3 = Life,
-    // bit4 = Score, bit5 = Danger, bit6 = Combo Explosions.
-    pub hide_active_mask: [u8; PLAYER_SLOTS],
-    // For FA+ Options row: bitmask of which options are enabled.
-    // bit0 = Display FA+ Window, bit1 = Display EX Score, bit2 = Display H.EX Score,
-    // bit3 = Display FA+ Pane, bit4 = 10ms Blue Window, bit5 = 15/10ms Split.
-    pub fa_plus_active_mask: [u8; PLAYER_SLOTS],
-    // For Early Decent/Way Off Options row: bitmask of which options are enabled.
-    // bit0 = Hide Judgments, bit1 = Hide NoteField Flash.
-    pub early_dw_active_mask: [u8; PLAYER_SLOTS],
-    // For Gameplay Extras row: bitmask of which options are enabled.
-    // bit0 = Flash Column for Miss, bit1 = Density Graph at Top,
-    // bit2 = Column Cues, bit3 = Display Scorebox.
-    pub gameplay_extras_active_mask: [u8; PLAYER_SLOTS],
-    // For Gameplay Extras (More) row: bitmask of which options are enabled.
-    // bit0 = Column Cues, bit1 = Display Scorebox.
-    pub gameplay_extras_more_active_mask: [u8; PLAYER_SLOTS],
-    // For Results Extras row: bitmask of which options are enabled.
-    // bit0 = Track Early Judgments.
-    pub results_extras_active_mask: [u8; PLAYER_SLOTS],
-    // For Life Bar Options row: bitmask of which options are enabled.
-    // bit0 = Rainbow Max, bit1 = Responsive Colors, bit2 = Show Life Percentage.
-    pub life_bar_options_active_mask: [u8; PLAYER_SLOTS],
+    pub scroll_active_mask: [ScrollMask; PLAYER_SLOTS],
+    pub hide_active_mask: [HideMask; PLAYER_SLOTS],
+    pub fa_plus_active_mask: [FaPlusMask; PLAYER_SLOTS],
+    pub early_dw_active_mask: [EarlyDwMask; PLAYER_SLOTS],
+    pub gameplay_extras_active_mask: [GameplayExtrasMask; PLAYER_SLOTS],
+    pub gameplay_extras_more_active_mask: [GameplayExtrasMoreMask; PLAYER_SLOTS],
+    pub results_extras_active_mask: [ResultsExtrasMask; PLAYER_SLOTS],
+    pub life_bar_options_active_mask: [LifeBarOptionsMask; PLAYER_SLOTS],
     // For Error Bar row: bitmask of which options are enabled.
     // bit0 = Colorful, bit1 = Monochrome, bit2 = Text, bit3 = Highlight, bit4 = Average.
     pub error_bar_active_mask: [u8; PLAYER_SLOTS],
-    // For Error Bar Options row: bitmask of which options are enabled.
-    // bit0 = Move Up, bit1 = Multi-Tick (Simply Love semantics).
-    pub error_bar_options_active_mask: [u8; PLAYER_SLOTS],
-    // For Measure Counter Options row: bitmask of which options are enabled.
-    // bit0 = Move Left, bit1 = Move Up, bit2 = Vertical Lookahead,
-    // bit3 = Broken Run Total, bit4 = Run Timer.
-    pub measure_counter_options_active_mask: [u8; PLAYER_SLOTS],
+    pub error_bar_options_active_mask: [ErrorBarOptionsMask; PLAYER_SLOTS],
+    pub measure_counter_options_active_mask: [MeasureCounterOptionsMask; PLAYER_SLOTS],
     // For Insert row: bitmask of enabled chart insert transforms.
     // bit0 = Wide, bit1 = Big, bit2 = Quick, bit3 = BMRize,
     // bit4 = Skippy, bit5 = Echo, bit6 = Stomp.

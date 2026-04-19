@@ -225,12 +225,12 @@ pub(super) fn density_graph_background_visible(
 
 pub(super) fn combo_rows_visible(
     active: [bool; PLAYER_SLOTS],
-    hide_active_mask: [u8; PLAYER_SLOTS],
+    hide_active_mask: [HideMask; PLAYER_SLOTS],
 ) -> bool {
     let mut any_active = false;
     for player_idx in active_player_indices(active) {
         any_active = true;
-        let hide_combo = (hide_active_mask[player_idx] & (1u8 << 2)) != 0;
+        let hide_combo = hide_active_mask[player_idx].contains(HideMask::COMBO);
         if !hide_combo {
             return true;
         }
@@ -240,12 +240,12 @@ pub(super) fn combo_rows_visible(
 
 pub(super) fn lifebar_rows_visible(
     active: [bool; PLAYER_SLOTS],
-    hide_active_mask: [u8; PLAYER_SLOTS],
+    hide_active_mask: [HideMask; PLAYER_SLOTS],
 ) -> bool {
     let mut any_active = false;
     for player_idx in active_player_indices(active) {
         any_active = true;
-        let hide_lifebar = (hide_active_mask[player_idx] & (1u8 << 3)) != 0;
+        let hide_lifebar = hide_active_mask[player_idx].contains(HideMask::LIFE);
         if !hide_lifebar {
             return true;
         }
@@ -274,7 +274,7 @@ pub(super) fn indicator_score_type_visible(row_map: &RowMap, active: [bool; PLAY
 pub(super) fn row_visibility(
     row_map: &RowMap,
     active: [bool; PLAYER_SLOTS],
-    hide_active_mask: [u8; PLAYER_SLOTS],
+    hide_active_mask: [HideMask; PLAYER_SLOTS],
     error_bar_active_mask: [u8; PLAYER_SLOTS],
     allow_per_player_global_offsets: bool,
 ) -> RowVisibility {
