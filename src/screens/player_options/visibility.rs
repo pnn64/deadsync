@@ -391,28 +391,28 @@ pub(super) fn parent_anchor_visible_index(
 }
 
 pub(super) fn sync_selected_rows_with_visibility(state: &mut State, active: [bool; PLAYER_SLOTS]) {
-    if state.row_map.is_empty() {
-        state.selected_row = [0; PLAYER_SLOTS];
-        state.prev_selected_row = [0; PLAYER_SLOTS];
+    if state.pane().row_map.is_empty() {
+        state.pane_mut().selected_row = [0; PLAYER_SLOTS];
+        state.pane_mut().prev_selected_row = [0; PLAYER_SLOTS];
         return;
     }
     let visibility = row_visibility(
-        &state.row_map,
+        &state.pane().row_map,
         active,
         state.hide_active_mask,
         state.error_bar_active_mask,
         state.allow_per_player_global_offsets,
     );
     for player_idx in [P1, P2] {
-        let idx = state.selected_row[player_idx].min(state.row_map.len().saturating_sub(1));
-        if is_row_visible(&state.row_map, idx, visibility) {
-            state.selected_row[player_idx] = idx;
+        let idx = state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
+        if is_row_visible(&state.pane().row_map, idx, visibility) {
+            state.pane_mut().selected_row[player_idx] = idx;
             continue;
         }
-        if let Some(fallback) = fallback_visible_row(&state.row_map, idx, visibility) {
-            state.selected_row[player_idx] = fallback;
+        if let Some(fallback) = fallback_visible_row(&state.pane().row_map, idx, visibility) {
+            state.pane_mut().selected_row[player_idx] = fallback;
             if active[player_idx] {
-                state.prev_selected_row[player_idx] = fallback;
+                state.pane_mut().prev_selected_row[player_idx] = fallback;
             }
         }
     }
@@ -422,7 +422,7 @@ pub(super) fn sync_selected_rows_with_visibility(state: &mut State, active: [boo
 pub(super) fn row_allows_arcade_next_row(state: &State, row_idx: usize) -> bool {
     arcade_options_navigation_active()
         && pane_uses_arcade_next_row(state.current_pane)
-        && state
+        && state.pane()
             .row_map
             .get_at(row_idx)
             .is_some_and(|row| row.id != RowId::Exit && row_supports_inline_nav(row))
@@ -434,11 +434,11 @@ pub(super) fn arcade_row_uses_choice_focus(state: &State, player_idx: usize) -> 
         return false;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
-    state
+    let row_idx = state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));
+    state.pane()
         .row_map
         .display_order()
         .get(row_idx)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
         .is_some_and(row_supports_inline_nav)
 }

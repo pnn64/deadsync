@@ -37,20 +37,20 @@ pub fn fixture() -> PlayerOptionsBenchFixture {
 
     let mut state = player_options::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
 
-    let perspective_row = state
+    let perspective_row = state.pane()
         .row_map
         .display_order()
         .iter()
         .position(|&id| id == RowId::Perspective)
         .unwrap_or(0);
-    let background_filter_row = state
+    let background_filter_row = state.pane()
         .row_map
         .display_order()
         .iter()
         .position(|&id| id == RowId::BackgroundFilter)
         .unwrap_or(perspective_row);
-    state.selected_row = [perspective_row, background_filter_row];
-    state.prev_selected_row = state.selected_row;
+    state.pane_mut().selected_row = [perspective_row, background_filter_row];
+    state.pane_mut().prev_selected_row = state.pane().selected_row;
     let _ = player_options::update(&mut state, 1.0, &asset_manager);
     let _ = player_options::update(&mut state, 1.0, &asset_manager);
 

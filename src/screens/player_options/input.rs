@@ -28,7 +28,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             continue;
         }
 
-        if state.row_map.is_empty() {
+        if state.pane().row_map.is_empty() {
             continue;
         }
         match direction {
@@ -105,11 +105,11 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     // If either player is on the Combo Font row, tick the preview combo once per second.
     let mut combo_row_active = false;
     for player_idx in active_player_indices(active) {
-        if let Some(row) = state
+        if let Some(row) = state.pane()
             .row_map
             .display_order()
-            .get(state.selected_row[player_idx])
-            .and_then(|&id| state.row_map.get(id))
+            .get(state.pane().selected_row[player_idx])
+            .and_then(|&id| state.pane().row_map.get(id))
             && row.id == RowId::ComboFont
         {
             combo_row_active = true;
@@ -128,14 +128,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
 
     // Row frame tweening: mimic ScreenOptions::PositionRows() + OptionRow::SetDestination()
     // so rows slide smoothly as the visible window scrolls.
-    let total_rows = state.row_map.len();
+    let total_rows = state.pane().row_map.len();
     let (first_row_center_y, row_step) = row_layout_params();
     if total_rows == 0 {
-        state.row_tweens.clear();
-    } else if state.row_tweens.len() != total_rows {
-        state.row_tweens = init_row_tweens(
-            &state.row_map,
-            state.selected_row,
+        state.pane_mut().row_tweens.clear();
+    } else if state.pane().row_tweens.len() != total_rows {
+        state.pane_mut().row_tweens = init_row_tweens(
+            &state.pane().row_map,
+            state.pane().selected_row,
             active,
             state.hide_active_mask,
             state.error_bar_active_mask,
@@ -143,16 +143,16 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         );
     } else {
         let visibility = row_visibility(
-            &state.row_map,
+            &state.pane().row_map,
             active,
             state.hide_active_mask,
             state.error_bar_active_mask,
             state.allow_per_player_global_offsets,
         );
-        let visible_rows = count_visible_rows(&state.row_map, visibility);
+        let visible_rows = count_visible_rows(&state.pane().row_map, visibility);
         if visible_rows == 0 {
             let y = first_row_center_y - row_step * 0.5;
-            for tw in &mut state.row_tweens {
+            for tw in &mut state.pane_mut().row_tweens {
                 let cur_y = tw.y();
                 let cur_a = tw.a();
                 if (y - tw.to_y).abs() > 0.01 || tw.to_a != 0.0 {
@@ -172,30 +172,30 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             }
         } else {
             let selected_visible = std::array::from_fn(|player_idx| {
-                let row_idx = state.selected_row[player_idx].min(total_rows.saturating_sub(1));
-                row_to_visible_index(&state.row_map, row_idx, visibility).unwrap_or(0)
+                let row_idx = state.pane().selected_row[player_idx].min(total_rows.saturating_sub(1));
+                row_to_visible_index(&state.pane().row_map, row_idx, visibility).unwrap_or(0)
             });
             let w = compute_row_window(visible_rows, selected_visible, active);
             let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
             let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
             let measure_counter_anchor_visible_idx =
-                parent_anchor_visible_index(&state.row_map, RowId::MeasureCounter, visibility);
+                parent_anchor_visible_index(&state.pane().row_map, RowId::MeasureCounter, visibility);
             let judgment_tilt_anchor_visible_idx =
-                parent_anchor_visible_index(&state.row_map, RowId::JudgmentTilt, visibility);
+                parent_anchor_visible_index(&state.pane().row_map, RowId::JudgmentTilt, visibility);
             let error_bar_anchor_visible_idx =
-                parent_anchor_visible_index(&state.row_map, RowId::ErrorBar, visibility);
+                parent_anchor_visible_index(&state.pane().row_map, RowId::ErrorBar, visibility);
             let hide_anchor_visible_idx =
-                parent_anchor_visible_index(&state.row_map, RowId::Hide, visibility);
+                parent_anchor_visible_index(&state.pane().row_map, RowId::Hide, visibility);
             let mut visible_idx = 0i32;
             for i in 0..total_rows {
-                let visible = is_row_visible(&state.row_map, i, visibility);
+                let visible = is_row_visible(&state.pane().row_map, i, visibility);
                 let (f_pos, hidden) = if visible {
                     let ii = visible_idx;
                     visible_idx += 1;
                     f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
                 } else {
                     let anchor =
-                        state.row_map.get_at(i).and_then(|row| {
+                        state.pane().row_map.get_at(i).and_then(|row| {
                             match conditional_row_parent(row.id) {
                                 Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
                                 Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
@@ -216,7 +216,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 let dest_y = first_row_center_y + row_step * f_pos;
                 let dest_a = if hidden { 0.0 } else { 1.0 };
 
-                let tw = &mut state.row_tweens[i];
+                let tw = &mut state.pane_mut().row_tweens[i];
                 let cur_y = tw.y();
                 let cur_a = tw.a();
                 if (dest_y - tw.to_y).abs() > 0.01 || dest_a != tw.to_a {
@@ -239,7 +239,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
 
     // Reset help reveal and play SFX when a player changes rows.
     for player_idx in active_player_indices(active) {
-        if state.selected_row[player_idx] == state.prev_selected_row[player_idx] {
+        if state.pane().selected_row[player_idx] == state.pane().prev_selected_row[player_idx] {
             continue;
         }
         match state.nav_key_held_direction[player_idx] {
@@ -249,7 +249,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         }
 
         state.help_anim_time[player_idx] = 0.0;
-        state.prev_selected_row[player_idx] = state.selected_row[player_idx];
+        state.pane_mut().prev_selected_row[player_idx] = state.pane().selected_row[player_idx];
     }
 
     // Retarget cursor tween destinations to match current selection and row destinations.
@@ -260,55 +260,55 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             continue;
         };
 
-        let needs_cursor_init = !state.cursor_initialized[player_idx];
+        let needs_cursor_init = !state.pane().cursor_initialized[player_idx];
         if needs_cursor_init {
-            state.cursor_initialized[player_idx] = true;
-            state.cursor_from_x[player_idx] = to_x;
-            state.cursor_from_y[player_idx] = to_y;
-            state.cursor_from_w[player_idx] = to_w;
-            state.cursor_from_h[player_idx] = to_h;
-            state.cursor_to_x[player_idx] = to_x;
-            state.cursor_to_y[player_idx] = to_y;
-            state.cursor_to_w[player_idx] = to_w;
-            state.cursor_to_h[player_idx] = to_h;
-            state.cursor_t[player_idx] = 1.0;
+            state.pane_mut().cursor_initialized[player_idx] = true;
+            state.pane_mut().cursor_from_x[player_idx] = to_x;
+            state.pane_mut().cursor_from_y[player_idx] = to_y;
+            state.pane_mut().cursor_from_w[player_idx] = to_w;
+            state.pane_mut().cursor_from_h[player_idx] = to_h;
+            state.pane_mut().cursor_to_x[player_idx] = to_x;
+            state.pane_mut().cursor_to_y[player_idx] = to_y;
+            state.pane_mut().cursor_to_w[player_idx] = to_w;
+            state.pane_mut().cursor_to_h[player_idx] = to_h;
+            state.pane_mut().cursor_t[player_idx] = 1.0;
         } else {
-            let dx = (to_x - state.cursor_to_x[player_idx]).abs();
-            let dy = (to_y - state.cursor_to_y[player_idx]).abs();
-            let dw = (to_w - state.cursor_to_w[player_idx]).abs();
-            let dh = (to_h - state.cursor_to_h[player_idx]).abs();
+            let dx = (to_x - state.pane().cursor_to_x[player_idx]).abs();
+            let dy = (to_y - state.pane().cursor_to_y[player_idx]).abs();
+            let dw = (to_w - state.pane().cursor_to_w[player_idx]).abs();
+            let dh = (to_h - state.pane().cursor_to_h[player_idx]).abs();
             if dx > 0.01 || dy > 0.01 || dw > 0.01 || dh > 0.01 {
-                let t = state.cursor_t[player_idx].clamp(0.0, 1.0);
-                let cur_x = (state.cursor_to_x[player_idx] - state.cursor_from_x[player_idx])
-                    .mul_add(t, state.cursor_from_x[player_idx]);
-                let cur_y = (state.cursor_to_y[player_idx] - state.cursor_from_y[player_idx])
-                    .mul_add(t, state.cursor_from_y[player_idx]);
-                let cur_w = (state.cursor_to_w[player_idx] - state.cursor_from_w[player_idx])
-                    .mul_add(t, state.cursor_from_w[player_idx]);
-                let cur_h = (state.cursor_to_h[player_idx] - state.cursor_from_h[player_idx])
-                    .mul_add(t, state.cursor_from_h[player_idx]);
+                let t = state.pane().cursor_t[player_idx].clamp(0.0, 1.0);
+                let cur_x = (state.pane().cursor_to_x[player_idx] - state.pane().cursor_from_x[player_idx])
+                    .mul_add(t, state.pane().cursor_from_x[player_idx]);
+                let cur_y = (state.pane().cursor_to_y[player_idx] - state.pane().cursor_from_y[player_idx])
+                    .mul_add(t, state.pane().cursor_from_y[player_idx]);
+                let cur_w = (state.pane().cursor_to_w[player_idx] - state.pane().cursor_from_w[player_idx])
+                    .mul_add(t, state.pane().cursor_from_w[player_idx]);
+                let cur_h = (state.pane().cursor_to_h[player_idx] - state.pane().cursor_from_h[player_idx])
+                    .mul_add(t, state.pane().cursor_from_h[player_idx]);
 
-                state.cursor_from_x[player_idx] = cur_x;
-                state.cursor_from_y[player_idx] = cur_y;
-                state.cursor_from_w[player_idx] = cur_w;
-                state.cursor_from_h[player_idx] = cur_h;
-                state.cursor_to_x[player_idx] = to_x;
-                state.cursor_to_y[player_idx] = to_y;
-                state.cursor_to_w[player_idx] = to_w;
-                state.cursor_to_h[player_idx] = to_h;
-                state.cursor_t[player_idx] = 0.0;
+                state.pane_mut().cursor_from_x[player_idx] = cur_x;
+                state.pane_mut().cursor_from_y[player_idx] = cur_y;
+                state.pane_mut().cursor_from_w[player_idx] = cur_w;
+                state.pane_mut().cursor_from_h[player_idx] = cur_h;
+                state.pane_mut().cursor_to_x[player_idx] = to_x;
+                state.pane_mut().cursor_to_y[player_idx] = to_y;
+                state.pane_mut().cursor_to_w[player_idx] = to_w;
+                state.pane_mut().cursor_to_h[player_idx] = to_h;
+                state.pane_mut().cursor_t[player_idx] = 0.0;
             }
         }
     }
 
     // Advance cursor tween.
     for player_idx in [P1, P2] {
-        if state.cursor_t[player_idx] < 1.0 {
+        if state.pane().cursor_t[player_idx] < 1.0 {
             if CURSOR_TWEEN_SECONDS > 0.0 {
-                state.cursor_t[player_idx] =
-                    (state.cursor_t[player_idx] + dt / CURSOR_TWEEN_SECONDS).min(1.0);
+                state.pane_mut().cursor_t[player_idx] =
+                    (state.pane().cursor_t[player_idx] + dt / CURSOR_TWEEN_SECONDS).min(1.0);
             } else {
-                state.cursor_t[player_idx] = 1.0;
+                state.pane_mut().cursor_t[player_idx] = 1.0;
             }
         }
     }
@@ -349,12 +349,12 @@ pub(super) fn clear_start_hold(state: &mut State, player_idx: usize) {
 }
 
 pub(super) fn focus_exit_row(state: &mut State, active: [bool; PLAYER_SLOTS], player_idx: usize) {
-    if state.row_map.is_empty() {
+    if state.pane().row_map.is_empty() {
         return;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    state.selected_row[idx] = state.row_map.len().saturating_sub(1);
-    state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, state.selected_row[idx]);
+    state.pane_mut().selected_row[idx] = state.pane().row_map.len().saturating_sub(1);
+    state.pane_mut().arcade_row_focus[idx] = row_allows_arcade_next_row(state, state.pane().selected_row[idx]);
     sync_selected_rows_with_visibility(state, active);
 }
 
@@ -379,7 +379,7 @@ pub(super) fn handle_nav_event(
     dir: NavDirection,
     pressed: bool,
 ) {
-    if !active[player_idx] || state.row_map.is_empty() {
+    if !active[player_idx] || state.pane().row_map.is_empty() {
         return;
     }
     if pressed {
@@ -399,7 +399,7 @@ pub(super) fn handle_nav_event(
                 if !move_arcade_horizontal_focus(state, asset_manager, player_idx, -1) {
                     apply_choice_delta(state, asset_manager, player_idx, -1);
                     if arcade_row_uses_choice_focus(state, player_idx) {
-                        state.arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
+                        state.pane_mut().arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
                     }
                 }
             }
@@ -407,7 +407,7 @@ pub(super) fn handle_nav_event(
                 if !move_arcade_horizontal_focus(state, asset_manager, player_idx, 1) {
                     apply_choice_delta(state, asset_manager, player_idx, 1);
                     if arcade_row_uses_choice_focus(state, player_idx) {
-                        state.arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
+                        state.pane_mut().arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
                     }
                 }
             }
@@ -446,10 +446,10 @@ pub(super) fn handle_arcade_start_press(
         handle_arcade_prev_event(state, asset_manager, active, player_idx);
         return None;
     }
-    if repeated && !state.row_map.is_empty() {
+    if repeated && !state.pane().row_map.is_empty() {
         let idx = player_idx.min(PLAYER_SLOTS - 1);
-        let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
-        if row_idx + 1 == state.row_map.len() {
+        let row_idx = state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));
+        if row_idx + 1 == state.pane().row_map.len() {
             return None;
         }
     }
@@ -489,16 +489,16 @@ pub(super) fn move_arcade_horizontal_focus(
     player_idx: usize,
     delta: isize,
 ) -> bool {
-    if delta == 0 || state.row_map.is_empty() {
+    if delta == 0 || state.pane().row_map.is_empty() {
         return false;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_idx = state.selected_row[idx].min(state.row_map.len().saturating_sub(1));
-    let Some(row) = state
+    let row_idx = state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));
+    let Some(row) = state.pane()
         .row_map
         .display_order()
         .get(row_idx)
-        .and_then(|&id| state.row_map.get(id))
+        .and_then(|&id| state.pane().row_map.get(id))
     else {
         return false;
     };
@@ -520,11 +520,11 @@ pub(super) fn move_arcade_horizontal_focus(
     if num_choices <= 1 {
         return false;
     }
-    if state.arcade_row_focus[idx] {
+    if state.pane().arcade_row_focus[idx] {
         if delta < 0 {
             return false;
         }
-        state.arcade_row_focus[idx] = false;
+        state.pane_mut().arcade_row_focus[idx] = false;
         if current_choice == 0 {
             audio::play_sfx("assets/sounds/change_value.ogg");
         } else {
@@ -534,7 +534,7 @@ pub(super) fn move_arcade_horizontal_focus(
     }
     if delta < 0 {
         if current_choice == 0 {
-            state.arcade_row_focus[idx] = true;
+            state.pane_mut().arcade_row_focus[idx] = true;
             audio::play_sfx("assets/sounds/change_value.ogg");
             return true;
         }
@@ -554,17 +554,17 @@ pub(super) fn handle_arcade_prev_event(
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
 ) {
-    if !active[player_idx] || state.row_map.is_empty() {
+    if !active[player_idx] || state.pane().row_map.is_empty() {
         return;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let prev_row = state.selected_row[idx];
+    let prev_row = state.pane().selected_row[idx];
     clear_nav_hold(state, player_idx);
     move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up);
-    if state.selected_row[idx] != prev_row {
+    if state.pane().selected_row[idx] != prev_row {
         audio::play_sfx("assets/sounds/prev_row.ogg");
         state.help_anim_time[idx] = 0.0;
-        state.prev_selected_row[idx] = state.selected_row[idx];
+        state.pane_mut().prev_selected_row[idx] = state.pane().selected_row[idx];
     }
 }
 
@@ -578,23 +578,23 @@ pub(super) fn handle_arcade_start_event(
         return None;
     }
     sync_selected_rows_with_visibility(state, active);
-    let num_rows = state.row_map.len();
+    let num_rows = state.pane().row_map.len();
     if num_rows == 0 {
         return None;
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx].min(num_rows.saturating_sub(1));
+    let row_index = state.pane().selected_row[idx].min(num_rows.saturating_sub(1));
     if row_index + 1 == num_rows {
-        state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
+        state.pane_mut().arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
         return handle_start_event(state, asset_manager, active, idx);
     }
-    if arcade_row_uses_choice_focus(state, idx) && !state.arcade_row_focus[idx] {
+    if arcade_row_uses_choice_focus(state, idx) && !state.pane().arcade_row_focus[idx] {
         let action = handle_start_event(state, asset_manager, active, idx);
-        state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
+        state.pane_mut().arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
         return action;
     }
     move_selection_vertical(state, asset_manager, active, idx, NavDirection::Down);
-    state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, state.selected_row[idx]);
+    state.pane_mut().arcade_row_focus[idx] = row_allows_arcade_next_row(state, state.pane().selected_row[idx]);
     None
 }
 
@@ -608,17 +608,17 @@ pub(super) fn handle_start_event(
         return None;
     }
     sync_selected_rows_with_visibility(state, active);
-    let num_rows = state.row_map.len();
+    let num_rows = state.pane().row_map.len();
     if num_rows == 0 {
         return None;
     }
-    let row_index = state.selected_row[player_idx].min(num_rows.saturating_sub(1));
+    let row_index = state.pane().selected_row[player_idx].min(num_rows.saturating_sub(1));
     let should_focus_exit = state.current_pane == OptionsPane::Main && row_index + 1 < num_rows;
-    let row = state
+    let row = state.pane()
         .row_map
         .display_order()
         .get(row_index)
-        .and_then(|&id| state.row_map.get(id))?;
+        .and_then(|&id| state.pane().row_map.get(id))?;
     let id = row.id;
     let row_supports_inline = row_supports_inline_nav(row);
     let row_toggles = row_toggles_with_start(row);
@@ -633,11 +633,11 @@ pub(super) fn handle_start_event(
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_index == num_rows.saturating_sub(1)
-        && let Some(what_comes_next_row) = state
+        && let Some(what_comes_next_row) = state.pane()
             .row_map
             .display_order()
             .get(num_rows.saturating_sub(2))
-            .and_then(|&id| state.row_map.get(id))
+            .and_then(|&id| state.pane().row_map.get(id))
         && what_comes_next_row.id == RowId::WhatComesNext
     {
         let choice_idx = what_comes_next_row.selected_choice_index[player_idx];
