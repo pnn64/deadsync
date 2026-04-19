@@ -59,6 +59,7 @@ fn leaderboard_pane(name: &str, is_ex: bool, entries: Vec<LeaderboardEntry>) -> 
         entries,
         is_ex,
         disabled: false,
+        personalized: true,
     }
 }
 

@@ -6739,6 +6739,11 @@ impl ApplicationHandler<UserEvent> for App {
                         &mut self.state.screens.input_state,
                         &ev,
                     );
+                } else if self.state.screens.current_screen == CurrentScreen::SelectMusic {
+                    crate::screens::select_music::handle_raw_pad_event(
+                        &mut self.state.screens.select_music_state,
+                        &ev,
+                    );
                 }
                 self.handle_pad_event(event_loop, ev);
                 self.state

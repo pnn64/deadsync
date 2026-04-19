@@ -58,6 +58,17 @@ pub fn leaderboards_url(chart_hash: &str) -> Option<String> {
     ))
 }
 
+pub fn public_leaderboards_url(chart_hash: &str) -> Option<String> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "{}/chart/{hash}/leaderboards",
+        ARROWCLOUD_API_BASE_URL.trim_end_matches('/')
+    ))
+}
+
 pub fn init() {
     let cfg = crate::config::get();
     if !cfg.enable_arrowcloud {

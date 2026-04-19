@@ -1993,6 +1993,7 @@ pub struct LeaderboardPane {
     pub entries: Vec<LeaderboardEntry>,
     pub is_ex: bool,
     pub disabled: bool,
+    pub personalized: bool,
 }
 
 impl LeaderboardPane {
@@ -2263,6 +2264,7 @@ fn push_leaderboard_pane(
         entries: leaderboard_entries_from_api(entries),
         is_ex,
         disabled: false,
+        personalized: true,
     });
 }
 
@@ -2459,6 +2461,61 @@ fn arrowcloud_entries_from_api(entries: Vec<ArrowCloudLeaderboardEntry>) -> Vec<
     out
 }
 
+#[inline(always)]
+fn empty_arrowcloud_pane() -> LeaderboardPane {
+    LeaderboardPane {
+        name: "ArrowCloud".to_string(),
+        entries: Vec::new(),
+        is_ex: false,
+        disabled: false,
+        personalized: false,
+    }
+}
+
+fn arrowcloud_hard_ex_pane_from_response(
+    decoded: ArrowCloudLeaderboardsApiResponse,
+    personalized: bool,
+) -> Option<LeaderboardPane> {
+    decoded
+        .leaderboards
+        .into_iter()
+        .find(|pane| arrowcloud_lb_type_is_hard_ex(pane.r#type.as_str()))
+        .map(|pane| LeaderboardPane {
+            name: "ArrowCloud".to_string(),
+            entries: arrowcloud_entries_from_api(pane.scores),
+            is_ex: false,
+            disabled: false,
+            personalized,
+        })
+}
+
+fn fetch_arrowcloud_leaderboards(
+    api_url: &str,
+    api_key: Option<&str>,
+    per_page: Option<usize>,
+) -> Result<ArrowCloudLeaderboardsApiResponse, Box<dyn Error + Send + Sync>> {
+    let mut request = network::get_agent().get(api_url).query("page", "1");
+    let per_page_text = per_page.map(|per_page| per_page.to_string());
+    if let Some(per_page) = per_page_text.as_deref() {
+        request = request.query("perPage", per_page).query("limit", per_page);
+    }
+    if let Some(api_key) = api_key.map(str::trim).filter(|api_key| !api_key.is_empty()) {
+        let bearer = format!("Bearer {api_key}");
+        request = request
+            .header("Authorization", &bearer)
+            .header("x-api-key-player-1", api_key);
+    }
+    let response = request.call()?;
+    if response.status() != 200 {
+        return Err(format!(
+            "ArrowCloud leaderboard API returned status {}",
+            response.status()
+        )
+        .into());
+    }
+    Ok(response.into_body().read_json()?)
+}
+
 fn fetch_arrowcloud_hard_ex_pane(
     chart_hash: &str,
     api_key: &str,
@@ -2473,39 +2530,54 @@ fn fetch_arrowcloud_hard_ex_pane(
     // ArrowCloud may return self/rival entries outside the top ranks.
     // Pull a wider page so scorebox views can always include those rows.
     let max_entries = max_entries.max(1).max(ARROWCLOUD_HARD_EX_MIN_PER_PAGE);
-    let max_entries = max_entries.to_string();
-    let Some(api_url) = online::arrowcloud_leaderboards_url(chart_hash) else {
-        return Ok(None);
-    };
-    let bearer = format!("Bearer {api_key}");
-    let response = network::get_agent()
-        .get(&api_url)
-        .header("Authorization", &bearer)
-        .header("x-api-key-player-1", api_key)
-        .query("page", "1")
-        .query("perPage", max_entries.as_str())
-        .call()?;
+    let auth_url = online::arrowcloud_leaderboards_url(chart_hash);
+    let public_url = online::arrowcloud_public_leaderboards_url(chart_hash);
+    let mut auth_error = None::<String>;
 
-    if response.status() != 200 {
-        return Err(format!(
-            "ArrowCloud leaderboard API returned status {}",
-            response.status()
-        )
-        .into());
+    if let Some(api_url) = auth_url.as_deref() {
+        match fetch_arrowcloud_leaderboards(api_url, Some(api_key), Some(max_entries)) {
+            Ok(decoded) => {
+                if let Some(pane) = arrowcloud_hard_ex_pane_from_response(decoded, true) {
+                    return Ok(Some(pane));
+                }
+                debug!(
+                    "ArrowCloud auth leaderboard response omitted HardEX for chart {}; retrying public route.",
+                    chart_hash
+                );
+            }
+            Err(error) => {
+                auth_error = Some(error.to_string());
+                debug!(
+                    "ArrowCloud auth leaderboard request failed for chart {}; retrying public route: {}",
+                    chart_hash,
+                    auth_error.as_deref().unwrap_or_default()
+                );
+            }
+        }
     }
 
-    let decoded: ArrowCloudLeaderboardsApiResponse = response.into_body().read_json()?;
-    let entries = decoded
-        .leaderboards
-        .into_iter()
-        .find(|pane| arrowcloud_lb_type_is_hard_ex(pane.r#type.as_str()))
-        .map_or_else(Vec::new, |pane| arrowcloud_entries_from_api(pane.scores));
-    Ok(Some(LeaderboardPane {
-        name: "ArrowCloud".to_string(),
-        entries,
-        is_ex: false,
-        disabled: false,
-    }))
+    let Some(api_url) = public_url.as_deref() else {
+        if let Some(auth_error) = auth_error {
+            return Err(auth_error.into());
+        }
+        return Ok(None);
+    };
+    match fetch_arrowcloud_leaderboards(api_url, None, Some(max_entries)) {
+        Ok(decoded) => Ok(Some(
+            arrowcloud_hard_ex_pane_from_response(decoded, false)
+                .unwrap_or_else(empty_arrowcloud_pane),
+        )),
+        Err(error) => {
+            if let Some(auth_error) = auth_error {
+                Err(format!(
+                    "authenticated request failed: {auth_error}; public fallback failed: {error}"
+                )
+                .into())
+            } else {
+                Err(error)
+            }
+        }
+    }
 }
 
 fn fetch_player_leaderboards_internal(
@@ -4445,6 +4517,69 @@ mod tests {
         queue_player_leaderboard_refresh(&mut pending_refresh, &key, 3);
 
         assert_eq!(pending_refresh.get(&key), Some(&10));
+    }
+
+    #[test]
+    fn arrowcloud_hard_ex_pane_from_response_parses_hardex_scores() {
+        let pane = arrowcloud_hard_ex_pane_from_response(
+            ArrowCloudLeaderboardsApiResponse {
+                leaderboards: vec![ArrowCloudLeaderboardPane {
+                    r#type: "HardEX".to_string(),
+                    scores: vec![ArrowCloudLeaderboardEntry {
+                        rank: 7,
+                        score: 98.31,
+                        alias: "YOU".to_string(),
+                        date: "2026-04-18T12:34:56.000Z".to_string(),
+                        is_rival: false,
+                        is_self: true,
+                    }],
+                }],
+            },
+            true,
+        )
+        .expect("expected HardEX pane");
+
+        assert_eq!(pane.name, "ArrowCloud");
+        assert_eq!(pane.entries.len(), 1);
+        assert_eq!(pane.entries[0].rank, 7);
+        assert_eq!(pane.entries[0].score, 9831.0);
+        assert!(pane.entries[0].is_self);
+        assert!(pane.personalized);
+    }
+
+    #[test]
+    fn arrowcloud_hard_ex_pane_from_response_ignores_non_hardex_types() {
+        let pane = arrowcloud_hard_ex_pane_from_response(
+            ArrowCloudLeaderboardsApiResponse {
+                leaderboards: vec![
+                    ArrowCloudLeaderboardPane {
+                        r#type: "EX".to_string(),
+                        scores: vec![ArrowCloudLeaderboardEntry {
+                            rank: 1,
+                            score: 99.12,
+                            alias: "AAA".to_string(),
+                            date: String::new(),
+                            is_rival: false,
+                            is_self: false,
+                        }],
+                    },
+                    ArrowCloudLeaderboardPane {
+                        r#type: "ITG".to_string(),
+                        scores: vec![ArrowCloudLeaderboardEntry {
+                            rank: 1,
+                            score: 98.76,
+                            alias: "BBB".to_string(),
+                            date: String::new(),
+                            is_rival: false,
+                            is_self: false,
+                        }],
+                    },
+                ],
+            },
+            true,
+        );
+
+        assert!(pane.is_none());
     }
 
     #[test]
