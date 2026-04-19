@@ -144,7 +144,7 @@ const MUSIC_RATE: CustomBinding = CustomBinding {
         state.music_rate = (state.music_rate / increment).round() * increment;
         state.music_rate = state.music_rate.clamp(0.05, 3.00);
         let formatted = fmt_music_rate(state.music_rate);
-        if let Some(row) = state.row_map.get_mut(row_id) {
+        if let Some(row) = state.pane_mut().row_map.get_mut(row_id) {
             row.choices[0] = formatted;
             for slot in 0..PLAYER_SLOTS {
                 row.selected_choice_index[slot] = 0;
@@ -225,7 +225,7 @@ const MINI: CustomBinding = CustomBinding {
         let Some(new_index) = super::super::choice::cycle_choice_index(state, player_idx, row_id, delta) else {
             return Outcome::NONE;
         };
-        let Some(choice) = state
+        let Some(choice) = state.pane()
             .row_map
             .get(row_id)
             .and_then(|r| r.choices.get(new_index))
@@ -293,7 +293,7 @@ const STEPCHART: CustomBinding = CustomBinding {
             return Outcome::NONE;
         };
         let difficulty_idx = {
-            let Some(row) = state.row_map.get(row_id) else {
+            let Some(row) = state.pane().row_map.get(row_id) else {
                 return Outcome::persisted();
             };
             let Some(diff_indices) = &row.choice_difficulty_indices else {

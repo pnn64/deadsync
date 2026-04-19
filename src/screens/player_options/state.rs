@@ -27,9 +27,7 @@ pub struct State {
     pub fixed_stepchart: Option<FixedStepchart>,
     pub chart_steps_index: [usize; PLAYER_SLOTS],
     pub chart_difficulty_index: [usize; PLAYER_SLOTS],
-    pub row_map: RowMap,
-    pub selected_row: [usize; PLAYER_SLOTS],
-    pub prev_selected_row: [usize; PLAYER_SLOTS],
+    pub(super) panes: [PaneState; OptionsPane::COUNT],
     // For Scroll row: bitmask of which options are enabled.
     // 0 => Normal scroll (no special modifier).
     pub scroll_active_mask: [u8; PLAYER_SLOTS],
@@ -101,8 +99,6 @@ pub struct State {
     pub nav_key_last_scrolled_at: [Option<Instant>; PLAYER_SLOTS],
     pub start_held_since: [Option<Instant>; PLAYER_SLOTS],
     pub start_last_triggered_at: [Option<Instant>; PLAYER_SLOTS],
-    pub(super) inline_choice_x: [f32; PLAYER_SLOTS],
-    pub(super) arcade_row_focus: [bool; PLAYER_SLOTS],
     pub(super) allow_per_player_global_offsets: bool,
     pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
     pub(super) noteskin_names: Vec<String>,
@@ -117,6 +113,20 @@ pub struct State {
     // Combo preview state (for Combo Font row)
     pub(super) combo_preview_count: u32,
     pub(super) combo_preview_elapsed: f32,
+    pub(super) pane_transition: PaneTransition,
+    pub(super) menu_lr_chord: screen_input::MenuLrChordTracker,
+}
+
+/// Per-pane state. Each pane keeps its own row map, cursor, and tween state so
+/// switching panes never throws away rebuilt data. `current_pane` on `State`
+/// indexes into `State::panes`.
+pub struct PaneState {
+    pub row_map: RowMap,
+    pub selected_row: [usize; PLAYER_SLOTS],
+    pub prev_selected_row: [usize; PLAYER_SLOTS],
+    pub(super) inline_choice_x: [f32; PLAYER_SLOTS],
+    pub(super) arcade_row_focus: [bool; PLAYER_SLOTS],
+    pub(super) row_tweens: Vec<RowTween>,
     // Cursor ring tween (StopTweening/BeginTweening parity with ITGmania ScreenOptions::TweenCursor).
     pub(super) cursor_initialized: [bool; PLAYER_SLOTS],
     pub(super) cursor_from_x: [f32; PLAYER_SLOTS],
@@ -128,7 +138,59 @@ pub struct State {
     pub(super) cursor_to_w: [f32; PLAYER_SLOTS],
     pub(super) cursor_to_h: [f32; PLAYER_SLOTS],
     pub(super) cursor_t: [f32; PLAYER_SLOTS],
-    pub(super) row_tweens: Vec<RowTween>,
-    pub(super) pane_transition: PaneTransition,
-    pub(super) menu_lr_chord: screen_input::MenuLrChordTracker,
+}
+
+impl PaneState {
+    pub(super) fn new(row_map: RowMap) -> Self {
+        Self {
+            row_map,
+            selected_row: [0; PLAYER_SLOTS],
+            prev_selected_row: [0; PLAYER_SLOTS],
+            inline_choice_x: [f32::NAN; PLAYER_SLOTS],
+            arcade_row_focus: [false; PLAYER_SLOTS],
+            row_tweens: Vec::new(),
+            cursor_initialized: [false; PLAYER_SLOTS],
+            cursor_from_x: [0.0; PLAYER_SLOTS],
+            cursor_from_y: [0.0; PLAYER_SLOTS],
+            cursor_from_w: [0.0; PLAYER_SLOTS],
+            cursor_from_h: [0.0; PLAYER_SLOTS],
+            cursor_to_x: [0.0; PLAYER_SLOTS],
+            cursor_to_y: [0.0; PLAYER_SLOTS],
+            cursor_to_w: [0.0; PLAYER_SLOTS],
+            cursor_to_h: [0.0; PLAYER_SLOTS],
+            cursor_t: [1.0; PLAYER_SLOTS],
+        }
+    }
+
+    /// Reset cursor + per-player navigation state, keeping `row_map` intact.
+    /// Used when entering a pane: the row map persists across pane switches,
+    /// but cursor position does not.
+    pub(super) fn reset_cursor(&mut self) {
+        self.selected_row = [0; PLAYER_SLOTS];
+        self.prev_selected_row = [0; PLAYER_SLOTS];
+        self.inline_choice_x = [f32::NAN; PLAYER_SLOTS];
+        self.arcade_row_focus = [false; PLAYER_SLOTS];
+        self.cursor_initialized = [false; PLAYER_SLOTS];
+        self.cursor_from_x = [0.0; PLAYER_SLOTS];
+        self.cursor_from_y = [0.0; PLAYER_SLOTS];
+        self.cursor_from_w = [0.0; PLAYER_SLOTS];
+        self.cursor_from_h = [0.0; PLAYER_SLOTS];
+        self.cursor_to_x = [0.0; PLAYER_SLOTS];
+        self.cursor_to_y = [0.0; PLAYER_SLOTS];
+        self.cursor_to_w = [0.0; PLAYER_SLOTS];
+        self.cursor_to_h = [0.0; PLAYER_SLOTS];
+        self.cursor_t = [1.0; PLAYER_SLOTS];
+    }
+}
+
+impl State {
+    #[inline(always)]
+    pub(crate) fn pane(&self) -> &PaneState {
+        &self.panes[self.current_pane.index()]
+    }
+
+    #[inline(always)]
+    pub(crate) fn pane_mut(&mut self) -> &mut PaneState {
+        &mut self.panes[self.current_pane.index()]
+    }
 }

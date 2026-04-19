@@ -215,7 +215,7 @@ const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
         let Some(new_index) = super::super::choice::cycle_choice_index(state, player_idx, row_id, delta) else {
             return Outcome::NONE;
         };
-        let Some(choice) = state
+        let Some(choice) = state.pane()
             .row_map
             .get(row_id)
             .and_then(|r| r.choices.get(new_index))
@@ -257,7 +257,7 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW_MS: CustomBinding = CustomBinding {
         let Some(new_index) = super::super::choice::cycle_choice_index(state, player_idx, row_id, delta) else {
             return Outcome::NONE;
         };
-        let Some(choice) = state
+        let Some(choice) = state.pane()
             .row_map
             .get(row_id)
             .and_then(|r| r.choices.get(new_index))
