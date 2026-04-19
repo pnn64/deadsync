@@ -246,6 +246,7 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(content, "Theme", default.theme_flag.as_str());
     push_line(content, "AssistTickVolume", default.assist_tick_volume);
     push_line(content, "SFXVolume", default.sfx_volume);
+    push_bool(content, "TabAcceleration", default.tab_acceleration);
     push_bool(content, "TranslatedTitles", default.translated_titles);
     push_line(content, "VideoRenderer", default.video_renderer);
     push_bool(content, "Vsync", default.vsync);

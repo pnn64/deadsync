@@ -757,6 +757,9 @@ pub struct ShellState {
     pending_exit: bool,
     shift_held: bool,
     ctrl_held: bool,
+    tab_held: bool,
+    backquote_held: bool,
+    tab_acceleration_enabled: bool,
     window_focused: bool,
     window_occluded: bool,
     surface_active: bool,
@@ -764,6 +767,42 @@ pub struct ShellState {
     screenshot_request_side: Option<profile::PlayerSide>,
     screenshot_flash_started_at: Option<Instant>,
     screenshot_preview: Option<ScreenshotPreviewState>,
+}
+
+/// Hold-Tab fast-forward / hold-` slow-down multipliers, ITGmania parity.
+///
+/// `Tab` alone → `TAB_FAST_MULTIPLIER`× engine update rate.
+/// `` ` `` alone → `1.0 / TAB_SLOW_DIVISOR`× rate.
+/// Both held → `0.0` (halt).
+///
+/// Always returns `1.0` on `CurrentScreen::Gameplay` (timing-sensitive,
+/// per issue #174) or when `enabled` is false.
+const TAB_FAST_MULTIPLIER: f32 = 4.0;
+const TAB_SLOW_DIVISOR: f32 = 4.0;
+/// Upper bound on the post-acceleration logic dt fed to screens.
+/// Prevents catastrophic spikes (e.g. the app stalled for several seconds
+/// and the user happens to be holding Tab) from injecting absurd dt values
+/// into per-screen `update(dt)` accumulators.
+const MAX_LOGIC_DT_PER_FRAME: f32 = 0.25;
+
+#[inline]
+fn apply_tab_acceleration(
+    wall_dt: f32,
+    screen: CurrentScreen,
+    fast: bool,
+    slow: bool,
+    enabled: bool,
+) -> f32 {
+    if !enabled || matches!(screen, CurrentScreen::Gameplay) {
+        return wall_dt;
+    }
+    let scaled = match (fast, slow) {
+        (true, true) => 0.0,
+        (true, false) => wall_dt * TAB_FAST_MULTIPLIER,
+        (false, true) => wall_dt / TAB_SLOW_DIVISOR,
+        (false, false) => wall_dt,
+    };
+    scaled.clamp(0.0, MAX_LOGIC_DT_PER_FRAME)
 }
 
 #[inline(always)]
@@ -886,6 +925,9 @@ impl ShellState {
             pending_exit: false,
             shift_held: false,
             ctrl_held: false,
+            tab_held: false,
+            backquote_held: false,
+            tab_acceleration_enabled: cfg.tab_acceleration,
             window_focused: true,
             window_occluded: false,
             surface_active: cfg.display_width > 0 && cfg.display_height > 0,
@@ -2562,6 +2604,20 @@ impl App {
             .as_secs_f32();
         crate::engine::present::runtime::tick(delta_time);
 
+        // Tab/`-acceleration: scale the dt fed to non-gameplay screens and
+        // their fade transitions. Wall-clock dt (`delta_time`) is preserved
+        // for the present runtime tick above and for the gameplay step that
+        // continues running under the FadingOut→Evaluation and FadingIn
+        // transitions below, so timing-sensitive paths stay on real time.
+        // See `apply_tab_acceleration` and issue #174.
+        let logic_dt = apply_tab_acceleration(
+            delta_time,
+            self.state.screens.current_screen,
+            self.state.shell.tab_held,
+            self.state.shell.backquote_held,
+            self.state.shell.tab_acceleration_enabled,
+        );
+
         self.sync_gameplay_input_capture();
         self.state.shell.update_gamepad_overlay(redraw_started);
 
@@ -2585,7 +2641,7 @@ impl App {
                 duration,
                 target,
             } => {
-                *elapsed += delta_time;
+                *elapsed += logic_dt;
                 if *target == CurrentScreen::Evaluation
                     && self.state.screens.current_screen == CurrentScreen::Gameplay
                     && let Some(gs) = self.state.screens.gameplay_state.as_mut()
@@ -2604,13 +2660,13 @@ impl App {
                 duration,
                 target,
             } => {
-                *elapsed += delta_time;
+                *elapsed += logic_dt;
                 if *elapsed >= *duration {
                     finished_actor_fade_to = Some(*target);
                 }
             }
             TransitionState::FadingIn { elapsed, duration } => {
-                *elapsed += delta_time;
+                *elapsed += logic_dt;
                 let finished = *elapsed >= *duration;
 
                 if self.state.screens.current_screen == CurrentScreen::Gameplay
@@ -2629,7 +2685,7 @@ impl App {
                 }
             }
             TransitionState::ActorsFadeIn { elapsed } => {
-                *elapsed += delta_time;
+                *elapsed += logic_dt;
                 if *elapsed >= MENU_ACTORS_FADE_DURATION {
                     self.state.shell.transition = TransitionState::Idle;
                 }
@@ -2640,7 +2696,7 @@ impl App {
                     && self.state.gameplay_offset_save_prompt.is_some();
                 if !gameplay_prompt_active {
                     let (action, _) = self.state.screens.step_idle(
-                        delta_time,
+                        logic_dt,
                         redraw_started,
                         &self.state.session,
                         &self.asset_manager,
@@ -5151,6 +5207,12 @@ impl App {
             KeyCode::ControlLeft | KeyCode::ControlRight => {
                 self.state.shell.ctrl_held = raw_key.pressed;
             }
+            KeyCode::Tab => {
+                self.state.shell.tab_held = raw_key.pressed;
+            }
+            KeyCode::Backquote => {
+                self.state.shell.backquote_held = raw_key.pressed;
+            }
             _ => {}
         }
 
@@ -6828,6 +6890,8 @@ impl ApplicationHandler<UserEvent> for App {
                     if !focused {
                         self.state.shell.shift_held = false;
                         self.state.shell.ctrl_held = false;
+                        self.state.shell.tab_held = false;
+                        self.state.shell.backquote_held = false;
                         input::clear_debounce_state();
                         self.clear_gameplay_input_events();
                     }
@@ -7280,5 +7344,83 @@ mod tests {
             evaluation_summary_return_to(CurrentScreen::SelectCourse, true),
             CurrentScreen::Initials,
         );
+    }
+
+    // ---- Tab acceleration helper (issue #174) ----
+
+    const EPS: f32 = 1e-6;
+
+    #[test]
+    fn tab_accel_no_modifier_is_passthrough() {
+        let dt = 0.016_f32;
+        assert!(
+            (apply_tab_acceleration(dt, CurrentScreen::Menu, false, false, true) - dt).abs() < EPS
+        );
+    }
+
+    #[test]
+    fn tab_accel_fast_multiplies_by_four() {
+        let dt = 0.016_f32;
+        let out = apply_tab_acceleration(dt, CurrentScreen::Menu, true, false, true);
+        assert!((out - dt * 4.0).abs() < EPS, "got {out}");
+    }
+
+    #[test]
+    fn tab_accel_slow_divides_by_four() {
+        let dt = 0.016_f32;
+        let out = apply_tab_acceleration(dt, CurrentScreen::Menu, false, true, true);
+        assert!((out - dt / 4.0).abs() < EPS, "got {out}");
+    }
+
+    #[test]
+    fn tab_accel_both_held_halts() {
+        let dt = 0.016_f32;
+        let out = apply_tab_acceleration(dt, CurrentScreen::Menu, true, true, true);
+        assert_eq!(out, 0.0);
+    }
+
+    #[test]
+    fn tab_accel_gameplay_screen_never_scales() {
+        let dt = 0.016_f32;
+        for (fast, slow) in [(false, false), (true, false), (false, true), (true, true)] {
+            let out = apply_tab_acceleration(dt, CurrentScreen::Gameplay, fast, slow, true);
+            assert!(
+                (out - dt).abs() < EPS,
+                "Gameplay must passthrough; fast={fast} slow={slow} got={out}"
+            );
+        }
+    }
+
+    #[test]
+    fn tab_accel_disabled_never_scales() {
+        let dt = 0.016_f32;
+        for screen in [
+            CurrentScreen::Menu,
+            CurrentScreen::SelectMusic,
+            CurrentScreen::Evaluation,
+        ] {
+            for (fast, slow) in [(false, false), (true, false), (false, true), (true, true)] {
+                let out = apply_tab_acceleration(dt, screen, fast, slow, false);
+                assert!(
+                    (out - dt).abs() < EPS,
+                    "disabled must passthrough; screen={screen:?} fast={fast} slow={slow} got={out}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn tab_accel_clamps_to_max_logic_dt() {
+        // Big stall: 1s wall_dt with 4x fast-forward would yield 4s; must clamp to MAX.
+        let out = apply_tab_acceleration(1.0, CurrentScreen::Menu, true, false, true);
+        assert_eq!(out, MAX_LOGIC_DT_PER_FRAME);
+    }
+
+    #[test]
+    fn tab_accel_clamp_does_not_affect_normal_frames() {
+        let dt = 0.016_f32;
+        let out = apply_tab_acceleration(dt, CurrentScreen::Menu, true, false, true);
+        assert!(out < MAX_LOGIC_DT_PER_FRAME);
+        assert!((out - 4.0 * dt).abs() < EPS);
     }
 }
