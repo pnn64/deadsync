@@ -94,6 +94,7 @@ const GAMEPLAY_PRESENT_SPIKE_US: u32 = 3_000;
 const GAMEPLAY_EVENT_TRACE_INTERVAL: Duration = Duration::from_secs(1);
 const GAMEPLAY_EVENT_BATCH_SLOW_US: u32 = 1_000;
 const GAMEPLAY_EVENT_BATCH_BURST_KEYS: u32 = 8;
+const UI_TEXT_LAYOUT_CACHE_LIMIT: usize = 4_096;
 const GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT: usize = 131_072;
 const LIVE_TEXTURE_UPLOAD_MAX_OPS: usize = 2;
 const LIVE_TEXTURE_UPLOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
@@ -2872,7 +2873,11 @@ impl App {
             backend_type,
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
-            ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache::default(),
+            // Screen transitions clear the UI cache, so saturating avoids full
+            // prune sweeps during a live compose without changing its footprint.
+            ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache::saturating(
+                UI_TEXT_LAYOUT_CACHE_LIMIT,
+            ),
             gameplay_text_layout_cache:
                 crate::engine::present::compose::TextLayoutCache::saturating(
                     GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,

@@ -1,9 +1,13 @@
 use crate::engine::gfx::{
-    BlendMode, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, ObjectType,
-    RenderList, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
+    BlendMode, FastU64Map, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshMode,
+    MeshVertex, ObjectType, RenderList, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::BuildHasherDefault};
+use twox_hash::XxHash64;
+
+type TMeshHasher = BuildHasherDefault<XxHash64>;
+type TMeshGeomMap = HashMap<TMeshGeomKey, FrameTMeshGeom, TMeshHasher>;
 
 #[repr(C)]
 #[derive(
@@ -143,8 +147,8 @@ pub struct DrawScratch {
     pub tmesh_vertices: Vec<TexturedMeshVertexRaw>,
     pub tmesh_instances: Vec<TexturedMeshInstanceRaw>,
     pub ops: Vec<DrawOp>,
-    transient_tmesh_geom: HashMap<TMeshGeomKey, FrameTMeshGeom>,
-    cached_tmesh: HashMap<TMeshCacheKey, bool>,
+    transient_tmesh_geom: TMeshGeomMap,
+    cached_tmesh: FastU64Map<bool>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -181,8 +185,14 @@ impl DrawScratch {
             tmesh_vertices: Vec::with_capacity(tmesh_vertices),
             tmesh_instances: Vec::with_capacity(tmesh_instances),
             ops: Vec::with_capacity(ops),
-            transient_tmesh_geom: HashMap::with_capacity(ops),
-            cached_tmesh: HashMap::with_capacity(ops),
+            transient_tmesh_geom: HashMap::with_capacity_and_hasher(
+                ops,
+                BuildHasherDefault::default(),
+            ),
+            cached_tmesh: FastU64Map::with_capacity_and_hasher(
+                ops,
+                BuildHasherDefault::default(),
+            ),
         }
     }
 }
