@@ -328,6 +328,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "TurnHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::Scroll,
@@ -343,6 +344,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "ScrollHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::Hide,
@@ -360,6 +362,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "HideHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::LifeMeterType,
@@ -373,6 +376,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "LifeMeterTypeHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::LifeBarOptions,
@@ -386,6 +390,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "LifeBarOptionsHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::DataVisualizations,
@@ -399,6 +404,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "DataVisualizationsHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::DensityGraphBackground,
@@ -411,6 +417,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "DensityGraphBackgroundHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::TargetScore,
@@ -435,6 +442,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [10; PLAYER_SLOTS], // S by default
         help: vec![tr("PlayerOptionsHelp", "TargetScoreHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ActionOnMissedTarget,
@@ -448,6 +456,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "TargetScoreMissPolicyHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::MiniIndicator,
@@ -465,6 +474,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "MiniIndicatorHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::IndicatorScoreType,
@@ -478,6 +488,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "IndicatorScoreTypeHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::GameplayExtras,
@@ -487,6 +498,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "GameplayExtrasHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ComboColors,
@@ -502,6 +514,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "ComboColorsHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ComboColorMode,
@@ -514,6 +527,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "ComboColorModeHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::CarryCombo,
@@ -526,6 +540,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "CarryComboHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::JudgmentTilt,
@@ -538,6 +553,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "JudgmentTiltHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::JudgmentTiltIntensity,
@@ -547,6 +563,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "JudgmentTiltIntensityHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::JudgmentBehindArrows,
@@ -559,6 +576,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "JudgmentBehindArrowsHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::OffsetIndicator,
@@ -571,6 +589,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "OffsetIndicatorHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ErrorBar,
@@ -586,6 +605,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "ErrorBarHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ErrorBarTrim,
@@ -600,6 +620,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "ErrorBarTrimHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ErrorBarOptions,
@@ -612,6 +633,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "ErrorBarOptionsHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ErrorBarOffsetX,
@@ -621,6 +643,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "ErrorBarOffsetXHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ErrorBarOffsetY,
@@ -630,6 +653,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "ErrorBarOffsetYHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::MeasureCounter,
@@ -646,6 +670,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "MeasureCounterHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::MeasureCounterLookahead,
@@ -661,6 +686,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "MeasureCounterLookaheadHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::MeasureCounterOptions,
@@ -676,6 +702,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "MeasureCounterOptionsHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::MeasureLines,
@@ -690,6 +717,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "MeasureLinesHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::RescoreEarlyHits,
@@ -702,6 +730,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "RescoreEarlyHitsHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::EarlyDecentWayOffOptions,
@@ -718,6 +747,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "EarlyDecentWayOffOptionsHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ResultsExtras,
@@ -727,6 +757,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "ResultsExtrasHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::TimingWindows,
@@ -741,6 +772,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "TimingWindowsHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::FAPlusOptions,
@@ -757,6 +789,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "FAPlusOptionsHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::CustomBlueFantasticWindow,
@@ -769,6 +802,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "CustomBlueFantasticWindowHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::CustomBlueFantasticWindowMs,
@@ -778,24 +812,27 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "CustomBlueFantasticWindowMsHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::WhatComesNext,
-        behavior: RowBehavior::Action(ActionRow::WhatComesNext),
+        behavior: RowBehavior::Custom(super::WHAT_COMES_NEXT),
         name: lookup_key("PlayerOptions", "WhatComesNext"),
         choices: what_comes_next_choices(OptionsPane::Advanced, return_screen),
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "WhatComesNextAdvancedHelp").to_string()],
         choice_difficulty_indices: None,
+        mirror_across_players: true,
     });
     b.push(Row {
         id: RowId::Exit,
-        behavior: RowBehavior::Action(ActionRow::Exit),
+        behavior: RowBehavior::Exit,
         name: lookup_key("Common", "Exit"),
         choices: vec![tr("Common", "Exit").to_string()],
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![String::new()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.finish()
 }

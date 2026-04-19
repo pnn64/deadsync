@@ -465,6 +465,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::SpeedMod,
@@ -477,6 +478,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::Mini,
@@ -489,6 +491,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::Perspective,
@@ -507,6 +510,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::NoteSkin,
@@ -523,6 +527,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::MineSkin,
@@ -535,6 +540,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ReceptorSkin,
@@ -547,6 +553,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::TapExplosionSkin,
@@ -559,6 +566,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::JudgmentFont,
@@ -574,6 +582,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::JudgmentOffsetX,
@@ -586,6 +595,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::JudgmentOffsetY,
@@ -598,6 +608,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ComboFont,
@@ -619,6 +630,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ComboOffsetX,
@@ -631,6 +643,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::ComboOffsetY,
@@ -643,6 +656,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::HoldJudgment,
@@ -658,6 +672,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::BackgroundFilter,
@@ -675,6 +690,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::NoteFieldOffsetX,
@@ -687,6 +703,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::NoteFieldOffsetY,
@@ -699,6 +716,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::VisualDelay,
@@ -711,6 +729,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::GlobalOffsetShift,
@@ -723,6 +742,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::MusicRate,
@@ -735,6 +755,7 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::Stepchart,
@@ -747,10 +768,11 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: Some(stepchart_choice_indices),
+        mirror_across_players: false,
     });
     b.push(Row {
         id: RowId::WhatComesNext,
-        behavior: RowBehavior::Action(ActionRow::WhatComesNext),
+        behavior: RowBehavior::Custom(super::WHAT_COMES_NEXT),
         name: lookup_key("PlayerOptions", "WhatComesNext"),
         choices: what_comes_next_choices(OptionsPane::Main, return_screen),
         selected_choice_index: [0; PLAYER_SLOTS],
@@ -759,15 +781,17 @@ pub(super) fn build_main_rows(
             .map(|s| s.to_string())
             .collect(),
         choice_difficulty_indices: None,
+        mirror_across_players: true,
     });
     b.push(Row {
         id: RowId::Exit,
-        behavior: RowBehavior::Action(ActionRow::Exit),
+        behavior: RowBehavior::Exit,
         name: lookup_key("Common", "Exit"),
         choices: vec![tr("Common", "Exit").to_string()],
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![String::new()],
         choice_difficulty_indices: None,
+        mirror_across_players: false,
     });
     b.finish()
 }

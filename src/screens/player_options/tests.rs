@@ -33,12 +33,13 @@ pub(super) mod tests {
     ) -> Row {
         Row {
             id,
-            behavior: super::RowBehavior::Action(super::ActionRow::Exit),
+            behavior: super::RowBehavior::Exit,
             name,
             choices: choices.iter().map(ToString::to_string).collect(),
             selected_choice_index,
             help: Vec::new(),
             choice_difficulty_indices: None,
+            mirror_across_players: false,
         }
     }
 
@@ -358,6 +359,7 @@ pub(super) mod tests {
             selected_choice_index: [0, 0],
             help: Vec::new(),
             choice_difficulty_indices: None,
+            mirror_across_players: false,
         };
         state.pane_mut().row_map.display_order.push(RowId::Scroll);
         state.pane_mut().row_map.insert(scroll_row);
@@ -395,6 +397,7 @@ pub(super) mod tests {
             selected_choice_index: [0, 0],
             help: Vec::new(),
             choice_difficulty_indices: None,
+            mirror_across_players: false,
         };
         let tilt_intensity_row = test_row(
             RowId::JudgmentTiltIntensity,
@@ -557,7 +560,7 @@ pub(super) mod tests {
             .unwrap()
             .selected_choice_index;
 
-        // Action::Exit returns Outcome::NONE so the dispatcher must not panic,
+        // RowBehavior::Exit returns Outcome::NONE so the dispatcher must not panic,
         // mutate the row, or play SFX (which would panic — audio uninit in tests).
         super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
         super::change_choice_for_player(&mut state, &asset_manager, P1, -3);
@@ -570,7 +573,7 @@ pub(super) mod tests {
             .selected_choice_index;
         assert_eq!(
             before, after,
-            "Action::Exit must not advance its own choice index"
+            "RowBehavior::Exit must not advance its own choice index"
         );
     }
 
@@ -594,6 +597,7 @@ pub(super) mod tests {
             selected_choice_index: [2, 0],
             help: Vec::new(),
             choice_difficulty_indices: None,
+            mirror_across_players: false,
         };
         state.pane_mut().row_map.display_order.push(RowId::Scroll);
         state.pane_mut().row_map.insert(scroll_row);
@@ -703,5 +707,136 @@ pub(super) mod tests {
                 "{id:?} is defined as a RowId but no pane builder constructs a Row for it",
             );
         }
+    }
+
+    #[test]
+    fn dispatch_mirror_flag_off_keeps_per_player_index() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+
+        // BackgroundFilter is a Cycle row with mirror_across_players: false.
+        let row_index = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::BackgroundFilter)
+            .expect("BackgroundFilter should be in Main pane");
+        state.pane_mut().selected_row[P1] = row_index;
+
+        let row = state.pane().row_map.get(RowId::BackgroundFilter).unwrap();
+        assert!(
+            !row.mirror_across_players,
+            "BackgroundFilter should default to per-player choice"
+        );
+        let p2_before = row.selected_choice_index[1];
+
+        super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
+
+        let row = state.pane().row_map.get(RowId::BackgroundFilter).unwrap();
+        assert_eq!(
+            row.selected_choice_index[1], p2_before,
+            "P2 slot must not move when mirror_across_players is false"
+        );
+    }
+
+    #[test]
+    fn dispatch_mirror_skipped_when_apply_returns_none() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+
+        // Insert a fixture Custom row whose apply always returns Outcome::NONE,
+        // even though mirror_across_players is true. The dispatcher must NOT
+        // overwrite P2 in that case.
+        let custom = super::CustomBinding {
+            apply: |_state, _player_idx, _id, _delta| super::Outcome::NONE,
+        };
+        let mirror_row = Row {
+            id: RowId::Hide,
+            behavior: super::RowBehavior::Custom(custom),
+            name: lookup_key("PlayerOptions", "Hide"),
+            choices: vec!["A".into(), "B".into(), "C".into()],
+            selected_choice_index: [0, 0],
+            help: Vec::new(),
+            choice_difficulty_indices: None,
+            mirror_across_players: true,
+        };
+        state.pane_mut().row_map.display_order.push(RowId::Hide);
+        state.pane_mut().row_map.insert(mirror_row);
+        let row_index = state.pane().row_map.display_order().len() - 1;
+        state.pane_mut().selected_row[P1] = row_index;
+
+        // Pre-set P2 to a distinct value to detect any incorrect overwrite.
+        state
+            .pane_mut()
+            .row_map
+            .get_mut(RowId::Hide)
+            .unwrap()
+            .selected_choice_index[1] = 2;
+
+        super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
+
+        let row = state.pane().row_map.get(RowId::Hide).unwrap();
+        assert_eq!(
+            row.selected_choice_index[1], 2,
+            "P2 must keep its prior value when the Custom apply returns Outcome::NONE"
+        );
+    }
+
+    #[test]
+    fn inline_nav_what_comes_next_syncs_both_players_on_focus_commit() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+
+        let row_index = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::WhatComesNext)
+            .expect("WhatComesNext should be in Main pane");
+        state.pane_mut().selected_row[P1] = row_index;
+
+        let n = state
+            .pane()
+            .row_map
+            .get(RowId::WhatComesNext)
+            .unwrap()
+            .choices
+            .len();
+        assert!(
+            n >= 2,
+            "WhatComesNext needs at least 2 choices for this test"
+        );
+
+        // Reset both slots to a known starting choice and target a different one.
+        state
+            .pane_mut()
+            .row_map
+            .get_mut(RowId::WhatComesNext)
+            .unwrap()
+            .selected_choice_index = [0, 0];
+        let row = state.pane().row_map.get(RowId::WhatComesNext).unwrap();
+        let left_x = super::inline_nav::inline_choice_left_x_for_row(&state, row_index);
+        let centers =
+            super::inline_nav::inline_choice_centers(&row.choices, &asset_manager, left_x);
+        assert_eq!(centers.len(), n);
+        let target = 1usize;
+        state.pane_mut().inline_choice_x[P1] = centers[target];
+
+        let changed = super::inline_nav::commit_inline_focus_selection(
+            &mut state,
+            &asset_manager,
+            P1,
+            row_index,
+        );
+        assert!(changed, "commit should report a change");
+
+        let row = state.pane().row_map.get(RowId::WhatComesNext).unwrap();
+        assert_eq!(
+            row.selected_choice_index,
+            [target, target],
+            "WhatComesNext (mirror_across_players=true) must sync both player slots on inline focus commit"
+        );
     }
 }
