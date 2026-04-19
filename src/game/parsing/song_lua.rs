@@ -1914,11 +1914,11 @@ fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Re
 }
 
 fn player_option_state(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
-    if let Some(state) = owner.get::<Option<Table>>("__songlua_player_option_state")? {
+    if let Some(state) = owner.raw_get::<Option<Table>>("__songlua_player_option_state")? {
         return Ok(state);
     }
     let state = lua.create_table()?;
-    owner.set("__songlua_player_option_state", state.clone())?;
+    owner.raw_set("__songlua_player_option_state", state.clone())?;
     Ok(state)
 }
 
