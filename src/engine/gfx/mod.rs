@@ -8,6 +8,7 @@ use crate::engine::gfx::backends::{opengl, software, wgpu_core};
 use glam::Mat4 as Matrix4;
 use glow::HasContext;
 use image::RgbaImage;
+use std::ops::Deref;
 use std::{collections::HashMap, error::Error, hash::BuildHasherDefault, str::FromStr, sync::Arc};
 use twox_hash::XxHash64;
 use winit::window::Window;
@@ -76,6 +77,31 @@ impl Default for TexturedMeshVertex {
     }
 }
 
+#[derive(Clone)]
+pub enum TexturedMeshVertices {
+    Shared(Arc<[TexturedMeshVertex]>),
+    Transient(Arc<Vec<TexturedMeshVertex>>),
+}
+
+impl AsRef<[TexturedMeshVertex]> for TexturedMeshVertices {
+    #[inline(always)]
+    fn as_ref(&self) -> &[TexturedMeshVertex] {
+        match self {
+            Self::Shared(vertices) => vertices.as_ref(),
+            Self::Transient(vertices) => vertices.as_slice(),
+        }
+    }
+}
+
+impl Deref for TexturedMeshVertices {
+    type Target = [TexturedMeshVertex];
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        self.as_ref()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MeshMode {
     Triangles,
@@ -99,7 +125,7 @@ pub enum ObjectType {
     #[allow(dead_code)]
     TexturedMesh {
         tint: [f32; 4],
-        vertices: Arc<[TexturedMeshVertex]>,
+        vertices: TexturedMeshVertices,
         geom_cache_key: TMeshCacheKey,
         mode: MeshMode,
         uv_scale: [f32; 2],

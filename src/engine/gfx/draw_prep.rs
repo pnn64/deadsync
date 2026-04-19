@@ -1,6 +1,6 @@
 use crate::engine::gfx::{
-    BlendMode, FastU64Map, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshMode,
-    MeshVertex, ObjectType, RenderList, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
+    BlendMode, FastU64Map, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex,
+    ObjectType, RenderList, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use std::{collections::HashMap, hash::BuildHasherDefault};
@@ -189,10 +189,7 @@ impl DrawScratch {
                 ops,
                 BuildHasherDefault::default(),
             ),
-            cached_tmesh: FastU64Map::with_capacity_and_hasher(
-                ops,
-                BuildHasherDefault::default(),
-            ),
+            cached_tmesh: FastU64Map::with_capacity_and_hasher(ops, BuildHasherDefault::default()),
         }
     }
 }

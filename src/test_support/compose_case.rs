@@ -1348,7 +1348,9 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                 ..
             } => ObjectType::TexturedMesh {
                 tint: *tint,
-                vertices: Arc::from(vertices.clone()),
+                vertices: crate::engine::gfx::TexturedMeshVertices::Shared(Arc::from(
+                    vertices.clone(),
+                )),
                 geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
                 mode: MeshMode::from(*mode),
                 uv_scale: *uv_scale,

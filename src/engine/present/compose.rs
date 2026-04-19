@@ -13,6 +13,8 @@ use twox_hash::XxHash64;
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
+const MAX_RECYCLED_TEXT_MESH_VERTEX_BUFFERS: usize = 16;
+
 #[inline(always)]
 pub fn build_screen(
     actors: &[actors::Actor],
@@ -101,6 +103,7 @@ pub fn build_screen_cached_with_scratch(
             root_rect,
             m,
             fonts,
+            scratch,
             parent_z,
             camera,
             &mut cameras,
@@ -136,16 +139,47 @@ pub struct ComposeScratch {
     z_counts: Vec<usize>,
     z_perm: Vec<usize>,
     texture_cache: TextureLookupCache,
+    transient_text_mesh_builders: Vec<TextMeshBatchBuilder>,
+    recycled_text_mesh_vertices: Vec<Vec<renderer::TexturedMeshVertex>>,
 }
 
 impl ComposeScratch {
     pub fn recycle_render_list(&mut self, render: &mut RenderList) {
         let mut objects = std::mem::take(&mut render.objects);
-        objects.clear();
+        for obj in objects.drain(..) {
+            let renderer::ObjectType::TexturedMesh {
+                vertices: renderer::TexturedMeshVertices::Transient(vertices),
+                ..
+            } = obj.object_type
+            else {
+                continue;
+            };
+            if self.recycled_text_mesh_vertices.len() >= MAX_RECYCLED_TEXT_MESH_VERTEX_BUFFERS {
+                continue;
+            }
+            let Ok(mut vertices) = Arc::try_unwrap(vertices) else {
+                continue;
+            };
+            vertices.clear();
+            self.recycled_text_mesh_vertices.push(vertices);
+        }
         self.objects = objects;
         let mut cameras = std::mem::take(&mut render.cameras);
         cameras.clear();
         self.cameras = cameras;
+    }
+
+    #[inline(always)]
+    fn transient_text_mesh_scratch(
+        &mut self,
+    ) -> (
+        &mut Vec<TextMeshBatchBuilder>,
+        &mut Vec<Vec<renderer::TexturedMeshVertex>>,
+    ) {
+        (
+            &mut self.transient_text_mesh_builders,
+            &mut self.recycled_text_mesh_vertices,
+        )
     }
 }
 
@@ -1206,10 +1240,18 @@ struct TextMeshBatchBuilder {
 }
 
 #[inline(always)]
-fn text_mesh_batch_builder(
-    builders: &mut Vec<TextMeshBatchBuilder>,
+fn take_recycled_text_mesh_vertices(
+    recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
+) -> Vec<renderer::TexturedMeshVertex> {
+    recycled_vertices.pop().unwrap_or_default()
+}
+
+#[inline(always)]
+fn text_mesh_batch_builder<'a>(
+    builders: &'a mut Vec<TextMeshBatchBuilder>,
+    recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
     texture_key: *const str,
-) -> &mut TextMeshBatchBuilder {
+) -> &'a mut TextMeshBatchBuilder {
     if let Some(index) = builders
         .iter()
         .position(|builder| std::ptr::addr_eq(builder.texture_key, texture_key))
@@ -1218,7 +1260,7 @@ fn text_mesh_batch_builder(
     }
     builders.push(TextMeshBatchBuilder {
         texture_key,
-        vertices: Vec::new(),
+        vertices: take_recycled_text_mesh_vertices(recycled_vertices),
     });
     builders
         .last_mut()
@@ -1228,6 +1270,7 @@ fn text_mesh_batch_builder(
 #[inline(always)]
 fn push_text_mesh_quad_with_color(
     builders: &mut Vec<TextMeshBatchBuilder>,
+    recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
     texture_key: *const str,
     quad_x: f32,
     quad_y: f32,
@@ -1236,7 +1279,7 @@ fn push_text_mesh_quad_with_color(
     uv_offset: [f32; 2],
     color: [f32; 4],
 ) {
-    let out = &mut text_mesh_batch_builder(builders, texture_key).vertices;
+    let out = &mut text_mesh_batch_builder(builders, recycled_vertices, texture_key).vertices;
     let x0 = quad_x;
     let y0 = quad_y;
     let x1 = quad_x + size[0];
@@ -1289,6 +1332,7 @@ fn push_text_mesh_quad_with_color(
 #[inline(always)]
 fn push_text_mesh_quad(
     builders: &mut Vec<TextMeshBatchBuilder>,
+    recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
     texture_key: *const str,
     quad_x: f32,
     quad_y: f32,
@@ -1298,6 +1342,7 @@ fn push_text_mesh_quad(
 ) {
     push_text_mesh_quad_with_color(
         builders,
+        recycled_vertices,
         texture_key,
         quad_x,
         quad_y,
@@ -1349,6 +1394,7 @@ fn build_text_mesh_batches(
         let line_padding = font.line_spacing - font.height;
         let mut fill = Vec::new();
         let mut stroke = Vec::new();
+        let mut recycled_vertices = Vec::new();
 
         for line in lines {
             pen_y_logical += font.height;
@@ -1364,6 +1410,7 @@ fn build_text_mesh_batches(
                     let quad_y_logical = baseline_local_logical + glyph.offset[1];
                     push_text_mesh_quad(
                         &mut fill,
+                        &mut recycled_vertices,
                         glyph.texture_key,
                         quad_x_logical,
                         quad_y_logical,
@@ -1374,6 +1421,7 @@ fn build_text_mesh_batches(
                     if let Some(stroke_key) = glyph.stroke_texture_key {
                         push_text_mesh_quad(
                             &mut stroke,
+                            &mut recycled_vertices,
                             stroke_key,
                             quad_x_logical,
                             quad_y_logical,
@@ -1417,16 +1465,18 @@ fn build_attributed_text_mesh_builders(
     layout: &CachedTextLayout,
     text_align: actors::TextAlign,
     attributes: &[actors::TextAttribute],
-) -> Vec<TextMeshBatchBuilder> {
+    builders: &mut Vec<TextMeshBatchBuilder>,
+    recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
+) {
+    builders.clear();
     if layout.lines.is_empty() || layout.glyphs.is_empty() {
-        return Vec::new();
+        return;
     }
 
     let block_w_logical_even = quantize_up_even_i32(layout.max_logical_width_i) as f32;
     let block_h_logical_i = text_block_height_i(font, layout.lines.len());
     let mut pen_y_logical = lrint_ties_even(-(block_h_logical_i as f32) * 0.5) as i32;
     let line_padding = font.line_spacing - font.height;
-    let mut builders = Vec::new();
     let mut attr_cursor = TextAttrCursor::new(attributes);
 
     for line in &layout.lines {
@@ -1445,7 +1495,8 @@ fn build_attributed_text_mesh_builders(
                     .as_mut()
                     .map_or([1.0; 4], |cursor| cursor.tint_for(glyph.char_index));
                 push_text_mesh_quad_with_color(
-                    &mut builders,
+                    builders,
+                    recycled_vertices,
                     glyph.texture_key,
                     quad_x_logical,
                     quad_y_logical,
@@ -1459,8 +1510,6 @@ fn build_attributed_text_mesh_builders(
         }
         pen_y_logical += line_padding;
     }
-
-    builders
 }
 
 fn build_cached_text_layout(
@@ -1778,6 +1827,7 @@ fn build_actor_recursive<'a>(
     parent: SmRect,
     m: &Metrics,
     fonts: &'a HashMap<&'static str, font::Font>,
+    scratch: &mut ComposeScratch,
     base_z: i16,
     camera: u8,
     cameras: &mut Vec<Matrix4>,
@@ -2022,7 +2072,7 @@ fn build_actor_recursive<'a>(
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::TexturedMesh {
                     tint: *tint,
-                    vertices: Arc::clone(vertices),
+                    vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
                     geom_cache_key: *geom_cache_key,
                     mode: *mode,
                     uv_scale: *uv_scale,
@@ -2057,6 +2107,7 @@ fn build_actor_recursive<'a>(
                 parent,
                 m,
                 fonts,
+                scratch,
                 base_z,
                 camera,
                 cameras,
@@ -2126,6 +2177,7 @@ fn build_actor_recursive<'a>(
                     parent,
                     m,
                     fonts,
+                    scratch,
                     base_z,
                     id,
                     cameras,
@@ -2238,14 +2290,18 @@ fn build_actor_recursive<'a>(
                             }
                         }
                     } else {
+                        let (builders, recycled_vertices) = scratch.transient_text_mesh_scratch();
+                        build_attributed_text_mesh_builders(
+                            fm,
+                            layout,
+                            *align_text,
+                            attributes,
+                            builders,
+                            recycled_vertices,
+                        );
                         push_transient_text_mesh_builders(
                             out,
-                            build_attributed_text_mesh_builders(
-                                fm,
-                                layout,
-                                *align_text,
-                                attributes,
-                            ),
+                            builders,
                             &placement,
                             [1.0; 4],
                             m,
@@ -2410,6 +2466,7 @@ fn build_actor_recursive<'a>(
                     rect,
                     m,
                     fonts,
+                    scratch,
                     layer,
                     camera,
                     cameras,
@@ -2818,7 +2875,7 @@ fn push_text_mesh_batches(
         out.push(RenderObject {
             object_type: renderer::ObjectType::TexturedMesh {
                 tint,
-                vertices: Arc::clone(&batch.vertices),
+                vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(&batch.vertices)),
                 geom_cache_key: batch.geom_cache_key,
                 mode: renderer::MeshMode::Triangles,
                 uv_scale: [1.0, 1.0],
@@ -2837,7 +2894,7 @@ fn push_text_mesh_batches(
 
 fn push_transient_text_mesh_builders(
     out: &mut Vec<RenderObject>,
-    builders: Vec<TextMeshBatchBuilder>,
+    builders: &mut Vec<TextMeshBatchBuilder>,
     placement: &TextLayoutPlacement,
     tint: [f32; 4],
     m: &Metrics,
@@ -2854,7 +2911,7 @@ fn push_transient_text_mesh_builders(
     )) * Matrix4::from_scale(Vector3::new(placement.sx, -placement.sy, 1.0));
 
     out.reserve(builders.len());
-    for builder in builders {
+    for builder in builders.drain(..) {
         if builder.vertices.is_empty() {
             continue;
         }
@@ -2864,7 +2921,7 @@ fn push_transient_text_mesh_builders(
         out.push(RenderObject {
             object_type: renderer::ObjectType::TexturedMesh {
                 tint,
-                vertices: Arc::from(builder.vertices),
+                vertices: renderer::TexturedMeshVertices::Transient(Arc::new(builder.vertices)),
                 geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
                 mode: renderer::MeshMode::Triangles,
                 uv_scale: [1.0, 1.0],
@@ -3331,7 +3388,7 @@ fn clip_textured_mesh_to_world_rect(
     Some(ClippedSpriteObject {
         object_type: renderer::ObjectType::TexturedMesh {
             tint,
-            vertices: Arc::from(out),
+            vertices: renderer::TexturedMeshVertices::Transient(Arc::new(out)),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             mode: renderer::MeshMode::Triangles,
             uv_scale: [1.0, 1.0],
@@ -3394,7 +3451,7 @@ fn clip_rotated_sprite_to_world_rect(
     Some(ClippedSpriteObject {
         object_type: renderer::ObjectType::TexturedMesh {
             tint,
-            vertices: Arc::from(out.as_slice()),
+            vertices: renderer::TexturedMeshVertices::Transient(Arc::new(out.into_vec())),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             mode: renderer::MeshMode::Triangles,
             uv_scale: [1.0, 1.0],
@@ -3726,6 +3783,41 @@ mod tests {
         assert_eq!(cache.frame_stats.prunes, 0);
         assert!(cache.owned_layout(key, "beta").is_none());
         assert!(cache.uncached_layout.is_some());
+    }
+
+    #[test]
+    fn recycle_render_list_recovers_transient_textured_mesh_vertices() {
+        let mut scratch = ComposeScratch::default();
+        let mut render = crate::engine::gfx::RenderList {
+            clear_color: [0.0, 0.0, 0.0, 1.0],
+            cameras: Vec::new(),
+            objects: vec![RenderObject {
+                object_type: ObjectType::TexturedMesh {
+                    tint: [1.0; 4],
+                    vertices: crate::engine::gfx::TexturedMeshVertices::Transient(Arc::new(
+                        vec![TexturedMeshVertex::default(); 6],
+                    )),
+                    geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                    mode: MeshMode::Triangles,
+                    uv_scale: [1.0, 1.0],
+                    uv_offset: [0.0, 0.0],
+                    uv_tex_shift: [0.0, 0.0],
+                },
+                texture_handle: 9,
+                transform: Matrix4::IDENTITY,
+                blend: BlendMode::Alpha,
+                z: 0,
+                order: 0,
+                camera: 0,
+            }],
+        };
+
+        scratch.recycle_render_list(&mut render);
+
+        assert!(scratch.objects.is_empty());
+        assert_eq!(scratch.recycled_text_mesh_vertices.len(), 1);
+        assert!(scratch.recycled_text_mesh_vertices[0].is_empty());
+        assert!(scratch.recycled_text_mesh_vertices[0].capacity() >= 6);
     }
 
     #[test]
