@@ -971,6 +971,10 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         })?,
     )?;
     gamestate.set(
+        "SetCurrentSteps",
+        lua.create_function(|_, _args: MultiValue| Ok(()))?,
+    )?;
+    gamestate.set(
         "GetSongBeat",
         lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
     )?;
@@ -1029,6 +1033,10 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     )?;
     screenman.set(
         "SystemMessage",
+        lua.create_function(|_, _args: MultiValue| Ok(()))?,
+    )?;
+    screenman.set(
+        "SetNewScreen",
         lua.create_function(|_, _args: MultiValue| Ok(()))?,
     )?;
     globals.set("SCREENMAN", screenman)?;
@@ -1851,9 +1859,41 @@ fn theme_metric(group: &str, name: &str) -> Option<f32> {
 fn create_player_state_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::Result<Table> {
     let options = create_player_options_table(lua, player)?;
     let table = lua.create_table()?;
+    table.set("__songlua_player_options_string", String::new())?;
     table.set(
         "GetPlayerOptions",
         lua.create_function(move |_, _args: MultiValue| Ok(options.clone()))?,
+    )?;
+    table.set(
+        "GetPlayerOptionsString",
+        lua.create_function(|_, args: MultiValue| {
+            let Some(owner) = args.front().and_then(|value| match value {
+                Value::Table(table) => Some(table.clone()),
+                _ => None,
+            }) else {
+                return Ok(String::new());
+            };
+            Ok(owner
+                .get::<Option<String>>("__songlua_player_options_string")?
+                .unwrap_or_default())
+        })?,
+    )?;
+    table.set(
+        "SetPlayerOptions",
+        lua.create_function(|_, args: MultiValue| {
+            let Some(owner) = args.front().and_then(|value| match value {
+                Value::Table(table) => Some(table.clone()),
+                _ => None,
+            }) else {
+                return Ok(());
+            };
+            let options = method_arg(&args, 1)
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            owner.set("__songlua_player_options_string", options)?;
+            Ok(())
+        })?,
     )?;
     Ok(table)
 }
@@ -2018,6 +2058,7 @@ fn speedmod_value(speedmod: SongLuaSpeedMod, ctor: fn(f32) -> SongLuaSpeedMod) -
 fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let song_dir = song_dir_string(context.song_dir.as_path());
+    let steps_by_type = create_steps_by_steps_type_table(lua, context.song_display_bpms)?;
     table.set(
         "GetSongDir",
         lua.create_function(move |lua, _args: MultiValue| {
@@ -2048,6 +2089,28 @@ fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
         "GetTimingData",
         lua.create_function(move |_, _args: MultiValue| Ok(timing.clone()))?,
     )?;
+    table.set(
+        "GetStepsByStepsType",
+        lua.create_function(move |_, _args: MultiValue| Ok(steps_by_type.clone()))?,
+    )?;
+    Ok(table)
+}
+
+fn create_steps_by_steps_type_table(lua: &Lua, display_bpms: [f32; 2]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    for (idx, difficulty) in [
+        SongLuaDifficulty::Beginner,
+        SongLuaDifficulty::Easy,
+        SongLuaDifficulty::Medium,
+        SongLuaDifficulty::Hard,
+        SongLuaDifficulty::Challenge,
+        SongLuaDifficulty::Edit,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        table.raw_set(idx + 1, create_steps_table(lua, difficulty, display_bpms)?)?;
+    }
     Ok(table)
 }
 
@@ -2102,6 +2165,7 @@ fn install_def(lua: &Lua) -> mlua::Result<()> {
         ("Actor", "Actor"),
         ("ActorFrame", "ActorFrame"),
         ("Sprite", "Sprite"),
+        ("Sound", "Sound"),
         ("BitmapText", "BitmapText"),
         ("Model", "Model"),
         ("Quad", "Quad"),
@@ -4072,9 +4136,14 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "fardistz",
         "finishtweening",
         "hibernate",
+        "load",
         "loop",
+        "pause",
+        "play",
         "rate",
+        "stop",
         "texturetranslate",
+        "volume",
         "wag",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
@@ -4169,6 +4238,18 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     return Ok(Value::Nil);
                 }
                 Ok(Value::Table(note_field_column_actors(lua, &actor)?))
+            }
+        })?,
+    )?;
+    actor.set(
+        "get_column_actors",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let Value::Function(method) = actor.get::<Value>("GetColumnActors")? else {
+                    return Ok(Value::Nil);
+                };
+                method.call::<Value>(MultiValue::from_vec(vec![Value::Table(actor.clone())]))
             }
         })?,
     )?;
@@ -6523,6 +6604,72 @@ return Def.ActorFrame{}
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "1.25xMusic");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_save_your_tears_compat_helpers() {
+        let song_dir = test_dir("save-your-tears-compat");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local steps = GAMESTATE:GetCurrentSong():GetStepsByStepsType("StepsType_Dance_Single")
+        GAMESTATE:SetCurrentSteps(PLAYER_1, steps[2])
+        SCREENMAN:SetNewScreen("ScreenGameplay")
+        local ps = GAMESTATE:GetPlayerState(PLAYER_1)
+        ps:SetPlayerOptions("ModsLevel_Song", "1x, Overhead")
+        mod_actions = {
+            {1, string.format("%d:%s", #steps, ps:GetPlayerOptionsString("ModsLevel_Song")), true},
+        }
+    end,
+    Def.Sound{
+        File="thunder.ogg",
+        OnCommand=function(self)
+            self:play():pause():stop():load("rain.ogg"):volume(0.5)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Save Your Tears Compat"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "6:1x, Overhead");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_get_column_actors_alias() {
+        let song_dir = test_dir("column-actors-alias");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
+        mod_actions = {
+            {1, tostring(#nf:get_column_actors()), true},
+        }
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Column Actors Alias"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "4");
     }
 
     #[test]
