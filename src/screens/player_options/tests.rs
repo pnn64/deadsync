@@ -625,6 +625,7 @@ pub(super) mod tests {
     }
 
     fn build_all_pane_row_maps(state: &super::State) -> Vec<(super::OptionsPane, RowMap)> {
+        let noteskin_names = super::discover_noteskin_names();
         [
             super::OptionsPane::Main,
             super::OptionsPane::Advanced,
@@ -639,7 +640,7 @@ pub(super) mod tests {
                 [0; 2],
                 state.music_rate,
                 pane,
-                &state.noteskin_names,
+                &noteskin_names,
                 Screen::SelectMusic,
                 state.fixed_stepchart.as_ref(),
             );

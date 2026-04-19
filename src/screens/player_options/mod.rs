@@ -314,7 +314,6 @@ pub fn init(
         start_last_triggered_at: [None; PLAYER_SLOTS],
         allow_per_player_global_offsets,
         player_profiles,
-        noteskin_names,
         noteskin_cache,
         noteskin: noteskin_previews,
         mine_noteskin: mine_noteskin_previews,

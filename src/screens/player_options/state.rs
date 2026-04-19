@@ -101,7 +101,6 @@ pub struct State {
     pub start_last_triggered_at: [Option<Instant>; PLAYER_SLOTS],
     pub(super) allow_per_player_global_offsets: bool,
     pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
-    pub(super) noteskin_names: Vec<String>,
     pub(super) noteskin_cache: HashMap<String, Arc<Noteskin>>,
     pub(super) noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
     pub(super) mine_noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
