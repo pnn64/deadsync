@@ -265,47 +265,30 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             continue;
         };
 
+        let to_rect = CursorRect::new(to_x, to_y, to_w, to_h);
         let needs_cursor_init = !state.pane().cursor_initialized[player_idx];
         if needs_cursor_init {
-            state.pane_mut().cursor_initialized[player_idx] = true;
-            state.pane_mut().cursor_from_x[player_idx] = to_x;
-            state.pane_mut().cursor_from_y[player_idx] = to_y;
-            state.pane_mut().cursor_from_w[player_idx] = to_w;
-            state.pane_mut().cursor_from_h[player_idx] = to_h;
-            state.pane_mut().cursor_to_x[player_idx] = to_x;
-            state.pane_mut().cursor_to_y[player_idx] = to_y;
-            state.pane_mut().cursor_to_w[player_idx] = to_w;
-            state.pane_mut().cursor_to_h[player_idx] = to_h;
-            state.pane_mut().cursor_t[player_idx] = 1.0;
+            let pane = state.pane_mut();
+            pane.cursor_initialized[player_idx] = true;
+            pane.cursor_from[player_idx] = to_rect;
+            pane.cursor_to[player_idx] = to_rect;
+            pane.cursor_t[player_idx] = 1.0;
         } else {
-            let dx = (to_x - state.pane().cursor_to_x[player_idx]).abs();
-            let dy = (to_y - state.pane().cursor_to_y[player_idx]).abs();
-            let dw = (to_w - state.pane().cursor_to_w[player_idx]).abs();
-            let dh = (to_h - state.pane().cursor_to_h[player_idx]).abs();
+            let cur_to = state.pane().cursor_to[player_idx];
+            let dx = (to_rect.x - cur_to.x).abs();
+            let dy = (to_rect.y - cur_to.y).abs();
+            let dw = (to_rect.w - cur_to.w).abs();
+            let dh = (to_rect.h - cur_to.h).abs();
             if dx > 0.01 || dy > 0.01 || dw > 0.01 || dh > 0.01 {
-                let t = state.pane().cursor_t[player_idx].clamp(0.0, 1.0);
-                let cur_x = (state.pane().cursor_to_x[player_idx]
-                    - state.pane().cursor_from_x[player_idx])
-                    .mul_add(t, state.pane().cursor_from_x[player_idx]);
-                let cur_y = (state.pane().cursor_to_y[player_idx]
-                    - state.pane().cursor_from_y[player_idx])
-                    .mul_add(t, state.pane().cursor_from_y[player_idx]);
-                let cur_w = (state.pane().cursor_to_w[player_idx]
-                    - state.pane().cursor_from_w[player_idx])
-                    .mul_add(t, state.pane().cursor_from_w[player_idx]);
-                let cur_h = (state.pane().cursor_to_h[player_idx]
-                    - state.pane().cursor_from_h[player_idx])
-                    .mul_add(t, state.pane().cursor_from_h[player_idx]);
+                let pane = state.pane();
+                let t = pane.cursor_t[player_idx].clamp(0.0, 1.0);
+                let cur_rect =
+                    CursorRect::lerp(pane.cursor_from[player_idx], pane.cursor_to[player_idx], t);
 
-                state.pane_mut().cursor_from_x[player_idx] = cur_x;
-                state.pane_mut().cursor_from_y[player_idx] = cur_y;
-                state.pane_mut().cursor_from_w[player_idx] = cur_w;
-                state.pane_mut().cursor_from_h[player_idx] = cur_h;
-                state.pane_mut().cursor_to_x[player_idx] = to_x;
-                state.pane_mut().cursor_to_y[player_idx] = to_y;
-                state.pane_mut().cursor_to_w[player_idx] = to_w;
-                state.pane_mut().cursor_to_h[player_idx] = to_h;
-                state.pane_mut().cursor_t[player_idx] = 0.0;
+                let pane = state.pane_mut();
+                pane.cursor_from[player_idx] = cur_rect;
+                pane.cursor_to[player_idx] = to_rect;
+                pane.cursor_t[player_idx] = 0.0;
             }
         }
     }

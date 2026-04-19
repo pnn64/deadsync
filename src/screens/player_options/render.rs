@@ -177,16 +177,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if player_idx >= PLAYER_SLOTS || !state.pane().cursor_initialized[player_idx] {
             return None;
         }
-        let t = state.pane().cursor_t[player_idx].clamp(0.0, 1.0);
-        let x = (state.pane().cursor_to_x[player_idx] - state.pane().cursor_from_x[player_idx])
-            .mul_add(t, state.pane().cursor_from_x[player_idx]);
-        let y = (state.pane().cursor_to_y[player_idx] - state.pane().cursor_from_y[player_idx])
-            .mul_add(t, state.pane().cursor_from_y[player_idx]);
-        let w = (state.pane().cursor_to_w[player_idx] - state.pane().cursor_from_w[player_idx])
-            .mul_add(t, state.pane().cursor_from_w[player_idx]);
-        let h = (state.pane().cursor_to_h[player_idx] - state.pane().cursor_from_h[player_idx])
-            .mul_add(t, state.pane().cursor_from_h[player_idx]);
-        Some((x, y, w, h))
+        let pane = state.pane();
+        let t = pane.cursor_t[player_idx].clamp(0.0, 1.0);
+        let r = CursorRect::lerp(pane.cursor_from[player_idx], pane.cursor_to[player_idx], t);
+        Some((r.x, r.y, r.w, r.h))
     };
 
     for item_idx in 0..total_rows {

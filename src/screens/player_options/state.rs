@@ -21,6 +21,34 @@ impl RowTween {
     }
 }
 
+/// Position + size for the cursor ring tween. Used as both the `from` and
+/// `to` endpoints of the cursor's per-player tween.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct CursorRect {
+    pub(super) x: f32,
+    pub(super) y: f32,
+    pub(super) w: f32,
+    pub(super) h: f32,
+}
+
+impl CursorRect {
+    #[inline(always)]
+    pub(super) fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
+        Self { x, y, w, h }
+    }
+
+    /// Linearly interpolate between `from` and `to` by `t` (component-wise).
+    #[inline(always)]
+    pub(super) fn lerp(from: Self, to: Self, t: f32) -> Self {
+        Self {
+            x: (to.x - from.x).mul_add(t, from.x),
+            y: (to.y - from.y).mul_add(t, from.y),
+            w: (to.w - from.w).mul_add(t, from.w),
+            h: (to.h - from.h).mul_add(t, from.h),
+        }
+    }
+}
+
 pub struct State {
     pub song: Arc<SongData>,
     pub return_screen: Screen,
@@ -128,14 +156,8 @@ pub struct PaneState {
     pub(super) row_tweens: Vec<RowTween>,
     // Cursor ring tween (StopTweening/BeginTweening parity with ITGmania ScreenOptions::TweenCursor).
     pub(super) cursor_initialized: [bool; PLAYER_SLOTS],
-    pub(super) cursor_from_x: [f32; PLAYER_SLOTS],
-    pub(super) cursor_from_y: [f32; PLAYER_SLOTS],
-    pub(super) cursor_from_w: [f32; PLAYER_SLOTS],
-    pub(super) cursor_from_h: [f32; PLAYER_SLOTS],
-    pub(super) cursor_to_x: [f32; PLAYER_SLOTS],
-    pub(super) cursor_to_y: [f32; PLAYER_SLOTS],
-    pub(super) cursor_to_w: [f32; PLAYER_SLOTS],
-    pub(super) cursor_to_h: [f32; PLAYER_SLOTS],
+    pub(super) cursor_from: [CursorRect; PLAYER_SLOTS],
+    pub(super) cursor_to: [CursorRect; PLAYER_SLOTS],
     pub(super) cursor_t: [f32; PLAYER_SLOTS],
 }
 
@@ -149,14 +171,8 @@ impl PaneState {
             arcade_row_focus: [false; PLAYER_SLOTS],
             row_tweens: Vec::new(),
             cursor_initialized: [false; PLAYER_SLOTS],
-            cursor_from_x: [0.0; PLAYER_SLOTS],
-            cursor_from_y: [0.0; PLAYER_SLOTS],
-            cursor_from_w: [0.0; PLAYER_SLOTS],
-            cursor_from_h: [0.0; PLAYER_SLOTS],
-            cursor_to_x: [0.0; PLAYER_SLOTS],
-            cursor_to_y: [0.0; PLAYER_SLOTS],
-            cursor_to_w: [0.0; PLAYER_SLOTS],
-            cursor_to_h: [0.0; PLAYER_SLOTS],
+            cursor_from: [CursorRect::default(); PLAYER_SLOTS],
+            cursor_to: [CursorRect::default(); PLAYER_SLOTS],
             cursor_t: [1.0; PLAYER_SLOTS],
         }
     }
@@ -170,14 +186,8 @@ impl PaneState {
         self.inline_choice_x = [f32::NAN; PLAYER_SLOTS];
         self.arcade_row_focus = [false; PLAYER_SLOTS];
         self.cursor_initialized = [false; PLAYER_SLOTS];
-        self.cursor_from_x = [0.0; PLAYER_SLOTS];
-        self.cursor_from_y = [0.0; PLAYER_SLOTS];
-        self.cursor_from_w = [0.0; PLAYER_SLOTS];
-        self.cursor_from_h = [0.0; PLAYER_SLOTS];
-        self.cursor_to_x = [0.0; PLAYER_SLOTS];
-        self.cursor_to_y = [0.0; PLAYER_SLOTS];
-        self.cursor_to_w = [0.0; PLAYER_SLOTS];
-        self.cursor_to_h = [0.0; PLAYER_SLOTS];
+        self.cursor_from = [CursorRect::default(); PLAYER_SLOTS];
+        self.cursor_to = [CursorRect::default(); PLAYER_SLOTS];
         self.cursor_t = [1.0; PLAYER_SLOTS];
     }
 }
