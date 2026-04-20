@@ -503,7 +503,6 @@ struct ComposeBreakdown {
     actor_build_us: u32,
     build_screen_us: u32,
     resolve_textures_us: u32,
-    actor_stats: ActorTreeStats,
     render_objects: u32,
     render_cameras: u32,
     text_layout: crate::engine::present::compose::TextLayoutFrameStats,
@@ -2768,7 +2767,6 @@ impl App {
         let actor_build_started = Instant::now();
         let (actors, clear_color) = self.get_current_actors();
         let actor_build_us = elapsed_us_since(actor_build_started);
-        let actor_stats = actor_tree_stats(&actors);
         self.update_fps_stats(redraw_started);
         let active_banner_video_paths = self.active_banner_video_paths();
         let song_lua_video_paths = if self.state.screens.current_screen == CurrentScreen::Gameplay {
@@ -2851,7 +2849,6 @@ impl App {
             actor_build_us,
             build_screen_us,
             resolve_textures_us,
-            actor_stats,
             render_objects: saturating_u32(screen.objects.len()),
             render_cameras: saturating_u32(screen.cameras.len()),
             text_layout,
@@ -2926,6 +2923,7 @@ impl App {
             compose_us,
             upload_us,
             draw_us,
+            &actors,
             draw_stats,
             compose_breakdown,
         );
@@ -4797,6 +4795,7 @@ impl App {
         compose_us: u32,
         upload_us: u32,
         draw_us: u32,
+        actors: &[crate::engine::present::actors::Actor],
         draw_stats: renderer::DrawStats,
         compose_breakdown: ComposeBreakdown,
     ) {
@@ -4865,6 +4864,7 @@ impl App {
         } else {
             0.0
         };
+        let actor_stats = actor_tree_stats(actors);
         let audio_stats = crate::engine::audio::get_output_timing_snapshot();
         log::trace!(
             "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] compose_dbg=[actors:{:.3} build:{:.3} resolve:{:.3} nodes:{} sprites:{} text:{} chars:{} frames:{} mesh:{} tmesh:{} cameras:{} shadows:{} objects:{} render_cameras:{} txt_hits:{} txt_shared:{} txt_miss:{} txt_lines:{} txt_glyphs:{} txt_prunes:{} txt_entries:{} txt_aliases:{}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] display_dbg=[active:{} err_ms:{:+.3} catch:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
@@ -4887,15 +4887,15 @@ impl App {
             compose_breakdown.actor_build_us as f32 / 1000.0,
             compose_breakdown.build_screen_us as f32 / 1000.0,
             compose_breakdown.resolve_textures_us as f32 / 1000.0,
-            compose_breakdown.actor_stats.total,
-            compose_breakdown.actor_stats.sprites,
-            compose_breakdown.actor_stats.texts,
-            compose_breakdown.actor_stats.text_chars,
-            compose_breakdown.actor_stats.frames,
-            compose_breakdown.actor_stats.meshes,
-            compose_breakdown.actor_stats.textured_meshes,
-            compose_breakdown.actor_stats.cameras,
-            compose_breakdown.actor_stats.shadows,
+            actor_stats.total,
+            actor_stats.sprites,
+            actor_stats.texts,
+            actor_stats.text_chars,
+            actor_stats.frames,
+            actor_stats.meshes,
+            actor_stats.textured_meshes,
+            actor_stats.cameras,
+            actor_stats.shadows,
             compose_breakdown.render_objects,
             compose_breakdown.render_cameras,
             compose_breakdown.text_layout.owned_hits,
