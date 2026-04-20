@@ -138,6 +138,7 @@ pub enum Actor {
         offset: [f32; 2],
         world_z: f32,
         size: [SizeSpec; 2],
+        local_transform: Matrix4,
         texture: Arc<str>,
         tint: [f32; 4],
         vertices: Arc<[TexturedMeshVertex]>,

@@ -89,7 +89,7 @@ struct InstanceRaw {
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct TexturedMeshVertexRaw {
-    pos: [f32; 2],
+    pos: [f32; 3],
     uv: [f32; 2],
     color: [f32; 4],
     tex_matrix_scale: [f32; 2],
@@ -2096,7 +2096,7 @@ const MESH_ATTRS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
 ];
 
 const TMESH_ATTRS: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
-    0 => Float32x2, // pos
+    0 => Float32x3, // pos
     1 => Float32x2, // uv
     2 => Float32x4, // color
     3 => Float32x2, // tex-matrix scale

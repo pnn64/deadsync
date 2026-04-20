@@ -1,5 +1,5 @@
 #version 330 core
-layout (location = 0) in vec2 a_pos;
+layout (location = 0) in vec3 a_pos;
 layout (location = 1) in vec2 a_uv;
 layout (location = 2) in vec4 a_color;
 layout (location = 3) in vec2 a_tex_matrix_scale;
@@ -22,5 +22,5 @@ void main() {
     v_uv = a_uv * i_uv_scale + i_uv_offset
          + i_uv_tex_shift * (a_tex_matrix_scale - vec2(1.0, 1.0));
     v_color = a_color * i_tint;
-    gl_Position = u_model_view_proj * model * vec4(a_pos, 0.0, 1.0);
+    gl_Position = u_model_view_proj * model * vec4(a_pos, 1.0);
 }

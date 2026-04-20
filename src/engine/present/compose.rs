@@ -4,7 +4,7 @@ use crate::engine::gfx::{BlendMode, RenderList, RenderObject};
 use crate::engine::present::actors::{self, SizeSpec};
 use crate::engine::present::{anim, font};
 use crate::engine::space::Metrics;
-use glam::{Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3};
+use glam::{Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, DefaultHasher, Hash, Hasher};
@@ -1400,37 +1400,37 @@ fn push_text_mesh_quad_with_color(
 
     out.reserve(6);
     out.push(renderer::TexturedMeshVertex {
-        pos: [x0, y0],
+        pos: [x0, y0, 0.0],
         uv: [u0, v0],
         tex_matrix_scale,
         color,
     });
     out.push(renderer::TexturedMeshVertex {
-        pos: [x0, y1],
+        pos: [x0, y1, 0.0],
         uv: [u0, v1],
         tex_matrix_scale,
         color,
     });
     out.push(renderer::TexturedMeshVertex {
-        pos: [x1, y1],
+        pos: [x1, y1, 0.0],
         uv: [u1, v1],
         tex_matrix_scale,
         color,
     });
     out.push(renderer::TexturedMeshVertex {
-        pos: [x0, y0],
+        pos: [x0, y0, 0.0],
         uv: [u0, v0],
         tex_matrix_scale,
         color,
     });
     out.push(renderer::TexturedMeshVertex {
-        pos: [x1, y1],
+        pos: [x1, y1, 0.0],
         uv: [u1, v1],
         tex_matrix_scale,
         color,
     });
     out.push(renderer::TexturedMeshVertex {
-        pos: [x1, y0],
+        pos: [x1, y0, 0.0],
         uv: [u1, v0],
         tex_matrix_scale,
         color,
@@ -2156,6 +2156,7 @@ fn build_actor_recursive<'a>(
             offset,
             world_z,
             size,
+            local_transform,
             texture,
             tint,
             vertices,
@@ -2176,7 +2177,8 @@ fn build_actor_recursive<'a>(
             let base_x = m.left + rect.x;
             let base_y = m.top - rect.y;
             let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, *world_z))
-                * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+                * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0))
+                * *local_transform;
 
             let before = out.len();
             out.push(renderer::RenderObject {
@@ -3155,9 +3157,9 @@ fn object_world_area(object_type: &renderer::ObjectType, transform: &Matrix4) ->
             let mut area = 0.0_f32;
             let mut i = 0usize;
             while i + 2 < vertices.len() {
-                let p0 = world_xy(t, vertices[i].pos);
-                let p1 = world_xy(t, vertices[i + 1].pos);
-                let p2 = world_xy(t, vertices[i + 2].pos);
+                let p0 = world_xy_3d(t, vertices[i].pos);
+                let p1 = world_xy_3d(t, vertices[i + 1].pos);
+                let p2 = world_xy_3d(t, vertices[i + 2].pos);
                 let a = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]);
                 area += 0.5 * a.abs();
                 i += 3;
@@ -3371,6 +3373,17 @@ fn world_xy(t: &Matrix4, p: [f32; 2]) -> [f32; 2] {
 }
 
 #[inline(always)]
+fn world_xy_3d(t: &Matrix4, p: [f32; 3]) -> [f32; 2] {
+    let clip = *t * Vector4::new(p[0], p[1], p[2], 1.0);
+    let inv_w = if clip.w.abs() > f32::EPSILON {
+        clip.w.recip()
+    } else {
+        1.0
+    };
+    [clip.x * inv_w, clip.y * inv_w]
+}
+
+#[inline(always)]
 fn lerp_clip(a: ClipVertex, b: ClipVertex, t: f32) -> ClipVertex {
     let t = t.clamp(0.0, 1.0);
     ClipVertex {
@@ -3475,17 +3488,17 @@ fn clip_textured_mesh_to_world_rect(
     for tri in vertices.chunks_exact(3) {
         let poly = [
             ClipVertex {
-                pos: world_xy(&transform, tri[0].pos),
+                pos: world_xy_3d(&transform, tri[0].pos),
                 uv: baked_tmesh_uv(&tri[0], uv_scale, uv_offset, uv_tex_shift),
                 color: tri[0].color,
             },
             ClipVertex {
-                pos: world_xy(&transform, tri[1].pos),
+                pos: world_xy_3d(&transform, tri[1].pos),
                 uv: baked_tmesh_uv(&tri[1], uv_scale, uv_offset, uv_tex_shift),
                 color: tri[1].color,
             },
             ClipVertex {
-                pos: world_xy(&transform, tri[2].pos),
+                pos: world_xy_3d(&transform, tri[2].pos),
                 uv: baked_tmesh_uv(&tri[2], uv_scale, uv_offset, uv_tex_shift),
                 color: tri[2].color,
             },
@@ -3500,7 +3513,7 @@ fn clip_textured_mesh_to_world_rect(
         while i + 1 < clipped.len() {
             for vertex in [base, clipped[i], clipped[i + 1]] {
                 out.push(renderer::TexturedMeshVertex {
-                    pos: vertex.pos,
+                    pos: [vertex.pos[0], vertex.pos[1], 0.0],
                     uv: vertex.uv,
                     tex_matrix_scale: [1.0, 1.0],
                     color: vertex.color,
@@ -3568,7 +3581,7 @@ fn clip_rotated_sprite_to_world_rect(
     while i + 1 < clipped.len() {
         for v in [base, clipped[i], clipped[i + 1]] {
             out.push(renderer::TexturedMeshVertex {
-                pos: v.pos,
+                pos: [v.pos[0], v.pos[1], 0.0],
                 uv: v.uv,
                 tex_matrix_scale: [1.0, 1.0],
                 color: v.color,
@@ -4082,6 +4095,7 @@ mod tests {
             offset: [10.0, 20.0],
             world_z: 0.0,
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            local_transform: Matrix4::IDENTITY,
             texture: Arc::from("mesh"),
             tint: [0.25, 0.5, 0.75, 0.8],
             vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),

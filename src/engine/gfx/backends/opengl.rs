@@ -319,7 +319,7 @@ pub fn init(
         // a_pos (location 0), a_uv (location 1), a_color (location 2), a_tex_matrix_scale (location 3)
         let stride = std::mem::size_of::<TexturedMeshVertexRaw>() as i32;
         gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+        gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
         gl.enable_vertex_attrib_array(1);
         gl.vertex_attrib_pointer_f32(
             1,
@@ -327,7 +327,7 @@ pub fn init(
             glow::FLOAT,
             false,
             stride,
-            (2 * std::mem::size_of::<f32>()) as i32,
+            (3 * std::mem::size_of::<f32>()) as i32,
         );
         gl.enable_vertex_attrib_array(2);
         gl.vertex_attrib_pointer_f32(
@@ -336,7 +336,7 @@ pub fn init(
             glow::FLOAT,
             false,
             stride,
-            (4 * std::mem::size_of::<f32>()) as i32,
+            (5 * std::mem::size_of::<f32>()) as i32,
         );
         gl.enable_vertex_attrib_array(3);
         gl.vertex_attrib_pointer_f32(
@@ -345,7 +345,7 @@ pub fn init(
             glow::FLOAT,
             false,
             stride,
-            (8 * std::mem::size_of::<f32>()) as i32,
+            (9 * std::mem::size_of::<f32>()) as i32,
         );
 
         // i_model_col0..i_model_col3 (locations 4..7), i_tint (8),
@@ -957,14 +957,14 @@ pub fn draw(
                             continue;
                         };
                         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
-                        gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+                        gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
                         gl.vertex_attrib_pointer_f32(
                             1,
                             2,
                             glow::FLOAT,
                             false,
                             stride,
-                            (2 * std::mem::size_of::<f32>()) as i32,
+                            (3 * std::mem::size_of::<f32>()) as i32,
                         );
                         gl.vertex_attrib_pointer_f32(
                             2,
@@ -972,7 +972,7 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             stride,
-                            (4 * std::mem::size_of::<f32>()) as i32,
+                            (5 * std::mem::size_of::<f32>()) as i32,
                         );
                         gl.vertex_attrib_pointer_f32(
                             3,
@@ -980,7 +980,7 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             stride,
-                            (8 * std::mem::size_of::<f32>()) as i32,
+                            (9 * std::mem::size_of::<f32>()) as i32,
                         );
                         last_tmesh_source = Some(run.source);
                     }

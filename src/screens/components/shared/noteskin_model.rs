@@ -1,6 +1,7 @@
 use crate::engine::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::game::parsing::noteskin::{ModelDrawState, ModelMesh, ModelMeshCache, SpriteSlot};
+use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4};
 use std::sync::Arc;
 
 #[inline(always)]
@@ -40,66 +41,16 @@ const fn model_blend(draw: ModelDrawState, blend: BlendMode) -> BlendMode {
 }
 
 #[inline(always)]
-fn build_model_vertices(
-    slot: &SpriteSlot,
-    model: &ModelMesh,
-    size: [f32; 2],
-    rotation_deg: f32,
-    draw: ModelDrawState,
-) -> Arc<[TexturedMeshVertex]> {
-    let model_size = model.size();
-    let model_h = model_size[1];
-    let scale = if model_h > f32::EPSILON && size[1] > f32::EPSILON {
-        size[1] / model_h
-    } else {
-        1.0
-    };
-    let zoom = [
-        draw.zoom[0].max(0.0),
-        draw.zoom[1].max(0.0),
-        draw.zoom[2].max(0.0),
-    ];
-    let local_scale = [scale * zoom[0], scale * zoom[1], scale * zoom[2]];
-    let rx = draw.rot[0].to_radians();
-    let ry = draw.rot[1].to_radians();
-    let rz = (draw.rot[2] + rotation_deg).to_radians();
-    let (sin_x, cos_x) = rx.sin_cos();
-    let (sin_y, cos_y) = ry.sin_cos();
-    let (sin_z, cos_z) = rz.sin_cos();
-    let tx = draw.pos[0] * scale;
-    let ty = draw.pos[1] * scale;
-    let tz = draw.pos[2] * scale;
-    let focal = model_size[0]
-        .max(model_size[1])
-        .mul_add(6.0, 0.0)
-        .max(180.0);
-    let align_y = (0.5 - draw.vert_align) * size[1];
-
+fn build_model_geometry(slot: &SpriteSlot, model: &ModelMesh) -> Arc<[TexturedMeshVertex]> {
     let mut vertices = Vec::with_capacity(model.vertices.len());
     for v in model.vertices.iter() {
-        let mut lx = v.pos[0] * local_scale[0];
-        let mut ly = v.pos[1] * local_scale[1] + align_y;
-        let lz = v.pos[2] * local_scale[2];
+        let mut pos = v.pos;
         if slot.def.mirror_h {
-            lx = -lx;
+            pos[0] = -pos[0];
         }
         if slot.def.mirror_v {
-            ly = -ly;
+            pos[1] = -pos[1];
         }
-
-        let x1 = lx;
-        let y1 = ly.mul_add(cos_x, -lz * sin_x);
-        let z1 = ly.mul_add(sin_x, lz * cos_x);
-
-        let x2 = x1.mul_add(cos_y, z1 * sin_y);
-        let y2 = y1;
-        let z2 = z1.mul_add(cos_y, -x1 * sin_y);
-
-        let x3 = x2.mul_add(cos_z, -y2 * sin_z) + tx;
-        let y3 = x2.mul_add(sin_z, y2 * cos_z) + ty;
-        let y_screen = -y3;
-        let z3 = z2 + tz;
-        let perspective = focal / (focal - z3).max(1.0);
         let u = if slot.def.mirror_h {
             1.0 - v.uv[0]
         } else {
@@ -112,7 +63,7 @@ fn build_model_vertices(
         };
 
         vertices.push(TexturedMeshVertex {
-            pos: [x3 * perspective, y_screen * perspective],
+            pos,
             uv: [u, v_tex],
             tex_matrix_scale: v.tex_matrix_scale,
             color: [1.0; 4],
@@ -122,12 +73,76 @@ fn build_model_vertices(
 }
 
 #[inline(always)]
+fn model_draw_transform(
+    model: &ModelMesh,
+    size: [f32; 2],
+    rotation_deg: f32,
+    draw: ModelDrawState,
+) -> Matrix4 {
+    let model_size = model.size();
+    let model_h = model_size[1];
+    let scale = if model_h > f32::EPSILON && size[1] > f32::EPSILON {
+        size[1] / model_h
+    } else {
+        1.0
+    };
+    let local_scale = Vector3::new(
+        scale * draw.zoom[0].max(0.0),
+        scale * draw.zoom[1].max(0.0),
+        scale * draw.zoom[2].max(0.0),
+    );
+    let align_y = (0.5 - draw.vert_align) * size[1];
+    let focal = model_size[0]
+        .max(model_size[1])
+        .mul_add(6.0, 0.0)
+        .max(180.0);
+    let inv_focal = focal.recip();
+    let affine = Matrix4::from_translation(Vector3::new(
+        draw.pos[0] * scale,
+        draw.pos[1] * scale,
+        draw.pos[2] * scale,
+    )) * Matrix4::from_rotation_z((draw.rot[2] + rotation_deg).to_radians())
+        * Matrix4::from_rotation_y(draw.rot[1].to_radians())
+        * Matrix4::from_rotation_x(draw.rot[0].to_radians())
+        * Matrix4::from_translation(Vector3::new(0.0, align_y, 0.0))
+        * Matrix4::from_scale(local_scale);
+
+    Matrix4::from_cols(
+        Vec4::new(
+            affine.x_axis.x,
+            -affine.x_axis.y,
+            0.0,
+            -affine.x_axis.z * inv_focal,
+        ),
+        Vec4::new(
+            affine.y_axis.x,
+            -affine.y_axis.y,
+            0.0,
+            -affine.y_axis.z * inv_focal,
+        ),
+        Vec4::new(
+            affine.z_axis.x,
+            -affine.z_axis.y,
+            0.0,
+            -affine.z_axis.z * inv_focal,
+        ),
+        Vec4::new(
+            affine.w_axis.x,
+            -affine.w_axis.y,
+            0.0,
+            1.0 - affine.w_axis.z * inv_focal,
+        ),
+    )
+}
+
+#[inline(always)]
 fn actor_from_vertices(
     slot: &SpriteSlot,
     xy: [f32; 2],
     tint: [f32; 4],
     vertices: Arc<[TexturedMeshVertex]>,
     geom_cache_key: crate::engine::gfx::TMeshCacheKey,
+    local_transform: Matrix4,
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
@@ -139,6 +154,7 @@ fn actor_from_vertices(
         offset: xy,
         world_z: 0.0,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        local_transform,
         texture: slot.texture_key_shared(),
         tint,
         vertices,
@@ -172,7 +188,8 @@ fn actor_from_draw(
 
     let tint = model_tint(color, draw);
     let blend = model_blend(draw, blend);
-    let vertices = build_model_vertices(slot, model, size, rotation_deg, draw);
+    let vertices = build_model_geometry(slot, model);
+    let local_transform = model_draw_transform(model, size, rotation_deg, draw);
     let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
     Some(actor_from_vertices(
         slot,
@@ -180,6 +197,7 @@ fn actor_from_draw(
         tint,
         vertices,
         crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
+        local_transform,
         uv_scale,
         uv_offset,
         uv_tex_shift,
@@ -207,10 +225,10 @@ pub(crate) fn noteskin_model_actor_from_draw_cached(
     }
 
     let tint = model_tint(color, draw);
-    let (geom_cache_key, vertices) =
-        cache.get_or_insert_with(slot, size, rotation_deg, draw, || {
-            build_model_vertices(slot, model, size, rotation_deg, draw)
-        });
+    let local_transform = model_draw_transform(model, size, rotation_deg, draw);
+    let (geom_cache_key, vertices) = cache.get_or_insert_with(slot, || {
+        build_model_geometry(slot, model)
+    });
     let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
     Some(actor_from_vertices(
         slot,
@@ -218,6 +236,7 @@ pub(crate) fn noteskin_model_actor_from_draw_cached(
         tint,
         vertices,
         geom_cache_key,
+        local_transform,
         uv_scale,
         uv_offset,
         uv_tex_shift,

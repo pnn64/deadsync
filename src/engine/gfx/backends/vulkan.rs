@@ -2600,23 +2600,23 @@ fn vertex_input_descriptions_tmesh() -> (
     let a_pos = vk::VertexInputAttributeDescription::default()
         .binding(0)
         .location(0)
-        .format(vk::Format::R32G32_SFLOAT)
+        .format(vk::Format::R32G32B32_SFLOAT)
         .offset(0);
     let a_uv = vk::VertexInputAttributeDescription::default()
         .binding(0)
         .location(1)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(8);
+        .offset(12);
     let a_color = vk::VertexInputAttributeDescription::default()
         .binding(0)
         .location(2)
         .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(16);
+        .offset(20);
     let a_tex_matrix_scale = vk::VertexInputAttributeDescription::default()
         .binding(0)
         .location(3)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(32);
+        .offset(36);
     let a_model0 = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(4)

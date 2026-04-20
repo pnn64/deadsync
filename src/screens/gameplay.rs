@@ -1871,6 +1871,7 @@ fn song_lua_style_capture_actor(
             offset,
             world_z,
             size,
+            local_transform,
             texture,
             tint,
             vertices,
@@ -1887,6 +1888,7 @@ fn song_lua_style_capture_actor(
             offset,
             world_z,
             size,
+            local_transform,
             texture,
             tint,
             vertices,
@@ -2289,8 +2291,9 @@ fn song_lua_projected_overlay_actor(
     let mut corners = [TexturedMeshVertex::default(); 4];
     for (idx, (pos, uv)) in local.into_iter().enumerate() {
         let world = model * Vector4::new(pos[0], pos[1], pos[2], 1.0);
+        let screen = song_lua_project_overlay_point(view_proj, [world.x, world.y, world.z])?;
         corners[idx] = TexturedMeshVertex {
-            pos: song_lua_project_overlay_point(view_proj, [world.x, world.y, world.z])?,
+            pos: [screen[0], screen[1], 0.0],
             uv,
             tex_matrix_scale: [1.0, 1.0],
             color: tint,
@@ -2301,6 +2304,7 @@ fn song_lua_projected_overlay_actor(
         offset: [0.0, 0.0],
         world_z: 0.0,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        local_transform: Matrix4::IDENTITY,
         texture,
         tint: [1.0, 1.0, 1.0, 1.0],
         vertices: Arc::from(
@@ -2760,6 +2764,7 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             mut offset,
             world_z,
             size,
+            local_transform,
             texture,
             tint,
             vertices,
@@ -2778,6 +2783,7 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 offset,
                 world_z,
                 size,
+                local_transform,
                 texture,
                 tint,
                 vertices,

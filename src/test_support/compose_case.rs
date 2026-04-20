@@ -1180,6 +1180,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             offset: *offset,
             world_z: 0.0,
             size: size.map(SizeSpec::from),
+            local_transform: glam::Mat4::IDENTITY,
             texture: Arc::from(texture.as_str()),
             tint: *tint,
             vertices: Arc::from(vertices.clone()),

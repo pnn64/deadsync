@@ -976,7 +976,7 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                 Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
                 out.push(crate::engine::gfx::TexturedMeshVertex {
-                    pos: [v.pos[0] * zoom, v.pos[1] * zoom],
+                    pos: [v.pos[0] * zoom, v.pos[1] * zoom, v.pos[2] * zoom],
                     uv: v.uv,
                     tex_matrix_scale: v.tex_matrix_scale,
                     color: v.color,

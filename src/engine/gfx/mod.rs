@@ -59,7 +59,7 @@ pub struct MeshVertex {
     Clone, Copy, Debug, serde::Serialize, serde::Deserialize, bytemuck::Pod, bytemuck::Zeroable,
 )]
 pub struct TexturedMeshVertex {
-    pub pos: [f32; 2],
+    pub pos: [f32; 3],
     pub uv: [f32; 2],
     pub tex_matrix_scale: [f32; 2],
     pub color: [f32; 4],
@@ -69,7 +69,7 @@ impl Default for TexturedMeshVertex {
     #[inline(always)]
     fn default() -> Self {
         Self {
-            pos: [0.0, 0.0],
+            pos: [0.0, 0.0, 0.0],
             uv: [0.0, 0.0],
             tex_matrix_scale: [1.0, 1.0],
             color: [0.0, 0.0, 0.0, 0.0],

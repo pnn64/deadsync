@@ -44,7 +44,7 @@ pub struct SpriteInstanceRaw {
     bytemuck::Zeroable,
 )]
 pub struct TexturedMeshVertexRaw {
-    pub pos: [f32; 2],
+    pub pos: [f32; 3],
     pub uv: [f32; 2],
     pub color: [f32; 4],
     pub tex_matrix_scale: [f32; 2],

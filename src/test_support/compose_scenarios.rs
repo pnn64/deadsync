@@ -820,6 +820,7 @@ fn textured_mesh() -> Actor {
         offset: screen_pos(0.0, -184.0),
         world_z: 0.0,
         size: [SizeSpec::Px(120.0), SizeSpec::Px(80.0)],
+        local_transform: glam::Mat4::IDENTITY,
         texture: Arc::<str>::from(MESH_TEX),
         tint: [1.0; 4],
         vertices: verts,
@@ -836,7 +837,7 @@ fn textured_mesh() -> Actor {
 
 fn textured_vertex(pos: [f32; 2], uv: [f32; 2]) -> TexturedMeshVertex {
     TexturedMeshVertex {
-        pos,
+        pos: [pos[0], pos[1], 0.0],
         uv,
         tex_matrix_scale: [1.0, 1.0],
         color: [1.0; 4],

@@ -1143,13 +1143,13 @@ fn hold_strip_row(
     let ny = forward[0] / len * half_width;
     [
         TexturedMeshVertex {
-            pos: [center[0] + nx, center[1] + ny],
+            pos: [center[0] + nx, center[1] + ny, 0.0],
             uv: [u0, v],
             tex_matrix_scale: [1.0, 1.0],
             color,
         },
         TexturedMeshVertex {
-            pos: [center[0] - nx, center[1] - ny],
+            pos: [center[0] - nx, center[1] - ny, 0.0],
             uv: [u1, v],
             tex_matrix_scale: [1.0, 1.0],
             color,
@@ -1159,8 +1159,8 @@ fn hold_strip_row(
 
 #[inline(always)]
 fn hold_strip_row_from_positions(
-    left: [f32; 2],
-    right: [f32; 2],
+    left: [f32; 3],
+    right: [f32; 3],
     u0: f32,
     u1: f32,
     v: f32,
@@ -1208,6 +1208,7 @@ fn hold_strip_actor(
         offset: [0.0, 0.0],
         world_z: 0.0,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        local_transform: Matrix4::IDENTITY,
         texture,
         tint: [1.0; 4],
         vertices,
@@ -4265,8 +4266,8 @@ pub fn build_bundles(
             // body segments are visible.
             let mut rendered_body_top: Option<f32> = None;
             let mut rendered_body_bottom: Option<f32> = None;
-            let mut body_head_row: Option<[[f32; 2]; 2]> = None;
-            let mut body_tail_row: Option<[[f32; 2]; 2]> = None;
+            let mut body_head_row: Option<[[f32; 3]; 2]> = None;
+            let mut body_tail_row: Option<[[f32; 3]; 2]> = None;
             let use_legacy_hold_sprites = visual.bumpy <= f32::EPSILON
                 && visual.drunk <= f32::EPSILON
                 && visual.tornado <= f32::EPSILON
@@ -4487,7 +4488,7 @@ pub fn build_bundles(
                                 use_body_mesh.then(|| Vec::with_capacity(96));
                             let mut body_glow_vertices =
                                 use_body_mesh.then(|| Vec::with_capacity(96));
-                            let mut prev_body_row: Option<[[f32; 2]; 2]> = None;
+                            let mut prev_body_row: Option<[[f32; 3]; 2]> = None;
 
                             while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
                                 && emitted < max_segments

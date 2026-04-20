@@ -6052,7 +6052,7 @@ return Def.ActorFrame{
                 ref text,
                 stroke_color: Some([0.0, 0.0, 0.0, 1.0]),
                 ..
-            } if font_path.ends_with("_komika axis 42px.ini") && text == "3"
+            } if font_path.ends_with("_komika axis 42px.ini") && text.as_ref() == "3"
         ));
     }
 

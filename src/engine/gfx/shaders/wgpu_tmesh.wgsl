@@ -8,7 +8,7 @@ var<immediate> u_proj: Proj;
 @group(0) @binding(1) var u_texture: texture_2d<f32>;
 
 struct VertexIn {
-    @location(0) pos: vec2<f32>,
+    @location(0) pos: vec3<f32>,
     @location(1) uv: vec2<f32>,
     @location(2) color: vec4<f32>,
     @location(3) tex_matrix_scale: vec2<f32>,
@@ -37,7 +37,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
         input.model_col2,
         input.model_col3,
     );
-    out.pos = u_proj.proj * model * vec4<f32>(input.pos, 0.0, 1.0);
+    out.pos = u_proj.proj * model * vec4<f32>(input.pos, 1.0);
     out.uv = input.uv * input.uv_scale
         + input.uv_offset
         + input.uv_tex_shift * (input.tex_matrix_scale - vec2<f32>(1.0, 1.0));

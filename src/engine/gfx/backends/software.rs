@@ -567,7 +567,7 @@ fn rasterize_textured_mesh_triangles(
     'tri: for chunk in vertices.chunks_exact(3) {
         for i in 0..3 {
             let p = chunk[i].pos;
-            let clip = mvp * Vector4::new(p[0], p[1], 0.0, 1.0);
+            let clip = mvp * Vector4::new(p[0], p[1], p[2], 1.0);
             if clip.w == 0.0 {
                 continue 'tri;
             }

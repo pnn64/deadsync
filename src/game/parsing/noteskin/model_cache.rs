@@ -1,4 +1,4 @@
-use super::{ModelDrawState, SpriteSlot};
+use super::SpriteSlot;
 use crate::engine::gfx::{TMeshCacheKey, TexturedMeshVertex};
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hash, Hasher};
@@ -10,17 +10,24 @@ const MODEL_MESH_CACHE_LIMIT: usize = 512;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct ModelMeshCacheKey {
     slot: *const SpriteSlot,
-    size: [u32; 2],
-    rotation: u32,
-    pos: [u32; 3],
-    rot: [u32; 3],
-    zoom: [u32; 3],
-    vert_align: u32,
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ModelMeshCacheStats {
+    pub hits: u64,
+    pub misses: u64,
+    pub saturated_misses: u64,
+}
+
 pub(crate) struct ModelMeshCache {
     entries: HashMap<ModelMeshCacheKey, Arc<[TexturedMeshVertex]>, BuildHasherDefault<XxHash64>>,
+    pub(crate) stats: ModelMeshCacheStats,
+}
+
+impl Default for ModelMeshCache {
+    fn default() -> Self {
+        Self::with_capacity(0)
+    }
 }
 
 impl ModelMeshCache {
@@ -28,6 +35,7 @@ impl ModelMeshCache {
     pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
             entries: HashMap::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            stats: ModelMeshCacheStats::default(),
         }
     }
 
@@ -40,63 +48,32 @@ impl ModelMeshCache {
     pub(crate) fn get_or_insert_with<F>(
         &mut self,
         slot: &SpriteSlot,
-        size: [f32; 2],
-        rotation_deg: f32,
-        draw: ModelDrawState,
         build: F,
     ) -> (TMeshCacheKey, Arc<[TexturedMeshVertex]>)
     where
         F: FnOnce() -> Arc<[TexturedMeshVertex]>,
     {
-        let key = model_cache_key(slot, size, rotation_deg, draw);
+        let key = model_cache_key(slot);
         let geom_cache_key = hashed_model_cache_key(&key);
         if let Some(vertices) = self.entries.get(&key) {
+            self.stats.hits = self.stats.hits.saturating_add(1);
             return (geom_cache_key, vertices.clone());
         }
+        self.stats.misses = self.stats.misses.saturating_add(1);
         let vertices = build();
         if self.entries.len() < MODEL_MESH_CACHE_LIMIT {
             self.entries.insert(key, vertices.clone());
+        } else {
+            self.stats.saturated_misses = self.stats.saturated_misses.saturating_add(1);
         }
         (geom_cache_key, vertices)
     }
 }
 
 #[inline(always)]
-const fn norm_bits(v: f32) -> u32 {
-    if v == 0.0 {
-        0.0f32.to_bits()
-    } else {
-        v.to_bits()
-    }
-}
-
-#[inline(always)]
-fn model_cache_key(
-    slot: &SpriteSlot,
-    size: [f32; 2],
-    rotation_deg: f32,
-    draw: ModelDrawState,
-) -> ModelMeshCacheKey {
+fn model_cache_key(slot: &SpriteSlot) -> ModelMeshCacheKey {
     ModelMeshCacheKey {
         slot: slot as *const SpriteSlot,
-        size: [norm_bits(size[0]), norm_bits(size[1])],
-        rotation: norm_bits(rotation_deg),
-        pos: [
-            norm_bits(draw.pos[0]),
-            norm_bits(draw.pos[1]),
-            norm_bits(draw.pos[2]),
-        ],
-        rot: [
-            norm_bits(draw.rot[0]),
-            norm_bits(draw.rot[1]),
-            norm_bits(draw.rot[2]),
-        ],
-        zoom: [
-            norm_bits(draw.zoom[0]),
-            norm_bits(draw.zoom[1]),
-            norm_bits(draw.zoom[2]),
-        ],
-        vert_align: norm_bits(draw.vert_align),
     }
 }
 
@@ -111,7 +88,8 @@ fn hashed_model_cache_key(key: &ModelMeshCacheKey) -> TMeshCacheKey {
 mod tests {
     use super::*;
     use crate::game::parsing::noteskin::{
-        ModelAutoRotKey, ModelMesh, ModelTweenSegment, SpriteDefinition, SpriteSource,
+        ModelAutoRotKey, ModelDrawState, ModelMesh, ModelTweenSegment, ModelVertex,
+        SpriteDefinition, SpriteSource,
     };
 
     fn test_slot() -> SpriteSlot {
@@ -127,7 +105,11 @@ mod tests {
             uv_offset: [0.0, 0.0],
             note_color_translate: false,
             model: Some(Arc::new(ModelMesh {
-                vertices: Arc::from([]),
+                vertices: Arc::from([ModelVertex {
+                    pos: [0.0, 0.0, 0.0],
+                    uv: [0.0, 0.0],
+                    tex_matrix_scale: [1.0, 1.0],
+                }]),
                 bounds: [0.0; 6],
             })),
             model_draw: ModelDrawState::default(),
@@ -141,22 +123,57 @@ mod tests {
     #[test]
     fn cached_geometry_reuses_key_across_tints() {
         let slot = test_slot();
-        let size = [48.0, 64.0];
-        let draw = ModelDrawState::default();
         let mut cache = ModelMeshCache::default();
         let mut builds = 0usize;
 
-        let (key_a, verts_a) = cache.get_or_insert_with(&slot, size, 15.0, draw, || {
+        let (key_a, verts_a) = cache.get_or_insert_with(&slot, || {
             builds += 1;
             Arc::from(vec![TexturedMeshVertex::default()])
         });
-        let (key_b, verts_b) = cache.get_or_insert_with(&slot, size, 15.0, draw, || {
+        let (key_b, verts_b) = cache.get_or_insert_with(&slot, || {
             builds += 1;
             Arc::from(vec![TexturedMeshVertex::default()])
         });
 
         assert_eq!(builds, 1);
         assert_eq!(key_a, key_b);
+        assert!(Arc::ptr_eq(&verts_a, &verts_b));
+        assert_eq!(
+            cache.stats,
+            ModelMeshCacheStats {
+                hits: 1,
+                misses: 1,
+                saturated_misses: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn cached_geometry_ignores_draw_state_changes() {
+        let slot = test_slot();
+        let mut cache = ModelMeshCache::default();
+        let mut builds = 0usize;
+        let draw = ModelDrawState {
+            pos: [12.0, -4.0, 1.0],
+            rot: [10.0, 20.0, 30.0],
+            zoom: [1.5, 0.75, 2.0],
+            vert_align: 0.1,
+            ..ModelDrawState::default()
+        };
+
+        let (_, verts_a) = cache.get_or_insert_with(&slot, || {
+            builds += 1;
+            Arc::from(vec![TexturedMeshVertex::default()])
+        });
+        let (_, verts_b) = cache.get_or_insert_with(&slot, || {
+            builds += 1;
+            Arc::from(vec![TexturedMeshVertex {
+                pos: [draw.pos[0], draw.pos[1], draw.pos[2]],
+                ..TexturedMeshVertex::default()
+            }])
+        });
+
+        assert_eq!(builds, 1);
         assert!(Arc::ptr_eq(&verts_a, &verts_b));
     }
 }
