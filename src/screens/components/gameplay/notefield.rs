@@ -1312,12 +1312,26 @@ fn effective_mini_value(
 
 #[inline(always)]
 fn judgment_actor_zoom(mini: f32, judgment_back: bool) -> f32 {
-    if !judgment_back {
-        return 1.0;
+    if judgment_back {
+        // Arrow Cloud's JudgmentBack actorframe applies its own linear
+        // shrink on top of the Player ActorFrame inheritance.
+        ((2.0 - mini) * 0.5).clamp(0.35, 1.0)
+    } else {
+        // ITGmania Player::Update applies the same min(pow(0.5, mini+tiny), 1.0)
+        // factor to the front judgment actor that it applies to combo (see
+        // Player.cpp fJudgmentZoom -> m_pActorWithJudgmentPosition->SetZoom).
+        // Simply Love does not override this, so the front judgment shrinks
+        // with Mini just like the combo does.
+        combo_actor_zoom(mini)
     }
-    // Arrow Cloud's JudgmentBack actorframe scales with Mini; the normal
-    // front judgment actor in ITGmania/Simply Love does not.
-    ((2.0 - mini) * 0.5).clamp(0.35, 1.0)
+}
+
+#[inline(always)]
+fn combo_actor_zoom(mini: f32) -> f32 {
+    // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0). The Player
+    // ActorFrame's mini scale is inherited by both the combo display and
+    // the front judgment actor in Simply Love.
+    0.5_f32.powf(mini).min(1.0)
 }
 
 #[inline(always)]
@@ -3100,6 +3114,7 @@ pub fn build_bundles(
     let mc_font_name = zmod_small_combo_font(profile.combo_font);
     let judgment_zoom_mod = judgment_actor_zoom(mini, profile.judgment_back)
         * hallway_judgment_zoom(perspective.tilt, perspective.skew);
+    let combo_zoom_mod = combo_actor_zoom(mini);
     let effect_height = field_effect_height(perspective.tilt);
     let receptor_alpha = (1.0 - visibility.dark).clamp(0.0, 1.0);
     let blind_active = visibility.blind > f32::EPSILON;
@@ -6196,7 +6211,7 @@ pub fn build_bundles(
                     let explosion_duration = 0.5_f32;
                     if elapsed <= explosion_duration {
                         let progress = (elapsed / explosion_duration).clamp(0.0, 1.0);
-                        let zoom = 2.0 - progress;
+                        let zoom = (2.0 - progress) * combo_zoom_mod;
                         let alpha = (0.5 * (1.0 - progress)).max(0.0);
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let rotation = 90.0 * direction * progress;
@@ -6219,7 +6234,7 @@ pub fn build_bundles(
                     if elapsed <= COMBO_HUNDRED_MILESTONE_DURATION {
                         let progress = (elapsed / COMBO_HUNDRED_MILESTONE_DURATION).clamp(0.0, 1.0);
                         let eased = ease_out_quad(progress);
-                        let zoom = 0.25 + (2.0 - 0.25) * eased;
+                        let zoom = (0.25 + (2.0 - 0.25) * eased) * combo_zoom_mod;
                         let alpha = (0.6 * (1.0 - eased)).max(0.0);
                         let rotation = 10.0 + (0.0 - 10.0) * eased;
                         push_hud_capture(
@@ -6239,7 +6254,7 @@ pub fn build_bundles(
                         let mini_duration = 0.4_f32;
                         if elapsed <= mini_duration {
                             let mini_progress = (elapsed / mini_duration).clamp(0.0, 1.0);
-                            let mini_zoom = 0.25 + (1.8 - 0.25) * mini_progress;
+                            let mini_zoom = (0.25 + (1.8 - 0.25) * mini_progress) * combo_zoom_mod;
                             let mini_alpha = (1.0 - mini_progress).max(0.0);
                             let mini_rotation = 10.0 + (0.0 - 10.0) * mini_progress;
                             push_hud_capture(
@@ -6264,9 +6279,9 @@ pub fn build_bundles(
                     if elapsed <= COMBO_THOUSAND_MILESTONE_DURATION {
                         let progress =
                             (elapsed / COMBO_THOUSAND_MILESTONE_DURATION).clamp(0.0, 1.0);
-                        let zoom = 0.25 + (3.0 - 0.25) * progress;
+                        let zoom = (0.25 + (3.0 - 0.25) * progress) * combo_zoom_mod;
                         let alpha = (0.7 * (1.0 - progress)).max(0.0);
-                        let x_offset = 100.0 * progress;
+                        let x_offset = 100.0 * progress * combo_zoom_mod;
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let final_x = combo_center_x + x_offset * direction;
                             push_hud_capture(
@@ -6302,7 +6317,7 @@ pub fn build_bundles(
                     act!(text:
                         font(font_name): settext(cached_int_u32(p.miss_combo)):
                         align(0.5, 0.5): xy(combo_x, combo_y):
-                        zoom(0.75): horizalign(center): shadowlength(1.0):
+                        zoom(0.75 * combo_zoom_mod): horizalign(center): shadowlength(1.0):
                         diffuse(1.0, 0.0, 0.0, 1.0):
                         z(90)
                     ),
@@ -6380,7 +6395,7 @@ pub fn build_bundles(
                     act!(text:
                         font(font_name): settext(cached_int_u32(p.combo)):
                         align(0.5, 0.5): xy(combo_x, combo_y):
-                        zoom(0.75): horizalign(center): shadowlength(1.0):
+                        zoom(0.75 * combo_zoom_mod): horizalign(center): shadowlength(1.0):
                         diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
                         z(90)
                     ),
@@ -7263,7 +7278,7 @@ mod tests {
         MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
-        calc_note_rotation_z, clipped_hold_body_bounds, hallway_judgment_zoom,
+        calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, hallway_judgment_zoom,
         hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
         hold_window_for_display_run, hud_layout_ys, hud_y, judgment_actor_zoom,
         lane_hold_window_bounds_by_time_ns, let_go_head_beat,
@@ -7918,10 +7933,22 @@ mod tests {
     }
 
     #[test]
-    fn judgment_actor_zoom_ignores_mini_without_judgment_back() {
-        assert!((judgment_actor_zoom(0.35, false) - 1.0).abs() <= 1e-6);
-        assert!((judgment_actor_zoom(1.5, false) - 1.0).abs() <= 1e-6);
+    fn judgment_actor_zoom_matches_itgmania_player_mini_formula_without_judgment_back() {
+        // Without the Arrow Cloud JudgmentBack override, the front judgment
+        // inherits the Player ActorFrame's mini scale, identical to combo:
+        // min(pow(0.5, mini + tiny), 1.0).
+        assert!((judgment_actor_zoom(0.0, false) - 1.0).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(1.0, false) - 0.5).abs() <= 1e-6);
+        assert!((judgment_actor_zoom(0.5, false) - 0.5_f32.sqrt()).abs() <= 1e-6);
+        // Negative mini is clamped to 1.0 by the min(_, 1.0) cap so the
+        // judgment never grows past its base size.
         assert!((judgment_actor_zoom(-1.0, false) - 1.0).abs() <= 1e-6);
+        // Parity with combo_actor_zoom is the whole point of this branch.
+        for &mini in &[-1.0_f32, 0.0, 0.25, 0.5, 1.0, 1.5] {
+            assert!(
+                (judgment_actor_zoom(mini, false) - combo_actor_zoom(mini)).abs() <= 1e-6
+            );
+        }
     }
 
     #[test]
@@ -7929,6 +7956,17 @@ mod tests {
         assert!((judgment_actor_zoom(0.35, true) - 0.825).abs() <= 1e-6);
         assert!((judgment_actor_zoom(1.5, true) - 0.35).abs() <= 1e-6);
         assert!((judgment_actor_zoom(-1.0, true) - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn combo_actor_zoom_matches_itgmania_player_mini_formula() {
+        // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0).
+        assert!((combo_actor_zoom(0.0) - 1.0).abs() <= 1e-6);
+        assert!((combo_actor_zoom(1.0) - 0.5).abs() <= 1e-6);
+        assert!((combo_actor_zoom(0.5) - 0.5_f32.sqrt()).abs() <= 1e-6);
+        // Big (negative mini) is clamped to 1.0 by the min(_, 1.0) cap so
+        // the combo never grows past its base size.
+        assert!((combo_actor_zoom(-1.0) - 1.0).abs() <= 1e-6);
     }
 
     #[test]
