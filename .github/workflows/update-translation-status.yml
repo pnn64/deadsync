@@ -18,6 +18,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            pkg-config \
+            libasound2-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxi-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libvulkan-dev \
+            libudev-dev \
+            libgl1-mesa-dev \
+            libxcb1-dev \
+            libxcb-randr0-dev
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
