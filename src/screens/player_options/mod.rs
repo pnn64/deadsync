@@ -149,8 +149,19 @@ pub fn init(
         fixed_stepchart.as_ref(),
     );
     let player_profiles = [p1_profile.clone(), p2_profile.clone()];
-    // Masks are computed from the profile and are identical regardless of
-    // which pane's row_map is passed, so capture them from the Main call.
+    // `apply_profile_defaults` populates 8 of its 17 returned masks (Scroll,
+    // Insert, Remove, Holds, Accel, Effect, Appearance, EarlyDw) only when
+    // the corresponding row exists in the passed `row_map`. Those rows live
+    // on the Advanced and Uncommon panes, so we must call the function on
+    // every pane and OR the results together. Otherwise persisted profile
+    // state for those rows would silently appear empty here and get
+    // overwritten the moment the user touches any choice on those rows.
+    let p1_main = apply_profile_defaults(&mut main_row_map, &player_profiles[P1], P1);
+    let p2_main = apply_profile_defaults(&mut main_row_map, &player_profiles[P2], P2);
+    let p1_advanced = apply_profile_defaults(&mut advanced_row_map, &player_profiles[P1], P1);
+    let p2_advanced = apply_profile_defaults(&mut advanced_row_map, &player_profiles[P2], P2);
+    let p1_uncommon = apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P1], P1);
+    let p2_uncommon = apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P2], P2);
     let (
         scroll_active_mask_p1,
         hide_active_mask_p1,
@@ -169,7 +180,7 @@ pub fn init(
         error_bar_active_mask_p1,
         error_bar_options_active_mask_p1,
         measure_counter_options_active_mask_p1,
-    ) = apply_profile_defaults(&mut main_row_map, &player_profiles[P1], P1);
+    ) = or_active_masks(or_active_masks(p1_main, p1_advanced), p1_uncommon);
     let (
         scroll_active_mask_p2,
         hide_active_mask_p2,
@@ -188,12 +199,7 @@ pub fn init(
         error_bar_active_mask_p2,
         error_bar_options_active_mask_p2,
         measure_counter_options_active_mask_p2,
-    ) = apply_profile_defaults(&mut main_row_map, &player_profiles[P2], P2);
-    // Populate selected_choice_index for the other panes (mask returns dropped).
-    let _ = apply_profile_defaults(&mut advanced_row_map, &player_profiles[P1], P1);
-    let _ = apply_profile_defaults(&mut advanced_row_map, &player_profiles[P2], P2);
-    let _ = apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P1], P1);
-    let _ = apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P2], P2);
+    ) = or_active_masks(or_active_masks(p2_main, p2_advanced), p2_uncommon);
 
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
     let mut initial_noteskin_names = vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()];
