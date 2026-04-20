@@ -266,16 +266,6 @@ fn build_cached_banner_rgba(
     Ok(open_image_fallback_quiet(path)?.to_rgba8())
 }
 
-pub(crate) fn collect_stale_dynamic_keys<'a>(
-    current: impl Iterator<Item = &'a String>,
-    desired: &HashSet<String>,
-) -> Vec<String> {
-    current
-        .filter(|key| !desired.contains(*key))
-        .cloned()
-        .collect()
-}
-
 pub(crate) fn dedupe_dynamic_keys(keys: Vec<String>) -> Vec<String> {
     let mut seen = HashSet::with_capacity(keys.len());
     let mut out = Vec::with_capacity(keys.len());

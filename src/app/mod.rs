@@ -2768,33 +2768,105 @@ impl App {
         let (actors, clear_color) = self.get_current_actors();
         let actor_build_us = elapsed_us_since(actor_build_started);
         self.update_fps_stats(redraw_started);
-        let active_banner_video_paths = self.active_banner_video_paths();
-        let song_lua_video_paths = if self.state.screens.current_screen == CurrentScreen::Gameplay {
-            self.state
-                .screens
-                .gameplay_state
-                .as_ref()
-                .map(|state| song_lua_video_paths(&state.song_lua_overlays))
-                .unwrap_or_default()
+        let screens = &self.state.screens;
+        let current_screen = screens.current_screen;
+        let post_select_banner_paths = if config::get().show_select_music_video_banners
+            && matches!(
+                current_screen,
+                CurrentScreen::EvaluationSummary | CurrentScreen::Initials
+            ) {
+            self.post_select_display_stages()
+                .iter()
+                .filter_map(|stage| stage.song.banner_path.clone())
+                .collect::<Vec<_>>()
         } else {
             Vec::new()
         };
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
-            let gameplay_time = self.state.screens.gameplay_state.as_ref().map(|state| {
+            let gameplay_time = screens.gameplay_state.as_ref().map(|state| {
                 crate::game::gameplay::song_time_ns_to_seconds(state.current_music_time_ns)
             });
-            self.dynamic_media.sync_active_banner_videos(
-                &mut self.asset_manager,
-                backend,
-                &active_banner_video_paths,
-            );
-            if self.state.screens.current_screen == CurrentScreen::Gameplay {
-                self.dynamic_media.sync_active_song_lua_videos(
-                    &mut self.asset_manager,
-                    backend,
-                    &song_lua_video_paths,
-                );
+            match current_screen {
+                CurrentScreen::SelectMusic => {
+                    let state = &screens.select_music_state;
+                    let desired_path = if config::get().show_select_music_video_banners
+                        && config::get().show_select_music_banners
+                        && state.banner_high_quality_requested
+                    {
+                        match state.entries.get(state.selected_index) {
+                            Some(select_music::MusicWheelEntry::Song(song)) => {
+                                song.banner_path.as_deref()
+                            }
+                            Some(select_music::MusicWheelEntry::PackHeader {
+                                banner_path, ..
+                            }) => banner_path.as_deref(),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    self.dynamic_media.sync_active_banner_video(
+                        &mut self.asset_manager,
+                        backend,
+                        desired_path,
+                    );
+                }
+                CurrentScreen::SelectCourse => {
+                    let state = &screens.select_course_state;
+                    let desired_path = if config::get().show_select_music_video_banners
+                        && config::get().show_select_music_banners
+                        && state.banner_high_quality_requested
+                    {
+                        match state.entries.get(state.selected_index) {
+                            Some(select_music::MusicWheelEntry::Song(song)) => {
+                                song.banner_path.as_deref()
+                            }
+                            Some(select_music::MusicWheelEntry::PackHeader {
+                                banner_path, ..
+                            }) => banner_path.as_deref(),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    self.dynamic_media.sync_active_banner_video(
+                        &mut self.asset_manager,
+                        backend,
+                        desired_path,
+                    );
+                }
+                CurrentScreen::Evaluation => {
+                    let desired_path = if config::get().show_select_music_video_banners {
+                        screens
+                            .evaluation_state
+                            .score_info
+                            .iter()
+                            .flatten()
+                            .find_map(|score| score.song.banner_path.as_deref())
+                    } else {
+                        None
+                    };
+                    self.dynamic_media.sync_active_banner_video(
+                        &mut self.asset_manager,
+                        backend,
+                        desired_path,
+                    );
+                }
+                CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
+                    self.dynamic_media.sync_active_banner_videos(
+                        &mut self.asset_manager,
+                        backend,
+                        &post_select_banner_paths,
+                    );
+                }
+                _ => {
+                    self.dynamic_media.sync_active_banner_video(
+                        &mut self.asset_manager,
+                        backend,
+                        None,
+                    );
+                }
             }
             self.dynamic_media
                 .queue_video_frames(&mut self.asset_manager, gameplay_time);
@@ -4175,62 +4247,6 @@ impl App {
             && let Some(gs) = self.state.screens.gameplay_state.as_mut()
         {
             gs.background_texture_key = key;
-        }
-    }
-
-    fn active_banner_video_paths(&self) -> Vec<PathBuf> {
-        if !config::get().show_select_music_video_banners {
-            return Vec::new();
-        }
-        match self.state.screens.current_screen {
-            CurrentScreen::SelectMusic => {
-                let state = &self.state.screens.select_music_state;
-                if !config::get().show_select_music_banners || !state.banner_high_quality_requested
-                {
-                    return Vec::new();
-                }
-                match state.entries.get(state.selected_index) {
-                    Some(select_music::MusicWheelEntry::Song(song)) => {
-                        song.banner_path.clone().into_iter().collect()
-                    }
-                    Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
-                        banner_path.clone().into_iter().collect()
-                    }
-                    _ => Vec::new(),
-                }
-            }
-            CurrentScreen::SelectCourse => {
-                let state = &self.state.screens.select_course_state;
-                if !config::get().show_select_music_banners || !state.banner_high_quality_requested
-                {
-                    return Vec::new();
-                }
-                match state.entries.get(state.selected_index) {
-                    Some(select_music::MusicWheelEntry::Song(song)) => {
-                        song.banner_path.clone().into_iter().collect()
-                    }
-                    Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
-                        banner_path.clone().into_iter().collect()
-                    }
-                    _ => Vec::new(),
-                }
-            }
-            CurrentScreen::Evaluation => self
-                .state
-                .screens
-                .evaluation_state
-                .score_info
-                .iter()
-                .flatten()
-                .find_map(|score| score.song.banner_path.clone())
-                .into_iter()
-                .collect(),
-            CurrentScreen::EvaluationSummary | CurrentScreen::Initials => self
-                .post_select_display_stages()
-                .iter()
-                .filter_map(|stage| stage.song.banner_path.clone())
-                .collect(),
-            _ => Vec::new(),
         }
     }
 
@@ -6260,6 +6276,7 @@ impl App {
                     combo_carry,
                 );
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
+                let song_lua_video_paths = song_lua_video_paths(&gs.song_lua_overlays);
 
                 let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
@@ -6272,7 +6289,7 @@ impl App {
                     self.dynamic_media.sync_active_song_lua_videos(
                         &mut self.asset_manager,
                         backend,
-                        &song_lua_video_paths(&gs.song_lua_overlays),
+                        &song_lua_video_paths,
                     );
                     if let Some(path) = gs.song.banner_path.as_ref() {
                         media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);

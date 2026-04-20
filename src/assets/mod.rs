@@ -14,9 +14,8 @@ use std::{error::Error as StdError, fmt, path::Path, sync::Arc};
 
 #[cfg(test)]
 pub(crate) use self::dynamic::{
-    BannerCacheOptions, collect_stale_dynamic_keys, dedupe_dynamic_keys,
-    dynamic_image_cache_path_for, load_or_build_cached_dynamic_image, save_cached_banner_image,
-    save_raw_cached_banner_image,
+    BannerCacheOptions, dedupe_dynamic_keys, dynamic_image_cache_path_for,
+    load_or_build_cached_dynamic_image, save_cached_banner_image, save_raw_cached_banner_image,
 };
 #[cfg(test)]
 pub(crate) use self::textures::parse_texture_resolution_hint;
@@ -649,20 +648,6 @@ mod tests {
         assert_eq!(
             parse_texture_resolution_hint("_miso light 16x7 doubleres.png"),
             None
-        );
-    }
-
-    #[test]
-    fn collect_stale_dynamic_keys_skips_desired_entries() {
-        let current = [
-            "keep.mp4".to_string(),
-            "drop-a.mp4".to_string(),
-            "drop-b.mp4".to_string(),
-        ];
-        let desired = HashSet::from(["keep.mp4".to_string()]);
-        assert_eq!(
-            collect_stale_dynamic_keys(current.iter(), &desired),
-            vec!["drop-a.mp4".to_string(), "drop-b.mp4".to_string()]
         );
     }
 
