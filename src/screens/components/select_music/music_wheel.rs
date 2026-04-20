@@ -1,5 +1,6 @@
 use crate::act;
 use crate::config::SelectMusicItlWheelMode;
+use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
 use crate::engine::space::widescale;
@@ -45,6 +46,7 @@ const HEART_ZOOM_SINGLE: f32 = 0.039; // 512 * 0.039 ≈ 20px
 const HEART_ZOOM_DUAL: f32 = 0.029; // 512 * 0.029 ≈ 15px
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
+const STR_REF_CACHE_LIMIT: usize = 4096;
 // Simply Love and Arrow Cloud both use zoom(0.2) for the single-line ITL wheel value.
 // Our stacked Points+Score mode is deadsync-only, so it needs a smaller zoom to
 // keep both lines within that same visual footprint.
@@ -56,6 +58,8 @@ thread_local! {
         RefCell::new(HashMap::with_capacity(256));
     static ITL_POINTS_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
         RefCell::new(HashMap::with_capacity(256));
+    static STR_REF_CACHE: RefCell<TextCache<(usize, usize)>> =
+        RefCell::new(HashMap::with_capacity(1024));
 }
 
 const fn col_quint_lamp() -> [f32; 4] {
@@ -122,6 +126,12 @@ fn cached_itl_points_text(points: u32) -> Arc<str> {
         }
         text
     })
+}
+
+#[inline(always)]
+fn cached_str_ref(text: &str) -> Arc<str> {
+    let key = (text.as_ptr() as usize, text.len());
+    cached_text(&STR_REF_CACHE, key, STR_REF_CACHE_LIMIT, || text.to_owned())
 }
 
 #[inline(always)]
@@ -352,7 +362,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     ));
                     slot_children.push(act!(text:
                         font("miso"):
-                        settext(name.as_str()):
+                        settext(cached_str_ref(name.as_str())):
                         align(0.5, 0.5):
                         xy(pack_center_x_local, half_item_h):
                         maxwidth(pack_name_max_w):
@@ -448,7 +458,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     let subtitle_y_offset = if has_subtitle { -line_gap_units } else { 0.0 };
                     slot_children.push(act!(text:
                         font("miso"):
-                        settext(title):
+                        settext(cached_str_ref(title)):
                         align(0.0, 0.5):
                         xy(title_x_local, half_item_h + subtitle_y_offset):
                         maxwidth(title_max_w_local):
@@ -459,7 +469,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     if has_subtitle {
                         slot_children.push(act!(text:
                             font("miso"):
-                            settext(subtitle):
+                            settext(cached_str_ref(subtitle)):
                             align(0.0, 0.5):
                             xy(title_x_local, half_item_h + line_gap_units):
                             maxwidth(title_max_w_local):

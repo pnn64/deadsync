@@ -30,6 +30,7 @@ thread_local! {
     static PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
     static GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(1024));
     static GAME_TIME_WIDTH_CACHE: RefCell<HashMap<(u32, u8), f32>> = RefCell::new(HashMap::with_capacity(1024));
+    static STR_REF_CACHE: RefCell<TextCache<(usize, usize)>> = RefCell::new(HashMap::with_capacity(512));
 }
 
 static DIGIT_TEXT: LazyLock<[Arc<str>; 10]> =
@@ -117,6 +118,12 @@ fn time_song_right_text() -> Arc<str> {
 
 fn time_remaining_right_text() -> Arc<str> {
     tr("Gameplay", "TimeRemaining")
+}
+
+#[inline(always)]
+fn cached_str_ref(text: &str) -> Arc<str> {
+    let key = (text.as_ptr() as usize, text.len());
+    cached_text(&STR_REF_CACHE, key, TEXT_CACHE_LIMIT, || text.to_owned())
 }
 
 #[inline(always)]
@@ -1404,7 +1411,7 @@ fn build_steps_info(
     ));
     let y_artist = origin_y + (row_h * 2.0 * group_zoom);
     actors.push(act!(text:
-        font("miso"): settext(state.song.artist.as_str()):
+        font("miso"): settext(cached_str_ref(state.song.artist.as_str())):
         align(0.0, 0.5): xy(values_x, y_artist):
         maxwidth(maxwidth):
         zoom(group_zoom): z(z):
