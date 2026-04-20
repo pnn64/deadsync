@@ -15,87 +15,138 @@ pub(super) struct RowVisibility {
     pub(super) show_global_offset_shift: bool,
 }
 
+/// Single source of truth for parent/child row-visibility relationships.
+///
+/// Each entry declares a conditional child row, the parent row whose
+/// state controls it (used for scroll-anchoring back to the parent when
+/// the child is hidden), and the predicate over `RowVisibility` that
+/// determines whether the child is currently visible.
+///
+/// `parent` is `None` for rows that are gated by an environment flag
+/// rather than a parent row's choice (e.g. `GlobalOffsetShift`).
+struct RowHierarchyEntry {
+    child: RowId,
+    parent: Option<RowId>,
+    visible: fn(&RowVisibility) -> bool,
+}
+
+const ROW_HIERARCHY: &[RowHierarchyEntry] = &[
+    RowHierarchyEntry {
+        child: RowId::MeasureCounterLookahead,
+        parent: Some(RowId::MeasureCounter),
+        visible: |v| v.show_measure_counter_children,
+    },
+    RowHierarchyEntry {
+        child: RowId::MeasureCounterOptions,
+        parent: Some(RowId::MeasureCounter),
+        visible: |v| v.show_measure_counter_children,
+    },
+    RowHierarchyEntry {
+        child: RowId::JudgmentOffsetX,
+        parent: Some(RowId::JudgmentFont),
+        visible: |v| v.show_judgment_offsets,
+    },
+    RowHierarchyEntry {
+        child: RowId::JudgmentOffsetY,
+        parent: Some(RowId::JudgmentFont),
+        visible: |v| v.show_judgment_offsets,
+    },
+    RowHierarchyEntry {
+        child: RowId::JudgmentTiltIntensity,
+        parent: Some(RowId::JudgmentTilt),
+        visible: |v| v.show_judgment_tilt_intensity,
+    },
+    RowHierarchyEntry {
+        child: RowId::ComboOffsetX,
+        parent: Some(RowId::ComboFont),
+        visible: |v| v.show_combo_offsets,
+    },
+    RowHierarchyEntry {
+        child: RowId::ComboOffsetY,
+        parent: Some(RowId::ComboFont),
+        visible: |v| v.show_combo_offsets,
+    },
+    RowHierarchyEntry {
+        child: RowId::ErrorBarTrim,
+        parent: Some(RowId::ErrorBar),
+        visible: |v| v.show_error_bar_children,
+    },
+    RowHierarchyEntry {
+        child: RowId::ErrorBarOptions,
+        parent: Some(RowId::ErrorBar),
+        visible: |v| v.show_error_bar_children,
+    },
+    RowHierarchyEntry {
+        child: RowId::ErrorBarOffsetX,
+        parent: Some(RowId::ErrorBar),
+        visible: |v| v.show_error_bar_children,
+    },
+    RowHierarchyEntry {
+        child: RowId::ErrorBarOffsetY,
+        parent: Some(RowId::ErrorBar),
+        visible: |v| v.show_error_bar_children,
+    },
+    RowHierarchyEntry {
+        child: RowId::CustomBlueFantasticWindowMs,
+        parent: Some(RowId::CustomBlueFantasticWindow),
+        visible: |v| v.show_custom_fantastic_window_ms,
+    },
+    RowHierarchyEntry {
+        child: RowId::DensityGraphBackground,
+        parent: Some(RowId::DataVisualizations),
+        visible: |v| v.show_density_graph_background,
+    },
+    RowHierarchyEntry {
+        child: RowId::ComboColors,
+        parent: Some(RowId::Hide),
+        visible: |v| v.show_combo_rows,
+    },
+    RowHierarchyEntry {
+        child: RowId::ComboColorMode,
+        parent: Some(RowId::Hide),
+        visible: |v| v.show_combo_rows,
+    },
+    RowHierarchyEntry {
+        child: RowId::CarryCombo,
+        parent: Some(RowId::Hide),
+        visible: |v| v.show_combo_rows,
+    },
+    RowHierarchyEntry {
+        child: RowId::LifeMeterType,
+        parent: Some(RowId::Hide),
+        visible: |v| v.show_lifebar_rows,
+    },
+    RowHierarchyEntry {
+        child: RowId::LifeBarOptions,
+        parent: Some(RowId::Hide),
+        visible: |v| v.show_lifebar_rows,
+    },
+    RowHierarchyEntry {
+        child: RowId::IndicatorScoreType,
+        parent: Some(RowId::MiniIndicator),
+        visible: |v| v.show_indicator_score_type,
+    },
+    RowHierarchyEntry {
+        child: RowId::GlobalOffsetShift,
+        parent: None,
+        visible: |v| v.show_global_offset_shift,
+    },
+];
+
 #[inline(always)]
 pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bool {
-    if id == RowId::MeasureCounterLookahead || id == RowId::MeasureCounterOptions {
-        return visibility.show_measure_counter_children;
-    }
-    if id == RowId::JudgmentOffsetX || id == RowId::JudgmentOffsetY {
-        return visibility.show_judgment_offsets;
-    }
-    if id == RowId::JudgmentTiltIntensity {
-        return visibility.show_judgment_tilt_intensity;
-    }
-    if id == RowId::ComboOffsetX || id == RowId::ComboOffsetY {
-        return visibility.show_combo_offsets;
-    }
-    if id == RowId::ErrorBarTrim
-        || id == RowId::ErrorBarOptions
-        || id == RowId::ErrorBarOffsetX
-        || id == RowId::ErrorBarOffsetY
-    {
-        return visibility.show_error_bar_children;
-    }
-    if id == RowId::CustomBlueFantasticWindowMs {
-        return visibility.show_custom_fantastic_window_ms;
-    }
-    if id == RowId::DensityGraphBackground {
-        return visibility.show_density_graph_background;
-    }
-    if id == RowId::ComboColors || id == RowId::ComboColorMode || id == RowId::CarryCombo {
-        return visibility.show_combo_rows;
-    }
-    if id == RowId::LifeMeterType || id == RowId::LifeBarOptions {
-        return visibility.show_lifebar_rows;
-    }
-    if id == RowId::IndicatorScoreType {
-        return visibility.show_indicator_score_type;
-    }
-    if id == RowId::GlobalOffsetShift {
-        return visibility.show_global_offset_shift;
-    }
-    true
+    ROW_HIERARCHY
+        .iter()
+        .find(|entry| entry.child == id)
+        .map_or(true, |entry| (entry.visible)(&visibility))
 }
 
 #[inline(always)]
 pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
-    if id == RowId::MeasureCounterLookahead || id == RowId::MeasureCounterOptions {
-        return Some(RowId::MeasureCounter);
-    }
-    if id == RowId::JudgmentOffsetX || id == RowId::JudgmentOffsetY {
-        return Some(RowId::JudgmentFont);
-    }
-    if id == RowId::JudgmentTiltIntensity {
-        return Some(RowId::JudgmentTilt);
-    }
-    if id == RowId::ComboOffsetX || id == RowId::ComboOffsetY {
-        return Some(RowId::ComboFont);
-    }
-    if id == RowId::ErrorBarTrim
-        || id == RowId::ErrorBarOptions
-        || id == RowId::ErrorBarOffsetX
-        || id == RowId::ErrorBarOffsetY
-    {
-        return Some(RowId::ErrorBar);
-    }
-    if id == RowId::CustomBlueFantasticWindowMs {
-        return Some(RowId::CustomBlueFantasticWindow);
-    }
-    if id == RowId::DensityGraphBackground {
-        return Some(RowId::DataVisualizations);
-    }
-    if id == RowId::ComboColors
-        || id == RowId::ComboColorMode
-        || id == RowId::CarryCombo
-        || id == RowId::LifeMeterType
-        || id == RowId::LifeBarOptions
-    {
-        return Some(RowId::Hide);
-    }
-    if id == RowId::IndicatorScoreType {
-        return Some(RowId::MiniIndicator);
-    }
-    None
+    ROW_HIERARCHY
+        .iter()
+        .find(|entry| entry.child == id)
+        .and_then(|entry| entry.parent)
 }
 
 pub(super) fn measure_counter_children_visible(
