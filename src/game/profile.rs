@@ -1,6 +1,7 @@
 pub use super::scroll::ScrollSpeedSetting;
 use crate::config::{self, SimpleIni, dirs};
 use bincode::{Decode, Encode};
+use bitflags::bitflags;
 use chrono::{Datelike, Local};
 use log::{debug, info, warn};
 use std::collections::HashSet;
@@ -319,41 +320,106 @@ impl core::fmt::Display for ScrollOption {
     }
 }
 
-pub const INSERT_ACTIVE_BITS: u8 = (1 << 7) - 1;
-pub const REMOVE_ACTIVE_BITS: u8 = u8::MAX;
-pub const HOLDS_ACTIVE_BITS: u8 = (1 << 5) - 1;
-pub const ACCEL_EFFECTS_ACTIVE_BITS: u8 = (1 << 5) - 1;
-pub const VISUAL_EFFECTS_ACTIVE_BITS: u16 = (1 << 10) - 1;
-pub const APPEARANCE_EFFECTS_ACTIVE_BITS: u8 = (1 << 5) - 1;
-
-#[inline(always)]
-pub const fn normalize_insert_mask(mask: u8) -> u8 {
-    mask & INSERT_ACTIVE_BITS
+bitflags! {
+    /// Persisted bitmask of enabled chart insert transforms.
+    ///
+    /// Bit layout matches the runtime `INSERT_MASK_BIT_*` constants in
+    /// `game::gameplay`, except bit 7 (Mines) is runtime/attack-only and is
+    /// deliberately not represented here. The boundary that fuses the
+    /// two — `profile.insert_active_mask.bits() | chart_attack.insert_mask` —
+    /// lives in `screens::components::gameplay::notefield`.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct InsertMask: u8 {
+        const WIDE   = 1 << 0;
+        const BIG    = 1 << 1;
+        const QUICK  = 1 << 2;
+        const BMRIZE = 1 << 3;
+        const SKIPPY = 1 << 4;
+        const ECHO   = 1 << 5;
+        const STOMP  = 1 << 6;
+    }
 }
 
-#[inline(always)]
-pub const fn normalize_remove_mask(mask: u8) -> u8 {
-    mask & REMOVE_ACTIVE_BITS
+bitflags! {
+    /// Persisted bitmask of enabled chart removal transforms.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct RemoveMask: u8 {
+        const LITTLE   = 1 << 0;
+        const NO_MINES = 1 << 1;
+        const NO_HOLDS = 1 << 2;
+        const NO_JUMPS = 1 << 3;
+        const NO_HANDS = 1 << 4;
+        const NO_QUADS = 1 << 5;
+        const NO_LIFTS = 1 << 6;
+        const NO_FAKES = 1 << 7;
+    }
 }
 
-#[inline(always)]
-pub const fn normalize_holds_mask(mask: u8) -> u8 {
-    mask & HOLDS_ACTIVE_BITS
+bitflags! {
+    /// Persisted bitmask of enabled hold transforms.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct HoldsMask: u8 {
+        const PLANTED        = 1 << 0;
+        const FLOORED        = 1 << 1;
+        const TWISTER        = 1 << 2;
+        const NO_ROLLS       = 1 << 3;
+        const HOLDS_TO_ROLLS = 1 << 4;
+    }
 }
 
-#[inline(always)]
-pub const fn normalize_accel_effects_mask(mask: u8) -> u8 {
-    mask & ACCEL_EFFECTS_ACTIVE_BITS
+bitflags! {
+    /// Persisted bitmask of enabled acceleration transforms.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct AccelEffectsMask: u8 {
+        const BOOST     = 1 << 0;
+        const BRAKE     = 1 << 1;
+        const WAVE      = 1 << 2;
+        const EXPAND    = 1 << 3;
+        const BOOMERANG = 1 << 4;
+    }
 }
 
-#[inline(always)]
-pub const fn normalize_visual_effects_mask(mask: u16) -> u16 {
-    mask & VISUAL_EFFECTS_ACTIVE_BITS
+bitflags! {
+    /// Persisted bitmask of enabled visual transforms.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct VisualEffectsMask: u16 {
+        const DRUNK     = 1 << 0;
+        const DIZZY     = 1 << 1;
+        const CONFUSION = 1 << 2;
+        const BIG       = 1 << 3;
+        const FLIP      = 1 << 4;
+        const INVERT    = 1 << 5;
+        const TORNADO   = 1 << 6;
+        const TIPSY     = 1 << 7;
+        const BUMPY     = 1 << 8;
+        const BEAT      = 1 << 9;
+    }
 }
 
-#[inline(always)]
-pub const fn normalize_appearance_effects_mask(mask: u8) -> u8 {
-    mask & APPEARANCE_EFFECTS_ACTIVE_BITS
+bitflags! {
+    /// Persisted bitmask of enabled appearance transforms.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct AppearanceEffectsMask: u8 {
+        const HIDDEN         = 1 << 0;
+        const SUDDEN         = 1 << 1;
+        const STEALTH        = 1 << 2;
+        const BLINK          = 1 << 3;
+        const RANDOM_VANISH  = 1 << 4;
+    }
+}
+
+bitflags! {
+    /// Persisted bitmask for the Error Bar SelectMultiple row. Each bit
+    /// toggles one rendering submodule (Colorful / Monochrome / Text /
+    /// Highlight / Average).
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct ErrorBarMask: u8 {
+        const COLORFUL   = 1 << 0;
+        const MONOCHROME = 1 << 1;
+        const TEXT       = 1 << 2;
+        const HIGHLIGHT  = 1 << 3;
+        const AVERAGE    = 1 << 4;
+    }
 }
 
 // --- Profile Data ---
@@ -440,20 +506,29 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
     content.push_str(&format!("ScrollSpeed={}\n", options.scroll_speed));
     content.push_str(&format!("Scroll={}\n", options.scroll_option));
     content.push_str(&format!("Turn={}\n", options.turn_option));
-    content.push_str(&format!("InsertMask={}\n", options.insert_active_mask));
-    content.push_str(&format!("RemoveMask={}\n", options.remove_active_mask));
-    content.push_str(&format!("HoldsMask={}\n", options.holds_active_mask));
+    content.push_str(&format!(
+        "InsertMask={}\n",
+        options.insert_active_mask.bits()
+    ));
+    content.push_str(&format!(
+        "RemoveMask={}\n",
+        options.remove_active_mask.bits()
+    ));
+    content.push_str(&format!(
+        "HoldsMask={}\n",
+        options.holds_active_mask.bits()
+    ));
     content.push_str(&format!(
         "AccelEffectsMask={}\n",
-        options.accel_effects_active_mask
+        options.accel_effects_active_mask.bits()
     ));
     content.push_str(&format!(
         "VisualEffectsMask={}\n",
-        options.visual_effects_active_mask
+        options.visual_effects_active_mask.bits()
     ));
     content.push_str(&format!(
         "AppearanceEffectsMask={}\n",
-        options.appearance_effects_active_mask
+        options.appearance_effects_active_mask.bits()
     ));
     content.push_str(&format!("AttackMode={}\n", options.attack_mode));
     content.push_str(&format!("HideLightType={}\n", options.hide_light_type));
@@ -580,26 +655,29 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         "ErrorBarText={}\n",
         i32::from(options.error_bar_text)
     ));
-    content.push_str(&format!("ErrorBarMask={}\n", options.error_bar_active_mask));
+    content.push_str(&format!(
+        "ErrorBarMask={}\n",
+        options.error_bar_active_mask.bits()
+    ));
     content.push_str(&format!(
         "Colorful={}\n",
-        i32::from((options.error_bar_active_mask & ERROR_BAR_BIT_COLORFUL) != 0)
+        i32::from(options.error_bar_active_mask.contains(ErrorBarMask::COLORFUL))
     ));
     content.push_str(&format!(
         "Monochrome={}\n",
-        i32::from((options.error_bar_active_mask & ERROR_BAR_BIT_MONOCHROME) != 0)
+        i32::from(options.error_bar_active_mask.contains(ErrorBarMask::MONOCHROME))
     ));
     content.push_str(&format!(
         "Text={}\n",
-        i32::from((options.error_bar_active_mask & ERROR_BAR_BIT_TEXT) != 0)
+        i32::from(options.error_bar_active_mask.contains(ErrorBarMask::TEXT))
     ));
     content.push_str(&format!(
         "Highlight={}\n",
-        i32::from((options.error_bar_active_mask & ERROR_BAR_BIT_HIGHLIGHT) != 0)
+        i32::from(options.error_bar_active_mask.contains(ErrorBarMask::HIGHLIGHT))
     ));
     content.push_str(&format!(
         "Average={}\n",
-        i32::from((options.error_bar_active_mask & ERROR_BAR_BIT_AVERAGE) != 0)
+        i32::from(options.error_bar_active_mask.contains(ErrorBarMask::AVERAGE))
     ));
     content.push_str(&format!("ErrorBarUp={}\n", i32::from(options.error_bar_up)));
     content.push_str(&format!(
@@ -879,7 +957,7 @@ fn load_player_options(
     let mask_from_key = profile_conf
         .get(section, "ErrorBarMask")
         .and_then(|s| s.parse::<u8>().ok())
-        .map(normalize_error_bar_mask);
+        .map(ErrorBarMask::from_bits_truncate);
     let colorful = profile_conf
         .get(section, "Colorful")
         .and_then(|s| s.parse::<u8>().ok())
@@ -906,23 +984,23 @@ fn load_player_options(
         || highlight.is_some()
         || average.is_some()
     {
-        let mut mask: u8 = 0;
+        let mut mask = ErrorBarMask::empty();
         if colorful.unwrap_or(false) {
-            mask |= ERROR_BAR_BIT_COLORFUL;
+            mask |= ErrorBarMask::COLORFUL;
         }
         if monochrome.unwrap_or(false) {
-            mask |= ERROR_BAR_BIT_MONOCHROME;
+            mask |= ErrorBarMask::MONOCHROME;
         }
         if text.unwrap_or(false) {
-            mask |= ERROR_BAR_BIT_TEXT;
+            mask |= ErrorBarMask::TEXT;
         }
         if highlight.unwrap_or(false) {
-            mask |= ERROR_BAR_BIT_HIGHLIGHT;
+            mask |= ErrorBarMask::HIGHLIGHT;
         }
         if average.unwrap_or(false) {
-            mask |= ERROR_BAR_BIT_AVERAGE;
+            mask |= ErrorBarMask::AVERAGE;
         }
-        Some(normalize_error_bar_mask(mask))
+        Some(mask)
     } else {
         None
     };
@@ -999,32 +1077,32 @@ fn load_player_options(
     options.insert_active_mask = profile_conf
         .get(section, "InsertMask")
         .and_then(|s| s.parse::<u8>().ok())
-        .map(normalize_insert_mask)
+        .map(InsertMask::from_bits_truncate)
         .unwrap_or(options.insert_active_mask);
     options.remove_active_mask = profile_conf
         .get(section, "RemoveMask")
         .and_then(|s| s.parse::<u8>().ok())
-        .map(normalize_remove_mask)
+        .map(RemoveMask::from_bits_truncate)
         .unwrap_or(options.remove_active_mask);
     options.holds_active_mask = profile_conf
         .get(section, "HoldsMask")
         .and_then(|s| s.parse::<u8>().ok())
-        .map(normalize_holds_mask)
+        .map(HoldsMask::from_bits_truncate)
         .unwrap_or(options.holds_active_mask);
     options.accel_effects_active_mask = profile_conf
         .get(section, "AccelEffectsMask")
         .and_then(|s| s.parse::<u8>().ok())
-        .map(normalize_accel_effects_mask)
+        .map(AccelEffectsMask::from_bits_truncate)
         .unwrap_or(options.accel_effects_active_mask);
     options.visual_effects_active_mask = profile_conf
         .get(section, "VisualEffectsMask")
         .and_then(|s| s.parse::<u16>().ok())
-        .map(normalize_visual_effects_mask)
+        .map(VisualEffectsMask::from_bits_truncate)
         .unwrap_or(options.visual_effects_active_mask);
     options.appearance_effects_active_mask = profile_conf
         .get(section, "AppearanceEffectsMask")
         .and_then(|s| s.parse::<u8>().ok())
-        .map(normalize_appearance_effects_mask)
+        .map(AppearanceEffectsMask::from_bits_truncate)
         .unwrap_or(options.appearance_effects_active_mask);
     options.attack_mode = profile_conf
         .get(section, "AttackMode")
@@ -1630,46 +1708,39 @@ impl core::fmt::Display for ErrorBarStyle {
     }
 }
 
-pub const ERROR_BAR_BIT_COLORFUL: u8 = 1 << 0;
-pub const ERROR_BAR_BIT_MONOCHROME: u8 = 1 << 1;
-pub const ERROR_BAR_BIT_TEXT: u8 = 1 << 2;
-pub const ERROR_BAR_BIT_HIGHLIGHT: u8 = 1 << 3;
-pub const ERROR_BAR_BIT_AVERAGE: u8 = 1 << 4;
-pub const ERROR_BAR_ACTIVE_BITS: u8 = ERROR_BAR_BIT_COLORFUL
-    | ERROR_BAR_BIT_MONOCHROME
-    | ERROR_BAR_BIT_TEXT
-    | ERROR_BAR_BIT_HIGHLIGHT
-    | ERROR_BAR_BIT_AVERAGE;
+pub const ERROR_BAR_BIT_COLORFUL: ErrorBarMask = ErrorBarMask::COLORFUL;
+pub const ERROR_BAR_BIT_MONOCHROME: ErrorBarMask = ErrorBarMask::MONOCHROME;
+pub const ERROR_BAR_BIT_TEXT: ErrorBarMask = ErrorBarMask::TEXT;
+pub const ERROR_BAR_BIT_HIGHLIGHT: ErrorBarMask = ErrorBarMask::HIGHLIGHT;
+pub const ERROR_BAR_BIT_AVERAGE: ErrorBarMask = ErrorBarMask::AVERAGE;
 
 #[inline(always)]
-pub const fn normalize_error_bar_mask(mask: u8) -> u8 {
-    mask & ERROR_BAR_ACTIVE_BITS
-}
-
-#[inline(always)]
-pub const fn error_bar_mask_from_style(style: ErrorBarStyle, text: bool) -> u8 {
-    let mut mask = if text { ERROR_BAR_BIT_TEXT } else { 0 };
-    mask |= match style {
-        ErrorBarStyle::None => 0,
-        ErrorBarStyle::Colorful => ERROR_BAR_BIT_COLORFUL,
-        ErrorBarStyle::Monochrome => ERROR_BAR_BIT_MONOCHROME,
-        ErrorBarStyle::Text => ERROR_BAR_BIT_TEXT,
-        ErrorBarStyle::Highlight => ERROR_BAR_BIT_HIGHLIGHT,
-        ErrorBarStyle::Average => ERROR_BAR_BIT_AVERAGE,
+pub const fn error_bar_mask_from_style(style: ErrorBarStyle, text: bool) -> ErrorBarMask {
+    let text_bits = if text {
+        ErrorBarMask::TEXT.bits()
+    } else {
+        0
     };
-    normalize_error_bar_mask(mask)
+    let style_bits = match style {
+        ErrorBarStyle::None => 0,
+        ErrorBarStyle::Colorful => ErrorBarMask::COLORFUL.bits(),
+        ErrorBarStyle::Monochrome => ErrorBarMask::MONOCHROME.bits(),
+        ErrorBarStyle::Text => ErrorBarMask::TEXT.bits(),
+        ErrorBarStyle::Highlight => ErrorBarMask::HIGHLIGHT.bits(),
+        ErrorBarStyle::Average => ErrorBarMask::AVERAGE.bits(),
+    };
+    ErrorBarMask::from_bits_truncate(text_bits | style_bits)
 }
 
 #[inline(always)]
-pub const fn error_bar_style_from_mask(mask: u8) -> ErrorBarStyle {
-    let mask = normalize_error_bar_mask(mask);
-    if (mask & ERROR_BAR_BIT_COLORFUL) != 0 {
+pub const fn error_bar_style_from_mask(mask: ErrorBarMask) -> ErrorBarStyle {
+    if mask.contains(ErrorBarMask::COLORFUL) {
         ErrorBarStyle::Colorful
-    } else if (mask & ERROR_BAR_BIT_MONOCHROME) != 0 {
+    } else if mask.contains(ErrorBarMask::MONOCHROME) {
         ErrorBarStyle::Monochrome
-    } else if (mask & ERROR_BAR_BIT_HIGHLIGHT) != 0 {
+    } else if mask.contains(ErrorBarMask::HIGHLIGHT) {
         ErrorBarStyle::Highlight
-    } else if (mask & ERROR_BAR_BIT_AVERAGE) != 0 {
+    } else if mask.contains(ErrorBarMask::AVERAGE) {
         ErrorBarStyle::Average
     } else {
         ErrorBarStyle::None
@@ -1677,8 +1748,8 @@ pub const fn error_bar_style_from_mask(mask: u8) -> ErrorBarStyle {
 }
 
 #[inline(always)]
-pub const fn error_bar_text_from_mask(mask: u8) -> bool {
-    (normalize_error_bar_mask(mask) & ERROR_BAR_BIT_TEXT) != 0
+pub const fn error_bar_text_from_mask(mask: ErrorBarMask) -> bool {
+    mask.contains(ErrorBarMask::TEXT)
 }
 
 pub const CUSTOM_FANTASTIC_WINDOW_MIN_MS: u8 = 1;
@@ -2308,12 +2379,12 @@ pub struct PlayerOptionsData {
     pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
     pub turn_option: TurnOption,
-    pub insert_active_mask: u8,
-    pub remove_active_mask: u8,
-    pub holds_active_mask: u8,
-    pub accel_effects_active_mask: u8,
-    pub visual_effects_active_mask: u16,
-    pub appearance_effects_active_mask: u8,
+    pub insert_active_mask: InsertMask,
+    pub remove_active_mask: RemoveMask,
+    pub holds_active_mask: HoldsMask,
+    pub accel_effects_active_mask: AccelEffectsMask,
+    pub visual_effects_active_mask: VisualEffectsMask,
+    pub appearance_effects_active_mask: AppearanceEffectsMask,
     pub attack_mode: AttackMode,
     pub hide_light_type: HideLightType,
     pub rescore_early_hits: bool,
@@ -2338,7 +2409,7 @@ pub struct PlayerOptionsData {
     pub responsive_colors: bool,
     pub show_life_percent: bool,
     pub tilt_multiplier: f32,
-    pub error_bar_active_mask: u8,
+    pub error_bar_active_mask: ErrorBarMask,
     pub error_bar: ErrorBarStyle,
     pub error_bar_text: bool,
     pub error_bar_up: bool,
@@ -2400,12 +2471,12 @@ fn default_player_options() -> PlayerOptionsData {
         scroll_option: ScrollOption::default(),
         reverse_scroll: false,
         turn_option: TurnOption::default(),
-        insert_active_mask: 0,
-        remove_active_mask: 0,
-        holds_active_mask: 0,
-        accel_effects_active_mask: 0,
-        visual_effects_active_mask: 0,
-        appearance_effects_active_mask: 0,
+        insert_active_mask: InsertMask::empty(),
+        remove_active_mask: RemoveMask::empty(),
+        holds_active_mask: HoldsMask::empty(),
+        accel_effects_active_mask: AccelEffectsMask::empty(),
+        visual_effects_active_mask: VisualEffectsMask::empty(),
+        appearance_effects_active_mask: AppearanceEffectsMask::empty(),
         attack_mode: AttackMode::default(),
         hide_light_type: HideLightType::default(),
         rescore_early_hits: true,
@@ -2521,12 +2592,12 @@ pub struct Profile {
     pub turn_option: TurnOption,
     // zmod uncommon modifiers (ScreenPlayerOptions3).
     // Bit order mirrors row choice order in metrics.ini.
-    pub insert_active_mask: u8,
-    pub remove_active_mask: u8,
-    pub holds_active_mask: u8,
-    pub accel_effects_active_mask: u8,
-    pub visual_effects_active_mask: u16,
-    pub appearance_effects_active_mask: u8,
+    pub insert_active_mask: InsertMask,
+    pub remove_active_mask: RemoveMask,
+    pub holds_active_mask: HoldsMask,
+    pub accel_effects_active_mask: AccelEffectsMask,
+    pub visual_effects_active_mask: VisualEffectsMask,
+    pub appearance_effects_active_mask: AppearanceEffectsMask,
     pub attack_mode: AttackMode,
     pub hide_light_type: HideLightType,
     // Allow early Decent/WayOff hits to be rescored to better judgments.
@@ -2566,8 +2637,7 @@ pub struct Profile {
     pub tilt_multiplier: f32,
     // Error bar (zmod semantics): each bit toggles one submodule in the
     // SelectMultiple row (Colorful/Monochrome/Text/Highlight/Average).
-    pub error_bar_active_mask: u8,
-    // Backward-compatible primary style string written to profile.ini.
+    pub error_bar_active_mask: ErrorBarMask,
     pub error_bar: ErrorBarStyle,
     // Backward-compatible text flag written to profile.ini.
     pub error_bar_text: bool,
@@ -4739,5 +4809,128 @@ mod tests {
 
         assert!(profile.tap_explosion_noteskin_hidden());
         assert_eq!(profile.resolved_tap_explosion_noteskin(), None);
+    }
+
+    #[test]
+    fn persisted_row_mask_bit_layouts_are_stable() {
+        use super::{
+            AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
+            RemoveMask, VisualEffectsMask,
+        };
+
+        // InsertMask: persisted bits 0..=6 (Mines is runtime-only and
+        // intentionally not represented here).
+        assert_eq!(InsertMask::WIDE.bits(), 1 << 0);
+        assert_eq!(InsertMask::BIG.bits(), 1 << 1);
+        assert_eq!(InsertMask::QUICK.bits(), 1 << 2);
+        assert_eq!(InsertMask::BMRIZE.bits(), 1 << 3);
+        assert_eq!(InsertMask::SKIPPY.bits(), 1 << 4);
+        assert_eq!(InsertMask::ECHO.bits(), 1 << 5);
+        assert_eq!(InsertMask::STOMP.bits(), 1 << 6);
+        assert_eq!(InsertMask::all().bits(), 0b0111_1111);
+
+        // RemoveMask: bits 0..=7
+        assert_eq!(RemoveMask::LITTLE.bits(), 1 << 0);
+        assert_eq!(RemoveMask::NO_MINES.bits(), 1 << 1);
+        assert_eq!(RemoveMask::NO_HOLDS.bits(), 1 << 2);
+        assert_eq!(RemoveMask::NO_JUMPS.bits(), 1 << 3);
+        assert_eq!(RemoveMask::NO_HANDS.bits(), 1 << 4);
+        assert_eq!(RemoveMask::NO_QUADS.bits(), 1 << 5);
+        assert_eq!(RemoveMask::NO_LIFTS.bits(), 1 << 6);
+        assert_eq!(RemoveMask::NO_FAKES.bits(), 1 << 7);
+        assert_eq!(RemoveMask::all().bits(), 0xFF);
+
+        assert_eq!(HoldsMask::PLANTED.bits(), 1 << 0);
+        assert_eq!(HoldsMask::FLOORED.bits(), 1 << 1);
+        assert_eq!(HoldsMask::TWISTER.bits(), 1 << 2);
+        assert_eq!(HoldsMask::NO_ROLLS.bits(), 1 << 3);
+        assert_eq!(HoldsMask::HOLDS_TO_ROLLS.bits(), 1 << 4);
+        assert_eq!(HoldsMask::all().bits(), 0b0001_1111);
+
+        assert_eq!(AccelEffectsMask::BOOST.bits(), 1 << 0);
+        assert_eq!(AccelEffectsMask::BRAKE.bits(), 1 << 1);
+        assert_eq!(AccelEffectsMask::WAVE.bits(), 1 << 2);
+        assert_eq!(AccelEffectsMask::EXPAND.bits(), 1 << 3);
+        assert_eq!(AccelEffectsMask::BOOMERANG.bits(), 1 << 4);
+        assert_eq!(AccelEffectsMask::all().bits(), 0b0001_1111);
+
+        assert_eq!(VisualEffectsMask::DRUNK.bits(), 1 << 0);
+        assert_eq!(VisualEffectsMask::DIZZY.bits(), 1 << 1);
+        assert_eq!(VisualEffectsMask::CONFUSION.bits(), 1 << 2);
+        assert_eq!(VisualEffectsMask::BIG.bits(), 1 << 3);
+        assert_eq!(VisualEffectsMask::FLIP.bits(), 1 << 4);
+        assert_eq!(VisualEffectsMask::INVERT.bits(), 1 << 5);
+        assert_eq!(VisualEffectsMask::TORNADO.bits(), 1 << 6);
+        assert_eq!(VisualEffectsMask::TIPSY.bits(), 1 << 7);
+        assert_eq!(VisualEffectsMask::BUMPY.bits(), 1 << 8);
+        assert_eq!(VisualEffectsMask::BEAT.bits(), 1 << 9);
+        assert_eq!(VisualEffectsMask::all().bits(), 0b11_1111_1111);
+
+        assert_eq!(AppearanceEffectsMask::HIDDEN.bits(), 1 << 0);
+        assert_eq!(AppearanceEffectsMask::SUDDEN.bits(), 1 << 1);
+        assert_eq!(AppearanceEffectsMask::STEALTH.bits(), 1 << 2);
+        assert_eq!(AppearanceEffectsMask::BLINK.bits(), 1 << 3);
+        assert_eq!(AppearanceEffectsMask::RANDOM_VANISH.bits(), 1 << 4);
+        assert_eq!(AppearanceEffectsMask::all().bits(), 0b0001_1111);
+
+        assert_eq!(ErrorBarMask::COLORFUL.bits(), 1 << 0);
+        assert_eq!(ErrorBarMask::MONOCHROME.bits(), 1 << 1);
+        assert_eq!(ErrorBarMask::TEXT.bits(), 1 << 2);
+        assert_eq!(ErrorBarMask::HIGHLIGHT.bits(), 1 << 3);
+        assert_eq!(ErrorBarMask::AVERAGE.bits(), 1 << 4);
+        assert_eq!(ErrorBarMask::all().bits(), 0b0001_1111);
+    }
+
+    #[test]
+    fn from_bits_truncate_drops_unrepresented_bits() {
+        use super::{InsertMask, VisualEffectsMask};
+
+        // InsertMask only persists 7 bits; bit 7 (Mines) belongs to runtime.
+        assert_eq!(
+            InsertMask::from_bits_truncate(0xFF),
+            InsertMask::all()
+        );
+        assert_eq!(InsertMask::from_bits_truncate(0xFF).bits(), 0b0111_1111);
+
+        // VisualEffectsMask is 10 bits in a u16.
+        assert_eq!(
+            VisualEffectsMask::from_bits_truncate(u16::MAX),
+            VisualEffectsMask::all()
+        );
+        assert_eq!(
+            VisualEffectsMask::from_bits_truncate(u16::MAX).bits(),
+            0b11_1111_1111
+        );
+    }
+
+    #[test]
+    fn error_bar_helpers_roundtrip_through_mask() {
+        use super::{ErrorBarMask, ErrorBarStyle, error_bar_mask_from_style,
+            error_bar_style_from_mask, error_bar_text_from_mask};
+
+        // Style + text combine into mask bits.
+        let mask = error_bar_mask_from_style(ErrorBarStyle::Colorful, true);
+        assert!(mask.contains(ErrorBarMask::COLORFUL));
+        assert!(mask.contains(ErrorBarMask::TEXT));
+        assert_eq!(error_bar_style_from_mask(mask), ErrorBarStyle::Colorful);
+        assert!(error_bar_text_from_mask(mask));
+
+        // Style precedence: Colorful > Monochrome > Highlight > Average > None.
+        let mask = ErrorBarMask::COLORFUL | ErrorBarMask::MONOCHROME;
+        assert_eq!(error_bar_style_from_mask(mask), ErrorBarStyle::Colorful);
+
+        // Text-only mask round-trips to (Style::None, text=true) — the legacy
+        // canonicalization quirk preserved by the typed helpers.
+        let mask = error_bar_mask_from_style(ErrorBarStyle::Text, false);
+        assert!(mask.contains(ErrorBarMask::TEXT));
+        assert!(!mask.contains(ErrorBarMask::COLORFUL));
+        assert_eq!(error_bar_style_from_mask(mask), ErrorBarStyle::None);
+        assert!(error_bar_text_from_mask(mask));
+
+        // Empty mask means no error bar at all.
+        let mask = error_bar_mask_from_style(ErrorBarStyle::None, false);
+        assert!(mask.is_empty());
+        assert_eq!(error_bar_style_from_mask(mask), ErrorBarStyle::None);
+        assert!(!error_bar_text_from_mask(mask));
     }
 }

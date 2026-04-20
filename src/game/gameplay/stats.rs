@@ -179,7 +179,7 @@ pub fn score_invalid_reason_lines_for_chart(
         reasons.push("music rate is below 1.0x");
     }
 
-    let remove_mask = profile::normalize_remove_mask(profile.remove_active_mask);
+    let remove_mask = profile.remove_active_mask.bits();
     if (remove_mask & REMOVE_MASK_BIT_NO_HOLDS) != 0 && chart.stats.holds > 0 {
         reasons.push("No Holds is enabled on a chart with holds");
     }
@@ -202,7 +202,7 @@ pub fn score_invalid_reason_lines_for_chart(
         reasons.push("No Fakes is enabled on a chart with fakes");
     }
 
-    let holds_mask = profile::normalize_holds_mask(profile.holds_active_mask);
+    let holds_mask = profile.holds_active_mask.bits();
     if (holds_mask & HOLDS_MASK_BIT_NO_ROLLS) != 0 && chart.stats.rolls > 0 {
         reasons.push("No Rolls is enabled on a chart with rolls");
     }
@@ -211,7 +211,7 @@ pub fn score_invalid_reason_lines_for_chart(
         reasons.push("Little is enabled");
     }
 
-    let insert_mask = profile::normalize_insert_mask(profile.insert_active_mask);
+    let insert_mask = profile.insert_active_mask.bits();
     if (insert_mask & INSERT_MASK_BIT_ECHO) != 0 {
         reasons.push("Echo is enabled");
     }

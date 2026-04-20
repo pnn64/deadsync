@@ -1303,8 +1303,7 @@ fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -
     } else {
         1.0
     };
-    let remove_mask =
-        profile::normalize_remove_mask(gs.player_profiles[player_idx].remove_active_mask);
+    let remove_mask = gs.player_profiles[player_idx].remove_active_mask.bits();
     let mines_enabled = (remove_mask & (1u8 << 1)) == 0;
     let passed = gameplay_run_passed(
         gs.song_completed_naturally,

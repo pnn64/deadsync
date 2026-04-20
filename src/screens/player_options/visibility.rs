@@ -173,12 +173,12 @@ pub(super) fn combo_offsets_visible(row_map: &RowMap, active: [bool; PLAYER_SLOT
 
 pub(super) fn error_bar_children_visible(
     active: [bool; PLAYER_SLOTS],
-    error_bar_active_mask: [u8; PLAYER_SLOTS],
+    error_bar_active_mask: [ErrorBarMask; PLAYER_SLOTS],
 ) -> bool {
     let mut any_active = false;
     for player_idx in active_player_indices(active) {
         any_active = true;
-        if crate::game::profile::normalize_error_bar_mask(error_bar_active_mask[player_idx]) != 0 {
+        if !error_bar_active_mask[player_idx].is_empty() {
             return true;
         }
     }
@@ -275,7 +275,7 @@ pub(super) fn row_visibility(
     row_map: &RowMap,
     active: [bool; PLAYER_SLOTS],
     hide_active_mask: [HideMask; PLAYER_SLOTS],
-    error_bar_active_mask: [u8; PLAYER_SLOTS],
+    error_bar_active_mask: [ErrorBarMask; PLAYER_SLOTS],
     allow_per_player_global_offsets: bool,
 ) -> RowVisibility {
     RowVisibility {

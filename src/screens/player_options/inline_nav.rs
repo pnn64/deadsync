@@ -19,13 +19,15 @@ pub(super) fn inline_choice_centers(
     centers
 }
 
-pub(super) fn focused_inline_choice_index(
-    state: &State,
+/// Common lookup used by every inline-nav function: resolve `row_idx` to a
+/// `Row` that supports inline navigation, plus its computed choice centers.
+/// Returns `None` if the row index is out of bounds, the row doesn't support
+/// inline nav, or the row has no choices to navigate.
+fn inline_row_and_centers<'a>(
+    state: &'a State,
     asset_manager: &AssetManager,
-    player_idx: usize,
     row_idx: usize,
-) -> Option<usize> {
-    let idx = player_idx.min(PLAYER_SLOTS - 1);
+) -> Option<(&'a Row, Vec<f32>)> {
     let row = state
         .pane()
         .row_map
@@ -43,6 +45,17 @@ pub(super) fn focused_inline_choice_index(
     if centers.is_empty() {
         return None;
     }
+    Some((row, centers))
+}
+
+pub(super) fn focused_inline_choice_index(
+    state: &State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+    row_idx: usize,
+) -> Option<usize> {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let (row, centers) = inline_row_and_centers(state, asset_manager, row_idx)?;
     let mut focus_idx = row.selected_choice_index[idx].min(centers.len().saturating_sub(1));
     let anchor_x = state.pane().inline_choice_x[idx];
     if anchor_x.is_finite() {
@@ -69,26 +82,9 @@ pub(super) fn move_inline_focus(
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_idx = state.pane().selected_row[idx].min(state.pane().row_map.len().saturating_sub(1));
-    let Some(row) = state
-        .pane()
-        .row_map
-        .display_order()
-        .get(row_idx)
-        .and_then(|&id| state.pane().row_map.get(id))
-    else {
+    let Some((_row, centers)) = inline_row_and_centers(state, asset_manager, row_idx) else {
         return false;
     };
-    if !row_supports_inline_nav(row) {
-        return false;
-    }
-    let centers = inline_choice_centers(
-        &row.choices,
-        asset_manager,
-        inline_choice_left_x_for_row(state, row_idx),
-    );
-    if centers.is_empty() {
-        return false;
-    }
     if row_allows_arcade_next_row(state, row_idx) {
         if state.pane().arcade_row_focus[idx] {
             if delta <= 0 {
@@ -133,22 +129,13 @@ pub(super) fn commit_inline_focus_selection(
     row_idx: usize,
 ) -> bool {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let Some(row) = state
-        .pane()
-        .row_map
-        .display_order()
-        .get(row_idx)
-        .and_then(|&id| state.pane().row_map.get(id))
-    else {
+    let Some((row, _centers)) = inline_row_and_centers(state, asset_manager, row_idx) else {
         return false;
     };
-    if !row_supports_inline_nav(row) {
-        return false;
-    }
     let Some(focus_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx) else {
         return false;
     };
-    let is_shared = row_is_shared(row.id);
+    let is_shared = row.mirror_across_players;
     if let Some(&row_id) = state.pane().row_map.display_order().get(row_idx) {
         if let Some(row) = state.pane_mut().row_map.get_mut(row_id) {
             if is_shared {
@@ -164,39 +151,47 @@ pub(super) fn commit_inline_focus_selection(
     false
 }
 
-pub(super) fn sync_inline_intent_from_row(
+/// Anchor `inline_choice_x` to the current row's selected choice.
+///
+/// `force` distinguishes the two flavors:
+/// - `force = true` (`sync_inline_intent_from_row`): always overwrite the
+///   anchor — used when the caller knows it owns the intent (e.g. after a
+///   profile-driven selection change).
+/// - `force = false` (`apply_inline_intent_to_row`): preserve any existing
+///   finite anchor on non-Main panes (so horizontal intent carries between
+///   rows), but always reset on the Main pane.
+fn write_inline_intent(
     state: &mut State,
     asset_manager: &AssetManager,
     player_idx: usize,
     row_idx: usize,
+    force: bool,
 ) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     if row_allows_arcade_next_row(state, row_idx) && state.pane().arcade_row_focus[idx] {
         state.pane_mut().inline_choice_x[idx] = f32::NAN;
         return;
     }
-    let Some(row) = state
-        .pane()
-        .row_map
-        .display_order()
-        .get(row_idx)
-        .and_then(|&id| state.pane().row_map.get(id))
-    else {
+    let Some((row, centers)) = inline_row_and_centers(state, asset_manager, row_idx) else {
         return;
     };
-    if !row_supports_inline_nav(row) {
-        return;
-    }
-    let centers = inline_choice_centers(
-        &row.choices,
-        asset_manager,
-        inline_choice_left_x_for_row(state, row_idx),
-    );
-    if centers.is_empty() {
-        return;
-    }
     let sel = row.selected_choice_index[idx].min(centers.len().saturating_sub(1));
-    state.pane_mut().inline_choice_x[idx] = centers[sel];
+    let target = centers[sel];
+    if force
+        || state.current_pane == OptionsPane::Main
+        || !state.pane().inline_choice_x[idx].is_finite()
+    {
+        state.pane_mut().inline_choice_x[idx] = target;
+    }
+}
+
+pub(super) fn sync_inline_intent_from_row(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+    row_idx: usize,
+) {
+    write_inline_intent(state, asset_manager, player_idx, row_idx, true);
 }
 
 pub(super) fn apply_inline_intent_to_row(
@@ -205,39 +200,7 @@ pub(super) fn apply_inline_intent_to_row(
     player_idx: usize,
     row_idx: usize,
 ) {
-    let idx = player_idx.min(PLAYER_SLOTS - 1);
-    if row_allows_arcade_next_row(state, row_idx) && state.pane().arcade_row_focus[idx] {
-        state.pane_mut().inline_choice_x[idx] = f32::NAN;
-        return;
-    }
-    let Some(row) = state
-        .pane()
-        .row_map
-        .display_order()
-        .get(row_idx)
-        .and_then(|&id| state.pane().row_map.get(id))
-    else {
-        return;
-    };
-    if !row_supports_inline_nav(row) {
-        return;
-    }
-    let centers = inline_choice_centers(
-        &row.choices,
-        asset_manager,
-        inline_choice_left_x_for_row(state, row_idx),
-    );
-    if centers.is_empty() {
-        return;
-    }
-    let sel = row.selected_choice_index[idx].min(centers.len().saturating_sub(1));
-    if state.current_pane == OptionsPane::Main {
-        state.pane_mut().inline_choice_x[idx] = centers[sel];
-        return;
-    }
-    if !state.pane().inline_choice_x[idx].is_finite() {
-        state.pane_mut().inline_choice_x[idx] = centers[sel];
-    }
+    write_inline_intent(state, asset_manager, player_idx, row_idx, false);
 }
 
 pub(super) fn move_selection_vertical(

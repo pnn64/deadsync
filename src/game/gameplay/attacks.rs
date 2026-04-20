@@ -2810,9 +2810,7 @@ pub(super) fn apply_chart_attacks_transforms(
 
 #[inline(always)]
 pub(super) fn base_appearance_effects(profile: &profile::Profile) -> AppearanceEffects {
-    AppearanceEffects::from_mask(profile::normalize_appearance_effects_mask(
-        profile.appearance_effects_active_mask,
-    ))
+    AppearanceEffects::from_mask(profile.appearance_effects_active_mask.bits())
 }
 
 #[inline(always)]
@@ -3098,9 +3096,7 @@ pub fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> A
     let base = if player_attack_base_cleared(state, player_idx) {
         AccelEffects::default()
     } else {
-        AccelEffects::from_mask(profile::normalize_accel_effects_mask(
-            state.player_profiles[player_idx].accel_effects_active_mask,
-        ))
+        AccelEffects::from_mask(state.player_profiles[player_idx].accel_effects_active_mask.bits())
     };
     let attack = state.active_attack_accel[player_idx];
     AccelEffects {
@@ -3120,9 +3116,7 @@ pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> 
     let base = if player_attack_base_cleared(state, player_idx) {
         VisualEffects::default()
     } else {
-        VisualEffects::from_mask(profile::normalize_visual_effects_mask(
-            state.player_profiles[player_idx].visual_effects_active_mask,
-        ))
+        VisualEffects::from_mask(state.player_profiles[player_idx].visual_effects_active_mask.bits())
     };
     let attack = state.active_attack_visual[player_idx];
     VisualEffects {

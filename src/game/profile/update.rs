@@ -1,14 +1,13 @@
 use super::{
-    AttackMode, BackgroundFilter, ComboColors, ComboFont, ComboMode, DataVisualizations,
-    ErrorBarTrim, HUD_OFFSET_MAX, HUD_OFFSET_MIN, HideLightType, HoldJudgmentGraphic,
-    JudgmentGraphic, LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator,
-    MiniIndicatorScoreType, NoteSkin, Perspective, PlayStyle, PlayerSide, ScrollOption,
-    ScrollSpeedSetting, TargetScoreSetting, TimingWindowsOption, TurnOption,
-    clamp_custom_fantastic_window_ms, error_bar_style_from_mask, error_bar_text_from_mask,
-    lock_profiles, normalize_accel_effects_mask, normalize_appearance_effects_mask,
-    normalize_error_bar_mask, normalize_holds_mask, normalize_insert_mask, normalize_remove_mask,
-    normalize_visual_effects_mask, sanitize_player_initials, save_profile_ini_for_side,
-    save_profile_stats_for_side, session_side_is_guest, side_ix,
+    AccelEffectsMask, AppearanceEffectsMask, AttackMode, BackgroundFilter, ComboColors, ComboFont,
+    ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
+    HideLightType, HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType,
+    MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorScoreType, NoteSkin, Perspective,
+    PlayStyle, PlayerSide, RemoveMask, ScrollOption, ScrollSpeedSetting, TargetScoreSetting,
+    TimingWindowsOption, TurnOption, VisualEffectsMask, clamp_custom_fantastic_window_ms,
+    error_bar_style_from_mask, error_bar_text_from_mask, lock_profiles,
+    sanitize_player_initials, save_profile_ini_for_side, save_profile_stats_for_side,
+    session_side_is_guest, side_ix,
 };
 use chrono::Local;
 use std::path::Path;
@@ -229,8 +228,7 @@ pub fn update_turn_option_for_side(side: PlayerSide, setting: TurnOption) {
     save_profile_ini_for_side(side);
 }
 
-pub fn update_insert_mask_for_side(side: PlayerSide, mask: u8) {
-    let mask = normalize_insert_mask(mask);
+pub fn update_insert_mask_for_side(side: PlayerSide, mask: InsertMask) {
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -242,8 +240,7 @@ pub fn update_insert_mask_for_side(side: PlayerSide, mask: u8) {
     save_profile_ini_for_side(side);
 }
 
-pub fn update_remove_mask_for_side(side: PlayerSide, mask: u8) {
-    let mask = normalize_remove_mask(mask);
+pub fn update_remove_mask_for_side(side: PlayerSide, mask: RemoveMask) {
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -255,8 +252,7 @@ pub fn update_remove_mask_for_side(side: PlayerSide, mask: u8) {
     save_profile_ini_for_side(side);
 }
 
-pub fn update_holds_mask_for_side(side: PlayerSide, mask: u8) {
-    let mask = normalize_holds_mask(mask);
+pub fn update_holds_mask_for_side(side: PlayerSide, mask: HoldsMask) {
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -268,8 +264,7 @@ pub fn update_holds_mask_for_side(side: PlayerSide, mask: u8) {
     save_profile_ini_for_side(side);
 }
 
-pub fn update_accel_effects_mask_for_side(side: PlayerSide, mask: u8) {
-    let mask = normalize_accel_effects_mask(mask);
+pub fn update_accel_effects_mask_for_side(side: PlayerSide, mask: AccelEffectsMask) {
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -281,8 +276,7 @@ pub fn update_accel_effects_mask_for_side(side: PlayerSide, mask: u8) {
     save_profile_ini_for_side(side);
 }
 
-pub fn update_visual_effects_mask_for_side(side: PlayerSide, mask: u16) {
-    let mask = normalize_visual_effects_mask(mask);
+pub fn update_visual_effects_mask_for_side(side: PlayerSide, mask: VisualEffectsMask) {
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -294,8 +288,7 @@ pub fn update_visual_effects_mask_for_side(side: PlayerSide, mask: u16) {
     save_profile_ini_for_side(side);
 }
 
-pub fn update_appearance_effects_mask_for_side(side: PlayerSide, mask: u8) {
-    let mask = normalize_appearance_effects_mask(mask);
+pub fn update_appearance_effects_mask_for_side(side: PlayerSide, mask: AppearanceEffectsMask) {
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -904,8 +897,7 @@ pub fn update_tilt_multiplier_for_side(side: PlayerSide, multiplier: f32) {
     save_profile_ini_for_side(side);
 }
 
-pub fn update_error_bar_mask_for_side(side: PlayerSide, mask: u8) {
-    let mask = normalize_error_bar_mask(mask);
+pub fn update_error_bar_mask_for_side(side: PlayerSide, mask: ErrorBarMask) {
     let style = error_bar_style_from_mask(mask);
     let text = error_bar_text_from_mask(mask);
     {

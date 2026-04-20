@@ -517,9 +517,9 @@ fn groovestats_eval_state(
     } else {
         1.0
     };
-    let remove_mask = profile::normalize_remove_mask(profile.remove_active_mask);
-    let insert_mask = profile::normalize_insert_mask(profile.insert_active_mask);
-    let holds_mask = profile::normalize_holds_mask(profile.holds_active_mask);
+    let remove_mask = profile.remove_active_mask.bits();
+    let insert_mask = profile.insert_active_mask.bits();
+    let holds_mask = profile.holds_active_mask.bits();
     let fail_type_ok = matches!(
         crate::config::get().default_fail_type,
         crate::config::DefaultFailType::Immediate
@@ -1455,7 +1455,7 @@ mod tests {
     fn groovestats_validity_allows_cmod_and_no_mines() {
         let mut profile = Profile::default();
         profile.scroll_speed = ScrollSpeedSetting::CMod(650.0);
-        profile.remove_active_mask = 1u8 << 1;
+        profile.remove_active_mask = crate::game::profile::RemoveMask::from_bits_truncate(1u8 << 1);
 
         assert_eq!(
             groovestats_submit_invalid_reason(&sample_chart("dance-single"), false, &profile, 1.5),

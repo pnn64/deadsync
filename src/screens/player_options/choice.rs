@@ -1,6 +1,9 @@
 use super::*;
 use crate::engine::audio;
-use crate::game::profile::{self as gp, PlayerSide};
+use crate::game::profile::{
+    self as gp, AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
+    PlayerSide, RemoveMask, VisualEffectsMask,
+};
 
 // ============================ Dispatchers ============================
 // Dispatch reads `row.behavior` to decide how to apply input.
@@ -9,8 +12,8 @@ use crate::game::profile::{self as gp, PlayerSide};
 ///
 /// `pub(super)` so `CustomBinding` arms in `panes/main.rs` and
 /// `panes/advanced.rs` can drive their own apply + persist sequence inline.
-/// The typed bindings (`NumericBinding`, `ChoiceBinding<T>`, `NoteSkinBinding`)
-/// wrap this internally via their `apply_for_player` methods below, so the
+/// The typed bindings (`NumericBinding`, `ChoiceBinding<T>`) wrap this
+/// internally via their `apply_for_player` methods below, so the
 /// dispatcher itself never reads it.
 pub(super) fn persist_ctx(player_idx: usize) -> (bool, PlayerSide) {
     let play_style = gp::get_session_play_style();
@@ -64,20 +67,6 @@ impl<T: Copy + 'static> ChoiceBinding<T> {
     }
 }
 
-impl NoteSkinBinding {
-    #[inline]
-    pub(super) fn apply_for_player(
-        &self,
-        state: &mut State,
-        player_idx: usize,
-        choice: &str,
-    ) -> Outcome {
-        let (should_persist, side) = persist_ctx(player_idx);
-        (self.apply)(state, player_idx, choice, should_persist, side);
-        Outcome::persisted()
-    }
-}
-
 /// Advance `selected_choice_index[player_idx]` by `delta`, wrapping. Returns
 /// the new index, or `None` if the row doesn't exist or has no choices.
 pub(super) fn cycle_choice_index(
@@ -115,7 +104,12 @@ pub(super) fn dispatch_behavior_delta(
     let Some(&id) = state.pane().row_map.display_order().get(row_index) else {
         return;
     };
-    let Some(behavior) = state.pane().row_map.get(id).map(|r| r.behavior) else {
+    let Some((behavior, mirror_across_players)) = state
+        .pane()
+        .row_map
+        .get(id)
+        .map(|r| (r.behavior, r.mirror_across_players))
+    else {
         return;
     };
 
@@ -124,11 +118,17 @@ pub(super) fn dispatch_behavior_delta(
         RowBehavior::Cycle(b) => apply_cycle(state, player_idx, id, delta, &b),
         RowBehavior::Custom(b) => (b.apply)(state, player_idx, id, delta),
         RowBehavior::Bitmask(_) => Outcome::NONE,
-        RowBehavior::Action(ActionRow::Exit) => Outcome::NONE,
-        RowBehavior::Action(ActionRow::WhatComesNext) => {
-            apply_what_comes_next_cycle(state, player_idx, id, delta)
-        }
+        RowBehavior::Exit => Outcome::NONE,
     };
+
+    if outcome.persisted && mirror_across_players {
+        if let Some(row) = state.pane_mut().row_map.get_mut(id) {
+            let v = row.selected_choice_index[player_idx];
+            for slot in 0..PLAYER_SLOTS {
+                row.selected_choice_index[slot] = v;
+            }
+        }
+    }
 
     if outcome.persisted {
         super::sync_inline_intent_from_row(state, asset_manager, player_idx, row_index);
@@ -191,35 +191,7 @@ fn apply_cycle(
     match binding {
         CycleBinding::Bool(b) => b.apply_for_player(state, player_idx, new_index != 0),
         CycleBinding::Index(i) => i.apply_for_player(state, player_idx, new_index),
-        CycleBinding::NoteSkin(n) => {
-            let choice = state
-                .pane()
-                .row_map
-                .get(id)
-                .and_then(|r| r.choices.get(new_index))
-                .cloned()
-                .unwrap_or_default();
-            n.apply_for_player(state, player_idx, &choice)
-        }
     }
-}
-
-fn apply_what_comes_next_cycle(
-    state: &mut State,
-    player_idx: usize,
-    id: RowId,
-    delta: isize,
-) -> Outcome {
-    let new_index = match cycle_choice_index(state, player_idx, id, delta) {
-        Some(i) => i,
-        None => return Outcome::NONE,
-    };
-    if let Some(row) = state.pane_mut().row_map.get_mut(id) {
-        for slot in 0..PLAYER_SLOTS {
-            row.selected_choice_index[slot] = new_index;
-        }
-    }
-    Outcome::persisted()
 }
 
 // ========================= Original choice.rs ==========================
@@ -436,14 +408,14 @@ pub(super) fn toggle_insert_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    if (state.insert_active_mask[idx] & bit) != 0 {
-        state.insert_active_mask[idx] &= !bit;
+    let mut bits = state.insert_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.insert_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.insert_active_mask[idx] =
-        crate::game::profile::normalize_insert_mask(state.insert_active_mask[idx]);
-    let mask = state.insert_active_mask[idx];
+    let mask = InsertMask::from_bits_truncate(bits);
+    state.insert_active_mask[idx] = mask;
     state.player_profiles[idx].insert_active_mask = mask;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -492,14 +464,14 @@ pub(super) fn toggle_remove_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    if (state.remove_active_mask[idx] & bit) != 0 {
-        state.remove_active_mask[idx] &= !bit;
+    let mut bits = state.remove_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.remove_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.remove_active_mask[idx] =
-        crate::game::profile::normalize_remove_mask(state.remove_active_mask[idx]);
-    let mask = state.remove_active_mask[idx];
+    let mask = RemoveMask::from_bits_truncate(bits);
+    state.remove_active_mask[idx] = mask;
     state.player_profiles[idx].remove_active_mask = mask;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -556,14 +528,14 @@ pub(super) fn toggle_holds_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    if (state.holds_active_mask[idx] & bit) != 0 {
-        state.holds_active_mask[idx] &= !bit;
+    let mut bits = state.holds_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.holds_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.holds_active_mask[idx] =
-        crate::game::profile::normalize_holds_mask(state.holds_active_mask[idx]);
-    let mask = state.holds_active_mask[idx];
+    let mask = HoldsMask::from_bits_truncate(bits);
+    state.holds_active_mask[idx] = mask;
     state.player_profiles[idx].holds_active_mask = mask;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -620,14 +592,14 @@ pub(super) fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    if (state.accel_effects_active_mask[idx] & bit) != 0 {
-        state.accel_effects_active_mask[idx] &= !bit;
+    let mut bits = state.accel_effects_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.accel_effects_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.accel_effects_active_mask[idx] =
-        crate::game::profile::normalize_accel_effects_mask(state.accel_effects_active_mask[idx]);
-    let mask = state.accel_effects_active_mask[idx];
+    let mask = AccelEffectsMask::from_bits_truncate(bits);
+    state.accel_effects_active_mask[idx] = mask;
     state.player_profiles[idx].accel_effects_active_mask = mask;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -676,14 +648,14 @@ pub(super) fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    if (state.visual_effects_active_mask[idx] & bit) != 0 {
-        state.visual_effects_active_mask[idx] &= !bit;
+    let mut bits = state.visual_effects_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.visual_effects_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.visual_effects_active_mask[idx] =
-        crate::game::profile::normalize_visual_effects_mask(state.visual_effects_active_mask[idx]);
-    let mask = state.visual_effects_active_mask[idx];
+    let mask = VisualEffectsMask::from_bits_truncate(bits);
+    state.visual_effects_active_mask[idx] = mask;
     state.player_profiles[idx].visual_effects_active_mask = mask;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -740,16 +712,14 @@ pub(super) fn toggle_appearance_effects_row(state: &mut State, player_idx: usize
         return;
     }
 
-    if (state.appearance_effects_active_mask[idx] & bit) != 0 {
-        state.appearance_effects_active_mask[idx] &= !bit;
+    let mut bits = state.appearance_effects_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.appearance_effects_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.appearance_effects_active_mask[idx] =
-        crate::game::profile::normalize_appearance_effects_mask(
-            state.appearance_effects_active_mask[idx],
-        );
-    let mask = state.appearance_effects_active_mask[idx];
+    let mask = AppearanceEffectsMask::from_bits_truncate(bits);
+    state.appearance_effects_active_mask[idx] = mask;
     state.player_profiles[idx].appearance_effects_active_mask = mask;
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -981,14 +951,14 @@ pub(super) fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    if (state.error_bar_active_mask[idx] & bit) != 0 {
-        state.error_bar_active_mask[idx] &= !bit;
+    let mut bits = state.error_bar_active_mask[idx].bits();
+    if (bits & bit) != 0 {
+        bits &= !bit;
     } else {
-        state.error_bar_active_mask[idx] |= bit;
+        bits |= bit;
     }
-    state.error_bar_active_mask[idx] =
-        crate::game::profile::normalize_error_bar_mask(state.error_bar_active_mask[idx]);
-    let mask = state.error_bar_active_mask[idx];
+    let mask = ErrorBarMask::from_bits_truncate(bits);
+    state.error_bar_active_mask[idx] = mask;
     state.player_profiles[idx].error_bar_active_mask = mask;
     state.player_profiles[idx].error_bar = crate::game::profile::error_bar_style_from_mask(mask);
     state.player_profiles[idx].error_bar_text =
