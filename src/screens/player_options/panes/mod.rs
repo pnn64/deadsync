@@ -108,11 +108,7 @@ fn find_noteskin_choice_index(
     }
 }
 
-pub(super) fn apply_profile_defaults(
-    row_map: &mut RowMap,
-    profile: &crate::game::profile::Profile,
-    player_idx: usize,
-) -> (
+type ActiveMaskTuple = (
     ScrollMask,
     HideMask,
     InsertMask,

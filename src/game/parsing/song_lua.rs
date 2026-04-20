@@ -5638,6 +5638,7 @@ fn message_event_cmp(
 
 #[cfg(test)]
 mod tests {
+    use chrono::{Datelike, Local};
     use super::{
         EffectMode, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
         SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaPlayerContext, SongLuaProxyTarget,
