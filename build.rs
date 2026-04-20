@@ -187,11 +187,23 @@ fn compile_vulkan_shaders(compiler: &mut Compiler, out_dir: &Path) -> Result<(),
 }
 
 fn compute_target_dir() -> Result<PathBuf, Box<dyn Error>> {
-    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
-    let profile = std::env::var("PROFILE")?;
-    let base = std::env::var("CARGO_TARGET_DIR")
-        .map_or_else(|_| manifest_dir.join("target"), PathBuf::from);
-    Ok(base.join(profile))
+    // Cargo's `PROFILE` env var only ever takes the values `debug` or
+    // `release` (it reflects the inherited base profile, not the actual
+    // profile name). For custom profiles like `[profile.local]` that inherit
+    // from `release`, joining `target/<PROFILE>` would copy assets into
+    // `target/release` while the binary is built into `target/local`,
+    // leaving the runtime without its bundled assets.
+    //
+    // Instead, derive the real per-profile output directory from `OUT_DIR`,
+    // which Cargo sets to `target/<profile>/build/<crate-hash>/out`. Walking
+    // up three parents lands on `target/<profile>` for every profile name.
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
+    let target_dir = out_dir
+        .ancestors()
+        .nth(3)
+        .ok_or("OUT_DIR did not have the expected target/<profile>/build/<hash>/out shape")?
+        .to_path_buf();
+    Ok(target_dir)
 }
 
 fn copy_assets(target_dir: &Path) -> Result<(), Box<dyn Error>> {
