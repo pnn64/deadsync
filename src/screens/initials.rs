@@ -3,6 +3,7 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -11,6 +12,9 @@ use crate::game::scores;
 use crate::game::stage_stats;
 use crate::screens::components::shared::heart_bg;
 use crate::screens::{Screen, ScreenAction};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 /* ---------------------------- transitions ---------------------------- */
@@ -31,6 +35,7 @@ const WHEEL_NUM_ITEMS: usize = 7;
 const WHEEL_FOCUS_POS: usize = 3; // Simply Love's sick_wheel focus_pos for num_items=7
 const WHEEL_SLIDE_SECONDS: f32 = 0.075; // SL: AlphabetCharacterMT.lua linear(0.075)
 const WHEEL_HIDE_FADE_SECONDS: f32 = 0.25;
+const TEXT_CACHE_LIMIT: usize = 256;
 
 // Layout (Simply Love semantics)
 const PLAYER_FRAME_X_OFF: f32 = 160.0;
@@ -59,6 +64,14 @@ const POSSIBLE_CHARS: [&str; 40] = [
     "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7",
     "8", "9", "?", "!",
 ];
+
+static POSSIBLE_CHAR_TEXT: LazyLock<[Arc<str>; POSSIBLE_CHARS.len()]> =
+    LazyLock::new(|| POSSIBLE_CHARS.map(Arc::<str>::from));
+
+thread_local! {
+    static STR_REF_CACHE: RefCell<TextCache<(usize, usize)>> =
+        RefCell::new(HashMap::with_capacity(64));
+}
 
 #[derive(Clone, Copy, Debug)]
 struct WheelItem {
@@ -299,6 +312,12 @@ fn month_abbr(index: usize) -> std::sync::Arc<str> {
     } else {
         std::sync::Arc::from("???")
     }
+}
+
+#[inline(always)]
+fn cached_str_ref(text: &str) -> Arc<str> {
+    let key = (text.as_ptr() as usize, text.len());
+    cached_text(&STR_REF_CACHE, key, TEXT_CACHE_LIMIT, || text.to_owned())
 }
 
 fn format_highscore_date(date: &str) -> String {
@@ -873,7 +892,7 @@ fn build_banner_and_title(state: &State, stages: &[stage_stats::StageSummary]) -
         .display_title(crate::config::get().translated_titles);
     actors.push(act!(text:
         font("miso"):
-        settext(title):
+        settext(cached_str_ref(title)):
         align(0.5, 0.5):
         xy(cx, 54.0):
         zoom(1.0):
@@ -910,7 +929,7 @@ fn build_wheel(
     for item_index in 1..=WHEEL_NUM_ITEMS {
         let it = &p.wheel.items[item_index - 1];
         let x = it.x;
-        let content = POSSIBLE_CHARS[it.info_index];
+        let content = POSSIBLE_CHAR_TEXT[it.info_index].clone();
 
         // Mirror AlphabetCharacterMT.lua visibility: hide the right-most two items.
         let visible = item_index < (WHEEL_NUM_ITEMS - 1);

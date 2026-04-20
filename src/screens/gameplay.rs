@@ -2488,7 +2488,7 @@ fn build_song_lua_overlay_actor(
                 stroke_color: *stroke_color,
                 glow: [0.0, 0.0, 0.0, 0.0],
                 font,
-                content: TextContent::from(text.as_str()),
+                content: TextContent::from(text),
                 attributes: Vec::new(),
                 align_text: TextAlign::Center,
                 z,

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 #[cfg(test)]
 use crate::engine::present::anim::EffectMode;
@@ -2653,10 +2653,12 @@ fn read_overlay_actor(
         SongLuaOverlayKind::BitmapText {
             font_name: song_lua_font_name(font_path.as_path()),
             font_path,
-            text: actor
-                .get::<Option<String>>("Text")
-                .map_err(|err| err.to_string())?
-                .unwrap_or_default(),
+            text: Arc::<str>::from(
+                actor
+                    .get::<Option<String>>("Text")
+                    .map_err(|err| err.to_string())?
+                    .unwrap_or_default(),
+            ),
             stroke_color: read_actor_color_field(actor, "__songlua_stroke_color")?
                 .or_else(|| read_actor_color_field(actor, "StrokeColor").ok().flatten()),
         }

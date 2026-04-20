@@ -1,5 +1,6 @@
 use crate::engine::present::anim::EffectMode;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use super::{SongLuaSpanMode, SongLuaTimeUnit};
 
@@ -35,7 +36,7 @@ pub enum SongLuaOverlayKind {
     BitmapText {
         font_name: &'static str,
         font_path: PathBuf,
-        text: String,
+        text: Arc<str>,
         stroke_color: Option<[f32; 4]>,
     },
     Quad,
