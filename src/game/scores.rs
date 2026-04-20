@@ -29,17 +29,19 @@ mod itl;
 mod submit_status;
 
 pub use arrowcloud::{
-    ArrowCloudSubmitUiStatus, arrowcloud_auto_retry_remaining_secs,
-    get_arrowcloud_submit_ui_status_for_side, retry_arrowcloud_submit,
-    submit_arrowcloud_payloads_from_gameplay, tick_arrowcloud_auto_retries,
+    ArrowCloudSubmitUiStatus, arrowcloud_next_retry_is_auto,
+    arrowcloud_next_retry_remaining_secs, get_arrowcloud_submit_ui_status_for_side,
+    retry_arrowcloud_submit, submit_arrowcloud_payloads_from_gameplay,
+    tick_arrowcloud_auto_retries,
 };
 pub use submit_status::RejectReason;
 pub use groovestats::{
     GrooveStatsEvalState, GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus,
     get_groovestats_submit_itl_progress_for_side, get_groovestats_submit_record_banner_for_side,
-    get_groovestats_submit_ui_status_for_side, groovestats_auto_retry_remaining_secs,
-    groovestats_eval_state_from_gameplay, retry_groovestats_submit,
-    submit_groovestats_payloads_from_gameplay, tick_groovestats_auto_retries,
+    get_groovestats_submit_ui_status_for_side, groovestats_eval_state_from_gameplay,
+    groovestats_next_retry_is_auto, groovestats_next_retry_remaining_secs,
+    retry_groovestats_submit, submit_groovestats_payloads_from_gameplay,
+    tick_groovestats_auto_retries,
 };
 use groovestats::{
     GrooveStatsSubmitApiAchievement, GrooveStatsSubmitApiEvent, GrooveStatsSubmitApiPlayer,
