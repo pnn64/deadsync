@@ -573,11 +573,11 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
         speed_tag,
         speed_bits,
         noteskin_hash: noteskin_hasher.finish(),
-        insert_mask: profile::normalize_insert_mask(profile.insert_active_mask)
+        insert_mask: profile.insert_active_mask.bits()
             | chart_attack.insert_mask,
-        remove_mask: profile::normalize_remove_mask(profile.remove_active_mask)
+        remove_mask: profile.remove_active_mask.bits()
             | chart_attack.remove_mask,
-        holds_mask: profile::normalize_holds_mask(profile.holds_active_mask)
+        holds_mask: profile.holds_active_mask.bits()
             | chart_attack.holds_mask,
         turn_bits: turn_option_bits(profile.turn_option) | chart_attack.turn_bits,
         attack_mode: profile.attack_mode as u8,
@@ -1698,12 +1698,12 @@ fn zmod_layout_ys(
     let mut bottom_y = judgment_y + ERROR_BAR_JUDGMENT_HEIGHT * 0.5;
 
     // Zmod SL-Layout.lua: hasErrorBar checks multiple flags.
-    let mut error_bar_mask = profile::normalize_error_bar_mask(profile.error_bar_active_mask);
-    if error_bar_mask == 0 {
+    let mut error_bar_mask = profile.error_bar_active_mask;
+    if error_bar_mask.is_empty() {
         error_bar_mask =
             profile::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
     }
-    let has_error_bar = error_bar_mask != 0;
+    let has_error_bar = !error_bar_mask.is_empty();
     if has_error_bar {
         if resolved_judgment_texture(profile).is_none() {
             // Error bar replaces judgment; no top/bottom adjustment.
@@ -2959,8 +2959,8 @@ pub fn build_bundles(
         return BuiltNotefield::empty(screen_center_x());
     }
     let error_bar_mask = {
-        let mut mask = profile::normalize_error_bar_mask(profile.error_bar_active_mask);
-        if mask == 0 {
+        let mut mask = profile.error_bar_active_mask;
+        if mask.is_empty() {
             mask = profile::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
         }
         mask
@@ -2974,11 +2974,11 @@ pub fn build_bundles(
     let actor_cap = (num_cols * 10).max(28)
         + measure_line_extra
         + if profile.column_cues { num_cols + 4 } else { 0 }
-        + if error_bar_mask != 0 { 18 } else { 0 };
+        + if !error_bar_mask.is_empty() { 18 } else { 0 };
     let hud_cap = 8
         + if profile.column_cues { 1 } else { 0 }
         + if profile.hide_combo { 0 } else { 2 }
-        + if (error_bar_mask & profile::ERROR_BAR_BIT_TEXT) != 0 {
+        + if error_bar_mask.contains(profile::ErrorBarMask::TEXT) {
             1
         } else {
             0
@@ -6404,12 +6404,12 @@ pub fn build_bundles(
         }
     }
 
-    let show_error_bar_colorful = (error_bar_mask & profile::ERROR_BAR_BIT_COLORFUL) != 0;
-    let show_error_bar_monochrome = (error_bar_mask & profile::ERROR_BAR_BIT_MONOCHROME) != 0;
-    let show_error_bar_text = (error_bar_mask & profile::ERROR_BAR_BIT_TEXT) != 0;
-    let show_error_bar_highlight = (error_bar_mask & profile::ERROR_BAR_BIT_HIGHLIGHT) != 0;
-    let show_error_bar_average = (error_bar_mask & profile::ERROR_BAR_BIT_AVERAGE) != 0;
-    let show_error_bar = error_bar_mask != 0;
+    let show_error_bar_colorful = error_bar_mask.contains(profile::ErrorBarMask::COLORFUL);
+    let show_error_bar_monochrome = error_bar_mask.contains(profile::ErrorBarMask::MONOCHROME);
+    let show_error_bar_text = error_bar_mask.contains(profile::ErrorBarMask::TEXT);
+    let show_error_bar_highlight = error_bar_mask.contains(profile::ErrorBarMask::HIGHLIGHT);
+    let show_error_bar_average = error_bar_mask.contains(profile::ErrorBarMask::AVERAGE);
+    let show_error_bar = !error_bar_mask.is_empty();
     let error_bar_y = hud_layout.error_bar_y;
     let error_bar_max_h = hud_layout.error_bar_max_h;
     let error_bar_x = playfield_center_x + error_bar_extra_x;

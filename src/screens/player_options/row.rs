@@ -136,7 +136,6 @@ pub struct NumericBinding {
 pub enum CycleBinding {
     Bool(ChoiceBinding<bool>),
     Index(ChoiceBinding<usize>),
-    NoteSkin(NoteSkinBinding),
 }
 
 /// A typed cycle binding. `apply` writes the new value into the profile and
@@ -150,11 +149,6 @@ pub struct ChoiceBinding<T: Copy + 'static> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct NoteSkinBinding {
-    pub apply: fn(&mut State, usize, &str, bool, PlayerSide),
-}
-
-#[derive(Clone, Copy, Debug)]
 pub struct BitmaskBinding {
     pub toggle: fn(&mut State, usize),
 }
@@ -164,19 +158,13 @@ pub struct CustomBinding {
     pub apply: fn(&mut State, usize, RowId, isize) -> Outcome,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum ActionRow {
-    Exit,
-    WhatComesNext,
-}
-
 /// What kind of row this is, and any state owned by the row's behaviour.
 #[derive(Clone, Copy, Debug)]
 pub enum RowBehavior {
     Numeric(NumericBinding),
     Cycle(CycleBinding),
     Bitmask(BitmaskBinding),
-    Action(ActionRow),
+    Exit,
     Custom(CustomBinding),
 }
 
@@ -313,16 +301,16 @@ pub struct Row {
     pub selected_choice_index: [usize; PLAYER_SLOTS],
     pub help: Vec<String>,
     pub choice_difficulty_indices: Option<Vec<usize>>,
+    /// When `true`, after a delta apply that persisted the row, the
+    /// dispatcher copies `selected_choice_index[player_idx]` to every other
+    /// slot. Also consulted by inline-nav focus commit. Use for rows whose
+    /// state is conceptually shared across players (e.g. `WhatComesNext`).
+    pub mirror_across_players: bool,
 }
 
 #[derive(Clone, Debug)]
 pub struct FixedStepchart {
     pub label: String,
-}
-
-#[inline(always)]
-pub(super) fn row_is_shared(id: RowId) -> bool {
-    id == RowId::Exit || id == RowId::WhatComesNext || id == RowId::MusicRate
 }
 
 #[inline(always)]

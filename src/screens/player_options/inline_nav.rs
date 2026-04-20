@@ -148,7 +148,7 @@ pub(super) fn commit_inline_focus_selection(
     let Some(focus_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx) else {
         return false;
     };
-    let is_shared = row_is_shared(row.id);
+    let is_shared = row.mirror_across_players;
     if let Some(&row_id) = state.pane().row_map.display_order().get(row_idx) {
         if let Some(row) = state.pane_mut().row_map.get_mut(row_id) {
             if is_shared {
