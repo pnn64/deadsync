@@ -32,6 +32,7 @@ use crate::game::timing as timing_stats;
 use crate::screens::gameplay;
 use crate::screens::input as screen_input;
 use log::warn;
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -183,22 +184,18 @@ fn submit_record_text(banner: scores::GrooveStatsSubmitRecordBanner) -> Arc<str>
 }
 
 #[inline(always)]
-fn groovestats_submit_status_text(status: scores::GrooveStatsSubmitUiStatus) -> Arc<str> {
+fn submit_footer_status_text(status: SubmitFooterStatus) -> Cow<'static, str> {
     match status {
-        scores::GrooveStatsSubmitUiStatus::Submitting => tr("SubmitStatus", "Submitting"),
-        scores::GrooveStatsSubmitUiStatus::Submitted => tr("SubmitStatus", "Submitted"),
-        scores::GrooveStatsSubmitUiStatus::SubmitFailed => tr("SubmitStatus", "SubmitFailed"),
-        scores::GrooveStatsSubmitUiStatus::TimedOut => tr("SubmitStatus", "TimedOutRetry"),
-    }
-}
-
-#[inline(always)]
-fn arrowcloud_submit_status_text(status: scores::ArrowCloudSubmitUiStatus) -> Arc<str> {
-    match status {
-        scores::ArrowCloudSubmitUiStatus::Submitting => tr("SubmitStatus", "Submitting"),
-        scores::ArrowCloudSubmitUiStatus::Submitted => tr("SubmitStatus", "Submitted"),
-        scores::ArrowCloudSubmitUiStatus::SubmitFailed => tr("SubmitStatus", "SubmitFailed"),
-        scores::ArrowCloudSubmitUiStatus::TimedOut => tr("SubmitStatus", "TimedOutRetry"),
+        SubmitFooterStatus::Submitting => Cow::Borrowed("Submitting ..."),
+        SubmitFooterStatus::Submitted => Cow::Borrowed("Submitted!"),
+        SubmitFooterStatus::TimedOut => Cow::Borrowed("Timed Out - F5 Retry"),
+        SubmitFooterStatus::NetworkError => Cow::Borrowed("Network Error - F5 Retry"),
+        SubmitFooterStatus::ServerError { http_status } => {
+            Cow::Owned(format!("Server Error {http_status} - F5 Retry"))
+        }
+        SubmitFooterStatus::Rejected { reason } => {
+            Cow::Owned(format!("Rejected: {}", reason.label()))
+        }
     }
 }
 
@@ -206,28 +203,49 @@ fn arrowcloud_submit_status_text(status: scores::ArrowCloudSubmitUiStatus) -> Ar
 enum SubmitFooterStatus {
     Submitting,
     Submitted,
-    SubmitFailed,
+    /// Request timed out (HTTP 408/504 or transport timeout). Eligible for `F5 Retry`.
     TimedOut,
+    /// Network/transport failure unrelated to a server response. Eligible for `F5 Retry`.
+    NetworkError,
+    /// Server returned a 5xx response. Eligible for `F5 Retry`. Carries the HTTP code so
+    /// the player can see *which* server error occurred.
+    ServerError { http_status: u16 },
+    /// Terminal rejection — resubmitting will not change the outcome.
+    Rejected { reason: scores::RejectReason },
 }
 
-impl From<scores::GrooveStatsSubmitUiStatus> for SubmitFooterStatus {
-    fn from(value: scores::GrooveStatsSubmitUiStatus) -> Self {
-        match value {
-            scores::GrooveStatsSubmitUiStatus::Submitting => Self::Submitting,
-            scores::GrooveStatsSubmitUiStatus::Submitted => Self::Submitted,
-            scores::GrooveStatsSubmitUiStatus::SubmitFailed => Self::SubmitFailed,
-            scores::GrooveStatsSubmitUiStatus::TimedOut => Self::TimedOut,
+#[inline(always)]
+fn footer_status_from_groovestats(
+    status: scores::GrooveStatsSubmitUiStatus,
+) -> SubmitFooterStatus {
+    match status {
+        scores::GrooveStatsSubmitUiStatus::Submitting => SubmitFooterStatus::Submitting,
+        scores::GrooveStatsSubmitUiStatus::Submitted => SubmitFooterStatus::Submitted,
+        scores::GrooveStatsSubmitUiStatus::TimedOut => SubmitFooterStatus::TimedOut,
+        scores::GrooveStatsSubmitUiStatus::NetworkError => SubmitFooterStatus::NetworkError,
+        scores::GrooveStatsSubmitUiStatus::ServerError { http_status } => {
+            SubmitFooterStatus::ServerError { http_status }
+        }
+        scores::GrooveStatsSubmitUiStatus::Rejected { reason } => {
+            SubmitFooterStatus::Rejected { reason }
         }
     }
 }
 
-impl From<scores::ArrowCloudSubmitUiStatus> for SubmitFooterStatus {
-    fn from(value: scores::ArrowCloudSubmitUiStatus) -> Self {
-        match value {
-            scores::ArrowCloudSubmitUiStatus::Submitting => Self::Submitting,
-            scores::ArrowCloudSubmitUiStatus::Submitted => Self::Submitted,
-            scores::ArrowCloudSubmitUiStatus::SubmitFailed => Self::SubmitFailed,
-            scores::ArrowCloudSubmitUiStatus::TimedOut => Self::TimedOut,
+#[inline(always)]
+fn footer_status_from_arrowcloud(
+    status: scores::ArrowCloudSubmitUiStatus,
+) -> SubmitFooterStatus {
+    match status {
+        scores::ArrowCloudSubmitUiStatus::Submitting => SubmitFooterStatus::Submitting,
+        scores::ArrowCloudSubmitUiStatus::Submitted => SubmitFooterStatus::Submitted,
+        scores::ArrowCloudSubmitUiStatus::TimedOut => SubmitFooterStatus::TimedOut,
+        scores::ArrowCloudSubmitUiStatus::NetworkError => SubmitFooterStatus::NetworkError,
+        scores::ArrowCloudSubmitUiStatus::ServerError { http_status } => {
+            SubmitFooterStatus::ServerError { http_status }
+        }
+        scores::ArrowCloudSubmitUiStatus::Rejected { reason } => {
+            SubmitFooterStatus::Rejected { reason }
         }
     }
 }
@@ -236,8 +254,11 @@ impl From<scores::ArrowCloudSubmitUiStatus> for SubmitFooterStatus {
 const fn submit_footer_status_glyph(status: SubmitFooterStatus) -> &'static str {
     match status {
         SubmitFooterStatus::Submitted => SUBMIT_STATUS_CHECK_GLYPH,
-        SubmitFooterStatus::SubmitFailed => SUBMIT_STATUS_CROSS_GLYPH,
-        SubmitFooterStatus::Submitting | SubmitFooterStatus::TimedOut => "",
+        SubmitFooterStatus::TimedOut
+        | SubmitFooterStatus::NetworkError
+        | SubmitFooterStatus::ServerError { .. }
+        | SubmitFooterStatus::Rejected { .. } => SUBMIT_STATUS_CROSS_GLYPH,
+        SubmitFooterStatus::Submitting => "",
     }
 }
 
@@ -282,10 +303,10 @@ fn submit_footer_lines(
     arrowcloud_status: Option<scores::ArrowCloudSubmitUiStatus>,
 ) -> Vec<Arc<str>> {
     let gs_status = expected_groovestats_submit
-        .then(|| groovestats_status.map(SubmitFooterStatus::from))
+        .then(|| groovestats_status.map(footer_status_from_groovestats))
         .flatten();
     let ac_status = expected_arrowcloud_submit
-        .then(|| arrowcloud_status.map(SubmitFooterStatus::from))
+        .then(|| arrowcloud_status.map(footer_status_from_arrowcloud))
         .flatten();
     let gs_pending = expected_groovestats_submit
         && matches!(gs_status, None | Some(SubmitFooterStatus::Submitting));
@@ -298,36 +319,37 @@ fn submit_footer_lines(
     if gs_pending || ac_pending {
         return vec![tr("SubmitStatus", "Submitting")];
     }
-    if matches!(gs_status, Some(SubmitFooterStatus::TimedOut))
-        || matches!(ac_status, Some(SubmitFooterStatus::TimedOut))
-    {
+    let needs_per_side_lines = matches!(
+        gs_status,
+        Some(
+            SubmitFooterStatus::TimedOut
+                | SubmitFooterStatus::NetworkError
+                | SubmitFooterStatus::ServerError { .. }
+                | SubmitFooterStatus::Rejected { .. }
+        )
+    ) || matches!(
+        ac_status,
+        Some(
+            SubmitFooterStatus::TimedOut
+                | SubmitFooterStatus::NetworkError
+                | SubmitFooterStatus::ServerError { .. }
+                | SubmitFooterStatus::Rejected { .. }
+        )
+    );
+    if needs_per_side_lines {
         let include_labels = gs_status.is_some() && ac_status.is_some();
         let mut lines = Vec::with_capacity(2);
         if let Some(status) = gs_status {
             lines.push(submit_footer_service_line(
-                &submit_footer_gs_label(),
-                &groovestats_submit_status_text(match status {
-                    SubmitFooterStatus::Submitting => scores::GrooveStatsSubmitUiStatus::Submitting,
-                    SubmitFooterStatus::Submitted => scores::GrooveStatsSubmitUiStatus::Submitted,
-                    SubmitFooterStatus::SubmitFailed => {
-                        scores::GrooveStatsSubmitUiStatus::SubmitFailed
-                    }
-                    SubmitFooterStatus::TimedOut => scores::GrooveStatsSubmitUiStatus::TimedOut,
-                }),
+                submit_footer_gs_label(),
+                submit_footer_status_text(status).as_ref(),
                 include_labels,
             ));
         }
         if let Some(status) = ac_status {
             lines.push(submit_footer_service_line(
-                &tr("SubmitStatus", "ACLabel"),
-                &arrowcloud_submit_status_text(match status {
-                    SubmitFooterStatus::Submitting => scores::ArrowCloudSubmitUiStatus::Submitting,
-                    SubmitFooterStatus::Submitted => scores::ArrowCloudSubmitUiStatus::Submitted,
-                    SubmitFooterStatus::SubmitFailed => {
-                        scores::ArrowCloudSubmitUiStatus::SubmitFailed
-                    }
-                    SubmitFooterStatus::TimedOut => scores::ArrowCloudSubmitUiStatus::TimedOut,
-                }),
+                "AC",
+                submit_footer_status_text(status).as_ref(),
                 include_labels,
             ));
         }
@@ -336,21 +358,11 @@ fn submit_footer_lines(
 
     match (gs_status, ac_status) {
         (Some(gs_status), Some(ac_status)) => {
-            if matches!(gs_status, SubmitFooterStatus::SubmitFailed)
-                && matches!(ac_status, SubmitFooterStatus::SubmitFailed)
-            {
-                vec![tr("SubmitStatus", "SubmitFailed")]
-            } else {
-                vec![combined_submit_footer_text(gs_status, ac_status)]
-            }
+            vec![combined_submit_footer_text(gs_status, ac_status)]
         }
         (Some(SubmitFooterStatus::Submitted), None)
         | (None, Some(SubmitFooterStatus::Submitted)) => {
             vec![tr("SubmitStatus", "Submitted")]
-        }
-        (Some(SubmitFooterStatus::SubmitFailed), None)
-        | (None, Some(SubmitFooterStatus::SubmitFailed)) => {
-            vec![tr("SubmitStatus", "SubmitFailed")]
         }
         _ => Vec::new(),
     }
@@ -676,7 +688,9 @@ mod tests {
     #[test]
     fn combined_submit_footer_text_collapses_resolved_mixed_results() {
         let text = combined_submit_footer_text(
-            SubmitFooterStatus::SubmitFailed,
+            SubmitFooterStatus::Rejected {
+                reason: scores::RejectReason::InvalidScore,
+            },
             SubmitFooterStatus::Submitted,
         );
 
@@ -730,16 +744,63 @@ mod tests {
     }
 
     #[test]
-    fn submit_footer_lines_double_failure_stays_generic() {
+    fn submit_footer_lines_double_failure_stacks_per_side_with_labels() {
         let lines = submit_footer_lines(
             true,
             true,
-            Some(scores::GrooveStatsSubmitUiStatus::SubmitFailed),
-            Some(scores::ArrowCloudSubmitUiStatus::SubmitFailed),
+            Some(scores::GrooveStatsSubmitUiStatus::Rejected {
+                reason: scores::RejectReason::InvalidScore,
+            }),
+            Some(scores::ArrowCloudSubmitUiStatus::Rejected {
+                reason: scores::RejectReason::InvalidScore,
+            }),
+        );
+
+        assert_eq!(lines.len(), 2);
+        assert_eq!(
+            &*lines[0],
+            format!("{} Rejected: Invalid Score", submit_footer_gs_label())
+        );
+        assert_eq!(&*lines[1], "AC Rejected: Invalid Score");
+    }
+
+    #[test]
+    fn submit_footer_lines_network_error_renders_distinct_label() {
+        let lines = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::NetworkError),
+            None,
         );
 
         assert_eq!(lines.len(), 1);
-        assert_eq!(&*lines[0], "Submit Failed");
+        assert_eq!(&*lines[0], "Network Error - F5 Retry");
+    }
+
+    #[test]
+    fn submit_footer_lines_server_error_includes_http_status() {
+        let lines = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::ServerError { http_status: 503 }),
+            None,
+        );
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(&*lines[0], "Server Error 503 - F5 Retry");
+    }
+
+    #[test]
+    fn submit_footer_lines_timed_out_renders_distinct_label() {
+        let lines = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
+            None,
+        );
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(&*lines[0], "Timed Out - F5 Retry");
     }
 
     #[test]
@@ -1637,7 +1698,9 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
             && state.submit_groovestats_fallback[player_idx].is_none()
         {
             state.submit_groovestats_fallback[player_idx] =
-                Some(scores::GrooveStatsSubmitUiStatus::SubmitFailed);
+                Some(scores::GrooveStatsSubmitUiStatus::Rejected {
+                    reason: scores::RejectReason::InvalidScore,
+                });
             warn!(
                 "Missing {} submit status for {:?} ({}); rendering evaluation footer as failed.",
                 online::groovestats_service_name(),
@@ -1651,7 +1714,9 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
             && state.submit_arrowcloud_fallback[player_idx].is_none()
         {
             state.submit_arrowcloud_fallback[player_idx] =
-                Some(scores::ArrowCloudSubmitUiStatus::SubmitFailed);
+                Some(scores::ArrowCloudSubmitUiStatus::Rejected {
+                    reason: scores::RejectReason::InvalidScore,
+                });
             warn!(
                 "Missing ArrowCloud submit status for {:?} ({}); rendering evaluation footer as failed.",
                 si.side, chart_hash,
@@ -1808,12 +1873,11 @@ fn evaluation_lobby_status_text(state: &State) -> Option<String> {
     Some(text)
 }
 
-pub fn retry_timed_out_submissions(state: &State) -> bool {
+pub fn retry_submissions(state: &State) -> bool {
     let mut retried = false;
     for si in state.score_info.iter().flatten() {
-        retried |=
-            scores::retry_timed_out_groovestats_submit(si.chart.short_hash.as_str(), si.side);
-        retried |= scores::retry_timed_out_arrowcloud_submit(si.chart.short_hash.as_str(), si.side);
+        retried |= scores::retry_groovestats_submit(si.chart.short_hash.as_str(), si.side);
+        retried |= scores::retry_arrowcloud_submit(si.chart.short_hash.as_str(), si.side);
     }
     retried
 }

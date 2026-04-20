@@ -1,11 +1,11 @@
 use super::{
     GROOVESTATS_CHART_HASH_VERSION, GROOVESTATS_COMMENT_PREFIX, GROOVESTATS_REASON_COUNT,
     GROOVESTATS_SUBMIT_MAX_ENTRIES, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
-    GS_INVALID_REMOVE_MASK, ItlEventProgress, cache_gs_score_for_profile, cached_score_from_gs,
-    compact_f32_text, de_i32_from_string_or_number, de_string_from_string_or_number,
-    de_u32_from_string_or_number, gameplay_run_failed, gameplay_run_passed,
-    gameplay_side_for_player, invalidate_player_leaderboards_for_side, itl, log_body_snippet,
-    submit_record_banner, submit_side_ix,
+    GS_INVALID_REMOVE_MASK, ItlEventProgress, RejectReason, cache_gs_score_for_profile,
+    cached_score_from_gs, compact_f32_text, de_i32_from_string_or_number,
+    de_string_from_string_or_number, de_u32_from_string_or_number, gameplay_run_failed,
+    gameplay_run_passed, gameplay_side_for_player, invalidate_player_leaderboards_for_side, itl,
+    log_body_snippet, submit_record_banner, submit_side_ix,
 };
 use crate::engine::network;
 use crate::game::gameplay;
@@ -29,8 +29,10 @@ pub struct GrooveStatsEvalState {
 pub enum GrooveStatsSubmitUiStatus {
     Submitting,
     Submitted,
-    SubmitFailed,
     TimedOut,
+    NetworkError,
+    ServerError { http_status: u16 },
+    Rejected { reason: RejectReason },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -416,7 +418,9 @@ fn groovestats_next_submit_ui_token() -> u64 {
 const fn groovestats_can_retry_submit(status: GrooveStatsSubmitUiStatus) -> bool {
     matches!(
         status,
-        GrooveStatsSubmitUiStatus::SubmitFailed | GrooveStatsSubmitUiStatus::TimedOut
+        GrooveStatsSubmitUiStatus::TimedOut
+            | GrooveStatsSubmitUiStatus::NetworkError
+            | GrooveStatsSubmitUiStatus::ServerError { .. }
     )
 }
 
@@ -870,6 +874,25 @@ fn groovestats_payload_for_player(
     })
 }
 
+#[inline(always)]
+fn groovestats_status_from_http(status_code: u16) -> GrooveStatsSubmitUiStatus {
+    match status_code {
+        408 | 504 => GrooveStatsSubmitUiStatus::TimedOut,
+        500..=599 => GrooveStatsSubmitUiStatus::ServerError {
+            http_status: status_code,
+        },
+        401 | 403 => GrooveStatsSubmitUiStatus::Rejected {
+            reason: RejectReason::Unauthorized,
+        },
+        404 => GrooveStatsSubmitUiStatus::Rejected {
+            reason: RejectReason::NotFound,
+        },
+        _ => GrooveStatsSubmitUiStatus::Rejected {
+            reason: RejectReason::InvalidScore,
+        },
+    }
+}
+
 fn submit_groovestats_request(
     job: &GrooveStatsSubmitRequest,
 ) -> Result<GrooveStatsSubmitApiResponse, GrooveStatsSubmitError> {
@@ -891,7 +914,7 @@ fn submit_groovestats_request(
             status: if lower.contains("timeout") || lower.contains("timed out") {
                 GrooveStatsSubmitUiStatus::TimedOut
             } else {
-                GrooveStatsSubmitUiStatus::SubmitFailed
+                GrooveStatsSubmitUiStatus::NetworkError
             },
             message,
         }
@@ -902,11 +925,7 @@ fn submit_groovestats_request(
     let body = response.into_body().read_to_string().unwrap_or_default();
     if !status.is_success() {
         let snippet = log_body_snippet(body.as_str());
-        let status_kind = if status_code == 408 || status_code == 504 {
-            GrooveStatsSubmitUiStatus::TimedOut
-        } else {
-            GrooveStatsSubmitUiStatus::SubmitFailed
-        };
+        let status_kind = groovestats_status_from_http(status_code);
         return Err(GrooveStatsSubmitError {
             status: status_kind,
             message: if snippet.is_empty() {
@@ -919,7 +938,9 @@ fn submit_groovestats_request(
 
     let decoded: GrooveStatsSubmitApiResponse =
         serde_json::from_str(body.as_str()).map_err(|error| GrooveStatsSubmitError {
-            status: GrooveStatsSubmitUiStatus::SubmitFailed,
+            status: GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            },
             message: format!(
                 "failed to parse {service_name} submit response: {}",
                 log_body_snippet(error.to_string().as_str())
@@ -927,7 +948,9 @@ fn submit_groovestats_request(
         })?;
     if !decoded.error.trim().is_empty() {
         return Err(GrooveStatsSubmitError {
-            status: GrooveStatsSubmitUiStatus::SubmitFailed,
+            status: GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            },
             message: format!("{service_name} submit error: {}", decoded.error.trim()),
         });
     }
@@ -950,7 +973,9 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                         player.side,
                         player.chart_hash.as_str(),
                         player.token,
-                        GrooveStatsSubmitUiStatus::SubmitFailed,
+                        GrooveStatsSubmitUiStatus::Rejected {
+                            reason: RejectReason::InvalidScore,
+                        },
                     );
                     warn!(
                         "{} submit response omitted player{} for {:?} ({}).",
@@ -974,7 +999,9 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                         player.side,
                         player.chart_hash.as_str(),
                         player.token,
-                        GrooveStatsSubmitUiStatus::SubmitFailed,
+                        GrooveStatsSubmitUiStatus::Rejected {
+                            reason: RejectReason::InvalidScore,
+                        },
                     );
                     warn!(
                         "{} submit response hash mismatch for {:?}: expected {}, got {}.",
@@ -1258,7 +1285,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
     spawn_groovestats_submit(job);
 }
 
-pub fn retry_timed_out_groovestats_submit(chart_hash: &str, side: profile::PlayerSide) -> bool {
+pub fn retry_groovestats_submit(chart_hash: &str, side: profile::PlayerSide) -> bool {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return false;
@@ -1632,10 +1659,73 @@ mod tests {
             GrooveStatsSubmitUiStatus::Submitted
         ));
         assert!(groovestats_can_retry_submit(
-            GrooveStatsSubmitUiStatus::SubmitFailed
-        ));
-        assert!(groovestats_can_retry_submit(
             GrooveStatsSubmitUiStatus::TimedOut
         ));
+        assert!(groovestats_can_retry_submit(
+            GrooveStatsSubmitUiStatus::NetworkError
+        ));
+        assert!(groovestats_can_retry_submit(
+            GrooveStatsSubmitUiStatus::ServerError { http_status: 500 }
+        ));
+        assert!(!groovestats_can_retry_submit(
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        ));
+        assert!(!groovestats_can_retry_submit(
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        ));
+    }
+
+    #[test]
+    fn groovestats_status_from_http_classifies_codes() {
+        assert_eq!(
+            groovestats_status_from_http(408),
+            GrooveStatsSubmitUiStatus::TimedOut
+        );
+        assert_eq!(
+            groovestats_status_from_http(504),
+            GrooveStatsSubmitUiStatus::TimedOut
+        );
+        assert_eq!(
+            groovestats_status_from_http(500),
+            GrooveStatsSubmitUiStatus::ServerError { http_status: 500 }
+        );
+        assert_eq!(
+            groovestats_status_from_http(503),
+            GrooveStatsSubmitUiStatus::ServerError { http_status: 503 }
+        );
+        assert_eq!(
+            groovestats_status_from_http(401),
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+        assert_eq!(
+            groovestats_status_from_http(403),
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+        assert_eq!(
+            groovestats_status_from_http(404),
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::NotFound,
+            }
+        );
+        assert_eq!(
+            groovestats_status_from_http(400),
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        );
+        assert_eq!(
+            groovestats_status_from_http(418),
+            GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        );
     }
 }

@@ -1,5 +1,5 @@
 use super::{
-    gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
+    RejectReason, gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
     invalidate_player_leaderboards_for_side, log_body_snippet, submit_side_ix,
 };
 use crate::engine::network;
@@ -35,8 +35,10 @@ const ARROWCLOUD_APPEARANCE_NAMES: [&str; 5] = ["Hidden", "Sudden", "Stealth", "
 pub enum ArrowCloudSubmitUiStatus {
     Submitting,
     Submitted,
-    SubmitFailed,
     TimedOut,
+    NetworkError,
+    ServerError { http_status: u16 },
+    Rejected { reason: RejectReason },
 }
 
 #[derive(Debug, Clone)]
@@ -139,17 +141,38 @@ fn arrowcloud_next_submit_ui_token() -> u64 {
 const fn arrowcloud_can_retry_submit(status: ArrowCloudSubmitUiStatus) -> bool {
     matches!(
         status,
-        ArrowCloudSubmitUiStatus::SubmitFailed | ArrowCloudSubmitUiStatus::TimedOut
+        ArrowCloudSubmitUiStatus::TimedOut
+            | ArrowCloudSubmitUiStatus::NetworkError
+            | ArrowCloudSubmitUiStatus::ServerError { .. }
     )
 }
 
 #[inline(always)]
-fn arrowcloud_status_from_error_message(message: &str) -> ArrowCloudSubmitUiStatus {
+fn arrowcloud_status_from_transport_error(message: &str) -> ArrowCloudSubmitUiStatus {
     let lower = message.to_ascii_lowercase();
     if lower.contains("timeout") || lower.contains("timed out") {
         ArrowCloudSubmitUiStatus::TimedOut
     } else {
-        ArrowCloudSubmitUiStatus::SubmitFailed
+        ArrowCloudSubmitUiStatus::NetworkError
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_status_from_http(status_code: u16) -> ArrowCloudSubmitUiStatus {
+    match status_code {
+        408 | 504 => ArrowCloudSubmitUiStatus::TimedOut,
+        500..=599 => ArrowCloudSubmitUiStatus::ServerError {
+            http_status: status_code,
+        },
+        401 | 403 => ArrowCloudSubmitUiStatus::Rejected {
+            reason: RejectReason::Unauthorized,
+        },
+        404 => ArrowCloudSubmitUiStatus::Rejected {
+            reason: RejectReason::NotFound,
+        },
+        _ => ArrowCloudSubmitUiStatus::Rejected {
+            reason: RejectReason::InvalidScore,
+        },
     }
 }
 
@@ -668,13 +691,17 @@ fn submit_arrowcloud_payload(
     let api_key = api_key.trim();
     if api_key.is_empty() {
         return Err(ArrowCloudSubmitError {
-            status: ArrowCloudSubmitUiStatus::SubmitFailed,
+            status: ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            },
             message: "missing ArrowCloud API key".to_string(),
         });
     }
     let Some(url) = online::arrowcloud_submit_url(payload.hash.as_str()) else {
         return Err(ArrowCloudSubmitError {
-            status: ArrowCloudSubmitUiStatus::SubmitFailed,
+            status: ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            },
             message: "missing chart hash".to_string(),
         });
     };
@@ -689,7 +716,7 @@ fn submit_arrowcloud_payload(
         .map_err(|e| {
             let msg = format!("network error: {e}");
             ArrowCloudSubmitError {
-                status: arrowcloud_status_from_error_message(msg.as_str()),
+                status: arrowcloud_status_from_transport_error(msg.as_str()),
                 message: msg,
             }
         })?;
@@ -716,11 +743,7 @@ fn submit_arrowcloud_payload(
     }
 
     let snippet = log_body_snippet(body.as_str());
-    let status_kind = if status_code == 408 || status_code == 504 {
-        ArrowCloudSubmitUiStatus::TimedOut
-    } else {
-        ArrowCloudSubmitUiStatus::SubmitFailed
-    };
+    let status_kind = arrowcloud_status_from_http(status_code);
     if snippet.is_empty() {
         Err(ArrowCloudSubmitError {
             status: status_kind,
@@ -852,7 +875,7 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
     spawn_arrowcloud_submit_jobs(jobs);
 }
 
-pub fn retry_timed_out_arrowcloud_submit(chart_hash: &str, side: profile::PlayerSide) -> bool {
+pub fn retry_arrowcloud_submit(chart_hash: &str, side: profile::PlayerSide) -> bool {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return false;
@@ -1022,26 +1045,85 @@ mod tests {
             ArrowCloudSubmitUiStatus::Submitted
         ));
         assert!(arrowcloud_can_retry_submit(
-            ArrowCloudSubmitUiStatus::SubmitFailed
+            ArrowCloudSubmitUiStatus::TimedOut
         ));
         assert!(arrowcloud_can_retry_submit(
-            ArrowCloudSubmitUiStatus::TimedOut
+            ArrowCloudSubmitUiStatus::NetworkError
+        ));
+        assert!(arrowcloud_can_retry_submit(
+            ArrowCloudSubmitUiStatus::ServerError { http_status: 500 }
+        ));
+        assert!(!arrowcloud_can_retry_submit(
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        ));
+        assert!(!arrowcloud_can_retry_submit(
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
         ));
     }
 
     #[test]
-    fn arrowcloud_error_message_maps_timeout_status() {
+    fn arrowcloud_transport_error_maps_timeout_status() {
         assert_eq!(
-            arrowcloud_status_from_error_message("Timed Out"),
+            arrowcloud_status_from_transport_error("Timed Out"),
             ArrowCloudSubmitUiStatus::TimedOut
         );
         assert_eq!(
-            arrowcloud_status_from_error_message("network error: timed out while connecting"),
+            arrowcloud_status_from_transport_error("network error: timed out while connecting"),
             ArrowCloudSubmitUiStatus::TimedOut
         );
         assert_eq!(
-            arrowcloud_status_from_error_message("Machine Offline"),
-            ArrowCloudSubmitUiStatus::SubmitFailed
+            arrowcloud_status_from_transport_error("Machine Offline"),
+            ArrowCloudSubmitUiStatus::NetworkError
+        );
+    }
+
+    #[test]
+    fn arrowcloud_status_from_http_classifies_codes() {
+        assert_eq!(
+            arrowcloud_status_from_http(408),
+            ArrowCloudSubmitUiStatus::TimedOut
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(504),
+            ArrowCloudSubmitUiStatus::TimedOut
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(500),
+            ArrowCloudSubmitUiStatus::ServerError { http_status: 500 }
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(401),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(403),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(404),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::NotFound,
+            }
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(400),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(418),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
         );
     }
 }
