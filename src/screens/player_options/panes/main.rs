@@ -91,73 +91,133 @@ const GLOBAL_OFFSET_SHIFT: NumericBinding = NumericBinding {
     persist_for_side: gp::update_global_offset_shift_ms_for_side,
 };
 
-const NOTE_SKIN: NoteSkinBinding = NoteSkinBinding {
-    apply: |state, player_idx, choice, should_persist, side| {
-        let name = if choice.is_empty() {
-            gp::NoteSkin::DEFAULT_NAME.to_string()
-        } else {
-            choice.to_string()
-        };
-        let setting = gp::NoteSkin::new(&name);
-        state.player_profiles[player_idx].noteskin = setting.clone();
-        if should_persist {
-            gp::update_noteskin_for_side(side, setting);
-        }
-        sync_noteskin_previews_for_player(state, player_idx);
+/// Shared boilerplate for a noteskin-style cycle row implemented via
+/// `CustomBinding`: advance the choice index, look up the chosen string, then
+/// hand off to a row-specific `apply` closure that knows how to turn that
+/// string into the right Profile/State write.
+fn apply_noteskin_delta(
+    state: &mut State,
+    player_idx: usize,
+    row_id: RowId,
+    delta: isize,
+    apply: fn(&mut State, usize, &str, bool, gp::PlayerSide),
+) -> Outcome {
+    let Some(new_index) =
+        super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+    else {
+        return Outcome::NONE;
+    };
+    let choice = state
+        .pane()
+        .row_map
+        .get(row_id)
+        .and_then(|r| r.choices.get(new_index))
+        .cloned()
+        .unwrap_or_default();
+    let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+    apply(state, player_idx, &choice, should_persist, side);
+    Outcome::persisted()
+}
+
+const NOTE_SKIN: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta| {
+        apply_noteskin_delta(
+            state,
+            player_idx,
+            row_id,
+            delta,
+            |state, player_idx, choice, should_persist, side| {
+                let name = if choice.is_empty() {
+                    gp::NoteSkin::DEFAULT_NAME.to_string()
+                } else {
+                    choice.to_string()
+                };
+                let setting = gp::NoteSkin::new(&name);
+                state.player_profiles[player_idx].noteskin = setting.clone();
+                if should_persist {
+                    gp::update_noteskin_for_side(side, setting);
+                }
+                sync_noteskin_previews_for_player(state, player_idx);
+            },
+        )
     },
 };
-const MINE_SKIN: NoteSkinBinding = NoteSkinBinding {
-    apply: |state, player_idx, choice, should_persist, side| {
-        let match_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
-        let setting = if choice == match_label.as_ref() {
-            None
-        } else {
-            Some(gp::NoteSkin::new(choice))
-        };
-        state.player_profiles[player_idx]
-            .mine_noteskin
-            .clone_from(&setting);
-        if should_persist {
-            gp::update_mine_noteskin_for_side(side, setting);
-        }
-        sync_noteskin_previews_for_player(state, player_idx);
+const MINE_SKIN: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta| {
+        apply_noteskin_delta(
+            state,
+            player_idx,
+            row_id,
+            delta,
+            |state, player_idx, choice, should_persist, side| {
+                let match_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
+                let setting = if choice == match_label.as_ref() {
+                    None
+                } else {
+                    Some(gp::NoteSkin::new(choice))
+                };
+                state.player_profiles[player_idx]
+                    .mine_noteskin
+                    .clone_from(&setting);
+                if should_persist {
+                    gp::update_mine_noteskin_for_side(side, setting);
+                }
+                sync_noteskin_previews_for_player(state, player_idx);
+            },
+        )
     },
 };
-const RECEPTOR_SKIN: NoteSkinBinding = NoteSkinBinding {
-    apply: |state, player_idx, choice, should_persist, side| {
-        let match_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
-        let setting = if choice == match_label.as_ref() {
-            None
-        } else {
-            Some(gp::NoteSkin::new(choice))
-        };
-        state.player_profiles[player_idx]
-            .receptor_noteskin
-            .clone_from(&setting);
-        if should_persist {
-            gp::update_receptor_noteskin_for_side(side, setting);
-        }
-        sync_noteskin_previews_for_player(state, player_idx);
+const RECEPTOR_SKIN: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta| {
+        apply_noteskin_delta(
+            state,
+            player_idx,
+            row_id,
+            delta,
+            |state, player_idx, choice, should_persist, side| {
+                let match_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
+                let setting = if choice == match_label.as_ref() {
+                    None
+                } else {
+                    Some(gp::NoteSkin::new(choice))
+                };
+                state.player_profiles[player_idx]
+                    .receptor_noteskin
+                    .clone_from(&setting);
+                if should_persist {
+                    gp::update_receptor_noteskin_for_side(side, setting);
+                }
+                sync_noteskin_previews_for_player(state, player_idx);
+            },
+        )
     },
 };
-const TAP_EXPLOSION_SKIN: NoteSkinBinding = NoteSkinBinding {
-    apply: |state, player_idx, choice, should_persist, side| {
-        let match_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
-        let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
-        let setting = if choice == match_label.as_ref() {
-            None
-        } else if choice == no_tap_label.as_ref() {
-            Some(gp::NoteSkin::none_choice())
-        } else {
-            Some(gp::NoteSkin::new(choice))
-        };
-        state.player_profiles[player_idx]
-            .tap_explosion_noteskin
-            .clone_from(&setting);
-        if should_persist {
-            gp::update_tap_explosion_noteskin_for_side(side, setting);
-        }
-        sync_noteskin_previews_for_player(state, player_idx);
+const TAP_EXPLOSION_SKIN: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta| {
+        apply_noteskin_delta(
+            state,
+            player_idx,
+            row_id,
+            delta,
+            |state, player_idx, choice, should_persist, side| {
+                let match_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
+                let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
+                let setting = if choice == match_label.as_ref() {
+                    None
+                } else if choice == no_tap_label.as_ref() {
+                    Some(gp::NoteSkin::none_choice())
+                } else {
+                    Some(gp::NoteSkin::new(choice))
+                };
+                state.player_profiles[player_idx]
+                    .tap_explosion_noteskin
+                    .clone_from(&setting);
+                if should_persist {
+                    gp::update_tap_explosion_noteskin_for_side(side, setting);
+                }
+                sync_noteskin_previews_for_player(state, player_idx);
+            },
+        )
     },
 };
 
@@ -514,7 +574,7 @@ pub(super) fn build_main_rows(
     });
     b.push(Row {
         id: RowId::NoteSkin,
-        behavior: RowBehavior::Cycle(CycleBinding::NoteSkin(NOTE_SKIN)),
+        behavior: RowBehavior::Custom(NOTE_SKIN),
         name: lookup_key("PlayerOptions", "NoteSkin"),
         choices: if noteskin_names.is_empty() {
             vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()]
@@ -531,7 +591,7 @@ pub(super) fn build_main_rows(
     });
     b.push(Row {
         id: RowId::MineSkin,
-        behavior: RowBehavior::Cycle(CycleBinding::NoteSkin(MINE_SKIN)),
+        behavior: RowBehavior::Custom(MINE_SKIN),
         name: lookup_key("PlayerOptions", "MineSkin"),
         choices: build_noteskin_override_choices(noteskin_names),
         selected_choice_index: [0; PLAYER_SLOTS],
@@ -544,7 +604,7 @@ pub(super) fn build_main_rows(
     });
     b.push(Row {
         id: RowId::ReceptorSkin,
-        behavior: RowBehavior::Cycle(CycleBinding::NoteSkin(RECEPTOR_SKIN)),
+        behavior: RowBehavior::Custom(RECEPTOR_SKIN),
         name: lookup_key("PlayerOptions", "ReceptorSkin"),
         choices: build_noteskin_override_choices(noteskin_names),
         selected_choice_index: [0; PLAYER_SLOTS],
@@ -557,7 +617,7 @@ pub(super) fn build_main_rows(
     });
     b.push(Row {
         id: RowId::TapExplosionSkin,
-        behavior: RowBehavior::Cycle(CycleBinding::NoteSkin(TAP_EXPLOSION_SKIN)),
+        behavior: RowBehavior::Custom(TAP_EXPLOSION_SKIN),
         name: lookup_key("PlayerOptions", "TapExplosionSkin"),
         choices: build_tap_explosion_noteskin_choices(noteskin_names),
         selected_choice_index: [0; PLAYER_SLOTS],
