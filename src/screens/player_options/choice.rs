@@ -115,7 +115,12 @@ pub(super) fn dispatch_behavior_delta(
     let Some(&id) = state.pane().row_map.display_order().get(row_index) else {
         return;
     };
-    let Some(behavior) = state.pane().row_map.get(id).map(|r| r.behavior) else {
+    let Some((behavior, mirror_across_players)) = state
+        .pane()
+        .row_map
+        .get(id)
+        .map(|r| (r.behavior, r.mirror_across_players))
+    else {
         return;
     };
 
@@ -124,11 +129,17 @@ pub(super) fn dispatch_behavior_delta(
         RowBehavior::Cycle(b) => apply_cycle(state, player_idx, id, delta, &b),
         RowBehavior::Custom(b) => (b.apply)(state, player_idx, id, delta),
         RowBehavior::Bitmask(_) => Outcome::NONE,
-        RowBehavior::Action(ActionRow::Exit) => Outcome::NONE,
-        RowBehavior::Action(ActionRow::WhatComesNext) => {
-            apply_what_comes_next_cycle(state, player_idx, id, delta)
-        }
+        RowBehavior::Exit => Outcome::NONE,
     };
+
+    if outcome.persisted && mirror_across_players {
+        if let Some(row) = state.pane_mut().row_map.get_mut(id) {
+            let v = row.selected_choice_index[player_idx];
+            for slot in 0..PLAYER_SLOTS {
+                row.selected_choice_index[slot] = v;
+            }
+        }
+    }
 
     if outcome.persisted {
         super::sync_inline_intent_from_row(state, asset_manager, player_idx, row_index);
@@ -202,24 +213,6 @@ fn apply_cycle(
             n.apply_for_player(state, player_idx, &choice)
         }
     }
-}
-
-fn apply_what_comes_next_cycle(
-    state: &mut State,
-    player_idx: usize,
-    id: RowId,
-    delta: isize,
-) -> Outcome {
-    let new_index = match cycle_choice_index(state, player_idx, id, delta) {
-        Some(i) => i,
-        None => return Outcome::NONE,
-    };
-    if let Some(row) = state.pane_mut().row_map.get_mut(id) {
-        for slot in 0..PLAYER_SLOTS {
-            row.selected_choice_index[slot] = new_index;
-        }
-    }
-    Outcome::persisted()
 }
 
 // ========================= Original choice.rs ==========================

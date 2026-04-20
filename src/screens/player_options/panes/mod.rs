@@ -7,6 +7,24 @@ use advanced::*;
 use main::*;
 use uncommon::*;
 
+/// Cycle binding for the "What Comes Next" row. Mirroring across players is
+/// handled by the dispatcher via `Row::mirror_across_players`, not here.
+pub(super) const WHAT_COMES_NEXT: CustomBinding = CustomBinding {
+    apply: apply_what_comes_next_cycle,
+};
+
+fn apply_what_comes_next_cycle(
+    state: &mut State,
+    player_idx: usize,
+    id: RowId,
+    delta: isize,
+) -> Outcome {
+    match super::choice::cycle_choice_index(state, player_idx, id, delta) {
+        Some(_) => Outcome::persisted(),
+        None => Outcome::NONE,
+    }
+}
+
 #[inline(always)]
 pub(super) fn choose_different_screen_label(return_screen: Screen) -> String {
     match return_screen {
