@@ -84,7 +84,35 @@ pub(super) fn build_rows(
     }
 }
 
-pub(super) type ActiveMaskTuple = (
+fn find_noteskin_choice_index(
+    profile_value: Option<&crate::game::profile::NoteSkin>,
+    choices: &[String],
+    match_label: &str,
+    none_label: Option<&str>,
+) -> usize {
+    let position_eq = |label: &str| choices.iter().position(|c| c.as_str() == label);
+    match profile_value {
+        None => position_eq(match_label).unwrap_or(0),
+        Some(skin) => {
+            if let Some(none_label) = none_label {
+                if skin.is_none_choice() {
+                    return position_eq(none_label).unwrap_or(0);
+                }
+            }
+            choices
+                .iter()
+                .position(|c| c.eq_ignore_ascii_case(skin.as_str()))
+                .or_else(|| position_eq(match_label))
+                .unwrap_or(0)
+        }
+    }
+}
+
+pub(super) fn apply_profile_defaults(
+    row_map: &mut RowMap,
+    profile: &crate::game::profile::Profile,
+    player_idx: usize,
+) -> (
     ScrollMask,
     HideMask,
     InsertMask,
@@ -193,75 +221,28 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0);
     }
     if let Some(row) = row_map.get_mut(RowId::MineSkin) {
-        row.selected_choice_index[player_idx] = profile.mine_noteskin.as_ref().map_or_else(
-            || {
-                row.choices
-                    .iter()
-                    .position(|c| c.as_str() == match_ns_label.as_ref())
-                    .unwrap_or(0)
-            },
-            |mine_noteskin| {
-                row.choices
-                    .iter()
-                    .position(|c| c.eq_ignore_ascii_case(mine_noteskin.as_str()))
-                    .or_else(|| {
-                        row.choices
-                            .iter()
-                            .position(|c| c.as_str() == match_ns_label.as_ref())
-                    })
-                    .unwrap_or(0)
-            },
+        row.selected_choice_index[player_idx] = find_noteskin_choice_index(
+            profile.mine_noteskin.as_ref(),
+            &row.choices,
+            match_ns_label.as_ref(),
+            None,
         );
     }
     if let Some(row) = row_map.get_mut(RowId::ReceptorSkin) {
-        row.selected_choice_index[player_idx] = profile.receptor_noteskin.as_ref().map_or_else(
-            || {
-                row.choices
-                    .iter()
-                    .position(|c| c.as_str() == match_ns_label.as_ref())
-                    .unwrap_or(0)
-            },
-            |receptor_noteskin| {
-                row.choices
-                    .iter()
-                    .position(|c| c.eq_ignore_ascii_case(receptor_noteskin.as_str()))
-                    .or_else(|| {
-                        row.choices
-                            .iter()
-                            .position(|c| c.as_str() == match_ns_label.as_ref())
-                    })
-                    .unwrap_or(0)
-            },
+        row.selected_choice_index[player_idx] = find_noteskin_choice_index(
+            profile.receptor_noteskin.as_ref(),
+            &row.choices,
+            match_ns_label.as_ref(),
+            None,
         );
     }
     if let Some(row) = row_map.get_mut(RowId::TapExplosionSkin) {
-        row.selected_choice_index[player_idx] =
-            profile.tap_explosion_noteskin.as_ref().map_or_else(
-                || {
-                    row.choices
-                        .iter()
-                        .position(|c| c.as_str() == match_ns_label.as_ref())
-                        .unwrap_or(0)
-                },
-                |tap_explosion_noteskin| {
-                    if tap_explosion_noteskin.is_none_choice() {
-                        row.choices
-                            .iter()
-                            .position(|c| c.as_str() == no_tap_label.as_ref())
-                            .unwrap_or(0)
-                    } else {
-                        row.choices
-                            .iter()
-                            .position(|c| c.eq_ignore_ascii_case(tap_explosion_noteskin.as_str()))
-                            .or_else(|| {
-                                row.choices
-                                    .iter()
-                                    .position(|c| c.as_str() == match_ns_label.as_ref())
-                            })
-                            .unwrap_or(0)
-                    }
-                },
-            );
+        row.selected_choice_index[player_idx] = find_noteskin_choice_index(
+            profile.tap_explosion_noteskin.as_ref(),
+            &row.choices,
+            match_ns_label.as_ref(),
+            Some(no_tap_label.as_ref()),
+        );
     }
     // Initialize Combo Font row from profile setting
     if let Some(row) = row_map.get_mut(RowId::ComboFont) {
