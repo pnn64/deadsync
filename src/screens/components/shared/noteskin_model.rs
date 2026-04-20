@@ -1,6 +1,8 @@
 use crate::engine::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
-use crate::game::parsing::noteskin::{ModelDrawState, ModelMesh, ModelMeshCache, SpriteSlot};
+use crate::game::parsing::noteskin::{
+    ModelDrawState, ModelMesh, ModelMeshCache, SpriteSlot, build_model_geometry,
+};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4};
 use std::sync::Arc;
 
@@ -38,38 +40,6 @@ const fn model_blend(draw: ModelDrawState, blend: BlendMode) -> BlendMode {
     } else {
         blend
     }
-}
-
-#[inline(always)]
-fn build_model_geometry(slot: &SpriteSlot, model: &ModelMesh) -> Arc<[TexturedMeshVertex]> {
-    let mut vertices = Vec::with_capacity(model.vertices.len());
-    for v in model.vertices.iter() {
-        let mut pos = v.pos;
-        if slot.def.mirror_h {
-            pos[0] = -pos[0];
-        }
-        if slot.def.mirror_v {
-            pos[1] = -pos[1];
-        }
-        let u = if slot.def.mirror_h {
-            1.0 - v.uv[0]
-        } else {
-            v.uv[0]
-        };
-        let v_tex = if slot.def.mirror_v {
-            1.0 - v.uv[1]
-        } else {
-            v.uv[1]
-        };
-
-        vertices.push(TexturedMeshVertex {
-            pos,
-            uv: [u, v_tex],
-            tex_matrix_scale: v.tex_matrix_scale,
-            color: [1.0; 4],
-        });
-    }
-    Arc::from(vertices)
 }
 
 #[inline(always)]
@@ -188,7 +158,7 @@ fn actor_from_draw(
 
     let tint = model_tint(color, draw);
     let blend = model_blend(draw, blend);
-    let vertices = build_model_geometry(slot, model);
+    let vertices = build_model_geometry(slot);
     let local_transform = model_draw_transform(model, size, rotation_deg, draw);
     let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
     Some(actor_from_vertices(
@@ -226,9 +196,7 @@ pub(crate) fn noteskin_model_actor_from_draw_cached(
 
     let tint = model_tint(color, draw);
     let local_transform = model_draw_transform(model, size, rotation_deg, draw);
-    let (geom_cache_key, vertices) = cache.get_or_insert_with(slot, || {
-        build_model_geometry(slot, model)
-    });
+    let (geom_cache_key, vertices) = cache.get_or_insert_slot(slot)?;
     let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
     Some(actor_from_vertices(
         slot,

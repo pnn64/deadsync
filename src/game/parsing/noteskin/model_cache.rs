@@ -13,7 +13,7 @@ struct ModelMeshCacheKey {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct ModelMeshCacheStats {
+pub struct ModelMeshCacheStats {
     pub hits: u64,
     pub misses: u64,
     pub saturated_misses: u64,
@@ -21,7 +21,7 @@ pub(crate) struct ModelMeshCacheStats {
 
 pub(crate) struct ModelMeshCache {
     entries: HashMap<ModelMeshCacheKey, Arc<[TexturedMeshVertex]>, BuildHasherDefault<XxHash64>>,
-    pub(crate) stats: ModelMeshCacheStats,
+    stats: ModelMeshCacheStats,
 }
 
 impl Default for ModelMeshCache {
@@ -42,6 +42,34 @@ impl ModelMeshCache {
     #[inline(always)]
     pub(crate) fn clear(&mut self) {
         self.entries.clear();
+    }
+
+    #[inline(always)]
+    pub(crate) const fn stats(&self) -> ModelMeshCacheStats {
+        self.stats
+    }
+
+    #[inline(always)]
+    pub(crate) fn reset_stats(&mut self) {
+        self.stats = ModelMeshCacheStats::default();
+    }
+
+    #[inline(always)]
+    pub(crate) fn prewarm_slot(&mut self, slot: &SpriteSlot) {
+        if slot.model.is_none() {
+            return;
+        }
+        let _ = self.get_or_insert_with(slot, || build_model_geometry(slot));
+    }
+
+    #[inline(always)]
+    pub(crate) fn get_or_insert_slot(
+        &mut self,
+        slot: &SpriteSlot,
+    ) -> Option<(TMeshCacheKey, Arc<[TexturedMeshVertex]>)> {
+        slot.model
+            .as_ref()
+            .map(|_| self.get_or_insert_with(slot, || build_model_geometry(slot)))
     }
 
     #[inline(always)]
@@ -68,6 +96,41 @@ impl ModelMeshCache {
         }
         (geom_cache_key, vertices)
     }
+}
+
+#[inline(always)]
+pub(crate) fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex]> {
+    let model = slot
+        .model
+        .as_ref()
+        .expect("model geometry requested for non-model noteskin slot");
+    let mut vertices = Vec::with_capacity(model.vertices.len());
+    for v in model.vertices.iter() {
+        let mut pos = v.pos;
+        if slot.def.mirror_h {
+            pos[0] = -pos[0];
+        }
+        if slot.def.mirror_v {
+            pos[1] = -pos[1];
+        }
+        let u = if slot.def.mirror_h {
+            1.0 - v.uv[0]
+        } else {
+            v.uv[0]
+        };
+        let v_tex = if slot.def.mirror_v {
+            1.0 - v.uv[1]
+        } else {
+            v.uv[1]
+        };
+        vertices.push(TexturedMeshVertex {
+            pos,
+            uv: [u, v_tex],
+            tex_matrix_scale: v.tex_matrix_scale,
+            color: [1.0; 4],
+        });
+    }
+    Arc::from(vertices)
 }
 
 #[inline(always)]
@@ -139,7 +202,7 @@ mod tests {
         assert_eq!(key_a, key_b);
         assert!(Arc::ptr_eq(&verts_a, &verts_b));
         assert_eq!(
-            cache.stats,
+            cache.stats(),
             ModelMeshCacheStats {
                 hits: 1,
                 misses: 1,

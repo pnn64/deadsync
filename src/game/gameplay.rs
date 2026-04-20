@@ -7,7 +7,7 @@ use crate::game::judgment::{
     self, JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
 };
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
-use crate::game::parsing::noteskin::{self, ModelMeshCache, Noteskin, Style};
+use crate::game::parsing::noteskin::{self, ModelMeshCache, ModelMeshCacheStats, Noteskin, Style};
 use crate::game::parsing::song_lua::SongLuaOverlayActor;
 use crate::game::scores;
 use crate::game::song::SongData;
@@ -3632,6 +3632,31 @@ pub struct State {
     update_trace: GameplayUpdateTraceState,
 }
 
+impl State {
+    pub fn reset_notefield_model_cache_stats(&self) {
+        for cache in &self.notefield_model_cache {
+            cache.borrow_mut().reset_stats();
+        }
+    }
+
+    pub fn notefield_model_cache_stats(&self) -> [ModelMeshCacheStats; MAX_PLAYERS] {
+        std::array::from_fn(|player| self.notefield_model_cache[player].borrow().stats())
+    }
+
+    pub fn summed_notefield_model_cache_stats(&self) -> ModelMeshCacheStats {
+        self.notefield_model_cache_stats()
+            .into_iter()
+            .fold(ModelMeshCacheStats::default(), |mut acc, stats| {
+                acc.hits = acc.hits.saturating_add(stats.hits);
+                acc.misses = acc.misses.saturating_add(stats.misses);
+                acc.saturated_misses = acc
+                    .saturated_misses
+                    .saturating_add(stats.saturated_misses);
+                acc
+            })
+    }
+}
+
 impl GameplayUpdateTraceState {
     #[inline(always)]
     fn from_state(state: &State) -> Self {
@@ -3667,6 +3692,31 @@ fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
         u32::MAX
     } else {
         elapsed as u32
+    }
+}
+
+fn prewarm_notefield_model_cache(
+    noteskin: &[Option<Arc<Noteskin>>; MAX_PLAYERS],
+    mine_noteskin: &[Option<Arc<Noteskin>>; MAX_PLAYERS],
+    receptor_noteskin: &[Option<Arc<Noteskin>>; MAX_PLAYERS],
+    tap_explosion_noteskin: &[Option<Arc<Noteskin>>; MAX_PLAYERS],
+    notefield_model_cache: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
+    num_players: usize,
+) {
+    for player in 0..num_players.min(MAX_PLAYERS) {
+        let mut cache = notefield_model_cache[player].borrow_mut();
+        for skin in [
+            noteskin[player].as_ref(),
+            mine_noteskin[player].as_ref(),
+            receptor_noteskin[player].as_ref(),
+            tap_explosion_noteskin[player].as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            skin.for_each_model_slot(|slot| cache.prewarm_slot(slot));
+        }
+        cache.reset_stats();
     }
 }
 
@@ -4888,6 +4938,14 @@ pub fn init(
                 ModelMeshCache::default()
             })
         });
+    prewarm_notefield_model_cache(
+        &noteskin,
+        &mine_noteskin,
+        &receptor_noteskin,
+        &tap_explosion_noteskin,
+        &notefield_model_cache,
+        num_players,
+    );
 
     let field_zoom: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {

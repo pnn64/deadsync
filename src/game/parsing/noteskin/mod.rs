@@ -2,7 +2,8 @@ mod compile;
 mod itg;
 mod model_cache;
 
-pub(crate) use self::model_cache::ModelMeshCache;
+pub use self::model_cache::ModelMeshCacheStats;
+pub(crate) use self::model_cache::{ModelMeshCache, build_model_geometry};
 use self::{
     compile as noteskin_actor, compile as noteskin_compile, compile as noteskin_compiled,
     itg as noteskin_itg,
@@ -1135,48 +1136,48 @@ pub struct Noteskin {
 
 impl Noteskin {
     #[inline(always)]
-    pub fn for_each_texture_key(&self, mut visit: impl FnMut(&str)) {
+    fn for_each_slot(&self, mut visit: impl FnMut(&SpriteSlot)) {
         for slot in &self.notes {
-            visit(slot.texture_key());
+            visit(slot);
         }
         for layer in &self.note_layers {
             for slot in layer.iter() {
-                visit(slot.texture_key());
+                visit(slot);
             }
         }
         for layer in &self.lift_note_layers {
             for slot in layer.iter() {
-                visit(slot.texture_key());
+                visit(slot);
             }
         }
         for slot in &self.receptor_off {
-            visit(slot.texture_key());
+            visit(slot);
         }
         for slot in &self.receptor_glow {
             if let Some(slot) = slot.as_ref() {
-                visit(slot.texture_key());
+                visit(slot);
             }
         }
         for slot in &self.mines {
             if let Some(slot) = slot.as_ref() {
-                visit(slot.texture_key());
+                visit(slot);
             }
         }
         for slot in &self.mine_fill_slots {
             if let Some(slot) = slot.as_ref() {
-                visit(slot.texture_key());
+                visit(slot);
             }
         }
         for slot in &self.mine_frames {
             if let Some(slot) = slot.as_ref() {
-                visit(slot.texture_key());
+                visit(slot);
             }
         }
         for explosion in self.tap_explosions.values() {
-            visit(explosion.slot.texture_key());
+            visit(&explosion.slot);
         }
         if let Some(explosion) = self.mine_hit_explosion.as_ref() {
-            visit(explosion.slot.texture_key());
+            visit(&explosion.slot);
         }
         let mut visit_hold = |h: &HoldVisuals| {
             for slot in [
@@ -1192,10 +1193,10 @@ impl Noteskin {
             .into_iter()
             .flatten()
             {
-                visit(slot.texture_key());
+                visit(slot);
             }
             if let Some(slot) = h.explosion.as_ref() {
-                visit(slot.texture_key());
+                visit(slot);
             }
         };
         visit_hold(&self.hold);
@@ -1206,6 +1207,20 @@ impl Noteskin {
         for col in &self.roll_columns {
             visit_hold(col);
         }
+    }
+
+    #[inline(always)]
+    pub fn for_each_texture_key(&self, mut visit: impl FnMut(&str)) {
+        self.for_each_slot(|slot| visit(slot.texture_key()));
+    }
+
+    #[inline(always)]
+    pub fn for_each_model_slot(&self, mut visit: impl FnMut(&SpriteSlot)) {
+        self.for_each_slot(|slot| {
+            if slot.model.is_some() {
+                visit(slot);
+            }
+        });
     }
 
     #[inline(always)]

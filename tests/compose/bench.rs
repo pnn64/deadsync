@@ -90,6 +90,7 @@ struct BenchmarkResult {
     alloc: AllocDelta,
     checksum: u64,
     verifications: Vec<VerificationResult>,
+    notes: Vec<String>,
 }
 
 struct VerificationResult {
@@ -456,8 +457,8 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                 )
             }
             notefield_bench::SCENARIO_NAME => {
-                let fixture = notefield_bench::fixture();
-                benchmark_actor_builder(
+                let mut fixture = notefield_bench::fixture();
+                benchmark_notefield_actor_builder(
                     scenario.name,
                     scenario.clear_color,
                     &scenario.metrics,
@@ -466,7 +467,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     args.iters,
                     args.warmup,
                     args.cache_mode,
-                    || fixture.build(matches!(args.cache_mode, CacheMode::Retained)),
+                    &mut fixture,
                 )
             }
             options_bench::SCENARIO_NAME => {
@@ -828,6 +829,139 @@ where
                 actual_hash: actual_render_hash,
             },
         ],
+        notes: Vec::new(),
+    })
+}
+
+fn benchmark_notefield_actor_builder(
+    name: &str,
+    clear_color: [f32; 4],
+    metrics: &deadsync::engine::space::Metrics,
+    fonts: &HashMap<&'static str, deadsync::engine::present::font::Font>,
+    total_elapsed: f32,
+    iters: u64,
+    warmup: u64,
+    cache_mode: CacheMode,
+    fixture: &mut notefield_bench::NotefieldBenchFixture,
+) -> Result<BenchmarkResult, Box<dyn Error>> {
+    let retained = matches!(cache_mode, CacheMode::Retained);
+    let build_actors = |fixture: &notefield_bench::NotefieldBenchFixture| fixture.build(retained);
+
+    let sample_actors = build_actors(fixture);
+    let _assets = compose_case::asset_manager_for_scene(name, &sample_actors, fonts)?;
+    let actor_snapshot = compose_case::actor_list_snapshot(&sample_actors);
+    let actor_hash = compose_case::actor_snapshot_hash(&actor_snapshot)?;
+    let mut text_cache = compose::TextLayoutCache::default();
+    let sample_render = build_screen_for_mode(
+        cache_mode,
+        &mut text_cache,
+        &sample_actors,
+        clear_color,
+        metrics,
+        fonts,
+        total_elapsed,
+    );
+    let render_hash =
+        compose_case::render_snapshot_hash(&compose_case::render_list_snapshot(&sample_render))?;
+    let actors = actor_count(&sample_actors);
+    let objects = sample_render.objects.len();
+    let cameras = sample_render.cameras.len();
+    black_box(actors ^ objects ^ cameras);
+    drop(sample_render);
+    drop(sample_actors);
+
+    fixture.state().reset_notefield_model_cache_stats();
+    for _ in 0..warmup {
+        let actors = build_actors(fixture);
+        black_box(actor_count(&actors));
+    }
+    fixture.state().reset_notefield_model_cache_stats();
+
+    let start_alloc = ALLOC.begin_measurement();
+    let started = Instant::now();
+    let mut checksum = 0u64;
+    for _ in 0..iters {
+        let actors = black_box(build_actors(fixture));
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(actor_count(&actors) as u64)
+            .wrapping_add(actors.len() as u64);
+        black_box(checksum);
+    }
+    let model_cache_stats = fixture.state().notefield_model_cache_stats();
+    let model_cache_total = fixture.state().summed_notefield_model_cache_stats();
+
+    let final_actors = build_actors(fixture);
+    let actual_actor_hash =
+        compose_case::actor_snapshot_hash(&compose_case::actor_list_snapshot(&final_actors))?;
+    if actual_actor_hash != actor_hash {
+        return Err(format!(
+            "actor hash mismatch after benchmark: expected {} got {}",
+            actor_hash, actual_actor_hash
+        )
+        .into());
+    }
+    let mut verify_cache = compose::TextLayoutCache::default();
+    let final_render = build_screen_for_mode(
+        cache_mode,
+        &mut verify_cache,
+        &final_actors,
+        clear_color,
+        metrics,
+        fonts,
+        total_elapsed,
+    );
+    let actual_render_hash =
+        compose_case::render_snapshot_hash(&compose_case::render_list_snapshot(&final_render))?;
+    if actual_render_hash != render_hash {
+        return Err(format!(
+            "actor compose hash mismatch: expected {} got {}",
+            render_hash, actual_render_hash
+        )
+        .into());
+    }
+
+    let mut notes = vec![format!(
+        "model_cache: hits={} misses={} saturated_misses={}",
+        model_cache_total.hits, model_cache_total.misses, model_cache_total.saturated_misses
+    )];
+    for (player, stats) in model_cache_stats.iter().copied().enumerate() {
+        if stats == deadsync::game::parsing::noteskin::ModelMeshCacheStats::default() {
+            continue;
+        }
+        notes.push(format!(
+            "model_cache_p{}: hits={} misses={} saturated_misses={}",
+            player + 1,
+            stats.hits,
+            stats.misses,
+            stats.saturated_misses
+        ));
+    }
+
+    Ok(BenchmarkResult {
+        name: name.to_string(),
+        phase: Phase::Actors,
+        cache_mode,
+        actors,
+        objects,
+        cameras,
+        iters,
+        elapsed_s: started.elapsed().as_secs_f64(),
+        alloc: ALLOC.snapshot().diff(start_alloc),
+        checksum,
+        verifications: vec![
+            VerificationResult {
+                kind: "actors",
+                expected_hash: actor_hash,
+                actual_hash: actual_actor_hash,
+            },
+            VerificationResult {
+                kind: "compose",
+                expected_hash: render_hash,
+                actual_hash: actual_render_hash,
+            },
+        ],
+        notes,
     })
 }
 
@@ -906,6 +1040,7 @@ where
         alloc: ALLOC.snapshot().diff(start_alloc),
         checksum,
         verifications: verification.into_iter().collect(),
+        notes: Vec::new(),
     })
 }
 
@@ -967,6 +1102,7 @@ fn benchmark_resolve(
             expected_hash,
             actual_hash,
         }],
+        notes: Vec::new(),
     })
 }
 
@@ -1072,6 +1208,7 @@ where
             expected_hash,
             actual_hash,
         }],
+        notes: Vec::new(),
     })
 }
 
@@ -1148,6 +1285,9 @@ fn print_result(result: BenchmarkResult) {
         result.alloc.alloc_bytes,
         result.alloc.free_bytes
     );
+    for note in &result.notes {
+        println!("{note}");
+    }
     println!("checksum: {}", result.checksum);
     println!();
 }
