@@ -1,16 +1,26 @@
 use crate::act;
+use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::actors::{self, Actor, Background, SizeSpec};
 use crate::engine::present::color;
 use crate::engine::space;
 use crate::engine::space::{screen_center_x, screen_height, screen_width};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 // --- Constants ---
 const BAR_H: f32 = 32.0;
 const AVATAR_SIZE: f32 = 32.0;
+const TEXT_CACHE_LIMIT: usize = 512;
 
 // --- Positioning for the main title on the top bar when left-aligned ---
 const TOP_TITLE_OFFSET_X: f32 = 10.0;
 const TOP_TITLE_OFFSET_Y: f32 = 15.0;
+
+thread_local! {
+    static STR_REF_CACHE: RefCell<TextCache<(usize, usize)>> =
+        RefCell::new(HashMap::with_capacity(64));
+}
 
 pub enum ScreenBarPosition {
     Top,
@@ -51,6 +61,12 @@ fn wide_scale(normal: f32, wide: f32) -> f32 {
     if space::is_wide() { wide } else { normal }
 }
 
+#[inline(always)]
+fn cached_str_ref(text: &str) -> Arc<str> {
+    let key = (text.as_ptr() as usize, text.len());
+    cached_text(&STR_REF_CACHE, key, TEXT_CACHE_LIMIT, || text.to_owned())
+}
+
 pub fn build(params: ScreenBarParams) -> Actor {
     // Base placement per bar (height & anchor)
     let (align, offset) = match params.position {
@@ -65,6 +81,10 @@ pub fn build(params: ScreenBarParams) -> Actor {
     };
 
     let mut children = Vec::with_capacity(4);
+    let title = cached_str_ref(params.title);
+    let left_text = params.left_text.map(cached_str_ref);
+    let center_text = params.center_text.map(cached_str_ref);
+    let right_text = params.right_text.map(cached_str_ref);
 
     // All titles (Wendy font) use the same aspect-ratio-dependent scaling.
     let title_scale = wide_scale(0.5, 0.6);
@@ -100,7 +120,7 @@ pub fn build(params: ScreenBarParams) -> Actor {
                 zoom(title_scale):
                 z(2):
                 diffuse(params.fg_color[0], params.fg_color[1], params.fg_color[2], params.fg_color[3]):
-                font("wendy"): settext(params.title)
+                font("wendy"): settext(title.clone())
             );
 
             // Now, apply the alignment from the variable.
@@ -120,7 +140,7 @@ pub fn build(params: ScreenBarParams) -> Actor {
                 zoom(0.5):
                 z(2):
                 diffuse(params.fg_color[0], params.fg_color[1], params.fg_color[2], params.fg_color[3]):
-                font("wendy"): settext(params.title): horizalign(center)
+                font("wendy"): settext(title): horizalign(center)
             ));
 
             // Small side texts (Miso), positioned like Simply Love credits
@@ -143,7 +163,7 @@ pub fn build(params: ScreenBarParams) -> Actor {
                 ));
             }
 
-            if let Some(text) = params.left_text {
+            if let Some(text) = left_text {
                 let margin_x = wide_scale(38.0, 45.0);
                 children.push(act!(text:
                     align(0.0, 1.0): // horizalign,left; vertalign,bottom
@@ -154,7 +174,7 @@ pub fn build(params: ScreenBarParams) -> Actor {
                     font("miso"): settext(text): horizalign(left)
                 ));
             }
-            if let Some(text) = params.center_text {
+            if let Some(text) = center_text {
                 children.push(act!(text:
                     align(0.5, 1.0): // horizalign,center; vertalign,bottom
                     xy(screen_center_x(), BAR_H - 9.0):
@@ -164,7 +184,7 @@ pub fn build(params: ScreenBarParams) -> Actor {
                     font("miso"): settext(text): horizalign(center)
                 ));
             }
-            if let Some(text) = params.right_text {
+            if let Some(text) = right_text {
                 let margin_x = wide_scale(38.0, 45.0);
                 children.push(act!(text:
                     align(1.0, 1.0): // horizalign,right; vertalign,bottom
