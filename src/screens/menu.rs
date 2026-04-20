@@ -432,11 +432,10 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         tr("Menu", "Options"),
         tr("Menu", "Exit"),
     ];
-    let menu_strs: Vec<&str> = menu_labels.iter().map(Arc::as_ref).collect();
 
     // --- UPDATED PARAMS FOR THE NEW MENU LIST BUILDER ---
     let params = menu_list::MenuParams {
-        options: &menu_strs,
+        options: &menu_labels,
         selected_index: state.selected_index,
         start_center_y: base_y,
         row_spacing: MENU_ROW_SPACING,

@@ -1,21 +1,21 @@
 use crate::act;
-use crate::engine::present::actors::Actor;
+use crate::engine::present::actors::{Actor, TextContent};
 use crate::engine::space::screen_height;
 
-pub struct StepArtistBarParams<'a> {
+pub struct StepArtistBarParams {
     pub x0: f32,
     pub center_y: f32,
     pub accent_color: [f32; 4],
     pub z_base: i16,
-    pub label_text: &'a str,
+    pub label_text: TextContent,
     pub label_max_width: f32,
-    pub artist_text: &'a str,
+    pub artist_text: TextContent,
     pub artist_x_offset: f32,
     pub artist_max_width: f32,
     pub artist_color: [f32; 4],
 }
 
-pub fn build(p: StepArtistBarParams<'_>) -> Vec<Actor> {
+pub fn build(p: StepArtistBarParams) -> Vec<Actor> {
     let comp_h = screen_height() / 28.0;
     let z_text = p.z_base.saturating_add(1);
     vec![

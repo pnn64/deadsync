@@ -1145,7 +1145,7 @@ fn push_join_prompt(
     border_rgba: [f32; 4],
     inner_alpha: f32,
     time: f32,
-    text: &str,
+    text: std::sync::Arc<str>,
 ) {
     // ITGmania diffuse_shift: period=1, color1=white, color2=gray.
     // f = sin((t + 0.25) * 2π) / 2 + 0.5
@@ -1644,7 +1644,7 @@ fn build_box_actors(
             border_rgba,
             inner_alpha,
             state.preview_time,
-            &join_text,
+            join_text,
         );
         for a in &mut join_ui {
             apply_alpha_to_actor(a, if show_join { 1.0 } else { 0.0 });
@@ -1730,7 +1730,7 @@ fn build_box_actors(
             border_rgba,
             inner_alpha,
             state.preview_time,
-            &join_text,
+            join_text,
         );
         for a in &mut join_ui {
             apply_alpha_to_actor(a, if show_join { 1.0 } else { 0.0 });

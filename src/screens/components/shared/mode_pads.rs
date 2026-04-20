@@ -4,7 +4,7 @@ use crate::engine::space::{screen_width, widescale};
 use crate::game::profile;
 use crate::screens::components::shared::pad_display;
 
-pub fn build_label(text: &str) -> Actor {
+pub fn build_label(text: String) -> Actor {
     act!(text:
         font("wendy"):
         settext(text):

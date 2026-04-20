@@ -97,11 +97,11 @@ fn holds_mines_rolls_label(index: usize) -> Arc<str> {
         .unwrap_or_else(|| Arc::from(""))
 }
 
-fn judgment_label(index: usize) -> String {
+fn judgment_label(index: usize) -> Arc<str> {
     JUDGMENT_INFO
         .get(index)
-        .map(|info| info.label.get().to_string())
-        .unwrap_or_default()
+        .map(|info| info.label.get())
+        .unwrap_or_else(|| Arc::from(""))
 }
 
 fn time_song_left_text() -> Arc<str> {
@@ -930,7 +930,7 @@ pub fn build_double_step_stats(
                         gameplay::display_judgment_count(state, 0, JudgeGrade::WayOff),
                         gameplay::display_judgment_count(state, 0, JudgeGrade::Miss),
                     ];
-                    let labels: Vec<String> = (0..6).map(judgment_label).collect();
+                    let labels: Vec<Arc<str>> = (0..6).map(judgment_label).collect();
                     for row_i in 0..labels.len() {
                         let local_y = y_base + (row_i as f32 * row_height);
                         let y_numbers = origin_y + (local_y * base_zoom);
@@ -1009,13 +1009,13 @@ pub fn build_double_step_stats(
 
                     let fa_label = judgment_label(0);
                     let labels = [
-                        fa_label.as_str(),
-                        fa_label.as_str(),
-                        &judgment_label(1),
-                        &judgment_label(2),
-                        &judgment_label(3),
-                        &judgment_label(4),
-                        &judgment_label(5),
+                        fa_label.clone(),
+                        fa_label,
+                        judgment_label(1),
+                        judgment_label(2),
+                        judgment_label(3),
+                        judgment_label(4),
+                        judgment_label(5),
                     ];
                     for row_i in 0..labels.len() {
                         let local_y = y_base + (row_i as f32 * row_height);
@@ -1049,7 +1049,7 @@ pub fn build_double_step_stats(
                         }
 
                         actors.push(act!(text:
-                            font("miso"): settext(labels[row_i]):
+                            font("miso"): settext(labels[row_i].clone()):
                             align(1.0, 0.5): horizalign(right):
                             xy(label_x, y_label):
                             zoom(label_zoom):
@@ -1427,7 +1427,7 @@ fn build_steps_info(
     ));
     let y_desc = origin_y + (row_h * 4.0 * group_zoom);
     actors.push(act!(text:
-        font("miso"): settext(desc_text):
+        font("miso"): settext(cached_str_ref(desc_text)):
         align(0.0, 0.5): xy(values_x, y_desc):
         maxwidth(maxwidth):
         zoom(group_zoom): z(z):

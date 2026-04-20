@@ -511,7 +511,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         actors.push(act!(text:
             font("wendy"):
-            settext(label):
+            settext(label.clone()):
             align(1.0, 0.5):
             xy(x, y):
             zoom(zoom):

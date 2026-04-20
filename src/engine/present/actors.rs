@@ -225,15 +225,9 @@ impl From<String> for TextContent {
     }
 }
 
-impl From<&String> for TextContent {
-    fn from(value: &String) -> Self {
-        Self::Owned(value.clone())
-    }
-}
-
-impl From<&str> for TextContent {
-    fn from(value: &str) -> Self {
-        Self::Owned(value.to_owned())
+impl From<&'static str> for TextContent {
+    fn from(value: &'static str) -> Self {
+        Self::Static(value)
     }
 }
 

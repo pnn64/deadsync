@@ -573,12 +573,9 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
         speed_tag,
         speed_bits,
         noteskin_hash: noteskin_hasher.finish(),
-        insert_mask: profile.insert_active_mask.bits()
-            | chart_attack.insert_mask,
-        remove_mask: profile.remove_active_mask.bits()
-            | chart_attack.remove_mask,
-        holds_mask: profile.holds_active_mask.bits()
-            | chart_attack.holds_mask,
+        insert_mask: profile.insert_active_mask.bits() | chart_attack.insert_mask,
+        remove_mask: profile.remove_active_mask.bits() | chart_attack.remove_mask,
+        holds_mask: profile.holds_active_mask.bits() | chart_attack.holds_mask,
         turn_bits: turn_option_bits(profile.turn_option) | chart_attack.turn_bits,
         attack_mode: profile.attack_mode as u8,
         mini_percent: clamp_rounded_i16(display_mini),
@@ -7946,9 +7943,7 @@ mod tests {
         assert!((judgment_actor_zoom(-1.0, false) - 1.0).abs() <= 1e-6);
         // Parity with combo_actor_zoom is the whole point of this branch.
         for &mini in &[-1.0_f32, 0.0, 0.25, 0.5, 1.0, 1.5] {
-            assert!(
-                (judgment_actor_zoom(mini, false) - combo_actor_zoom(mini)).abs() <= 1e-6
-            );
+            assert!((judgment_actor_zoom(mini, false) - combo_actor_zoom(mini)).abs() <= 1e-6);
         }
     }
 

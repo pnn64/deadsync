@@ -514,10 +514,7 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         "RemoveMask={}\n",
         options.remove_active_mask.bits()
     ));
-    content.push_str(&format!(
-        "HoldsMask={}\n",
-        options.holds_active_mask.bits()
-    ));
+    content.push_str(&format!("HoldsMask={}\n", options.holds_active_mask.bits()));
     content.push_str(&format!(
         "AccelEffectsMask={}\n",
         options.accel_effects_active_mask.bits()
@@ -661,11 +658,19 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
     ));
     content.push_str(&format!(
         "Colorful={}\n",
-        i32::from(options.error_bar_active_mask.contains(ErrorBarMask::COLORFUL))
+        i32::from(
+            options
+                .error_bar_active_mask
+                .contains(ErrorBarMask::COLORFUL)
+        )
     ));
     content.push_str(&format!(
         "Monochrome={}\n",
-        i32::from(options.error_bar_active_mask.contains(ErrorBarMask::MONOCHROME))
+        i32::from(
+            options
+                .error_bar_active_mask
+                .contains(ErrorBarMask::MONOCHROME)
+        )
     ));
     content.push_str(&format!(
         "Text={}\n",
@@ -673,11 +678,19 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
     ));
     content.push_str(&format!(
         "Highlight={}\n",
-        i32::from(options.error_bar_active_mask.contains(ErrorBarMask::HIGHLIGHT))
+        i32::from(
+            options
+                .error_bar_active_mask
+                .contains(ErrorBarMask::HIGHLIGHT)
+        )
     ));
     content.push_str(&format!(
         "Average={}\n",
-        i32::from(options.error_bar_active_mask.contains(ErrorBarMask::AVERAGE))
+        i32::from(
+            options
+                .error_bar_active_mask
+                .contains(ErrorBarMask::AVERAGE)
+        )
     ));
     content.push_str(&format!("ErrorBarUp={}\n", i32::from(options.error_bar_up)));
     content.push_str(&format!(
@@ -1716,11 +1729,7 @@ pub const ERROR_BAR_BIT_AVERAGE: ErrorBarMask = ErrorBarMask::AVERAGE;
 
 #[inline(always)]
 pub const fn error_bar_mask_from_style(style: ErrorBarStyle, text: bool) -> ErrorBarMask {
-    let text_bits = if text {
-        ErrorBarMask::TEXT.bits()
-    } else {
-        0
-    };
+    let text_bits = if text { ErrorBarMask::TEXT.bits() } else { 0 };
     let style_bits = match style {
         ErrorBarStyle::None => 0,
         ErrorBarStyle::Colorful => ErrorBarMask::COLORFUL.bits(),
@@ -4886,10 +4895,7 @@ mod tests {
         use super::{InsertMask, VisualEffectsMask};
 
         // InsertMask only persists 7 bits; bit 7 (Mines) belongs to runtime.
-        assert_eq!(
-            InsertMask::from_bits_truncate(0xFF),
-            InsertMask::all()
-        );
+        assert_eq!(InsertMask::from_bits_truncate(0xFF), InsertMask::all());
         assert_eq!(InsertMask::from_bits_truncate(0xFF).bits(), 0b0111_1111);
 
         // VisualEffectsMask is 10 bits in a u16.
@@ -4905,8 +4911,10 @@ mod tests {
 
     #[test]
     fn error_bar_helpers_roundtrip_through_mask() {
-        use super::{ErrorBarMask, ErrorBarStyle, error_bar_mask_from_style,
-            error_bar_style_from_mask, error_bar_text_from_mask};
+        use super::{
+            ErrorBarMask, ErrorBarStyle, error_bar_mask_from_style, error_bar_style_from_mask,
+            error_bar_text_from_mask,
+        };
 
         // Style + text combine into mask bits.
         let mask = error_bar_mask_from_style(ErrorBarStyle::Colorful, true);

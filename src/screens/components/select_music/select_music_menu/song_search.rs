@@ -412,7 +412,7 @@ pub fn build_song_search_overlay(
                     ));
                     actors.push(act!(text:
                         font("miso"):
-                        settext(value):
+                        settext(value.clone()):
                         align(0.0, 0.5):
                         xy(pane_cx + 40.0, value_y):
                         zoom(zoom):

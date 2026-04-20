@@ -5640,12 +5640,12 @@ fn message_event_cmp(
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Datelike, Local};
     use super::{
         EffectMode, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
         SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaPlayerContext, SongLuaProxyTarget,
         SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua, file_path_string,
     };
+    use chrono::{Datelike, Local};
     use std::fs;
     use std::path::PathBuf;
 

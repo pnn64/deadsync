@@ -101,10 +101,22 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [ErrorBarMask::empty(), ErrorBarMask::empty()], false);
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [HideMask::empty(), HideMask::empty()],
+            [ErrorBarMask::empty(), ErrorBarMask::empty()],
+            false,
+        );
         assert!(!is_row_visible(&row_map, 1, visibility));
 
-        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [ErrorBarMask::COLORFUL, ErrorBarMask::empty()], false);
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [HideMask::empty(), HideMask::empty()],
+            [ErrorBarMask::COLORFUL, ErrorBarMask::empty()],
+            false,
+        );
         assert!(is_row_visible(&row_map, 1, visibility));
     }
 
@@ -125,7 +137,13 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [ErrorBarMask::empty(), ErrorBarMask::empty()], false);
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [HideMask::empty(), HideMask::empty()],
+            [ErrorBarMask::empty(), ErrorBarMask::empty()],
+            false,
+        );
         assert!(!is_row_visible(&row_map, 1, visibility));
 
         let row_map = test_row_map(vec![
@@ -142,7 +160,13 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [ErrorBarMask::empty(), ErrorBarMask::empty()], false);
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [HideMask::empty(), HideMask::empty()],
+            [ErrorBarMask::empty(), ErrorBarMask::empty()],
+            false,
+        );
         assert!(is_row_visible(&row_map, 1, visibility));
     }
 
@@ -163,7 +187,13 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, true], [HideMask::empty(), HideMask::empty()], [ErrorBarMask::empty(), ErrorBarMask::empty()], false);
+        let visibility = row_visibility(
+            &row_map,
+            [true, true],
+            [HideMask::empty(), HideMask::empty()],
+            [ErrorBarMask::empty(), ErrorBarMask::empty()],
+            false,
+        );
         assert!(!is_row_visible(&row_map, 1, visibility));
 
         let row_map = test_row_map(vec![
@@ -180,7 +210,13 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, true], [HideMask::empty(), HideMask::empty()], [ErrorBarMask::empty(), ErrorBarMask::empty()], false);
+        let visibility = row_visibility(
+            &row_map,
+            [true, true],
+            [HideMask::empty(), HideMask::empty()],
+            [ErrorBarMask::empty(), ErrorBarMask::empty()],
+            false,
+        );
         assert!(is_row_visible(&row_map, 1, visibility));
     }
 
@@ -195,8 +231,7 @@ pub(super) mod tests {
         // the moment the user toggles any choice on those rows.
         ensure_i18n();
         let mut profile = Profile::default();
-        profile.scroll_option =
-            profile::ScrollOption::Reverse.union(profile::ScrollOption::Cross);
+        profile.scroll_option = profile::ScrollOption::Reverse.union(profile::ScrollOption::Cross);
 
         let mut main_rows = test_row_map(vec![test_row(
             RowId::Exit,
@@ -217,12 +252,9 @@ pub(super) mod tests {
             [0, 0],
         )]);
 
-        let main =
-            super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1);
-        let adv =
-            super::super::panes::apply_profile_defaults(&mut advanced_rows, &profile, P1);
-        let unc =
-            super::super::panes::apply_profile_defaults(&mut uncommon_rows, &profile, P1);
+        let main = super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1);
+        let adv = super::super::panes::apply_profile_defaults(&mut advanced_rows, &profile, P1);
+        let unc = super::super::panes::apply_profile_defaults(&mut uncommon_rows, &profile, P1);
 
         // Main alone: Scroll row absent, mask comes back empty (the bug source).
         assert_eq!(main.0, ScrollMask::empty());
@@ -428,7 +460,8 @@ pub(super) mod tests {
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_ne!(
-            state.scroll_active_mask[P1], ScrollMask::empty(),
+            state.scroll_active_mask[P1],
+            ScrollMask::empty(),
             "Scroll bitmask should have been toggled"
         );
     }
@@ -668,7 +701,8 @@ pub(super) mod tests {
         super::change_choice_for_player(&mut state, &asset_manager, P1, -1);
 
         assert_eq!(
-            state.scroll_active_mask, [ScrollMask::empty(), ScrollMask::empty()],
+            state.scroll_active_mask,
+            [ScrollMask::empty(), ScrollMask::empty()],
             "delta on Bitmask row must not toggle the mask"
         );
         // selected_choice_index is also untouched (cycle_choice_index never runs)

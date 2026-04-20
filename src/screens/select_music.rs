@@ -4622,10 +4622,10 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
                 diffuse(accent[0], accent[1], accent[2], 1.0):
                 z(SYNC_OVERLAY_Z + 4)
             ));
-            if let Some(line) = ready_offset_line.as_deref() {
+            if let Some(line) = ready_offset_line.as_ref() {
                 actors.push(act!(text:
                     font("miso"):
-                    settext(line):
+                    settext(line.clone()):
                     align(0.5, 0.5):
                     xy(pane_cx, ready_prompt_y - SYNC_READY_LINE_STEP * 0.5):
                     zoom(SYNC_READY_TEXT_ZOOM):
@@ -7982,7 +7982,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Pads
     {
-        actors.push(mode_pads::build_label(score_mode_text.as_str()));
+        actors.push(mode_pads::build_label(score_mode_text));
         actors.extend(mode_pads::build());
     }
 
@@ -8183,9 +8183,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 center_y: y_cen,
                 accent_color: sel_col,
                 z_base: 120,
-                label_text: &steps_label,
+                label_text: steps_label.clone().into(),
                 label_max_width: 40.0,
-                artist_text: step_artist,
+                artist_text: cached_str_ref(step_artist).into(),
                 artist_x_offset: 75.0,
                 artist_max_width: 124.0,
                 artist_color: [0.0, 0.0, 0.0, 1.0],
@@ -8400,13 +8400,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                       sel_col: [f32; 4],
                       side: profile::PlayerSide,
                       player_initials: &str,
-                      steps: &str,
-                      mines: &str,
-                      jumps: &str,
-                      hands: &str,
-                      holds: &str,
-                      rolls: &str,
-                      meter: &str,
+                      steps: String,
+                      mines: String,
+                      jumps: String,
+                      hands: String,
+                      holds: String,
+                      rolls: String,
+                      meter: String,
                       chart: Option<&ChartData>| {
         let gs_active = scores::is_gs_active_for_side(side);
         let show_rivals = gs_active && cfg.show_select_music_scorebox && scorebox_cycle_enabled;
@@ -8445,38 +8445,33 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
             // Simply Love PaneDisplay order: Machine/World first, then Player.
             let lines = [
-                (
-                    gs_view.machine_name.as_str(),
-                    gs_view.machine_score.as_ref(),
-                ),
-                (gs_view.player_name.as_str(), gs_view.player_score.as_ref()),
+                (gs_view.machine_name.clone(), gs_view.machine_score.clone()),
+                (gs_view.player_name.clone(), gs_view.player_score.clone()),
             ];
-            for i in 0..2 {
-                let (name, pct) = lines[i];
+            for (i, (name, pct)) in lines.into_iter().enumerate() {
                 out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
                 out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             }
             let score_mode_label_storage = format!("{} Score", gs_view.mode_text);
             let score_mode_label = gs_view
                 .loading_text
-                .as_deref()
-                .unwrap_or(score_mode_label_storage.as_str());
+                .clone()
+                .unwrap_or(score_mode_label_storage);
             out.push(act!(text: font("miso"): settext(score_mode_label): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
             if gs_view.show_rivals {
                 for (i, (name, pct)) in gs_view.rivals.iter().enumerate() {
-                    let pct = pct.as_ref();
-                    out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] + 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-                    out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 125.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                    out.push(act!(text: font("miso"): settext(name.clone()): align(0.5, 0.5): xy(pane_cx + cols[2] + 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                    out.push(act!(text: font("miso"): settext(pct.clone()): align(1.0, 0.5): xy(pane_cx + cols[2] + 125.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
                 }
             }
         } else {
-            let mut player_name = "----";
+            let mut player_name = "----".to_owned();
             let mut player_score = placeholder_score_percent();
             if let Some(c) = chart
                 && let Some(sc) = scores::get_cached_local_score_for_side(&c.short_hash, side)
                 && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
             {
-                player_name = player_initials;
+                player_name = player_initials.to_owned();
                 player_score = cached_score_percent_text(sc.score_percent);
             }
 
@@ -8489,13 +8484,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 machine_name_storage = Some(initials);
                 machine_score = cached_score_percent_text(sc.score_percent);
             }
-            let machine_name = machine_name_storage.as_deref().unwrap_or("----");
-
-            let names = [machine_name, player_name];
-            let scores = [machine_score, player_score];
-            for i in 0..2 {
-                out.push(act!(text: font("miso"): settext(names[i]): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-                out.push(act!(text: font("miso"): settext(scores[i].clone()): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+            let machine_name = machine_name_storage.unwrap_or_else(|| "----".to_owned());
+            let lines = [(machine_name, machine_score), (player_name, player_score)];
+            for (i, (name, score)) in lines.into_iter().enumerate() {
+                out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+                out.push(act!(text: font("miso"): settext(score): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             }
             out.push(act!(text: font("miso"): settext(if show_ex_score { tr("SelectMusic", "ExScore") } else { tr("SelectMusic", "ItgScore") }): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
         }
@@ -8509,13 +8502,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             sel_col_p1,
             profile::PlayerSide::P1,
             p1_profile.player_initials.as_str(),
-            &steps,
-            &mines,
-            &jumps,
-            &hands,
-            &holds,
-            &rolls,
-            &meter,
+            steps,
+            mines,
+            jumps,
+            hands,
+            holds,
+            rolls,
+            meter,
             immediate_chart_p1,
         ));
         actors.extend(build_pane(
@@ -8523,13 +8516,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             sel_col_p2,
             profile::PlayerSide::P2,
             p2_profile.player_initials.as_str(),
-            &steps_p2,
-            &mines_p2,
-            &jumps_p2,
-            &hands_p2,
-            &holds_p2,
-            &rolls_p2,
-            &meter_p2,
+            steps_p2,
+            mines_p2,
+            jumps_p2,
+            hands_p2,
+            holds_p2,
+            rolls_p2,
+            meter_p2,
             immediate_chart_p2,
         ));
     } else {
@@ -8551,13 +8544,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 p1_profile.player_initials.as_str()
             },
-            &steps,
-            &mines,
-            &jumps,
-            &hands,
-            &holds,
-            &rolls,
-            &meter,
+            steps,
+            mines,
+            jumps,
+            hands,
+            holds,
+            rolls,
+            meter,
             immediate_chart_p1,
         ));
     }
@@ -8652,8 +8645,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 let label_x = num_right_x + 3.0;
                 let num_w = (num_right_x - col_left).max(8.0);
                 let label_w = (col_left + col_w - label_x - 2.0).max(8.0);
-                actors.push(act!(text: font("miso"): settext(num): align(1.0, 0.5): horizalign(right): xy(num_right_x, y): maxwidth(num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
-                actors.push(act!(text: font("miso"): settext(label): align(0.0, 0.5): horizalign(left): xy(label_x, y): maxwidth(label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+                actors.push(act!(text: font("miso"): settext(num.to_owned()): align(1.0, 0.5): horizalign(right): xy(num_right_x, y): maxwidth(num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+                actors.push(act!(text: font("miso"): settext(label.to_owned()): align(0.0, 0.5): horizalign(left): xy(label_x, y): maxwidth(label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
             };
 
             let num_anchor_frac = 0.31;
@@ -8825,10 +8818,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 let vx = p_v_x + c as f32 * 148.0;
                 let lx = p_l_x + c as f32 * 148.0;
                 match mw {
-                    Some(w) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
-                    None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+                    Some(w) => actors.push(act!(text: font("miso"): settext(val.to_owned()): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+                    None => actors.push(act!(text: font("miso"): settext(val.to_owned()): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
                 }
-                actors.push(act!(text: font("miso"): settext(lbl): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+                actors.push(act!(text: font("miso"): settext(lbl.to_owned()): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
             }
         }
     }
@@ -9360,8 +9353,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             &mut actors,
             cx - SL_EXIT_PROMPT_CHOICE_X_OFFSET,
             SL_EXIT_PROMPT_CHOICE_Y,
-            &tr("Common", "No"),
-            &tr("SelectMusic", "KeepPlayingInfo"),
+            tr("Common", "No"),
+            tr("SelectMusic", "KeepPlayingInfo"),
             active_choice == 0,
             zoom_no,
             p2_color,
@@ -9372,8 +9365,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             &mut actors,
             cx + SL_EXIT_PROMPT_CHOICE_X_OFFSET,
             SL_EXIT_PROMPT_CHOICE_Y,
-            &tr("Common", "Yes"),
-            &tr("SelectMusic", "FinishedInfo"),
+            tr("Common", "Yes"),
+            tr("SelectMusic", "FinishedInfo"),
             active_choice == 1,
             zoom_yes,
             p2_color,
@@ -9428,8 +9421,8 @@ fn push_exit_prompt_choice(
     out: &mut Vec<Actor>,
     cx: f32,
     cy: f32,
-    label: &str,
-    info: &str,
+    label: std::sync::Arc<str>,
+    info: std::sync::Arc<str>,
     active: bool,
     choice_zoom: f32,
     active_rgba: [f32; 4],

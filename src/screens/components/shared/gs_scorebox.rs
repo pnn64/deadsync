@@ -951,7 +951,7 @@ fn push_mode_text(
     let c = color_with_alpha([1.0, 1.0, 1.0, SCOREBOX_MODE_ALPHA], alpha);
     actors.push(act!(text:
         font("miso"):
-        settext(text):
+        settext(text.to_owned()):
         align(0.5, 0.5):
         xy(center_x + 2.0 * zoom, center_y - 5.0 * zoom):
         zoom(0.9 * zoom):
@@ -1010,7 +1010,7 @@ fn push_mode_overlay(
     let c = color_with_alpha(rgba, alpha);
     actors.push(act!(text:
         font("miso"):
-        settext(text):
+        settext(text.to_owned()):
         align(0.5, 0.5):
         xy(center_x + 2.0 * zoom, center_y - 5.0 * zoom):
         zoom(0.9 * zoom):

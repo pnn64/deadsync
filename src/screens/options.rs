@@ -9700,7 +9700,7 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
 }
 
 fn build_yes_no_confirm_overlay(
-    prompt_text: &str,
+    prompt_text: String,
     active_choice: u8,
     active_color_index: i32,
 ) -> Vec<Actor> {
@@ -10116,7 +10116,7 @@ pub fn get_actors(
                                     zoom(ITEM_TEXT_ZOOM):
                                     diffuse(value_color[0], value_color[1], value_color[2], value_color[3]):
                                     font("miso"):
-                                    settext(choices[choice_idx].as_ref()):
+                                    settext(choices[choice_idx].clone().into_owned()):
                                     horizalign(right)
                                 ));
                             }
@@ -10489,7 +10489,7 @@ pub fn get_actors(
                     } else {
                         // Exit row: centered "Exit" text in the items column.
                         let exit_label = tr("Common", "Exit");
-                        let label = &*exit_label;
+                        let label = exit_label.clone();
                         let value_zoom = 0.835_f32;
                         let mut choice_color = if is_active { col_white } else { sl_gray };
                         choice_color[3] *= row_alpha;
@@ -10623,7 +10623,7 @@ pub fn get_actors(
             }
         );
         ui_actors.extend(build_yes_no_confirm_overlay(
-            &prompt_text,
+            prompt_text,
             confirm.active_choice,
             state.active_color_index,
         ));
@@ -10638,7 +10638,7 @@ pub fn get_actors(
             }
         );
         ui_actors.extend(build_yes_no_confirm_overlay(
-            &prompt_text,
+            prompt_text,
             confirm.active_choice,
             state.active_color_index,
         ));

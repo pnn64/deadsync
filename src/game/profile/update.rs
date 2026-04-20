@@ -5,9 +5,8 @@ use super::{
     MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorScoreType, NoteSkin, Perspective,
     PlayStyle, PlayerSide, RemoveMask, ScrollOption, ScrollSpeedSetting, TargetScoreSetting,
     TimingWindowsOption, TurnOption, VisualEffectsMask, clamp_custom_fantastic_window_ms,
-    error_bar_style_from_mask, error_bar_text_from_mask, lock_profiles,
-    sanitize_player_initials, save_profile_ini_for_side, save_profile_stats_for_side,
-    session_side_is_guest, side_ix,
+    error_bar_style_from_mask, error_bar_text_from_mask, lock_profiles, sanitize_player_initials,
+    save_profile_ini_for_side, save_profile_stats_for_side, session_side_is_guest, side_ix,
 };
 use chrono::Local;
 use std::path::Path;

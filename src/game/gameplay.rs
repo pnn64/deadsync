@@ -3644,16 +3644,15 @@ impl State {
     }
 
     pub fn summed_notefield_model_cache_stats(&self) -> ModelMeshCacheStats {
-        self.notefield_model_cache_stats()
-            .into_iter()
-            .fold(ModelMeshCacheStats::default(), |mut acc, stats| {
+        self.notefield_model_cache_stats().into_iter().fold(
+            ModelMeshCacheStats::default(),
+            |mut acc, stats| {
                 acc.hits = acc.hits.saturating_add(stats.hits);
                 acc.misses = acc.misses.saturating_add(stats.misses);
-                acc.saturated_misses = acc
-                    .saturated_misses
-                    .saturating_add(stats.saturated_misses);
+                acc.saturated_misses = acc.saturated_misses.saturating_add(stats.saturated_misses);
                 acc
-            })
+            },
+        )
     }
 }
 
@@ -9510,7 +9509,8 @@ mod tests {
     #[test]
     fn score_valid_rejects_nohands_when_chart_has_hands() {
         let mut profile = profile::Profile::default();
-        profile.remove_active_mask = profile::RemoveMask::from_bits_truncate(super::REMOVE_MASK_BIT_NO_HANDS);
+        profile.remove_active_mask =
+            profile::RemoveMask::from_bits_truncate(super::REMOVE_MASK_BIT_NO_HANDS);
         let chart = test_chart(
             ArrowStats {
                 hands: 4,

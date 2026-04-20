@@ -45,7 +45,7 @@ pub fn build(params: Params) -> Vec<Actor> {
 
     let text = act!(text:
         font("miso"):
-        settext(params.message):
+        settext(params.message.to_owned()):
         align(0.0, 0.0): // top-left
         xy(TEXT_MARGIN_X, TEXT_MARGIN_Y):
         zoom(text_zoom): // Apply the widescale zoom

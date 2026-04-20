@@ -754,8 +754,7 @@ pub(super) fn apply_profile_defaults(
         ];
         for &(flag, idx) in flags {
             if profile.scroll_option.contains(flag) && idx < row.choices.len() && idx < 8 {
-                scroll_active_mask
-                    .insert(ScrollMask::from_bits_truncate(1u8 << (idx as u8)));
+                scroll_active_mask.insert(ScrollMask::from_bits_truncate(1u8 << (idx as u8)));
             }
         }
 

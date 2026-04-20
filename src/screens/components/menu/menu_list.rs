@@ -1,6 +1,7 @@
 use crate::act;
 use crate::engine::present::actors::Actor;
 use crate::engine::space::screen_center_x;
+use std::sync::Arc;
 
 // --- CONSTANTS TO MATCH THE LUA SCRIPT'S STATIC STATE ---
 const MENU_BASE_PX: f32 = 32.0; // An arbitrary base font size before zoom.
@@ -9,7 +10,7 @@ const UNFOCUSED_ZOOM: f32 = 0.4; // Zoom factor when an item loses focus.
 
 #[derive(Clone, Copy)]
 pub struct MenuParams<'a> {
-    pub options: &'a [&'a str],
+    pub options: &'a [Arc<str>],
     pub selected_index: usize,
 
     // In SM TL space:
@@ -52,7 +53,7 @@ pub fn build_vertical_menu(p: MenuParams) -> Vec<Actor> {
             diffuse(color[0], color[1], color[2], color[3]):
             shadowlength(0.8):
             font(p.font):
-            settext(*label):
+            settext(label.clone()):
             horizalign(center)
         ));
     }

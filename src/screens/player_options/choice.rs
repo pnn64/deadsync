@@ -253,7 +253,8 @@ pub(super) fn toggle_scroll_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
@@ -320,7 +321,8 @@ pub(super) fn toggle_hide_row(state: &mut State, player_idx: usize) {
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
@@ -754,7 +756,8 @@ pub(super) fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) 
         return;
     }
 
-    let choice_index = state.pane()
+    let choice_index = state
+        .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
@@ -817,7 +820,8 @@ pub(super) fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
     let bit = if choice_index
-        < state.pane()
+        < state
+            .pane()
             .row_map
             .row(state.pane().row_map.id_at(row_index))
             .choices
@@ -900,9 +904,8 @@ pub(super) fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
 
     state.results_extras_active_mask[idx].toggle(bit);
 
-    let track_early_judgments = state
-        .results_extras_active_mask[idx]
-        .contains(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
+    let track_early_judgments =
+        state.results_extras_active_mask[idx].contains(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
     state.player_profiles[idx].track_early_judgments = track_early_judgments;
 
     let play_style = crate::game::profile::get_session_play_style();

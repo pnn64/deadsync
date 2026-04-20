@@ -2012,7 +2012,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     )));
 
     let mode_text = gs_scorebox::select_music_mode_text(profile::PlayerSide::P1, None);
-    actors.push(mode_pads::build_label(mode_text.as_str()));
+    actors.push(mode_pads::build_label(mode_text));
     actors.extend(mode_pads::build());
 
     let (banner_zoom, banner_cx, banner_cy) = if is_wide() {
@@ -2159,24 +2159,21 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         pane_cx,
         accent_color: pane_sel_col,
         values: select_pane::StatsValues {
-            steps: steps_text.as_str(),
-            mines: mines_text.as_str(),
-            jumps: jumps_text.as_str(),
-            hands: hands_text.as_str(),
-            holds: holds_text.as_str(),
-            rolls: rolls_text.as_str(),
+            steps: steps_text,
+            mines: mines_text,
+            jumps: jumps_text,
+            hands: hands_text,
+            holds: holds_text,
+            rolls: rolls_text,
         },
-        meter: (!gs_view.show_rivals).then_some(meter_text.as_str()),
+        meter: (!gs_view.show_rivals).then_some(meter_text),
     }));
     let pane_layout = select_pane::layout();
     let lines = [
-        (
-            gs_view.machine_name.as_str(),
-            gs_view.machine_score.as_ref(),
-        ),
-        (gs_view.player_name.as_str(), gs_view.player_score.as_ref()),
+        (gs_view.machine_name.clone(), gs_view.machine_score.clone()),
+        (gs_view.player_name.clone(), gs_view.player_score.clone()),
     ];
-    for (i, (name, pct)) in lines.iter().copied().enumerate() {
+    for (i, (name, pct)) in lines.into_iter().enumerate() {
         actors.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + pane_layout.cols[2] - 50.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
         actors.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + pane_layout.cols[2] + 25.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
     }
@@ -2186,9 +2183,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     if gs_view.show_rivals {
         for i in 0..3 {
             let (name, pct) = (&gs_view.rivals[i].0, &gs_view.rivals[i].1);
-            let pct = pct.as_ref();
-            actors.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + pane_layout.cols[2] + 50.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-            actors.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + pane_layout.cols[2] + 125.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+            actors.push(act!(text: font("miso"): settext(name.clone()): align(0.5, 0.5): xy(pane_cx + pane_layout.cols[2] + 50.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+            actors.push(act!(text: font("miso"): settext(pct.clone()): align(1.0, 0.5): xy(pane_cx + pane_layout.cols[2] + 125.0 * pane_layout.text_zoom, pane_layout.pane_top + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
         }
     }
 
@@ -2429,9 +2425,9 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             center_y: step_artist_y,
             accent_color: step_artist_col,
             z_base: 122,
-            label_text: step_idx_text.as_str(),
+            label_text: step_idx_text.into(),
             label_max_width: 22.0,
-            artist_text: step_artist_text.as_str(),
+            artist_text: step_artist_text.into(),
             artist_x_offset: 60.0,
             artist_max_width: 138.0,
             artist_color: [
@@ -2592,8 +2588,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             &mut actors,
             cx - SL_EXIT_PROMPT_CHOICE_X_OFFSET,
             SL_EXIT_PROMPT_CHOICE_Y,
-            no_label.as_ref(),
-            no_info.as_ref(),
+            no_label,
+            no_info,
             active_choice == 0,
             zoom_no,
             p2_color,
@@ -2604,8 +2600,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             &mut actors,
             cx + SL_EXIT_PROMPT_CHOICE_X_OFFSET,
             SL_EXIT_PROMPT_CHOICE_Y,
-            yes_label.as_ref(),
-            yes_info.as_ref(),
+            yes_label,
+            yes_info,
             active_choice == 1,
             zoom_yes,
             p2_color,
@@ -2661,8 +2657,8 @@ fn push_exit_prompt_choice(
     out: &mut Vec<Actor>,
     cx: f32,
     cy: f32,
-    label: &str,
-    info: &str,
+    label: std::sync::Arc<str>,
+    info: std::sync::Arc<str>,
     active: bool,
     choice_zoom: f32,
     active_rgba: [f32; 4],

@@ -1,6 +1,6 @@
 use crate::act;
-use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::actors::{self, Actor, Background, SizeSpec};
+use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
 use crate::engine::space;
 use crate::engine::space::{screen_center_x, screen_height, screen_width};
