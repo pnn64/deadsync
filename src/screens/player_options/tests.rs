@@ -3,10 +3,10 @@ use super::*;
 #[cfg(test)]
 pub(super) mod tests {
     use super::{
-        HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
-        NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType,
-        handle_arcade_start_event, handle_start_event, hud_offset_choices, is_row_visible,
-        judgment_tilt_intensity_visible, repeat_held_arcade_start, row_visibility,
+        ErrorBarMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask,
+        NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowId, RowMap, ScrollMask,
+        SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event, hud_offset_choices,
+        is_row_visible, judgment_tilt_intensity_visible, repeat_held_arcade_start, row_visibility,
         session_active_players, sync_profile_scroll_speed,
     };
     use crate::assets::AssetManager;
@@ -101,10 +101,10 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [0, 0], false);
+        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [ErrorBarMask::empty(), ErrorBarMask::empty()], false);
         assert!(!is_row_visible(&row_map, 1, visibility));
 
-        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [1, 0], false);
+        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [ErrorBarMask::COLORFUL, ErrorBarMask::empty()], false);
         assert!(is_row_visible(&row_map, 1, visibility));
     }
 
@@ -125,7 +125,7 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [0, 0], false);
+        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [ErrorBarMask::empty(), ErrorBarMask::empty()], false);
         assert!(!is_row_visible(&row_map, 1, visibility));
 
         let row_map = test_row_map(vec![
@@ -142,7 +142,7 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [0, 0], false);
+        let visibility = row_visibility(&row_map, [true, false], [HideMask::empty(), HideMask::empty()], [ErrorBarMask::empty(), ErrorBarMask::empty()], false);
         assert!(is_row_visible(&row_map, 1, visibility));
     }
 
@@ -163,7 +163,7 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, true], [HideMask::empty(), HideMask::empty()], [0, 0], false);
+        let visibility = row_visibility(&row_map, [true, true], [HideMask::empty(), HideMask::empty()], [ErrorBarMask::empty(), ErrorBarMask::empty()], false);
         assert!(!is_row_visible(&row_map, 1, visibility));
 
         let row_map = test_row_map(vec![
@@ -180,7 +180,7 @@ pub(super) mod tests {
                 [0, 0],
             ),
         ]);
-        let visibility = row_visibility(&row_map, [true, true], [HideMask::empty(), HideMask::empty()], [0, 0], false);
+        let visibility = row_visibility(&row_map, [true, true], [HideMask::empty(), HideMask::empty()], [ErrorBarMask::empty(), ErrorBarMask::empty()], false);
         assert!(is_row_visible(&row_map, 1, visibility));
     }
 

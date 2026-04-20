@@ -1,4 +1,8 @@
 use super::*;
+pub use crate::game::profile::{
+    AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask, RemoveMask,
+    VisualEffectsMask,
+};
 use bitflags::bitflags;
 
 bitflags! {
@@ -174,32 +178,32 @@ pub struct State {
     pub life_bar_options_active_mask: [LifeBarOptionsMask; PLAYER_SLOTS],
     // For Error Bar row: bitmask of which options are enabled.
     // bit0 = Colorful, bit1 = Monochrome, bit2 = Text, bit3 = Highlight, bit4 = Average.
-    pub error_bar_active_mask: [u8; PLAYER_SLOTS],
+    pub error_bar_active_mask: [ErrorBarMask; PLAYER_SLOTS],
     pub error_bar_options_active_mask: [ErrorBarOptionsMask; PLAYER_SLOTS],
     pub measure_counter_options_active_mask: [MeasureCounterOptionsMask; PLAYER_SLOTS],
     // For Insert row: bitmask of enabled chart insert transforms.
     // bit0 = Wide, bit1 = Big, bit2 = Quick, bit3 = BMRize,
     // bit4 = Skippy, bit5 = Echo, bit6 = Stomp.
-    pub insert_active_mask: [u8; PLAYER_SLOTS],
+    pub insert_active_mask: [InsertMask; PLAYER_SLOTS],
     // For Remove row: bitmask of enabled chart removal transforms.
     // bit0 = Little, bit1 = No Mines, bit2 = No Holds, bit3 = No Jumps,
     // bit4 = No Hands, bit5 = No Quads, bit6 = No Lifts, bit7 = No Fakes.
-    pub remove_active_mask: [u8; PLAYER_SLOTS],
+    pub remove_active_mask: [RemoveMask; PLAYER_SLOTS],
     // For Holds row: bitmask of enabled hold transforms.
     // bit0 = Planted, bit1 = Floored, bit2 = Twister,
     // bit3 = No Rolls, bit4 = Holds To Rolls.
-    pub holds_active_mask: [u8; PLAYER_SLOTS],
+    pub holds_active_mask: [HoldsMask; PLAYER_SLOTS],
     // For Accel Effects row: bitmask of enabled acceleration transforms.
     // bit0 = Boost, bit1 = Brake, bit2 = Wave, bit3 = Expand, bit4 = Boomerang.
-    pub accel_effects_active_mask: [u8; PLAYER_SLOTS],
+    pub accel_effects_active_mask: [AccelEffectsMask; PLAYER_SLOTS],
     // For Visual Effects row: bitmask of enabled visual transforms.
     // bit0 = Drunk, bit1 = Dizzy, bit2 = Confusion, bit3 = Big,
     // bit4 = Flip, bit5 = Invert, bit6 = Tornado, bit7 = Tipsy,
     // bit8 = Bumpy, bit9 = Beat.
-    pub visual_effects_active_mask: [u16; PLAYER_SLOTS],
+    pub visual_effects_active_mask: [VisualEffectsMask; PLAYER_SLOTS],
     // For Appearance Effects row: bitmask of enabled appearance transforms.
     // bit0 = Hidden, bit1 = Sudden, bit2 = Stealth, bit3 = Blink, bit4 = R.Vanish.
-    pub appearance_effects_active_mask: [u8; PLAYER_SLOTS],
+    pub appearance_effects_active_mask: [AppearanceEffectsMask; PLAYER_SLOTS],
     pub active_color_index: i32,
     pub speed_mod: [SpeedMod; PLAYER_SLOTS],
     pub music_rate: f32,

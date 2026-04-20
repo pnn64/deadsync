@@ -87,19 +87,19 @@ pub(super) fn build_rows(
 pub(super) type ActiveMaskTuple = (
     ScrollMask,
     HideMask,
-    u8,
-    u8,
-    u8,
-    u8,
-    u16,
-    u8,
+    InsertMask,
+    RemoveMask,
+    HoldsMask,
+    AccelEffectsMask,
+    VisualEffectsMask,
+    AppearanceEffectsMask,
     FaPlusMask,
     EarlyDwMask,
     GameplayExtrasMask,
     GameplayExtrasMoreMask,
     ResultsExtrasMask,
     LifeBarOptionsMask,
-    u8,
+    ErrorBarMask,
     ErrorBarOptionsMask,
     MeasureCounterOptionsMask,
 );
@@ -137,21 +137,20 @@ pub(super) fn apply_profile_defaults(
 ) -> ActiveMaskTuple {
     let mut scroll_active_mask = ScrollMask::empty();
     let mut hide_active_mask = HideMask::empty();
-    let mut insert_active_mask: u8 = 0;
-    let mut remove_active_mask: u8 = 0;
-    let mut holds_active_mask: u8 = 0;
-    let mut accel_effects_active_mask: u8 = 0;
-    let mut visual_effects_active_mask: u16 = 0;
-    let mut appearance_effects_active_mask: u8 = 0;
+    let mut insert_active_mask = InsertMask::empty();
+    let mut remove_active_mask = RemoveMask::empty();
+    let mut holds_active_mask = HoldsMask::empty();
+    let mut accel_effects_active_mask = AccelEffectsMask::empty();
+    let mut visual_effects_active_mask = VisualEffectsMask::empty();
+    let mut appearance_effects_active_mask = AppearanceEffectsMask::empty();
     let mut fa_plus_active_mask = FaPlusMask::empty();
     let mut early_dw_active_mask = EarlyDwMask::empty();
     let mut gameplay_extras_active_mask = GameplayExtrasMask::empty();
     let mut gameplay_extras_more_active_mask = GameplayExtrasMoreMask::empty();
     let mut results_extras_active_mask = ResultsExtrasMask::empty();
     let mut life_bar_options_active_mask = LifeBarOptionsMask::empty();
-    let mut error_bar_active_mask: u8 =
-        crate::game::profile::normalize_error_bar_mask(profile.error_bar_active_mask);
-    if error_bar_active_mask == 0 {
+    let mut error_bar_active_mask = profile.error_bar_active_mask;
+    if error_bar_active_mask.is_empty() {
         error_bar_active_mask = crate::game::profile::error_bar_mask_from_style(
             profile.error_bar,
             profile.error_bar_text,
@@ -435,11 +434,12 @@ pub(super) fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = if profile.error_ms_display { 1 } else { 0 };
     }
     if let Some(row) = row_map.get_mut(RowId::ErrorBar) {
-        if error_bar_active_mask != 0 {
+        if !error_bar_active_mask.is_empty() {
+            let bits = error_bar_active_mask.bits();
             let first_idx = (0..row.choices.len())
                 .find(|i| {
                     let bit = 1u8 << (*i as u8);
-                    (error_bar_active_mask & bit) != 0
+                    (bits & bit) != 0
                 })
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
@@ -796,14 +796,11 @@ pub(super) fn apply_profile_defaults(
         }
     }
     if let Some(row) = row_map.get_mut(RowId::Insert) {
-        insert_active_mask =
-            crate::game::profile::normalize_insert_mask(profile.insert_active_mask);
-        if insert_active_mask != 0 {
+        insert_active_mask = profile.insert_active_mask;
+        let bits = insert_active_mask.bits();
+        if bits != 0 {
             let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (insert_active_mask & bit) != 0
-                })
+                .find(|i| (bits & (1u8 << (*i as u8))) != 0)
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
         } else {
@@ -811,14 +808,11 @@ pub(super) fn apply_profile_defaults(
         }
     }
     if let Some(row) = row_map.get_mut(RowId::Remove) {
-        remove_active_mask =
-            crate::game::profile::normalize_remove_mask(profile.remove_active_mask);
-        if remove_active_mask != 0 {
+        remove_active_mask = profile.remove_active_mask;
+        let bits = remove_active_mask.bits();
+        if bits != 0 {
             let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (remove_active_mask & bit) != 0
-                })
+                .find(|i| (bits & (1u8 << (*i as u8))) != 0)
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
         } else {
@@ -826,13 +820,11 @@ pub(super) fn apply_profile_defaults(
         }
     }
     if let Some(row) = row_map.get_mut(RowId::Holds) {
-        holds_active_mask = crate::game::profile::normalize_holds_mask(profile.holds_active_mask);
-        if holds_active_mask != 0 {
+        holds_active_mask = profile.holds_active_mask;
+        let bits = holds_active_mask.bits();
+        if bits != 0 {
             let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (holds_active_mask & bit) != 0
-                })
+                .find(|i| (bits & (1u8 << (*i as u8))) != 0)
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
         } else {
@@ -840,14 +832,11 @@ pub(super) fn apply_profile_defaults(
         }
     }
     if let Some(row) = row_map.get_mut(RowId::Accel) {
-        accel_effects_active_mask =
-            crate::game::profile::normalize_accel_effects_mask(profile.accel_effects_active_mask);
-        if accel_effects_active_mask != 0 {
+        accel_effects_active_mask = profile.accel_effects_active_mask;
+        let bits = accel_effects_active_mask.bits();
+        if bits != 0 {
             let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (accel_effects_active_mask & bit) != 0
-                })
+                .find(|i| (bits & (1u8 << (*i as u8))) != 0)
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
         } else {
@@ -855,14 +844,11 @@ pub(super) fn apply_profile_defaults(
         }
     }
     if let Some(row) = row_map.get_mut(RowId::Effect) {
-        visual_effects_active_mask =
-            crate::game::profile::normalize_visual_effects_mask(profile.visual_effects_active_mask);
-        if visual_effects_active_mask != 0 {
+        visual_effects_active_mask = profile.visual_effects_active_mask;
+        let bits = visual_effects_active_mask.bits();
+        if bits != 0 {
             let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u16 << (*i as u16);
-                    (visual_effects_active_mask & bit) != 0
-                })
+                .find(|i| (bits & (1u16 << (*i as u16))) != 0)
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
         } else {
@@ -870,15 +856,11 @@ pub(super) fn apply_profile_defaults(
         }
     }
     if let Some(row) = row_map.get_mut(RowId::Appearance) {
-        appearance_effects_active_mask = crate::game::profile::normalize_appearance_effects_mask(
-            profile.appearance_effects_active_mask,
-        );
-        if appearance_effects_active_mask != 0 {
+        appearance_effects_active_mask = profile.appearance_effects_active_mask;
+        let bits = appearance_effects_active_mask.bits();
+        if bits != 0 {
             let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (appearance_effects_active_mask & bit) != 0
-                })
+                .find(|i| (bits & (1u8 << (*i as u8))) != 0)
                 .unwrap_or(0);
             row.selected_choice_index[player_idx] = first_idx;
         } else {

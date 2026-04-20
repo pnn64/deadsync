@@ -700,7 +700,7 @@ fn effective_mini_value_with_visual_mask(
 
 #[inline(always)]
 fn effective_mini_value(profile: &profile::Profile) -> f32 {
-    let visual_mask = profile::normalize_visual_effects_mask(profile.visual_effects_active_mask);
+    let visual_mask = profile.visual_effects_active_mask.bits();
     effective_mini_value_with_visual_mask(profile, visual_mask, profile.mini_percent as f32)
 }
 
@@ -731,7 +731,7 @@ fn player_draw_scale_with_visual_mask(
 
 #[inline(always)]
 fn player_draw_scale(profile: &profile::Profile) -> f32 {
-    let visual_mask = profile::normalize_visual_effects_mask(profile.visual_effects_active_mask);
+    let visual_mask = profile.visual_effects_active_mask.bits();
     player_draw_scale_with_visual_mask(profile, visual_mask, 0.0)
 }
 
@@ -2545,9 +2545,9 @@ fn apply_uncommon_masks_for_player(
 ) {
     apply_uncommon_masks_with_masks(
         notes,
-        profile::normalize_insert_mask(player_profile.insert_active_mask),
-        profile::normalize_remove_mask(player_profile.remove_active_mask),
-        profile::normalize_holds_mask(player_profile.holds_active_mask),
+        player_profile.insert_active_mask.bits(),
+        player_profile.remove_active_mask.bits(),
+        player_profile.holds_active_mask.bits(),
         timing_player,
         col_offset,
         cols,
@@ -2559,9 +2559,9 @@ fn apply_uncommon_masks_for_player(
 
 #[inline(always)]
 fn has_uncommon_masks(profile: &profile::Profile) -> bool {
-    profile::normalize_insert_mask(profile.insert_active_mask) != 0
-        || profile::normalize_remove_mask(profile.remove_active_mask) != 0
-        || profile::normalize_holds_mask(profile.holds_active_mask) != 0
+    !profile.insert_active_mask.is_empty()
+        || !profile.remove_active_mask.is_empty()
+        || !profile.holds_active_mask.is_empty()
 }
 
 fn apply_uncommon_chart_transforms(
@@ -6433,15 +6433,15 @@ fn error_bar_register_tap(
     tap_music_time_s: f32,
 ) {
     let prof = &state.player_profiles[player];
-    let mut error_bar_mask = profile::normalize_error_bar_mask(prof.error_bar_active_mask);
-    if error_bar_mask == 0 {
+    let mut error_bar_mask = prof.error_bar_active_mask;
+    if error_bar_mask.is_empty() {
         error_bar_mask = profile::error_bar_mask_from_style(prof.error_bar, prof.error_bar_text);
     }
-    let show_text = (error_bar_mask & profile::ERROR_BAR_BIT_TEXT) != 0;
-    let show_monochrome = (error_bar_mask & profile::ERROR_BAR_BIT_MONOCHROME) != 0;
-    let show_colorful = (error_bar_mask & profile::ERROR_BAR_BIT_COLORFUL) != 0;
-    let show_highlight = (error_bar_mask & profile::ERROR_BAR_BIT_HIGHLIGHT) != 0;
-    let show_average = (error_bar_mask & profile::ERROR_BAR_BIT_AVERAGE) != 0;
+    let show_text = error_bar_mask.contains(profile::ErrorBarMask::TEXT);
+    let show_monochrome = error_bar_mask.contains(profile::ErrorBarMask::MONOCHROME);
+    let show_colorful = error_bar_mask.contains(profile::ErrorBarMask::COLORFUL);
+    let show_highlight = error_bar_mask.contains(profile::ErrorBarMask::HIGHLIGHT);
+    let show_average = error_bar_mask.contains(profile::ErrorBarMask::AVERAGE);
     let show_fa_plus_window = prof.show_fa_plus_window;
     let fa_plus_window_s = player_fa_plus_window_s(state, player);
     let error_bar_trim = prof.error_bar_trim;
@@ -9452,7 +9452,7 @@ mod tests {
     #[test]
     fn score_valid_rejects_nohands_when_chart_has_hands() {
         let mut profile = profile::Profile::default();
-        profile.remove_active_mask = super::REMOVE_MASK_BIT_NO_HANDS;
+        profile.remove_active_mask = profile::RemoveMask::from_bits_truncate(super::REMOVE_MASK_BIT_NO_HANDS);
         let chart = test_chart(
             ArrowStats {
                 hands: 4,
