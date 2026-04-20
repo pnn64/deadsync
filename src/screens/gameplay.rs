@@ -1212,7 +1212,7 @@ fn song_lua_overlay_states(state: &State) -> Vec<SongLuaOverlayState> {
 fn song_lua_proxy_active_players(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
-    proxy_sources: &[SongLuaPlayerProxySources; 2],
+    proxy_sources: &[SongLuaPlayerProxySources<'_>; 2],
 ) -> [bool; 2] {
     let mut out = [false; 2];
     for (overlay_index, overlay) in overlays.iter().enumerate() {
@@ -1254,7 +1254,7 @@ fn song_lua_proxy_active_players(
 
 fn song_lua_proxy_target_has_source(
     target: &SongLuaProxyTarget,
-    proxy_sources: &[SongLuaPlayerProxySources; 2],
+    proxy_sources: &[SongLuaPlayerProxySources<'_>; 2],
 ) -> bool {
     match target {
         SongLuaProxyTarget::Player { player_index } => proxy_sources
@@ -1281,7 +1281,7 @@ fn song_lua_capture_replaces_player(
     overlays: &[SongLuaOverlayActor],
     capture_index: usize,
     player_index: usize,
-    proxy_sources: &[SongLuaPlayerProxySources; 2],
+    proxy_sources: &[SongLuaPlayerProxySources<'_>; 2],
 ) -> bool {
     overlays.iter().enumerate().any(|(idx, overlay)| {
         if song_lua_overlay_aft_ancestor(overlays, idx) != Some(capture_index) {
@@ -1316,7 +1316,7 @@ fn song_lua_capture_replaces_player(
 fn song_lua_replacement_active_players(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
-    proxy_sources: &[SongLuaPlayerProxySources; 2],
+    proxy_sources: &[SongLuaPlayerProxySources<'_>; 2],
 ) -> [bool; 2] {
     let mut out = song_lua_proxy_active_players(overlays, overlay_states, proxy_sources);
     for (overlay_index, overlay) in overlays.iter().enumerate() {
@@ -1374,12 +1374,12 @@ fn song_lua_overlay_capture_index_by_name(
     })
 }
 
-#[derive(Clone, Default)]
-struct SongLuaPlayerProxySources {
-    player: Option<Vec<Actor>>,
-    note_field: Option<Vec<Actor>>,
-    judgment: Option<Vec<Actor>>,
-    combo: Option<Vec<Actor>>,
+#[derive(Clone, Copy, Default)]
+struct SongLuaPlayerProxySources<'a> {
+    player: Option<&'a [Actor]>,
+    note_field: Option<&'a [Actor]>,
+    judgment: Option<&'a [Actor]>,
+    combo: Option<&'a [Actor]>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -1390,11 +1390,11 @@ struct SongLuaPlayerProxyRequests {
     combo: bool,
 }
 
-#[derive(Clone, Default)]
-struct SongLuaScreenProxySources {
-    players: [SongLuaPlayerProxySources; 2],
-    underlay: Option<Vec<Actor>>,
-    overlay: Option<Vec<Actor>>,
+#[derive(Clone, Copy, Default)]
+struct SongLuaScreenProxySources<'a> {
+    players: [SongLuaPlayerProxySources<'a>; 2],
+    underlay: Option<&'a [Actor]>,
+    overlay: Option<&'a [Actor]>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -1421,33 +1421,29 @@ fn song_lua_capture_new_actors(dest: &mut Option<Vec<Actor>>, actors: &[Actor], 
 }
 
 #[inline(always)]
-fn song_lua_clone_source(source: Option<&Vec<Actor>>) -> Option<Vec<Actor>> {
-    source.filter(|actors| !actors.is_empty()).cloned()
-}
-
-fn song_lua_proxy_source(
+fn song_lua_proxy_source<'a>(
     target: &SongLuaProxyTarget,
-    proxy_sources: &SongLuaScreenProxySources,
-) -> Option<Vec<Actor>> {
+    proxy_sources: &SongLuaScreenProxySources<'a>,
+) -> Option<&'a [Actor]> {
     match target {
         SongLuaProxyTarget::Player { player_index } => proxy_sources
             .players
             .get(*player_index)
-            .and_then(|sources| song_lua_clone_source(sources.player.as_ref())),
+            .and_then(|sources| sources.player.filter(|actors| !actors.is_empty())),
         SongLuaProxyTarget::NoteField { player_index } => proxy_sources
             .players
             .get(*player_index)
-            .and_then(|sources| song_lua_clone_source(sources.note_field.as_ref())),
+            .and_then(|sources| sources.note_field.filter(|actors| !actors.is_empty())),
         SongLuaProxyTarget::Judgment { player_index } => proxy_sources
             .players
             .get(*player_index)
-            .and_then(|sources| song_lua_clone_source(sources.judgment.as_ref())),
+            .and_then(|sources| sources.judgment.filter(|actors| !actors.is_empty())),
         SongLuaProxyTarget::Combo { player_index } => proxy_sources
             .players
             .get(*player_index)
-            .and_then(|sources| song_lua_clone_source(sources.combo.as_ref())),
-        SongLuaProxyTarget::Underlay => song_lua_clone_source(proxy_sources.underlay.as_ref()),
-        SongLuaProxyTarget::Overlay => song_lua_clone_source(proxy_sources.overlay.as_ref()),
+            .and_then(|sources| sources.combo.filter(|actors| !actors.is_empty())),
+        SongLuaProxyTarget::Underlay => proxy_sources.underlay.filter(|actors| !actors.is_empty()),
+        SongLuaProxyTarget::Overlay => proxy_sources.overlay.filter(|actors| !actors.is_empty()),
     }
 }
 
@@ -1564,12 +1560,46 @@ fn song_lua_proxy_requests(
     requests
 }
 
+fn song_lua_build_proxy_actor(
+    state: SongLuaOverlayState,
+    z: i16,
+    source: &[Actor],
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+) -> Option<Actor> {
+    if !state.visible || state.diffuse[3] <= f32::EPSILON || source.is_empty() {
+        return None;
+    }
+    Some(Actor::Frame {
+        align: [0.0, 0.0],
+        offset: [
+            state.x * screen_width() / overlay_space_width.max(1.0),
+            state.y * screen_height() / overlay_space_height.max(1.0),
+        ],
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children: source
+            .iter()
+            .cloned()
+            .map(|actor| {
+                song_lua_style_capture_actor(
+                    actor,
+                    state.diffuse,
+                    Some(song_lua_overlay_blend(state.blend)),
+                    0,
+                )
+            })
+            .collect(),
+        background: None,
+        z,
+    })
+}
+
 fn song_lua_capture_children(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
     asset_manager: &AssetManager,
     capture_index: usize,
-    proxy_sources: &SongLuaScreenProxySources,
+    proxy_sources: &SongLuaScreenProxySources<'_>,
     overlay_space_width: f32,
     overlay_space_height: f32,
 ) -> Vec<Actor> {
@@ -1584,25 +1614,31 @@ fn song_lua_capture_children(
         ) {
             continue;
         }
-        let source = match &overlay.kind {
+        let overlay_state = overlay_states.get(idx).copied().unwrap_or_default();
+        let actor = match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
-                song_lua_proxy_source(target, proxy_sources)
+                song_lua_proxy_source(target, proxy_sources).and_then(|source| {
+                    song_lua_build_proxy_actor(
+                        overlay_state,
+                        0,
+                        source,
+                        overlay_space_width,
+                        overlay_space_height,
+                    )
+                })
             }
-            _ => None,
+            _ => build_song_lua_overlay_actor(
+                overlay,
+                overlay_state,
+                song_lua_overlay_camera_state(overlays, overlay_states, overlay.parent_index),
+                asset_manager,
+                0,
+                overlay_space_width,
+                overlay_space_height,
+                0.0,
+            ),
         };
-        let camera_state =
-            song_lua_overlay_camera_state(overlays, overlay_states, overlay.parent_index);
-        if let Some(actor) = build_song_lua_overlay_actor(
-            overlay,
-            overlay_states.get(idx).copied().unwrap_or_default(),
-            camera_state,
-            asset_manager,
-            0,
-            source,
-            overlay_space_width,
-            overlay_space_height,
-            0.0,
-        ) {
+        if let Some(actor) = actor {
             out.push(actor);
         }
     }
@@ -1991,7 +2027,7 @@ fn song_lua_build_capture_actor(
     overlay_space_width: f32,
     overlay_space_height: f32,
 ) -> Option<Actor> {
-    if source.is_empty() {
+    if !state.visible || state.diffuse[3] <= f32::EPSILON || source.is_empty() {
         return None;
     }
     let blend = match state.blend {
@@ -2330,7 +2366,6 @@ fn build_song_lua_overlay_actor(
     camera_state: Option<SongLuaOverlayState>,
     asset_manager: &AssetManager,
     z: i16,
-    source: Option<Vec<Actor>>,
     overlay_space_width: f32,
     overlay_space_height: f32,
     total_elapsed: f32,
@@ -2359,30 +2394,8 @@ fn build_song_lua_overlay_actor(
     match &overlay.kind {
         SongLuaOverlayKind::ActorFrame => None,
         SongLuaOverlayKind::ActorFrameTexture => None,
-        SongLuaOverlayKind::ActorProxy { .. } => {
-            let source = source?;
-            Some(Actor::Frame {
-                align: [0.0, 0.0],
-                offset: [state.x * x_scale, state.y * y_scale],
-                size: [SizeSpec::Fill, SizeSpec::Fill],
-                children: source
-                    .into_iter()
-                    .map(|actor| {
-                        song_lua_style_capture_actor(actor, state.diffuse, Some(overlay_blend), 0)
-                    })
-                    .collect(),
-                background: None,
-                z,
-            })
-        }
-        SongLuaOverlayKind::AftSprite { .. } => song_lua_build_capture_actor(
-            overlay,
-            state,
-            z,
-            source?,
-            overlay_space_width,
-            overlay_space_height,
-        ),
+        SongLuaOverlayKind::ActorProxy { .. } => None,
+        SongLuaOverlayKind::AftSprite { .. } => None,
         SongLuaOverlayKind::Sprite { texture_path } => {
             let key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
             if !asset_manager.has_texture_key(key.as_ref()) {
@@ -3247,9 +3260,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             zoom_x,
             zoom_y,
         );
-        let proxy_sources = SongLuaPlayerProxySources {
-            player: requests.player.then(|| player.clone()),
-            note_field: requests.note_field.then(|| {
+        let proxy_sources = [
+            requests.note_field.then(|| {
                 apply_song_lua_player_transform(
                     field_actors,
                     layout_center_x,
@@ -3260,7 +3272,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     zoom_y,
                 )
             }),
-            judgment: requests.judgment.then(|| {
+            requests.judgment.then(|| {
                 apply_song_lua_player_transform(
                     judgment_actors,
                     layout_center_x,
@@ -3271,7 +3283,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     zoom_y,
                 )
             }),
-            combo: requests.combo.then(|| {
+            requests.combo.then(|| {
                 apply_song_lua_player_transform(
                     combo_actors,
                     layout_center_x,
@@ -3282,16 +3294,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     zoom_y,
                 )
             }),
-        };
+        ];
         (player, layout_center_x, proxy_sources)
     };
 
-    let (p1_actors, p2_actors, playfield_center_x, per_player_fields, player_proxy_sources): (
+    let (
+        p1_actors,
+        p2_actors,
+        p1_proxy_sources,
+        p2_proxy_sources,
+        playfield_center_x,
+        per_player_fields,
+    ): (
         Vec<Actor>,
         Option<Vec<Actor>>,
+        [Option<Vec<Actor>>; 3],
+        [Option<Vec<Actor>>; 3],
         f32,
         [(usize, f32); 2],
-        [SongLuaPlayerProxySources; 2],
     ) = match play_style {
         profile::PlayStyle::Versus => {
             let (p1, p1_x, p1_sources) = build_player_bundle(
@@ -3309,9 +3329,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             (
                 p1,
                 Some(p2),
+                p1_sources,
+                p2_sources,
                 p1_x,
                 [(0, p1_x), (1, p2_x)],
-                [p1_sources, p2_sources],
             )
         }
         _ => {
@@ -3329,16 +3350,36 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             (
                 nf,
                 None,
+                nf_sources,
+                [None, None, None],
                 nf_x,
                 [(0, nf_x), (usize::MAX, 0.0)],
-                [nf_sources, SongLuaPlayerProxySources::default()],
             )
         }
     };
+    let replacement_proxy_sources = [
+        SongLuaPlayerProxySources {
+            player: proxy_requests.players[0]
+                .player
+                .then_some(p1_actors.as_slice()),
+            note_field: p1_proxy_sources[0].as_deref(),
+            judgment: p1_proxy_sources[1].as_deref(),
+            combo: p1_proxy_sources[2].as_deref(),
+        },
+        SongLuaPlayerProxySources {
+            player: proxy_requests.players[1]
+                .player
+                .then(|| p2_actors.as_deref())
+                .flatten(),
+            note_field: p2_proxy_sources[0].as_deref(),
+            judgment: p2_proxy_sources[1].as_deref(),
+            combo: p2_proxy_sources[2].as_deref(),
+        },
+    ];
     let replacement_active_players = song_lua_replacement_active_players(
         &state.song_lua_overlays,
         &overlay_states,
-        &player_proxy_sources,
+        &replacement_proxy_sources,
     );
 
     // Danger overlay (Simply Love parity): red flashing in danger + green recovery, optional HideDanger.
@@ -3419,13 +3460,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_start);
 
     actors.reserve(p1_actors.len() + p2_actors.as_ref().map_or(0, Vec::len) + 48);
+    let mut p1_actor_range = None;
+    let mut p2_actor_range = None;
     if let Some(p2_actors) = p2_actors {
         if !replacement_active_players[1] {
+            let start = actors.len();
             actors.extend(p2_actors);
+            p2_actor_range = Some((start, actors.len()));
         }
     }
     if !replacement_active_players[0] {
+        let start = actors.len();
         actors.extend(p1_actors);
+        p1_actor_range = Some((start, actors.len()));
     }
     let underlay_tail_start = actors.len();
     let clamped_width = screen_width().clamp(640.0, 854.0);
@@ -4228,14 +4275,26 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
         }
     }
+    song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_tail_start);
     let proxy_sources = SongLuaScreenProxySources {
-        players: player_proxy_sources,
-        underlay: {
-            song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_tail_start);
-            underlay_proxy_source
-        },
-        overlay: overlay_proxy_source,
+        players: [
+            SongLuaPlayerProxySources {
+                player: p1_actor_range.map(|(start, end)| &actors[start..end]),
+                note_field: p1_proxy_sources[0].as_deref(),
+                judgment: p1_proxy_sources[1].as_deref(),
+                combo: p1_proxy_sources[2].as_deref(),
+            },
+            SongLuaPlayerProxySources {
+                player: p2_actor_range.map(|(start, end)| &actors[start..end]),
+                note_field: p2_proxy_sources[0].as_deref(),
+                judgment: p2_proxy_sources[1].as_deref(),
+                combo: p2_proxy_sources[2].as_deref(),
+            },
+        ],
+        underlay: underlay_proxy_source.as_deref(),
+        overlay: overlay_proxy_source.as_deref(),
     };
+    let mut song_lua_actors = Vec::with_capacity(state.song_lua_overlays.len());
     for (idx, overlay) in state.song_lua_overlays.iter().enumerate() {
         if song_lua_overlay_aft_ancestor(&state.song_lua_overlays, idx).is_some() {
             continue;
@@ -4244,14 +4303,22 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             .get(idx)
             .copied()
             .unwrap_or_else(|| song_lua_overlay_render_state(state, idx, overlay));
-        let source = match &overlay.kind {
+        let actor = match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
-                song_lua_proxy_source(target, &proxy_sources)
+                song_lua_proxy_source(target, &proxy_sources).and_then(|source| {
+                    song_lua_build_proxy_actor(
+                        overlay_state,
+                        1100 + idx as i16,
+                        source,
+                        song_lua_space_width,
+                        song_lua_space_height,
+                    )
+                })
             }
             SongLuaOverlayKind::AftSprite { capture_name } => {
-                song_lua_overlay_capture_index_by_name(&state.song_lua_overlays, capture_name).map(
-                    |capture_index| {
-                        song_lua_capture_children(
+                song_lua_overlay_capture_index_by_name(&state.song_lua_overlays, capture_name)
+                    .and_then(|capture_index| {
+                        let source = song_lua_capture_children(
                             &state.song_lua_overlays,
                             &overlay_states,
                             asset_manager,
@@ -4259,31 +4326,37 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             &proxy_sources,
                             song_lua_space_width,
                             song_lua_space_height,
+                        );
+                        song_lua_build_capture_actor(
+                            overlay,
+                            overlay_state,
+                            1100 + idx as i16,
+                            source,
+                            song_lua_space_width,
+                            song_lua_space_height,
                         )
-                    },
-                )
+                    })
             }
-            _ => None,
+            _ => build_song_lua_overlay_actor(
+                overlay,
+                overlay_state,
+                song_lua_overlay_camera_state(
+                    &state.song_lua_overlays,
+                    &overlay_states,
+                    overlay.parent_index,
+                ),
+                asset_manager,
+                1100 + idx as i16,
+                song_lua_space_width,
+                song_lua_space_height,
+                state.total_elapsed_in_screen,
+            ),
         };
-        let camera_state = song_lua_overlay_camera_state(
-            &state.song_lua_overlays,
-            &overlay_states,
-            overlay.parent_index,
-        );
-        if let Some(actor) = build_song_lua_overlay_actor(
-            overlay,
-            overlay_state,
-            camera_state,
-            asset_manager,
-            1100 + idx as i16,
-            source,
-            song_lua_space_width,
-            song_lua_space_height,
-            state.total_elapsed_in_screen,
-        ) {
-            actors.push(actor);
+        if let Some(actor) = actor {
+            song_lua_actors.push(actor);
         }
     }
+    actors.extend(song_lua_actors);
     actors
 }
 
@@ -4395,9 +4468,10 @@ mod tests {
             [false, false]
         );
 
+        let source = vec![test_source_actor()];
         let sources = [
             SongLuaPlayerProxySources {
-                player: Some(vec![test_source_actor()]),
+                player: Some(source.as_slice()),
                 ..SongLuaPlayerProxySources::default()
             },
             SongLuaPlayerProxySources::default(),
@@ -4528,18 +4602,10 @@ mod tests {
     #[test]
     fn song_lua_actor_proxy_keeps_overlay_z_layer() {
         let overlay = test_proxy_overlay(0);
-        let actor = build_song_lua_overlay_actor(
-            &overlay,
-            SongLuaOverlayState::default(),
-            None,
-            &AssetManager::new(),
-            1234,
-            Some(vec![test_source_actor()]),
-            640.0,
-            480.0,
-            0.0,
-        )
-        .expect("actor proxy should render with a source");
+        let source = vec![test_source_actor()];
+        let actor =
+            song_lua_build_proxy_actor(SongLuaOverlayState::default(), 1234, &source, 640.0, 480.0)
+                .expect("actor proxy should render with a source");
 
         match actor {
             Actor::Frame { z, children, .. } => {
@@ -4571,7 +4637,6 @@ mod tests {
             None,
             &AssetManager::new(),
             321,
-            None,
             640.0,
             480.0,
             0.0,
@@ -4630,7 +4695,6 @@ mod tests {
             }),
             &AssetManager::new(),
             654,
-            None,
             640.0,
             480.0,
             0.0,
