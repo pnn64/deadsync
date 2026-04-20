@@ -1,8 +1,9 @@
 use chrono::{Datelike, Local};
 use image::image_dimensions;
 use log::debug;
-use mlua::{Function, Lua, MultiValue, Table, Value};
-use std::collections::HashMap;
+use mlua::{Function, Lua, MultiValue, Table, Value, ffi};
+use std::collections::{HashMap, HashSet};
+use std::ffi::c_int;
 use std::ffi::c_void;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -465,6 +466,15 @@ pub fn compile_song_lua(
         &mut overlay_trigger_counter,
     )?;
     out.info.unsupported_function_actions += global_fn_actions;
+    let update_fn_actions = read_update_function_actions(
+        &lua,
+        &root,
+        &mut overlays,
+        &mut tracked_actors,
+        &mut out.messages,
+        &mut overlay_trigger_counter,
+    )?;
+    out.info.unsupported_function_actions += update_fn_actions;
     out.overlays = overlays.into_iter().map(|overlay| overlay.actor).collect();
     for tracked in tracked_actors {
         match tracked.target {
@@ -695,6 +705,43 @@ fn create_debug_table(lua: &Lua) -> mlua::Result<Table> {
                 info.set("namewhat", "")?;
             }
             Ok(info)
+        })?,
+    )?;
+    debug.set(
+        "getupvalue",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(function) = args.front().cloned().and_then(|value| match value {
+                Value::Function(function) => Some(function),
+                _ => None,
+            }) else {
+                return Ok((Value::Nil, Value::Nil));
+            };
+            let Some(index) = args.get(1).cloned().and_then(|value| match value {
+                Value::Integer(value) => Some(value),
+                Value::Number(value) => Some(value as i64),
+                _ => None,
+            }) else {
+                return Ok((Value::Nil, Value::Nil));
+            };
+            // SAFETY: exec_raw owns the temporary stack frame for this call. We only
+            // read the pushed function/index arguments, call Lua's debug API to fetch
+            // a single upvalue, then replace the frame contents with plain Lua return
+            // values before exec_raw converts them back into mlua Values.
+            unsafe {
+                lua.exec_raw((function, index), |state| {
+                    let upvalue_index = ffi::lua_tointeger(state, 2) as c_int;
+                    let name = ffi::lua_getupvalue(state, 1, upvalue_index);
+                    ffi::lua_remove(state, 2);
+                    ffi::lua_remove(state, 1);
+                    if name.is_null() {
+                        ffi::lua_pushnil(state);
+                        ffi::lua_pushnil(state);
+                        return;
+                    }
+                    ffi::lua_pushstring(state, name);
+                    ffi::lua_insert(state, -2);
+                })
+            }
         })?,
     )?;
     debug.set(
@@ -2413,6 +2460,43 @@ fn run_actor_update_functions(lua: &Lua, root: &Value) -> mlua::Result<()> {
     run_actor_update_functions_for_table(lua, root)
 }
 
+fn read_update_function_actions(
+    lua: &Lua,
+    root: &Value,
+    overlays: &mut [OverlayCompileActor],
+    tracked_actors: &mut [TrackedCompileActor],
+    messages: &mut Vec<SongLuaMessageEvent>,
+    counter: &mut usize,
+) -> Result<usize, String> {
+    let Value::Table(root) = root else {
+        return Ok(0);
+    };
+    let globals = lua.globals();
+    let Some(debug) = globals
+        .get::<Option<Table>>("debug")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(0);
+    };
+    let Some(getupvalue) = debug
+        .get::<Option<Function>>("getupvalue")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(0);
+    };
+    let mut seen_tables = HashSet::new();
+    read_update_function_actions_for_table(
+        lua,
+        root,
+        &getupvalue,
+        overlays,
+        tracked_actors,
+        messages,
+        counter,
+        &mut seen_tables,
+    )
+}
+
 fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     run_actor_init_command(lua, actor)?;
     for child in actor.sequence_values::<Value>() {
@@ -2451,6 +2535,77 @@ fn run_actor_update_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Resul
         run_actor_update_functions_for_table(lua, &child)?;
     }
     Ok(())
+}
+
+fn read_update_function_actions_for_table(
+    lua: &Lua,
+    actor: &Table,
+    getupvalue: &Function,
+    overlays: &mut [OverlayCompileActor],
+    tracked_actors: &mut [TrackedCompileActor],
+    messages: &mut Vec<SongLuaMessageEvent>,
+    counter: &mut usize,
+    seen_tables: &mut HashSet<usize>,
+) -> Result<usize, String> {
+    let mut unsupported = 0usize;
+    if let Some(update) = actor
+        .get::<Option<Function>>("__songlua_update_function")
+        .map_err(|err| err.to_string())?
+    {
+        for table in update_function_action_tables(getupvalue, &update, seen_tables)? {
+            unsupported += read_actions(
+                lua,
+                Some(table),
+                overlays,
+                tracked_actors,
+                messages,
+                counter,
+            )?;
+        }
+    }
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child.map_err(|err| err.to_string())? else {
+            continue;
+        };
+        unsupported += read_update_function_actions_for_table(
+            lua,
+            &child,
+            getupvalue,
+            overlays,
+            tracked_actors,
+            messages,
+            counter,
+            seen_tables,
+        )?;
+    }
+    Ok(unsupported)
+}
+
+fn update_function_action_tables(
+    getupvalue: &Function,
+    function: &Function,
+    seen_tables: &mut HashSet<usize>,
+) -> Result<Vec<Table>, String> {
+    let mut out = Vec::new();
+    for index in 1..=function.info().num_upvalues {
+        let (name, value): (Value, Value) = getupvalue
+            .call((function.clone(), i64::from(index)))
+            .map_err(|err| err.to_string())?;
+        let Value::String(name) = name else {
+            continue;
+        };
+        let name = name.to_str().map_err(|err| err.to_string())?;
+        if !matches!(name.as_ref(), "mod_actions" | "actions") {
+            continue;
+        }
+        let Value::Table(table) = value else {
+            continue;
+        };
+        if seen_tables.insert(table.to_pointer() as usize) {
+            out.push(table);
+        }
+    }
+    Ok(out)
 }
 
 fn run_actor_init_command(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -6419,6 +6574,64 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.beat_mods.len(), 1);
         assert_eq!(compiled.beat_mods[0].start, 4.0);
+    }
+
+    #[test]
+    fn compile_song_lua_extracts_local_update_mod_actions() {
+        let song_dir = test_dir("local-update-mod-actions");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local mod_actions = {
+    {2, function()
+        local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        if p then
+            p:linear(1):x(SCREEN_CENTER_X + 24):z(3):zoom(0.5):rotationz(20)
+        end
+    end, true},
+}
+local curaction = 1
+local mod_firstSeenBeat = 0
+
+local domods = function()
+    local beatupdate = GAMESTATE:GetSongBeat()
+    if beatupdate > mod_firstSeenBeat + 0.1 then
+        while curaction <= table.getn(mod_actions) and beatupdate >= mod_actions[curaction][1] do
+            if type(mod_actions[curaction][2]) == "function" then
+                mod_actions[curaction][2]()
+            end
+            curaction = curaction + 1
+        end
+    end
+end
+
+return Def.ActorFrame{
+    InitCommand=function(self)
+        table.sort(mod_actions, function(a, b) return a[1] < b[1] end)
+    end,
+    OnCommand=function(self)
+        self:SetUpdateFunction(domods)
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Local Update Mod Actions"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert_eq!(compiled.player_actors[0].message_commands.len(), 1);
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].beat, 2.0);
+        let block = &compiled.player_actors[0].message_commands[0].blocks[0];
+        assert_eq!(block.delta.x, Some(344.0));
+        assert_eq!(block.delta.z, Some(3.0));
+        assert_eq!(block.delta.zoom, Some(0.5));
+        assert_eq!(block.delta.rot_z_deg, Some(20.0));
     }
 
     #[test]
