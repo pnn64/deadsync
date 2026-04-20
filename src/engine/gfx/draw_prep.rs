@@ -195,18 +195,6 @@ impl DrawScratch {
 }
 
 #[inline(always)]
-pub fn decompose_2d(m: &Matrix4) -> ([f32; 4], [f32; 2], [f32; 2]) {
-    let center = [m.w_axis.x, m.w_axis.y, m.w_axis.z, 0.0];
-    let c0 = [m.x_axis.x, m.x_axis.y];
-    let c1 = [m.y_axis.x, m.y_axis.y];
-    let sx = c0[0].hypot(c0[1]).max(1e-12);
-    let sy = c1[0].hypot(c1[1]).max(1e-12);
-    let cos_t = c0[0] / sx;
-    let sin_t = c0[1] / sx;
-    (center, [sx, sy], [sin_t, cos_t])
-}
-
-#[inline(always)]
 fn textured_instance_raw(
     m: &Matrix4,
     tint: [f32; 4],
@@ -358,6 +346,9 @@ where
     for obj in render_list.objects.iter() {
         match &obj.object_type {
             ObjectType::Sprite {
+                center,
+                size,
+                rot_sin_cos,
                 tint,
                 uv_scale,
                 uv_offset,
@@ -371,12 +362,11 @@ where
                     continue;
                 }
 
-                let (center, size, rot_sin_cos) = decompose_2d(&obj.transform);
                 let instance_start = scratch.sprite_instances.len() as u32;
                 scratch.sprite_instances.push(SpriteInstanceRaw {
-                    center,
-                    size,
-                    rot_sin_cos,
+                    center: *center,
+                    size: *size,
+                    rot_sin_cos: *rot_sin_cos,
                     tint: *tint,
                     uv_scale: *uv_scale,
                     uv_offset: *uv_offset,

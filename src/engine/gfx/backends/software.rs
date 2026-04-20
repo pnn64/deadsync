@@ -223,6 +223,9 @@ fn draw_rows(
             .unwrap_or(default_proj);
         let drawn = match &obj.object_type {
             ObjectType::Sprite {
+                center,
+                size,
+                rot_sin_cos,
                 tint,
                 uv_scale,
                 uv_offset,
@@ -236,7 +239,9 @@ fn draw_rows(
                 };
                 rasterize_sprite(
                     &proj,
-                    &obj.transform,
+                    *center,
+                    *size,
+                    *rot_sin_cos,
                     *tint,
                     *uv_scale,
                     *uv_offset,
@@ -364,7 +369,9 @@ struct ScreenVertexTexColor {
 #[inline(always)]
 fn rasterize_sprite(
     proj: &Matrix4,
-    transform: &Matrix4,
+    center: [f32; 4],
+    size: [f32; 2],
+    rot_sin_cos: [f32; 2],
     tint: [f32; 4],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
@@ -383,16 +390,15 @@ fn rasterize_sprite(
         return 0;
     }
 
-    let mut adjusted = *transform;
+    let mut adjusted_center = center;
     if local_offset[0] != 0.0 || local_offset[1] != 0.0 {
         let s = local_offset_rot_sin_cos[0];
         let c = local_offset_rot_sin_cos[1];
         let ox = c.mul_add(local_offset[0], -(s * local_offset[1]));
         let oy = s.mul_add(local_offset[0], c * local_offset[1]);
-        adjusted.w_axis.x += ox;
-        adjusted.w_axis.y += oy;
+        adjusted_center[0] += ox;
+        adjusted_center[1] += oy;
     }
-    let mvp = *proj * adjusted;
 
     const POS: [(f32, f32); 4] = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)];
     const UV_BASE: [(f32, f32); 4] = [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)];
@@ -406,8 +412,15 @@ fn rasterize_sprite(
 
     for i in 0..4 {
         let (lx, ly) = POS[i];
-        let local = Vector4::new(lx, ly, 0.0, 1.0);
-        let clip = mvp * local;
+        let local_x = lx * size[0];
+        let local_y = ly * size[1];
+        let world = Vector4::new(
+            rot_sin_cos[1].mul_add(local_x, -(rot_sin_cos[0] * local_y) + adjusted_center[0]),
+            rot_sin_cos[0].mul_add(local_x, rot_sin_cos[1] * local_y + adjusted_center[1]),
+            adjusted_center[2],
+            1.0,
+        );
+        let clip = *proj * world;
         if clip.w == 0.0 {
             return 0;
         }

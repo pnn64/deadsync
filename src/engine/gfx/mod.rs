@@ -110,6 +110,9 @@ pub enum MeshMode {
 #[derive(Clone)]
 pub enum ObjectType {
     Sprite {
+        center: [f32; 4],
+        size: [f32; 2],
+        rot_sin_cos: [f32; 2],
         tint: [f32; 4],
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],

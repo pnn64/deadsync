@@ -1238,6 +1238,15 @@ pub fn render_list_snapshot(render: &RenderList) -> RenderListSnapshot {
 }
 
 fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
+    let transform = match &render.object_type {
+        ObjectType::Sprite {
+            center,
+            size,
+            rot_sin_cos,
+            ..
+        } => sprite_transform(*center, *size, *rot_sin_cos),
+        _ => render.transform,
+    };
     RenderObjectSnapshot {
         object_type: match &render.object_type {
             ObjectType::Sprite {
@@ -1247,6 +1256,7 @@ fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
                 local_offset,
                 local_offset_rot_sin_cos,
                 edge_fade,
+                ..
             } => RenderObjectTypeSnapshot::Sprite {
                 texture_id: None,
                 tint: *tint,
@@ -1284,7 +1294,7 @@ fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
             },
         },
         texture_handle: render.texture_handle,
-        transform: matrix_snapshot(&render.transform),
+        transform: matrix_snapshot(&transform),
         blend: BlendModeSnapshot::from(render.blend),
         z: render.z,
         order: render.order,
@@ -1300,6 +1310,7 @@ fn texture_resolve_object_snapshot(render: &RenderObject) -> TextureResolveObjec
 }
 
 fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
+    let snapshot_transform = matrix_runtime(render.transform);
     let texture_handle = if render.texture_handle != crate::engine::gfx::INVALID_TEXTURE_HANDLE {
         render.texture_handle
     } else {
@@ -1322,14 +1333,20 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                 local_offset_rot_sin_cos,
                 edge_fade,
                 ..
-            } => ObjectType::Sprite {
-                tint: *tint,
-                uv_scale: *uv_scale,
-                uv_offset: *uv_offset,
-                local_offset: *local_offset,
-                local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
-                edge_fade: *edge_fade,
-            },
+            } => {
+                let (center, size, rot_sin_cos) = sprite_parts_from_transform(&snapshot_transform);
+                ObjectType::Sprite {
+                    center,
+                    size,
+                    rot_sin_cos,
+                    tint: *tint,
+                    uv_scale: *uv_scale,
+                    uv_offset: *uv_offset,
+                    local_offset: *local_offset,
+                    local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
+                    edge_fade: *edge_fade,
+                }
+            }
             RenderObjectTypeSnapshot::Mesh {
                 tint,
                 vertices,
@@ -1360,7 +1377,10 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
             },
         },
         texture_handle,
-        transform: matrix_runtime(render.transform),
+        transform: match &render.object_type {
+            RenderObjectTypeSnapshot::Sprite { .. } => Matrix4::IDENTITY,
+            _ => snapshot_transform,
+        },
         blend: BlendMode::from(render.blend),
         z: render.z,
         order: render.order,
@@ -1374,6 +1394,37 @@ fn matrix_snapshot(m: &Matrix4) -> [[f32; 4]; 4] {
 
 fn matrix_runtime(m: [[f32; 4]; 4]) -> Matrix4 {
     Matrix4::from_cols_array_2d(&m)
+}
+
+fn sprite_transform(center: [f32; 4], size: [f32; 2], rot_sin_cos: [f32; 2]) -> Matrix4 {
+    Matrix4::from_cols_array(&[
+        rot_sin_cos[1] * size[0],
+        rot_sin_cos[0] * size[0],
+        0.0,
+        0.0,
+        -rot_sin_cos[0] * size[1],
+        rot_sin_cos[1] * size[1],
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        center[0],
+        center[1],
+        center[2],
+        1.0,
+    ])
+}
+
+fn sprite_parts_from_transform(m: &Matrix4) -> ([f32; 4], [f32; 2], [f32; 2]) {
+    let size_x = m.x_axis.x.hypot(m.x_axis.y).max(1e-12);
+    let size_y = m.y_axis.x.hypot(m.y_axis.y).max(1e-12);
+    (
+        [m.w_axis.x, m.w_axis.y, m.w_axis.z, 0.0],
+        [size_x, size_y],
+        [m.x_axis.y / size_x, m.x_axis.x / size_x],
+    )
 }
 
 fn leak_str(value: &str) -> &'static str {
