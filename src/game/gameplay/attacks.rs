@@ -2,10 +2,10 @@ use crate::engine::space::{screen_center_x, screen_center_y, screen_height, scre
 use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::note::Note;
 use crate::game::parsing::song_lua::{
-    CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
-    SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow, SongLuaOverlayActor,
-    SongLuaOverlayEase, SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
-    compile_song_lua,
+    CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty,
+    SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
+    SongLuaOverlayActor, SongLuaOverlayEase, SongLuaOverlayMessageCommand, SongLuaPlayerContext,
+    SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
 };
 use crate::game::profile;
 use crate::game::scroll::ScrollSpeedSetting;
@@ -1684,8 +1684,28 @@ fn build_song_lua_overlay_message_events(
     timing_player: &TimingData,
     global_offset_seconds: f32,
 ) -> Vec<Vec<SongLuaOverlayMessageRuntime>> {
-    let mut out = vec![Vec::new(); compiled.overlays.len()];
-    for message in &compiled.messages {
+    compiled
+        .overlays
+        .iter()
+        .map(|overlay| {
+            build_song_lua_actor_message_events(
+                &compiled.messages,
+                &overlay.message_commands,
+                timing_player,
+                global_offset_seconds,
+            )
+        })
+        .collect()
+}
+
+fn build_song_lua_actor_message_events(
+    messages: &[SongLuaMessageEvent],
+    commands: &[SongLuaOverlayMessageCommand],
+    timing_player: &TimingData,
+    global_offset_seconds: f32,
+) -> Vec<SongLuaOverlayMessageRuntime> {
+    let mut out = Vec::new();
+    for message in messages {
         let event_second = song_lua_time_to_second(
             SongLuaTimeUnit::Beat,
             message.beat,
@@ -1695,19 +1715,16 @@ fn build_song_lua_overlay_message_events(
         if !event_second.is_finite() {
             continue;
         }
-        for (overlay_index, overlay) in compiled.overlays.iter().enumerate() {
-            let Some(command_index) = overlay
-                .message_commands
-                .iter()
-                .position(|command| command.message.eq_ignore_ascii_case(&message.message))
-            else {
-                continue;
-            };
-            out[overlay_index].push(SongLuaOverlayMessageRuntime {
-                event_second,
-                command_index,
-            });
-        }
+        let Some(command_index) = commands
+            .iter()
+            .position(|command| command.message.eq_ignore_ascii_case(&message.message))
+        else {
+            continue;
+        };
+        out.push(SongLuaOverlayMessageRuntime {
+            event_second,
+            command_index,
+        });
     }
     out
 }
@@ -1773,6 +1790,7 @@ fn song_lua_overlay_delta_overlaps(
     }
     overlap!(x);
     overlap!(y);
+    overlap!(z);
     overlap!(diffuse);
     overlap!(visible);
     overlap!(cropleft);
@@ -1782,6 +1800,7 @@ fn song_lua_overlay_delta_overlaps(
     overlap!(zoom);
     overlap!(zoom_x);
     overlap!(zoom_y);
+    overlap!(zoom_z);
     overlap!(basezoom);
     overlap!(basezoom_x);
     overlap!(basezoom_y);
@@ -1917,6 +1936,10 @@ pub(super) fn build_song_lua_runtime_windows(
     Vec<SongLuaOverlayEaseWindowRuntime>,
     Vec<std::ops::Range<usize>>,
     Vec<Vec<SongLuaOverlayMessageRuntime>>,
+    [SongLuaCapturedActor; MAX_PLAYERS],
+    [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS],
+    SongLuaCapturedActor,
+    Vec<SongLuaOverlayMessageRuntime>,
     [bool; MAX_PLAYERS],
     f32,
     f32,
@@ -1929,6 +1952,12 @@ pub(super) fn build_song_lua_runtime_windows(
     let mut overlay_eases = Vec::new();
     let mut overlay_ease_ranges = Vec::new();
     let mut overlay_events = Vec::new();
+    let mut player_actors: [SongLuaCapturedActor; MAX_PLAYERS] =
+        std::array::from_fn(|_| SongLuaCapturedActor::default());
+    let mut player_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    let mut song_foreground = SongLuaCapturedActor::default();
+    let mut song_foreground_events = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
     let screen_width = screen_width();
     let screen_height = screen_height();
@@ -1945,6 +1974,10 @@ pub(super) fn build_song_lua_runtime_windows(
             overlay_eases,
             overlay_ease_ranges,
             overlay_events,
+            player_actors,
+            player_events,
+            song_foreground,
+            song_foreground_events,
             hidden_players,
             screen_width,
             screen_height,
@@ -2041,6 +2074,10 @@ pub(super) fn build_song_lua_runtime_windows(
                 overlay_eases,
                 overlay_ease_ranges,
                 overlay_events,
+                player_actors,
+                player_events,
+                song_foreground,
+                song_foreground_events,
                 hidden_players,
                 screen_width,
                 screen_height,
@@ -2057,6 +2094,22 @@ pub(super) fn build_song_lua_runtime_windows(
         group_song_lua_overlay_eases(compiled.overlays.len(), overlay_runtime_eases);
     overlay_events = build_song_lua_overlay_message_events(
         &compiled,
+        timing_players[0].as_ref(),
+        machine_global_offset_seconds,
+    );
+    player_actors[..compiled.player_actors.len()].clone_from_slice(&compiled.player_actors);
+    for (player, actor) in compiled.player_actors.iter().enumerate() {
+        player_events[player] = build_song_lua_actor_message_events(
+            &compiled.messages,
+            &actor.message_commands,
+            timing_players[0].as_ref(),
+            machine_global_offset_seconds,
+        );
+    }
+    song_foreground = compiled.song_foreground.clone();
+    song_foreground_events = build_song_lua_actor_message_events(
+        &compiled.messages,
+        &compiled.song_foreground.message_commands,
         timing_players[0].as_ref(),
         machine_global_offset_seconds,
     );
@@ -2128,6 +2181,10 @@ pub(super) fn build_song_lua_runtime_windows(
         overlay_eases,
         overlay_ease_ranges,
         overlay_events,
+        player_actors,
+        player_events,
+        song_foreground,
+        song_foreground_events,
         hidden_players,
         compiled.screen_width,
         compiled.screen_height,

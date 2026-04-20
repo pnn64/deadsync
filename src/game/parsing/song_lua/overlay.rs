@@ -46,6 +46,7 @@ pub enum SongLuaOverlayKind {
 pub struct SongLuaOverlayState {
     pub x: f32,
     pub y: f32,
+    pub z: f32,
     pub fov: Option<f32>,
     pub vanishpoint: Option<[f32; 2]>,
     pub diffuse: [f32; 4],
@@ -57,6 +58,7 @@ pub struct SongLuaOverlayState {
     pub zoom: f32,
     pub zoom_x: f32,
     pub zoom_y: f32,
+    pub zoom_z: f32,
     pub basezoom: f32,
     pub basezoom_x: f32,
     pub basezoom_y: f32,
@@ -81,6 +83,7 @@ impl Default for SongLuaOverlayState {
         Self {
             x: 0.0,
             y: 0.0,
+            z: 0.0,
             fov: None,
             vanishpoint: None,
             diffuse: [1.0, 1.0, 1.0, 1.0],
@@ -92,6 +95,7 @@ impl Default for SongLuaOverlayState {
             zoom: 1.0,
             zoom_x: 1.0,
             zoom_y: 1.0,
+            zoom_z: 1.0,
             basezoom: 1.0,
             basezoom_x: 1.0,
             basezoom_y: 1.0,
@@ -117,6 +121,7 @@ impl Default for SongLuaOverlayState {
 pub struct SongLuaOverlayStateDelta {
     pub x: Option<f32>,
     pub y: Option<f32>,
+    pub z: Option<f32>,
     pub fov: Option<f32>,
     pub vanishpoint: Option<[f32; 2]>,
     pub diffuse: Option<[f32; 4]>,
@@ -128,6 +133,7 @@ pub struct SongLuaOverlayStateDelta {
     pub zoom: Option<f32>,
     pub zoom_x: Option<f32>,
     pub zoom_y: Option<f32>,
+    pub zoom_z: Option<f32>,
     pub basezoom: Option<f32>,
     pub basezoom_x: Option<f32>,
     pub basezoom_y: Option<f32>,
@@ -229,6 +235,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.y {
         state.y = value;
     }
+    if let Some(value) = delta.z {
+        state.z = value;
+    }
     if let Some(value) = delta.fov {
         state.fov = Some(value);
     }
@@ -261,6 +270,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     }
     if let Some(value) = delta.zoom_y {
         state.zoom_y = value;
+    }
+    if let Some(value) = delta.zoom_z {
+        state.zoom_z = value;
     }
     if let Some(value) = delta.basezoom {
         state.basezoom = value;
@@ -327,6 +339,9 @@ fn overlay_state_lerp(
     if delta.y.is_some() {
         from.y = (to.y - from.y).mul_add(t, from.y);
     }
+    if delta.z.is_some() {
+        from.z = (to.z - from.z).mul_add(t, from.z);
+    }
     if delta.fov.is_some()
         && let (Some(from_fov), Some(to_fov)) = (from.fov, to.fov)
     {
@@ -365,6 +380,9 @@ fn overlay_state_lerp(
     }
     if delta.zoom_y.is_some() {
         from.zoom_y = (to.zoom_y - from.zoom_y).mul_add(t, from.zoom_y);
+    }
+    if delta.zoom_z.is_some() {
+        from.zoom_z = (to.zoom_z - from.zoom_z).mul_add(t, from.zoom_z);
     }
     if delta.basezoom.is_some() {
         from.basezoom = (to.basezoom - from.basezoom).mul_add(t, from.basezoom);
@@ -481,6 +499,7 @@ pub(super) fn parse_overlay_effect_mode(raw: &str) -> Option<EffectMode> {
 fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
     delta.x.is_none()
         && delta.y.is_none()
+        && delta.z.is_none()
         && delta.fov.is_none()
         && delta.vanishpoint.is_none()
         && delta.diffuse.is_none()
@@ -492,6 +511,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.zoom.is_none()
         && delta.zoom_x.is_none()
         && delta.zoom_y.is_none()
+        && delta.zoom_z.is_none()
         && delta.basezoom.is_none()
         && delta.basezoom_x.is_none()
         && delta.basezoom_y.is_none()
@@ -517,6 +537,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.y.is_some() {
         into.y = from.y;
+    }
+    if from.z.is_some() {
+        into.z = from.z;
     }
     if from.fov.is_some() {
         into.fov = from.fov;
@@ -550,6 +573,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.zoom_y.is_some() {
         into.zoom_y = from.zoom_y;
+    }
+    if from.zoom_z.is_some() {
+        into.zoom_z = from.zoom_z;
     }
     if from.basezoom.is_some() {
         into.basezoom = from.basezoom;
@@ -630,6 +656,7 @@ pub(super) fn overlay_delta_intersection(
     }
     copy_pair!(x);
     copy_pair!(y);
+    copy_pair!(z);
     copy_pair!(fov);
     copy_pair!(vanishpoint);
     copy_pair!(diffuse);
@@ -641,6 +668,7 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(zoom);
     copy_pair!(zoom_x);
     copy_pair!(zoom_y);
+    copy_pair!(zoom_z);
     copy_pair!(basezoom);
     copy_pair!(basezoom_x);
     copy_pair!(basezoom_y);

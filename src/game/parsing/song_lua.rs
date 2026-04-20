@@ -242,6 +242,12 @@ pub struct SongLuaCompileInfo {
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
+pub struct SongLuaCapturedActor {
+    pub initial_state: SongLuaOverlayState,
+    pub message_commands: Vec<SongLuaOverlayMessageCommand>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct CompiledSongLua {
     pub entry_path: PathBuf,
     pub screen_width: f32,
@@ -252,6 +258,8 @@ pub struct CompiledSongLua {
     pub messages: Vec<SongLuaMessageEvent>,
     pub overlays: Vec<SongLuaOverlayActor>,
     pub overlay_eases: Vec<SongLuaOverlayEase>,
+    pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
+    pub song_foreground: SongLuaCapturedActor,
     pub hidden_players: [bool; LUA_PLAYERS],
     pub info: SongLuaCompileInfo,
 }
@@ -264,6 +272,18 @@ struct HostState {
 struct OverlayCompileActor {
     table: Table,
     actor: SongLuaOverlayActor,
+}
+
+#[derive(Clone, Copy)]
+enum TrackedCompileActorTarget {
+    Player(usize),
+    SongForeground,
+}
+
+struct TrackedCompileActor {
+    table: Table,
+    actor: SongLuaCapturedActor,
+    target: TrackedCompileActorTarget,
 }
 
 struct SongLuaCompileGlobals {
@@ -362,6 +382,7 @@ pub fn compile_song_lua(
     let overlays = read_overlay_actors(&lua, &root);
     restore_compile_globals(&globals, compile_globals).map_err(|err| err.to_string())?;
     let mut overlays = overlays?;
+    let mut tracked_actors = read_tracked_compile_actors(&lua)?;
     let mut overlay_trigger_counter = 0usize;
 
     if let Some(prefix_globals) = globals
@@ -397,6 +418,7 @@ pub fn compile_song_lua(
                 .get::<Option<Table>>("actions")
                 .map_err(|err| err.to_string())?,
             &mut overlays,
+            &mut tracked_actors,
             &mut out.messages,
             &mut overlay_trigger_counter,
         )?;
@@ -438,11 +460,18 @@ pub fn compile_song_lua(
             .get::<Option<Table>>("mod_actions")
             .map_err(|err| err.to_string())?,
         &mut overlays,
+        &mut tracked_actors,
         &mut out.messages,
         &mut overlay_trigger_counter,
     )?;
     out.info.unsupported_function_actions += global_fn_actions;
     out.overlays = overlays.into_iter().map(|overlay| overlay.actor).collect();
+    for tracked in tracked_actors {
+        match tracked.target {
+            TrackedCompileActorTarget::Player(player) => out.player_actors[player] = tracked.actor,
+            TrackedCompileActorTarget::SongForeground => out.song_foreground = tracked.actor,
+        }
+    }
     out.hidden_players = std::array::from_fn(|player| {
         let key = if player == 0 {
             "__songlua_top_screen_player_1"
@@ -1043,6 +1072,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         "__songlua_top_screen_player_2",
         top_screen.players[1].clone(),
     )?;
+    globals.set("__songlua_top_screen", top_screen.top_screen.clone())?;
     let top_screen_table = top_screen.top_screen.clone();
     screenman.set(
         "GetTopScreen",
@@ -2707,6 +2737,12 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.y = value;
     }
     if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_z")
+        .map_err(|err| err.to_string())?
+    {
+        state.z = value;
+    }
+    if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_fov")
         .map_err(|err| err.to_string())?
     {
@@ -2760,6 +2796,12 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         .map_err(|err| err.to_string())?
     {
         state.zoom_y = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_zoom_z")
+        .map_err(|err| err.to_string())?
+    {
+        state.zoom_z = value;
     }
     if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_basezoom")
@@ -3155,6 +3197,9 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                 y: block
                     .get::<Option<f32>>("y")
                     .map_err(|err| err.to_string())?,
+                z: block
+                    .get::<Option<f32>>("z")
+                    .map_err(|err| err.to_string())?,
                 fov: block
                     .get::<Option<f32>>("fov")
                     .map_err(|err| err.to_string())?,
@@ -3189,6 +3234,9 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .map_err(|err| err.to_string())?,
                 zoom_y: block
                     .get::<Option<f32>>("zoom_y")
+                    .map_err(|err| err.to_string())?,
+                zoom_z: block
+                    .get::<Option<f32>>("zoom_z")
                     .map_err(|err| err.to_string())?,
                 basezoom: block
                     .get::<Option<f32>>("basezoom")
@@ -3957,9 +4005,9 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "z",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
-                    actor.set("__songlua_state_z", value)?;
+                    capture_block_set_f32(lua, &actor, "z", value)?;
                 }
                 Ok(actor.clone())
             }
@@ -3980,7 +4028,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "addrotationz",
         make_actor_add_f32_method(lua, actor, "rot_z_deg")?,
     )?;
-    for name in ["skewx", "skewy", "zoomz"] {
+    for name in ["skewx", "skewy"] {
         actor.set(
             name,
             lua.create_function({
@@ -3993,6 +4041,10 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             })?,
         )?;
     }
+    actor.set(
+        "zoomz",
+        make_actor_capture_f32_method(lua, actor, "zoom_z", Some("zoomz"))?,
+    )?;
     actor.set(
         "blend",
         lua.create_function({
@@ -5165,9 +5217,69 @@ fn probe_call_names(calls: &Table) -> mlua::Result<Vec<String>> {
     Ok(out)
 }
 
+fn read_tracked_compile_actors(lua: &Lua) -> Result<Vec<TrackedCompileActor>, String> {
+    let globals = lua.globals();
+    let top_screen = globals
+        .get::<Table>("__songlua_top_screen")
+        .map_err(|err| err.to_string())?;
+    let children = actor_children(lua, &top_screen).map_err(|err| err.to_string())?;
+    let song_foreground = if let Some(actor) = children
+        .get::<Option<Table>>("SongForeground")
+        .map_err(|err| err.to_string())?
+    {
+        actor
+    } else {
+        let actor = create_named_child_actor(lua, &top_screen, "SongForeground")
+            .map_err(|err| err.to_string())?;
+        children
+            .set("SongForeground", actor.clone())
+            .map_err(|err| err.to_string())?;
+        actor
+    };
+    Ok(vec![
+        tracked_compile_actor(
+            globals
+                .get::<Table>("__songlua_top_screen_player_1")
+                .map_err(|err| err.to_string())?,
+            TrackedCompileActorTarget::Player(0),
+        )?,
+        tracked_compile_actor(
+            globals
+                .get::<Table>("__songlua_top_screen_player_2")
+                .map_err(|err| err.to_string())?,
+            TrackedCompileActorTarget::Player(1),
+        )?,
+        tracked_compile_actor(song_foreground, TrackedCompileActorTarget::SongForeground)?,
+    ])
+}
+
+fn tracked_compile_actor(
+    table: Table,
+    target: TrackedCompileActorTarget,
+) -> Result<TrackedCompileActor, String> {
+    Ok(TrackedCompileActor {
+        actor: SongLuaCapturedActor {
+            initial_state: actor_overlay_initial_state(&table)?,
+            message_commands: Vec::new(),
+        },
+        table,
+        target,
+    })
+}
+
 fn reset_overlay_capture_tables(lua: &Lua, overlays: &[OverlayCompileActor]) -> Result<(), String> {
     for overlay in overlays {
         reset_actor_capture(lua, &overlay.table).map_err(|err| err.to_string())?;
+    }
+    Ok(())
+}
+
+fn reset_tracked_capture_tables(
+    lua: &Lua,
+    tracked_actors: &[TrackedCompileActor],
+) -> Result<(), String> {
+    for actor in tracked_actors {
+        reset_actor_capture(lua, &actor.table).map_err(|err| err.to_string())?;
     }
     Ok(())
 }
@@ -5179,6 +5291,20 @@ fn collect_overlay_capture_blocks(
     for (idx, overlay) in overlays.iter().enumerate() {
         flush_actor_capture(&overlay.table).map_err(|err| err.to_string())?;
         let blocks = read_actor_capture_blocks(&overlay.table)?;
+        if !blocks.is_empty() {
+            out.push((idx, blocks));
+        }
+    }
+    Ok(out)
+}
+
+fn collect_tracked_capture_blocks(
+    tracked_actors: &[TrackedCompileActor],
+) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
+    let mut out = Vec::new();
+    for (idx, actor) in tracked_actors.iter().enumerate() {
+        flush_actor_capture(&actor.table).map_err(|err| err.to_string())?;
+        let blocks = read_actor_capture_blocks(&actor.table)?;
         if !blocks.is_empty() {
             out.push((idx, blocks));
         }
@@ -5202,23 +5328,55 @@ fn capture_overlay_function_blocks(
     Ok(blocks)
 }
 
-fn compile_overlay_function_action(
+fn capture_function_action_blocks(
+    lua: &Lua,
+    overlays: &[OverlayCompileActor],
+    tracked_actors: &[TrackedCompileActor],
+    function: &Function,
+) -> Result<
+    (
+        Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
+        Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
+    ),
+    String,
+> {
+    reset_overlay_capture_tables(lua, overlays)?;
+    reset_tracked_capture_tables(lua, tracked_actors)?;
+    let result = function.call::<Value>(());
+    let overlay_blocks = collect_overlay_capture_blocks(overlays)?;
+    let tracked_blocks = collect_tracked_capture_blocks(tracked_actors)?;
+    result.map_err(|err| err.to_string())?;
+    Ok((overlay_blocks, tracked_blocks))
+}
+
+fn compile_function_action(
     lua: &Lua,
     overlays: &mut [OverlayCompileActor],
+    tracked_actors: &mut [TrackedCompileActor],
     function: &Function,
     beat: f32,
     persists: bool,
     counter: &mut usize,
     messages: &mut Vec<SongLuaMessageEvent>,
 ) -> Result<bool, String> {
-    let captures = capture_overlay_function_blocks(lua, overlays, function, None)?;
-    if captures.is_empty() {
+    let (overlay_captures, tracked_captures) =
+        capture_function_action_blocks(lua, overlays, tracked_actors, function)?;
+    if overlay_captures.is_empty() && tracked_captures.is_empty() {
         return Ok(false);
     }
     let message = format!("__songlua_overlay_fn_action_{}", *counter);
     *counter += 1;
-    for (overlay_index, blocks) in captures {
+    for (overlay_index, blocks) in overlay_captures {
         overlays[overlay_index]
+            .actor
+            .message_commands
+            .push(SongLuaOverlayMessageCommand {
+                message: message.clone(),
+                blocks,
+            });
+    }
+    for (tracked_index, blocks) in tracked_captures {
+        tracked_actors[tracked_index]
             .actor
             .message_commands
             .push(SongLuaOverlayMessageCommand {
@@ -5298,6 +5456,7 @@ fn read_actions(
     lua: &Lua,
     table: Option<Table>,
     overlays: &mut [OverlayCompileActor],
+    tracked_actors: &mut [TrackedCompileActor],
     messages: &mut Vec<SongLuaMessageEvent>,
     counter: &mut usize,
 ) -> Result<usize, String> {
@@ -5322,8 +5481,15 @@ fn read_actions(
             }),
             Value::Function(function) => {
                 if !matches!(
-                    compile_overlay_function_action(
-                        lua, overlays, &function, beat, persists, counter, messages
+                    compile_function_action(
+                        lua,
+                        overlays,
+                        tracked_actors,
+                        &function,
+                        beat,
+                        persists,
+                        counter,
+                        messages,
                     ),
                     Ok(true)
                 ) {
@@ -7752,6 +7918,42 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_captures_direct_player_startup_state() {
+        let song_dir = test_dir("player-startup-state");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        p:x(111):y(222):z(3)
+        p:rotationx(10):rotationy(20):rotationz(30)
+        p:zoom(0.75):zoomx(0.5):zoomy(1.25)
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Player Startup State"),
+        )
+        .unwrap();
+        let player = &compiled.player_actors[0];
+        assert_eq!(player.initial_state.x, 111.0);
+        assert_eq!(player.initial_state.y, 222.0);
+        assert_eq!(player.initial_state.z, 3.0);
+        assert_eq!(player.initial_state.rot_x_deg, 10.0);
+        assert_eq!(player.initial_state.rot_y_deg, 20.0);
+        assert_eq!(player.initial_state.rot_z_deg, 30.0);
+        assert_eq!(player.initial_state.zoom, 0.75);
+        assert_eq!(player.initial_state.zoom_x, 0.5);
+        assert_eq!(player.initial_state.zoom_y, 1.25);
+    }
+
+    #[test]
     fn compile_song_lua_supports_notefield_column_api() {
         let song_dir = test_dir("notefield-column-api");
         let entry = song_dir.join("default.lua");
@@ -7927,6 +8129,48 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays[1].parent_index, Some(0));
         assert_eq!(compiled.overlays[1].initial_state.x, 10.0);
         assert_eq!(compiled.overlays[1].initial_state.y, 20.0);
+    }
+
+    #[test]
+    fn compile_song_lua_captures_player_and_song_foreground_actions() {
+        let song_dir = test_dir("player-foreground-actions");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {0, function()
+        local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        local fg = SCREENMAN:GetTopScreen():GetChild("SongForeground")
+        if p then
+            p:linear(1):x(SCREEN_CENTER_X + 40):z(5):zoom(0.6):rotationz(15)
+        end
+        if fg then
+            fg:z(4)
+        end
+    end, true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Player Foreground Actions"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert_eq!(compiled.player_actors[0].message_commands.len(), 1);
+        assert_eq!(compiled.song_foreground.message_commands.len(), 1);
+        let player_block = &compiled.player_actors[0].message_commands[0].blocks[0];
+        assert_eq!(player_block.delta.x, Some(360.0));
+        assert_eq!(player_block.delta.z, Some(5.0));
+        assert_eq!(player_block.delta.zoom, Some(0.6));
+        assert_eq!(player_block.delta.rot_z_deg, Some(15.0));
+        let fg_block = &compiled.song_foreground.message_commands[0].blocks[0];
+        assert_eq!(fg_block.delta.z, Some(4.0));
     }
 
     #[test]

@@ -16,8 +16,9 @@ use crate::engine::space::widescale;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::parsing::song_lua::{
-    SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
-    SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaProxyTarget,
+    SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock,
+    SongLuaOverlayKind, SongLuaOverlayMessageCommand, SongLuaOverlayState,
+    SongLuaOverlayStateDelta, SongLuaProxyTarget,
 };
 use crate::game::{profile, scroll::ScrollSpeedSetting, song::SongData};
 use crate::screens::components::gameplay::{gameplay_stats, notefield};
@@ -865,6 +866,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.y {
         state.y = value;
     }
+    if let Some(value) = delta.z {
+        state.z = value;
+    }
     if let Some(value) = delta.fov {
         state.fov = Some(value);
     }
@@ -897,6 +901,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     }
     if let Some(value) = delta.zoom_y {
         state.zoom_y = value;
+    }
+    if let Some(value) = delta.zoom_z {
+        state.zoom_z = value;
     }
     if let Some(value) = delta.basezoom {
         state.basezoom = value;
@@ -971,6 +978,9 @@ fn song_lua_overlay_state_lerp(
     if delta.y.is_some() {
         from.y = (to.y - from.y).mul_add(t, from.y);
     }
+    if delta.z.is_some() {
+        from.z = (to.z - from.z).mul_add(t, from.z);
+    }
     if delta.fov.is_some()
         && let (Some(from_fov), Some(to_fov)) = (from.fov, to.fov)
     {
@@ -1009,6 +1019,9 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.zoom_y.is_some() {
         from.zoom_y = (to.zoom_y - from.zoom_y).mul_add(t, from.zoom_y);
+    }
+    if delta.zoom_z.is_some() {
+        from.zoom_z = (to.zoom_z - from.zoom_z).mul_add(t, from.zoom_z);
     }
     if delta.basezoom.is_some() {
         from.basezoom = (to.basezoom - from.basezoom).mul_add(t, from.basezoom);
@@ -1718,18 +1731,38 @@ fn song_lua_overlay_render_state(
     overlay_index: usize,
     overlay: &SongLuaOverlayActor,
 ) -> SongLuaOverlayState {
-    let now = state.current_music_time_display;
-    let mut current = overlay.initial_state;
-    let mut active: Option<(&[SongLuaOverlayCommandBlock], SongLuaOverlayState, f32)> = None;
-    let Some(events) = state.song_lua_overlay_events.get(overlay_index) else {
+    let current = song_lua_message_state(
+        state.current_music_time_display,
+        overlay.initial_state,
+        &overlay.message_commands,
+        state
+            .song_lua_overlay_events
+            .get(overlay_index)
+            .map(Vec::as_slice),
+    );
+    if state.song_lua_overlay_events.get(overlay_index).is_none() {
         return apply_song_lua_overlay_runtime_eases(state, overlay_index, current);
+    }
+    apply_song_lua_overlay_runtime_eases(state, overlay_index, current)
+}
+
+fn song_lua_message_state(
+    now: f32,
+    initial_state: SongLuaOverlayState,
+    message_commands: &[SongLuaOverlayMessageCommand],
+    events: Option<&[crate::game::gameplay::SongLuaOverlayMessageRuntime]>,
+) -> SongLuaOverlayState {
+    let Some(events) = events else {
+        return initial_state;
     };
+    let mut current = initial_state;
+    let mut active: Option<(&[SongLuaOverlayCommandBlock], SongLuaOverlayState, f32)> = None;
     for event in events {
         let event_second = event.event_second;
         if event_second > now {
             break;
         }
-        let Some(command) = overlay.message_commands.get(event.command_index) else {
+        let Some(command) = message_commands.get(event.command_index) else {
             continue;
         };
         if let Some((blocks, base, start_second)) = active.take() {
@@ -1742,7 +1775,31 @@ fn song_lua_overlay_render_state(
     if let Some((blocks, base, start_second)) = active {
         current = song_lua_overlay_apply_blocks(base, blocks, now - start_second);
     }
-    apply_song_lua_overlay_runtime_eases(state, overlay_index, current)
+    current
+}
+
+fn song_lua_player_render_state(state: &State, player_index: usize) -> SongLuaOverlayState {
+    let Some(actor) = state.song_lua_player_actors.get(player_index) else {
+        return SongLuaOverlayState::default();
+    };
+    song_lua_message_state(
+        state.current_music_time_display,
+        actor.initial_state,
+        &actor.message_commands,
+        state
+            .song_lua_player_events
+            .get(player_index)
+            .map(Vec::as_slice),
+    )
+}
+
+fn song_lua_song_foreground_state(state: &State) -> SongLuaOverlayState {
+    song_lua_message_state(
+        state.current_music_time_display,
+        state.song_lua_song_foreground.initial_state,
+        &state.song_lua_song_foreground.message_commands,
+        Some(state.song_lua_song_foreground_events.as_slice()),
+    )
 }
 
 fn song_lua_capture_tint(color: [f32; 4], tint: [f32; 4]) -> [f32; 4] {
@@ -1756,6 +1813,27 @@ fn song_lua_capture_tint(color: [f32; 4], tint: [f32; 4]) -> [f32; 4] {
 
 fn song_lua_add_z(z: i16, delta: i16) -> i16 {
     (i32::from(z) + i32::from(delta)).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
+}
+
+const SONG_LUA_LAYER_Z_BASE: i16 = 1100;
+
+fn song_lua_rounded_z(value: f32) -> i16 {
+    if !value.is_finite() {
+        return 0;
+    }
+    value
+        .round()
+        .clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i16
+}
+
+fn song_lua_player_layer_z(actor: &SongLuaCapturedActor, current: SongLuaOverlayState) -> i16 {
+    if actor.message_commands.is_empty()
+        && actor.initial_state.z.abs() <= f32::EPSILON
+        && current.z.abs() <= f32::EPSILON
+    {
+        return 0;
+    }
+    song_lua_add_z(SONG_LUA_LAYER_Z_BASE, song_lua_rounded_z(current.z))
 }
 
 fn song_lua_style_capture_actor(
@@ -2855,19 +2933,32 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
 
 fn song_lua_player_transform_matrix(
     playfield_center_x: f32,
+    target_x: f32,
+    target_y: f32,
+    rotation_x_deg: f32,
     rotation_z_deg: f32,
     skew_x: f32,
     zoom_x: f32,
     zoom_y: f32,
+    zoom_z: f32,
 ) -> Option<Matrix4> {
     if !playfield_center_x.is_finite()
+        || !target_x.is_finite()
+        || !target_y.is_finite()
+        || !rotation_x_deg.is_finite()
         || !rotation_z_deg.is_finite()
         || !skew_x.is_finite()
         || !zoom_x.is_finite()
         || !zoom_y.is_finite()
+        || !zoom_z.is_finite()
     {
         return None;
     }
+    let rotation_x_deg = if rotation_x_deg.abs() <= f32::EPSILON {
+        0.0
+    } else {
+        rotation_x_deg
+    };
     let rotation_z_deg = if rotation_z_deg.abs() <= f32::EPSILON {
         0.0
     } else {
@@ -2888,10 +2979,21 @@ fn song_lua_player_transform_matrix(
     } else {
         zoom_y
     };
-    if rotation_z_deg.abs() <= f32::EPSILON
+    let zoom_z = if (zoom_z - 1.0).abs() <= f32::EPSILON {
+        1.0
+    } else {
+        zoom_z
+    };
+    let translate_x = target_x - playfield_center_x;
+    let translate_y = screen_center_y() - target_y;
+    if rotation_x_deg.abs() <= f32::EPSILON
+        && rotation_z_deg.abs() <= f32::EPSILON
         && skew_x.abs() <= f32::EPSILON
         && (zoom_x - 1.0).abs() <= f32::EPSILON
         && (zoom_y - 1.0).abs() <= f32::EPSILON
+        && (zoom_z - 1.0).abs() <= f32::EPSILON
+        && translate_x.abs() <= f32::EPSILON
+        && translate_y.abs() <= f32::EPSILON
     {
         return None;
     }
@@ -2899,22 +3001,29 @@ fn song_lua_player_transform_matrix(
     let pivot_x = playfield_center_x - 0.5 * screen_width();
     let pivot_y = 0.5 * screen_height() - screen_center_y();
     Some(
-        Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
+        Matrix4::from_translation(Vector3::new(translate_x, translate_y, 0.0))
+            * Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
+            * Matrix4::from_rotation_x(rotation_x_deg.to_radians())
             * Matrix4::from_rotation_z(rotation_z_deg.to_radians())
             * song_lua_player_skew_x_matrix(skew_x)
-            * Matrix4::from_scale(Vector3::new(zoom_x, zoom_y, 1.0))
+            * Matrix4::from_scale(Vector3::new(zoom_x, zoom_y, zoom_z))
             * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0)),
     )
 }
 
 fn apply_song_lua_player_transform(
     actors: Vec<Actor>,
+    z_shift: i16,
     playfield_center_x: f32,
+    target_x: f32,
+    target_y: f32,
+    rotation_x_deg: f32,
     rotation_z_deg: f32,
     rotation_y_deg: f32,
     skew_x: f32,
     zoom_x: f32,
     zoom_y: f32,
+    zoom_z: f32,
 ) -> Vec<Actor> {
     let actors = if rotation_y_deg.is_finite() && rotation_y_deg.abs() > f32::EPSILON {
         actors
@@ -2926,12 +3035,23 @@ fn apply_song_lua_player_transform(
     };
     let Some(player_transform) = song_lua_player_transform_matrix(
         playfield_center_x,
+        target_x,
+        target_y,
+        rotation_x_deg,
         rotation_z_deg,
         skew_x,
         zoom_x,
         zoom_y,
+        zoom_z,
     ) else {
-        return actors;
+        return if z_shift == 0 {
+            actors
+        } else {
+            actors
+                .into_iter()
+                .map(|actor| song_lua_style_capture_actor(actor, [1.0; 4], None, z_shift))
+                .collect()
+        };
     };
     // notefield::build may already wrap the lane render in a perspective camera.
     // Multiply those cameras in place, and only wrap plain HUD actors here, so
@@ -2972,7 +3092,13 @@ fn apply_song_lua_player_transform(
             children: plain_children,
         });
     }
-    out
+    if z_shift == 0 {
+        out
+    } else {
+        out.into_iter()
+            .map(|actor| song_lua_style_capture_actor(actor, [1.0; 4], None, z_shift))
+            .collect()
+    }
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
@@ -3246,54 +3372,43 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 combo: requests.combo,
             },
         );
-        let rotation_z = state.song_lua_player_rotation_z[player_idx];
-        let rotation_y = state.song_lua_player_rotation_y[player_idx];
+        let player_actor = &state.song_lua_player_actors[player_idx];
+        let player_state = song_lua_player_render_state(state, player_idx);
+        let rotation_x = player_state.rot_x_deg;
+        let rotation_z = player_state.rot_z_deg + state.song_lua_player_rotation_z[player_idx];
+        let rotation_y = player_state.rot_y_deg + state.song_lua_player_rotation_y[player_idx];
         let skew_x = state.song_lua_player_skew_x[player_idx];
-        let zoom_x = state.song_lua_player_zoom_x[player_idx];
-        let zoom_y = state.song_lua_player_zoom_y[player_idx];
-        let player = apply_song_lua_player_transform(
-            actors,
-            layout_center_x,
-            rotation_z,
-            rotation_y,
-            skew_x,
-            zoom_x,
-            zoom_y,
-        );
+        let zoom_x =
+            player_state.zoom * player_state.zoom_x * state.song_lua_player_zoom_x[player_idx];
+        let zoom_y =
+            player_state.zoom * player_state.zoom_y * state.song_lua_player_zoom_y[player_idx];
+        let zoom_z = player_state.zoom_z;
+        let z_shift = song_lua_player_layer_z(player_actor, player_state);
+        let render_bundle = |bundle| {
+            if !player_state.visible {
+                Vec::new()
+            } else {
+                apply_song_lua_player_transform(
+                    bundle,
+                    z_shift,
+                    layout_center_x,
+                    player_state.x,
+                    player_state.y,
+                    rotation_x,
+                    rotation_z,
+                    rotation_y,
+                    skew_x,
+                    zoom_x,
+                    zoom_y,
+                    zoom_z,
+                )
+            }
+        };
+        let player = render_bundle(actors);
         let proxy_sources = [
-            requests.note_field.then(|| {
-                apply_song_lua_player_transform(
-                    field_actors,
-                    layout_center_x,
-                    rotation_z,
-                    rotation_y,
-                    skew_x,
-                    zoom_x,
-                    zoom_y,
-                )
-            }),
-            requests.judgment.then(|| {
-                apply_song_lua_player_transform(
-                    judgment_actors,
-                    layout_center_x,
-                    rotation_z,
-                    rotation_y,
-                    skew_x,
-                    zoom_x,
-                    zoom_y,
-                )
-            }),
-            requests.combo.then(|| {
-                apply_song_lua_player_transform(
-                    combo_actors,
-                    layout_center_x,
-                    rotation_z,
-                    rotation_y,
-                    skew_x,
-                    zoom_x,
-                    zoom_y,
-                )
-            }),
+            requests.note_field.then(|| render_bundle(field_actors)),
+            requests.judgment.then(|| render_bundle(judgment_actors)),
+            requests.combo.then(|| render_bundle(combo_actors)),
         ];
         (player, layout_center_x, proxy_sources)
     };
@@ -4294,6 +4409,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         underlay: underlay_proxy_source.as_deref(),
         overlay: overlay_proxy_source.as_deref(),
     };
+    let song_foreground_state = song_lua_song_foreground_state(state);
+    let song_lua_overlay_base_z = song_lua_add_z(
+        SONG_LUA_LAYER_Z_BASE,
+        song_lua_rounded_z(song_foreground_state.z),
+    );
     let mut song_lua_actors = Vec::with_capacity(state.song_lua_overlays.len());
     for (idx, overlay) in state.song_lua_overlays.iter().enumerate() {
         if song_lua_overlay_aft_ancestor(&state.song_lua_overlays, idx).is_some() {
@@ -4308,7 +4428,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 song_lua_proxy_source(target, &proxy_sources).and_then(|source| {
                     song_lua_build_proxy_actor(
                         overlay_state,
-                        1100 + idx as i16,
+                        song_lua_add_z(song_lua_overlay_base_z, idx as i16),
                         source,
                         song_lua_space_width,
                         song_lua_space_height,
@@ -4330,7 +4450,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         song_lua_build_capture_actor(
                             overlay,
                             overlay_state,
-                            1100 + idx as i16,
+                            song_lua_add_z(song_lua_overlay_base_z, idx as i16),
                             source,
                             song_lua_space_width,
                             song_lua_space_height,
@@ -4346,7 +4466,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     overlay.parent_index,
                 ),
                 asset_manager,
-                1100 + idx as i16,
+                song_lua_add_z(song_lua_overlay_base_z, idx as i16),
                 song_lua_space_width,
                 song_lua_space_height,
                 state.total_elapsed_in_screen,

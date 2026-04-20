@@ -8,7 +8,7 @@ use crate::game::judgment::{
 };
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{self, ModelMeshCache, ModelMeshCacheStats, Noteskin, Style};
-use crate::game::parsing::song_lua::SongLuaOverlayActor;
+use crate::game::parsing::song_lua::{SongLuaCapturedActor, SongLuaOverlayActor};
 use crate::game::scores;
 use crate::game::song::SongData;
 use crate::game::timing::{
@@ -3521,6 +3521,10 @@ pub struct State {
     pub song_lua_overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime>,
     pub song_lua_overlay_ease_ranges: Vec<std::ops::Range<usize>>,
     pub song_lua_overlay_events: Vec<Vec<SongLuaOverlayMessageRuntime>>,
+    pub song_lua_player_actors: [SongLuaCapturedActor; MAX_PLAYERS],
+    pub song_lua_player_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS],
+    pub song_lua_song_foreground: SongLuaCapturedActor,
+    pub song_lua_song_foreground_events: Vec<SongLuaOverlayMessageRuntime>,
     pub song_lua_hidden_players: [bool; MAX_PLAYERS],
     pub song_lua_screen_width: f32,
     pub song_lua_screen_height: f32,
@@ -5523,6 +5527,10 @@ pub fn init(
         song_lua_overlay_eases,
         song_lua_overlay_ease_ranges,
         song_lua_overlay_events,
+        song_lua_player_actors,
+        song_lua_player_events,
+        song_lua_song_foreground,
+        song_lua_song_foreground_events,
         song_lua_hidden_players,
         song_lua_screen_width,
         song_lua_screen_height,
@@ -5894,6 +5902,10 @@ pub fn init(
         song_lua_overlay_eases,
         song_lua_overlay_ease_ranges,
         song_lua_overlay_events,
+        song_lua_player_actors,
+        song_lua_player_events,
+        song_lua_song_foreground,
+        song_lua_song_foreground_events,
         song_lua_hidden_players,
         song_lua_screen_width,
         song_lua_screen_height,
