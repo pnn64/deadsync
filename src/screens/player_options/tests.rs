@@ -184,6 +184,63 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn init_active_masks_accumulate_across_panes() {
+        // Regression: apply_profile_defaults gates 8 of its 17 returned masks
+        // (Scroll, Insert, Remove, Holds, Accel, Effect, Appearance, EarlyDw)
+        // on the corresponding row being present in the passed row_map. Those
+        // rows live on the Advanced/Uncommon panes, so init() must call the
+        // function on all three pane row_maps and OR the resulting masks.
+        // Otherwise persisted profile state for those rows is silently lost
+        // the moment the user toggles any choice on those rows.
+        ensure_i18n();
+        let mut profile = Profile::default();
+        profile.scroll_option =
+            profile::ScrollOption::Reverse.union(profile::ScrollOption::Cross);
+
+        let mut main_rows = test_row_map(vec![test_row(
+            RowId::Exit,
+            lookup_key("PlayerOptions", "Exit"),
+            &["Exit"],
+            [0, 0],
+        )]);
+        let mut advanced_rows = test_row_map(vec![test_row(
+            RowId::Scroll,
+            lookup_key("PlayerOptions", "Scroll"),
+            &["Reverse", "Split", "Alternate", "Cross", "Centered"],
+            [0, 0],
+        )]);
+        let mut uncommon_rows = test_row_map(vec![test_row(
+            RowId::Exit,
+            lookup_key("PlayerOptions", "Exit"),
+            &["Exit"],
+            [0, 0],
+        )]);
+
+        let main =
+            super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1);
+        let adv =
+            super::super::panes::apply_profile_defaults(&mut advanced_rows, &profile, P1);
+        let unc =
+            super::super::panes::apply_profile_defaults(&mut uncommon_rows, &profile, P1);
+
+        // Main alone: Scroll row absent, mask comes back empty (the bug source).
+        assert_eq!(main.0, ScrollMask::empty());
+        // Accumulated across all three panes (the fix): Reverse + Cross preserved.
+        let combined = super::super::panes::or_active_masks(
+            super::super::panes::or_active_masks(main, adv),
+            unc,
+        );
+        assert!(
+            combined.0.contains(ScrollMask::REVERSE),
+            "Reverse bit preserved after OR-accumulation"
+        );
+        assert!(
+            combined.0.contains(ScrollMask::CROSS),
+            "Cross bit preserved after OR-accumulation"
+        );
+    }
+
+    #[test]
     fn hud_offset_choices_cover_full_range() {
         let choices = hud_offset_choices();
         assert_eq!(choices.first().map(String::as_str), Some("-250"));

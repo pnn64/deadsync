@@ -66,11 +66,7 @@ pub(super) fn build_rows(
     }
 }
 
-pub(super) fn apply_profile_defaults(
-    row_map: &mut RowMap,
-    profile: &crate::game::profile::Profile,
-    player_idx: usize,
-) -> (
+pub(super) type ActiveMaskTuple = (
     ScrollMask,
     HideMask,
     u8,
@@ -88,7 +84,39 @@ pub(super) fn apply_profile_defaults(
     u8,
     ErrorBarOptionsMask,
     MeasureCounterOptionsMask,
-) {
+);
+
+/// OR two `ActiveMaskTuple`s element-wise. Used by `init()` to accumulate
+/// per-pane mask results, because `apply_profile_defaults` only populates
+/// some masks when the corresponding row exists in the passed `row_map`,
+/// and the rows are split across the Main/Advanced/Uncommon panes.
+pub(super) fn or_active_masks(a: ActiveMaskTuple, b: ActiveMaskTuple) -> ActiveMaskTuple {
+    (
+        a.0 | b.0,
+        a.1 | b.1,
+        a.2 | b.2,
+        a.3 | b.3,
+        a.4 | b.4,
+        a.5 | b.5,
+        a.6 | b.6,
+        a.7 | b.7,
+        a.8 | b.8,
+        a.9 | b.9,
+        a.10 | b.10,
+        a.11 | b.11,
+        a.12 | b.12,
+        a.13 | b.13,
+        a.14 | b.14,
+        a.15 | b.15,
+        a.16 | b.16,
+    )
+}
+
+pub(super) fn apply_profile_defaults(
+    row_map: &mut RowMap,
+    profile: &crate::game::profile::Profile,
+    player_idx: usize,
+) -> ActiveMaskTuple {
     let mut scroll_active_mask = ScrollMask::empty();
     let mut hide_active_mask = HideMask::empty();
     let mut insert_active_mask: u8 = 0;
