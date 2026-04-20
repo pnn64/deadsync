@@ -1826,13 +1826,15 @@ fn song_lua_rounded_z(value: f32) -> i16 {
         .clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i16
 }
 
-fn song_lua_player_layer_z(actor: &SongLuaCapturedActor, current: SongLuaOverlayState) -> i16 {
-    if actor.message_commands.is_empty()
-        && actor.initial_state.z.abs() <= f32::EPSILON
-        && current.z.abs() <= f32::EPSILON
-    {
+fn song_lua_player_layer_z(
+    song_lua_active: bool,
+    actor: &SongLuaCapturedActor,
+    current: SongLuaOverlayState,
+) -> i16 {
+    if !song_lua_active {
         return 0;
     }
+    let _ = actor;
     song_lua_add_z(SONG_LUA_LAYER_Z_BASE, song_lua_rounded_z(current.z))
 }
 
@@ -3374,6 +3376,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         );
         let player_actor = &state.song_lua_player_actors[player_idx];
         let player_state = song_lua_player_render_state(state, player_idx);
+        let song_lua_active = !state.song.foreground_lua_changes.is_empty();
         let rotation_x = player_state.rot_x_deg;
         let rotation_z = player_state.rot_z_deg + state.song_lua_player_rotation_z[player_idx];
         let rotation_y = player_state.rot_y_deg + state.song_lua_player_rotation_y[player_idx];
@@ -3383,7 +3386,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let zoom_y =
             player_state.zoom * player_state.zoom_y * state.song_lua_player_zoom_y[player_idx];
         let zoom_z = player_state.zoom_z;
-        let z_shift = song_lua_player_layer_z(player_actor, player_state);
+        let z_shift = song_lua_player_layer_z(song_lua_active, player_actor, player_state);
         let render_bundle = |bundle| {
             if !player_state.visible {
                 Vec::new()
