@@ -3311,6 +3311,20 @@ fn capture_block_set_size(lua: &Lua, actor: &Table, size: [f32; 2]) -> mlua::Res
     Ok(())
 }
 
+fn capture_block_set_zoom_axes(
+    lua: &Lua,
+    actor: &Table,
+    zoom: f32,
+    zoom_x_key: &str,
+    zoom_y_key: &str,
+    zoom_z_key: &str,
+) -> mlua::Result<()> {
+    capture_block_set_f32(lua, actor, zoom_x_key, zoom)?;
+    capture_block_set_f32(lua, actor, zoom_y_key, zoom)?;
+    capture_block_set_f32(lua, actor, zoom_z_key, zoom)?;
+    Ok(())
+}
+
 fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandBlock>, String> {
     let Some(blocks) = actor
         .get::<Option<Table>>("__songlua_capture_blocks")
@@ -3957,6 +3971,14 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             move |lua, args: MultiValue| {
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "basezoom", value)?;
+                    capture_block_set_zoom_axes(
+                        lua,
+                        &actor,
+                        value,
+                        "basezoom_x",
+                        "basezoom_y",
+                        "basezoom_z",
+                    )?;
                 }
                 Ok(actor.clone())
             }
@@ -4005,6 +4027,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             move |lua, args: MultiValue| {
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "zoom", value)?;
+                    capture_block_set_zoom_axes(lua, &actor, value, "zoom_x", "zoom_y", "zoom_z")?;
                 }
                 Ok(actor.clone())
             }
@@ -7779,6 +7802,37 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "30:40");
+    }
+
+    #[test]
+    fn compile_song_lua_zoom_sets_axis_state() {
+        let song_dir = test_dir("zoom-axis-state");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:zoom(2)
+            self:zoomx(3)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Zoom Axis State"),
+        )
+        .unwrap();
+        let overlay = &compiled.overlays[0];
+        assert_eq!(overlay.initial_state.zoom, 2.0);
+        assert_eq!(overlay.initial_state.zoom_x, 3.0);
+        assert_eq!(overlay.initial_state.zoom_y, 2.0);
+        assert_eq!(overlay.initial_state.zoom_z, 2.0);
     }
 
     #[test]

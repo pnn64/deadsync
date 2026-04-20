@@ -1116,8 +1116,8 @@ fn song_lua_overlay_state_lerp(
 #[inline(always)]
 fn song_lua_overlay_axis_scale(state: SongLuaOverlayState) -> [f32; 2] {
     [
-        state.basezoom * state.basezoom_x * state.zoom * state.zoom_x,
-        state.basezoom * state.basezoom_y * state.zoom * state.zoom_y,
+        state.basezoom_x * state.zoom_x,
+        state.basezoom_y * state.zoom_y,
     ]
 }
 
@@ -2063,8 +2063,8 @@ fn song_lua_capture_transform_matrix(
     let y_scale = screen_height() / overlay_space_height.max(1.0);
     let translate_x = (state.x - 0.5 * overlay_space_width) * x_scale + extra_offset[0];
     let translate_y = (state.y - 0.5 * overlay_space_height) * y_scale + extra_offset[1];
-    let scale_x = state.basezoom * state.basezoom_x * state.zoom * state.zoom_x;
-    let scale_y = state.basezoom * state.basezoom_y * state.zoom * state.zoom_y;
+    let scale_x = state.basezoom_x * state.zoom_x;
+    let scale_y = state.basezoom_y * state.zoom_y;
     if translate_x.abs() <= f32::EPSILON
         && translate_y.abs() <= f32::EPSILON
         && state.rot_z_deg.abs() <= f32::EPSILON
@@ -3381,10 +3381,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let rotation_z = player_state.rot_z_deg + state.song_lua_player_rotation_z[player_idx];
         let rotation_y = player_state.rot_y_deg + state.song_lua_player_rotation_y[player_idx];
         let skew_x = state.song_lua_player_skew_x[player_idx];
-        let zoom_x =
-            player_state.zoom * player_state.zoom_x * state.song_lua_player_zoom_x[player_idx];
-        let zoom_y =
-            player_state.zoom * player_state.zoom_y * state.song_lua_player_zoom_y[player_idx];
+        let zoom_x = player_state.zoom_x * state.song_lua_player_zoom_x[player_idx];
+        let zoom_y = player_state.zoom_y * state.song_lua_player_zoom_y[player_idx];
         let zoom_z = player_state.zoom_z;
         let z_shift = song_lua_player_layer_z(song_lua_active, player_actor, player_state);
         let render_bundle = |bundle| {
