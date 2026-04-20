@@ -1655,6 +1655,28 @@ fn build_course_summary_eval_state(
     state
 }
 
+fn song_lua_video_paths(
+    overlays: &[crate::game::parsing::song_lua::SongLuaOverlayActor],
+) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let mut seen = HashSet::new();
+    for overlay in overlays {
+        let crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } =
+            &overlay.kind
+        else {
+            continue;
+        };
+        if !crate::assets::dynamic::is_dynamic_video_path(texture_path) {
+            continue;
+        }
+        let key = texture_path.to_string_lossy().into_owned();
+        if seen.insert(key) {
+            paths.push(texture_path.clone());
+        }
+    }
+    paths
+}
+
 fn prewarm_gameplay_assets(
     assets: &mut AssetManager,
     backend: &mut renderer::Backend,
@@ -2749,6 +2771,16 @@ impl App {
         let actor_stats = actor_tree_stats(&actors);
         self.update_fps_stats(redraw_started);
         let active_banner_video_paths = self.active_banner_video_paths();
+        let song_lua_video_paths = if self.state.screens.current_screen == CurrentScreen::Gameplay {
+            self.state
+                .screens
+                .gameplay_state
+                .as_ref()
+                .map(|state| song_lua_video_paths(&state.song_lua_overlays))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
             let gameplay_time = self.state.screens.gameplay_state.as_ref().map(|state| {
@@ -2759,6 +2791,13 @@ impl App {
                 backend,
                 &active_banner_video_paths,
             );
+            if self.state.screens.current_screen == CurrentScreen::Gameplay {
+                self.dynamic_media.sync_active_song_lua_videos(
+                    &mut self.asset_manager,
+                    backend,
+                    &song_lua_video_paths,
+                );
+            }
             self.dynamic_media
                 .queue_video_frames(&mut self.asset_manager, gameplay_time);
             self.asset_manager.queue_pending_generated_textures();
@@ -6230,6 +6269,11 @@ impl App {
                         backend,
                         gameplay_background_keys(&gs),
                     );
+                    self.dynamic_media.sync_active_song_lua_videos(
+                        &mut self.asset_manager,
+                        backend,
+                        &song_lua_video_paths(&gs.song_lua_overlays),
+                    );
                     if let Some(path) = gs.song.banner_path.as_ref() {
                         media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
                     }
@@ -7109,6 +7153,7 @@ mod tests {
     use super::*;
     use crate::game::{
         chart::{ChartData, StaminaCounts},
+        parsing::song_lua::{SongLuaOverlayActor, SongLuaOverlayKind},
         song::SongData,
     };
 
@@ -7179,6 +7224,49 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: vec![test_chart(hashes[0]), test_chart(hashes[1])],
         }
+    }
+
+    #[test]
+    fn song_lua_video_paths_filter_and_dedupe_video_sprites() {
+        let movie = PathBuf::from("badapple.AVI");
+        let overlays = vec![
+            SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Sprite {
+                    texture_path: movie.clone(),
+                },
+                name: None,
+                parent_index: None,
+                initial_state: Default::default(),
+                message_commands: Vec::new(),
+            },
+            SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Sprite {
+                    texture_path: movie.clone(),
+                },
+                name: None,
+                parent_index: None,
+                initial_state: Default::default(),
+                message_commands: Vec::new(),
+            },
+            SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Sprite {
+                    texture_path: PathBuf::from("panel.png"),
+                },
+                name: None,
+                parent_index: None,
+                initial_state: Default::default(),
+                message_commands: Vec::new(),
+            },
+            SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Quad,
+                name: None,
+                parent_index: None,
+                initial_state: Default::default(),
+                message_commands: Vec::new(),
+            },
+        ];
+
+        assert_eq!(song_lua_video_paths(&overlays), vec![movie]);
     }
 
     fn test_score_info(

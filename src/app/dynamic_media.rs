@@ -71,6 +71,9 @@ pub(crate) struct DynamicMedia {
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: std::collections::HashSet<String>,
     current_dynamic_background: Option<DynamicBackgroundState>,
+    active_song_lua_video_keys: HashSet<String>,
+    active_song_lua_videos: HashMap<String, video::Player>,
+    failed_song_lua_video_keys: HashSet<String>,
     gameplay_background_keys: HashSet<String>,
     pending_gameplay_background_preps: HashSet<String>,
     gameplay_background_prep_tx: mpsc::Sender<GameplayBackgroundPrepResult>,
@@ -93,6 +96,9 @@ impl DynamicMedia {
             current_dynamic_pack_banner: None,
             dynamic_pack_banner_keys: std::collections::HashSet::new(),
             current_dynamic_background: None,
+            active_song_lua_video_keys: HashSet::new(),
+            active_song_lua_videos: HashMap::new(),
+            failed_song_lua_video_keys: HashSet::new(),
             gameplay_background_keys: HashSet::new(),
             pending_gameplay_background_preps: HashSet::new(),
             gameplay_background_prep_tx,
@@ -121,6 +127,7 @@ impl DynamicMedia {
             self.active_banner_videos
                 .len()
                 .saturating_add(self.dynamic_pack_banner_keys.len())
+                .saturating_add(self.active_song_lua_video_keys.len())
                 .saturating_add(self.current_profile_avatars.len())
                 .saturating_add(5),
         );
@@ -139,6 +146,9 @@ impl DynamicMedia {
         if let Some(state) = self.current_dynamic_background.take() {
             keys.push(state.key);
         }
+        keys.extend(self.active_song_lua_video_keys.drain());
+        self.active_song_lua_videos.clear();
+        self.failed_song_lua_video_keys.clear();
         keys.extend(self.gameplay_background_keys.drain());
         self.pending_gameplay_background_preps.clear();
         self.failed_gameplay_background_key = None;
@@ -624,6 +634,63 @@ impl DynamicMedia {
         None
     }
 
+    pub(crate) fn sync_active_song_lua_videos(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        paths: &[PathBuf],
+    ) {
+        let desired = paths
+            .iter()
+            .filter(|path| dynamic::is_dynamic_video_path(path))
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect::<HashSet<_>>();
+        let stale =
+            dynamic::collect_stale_dynamic_keys(self.active_song_lua_video_keys.iter(), &desired);
+        self.active_song_lua_video_keys = desired;
+        self.failed_song_lua_video_keys
+            .retain(|key| self.active_song_lua_video_keys.contains(key));
+
+        for key in stale {
+            self.active_song_lua_videos.remove(&key);
+            self.failed_song_lua_video_keys.remove(&key);
+            self.release_texture_key(assets, backend, key);
+        }
+
+        for path in paths {
+            if !dynamic::is_dynamic_video_path(path) {
+                continue;
+            }
+            let key = path.to_string_lossy().into_owned();
+            if self.active_song_lua_videos.contains_key(&key)
+                || self.failed_song_lua_video_keys.contains(&key)
+            {
+                continue;
+            }
+            match video::open_player(path, true) {
+                Ok(player) => {
+                    if !assets.has_texture_key(&key) {
+                        match video::load_poster(path) {
+                            Ok(poster) => assets.queue_texture_upload(key.clone(), poster),
+                            Err(e) => warn!(
+                                "Failed to load song lua video poster '{}': {e}",
+                                path.display()
+                            ),
+                        }
+                    }
+                    self.active_song_lua_videos.insert(key, player);
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to start song lua video '{}': {e}. Using prewarmed poster.",
+                        path.display()
+                    );
+                    self.failed_song_lua_video_keys.insert(key);
+                }
+            }
+        }
+    }
+
     pub(crate) fn set_gameplay_background_keys<I>(
         &mut self,
         assets: &mut AssetManager,
@@ -650,6 +717,11 @@ impl DynamicMedia {
         backend: &mut Backend,
     ) {
         self.destroy_current_dynamic_background(assets, backend);
+        self.active_song_lua_videos.clear();
+        self.failed_song_lua_video_keys.clear();
+        for key in std::mem::take(&mut self.active_song_lua_video_keys) {
+            self.release_texture_key(assets, backend, key);
+        }
         self.reset_pending_gameplay_background();
         self.failed_gameplay_background_key = None;
         for key in std::mem::take(&mut self.gameplay_background_keys) {
@@ -728,6 +800,20 @@ impl DynamicMedia {
         if let Some((key, frame)) = background_frame {
             assets.queue_texture_upload(key, frame);
         }
+
+        let song_lua_play_time = gameplay_time_sec.unwrap_or(0.0).max(0.0);
+        let song_lua_frames: Vec<_> = self
+            .active_song_lua_videos
+            .iter_mut()
+            .filter_map(|(key, player)| {
+                player
+                    .take_due_frame(song_lua_play_time)
+                    .map(|frame| (key.clone(), frame))
+            })
+            .collect();
+        for (key, frame) in song_lua_frames {
+            assets.queue_texture_upload(key, frame);
+        }
     }
 
     #[inline(always)]
@@ -757,6 +843,7 @@ impl DynamicMedia {
                 .current_dynamic_background
                 .as_ref()
                 .is_some_and(|state| state.key == key)
+            || self.active_song_lua_video_keys.contains(key)
             || self.gameplay_background_keys.contains(key)
             || self
                 .current_profile_avatars
@@ -1041,6 +1128,21 @@ mod tests {
 
         assets.reserve_texture_handle(key.clone());
         media.gameplay_background_keys.insert(key.clone());
+
+        let removed = media.take_releasable_texture(&mut assets, &key);
+
+        assert!(removed.is_none());
+        assert!(assets.has_texture_key(&key));
+    }
+
+    #[test]
+    fn song_lua_video_key_counts_as_dynamic_texture_owner() {
+        let mut assets = AssetManager::new();
+        let mut media = DynamicMedia::new();
+        let key = "overlay.avi".to_string();
+
+        assets.reserve_texture_handle(key.clone());
+        media.active_song_lua_video_keys.insert(key.clone());
 
         let removed = media.take_releasable_texture(&mut assets, &key);
 
