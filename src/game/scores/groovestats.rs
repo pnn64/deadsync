@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, Default)]
 pub struct GrooveStatsEvalState {
@@ -79,6 +80,24 @@ struct GrooveStatsSubmitRetryEntry {
     is_fail: bool,
     api_key: String,
     payload: GrooveStatsSubmitPlayerPayload,
+    /// Number of `TimedOut` failures observed for the *current* retry budget.
+    /// Reset to 0 on manual F5 retry. Auto-retries do not reset.
+    auto_retry_attempt: u8,
+    /// When an auto-retry is scheduled to fire. `None` means no auto-retry pending
+    /// (either none ever scheduled, exhausted, or the failure wasn't a timeout).
+    auto_retry_at: Option<Instant>,
+}
+
+/// Maximum number of automatic retry attempts after `TimedOut` failures
+/// before falling back to manual `F5` retry. Counts attempts AFTER the
+/// initial submit, so total wall-clock to give up auto = sum(delays).
+const GROOVESTATS_AUTO_RETRY_MAX_ATTEMPTS: u8 = 4;
+
+/// Backoff schedule. `attempt` is 1-based (1 = first auto-retry after the
+/// initial failure). 1 → 2s, 2 → 4s, 3 → 8s, 4 → 16s. Total ≈ 30s.
+#[inline(always)]
+const fn groovestats_auto_retry_delay_secs(attempt: u8) -> u64 {
+    1u64 << attempt
 }
 
 static GROOVESTATS_SUBMIT_RETRY: std::sync::LazyLock<
@@ -364,15 +383,16 @@ fn groovestats_update_submit_ui_status_if_token(
     chart_hash: &str,
     token: u64,
     status: GrooveStatsSubmitUiStatus,
-) {
+) -> bool {
     let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
     let Some(entry) = state[submit_side_ix(side)].as_mut() else {
-        return;
+        return false;
     };
     if entry.token != token || !entry.chart_hash.eq_ignore_ascii_case(chart_hash) {
-        return;
+        return false;
     }
     entry.status = status;
+    true
 }
 
 #[inline(always)]
@@ -1058,7 +1078,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
         Err(err) => {
             let status = err.status;
             for player in &job.players {
-                groovestats_update_submit_ui_status_if_token(
+                let accepted = groovestats_update_submit_ui_status_if_token(
                     player.side,
                     player.chart_hash.as_str(),
                     player.token,
@@ -1072,6 +1092,13 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     status,
                     err.message
                 );
+                if accepted {
+                    groovestats_record_submit_failure(
+                        player.side,
+                        player.chart_hash.as_str(),
+                        status,
+                    );
+                }
                 invalidate_player_leaderboards_for_side(player.chart_hash.as_str(), player.side);
             }
         }
@@ -1238,6 +1265,8 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             is_fail,
             api_key: profile.groovestats_api_key.trim().to_string(),
             payload: payload.clone(),
+            auto_retry_attempt: 0,
+            auto_retry_at: None,
         });
         let token = groovestats_next_submit_ui_token();
         groovestats_set_submit_ui_status(
@@ -1286,6 +1315,14 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
 }
 
 pub fn retry_groovestats_submit(chart_hash: &str, side: profile::PlayerSide) -> bool {
+    retry_groovestats_submit_inner(chart_hash, side, true)
+}
+
+fn retry_groovestats_submit_inner(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+    reset_auto_budget: bool,
+) -> bool {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return false;
@@ -1300,12 +1337,21 @@ pub fn retry_groovestats_submit(chart_hash: &str, side: profile::PlayerSide) -> 
     if !groovestats_can_retry_submit(status) {
         return false;
     }
-    let Some(entry) = GROOVESTATS_SUBMIT_RETRY.lock().unwrap()[submit_side_ix(side)]
-        .as_ref()
-        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-        .cloned()
-    else {
-        return false;
+    let entry = {
+        let mut lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+        let slot = &mut lock[submit_side_ix(side)];
+        let Some(stored) = slot
+            .as_mut()
+            .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        else {
+            return false;
+        };
+        // Always clear the pending auto-retry since we're firing now.
+        stored.auto_retry_at = None;
+        if reset_auto_budget {
+            stored.auto_retry_attempt = 0;
+        }
+        stored.clone()
     };
 
     let token = groovestats_next_submit_ui_token();
@@ -1319,6 +1365,70 @@ pub fn retry_groovestats_submit(chart_hash: &str, side: profile::PlayerSide) -> 
     );
     spawn_groovestats_submit(groovestats_retry_request(&entry, token));
     true
+}
+
+/// Updates the retry entry's auto-retry schedule based on a worker-reported
+/// failure. Only call this after the worker's UI status update was accepted
+/// (i.e., the result wasn't from a stale token), so that late results from
+/// superseded requests cannot re-arm the schedule.
+fn groovestats_record_submit_failure(
+    side: profile::PlayerSide,
+    chart_hash: &str,
+    status: GrooveStatsSubmitUiStatus,
+) {
+    let mut lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+    let Some(entry) = lock[submit_side_ix(side)]
+        .as_mut()
+        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(chart_hash))
+    else {
+        return;
+    };
+    if matches!(status, GrooveStatsSubmitUiStatus::TimedOut) {
+        if entry.auto_retry_attempt < GROOVESTATS_AUTO_RETRY_MAX_ATTEMPTS {
+            entry.auto_retry_attempt += 1;
+            let delay = groovestats_auto_retry_delay_secs(entry.auto_retry_attempt);
+            entry.auto_retry_at = Some(Instant::now() + Duration::from_secs(delay));
+        } else {
+            entry.auto_retry_at = None;
+        }
+    } else {
+        entry.auto_retry_at = None;
+    }
+}
+
+/// Returns the seconds remaining until the next auto-retry for this side, if
+/// one is scheduled. Returns `Some(0)` if the retry is due to fire on the next
+/// tick. Returns `None` when no auto-retry is pending (manual `F5` mode).
+pub fn groovestats_auto_retry_remaining_secs(side: profile::PlayerSide) -> Option<u32> {
+    let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+    let target = lock[submit_side_ix(side)].as_ref()?.auto_retry_at?;
+    Some(target.saturating_duration_since(Instant::now()).as_secs() as u32)
+}
+
+/// Fires any auto-retries whose scheduled time has elapsed. Should be called
+/// once per frame from the evaluation screen update loop. Returns true if at
+/// least one retry was fired.
+pub fn tick_groovestats_auto_retries() -> bool {
+    let due: Vec<(String, profile::PlayerSide)> = {
+        let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+        let now = Instant::now();
+        lock.iter()
+            .flatten()
+            .filter_map(|entry| {
+                entry
+                    .auto_retry_at
+                    .filter(|t| *t <= now)
+                    .map(|_| (entry.chart_hash.clone(), entry.side))
+            })
+            .collect()
+    };
+    let mut fired = false;
+    for (hash, side) in due {
+        if retry_groovestats_submit_inner(&hash, side, false) {
+            fired = true;
+        }
+    }
+    fired
 }
 
 #[cfg(test)]
@@ -1677,6 +1787,17 @@ mod tests {
                 reason: RejectReason::Unauthorized,
             }
         ));
+    }
+
+    #[test]
+    fn groovestats_auto_retry_delay_schedule_is_exponential() {
+        assert_eq!(groovestats_auto_retry_delay_secs(1), 2);
+        assert_eq!(groovestats_auto_retry_delay_secs(2), 4);
+        assert_eq!(groovestats_auto_retry_delay_secs(3), 8);
+        assert_eq!(
+            groovestats_auto_retry_delay_secs(GROOVESTATS_AUTO_RETRY_MAX_ATTEMPTS),
+            16
+        );
     }
 
     #[test]

@@ -188,7 +188,15 @@ fn submit_footer_status_text(status: SubmitFooterStatus) -> Cow<'static, str> {
     match status {
         SubmitFooterStatus::Submitting => Cow::Borrowed("Submitting ..."),
         SubmitFooterStatus::Submitted => Cow::Borrowed("Submitted!"),
-        SubmitFooterStatus::TimedOut => Cow::Borrowed("Timed Out - F5 Retry"),
+        SubmitFooterStatus::TimedOut { retry_in_secs: None } => {
+            Cow::Borrowed("Timed Out - F5 Retry")
+        }
+        SubmitFooterStatus::TimedOut {
+            retry_in_secs: Some(0),
+        } => Cow::Borrowed("Timed Out - Retrying..."),
+        SubmitFooterStatus::TimedOut {
+            retry_in_secs: Some(n),
+        } => Cow::Owned(format!("Timed Out - Retrying in {n}s")),
         SubmitFooterStatus::NetworkError => Cow::Borrowed("Network Error - F5 Retry"),
         SubmitFooterStatus::ServerError { http_status } => {
             Cow::Owned(format!("Server Error {http_status} - F5 Retry"))
@@ -203,12 +211,14 @@ fn submit_footer_status_text(status: SubmitFooterStatus) -> Cow<'static, str> {
 enum SubmitFooterStatus {
     Submitting,
     Submitted,
-    /// Request timed out (HTTP 408/504 or transport timeout). Eligible for `F5 Retry`.
-    TimedOut,
-    /// Network/transport failure unrelated to a server response. Eligible for `F5 Retry`.
+    /// Request timed out (HTTP 408/504 or transport timeout). When
+    /// `retry_in_secs` is `Some`, an automatic retry is scheduled and we show
+    /// a countdown. When `None`, auto-retry is exhausted (or never armed) and
+    /// the player must press `F5`.
+    TimedOut { retry_in_secs: Option<u32> },
+    /// Network/transport failure unrelated to a server response. No auto-retry.
     NetworkError,
-    /// Server returned a 5xx response. Eligible for `F5 Retry`. Carries the HTTP code so
-    /// the player can see *which* server error occurred.
+    /// Server returned a 5xx response. No auto-retry; HTTP code shown to user.
     ServerError { http_status: u16 },
     /// Terminal rejection — resubmitting will not change the outcome.
     Rejected { reason: scores::RejectReason },
@@ -217,11 +227,14 @@ enum SubmitFooterStatus {
 #[inline(always)]
 fn footer_status_from_groovestats(
     status: scores::GrooveStatsSubmitUiStatus,
+    auto_retry_remaining_secs: Option<u32>,
 ) -> SubmitFooterStatus {
     match status {
         scores::GrooveStatsSubmitUiStatus::Submitting => SubmitFooterStatus::Submitting,
         scores::GrooveStatsSubmitUiStatus::Submitted => SubmitFooterStatus::Submitted,
-        scores::GrooveStatsSubmitUiStatus::TimedOut => SubmitFooterStatus::TimedOut,
+        scores::GrooveStatsSubmitUiStatus::TimedOut => SubmitFooterStatus::TimedOut {
+            retry_in_secs: auto_retry_remaining_secs,
+        },
         scores::GrooveStatsSubmitUiStatus::NetworkError => SubmitFooterStatus::NetworkError,
         scores::GrooveStatsSubmitUiStatus::ServerError { http_status } => {
             SubmitFooterStatus::ServerError { http_status }
@@ -235,11 +248,14 @@ fn footer_status_from_groovestats(
 #[inline(always)]
 fn footer_status_from_arrowcloud(
     status: scores::ArrowCloudSubmitUiStatus,
+    auto_retry_remaining_secs: Option<u32>,
 ) -> SubmitFooterStatus {
     match status {
         scores::ArrowCloudSubmitUiStatus::Submitting => SubmitFooterStatus::Submitting,
         scores::ArrowCloudSubmitUiStatus::Submitted => SubmitFooterStatus::Submitted,
-        scores::ArrowCloudSubmitUiStatus::TimedOut => SubmitFooterStatus::TimedOut,
+        scores::ArrowCloudSubmitUiStatus::TimedOut => SubmitFooterStatus::TimedOut {
+            retry_in_secs: auto_retry_remaining_secs,
+        },
         scores::ArrowCloudSubmitUiStatus::NetworkError => SubmitFooterStatus::NetworkError,
         scores::ArrowCloudSubmitUiStatus::ServerError { http_status } => {
             SubmitFooterStatus::ServerError { http_status }
@@ -254,7 +270,7 @@ fn footer_status_from_arrowcloud(
 const fn submit_footer_status_glyph(status: SubmitFooterStatus) -> &'static str {
     match status {
         SubmitFooterStatus::Submitted => SUBMIT_STATUS_CHECK_GLYPH,
-        SubmitFooterStatus::TimedOut
+        SubmitFooterStatus::TimedOut { .. }
         | SubmitFooterStatus::NetworkError
         | SubmitFooterStatus::ServerError { .. }
         | SubmitFooterStatus::Rejected { .. } => SUBMIT_STATUS_CROSS_GLYPH,
@@ -301,12 +317,20 @@ fn submit_footer_lines(
     expected_arrowcloud_submit: bool,
     groovestats_status: Option<scores::GrooveStatsSubmitUiStatus>,
     arrowcloud_status: Option<scores::ArrowCloudSubmitUiStatus>,
+    groovestats_auto_retry_remaining_secs: Option<u32>,
+    arrowcloud_auto_retry_remaining_secs: Option<u32>,
 ) -> Vec<Arc<str>> {
     let gs_status = expected_groovestats_submit
-        .then(|| groovestats_status.map(footer_status_from_groovestats))
+        .then(|| {
+            groovestats_status
+                .map(|s| footer_status_from_groovestats(s, groovestats_auto_retry_remaining_secs))
+        })
         .flatten();
     let ac_status = expected_arrowcloud_submit
-        .then(|| arrowcloud_status.map(footer_status_from_arrowcloud))
+        .then(|| {
+            arrowcloud_status
+                .map(|s| footer_status_from_arrowcloud(s, arrowcloud_auto_retry_remaining_secs))
+        })
         .flatten();
     let gs_pending = expected_groovestats_submit
         && matches!(gs_status, None | Some(SubmitFooterStatus::Submitting));
@@ -322,7 +346,7 @@ fn submit_footer_lines(
     let needs_per_side_lines = matches!(
         gs_status,
         Some(
-            SubmitFooterStatus::TimedOut
+            SubmitFooterStatus::TimedOut { .. }
                 | SubmitFooterStatus::NetworkError
                 | SubmitFooterStatus::ServerError { .. }
                 | SubmitFooterStatus::Rejected { .. }
@@ -330,7 +354,7 @@ fn submit_footer_lines(
     ) || matches!(
         ac_status,
         Some(
-            SubmitFooterStatus::TimedOut
+            SubmitFooterStatus::TimedOut { .. }
                 | SubmitFooterStatus::NetworkError
                 | SubmitFooterStatus::ServerError { .. }
                 | SubmitFooterStatus::Rejected { .. }
@@ -707,6 +731,8 @@ mod tests {
             true,
             Some(scores::GrooveStatsSubmitUiStatus::Submitted),
             Some(scores::ArrowCloudSubmitUiStatus::TimedOut),
+            None,
+            None,
         );
 
         assert_eq!(lines.len(), 2);
@@ -724,6 +750,8 @@ mod tests {
             true,
             Some(scores::GrooveStatsSubmitUiStatus::Submitted),
             Some(scores::ArrowCloudSubmitUiStatus::Submitting),
+            None,
+            None,
         );
 
         assert_eq!(lines.len(), 1);
@@ -736,6 +764,8 @@ mod tests {
             true,
             false,
             Some(scores::GrooveStatsSubmitUiStatus::Submitted),
+            None,
+            None,
             None,
         );
 
@@ -754,6 +784,8 @@ mod tests {
             Some(scores::ArrowCloudSubmitUiStatus::Rejected {
                 reason: scores::RejectReason::InvalidScore,
             }),
+            None,
+            None,
         );
 
         assert_eq!(lines.len(), 2);
@@ -771,6 +803,8 @@ mod tests {
             false,
             Some(scores::GrooveStatsSubmitUiStatus::NetworkError),
             None,
+            None,
+            None,
         );
 
         assert_eq!(lines.len(), 1);
@@ -783,6 +817,8 @@ mod tests {
             true,
             false,
             Some(scores::GrooveStatsSubmitUiStatus::ServerError { http_status: 503 }),
+            None,
+            None,
             None,
         );
 
@@ -797,10 +833,61 @@ mod tests {
             false,
             Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
             None,
+            None,
+            None,
         );
 
         assert_eq!(lines.len(), 1);
         assert_eq!(&*lines[0], "Timed Out - F5 Retry");
+    }
+
+    #[test]
+    fn submit_footer_lines_timed_out_renders_auto_retry_countdown() {
+        let lines = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
+            None,
+            Some(7),
+            None,
+        );
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(&*lines[0], "Timed Out - Retrying in 7s");
+    }
+
+    #[test]
+    fn submit_footer_lines_timed_out_due_now_shows_retrying() {
+        let lines = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
+            None,
+            Some(0),
+            None,
+        );
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(&*lines[0], "Timed Out - Retrying...");
+    }
+
+    #[test]
+    fn submit_footer_lines_timed_out_per_side_with_countdown_uses_labels() {
+        let lines = submit_footer_lines(
+            true,
+            true,
+            Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
+            Some(scores::ArrowCloudSubmitUiStatus::Submitted),
+            Some(4),
+            None,
+        );
+
+        assert_eq!(lines.len(), 2);
+        assert_eq!(
+            &*lines[0],
+            format!("{} Timed Out - Retrying in 4s", submit_footer_gs_label())
+        );
+        assert_eq!(&*lines[1], "AC Submitted!");
     }
 
     #[test]
@@ -1750,6 +1837,8 @@ pub fn update(state: &mut State, dt: f32) {
     }
     sync_submit_itl_progress(state);
     sync_missing_submit_status_fallbacks(state);
+    scores::tick_groovestats_auto_retries();
+    scores::tick_arrowcloud_auto_retries();
 }
 
 fn local_lobby_player_count() -> usize {
@@ -3569,11 +3658,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 side,
             )
             .or(state.submit_arrowcloud_fallback[player_idx]);
+            let groovestats_auto_retry = scores::groovestats_auto_retry_remaining_secs(side);
+            let arrowcloud_auto_retry = scores::arrowcloud_auto_retry_remaining_secs(side);
             let lines = submit_footer_lines(
                 si.expected_groovestats_submit,
                 si.expected_arrowcloud_submit,
                 groovestats_status,
                 arrowcloud_status,
+                groovestats_auto_retry,
+                arrowcloud_auto_retry,
             );
             if lines.is_empty() {
                 continue;
