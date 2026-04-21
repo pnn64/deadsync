@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.590"
+version = "0.3.591"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -99,6 +99,7 @@ bitflags = "2.11.1"
 # DirectX + Input (Windows)
 [target.'cfg(windows)'.dependencies]
 gpu-allocator = "0.28.0"
+hidapi = { version = "2.6.5", default-features = false, features = ["windows-native"] }
 windows = { version = "0.62.2", features = [
     "Foundation",
     "Foundation_Collections",

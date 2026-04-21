@@ -261,6 +261,7 @@ pub enum ItemId {
 
     // Input Backend Options submenu
     InpGamepadBackend,
+    InpUseFsrs,
     InpMenuButtons,
     InpOptionsNavigation,
     InpMenuNavigation,
@@ -879,6 +880,7 @@ pub enum SubRowId {
     InputOptions,
     // Input Backend Options
     GamepadBackend,
+    UseFsrs,
     MenuNavigation,
     OptionsNavigation,
     MenuButtons,
@@ -1670,6 +1672,7 @@ pub const INPUT_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsInputHelp", "InputOptionsHelp")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "GamepadBackend")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "UseFSRs")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "MenuNavigation")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "OptionsNavigation")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "MenuButtons")),
@@ -1692,6 +1695,15 @@ pub const INPUT_BACKEND_OPTIONS_ROWS: &[SubRow] = &[
         label: lookup_key("OptionsInput", "GamepadBackend"),
         choices: INPUT_BACKEND_CHOICES,
         inline: INPUT_BACKEND_INLINE,
+    },
+    SubRow {
+        id: SubRowId::UseFsrs,
+        label: lookup_key("OptionsInput", "UseFSRs"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
     },
     SubRow {
         id: SubRowId::MenuNavigation,
@@ -1735,6 +1747,14 @@ pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "GamepadBackendHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpUseFsrs,
+        name: lookup_key("OptionsInput", "UseFSRs"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "UseFSRsHelp",
         ))],
     },
     Item {
@@ -6079,6 +6099,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub_choice_indices_input_backend,
         INPUT_BACKEND_OPTIONS_ROWS,
+        SubRowId::UseFsrs,
+        yes_no_choice_index(cfg.use_fsrs),
+    );
+    set_choice_by_id(
+        &mut state.sub_choice_indices_input_backend,
+        INPUT_BACKEND_OPTIONS_ROWS,
         SubRowId::MenuNavigation,
         usize::from(cfg.three_key_navigation),
     );
@@ -7981,6 +8007,9 @@ fn apply_submenu_choice_delta(
             {
                 config::update_windows_gamepad_backend(windows_backend_from_choice(new_index));
             }
+        }
+        if row.id == SubRowId::UseFsrs {
+            config::update_use_fsrs(yes_no_from_choice(new_index));
         }
         if row.id == SubRowId::MenuNavigation {
             config::update_three_key_navigation(new_index == 1);

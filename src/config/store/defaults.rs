@@ -232,6 +232,7 @@ fn push_default_options(content: &mut String, default: &Config) {
         default.arcade_options_navigation,
     );
     push_bool(content, "ThreeKeyNavigation", default.three_key_navigation);
+    push_bool(content, "UseFSRs", default.use_fsrs);
     push_bool(
         content,
         "OnlyDedicatedMenuButtons",

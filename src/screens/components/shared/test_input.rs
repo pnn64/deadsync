@@ -3,6 +3,7 @@ use crate::engine::input::{
     InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
 };
 use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use std::collections::{HashMap, VecDeque};
 use std::time::Instant;
@@ -13,6 +14,38 @@ const SORT_MENU_DIM_ALPHA: f32 = 0.875;
 const SORT_MENU_CLOSE_HINT: &str = "Press &START; to dismiss.";
 const EVENT_RATE_HISTORY: usize = 64;
 const MAX_DISPLAY_HZ: u32 = 1000;
+const FSR_BAR_COUNT: usize = 4;
+const FSR_BAR_WIDTH: f32 = 42.0;
+const FSR_BAR_GAP: f32 = 18.0;
+const FSR_BAR_HEIGHT: f32 = 160.0;
+const FSR_PANEL_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.68];
+const FSR_PANEL_BORDER_H: f32 = 3.0;
+
+#[derive(Clone, Copy, Debug)]
+struct FsrTheme {
+    frame: [f32; 4],
+    track_top: [f32; 4],
+    track_active_bottom: [f32; 4],
+    track_idle_bottom: [f32; 4],
+    fill_top: [f32; 4],
+    fill_bottom: [f32; 4],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FsrBarView {
+    pub label: &'static str,
+    pub raw_value: u16,
+    pub value_norm: f32,
+    pub raw_threshold: u16,
+    pub threshold_norm: f32,
+    pub active: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct FsrView {
+    pub device_name: Option<String>,
+    pub bars: [FsrBarView; FSR_BAR_COUNT],
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LogicalButton {
@@ -37,6 +70,7 @@ pub struct State {
     buttons_held: HashMap<(PlayerSlot, LogicalButton), bool>,
     unmapped: UnmappedTracker,
     event_rate: EventRateTracker,
+    fsr_view: Option<FsrView>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -275,6 +309,11 @@ impl UnmappedTracker {
 #[inline(always)]
 pub fn clear(state: &mut State) {
     *state = State::default();
+}
+
+#[inline(always)]
+pub fn set_fsr_view(state: &mut State, view: Option<FsrView>) {
+    state.fsr_view = view;
 }
 
 const fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
@@ -545,8 +584,247 @@ fn push_polling_readout(actors: &mut Vec<Actor>, state: &State, z: f32) {
     ));
 }
 
-pub fn build_test_input_screen_content(state: &State) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(51);
+fn push_fsr_quad(actors: &mut Vec<Actor>, x: f32, y: f32, w: f32, h: f32, color: [f32; 4], z: f32) {
+    if w <= 0.0 || h <= 0.0 {
+        return;
+    }
+    actors.push(act!(quad:
+        align(0.5, 0.0):
+        xy(x, y):
+        zoomto(w, h):
+        diffuse(color[0], color[1], color[2], color[3]):
+        z(z)
+    ));
+}
+
+#[inline(always)]
+fn color_with_alpha(mut rgba: [f32; 4], alpha: f32) -> [f32; 4] {
+    rgba[3] = alpha;
+    rgba
+}
+
+#[inline(always)]
+fn scale_rgb(mut rgba: [f32; 4], scale: f32, alpha: f32) -> [f32; 4] {
+    rgba[0] = (rgba[0] * scale).clamp(0.0, 1.0);
+    rgba[1] = (rgba[1] * scale).clamp(0.0, 1.0);
+    rgba[2] = (rgba[2] * scale).clamp(0.0, 1.0);
+    rgba[3] = alpha;
+    rgba
+}
+
+#[inline(always)]
+fn fsr_theme(active_color_index: i32) -> FsrTheme {
+    let fill_bottom = color::decorative_rgba(active_color_index);
+    let fill_top = color::lighten_rgba(color::decorative_rgba(active_color_index + 1));
+    let track_top = color::decorative_rgba(active_color_index + 4);
+    let track_active_bottom = color::decorative_rgba(active_color_index + 2);
+    let frame = color::decorative_rgba(active_color_index - 2);
+    FsrTheme {
+        frame: color_with_alpha(frame, 0.95),
+        track_top: color_with_alpha(track_top, 0.95),
+        track_active_bottom: color_with_alpha(track_active_bottom, 0.92),
+        track_idle_bottom: scale_rgb(track_active_bottom, 0.28, 0.78),
+        fill_top: scale_rgb(fill_top, 1.0, 0.98),
+        fill_bottom: color_with_alpha(fill_bottom, 0.98),
+    }
+}
+
+fn push_fsr_frame(
+    actors: &mut Vec<Actor>,
+    center_x: f32,
+    top_y: f32,
+    panel_w: f32,
+    panel_h: f32,
+    frame_color: [f32; 4],
+    z: f32,
+) {
+    let left = center_x - panel_w * 0.5;
+    let right = center_x + panel_w * 0.5;
+    push_fsr_quad(actors, center_x, top_y, panel_w, panel_h, FSR_PANEL_BG, z);
+    push_fsr_quad(
+        actors,
+        center_x,
+        top_y,
+        panel_w,
+        FSR_PANEL_BORDER_H,
+        frame_color,
+        z + 1.0,
+    );
+    push_fsr_quad(
+        actors,
+        center_x,
+        top_y + panel_h - FSR_PANEL_BORDER_H,
+        panel_w,
+        FSR_PANEL_BORDER_H,
+        frame_color,
+        z + 1.0,
+    );
+    actors.push(act!(quad:
+        align(0.0, 0.0):
+        xy(left, top_y):
+        zoomto(FSR_PANEL_BORDER_H, panel_h):
+        diffuse(frame_color[0], frame_color[1], frame_color[2], frame_color[3]):
+        z(z + 1.0)
+    ));
+    actors.push(act!(quad:
+        align(0.0, 0.0):
+        xy(right - FSR_PANEL_BORDER_H, top_y):
+        zoomto(FSR_PANEL_BORDER_H, panel_h):
+        diffuse(frame_color[0], frame_color[1], frame_color[2], frame_color[3]):
+        z(z + 1.0)
+    ));
+}
+
+fn push_fsr_bar(
+    actors: &mut Vec<Actor>,
+    bar: &FsrBarView,
+    x: f32,
+    y: f32,
+    scale: f32,
+    theme: FsrTheme,
+    z: f32,
+) {
+    let bar_w = FSR_BAR_WIDTH * scale;
+    let bar_h = FSR_BAR_HEIGHT * scale;
+    let value_norm = bar.value_norm.clamp(0.0, 1.0);
+    let threshold_norm = bar.threshold_norm.clamp(0.0, 1.0);
+    let track_bottom = if bar.active {
+        theme.track_active_bottom
+    } else {
+        theme.track_idle_bottom
+    };
+    let half_h = bar_h * 0.5;
+    push_fsr_quad(actors, x, y, bar_w, half_h, theme.track_top, z);
+    push_fsr_quad(
+        actors,
+        x,
+        y + half_h,
+        bar_w,
+        bar_h - half_h,
+        track_bottom,
+        z,
+    );
+
+    let fill_h = value_norm * bar_h;
+    if fill_h > 0.0 {
+        let fill_y = y + bar_h - fill_h;
+        let fill_top_h = fill_h * 0.45;
+        push_fsr_quad(
+            actors,
+            x,
+            fill_y,
+            bar_w * 0.5,
+            fill_top_h,
+            theme.fill_top,
+            z + 1.0,
+        );
+        push_fsr_quad(
+            actors,
+            x,
+            fill_y + fill_top_h,
+            bar_w * 0.5,
+            fill_h - fill_top_h,
+            theme.fill_bottom,
+            z + 1.0,
+        );
+    }
+
+    let threshold_h = (3.0 * scale).max(2.0);
+    let threshold_y = y + (1.0 - threshold_norm) * bar_h - threshold_h * 0.5;
+    push_fsr_quad(
+        actors,
+        x,
+        threshold_y,
+        bar_w,
+        threshold_h,
+        [1.0, 1.0, 1.0, 1.0],
+        z + 2.0,
+    );
+
+    actors.push(act!(text:
+        font("miso"):
+        settext(bar.raw_value.to_string()):
+        align(0.5, 1.0):
+        xy(x, y - 6.0 * scale):
+        zoom(0.65 * scale):
+        horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 0.95):
+        z(z + 3.0)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(format!("T{}", bar.raw_threshold)):
+        align(0.5, 0.5):
+        xy(x, threshold_y - 10.0 * scale):
+        zoom(0.48 * scale):
+        horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 0.9):
+        z(z + 3.0)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(bar.label):
+        align(0.5, 0.0):
+        xy(x, y + bar_h + 6.0 * scale):
+        zoom(0.65 * scale):
+        horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 0.95):
+        z(z + 3.0)
+    ));
+}
+
+fn push_fsr_readout(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    active_color_index: i32,
+    panel_x: f32,
+    panel_y: f32,
+    scale: f32,
+    z: f32,
+) {
+    let Some(fsr) = state.fsr_view.as_ref() else {
+        return;
+    };
+
+    let theme = fsr_theme(active_color_index);
+    let bar_w = FSR_BAR_WIDTH * scale;
+    let bar_gap = FSR_BAR_GAP * scale;
+    let bar_h = FSR_BAR_HEIGHT * scale;
+    let span = bar_w * FSR_BAR_COUNT as f32 + bar_gap * (FSR_BAR_COUNT - 1) as f32;
+    let panel_w = span + 34.0 * scale;
+    let panel_h = bar_h + 86.0 * scale;
+    push_fsr_frame(actors, panel_x, panel_y, panel_w, panel_h, theme.frame, z);
+    actors.push(act!(text:
+        font("miso"):
+        settext("DIRECT FSR"):
+        align(0.5, 0.0):
+        xy(panel_x, panel_y + 10.0 * scale):
+        zoom(0.82 * scale):
+        horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 0.95):
+        z(z + 2.0)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(fsr.device_name.clone().unwrap_or_else(|| "Analog Dance Pad".to_owned())):
+        align(0.5, 0.0):
+        xy(panel_x, panel_y + 30.0 * scale):
+        zoom(0.58 * scale):
+        horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 0.8):
+        z(z + 2.0)
+    ));
+
+    let track_y = panel_y + 52.0 * scale;
+    let left = panel_x - span * 0.5 + bar_w * 0.5;
+    for (i, bar) in fsr.bars.iter().enumerate() {
+        let x = left + i as f32 * (bar_w + bar_gap);
+        push_fsr_bar(actors, bar, x, track_y, scale, theme, z + 1.0);
+    }
+}
+
+pub fn build_test_input_screen_content(state: &State, active_color_index: i32) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(96);
     let cx = screen_center_x();
     let cy = screen_center_y() - 20.0;
     let pad_spacing = 150.0;
@@ -570,6 +848,16 @@ pub fn build_test_input_screen_content(state: &State) -> Vec<Actor> {
         true,
         true,
         20.0,
+    );
+
+    push_fsr_readout(
+        &mut actors,
+        state,
+        active_color_index,
+        screen_center_x(),
+        88.0,
+        1.0,
+        26.0,
     );
 
     let lines = state.unmapped.active_lines();
@@ -606,11 +894,12 @@ pub fn build_test_input_screen_content(state: &State) -> Vec<Actor> {
 
 pub fn build_select_music_overlay(
     state: &State,
+    active_color_index: i32,
     show_p1: bool,
     show_p2: bool,
     pad_spacing: f32,
 ) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(27);
+    let mut actors = Vec::with_capacity(96);
     let cx = screen_center_x();
     // SL parity: overlay/TestInput.lua places pad AF at y = _screen.cy + 50, then
     // _modules/TestInput Pad/default.lua places the pad art at y = -80 inside that AF.
@@ -647,6 +936,29 @@ pub fn build_select_music_overlay(
             false,
             false,
             1451.0,
+        );
+    }
+
+    let solo_layout = show_p1 ^ show_p2;
+    if state.fsr_view.is_some() {
+        let (panel_x, panel_y, panel_scale) = if solo_layout {
+            let empty_x = if show_p1 {
+                cx + pad_spacing
+            } else {
+                cx - pad_spacing
+            };
+            (empty_x, 84.0, 1.0)
+        } else {
+            (cx, 50.0, 0.82)
+        };
+        push_fsr_readout(
+            &mut actors,
+            state,
+            active_color_index,
+            panel_x,
+            panel_y,
+            panel_scale,
+            1452.0,
         );
     }
 
