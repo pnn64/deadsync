@@ -66,11 +66,15 @@ const AUTO_SUBMIT_RECORD_TEXT_ZOOM: f32 = 0.225;
 const AUTO_SUBMIT_RECORD_TEXT_PERIOD: f32 = 3.0;
 const SUBMIT_FOOTER_CHECK_GLYPH: &str = "✔";
 const SUBMIT_FOOTER_REJECT_GLYPH: &str = "⊘";
-const SUBMIT_FOOTER_F5_GLYPH: &str = "↻ F5";
+const SUBMIT_FOOTER_REFRESH_GLYPH: &str = "↻";
+const SUBMIT_FOOTER_F5_LABEL: &str = "F5";
 const SUBMIT_FOOTER_HOURGLASS_GLYPH: &str = "⧗";
 const SUBMIT_FOOTER_SPINNER_GLYPH: &str = "◐";
 const SUBMIT_FOOTER_SPINNER_TEXTURE: &str = "submit/LoadingSpinner_10x3.png";
 const SUBMIT_FOOTER_HOURGLASS_TEXTURE: &str = "submit/Hourglass_10x3.png";
+const SUBMIT_FOOTER_CHECK_TEXTURE: &str = "submit/Check_1x1.png";
+const SUBMIT_FOOTER_REFRESH_TEXTURE: &str = "submit/Refresh_1x1.png";
+const SUBMIT_FOOTER_REJECTED_TEXTURE: &str = "submit/Rejected_1x1.png";
 const SUBMIT_FOOTER_SPRITE_FRAMES: u32 = 30;
 const SUBMIT_FOOTER_SPRITE_FPS: f32 = 30.0;
 const SUBMIT_FOOTER_TEXT_ZOOM: f32 = 0.8;
@@ -293,7 +297,9 @@ fn footer_status_from_arrowcloud(
 enum CellIcon {
     Spinner,
     Hourglass,
-    Static(&'static str),
+    Check,
+    Refresh,
+    Rejected,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -310,7 +316,9 @@ impl SubmitFooterCell {
         match &self.icon {
             CellIcon::Spinner => SUBMIT_FOOTER_SPINNER_GLYPH,
             CellIcon::Hourglass => SUBMIT_FOOTER_HOURGLASS_GLYPH,
-            CellIcon::Static(s) => s,
+            CellIcon::Check => SUBMIT_FOOTER_CHECK_GLYPH,
+            CellIcon::Refresh => SUBMIT_FOOTER_REFRESH_GLYPH,
+            CellIcon::Rejected => SUBMIT_FOOTER_REJECT_GLYPH,
         }
     }
 
@@ -323,6 +331,10 @@ impl SubmitFooterCell {
         s.push_str(&self.backend_label);
         s.push(' ');
         s.push_str(self.icon_glyph());
+        if matches!(self.icon, CellIcon::Refresh) {
+            s.push(' ');
+            s.push_str(SUBMIT_FOOTER_F5_LABEL);
+        }
         if let Some(n) = self.countdown_secs {
             s.push(' ');
             s.push_str(&n.to_string());
@@ -336,39 +348,40 @@ impl SubmitFooterCell {
         Arc::from(s)
     }
 
-    /// For animated cells, returns `(prefix, suffix)` text fragments that
-    /// surround the icon position. The renderer composes:
+    /// All cells now use a sprite for their icon. Returns the `(prefix, suffix)`
+    /// text fragments that surround the icon. The renderer composes:
     /// `text(prefix) + sprite(icon) + text(suffix)`.
-    /// Returns `None` for `Static` icons; callers should render `display_text()`
-    /// as a single text actor instead.
-    fn animated_render_parts(&self) -> Option<(Arc<str>, Arc<str>)> {
+    fn sprite_render_parts(&self) -> (Arc<str>, Arc<str>) {
+        let prefix: Arc<str> = format!("[{} ", self.backend_label).into();
+        let mut suffix = String::with_capacity(16);
+        if let Some(n) = self.countdown_secs {
+            suffix.push(' ');
+            suffix.push_str(&n.to_string());
+            suffix.push('s');
+        }
+        if let Some(reason) = &self.reason {
+            suffix.push(' ');
+            suffix.push_str(reason);
+        }
+        suffix.push(']');
+        (prefix, suffix.into())
+    }
+
+    /// Texture key for the cell's icon sprite.
+    fn sprite_texture_key(&self) -> &'static str {
         match self.icon {
-            CellIcon::Static(_) => None,
-            CellIcon::Spinner | CellIcon::Hourglass => {
-                let prefix: Arc<str> = format!("[{} ", self.backend_label).into();
-                let mut suffix = String::with_capacity(16);
-                if let Some(n) = self.countdown_secs {
-                    suffix.push(' ');
-                    suffix.push_str(&n.to_string());
-                    suffix.push('s');
-                }
-                if let Some(reason) = &self.reason {
-                    suffix.push(' ');
-                    suffix.push_str(reason);
-                }
-                suffix.push(']');
-                Some((prefix, suffix.into()))
-            }
+            CellIcon::Spinner => SUBMIT_FOOTER_SPINNER_TEXTURE,
+            CellIcon::Hourglass => SUBMIT_FOOTER_HOURGLASS_TEXTURE,
+            CellIcon::Check => SUBMIT_FOOTER_CHECK_TEXTURE,
+            CellIcon::Refresh => SUBMIT_FOOTER_REFRESH_TEXTURE,
+            CellIcon::Rejected => SUBMIT_FOOTER_REJECTED_TEXTURE,
         }
     }
 
-    /// Texture key for animated icons; `None` for static ones.
-    fn sprite_texture_key(&self) -> Option<&'static str> {
-        match self.icon {
-            CellIcon::Spinner => Some(SUBMIT_FOOTER_SPINNER_TEXTURE),
-            CellIcon::Hourglass => Some(SUBMIT_FOOTER_HOURGLASS_TEXTURE),
-            CellIcon::Static(_) => None,
-        }
+    /// Whether the icon is a multi-frame animation. Static (single-frame)
+    /// sprites should always use frame 0.
+    fn icon_is_animated(&self) -> bool {
+        matches!(self.icon, CellIcon::Spinner | CellIcon::Hourglass)
     }
 }
 
@@ -384,7 +397,7 @@ fn cell_for_retryable(
 ) -> (CellIcon, Option<u32>, Option<Arc<str>>) {
     match retry_in_secs {
         Some(0) if is_auto_retry => (CellIcon::Spinner, None, None),
-        None | Some(0) => (CellIcon::Static(SUBMIT_FOOTER_F5_GLYPH), None, Some(reason)),
+        None | Some(0) => (CellIcon::Refresh, None, Some(reason)),
         Some(n) => (CellIcon::Hourglass, Some(n), Some(reason)),
     }
 }
@@ -392,9 +405,7 @@ fn cell_for_retryable(
 fn submit_footer_cell(backend_label: Arc<str>, status: SubmitFooterStatus) -> SubmitFooterCell {
     let (icon, countdown_secs, reason) = match status {
         SubmitFooterStatus::Submitting => (CellIcon::Spinner, None, None),
-        SubmitFooterStatus::Submitted => {
-            (CellIcon::Static(SUBMIT_FOOTER_CHECK_GLYPH), None, None)
-        }
+        SubmitFooterStatus::Submitted => (CellIcon::Check, None, None),
         SubmitFooterStatus::TimedOut {
             retry_in_secs,
             is_auto_retry,
@@ -415,7 +426,7 @@ fn submit_footer_cell(backend_label: Arc<str>, status: SubmitFooterStatus) -> Su
             ),
         ),
         SubmitFooterStatus::Rejected { reason } => (
-            CellIcon::Static(SUBMIT_FOOTER_REJECT_GLYPH),
+            CellIcon::Rejected,
             None,
             Some(Arc::from(reason.label())),
         ),
@@ -3985,10 +3996,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if lines.is_empty() {
                 continue;
             }
-            let x = if side == profile::PlayerSide::P1 {
-                screen_width() * 0.25
+            let pane_left = if side == profile::PlayerSide::P1 {
+                screen_center_x() - 305.0
             } else {
-                screen_width() * 0.75
+                screen_center_x() + 5.0
+            };
+            let pane_right = if side == profile::PlayerSide::P1 {
+                if play_style == profile::PlayStyle::Versus {
+                    screen_center_x() - 5.0
+                } else {
+                    screen_center_x() + 305.0
+                }
+            } else {
+                screen_center_x() + 305.0
             };
             let base_y = screen_height() - 15.0;
             let frame = ((state.screen_elapsed.max(0.0) * SUBMIT_FOOTER_SPRITE_FPS) as u32)
@@ -3997,8 +4017,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
             #[derive(Clone)]
             enum FooterFrag {
-                Text { text: Arc<str>, width: f32 },
-                Sprite { texture_key: &'static str },
+                Text {
+                    text: Arc<str>,
+                    width: f32,
+                },
+                Sprite {
+                    texture_key: &'static str,
+                    animated: bool,
+                },
             }
 
             let mut frags: Vec<FooterFrag> = Vec::with_capacity(lines.len() * 3);
@@ -4009,38 +4035,40 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         width: sep_w,
                     });
                 }
-                if let Some((prefix, suffix)) = cell.animated_render_parts() {
-                    let pw = measure_footer_text_width(
-                        asset_manager,
-                        &prefix,
-                        SUBMIT_FOOTER_TEXT_ZOOM,
-                    );
-                    frags.push(FooterFrag::Text {
-                        text: prefix,
-                        width: pw,
-                    });
-                    let texture_key = cell
-                        .sprite_texture_key()
-                        .expect("animated cell must have sprite texture key");
-                    frags.push(FooterFrag::Sprite { texture_key });
-                    let sw = measure_footer_text_width(
-                        asset_manager,
-                        &suffix,
-                        SUBMIT_FOOTER_TEXT_ZOOM,
-                    );
-                    frags.push(FooterFrag::Text {
-                        text: suffix,
-                        width: sw,
-                    });
+                let (prefix, suffix) = cell.sprite_render_parts();
+                let pw = measure_footer_text_width(
+                    asset_manager,
+                    &prefix,
+                    SUBMIT_FOOTER_TEXT_ZOOM,
+                );
+                frags.push(FooterFrag::Text {
+                    text: prefix,
+                    width: pw,
+                });
+                frags.push(FooterFrag::Sprite {
+                    texture_key: cell.sprite_texture_key(),
+                    animated: cell.icon_is_animated(),
+                });
+                // For the manual-retry icon (Refresh), append the "F5" key
+                // hint inside the brackets after the icon. e.g. `[GS ↻ F5 Network]`.
+                let suffix_text: Arc<str> = if matches!(cell.icon, CellIcon::Refresh) {
+                    let mut s = String::with_capacity(suffix.len() + 3);
+                    s.push(' ');
+                    s.push_str(SUBMIT_FOOTER_F5_LABEL);
+                    s.push_str(&suffix);
+                    s.into()
                 } else {
-                    let txt = cell.display_text();
-                    let w = measure_footer_text_width(
-                        asset_manager,
-                        &txt,
-                        SUBMIT_FOOTER_TEXT_ZOOM,
-                    );
-                    frags.push(FooterFrag::Text { text: txt, width: w });
-                }
+                    suffix
+                };
+                let sw = measure_footer_text_width(
+                    asset_manager,
+                    &suffix_text,
+                    SUBMIT_FOOTER_TEXT_ZOOM,
+                );
+                frags.push(FooterFrag::Text {
+                    text: suffix_text,
+                    width: sw,
+                });
             }
 
             let total_w: f32 = frags
@@ -4050,29 +4078,35 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     FooterFrag::Sprite { .. } => SUBMIT_FOOTER_SPRITE_PX,
                 })
                 .sum();
-            let mut cursor = x - total_w * 0.5;
+            let mut cursor = if side == profile::PlayerSide::P1 {
+                pane_left
+            } else {
+                pane_right - total_w
+            };
             for frag in frags {
                 match frag {
                     FooterFrag::Text { text, width } => {
-                        let cx = cursor + width * 0.5;
                         actors.push(act!(text:
                             font("miso"):
                             settext(text):
-                            align(0.5, 0.5):
-                            xy(cx, base_y):
+                            align(0.0, 0.5):
+                            xy(cursor, base_y):
                             zoom(SUBMIT_FOOTER_TEXT_ZOOM):
                             z(121):
                             diffuse(1.0, 1.0, 1.0, 1.0)
                         ));
                         cursor += width;
                     }
-                    FooterFrag::Sprite { texture_key } => {
-                        let cx = cursor + SUBMIT_FOOTER_SPRITE_PX * 0.5;
+                    FooterFrag::Sprite {
+                        texture_key,
+                        animated,
+                    } => {
+                        let icon_frame = if animated { frame } else { 0 };
                         actors.push(act!(sprite(texture_key):
-                            align(0.5, 0.5):
-                            xy(cx, base_y):
+                            align(0.0, 0.5):
+                            xy(cursor, base_y):
                             setsize(SUBMIT_FOOTER_SPRITE_PX, SUBMIT_FOOTER_SPRITE_PX):
-                            setstate(frame):
+                            setstate(icon_frame):
                             z(121):
                             diffuse(1.0, 1.0, 1.0, 1.0)
                         ));
