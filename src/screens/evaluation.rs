@@ -17,7 +17,7 @@ use crate::screens::components::{
 };
 
 use crate::assets::AssetManager;
-use crate::assets::i18n::{tr, tr_fmt};
+use crate::assets::i18n::{self, tr, tr_fmt};
 use crate::engine::present::font;
 use crate::game::chart::ChartData;
 use crate::game::gameplay::MAX_PLAYERS;
@@ -32,7 +32,6 @@ use crate::game::timing as timing_stats;
 use crate::screens::gameplay;
 use crate::screens::input as screen_input;
 use log::warn;
-use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -185,42 +184,50 @@ fn submit_record_text(banner: scores::GrooveStatsSubmitRecordBanner) -> Arc<str>
 
 #[inline(always)]
 /// Renders the trailing "what to do about this failure" suffix shared by all
-/// retryable footer statuses. Lives behind a single helper so the prefix
-/// logic in [`submit_footer_status_text`] stays a one-liner per kind.
-fn submit_footer_retry_suffix(retry_in_secs: Option<u32>, is_auto_retry: bool) -> Cow<'static, str> {
+/// retryable footer statuses.
+fn submit_footer_retry_suffix(retry_in_secs: Option<u32>, is_auto_retry: bool) -> Arc<str> {
     match (is_auto_retry, retry_in_secs) {
-        (true, None) | (true, Some(0)) => Cow::Borrowed("Retrying..."),
-        (true, Some(n)) => Cow::Owned(format!("Retrying in {n}s")),
-        (false, None) | (false, Some(0)) => Cow::Borrowed("F5 Retry"),
-        (false, Some(n)) => Cow::Owned(format!("Retryable in {n}s")),
+        (true, None) | (true, Some(0)) => i18n::tr("SubmitStatus", "Retrying"),
+        (true, Some(n)) => i18n::tr_fmt("SubmitStatus", "RetryingIn", &[("n", &n.to_string())]),
+        (false, None) | (false, Some(0)) => i18n::tr("SubmitStatus", "F5Retry"),
+        (false, Some(n)) => i18n::tr_fmt("SubmitStatus", "RetryableIn", &[("n", &n.to_string())]),
     }
 }
 
-fn submit_footer_status_text(status: SubmitFooterStatus) -> Cow<'static, str> {
+fn submit_footer_status_text(status: SubmitFooterStatus) -> Arc<str> {
     match status {
-        SubmitFooterStatus::Submitting => Cow::Borrowed("Submitting ..."),
-        SubmitFooterStatus::Submitted => Cow::Borrowed("Submitted!"),
+        SubmitFooterStatus::Submitting => i18n::tr("SubmitStatus", "Submitting"),
+        SubmitFooterStatus::Submitted => i18n::tr("SubmitStatus", "Submitted"),
         SubmitFooterStatus::TimedOut {
             retry_in_secs,
             is_auto_retry,
-        } => Cow::Owned(format!(
-            "Timed Out - {}",
-            submit_footer_retry_suffix(retry_in_secs, is_auto_retry)
+        } => Arc::from(format!(
+            "{} - {}",
+            i18n::tr("SubmitStatus", "TimedOut"),
+            submit_footer_retry_suffix(retry_in_secs, is_auto_retry),
         )),
-        SubmitFooterStatus::NetworkError { retry_in_secs } => Cow::Owned(format!(
-            "Network Error - {}",
-            submit_footer_retry_suffix(retry_in_secs, false)
+        SubmitFooterStatus::NetworkError { retry_in_secs } => Arc::from(format!(
+            "{} - {}",
+            i18n::tr("SubmitStatus", "NetworkError"),
+            submit_footer_retry_suffix(retry_in_secs, false),
         )),
         SubmitFooterStatus::ServerError {
             http_status,
             retry_in_secs,
-        } => Cow::Owned(format!(
-            "Server Error {http_status} - {}",
-            submit_footer_retry_suffix(retry_in_secs, false)
+        } => Arc::from(format!(
+            "{} - {}",
+            i18n::tr_fmt(
+                "SubmitStatus",
+                "ServerError",
+                &[("code", &http_status.to_string())],
+            ),
+            submit_footer_retry_suffix(retry_in_secs, false),
         )),
-        SubmitFooterStatus::Rejected { reason } => {
-            Cow::Owned(format!("Rejected: {}", reason.label()))
-        }
+        SubmitFooterStatus::Rejected { reason } => i18n::tr_fmt(
+            "SubmitStatus",
+            "Rejected",
+            &[("reason", reason.label())],
+        ),
     }
 }
 
@@ -418,14 +425,14 @@ fn submit_footer_lines(
         let mut lines = Vec::with_capacity(2);
         if let Some(status) = gs_status {
             lines.push(submit_footer_service_line(
-                submit_footer_gs_label(),
+                &submit_footer_gs_label(),
                 submit_footer_status_text(status).as_ref(),
                 include_labels,
             ));
         }
         if let Some(status) = ac_status {
             lines.push(submit_footer_service_line(
-                "AC",
+                &tr("SubmitStatus", "ACLabel"),
                 submit_footer_status_text(status).as_ref(),
                 include_labels,
             ));
@@ -682,6 +689,7 @@ mod tests {
         eval_grade_for_result, eval_pane_shift, stage_in_stinger_texture_key,
         submit_footer_gs_label, submit_footer_lines,
     };
+    use crate::assets::i18n;
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{Note, NoteType};
     use crate::game::scores;
@@ -779,6 +787,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_keeps_timeouts_unstacked() {
+        i18n::init_for_tests();
         let lines = submit_footer_lines(
             true,
             true,
@@ -800,6 +809,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_collapses_in_flight_submits_to_one_line() {
+        i18n::init_for_tests();
         let lines = submit_footer_lines(
             true,
             true,
@@ -817,6 +827,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_single_enabled_submit_stays_generic() {
+        i18n::init_for_tests();
         let lines = submit_footer_lines(
             true,
             false,
@@ -834,6 +845,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_double_failure_stacks_per_side_with_labels() {
+        i18n::init_for_tests();
         let lines = submit_footer_lines(
             true,
             true,
@@ -859,6 +871,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_network_error_renders_distinct_label() {
+        i18n::init_for_tests();
         let lines = submit_footer_lines(
             true,
             false,
@@ -876,6 +889,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_server_error_includes_http_status() {
+        i18n::init_for_tests();
         let lines = submit_footer_lines(
             true,
             false,
@@ -893,6 +907,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_network_error_renders_cooldown_countdown() {
+        i18n::init_for_tests();
         let lines = submit_footer_lines(
             true,
             false,
@@ -910,6 +925,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_server_error_renders_cooldown_countdown() {
+        i18n::init_for_tests();
         let lines = submit_footer_lines(
             true,
             false,
@@ -927,6 +943,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_manual_cooldown_zero_shows_bare_f5() {
+        i18n::init_for_tests();
         // When the cooldown has just elapsed (Some(0)) NetErr/SrvErr should
         // render bare "F5 Retry" rather than "F5 Retry in 0s".
         let lines = submit_footer_lines(
@@ -944,6 +961,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_timed_out_renders_distinct_label() {
+        i18n::init_for_tests();
         let lines = submit_footer_lines(
             true,
             false,
@@ -961,6 +979,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_timed_out_renders_auto_retry_countdown() {
+        i18n::init_for_tests();
         let lines = submit_footer_lines(
             true,
             false,
@@ -978,6 +997,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_timed_out_due_now_shows_retrying() {
+        i18n::init_for_tests();
         let lines = submit_footer_lines(
             true,
             false,
@@ -995,6 +1015,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_timed_out_after_auto_exhaustion_shows_manual_cooldown() {
+        i18n::init_for_tests();
         // After the auto-retry budget is exhausted, the entry stays in
         // `TimedOut` with `next_retry_at` armed as a manual-only cooldown.
         // The footer should reflect that with "Retryable in {n}s" instead of
@@ -1016,6 +1037,7 @@ mod tests {
 
     #[test]
     fn submit_footer_lines_timed_out_per_side_with_countdown_uses_labels() {
+        i18n::init_for_tests();
         let lines = submit_footer_lines(
             true,
             true,
