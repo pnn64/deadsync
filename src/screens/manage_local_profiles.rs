@@ -3,7 +3,7 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
-use crate::engine::present::actors::{self, Actor};
+use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_height, screen_width};
 use crate::game::profile;
@@ -822,47 +822,6 @@ fn scaled_block_origin_with_margins() -> (f32, f32, f32) {
     (s, ox, oy)
 }
 
-fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
-    match actor {
-        Actor::Sprite { tint, .. } => tint[3] *= alpha,
-        Actor::Text { color, .. } => color[3] *= alpha,
-        Actor::Mesh { vertices, .. } => {
-            let mut out: Vec<crate::engine::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
-            for v in vertices.iter() {
-                let mut c = v.color;
-                c[3] *= alpha;
-                out.push(crate::engine::gfx::MeshVertex {
-                    pos: v.pos,
-                    color: c,
-                });
-            }
-            *vertices = std::sync::Arc::from(out);
-        }
-        Actor::TexturedMesh { tint, .. } => tint[3] *= alpha,
-        Actor::Frame {
-            background,
-            children,
-            ..
-        } => {
-            if let Some(actors::Background::Color(c)) = background {
-                c[3] *= alpha;
-            }
-            for child in children {
-                apply_alpha_to_actor(child, alpha);
-            }
-        }
-        Actor::Camera { children, .. } => {
-            for child in children {
-                apply_alpha_to_actor(child, alpha);
-            }
-        }
-        Actor::Shadow { color, child, .. } => {
-            color[3] *= alpha;
-            apply_alpha_to_actor(child, alpha);
-        }
-    }
-}
-
 fn indicator_text(id: &str, p1_id: Option<&str>, p2_id: Option<&str>) -> Option<Arc<str>> {
     let is_p1 = p1_id.is_some_and(|p1| p1 == id);
     let is_p2 = p2_id.is_some_and(|p2| p2 == id);
@@ -1508,7 +1467,7 @@ pub fn get_actors(
     push_delete_confirm_overlay(&mut ui, state);
 
     for actor in &mut ui {
-        apply_alpha_to_actor(actor, alpha_multiplier);
+        actor.mul_alpha(alpha_multiplier);
     }
     actors.extend(ui);
     actors

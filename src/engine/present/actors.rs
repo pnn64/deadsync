@@ -178,6 +178,49 @@ pub enum Actor {
     },
 }
 
+impl Actor {
+    pub fn mul_alpha(&mut self, alpha: f32) {
+        match self {
+            Self::Sprite { tint, .. } => tint[3] *= alpha,
+            Self::Text { color, .. } => color[3] *= alpha,
+            Self::Mesh { vertices, .. } => {
+                let mut out = Vec::with_capacity(vertices.len());
+                for vertex in vertices.iter() {
+                    let mut color = vertex.color;
+                    color[3] *= alpha;
+                    out.push(MeshVertex {
+                        pos: vertex.pos,
+                        color,
+                    });
+                }
+                *vertices = Arc::from(out);
+            }
+            Self::TexturedMesh { tint, .. } => tint[3] *= alpha,
+            Self::Frame {
+                background,
+                children,
+                ..
+            } => {
+                if let Some(Background::Color(color)) = background {
+                    color[3] *= alpha;
+                }
+                for child in children {
+                    child.mul_alpha(alpha);
+                }
+            }
+            Self::Camera { children, .. } => {
+                for child in children {
+                    child.mul_alpha(alpha);
+                }
+            }
+            Self::Shadow { color, child, .. } => {
+                color[3] *= alpha;
+                child.mul_alpha(alpha);
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextAttribute {
     pub start: usize,
@@ -240,5 +283,107 @@ impl From<Arc<str>> for TextContent {
 impl From<&Arc<str>> for TextContent {
     fn from(value: &Arc<str>) -> Self {
         Self::Shared(value.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::gfx::{BlendMode, MeshMode};
+
+    fn approx_eq(lhs: f32, rhs: f32) {
+        assert!((lhs - rhs).abs() < 1e-6, "expected {rhs}, got {lhs}");
+    }
+
+    fn text(color: [f32; 4]) -> Actor {
+        Actor::Text {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            color,
+            stroke_color: None,
+            glow: [0.0, 0.0, 0.0, 0.0],
+            font: "test",
+            content: TextContent::Static("x"),
+            attributes: Vec::new(),
+            align_text: TextAlign::Left,
+            z: 0,
+            scale: [1.0, 1.0],
+            fit_width: None,
+            fit_height: None,
+            wrap_width_pixels: None,
+            max_width: None,
+            max_height: None,
+            max_w_pre_zoom: false,
+            max_h_pre_zoom: false,
+            clip: None,
+            blend: BlendMode::Alpha,
+            effect: anim::EffectState::default(),
+        }
+    }
+
+    #[test]
+    fn mul_alpha_recurses_through_wrappers() {
+        let mut actor = Actor::Frame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            children: vec![Actor::Shadow {
+                len: [0.0, 0.0],
+                color: [1.0, 1.0, 1.0, 0.8],
+                child: Box::new(text([1.0, 1.0, 1.0, 0.6])),
+            }],
+            background: Some(Background::Color([0.0, 0.0, 0.0, 0.4])),
+            z: 0,
+        };
+
+        actor.mul_alpha(0.5);
+
+        let Actor::Frame {
+            background: Some(Background::Color(bg)),
+            children,
+            ..
+        } = actor
+        else {
+            panic!("expected frame actor");
+        };
+        approx_eq(bg[3], 0.2);
+
+        let Actor::Shadow { color, child, .. } = &children[0] else {
+            panic!("expected shadow child");
+        };
+        approx_eq(color[3], 0.4);
+
+        let Actor::Text { color, .. } = child.as_ref() else {
+            panic!("expected text child");
+        };
+        approx_eq(color[3], 0.3);
+    }
+
+    #[test]
+    fn mul_alpha_rebuilds_mesh_vertices() {
+        let original: Arc<[MeshVertex]> = Arc::from(vec![MeshVertex {
+            pos: [4.0, 8.0],
+            color: [1.0, 1.0, 1.0, 0.8],
+        }]);
+        let mut actor = Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            vertices: Arc::clone(&original),
+            mode: MeshMode::Triangles,
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 0,
+        };
+
+        actor.mul_alpha(0.25);
+
+        approx_eq(original[0].color[3], 0.8);
+
+        let Actor::Mesh { vertices, .. } = actor else {
+            panic!("expected mesh actor");
+        };
+        assert!(!Arc::ptr_eq(&vertices, &original));
+        approx_eq(vertices[0].color[3], 0.2);
     }
 }
