@@ -111,6 +111,166 @@ fn select_preview_texture<'a>(
         })
 }
 
+/// Returns the active mask (zero-extended to u16) for a row that
+/// supports multi-select underlining, or `None` if the row uses the
+/// default single-select underline behavior.
+fn multi_select_mask(state: &State, row_id: RowId, player_idx: usize) -> Option<u16> {
+    use RowId::*;
+    Some(match row_id {
+        Scroll => state.scroll_active_mask[player_idx].bits().into(),
+        Hide => state.hide_active_mask[player_idx].bits().into(),
+        Insert => state.insert_active_mask[player_idx].bits().into(),
+        Remove => state.remove_active_mask[player_idx].bits().into(),
+        Holds => state.holds_active_mask[player_idx].bits().into(),
+        Accel => state.accel_effects_active_mask[player_idx].bits().into(),
+        Effect => state.visual_effects_active_mask[player_idx].bits(),
+        Appearance => state.appearance_effects_active_mask[player_idx].bits().into(),
+        LifeBarOptions => state.life_bar_options_active_mask[player_idx].bits().into(),
+        FAPlusOptions => state.fa_plus_active_mask[player_idx].bits().into(),
+        GameplayExtras => state.gameplay_extras_active_mask[player_idx].bits().into(),
+        GameplayExtrasMore => state.gameplay_extras_more_active_mask[player_idx].bits().into(),
+        ResultsExtras => state.results_extras_active_mask[player_idx].bits().into(),
+        MeasureCounterOptions => state.measure_counter_options_active_mask[player_idx].bits().into(),
+        ErrorBar => state.error_bar_active_mask[player_idx].bits().into(),
+        ErrorBarOptions => state.error_bar_options_active_mask[player_idx].bits().into(),
+        EarlyDecentWayOffOptions => state.early_dw_active_mask[player_idx].bits().into(),
+        _ => return None,
+    })
+}
+
+/// Whether a row uses multi-select underlining (one underline per set bit
+/// in the row's active mask) rather than the default single-select
+/// underline (one underline under the chosen value).
+fn is_multi_select_row(row_id: RowId) -> bool {
+    use RowId::*;
+    matches!(
+        row_id,
+        Scroll
+            | Hide
+            | Insert
+            | Remove
+            | Holds
+            | Accel
+            | Effect
+            | Appearance
+            | LifeBarOptions
+            | FAPlusOptions
+            | GameplayExtras
+            | GameplayExtrasMore
+            | ResultsExtras
+            | MeasureCounterOptions
+            | ErrorBar
+            | ErrorBarOptions
+            | EarlyDecentWayOffOptions
+    )
+}
+
+/// Draw multi-select underlines for one row: one underline beneath each
+/// choice whose corresponding bit is set in the per-player active mask.
+#[allow(clippy::too_many_arguments)]
+fn draw_multi_select_underlines(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    row: &Row,
+    active: [bool; PLAYER_SLOTS],
+    x_positions: &[f32],
+    widths: &[f32],
+    current_row_y: f32,
+    text_h: f32,
+    a: f32,
+) {
+    let line_thickness = underline_thickness();
+    let offset = underline_offset();
+    let underline_base_y = current_row_y + text_h * 0.5 + offset;
+    let underline_y = |player_idx: usize| {
+        if active[P1] && active[P2] {
+            (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
+        } else {
+            underline_base_y
+        }
+    };
+    for player_idx in active_player_indices(active) {
+        let Some(mask) = multi_select_mask(state, row.id, player_idx) else {
+            continue;
+        };
+        if mask == 0 {
+            continue;
+        }
+        let underline_y = underline_y(player_idx);
+        let mut line_color = color::decorative_rgba(player_color_index(state, player_idx));
+        line_color[3] *= a;
+        for idx in 0..row.choices.len() {
+            let bit: u16 = 1 << idx;
+            if (mask & bit) == 0 {
+                continue;
+            }
+            if let Some(sel_x) = x_positions.get(idx).copied() {
+                let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                let underline_w = draw_w.ceil();
+                actors.push(act!(quad:
+                    align(0.0, 0.5):
+                    xy(sel_x, underline_y):
+                    zoomto(underline_w, line_thickness):
+                    diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                    z(Z_ROW_FOREGROUND)
+                ));
+            }
+        }
+    }
+}
+
+/// Draw a single-select underline for one row: one underline under each
+/// active player's chosen value.
+#[allow(clippy::too_many_arguments)]
+fn draw_single_select_underline(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    row: &Row,
+    active: [bool; PLAYER_SLOTS],
+    x_positions: &[f32],
+    widths: &[f32],
+    current_row_y: f32,
+    text_h: f32,
+    a: f32,
+) {
+    let line_thickness = underline_thickness();
+    let offset = underline_offset();
+    let underline_base_y = current_row_y + text_h * 0.5 + offset;
+    let underline_y = |player_idx: usize| {
+        if active[P1] && active[P2] {
+            (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
+        } else {
+            underline_base_y
+        }
+    };
+    for player_idx in active_player_indices(active) {
+        let idx = row.selected_choice_index[player_idx].min(widths.len().saturating_sub(1));
+        if let Some(sel_x) = x_positions.get(idx).copied() {
+            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+            let underline_w = draw_w.ceil();
+            let underline_y = underline_y(player_idx);
+            let mut line_color = color::decorative_rgba(player_color_index(state, player_idx));
+            line_color[3] *= a;
+            actors.push(act!(quad:
+                align(0.0, 0.5):
+                xy(sel_x, underline_y):
+                zoomto(underline_w, line_thickness):
+                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                z(Z_ROW_FOREGROUND)
+            ));
+        }
+    }
+}
+
+/// Color palette index for a player's underline / cursor.
+fn player_color_index(state: &State, player_idx: usize) -> i32 {
+    if player_idx == P2 {
+        state.active_color_index - 2
+    } else {
+        state.active_color_index
+    }
+}
+
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
     let active = session_active_players();
@@ -171,13 +331,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let preview_center_x =
         speed_mod_x_p1 + widescale(PREVIEW_CENTER_OFFSET_NORMAL, PREVIEW_CENTER_OFFSET_WIDE);
 
-    let player_color_index = |player_idx: usize| {
-        if player_idx == P2 {
-            state.active_color_index - 2
-        } else {
-            state.active_color_index
-        }
-    };
     let speed_x_for = |player_idx: usize| {
         if player_idx == P2 {
             speed_mod_x_p2
@@ -191,7 +344,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     if state.current_pane == OptionsPane::Main {
         for player_idx in active_player_indices(active) {
             let speed_mod = &state.speed_mod[player_idx];
-            let speed_color = color::simply_love_rgba(player_color_index(player_idx));
+            let speed_color = color::simply_love_rgba(player_color_index(state, player_idx));
             let p_chart = resolve_p1_chart(&state.song, &state.chart_steps_index);
             let main_scroll =
                 speed_mod_helper_scroll_text(&state.song, p_chart, speed_mod, state.music_rate);
@@ -397,7 +550,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let right = center_x + ring_w * 0.5;
                     let top = center_y - ring_h * 0.5;
                     let bottom = center_y + ring_h * 0.5;
-                    let mut ring_color = color::decorative_rgba(player_color_index(player_idx));
+                    let mut ring_color = color::decorative_rgba(player_color_index(state, player_idx));
                     ring_color[3] *= a;
 
                     actors.push(act!(quad:
@@ -463,664 +616,30 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // - For normal rows: underline the currently selected choice.
             // - For Scroll row: underline each enabled scroll mode (multi-select).
             // - For FA+ Options row: underline each enabled FA+ toggle (multi-select).
-            if row.id == RowId::Scroll {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.scroll_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::Hide {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.hide_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::Insert {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.insert_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::Remove {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.remove_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::Holds {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.holds_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::Accel {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.accel_effects_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::Effect {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.visual_effects_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u16 << (idx as u16);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::Appearance {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.appearance_effects_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::LifeBarOptions {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.life_bar_options_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::FAPlusOptions {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.fa_plus_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::GameplayExtras {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.gameplay_extras_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::GameplayExtrasMore {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.gameplay_extras_more_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::ResultsExtras {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.results_extras_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::MeasureCounterOptions {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.measure_counter_options_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::ErrorBar {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.error_bar_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::ErrorBarOptions {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.error_bar_options_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
-            } else if row.id == RowId::EarlyDecentWayOffOptions {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let mask = state.early_dw_active_mask[player_idx].bits();
-                    if mask == 0 {
-                        continue;
-                    }
-                    let underline_y = underline_y_for(player_idx);
-                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                    line_color[3] *= a;
-                    for idx in 0..row.choices.len() {
-                        let bit = 1u8 << (idx as u8);
-                        if (mask & bit) == 0 {
-                            continue;
-                        }
-                        if let Some(sel_x) = x_positions.get(idx).copied() {
-                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                            let underline_w = draw_w.ceil();
-                            actors.push(act!(quad:
-                                align(0.0, 0.5):
-                                xy(sel_x, underline_y):
-                                zoomto(underline_w, line_thickness):
-                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(Z_ROW_FOREGROUND)
-                            ));
-                        }
-                    }
-                }
+            if is_multi_select_row(row.id) {
+                draw_multi_select_underlines(
+                    &mut actors,
+                    state,
+                    row,
+                    active,
+                    &x_positions,
+                    &widths,
+                    current_row_y,
+                    text_h,
+                    a,
+                );
             } else {
-                let line_thickness = underline_thickness();
-                let offset = underline_offset();
-                let underline_base_y = current_row_y + text_h * 0.5 + offset;
-                let underline_y_for = |player_idx: usize| {
-                    if active[P1] && active[P2] {
-                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
-                    } else {
-                        underline_base_y
-                    }
-                };
-                for player_idx in active_player_indices(active) {
-                    let idx =
-                        row.selected_choice_index[player_idx].min(widths.len().saturating_sub(1));
-                    if let Some(sel_x) = x_positions.get(idx).copied() {
-                        let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                        let underline_w = draw_w.ceil();
-                        let underline_y = underline_y_for(player_idx);
-                        let mut line_color = color::decorative_rgba(player_color_index(player_idx));
-                        line_color[3] *= a;
-                        actors.push(act!(quad:
-                            align(0.0, 0.5):
-                            xy(sel_x, underline_y):
-                            zoomto(underline_w, line_thickness):
-                            diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                            z(Z_ROW_FOREGROUND)
-                        ));
-                    }
-                }
+                draw_single_select_underline(
+                    &mut actors,
+                    state,
+                    row,
+                    active,
+                    &x_positions,
+                    &widths,
+                    current_row_y,
+                    text_h,
+                    a,
+                );
             }
             // Draw the 4-sided cursor ring around the selected option when this row is active.
             if !widths.is_empty() {
@@ -1137,7 +656,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let right = center_x + ring_w * 0.5;
                     let top = center_y - ring_h * 0.5;
                     let bottom = center_y + ring_h * 0.5;
-                    let mut ring_color = color::decorative_rgba(player_color_index(player_idx));
+                    let mut ring_color = color::decorative_rgba(player_color_index(state, player_idx));
                     ring_color[3] *= a;
                     actors.push(act!(quad:
                         align(0.5, 0.5): xy((left + right) * 0.5, top + border_w * 0.5):
@@ -1253,7 +772,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let offset = underline_offset(); // place just under the baseline
                     let underline_y = current_row_y + draw_h * 0.5 + offset;
                     let underline_left_x = choice_center_x - draw_w * 0.5;
-                    let mut line_color = color::decorative_rgba(player_color_index(primary_player_idx));
+                    let mut line_color = color::decorative_rgba(player_color_index(state, primary_player_idx));
                     line_color[3] *= a;
                     actors.push(act!(quad:
                         align(0.0, 0.5): // start at text's left edge
@@ -1273,7 +792,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let top = center_y - ring_h * 0.5;
                             let bottom = center_y + ring_h * 0.5;
                             let mut ring_color =
-                                color::decorative_rgba(player_color_index(primary_player_idx));
+                                color::decorative_rgba(player_color_index(state, primary_player_idx));
                             ring_color[3] *= a;
                             actors.push(act!(quad:
                                 align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
@@ -1339,7 +858,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         let offset = underline_offset();
                         let underline_y = current_row_y + draw_h * 0.5 + offset;
                         let underline_left_x = p2_choice_center_x - p2_draw_w * 0.5;
-                        let mut line_color = color::decorative_rgba(player_color_index(P2));
+                        let mut line_color = color::decorative_rgba(player_color_index(state, P2));
                         line_color[3] *= a;
                         actors.push(act!(quad:
                             align(0.0, 0.5):
@@ -1355,7 +874,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 let right = center_x + ring_w * 0.5;
                                 let top = center_y - ring_h * 0.5;
                                 let bottom = center_y + ring_h * 0.5;
-                                let mut ring_color = color::decorative_rgba(player_color_index(P2));
+                                let mut ring_color = color::decorative_rgba(player_color_index(state, P2));
                                 ring_color[3] *= a;
                                 actors.push(act!(quad:
                                     align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
@@ -2047,7 +1566,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         else {
             continue;
         };
-        let help_text_color = color::simply_love_rgba(player_color_index(player_idx));
+        let help_text_color = color::simply_love_rgba(player_color_index(state, player_idx));
         let wrap_width = if split_help || player_idx == P2 {
             (help_box_w * 0.5) - 30.0
         } else {
@@ -2115,3 +1634,5 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
     actors
 }
+
+
