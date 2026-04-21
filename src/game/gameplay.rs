@@ -1070,6 +1070,11 @@ fn build_lane_hold_display_runs(
 }
 
 #[inline(always)]
+const fn note_has_displayable_hold(note: &Note) -> bool {
+    matches!(note.note_type, NoteType::Hold | NoteType::Roll) && note.hold.is_some()
+}
+
+#[inline(always)]
 fn crossed_mine_bounds_ns(
     mine_times_ns: &[SongTimeNs],
     prev_time_ns: SongTimeNs,
@@ -5454,7 +5459,7 @@ pub fn init(
         let col = note.column;
         if col < num_cols && col < MAX_COLS {
             lane_note_counts[col] = lane_note_counts[col].saturating_add(1);
-            if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+            if note_has_displayable_hold(note) {
                 lane_hold_counts[col] = lane_hold_counts[col].saturating_add(1);
             }
         }
@@ -5470,7 +5475,7 @@ pub fn init(
         let col = note.column;
         if col < num_cols && col < MAX_COLS {
             lane_note_indices[col].push(note_index);
-            if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+            if note_has_displayable_hold(note) {
                 lane_hold_indices[col].push(note_index);
             }
         }
@@ -7853,6 +7858,7 @@ mod tests {
         input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
         lane_note_window_bounds_ns, lane_press_started, lane_release_finished,
         late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_step_distance_ns,
+        note_has_displayable_hold,
         mine_window_bounds_ns, music_time_ns_from_song_clock, mutate_timing_arc,
         next_ready_row_in_lookahead, next_tick_mode, note_hit_eval, parse_attack_mods,
         parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
@@ -10210,6 +10216,12 @@ mod tests {
                 LaneIndexRun { start: 2, end: 4 },
             ]
         );
+    }
+
+    #[test]
+    fn displayable_hold_requires_runtime_hold_data() {
+        assert!(!note_has_displayable_hold(&test_note(0, 48, NoteType::Hold)));
+        assert!(note_has_displayable_hold(&test_hold(0, 48, 96)));
     }
 
     #[test]
