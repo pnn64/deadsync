@@ -1,4 +1,9 @@
-#[cfg(windows)]
+#[cfg(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+))]
 mod imp {
     use crate::screens::components::shared::test_input::{FsrBarView, FsrView};
     use hidapi::{HidApi, HidDevice};
@@ -13,7 +18,6 @@ mod imp {
     const REPORT_ID_NAME: u8 = 0x05;
 
     const SENSOR_COUNT: usize = 12;
-    const VIEW_SENSOR_COUNT: usize = 4;
     const MAX_NAME_SIZE: usize = 50;
     const MAX_SENSOR_VALUE: u16 = 850;
     const LINEARIZATION_POWER: u32 = 4;
@@ -211,7 +215,12 @@ mod imp {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+)))]
 mod imp {
     use crate::screens::components::shared::test_input::FsrView;
 
