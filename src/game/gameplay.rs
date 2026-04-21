@@ -4724,6 +4724,11 @@ fn stage_music_cut(lead_in_seconds: f32) -> audio::Cut {
     }
 }
 
+#[inline(always)]
+fn visible_notefield_time_ns(music_time_ns: SongTimeNs, visual_delay_seconds: f32) -> SongTimeNs {
+    song_time_ns_add_seconds(music_time_ns, -visual_delay_seconds)
+}
+
 fn start_stage_music_audio(state: &State) {
     let Some(music_path) = state.charts[0].music_path.as_ref() else {
         return;
@@ -4749,7 +4754,7 @@ pub fn start_stage_music(state: &mut State) {
     state.current_beat_display = state.timing.get_beat_for_time_ns(display_time_ns);
     for player in 0..state.num_players {
         let delay = state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
-        let visible_time_ns = song_time_ns_add_seconds(display_time_ns, -delay);
+        let visible_time_ns = visible_notefield_time_ns(state.current_music_time_ns, delay);
         state.current_music_time_visible_ns[player] = visible_time_ns;
         state.current_music_time_visible[player] = song_time_ns_to_seconds(visible_time_ns);
         state.current_beat_visible[player] =
@@ -5519,12 +5524,15 @@ pub fn init(
         ms as f32 / 1000.0
     });
     let init_music_time = -start_delay;
-    let init_beat = timing.get_beat_for_time_ns(song_time_ns_from_seconds(init_music_time));
-    let current_music_time_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
-        init_music_time - global_visual_delay_seconds - player_visual_delay_seconds[player]
+    let init_music_time_ns = song_time_ns_from_seconds(init_music_time);
+    let init_beat = timing.get_beat_for_time_ns(init_music_time_ns);
+    let current_music_time_visible_ns: [SongTimeNs; MAX_PLAYERS] = std::array::from_fn(|player| {
+        let delay = global_visual_delay_seconds + player_visual_delay_seconds[player];
+        visible_notefield_time_ns(init_music_time_ns, delay)
     });
-    let current_music_time_visible_ns: [SongTimeNs; MAX_PLAYERS] =
-        std::array::from_fn(|player| song_time_ns_from_seconds(current_music_time_visible[player]));
+    let current_music_time_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        song_time_ns_to_seconds(current_music_time_visible_ns[player])
+    });
     let current_beat_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         timing_players[player].get_beat_for_time_ns(current_music_time_visible_ns[player])
     });
@@ -7590,7 +7598,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         for player in 0..state.num_players {
             let delay =
                 state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
-            let visible_time_ns = song_time_ns_add_seconds(display_music_time_ns, -delay);
+            let visible_time_ns = visible_notefield_time_ns(music_time_ns, delay);
             state.current_music_time_visible_ns[player] = visible_time_ns;
             state.current_music_time_visible[player] = song_time_ns_to_seconds(visible_time_ns);
             state.current_beat_visible[player] =
@@ -7881,7 +7889,7 @@ mod tests {
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
         single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
         stage_music_cut, step_calories, suppress_final_bad_rescore_visual, tick_mode_status_line,
-        tick_visual_effects, turn_option_bits, update_lane_count,
+        tick_visual_effects, turn_option_bits, update_lane_count, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEvent, InputSource, VirtualAction};
     use crate::engine::present::color;
@@ -9183,6 +9191,15 @@ mod tests {
             false,
         ));
         assert!((display_time - 100.250).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn visible_notefield_time_uses_simulation_clock_plus_delay() {
+        let music_time_ns = song_time_ns_from_seconds(100.0);
+        let delay = 0.010;
+        let visible = song_time_ns_to_seconds(visible_notefield_time_ns(music_time_ns, delay));
+
+        assert!((visible - 99.990).abs() < 0.000_5);
     }
 
     #[test]

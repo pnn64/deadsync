@@ -7321,7 +7321,9 @@ mod tests {
     fn mine_hides_after_any_final_resolution() {
         assert!(!super::mine_hides_after_resolution(None));
         assert!(super::mine_hides_after_resolution(Some(MineResult::Hit)));
-        assert!(super::mine_hides_after_resolution(Some(MineResult::Avoided)));
+        assert!(super::mine_hides_after_resolution(Some(
+            MineResult::Avoided
+        )));
     }
 
     #[test]
