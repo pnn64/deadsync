@@ -142,18 +142,14 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 #[inline(always)]
 fn exit_anim_t(exiting: bool) -> f32 {
-    if !exiting {
-        return 0.0;
-    }
-    use crate::engine::present::{anim, runtime};
-    static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
-    let steps = STEPS.get_or_init(|| vec![anim::linear(EXIT_TOTAL_DUR).x(EXIT_TOTAL_DUR).build()]);
-
-    let mut init = anim::TweenState::default();
-    init.x = 0.0;
-    const SITE_BASE: u64 = runtime::site_base(file!(), line!(), column!());
-    let sid = runtime::site_id(SITE_BASE, 0x53504D4F44455849u64); // "SPMODEXI"
-    runtime::materialize(sid, init, steps).x.max(0.0)
+    static STEPS: std::sync::OnceLock<Vec<crate::engine::present::anim::Step>> =
+        std::sync::OnceLock::new();
+    crate::screens::components::shared::transitions::linear_elapsed(
+        exiting,
+        EXIT_TOTAL_DUR,
+        &STEPS,
+        0x53504D4F44455849u64, // "SPMODEXI"
+    )
 }
 
 #[inline(always)]

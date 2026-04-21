@@ -798,20 +798,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
 #[inline(always)]
 fn exit_anim_t(exiting: bool) -> f32 {
-    if !exiting {
-        return 0.0;
-    }
-
-    use crate::engine::present::{anim, runtime};
-    static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
-    let dur = EXIT_ANIM_DURATION.max(0.0);
-    let steps = STEPS.get_or_init(|| vec![anim::linear(dur).x(dur).build()]);
-
-    let mut init = anim::TweenState::default();
-    init.x = 0.0;
-    const SITE_BASE: u64 = runtime::site_base(file!(), line!(), column!());
-    let sid = runtime::site_id(SITE_BASE, 0x53454C5052455849u64); // "SELPREXI"
-    runtime::materialize(sid, init, steps).x.max(0.0)
+    static STEPS: std::sync::OnceLock<Vec<crate::engine::present::anim::Step>> =
+        std::sync::OnceLock::new();
+    super::transitions::linear_elapsed(
+        exiting,
+        EXIT_ANIM_DURATION,
+        &STEPS,
+        0x53454C5052455849u64, // "SELPREXI"
+    )
 }
 
 #[inline(always)]
