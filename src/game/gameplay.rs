@@ -976,26 +976,29 @@ fn closest_lane_note_ns(
     notes: &[Note],
     note_times_ns: &[SongTimeNs],
     current_time_ns: SongTimeNs,
+    current_row_index: usize,
     search_start_idx: usize,
     search_end_idx: usize,
 ) -> Option<(usize, SongTimeNs)> {
     let mut best: Option<(usize, SongTimeNs)> = None;
-    let mut best_signed_err = 0i128;
+    let mut best_row_distance = usize::MAX;
+    let mut best_row_index = 0usize;
     for &note_index in &note_indices[search_start_idx..search_end_idx] {
         let note = &notes[note_index];
         if note.result.is_some() || !note.can_be_judged || note.is_fake {
             continue;
         }
+        let row_distance = current_row_index.abs_diff(note.row_index);
         let signed_err_music = current_time_ns as i128 - note_times_ns[note_index] as i128;
-        let abs_err_music = signed_err_music.unsigned_abs();
+        // Match ITGmania Player::GetClosestNote: choose by row proximity, and
+        // break exact ties toward the later row.
         match best {
-            Some((_, best_err))
-                if abs_err_music > (best_err as i128).unsigned_abs()
-                    || (abs_err_music == (best_err as i128).unsigned_abs()
-                        && signed_err_music >= best_signed_err) => {}
+            Some(_) if row_distance > best_row_distance => {}
+            Some(_) if row_distance == best_row_distance && note.row_index <= best_row_index => {}
             _ => {
                 best = Some((note_index, signed_err_music as SongTimeNs));
-                best_signed_err = signed_err_music;
+                best_row_distance = row_distance;
+                best_row_index = note.row_index;
             }
         }
     }
@@ -6706,11 +6709,16 @@ pub fn judge_a_tap(
         search_start_time_ns,
         search_end_time_ns,
     );
+    let current_row_index = timing_row_floor(
+        &state.timing_players[player],
+        state.timing_players[player].get_beat_for_time_ns(current_time_ns),
+    );
     if let Some((note_index, _)) = closest_lane_note_ns(
         lane_notes,
         &state.notes,
         &state.note_time_cache_ns,
         current_time_ns,
+        current_row_index,
         search_start_idx,
         search_end_idx,
     ) {
@@ -6980,11 +6988,16 @@ pub fn judge_a_lift(
         search_start_time_ns,
         search_end_time_ns,
     );
+    let current_row_index = timing_row_floor(
+        &state.timing_players[player],
+        state.timing_players[player].get_beat_for_time_ns(current_time_ns),
+    );
     let Some((note_index, _)) = closest_lane_note_ns(
         lane_notes,
         &state.notes,
         &state.note_time_cache_ns,
         current_time_ns,
+        current_row_index,
         search_start_idx,
         search_end_idx,
     ) else {
@@ -10249,6 +10262,7 @@ mod tests {
             &notes,
             &note_times_ns,
             song_time_ns_from_seconds(1.004),
+            48,
             start_idx,
             end_idx,
         )
@@ -10283,6 +10297,7 @@ mod tests {
             &notes,
             &note_times_ns,
             song_time_ns_from_seconds(1.004),
+            48,
             start_idx,
             end_idx,
         )
@@ -10299,7 +10314,7 @@ mod tests {
     fn closest_lane_note_breaks_exact_tie_toward_future_note() {
         let notes = vec![
             test_note(0, 48, NoteType::Tap),
-            test_note(0, 49, NoteType::Tap),
+            test_note(0, 50, NoteType::Tap),
         ];
         let note_indices = [0usize, 1];
         let note_times_ns = [1_000_000_000_i64, 1_020_000_000_i64];
@@ -10314,6 +10329,7 @@ mod tests {
             &notes,
             &note_times_ns,
             1_010_000_000_i64,
+            49,
             start_idx,
             end_idx,
         )
@@ -10324,7 +10340,7 @@ mod tests {
     }
 
     #[test]
-    fn closest_lane_note_prefers_nearer_time_over_nearer_row() {
+    fn closest_lane_note_prefers_nearer_row_over_nearer_time() {
         let notes = vec![
             test_note(0, 48, NoteType::Tap),
             test_note(0, 60, NoteType::Tap),
@@ -10345,13 +10361,14 @@ mod tests {
             &notes,
             &note_times_ns,
             song_time_ns_from_seconds(1.030),
+            50,
             start_idx,
             end_idx,
         )
-        .expect("expected the nearer note in time to win");
+        .expect("expected the nearer note in row to win");
 
-        assert_eq!(note_index, 1);
-        assert!((song_time_ns_to_seconds(abs_err_ns.abs()) - 0.002).abs() <= 1e-6);
+        assert_eq!(note_index, 0);
+        assert!((song_time_ns_to_seconds(abs_err_ns.abs()) - 0.010).abs() <= 1e-6);
     }
     #[test]
     fn input_queue_cap_scales_with_fields() {
