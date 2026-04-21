@@ -1027,6 +1027,9 @@ impl AssetManager {
         for p in [
             "submit/LoadingSpinner_10x3.png",
             "submit/Hourglass_10x3.png",
+            "submit/Check_1x1.png",
+            "submit/Refresh_1x1.png",
+            "submit/Rejected_1x1.png",
         ] {
             textures_to_load.push((p.to_string(), p.to_string()));
         }
