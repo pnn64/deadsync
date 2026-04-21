@@ -1,5 +1,51 @@
 use super::*;
 
+/// Render z-order layers for the player_options screen. Higher values
+/// draw on top of lower ones.
+const Z_ROW_BACKGROUND: i16 = 100;
+/// Row text, underlines, cursor borders, choice values, help text.
+const Z_ROW_FOREGROUND: i16 = 101;
+/// Previews drawn over a row (judgment / hold-judgment / noteskin sprites,
+/// combo and font samples).
+const Z_ROW_PREVIEW: i16 = 102;
+/// Receptor noteskin preview (drawn above the row preview layer).
+const Z_RECEPTOR_PREVIEW: i16 = 106;
+/// Tap-explosion noteskin preview, the topmost preview layer.
+const Z_EXPLOSION_PREVIEW: i16 = 107;
+/// Speed-mod overlay text, drawn on top of all preview layers.
+const Z_SPEED_MOD_TEXT: i16 = 121;
+
+/// Visual zoom for choice values rendered inline next to the row title.
+const INLINE_CHOICE_VALUE_ZOOM: f32 = 0.835;
+/// Horizontal pixel gap between consecutive inline choice values.
+const INLINE_CHOICE_SPACING: f32 = 15.75;
+
+/// Zoom factor for judgment / hold-judgment / noteskin texture previews.
+const JUDGMENT_PREVIEW_ZOOM: f32 = 0.225;
+/// Zoom factor for combo-font number previews.
+const COMBO_PREVIEW_ZOOM: f32 = 0.45;
+
+/// Pixel size of one logical noteskin arrow used to compute preview scale.
+const NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE: f32 = 64.0;
+/// Scale applied to noteskin preview sprites relative to their natural size.
+const NOTESKIN_PREVIEW_SCALE: f32 = 0.45;
+
+/// Underline thickness for multi-select row indicators (16:9 / 16:10 widescale).
+fn underline_thickness() -> f32 {
+    widescale(2.0, 2.5).round().max(1.0)
+}
+
+/// Vertical pixel offset between a row's text baseline and its underline.
+fn underline_offset() -> f32 {
+    widescale(3.0, 4.0)
+}
+
+/// Border width for the cursor / selection ring drawn around a row's
+/// active choice.
+fn selection_border_width() -> f32 {
+    widescale(2.0, 2.5)
+}
+
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
     let active = session_active_players();
@@ -132,7 +178,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             actors.push(act!(text: font("wendy"): settext(speed_text):
                 align(0.5, 0.5): xy(speed_x, speed_mod_y): zoom(speed_mod_zoom):
                 diffuse(speed_color[0], speed_color[1], speed_color[2], pane_alpha):
-                z(121)
+                z(Z_SPEED_MOD_TEXT)
             ));
 
             let scaled_scroll = speed_mod_helper_scaled_text(
@@ -148,7 +194,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 actors.push(act!(text: font("wendy"): settext(scaled_text):
                     align(0.5, 0.5): xy(scaled_x, speed_mod_scaled_y): zoom(speed_mod_scaled_zoom):
                     diffuse(speed_color[0], speed_color[1], speed_color[2], 0.8 * pane_alpha):
-                    z(121)
+                    z(Z_SPEED_MOD_TEXT)
                 ));
             }
         }
@@ -224,14 +270,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             align(0.0, 0.5): xy(row_left, current_row_y):
             zoomto(row_width, frame_h):
             diffuse(bg_color[0], bg_color[1], bg_color[2], bg_color[3] * a):
-            z(100)
+            z(Z_ROW_BACKGROUND)
         ));
         if row.id != RowId::Exit {
             actors.push(act!(quad:
                 align(0.0, 0.5): xy(row_left, current_row_y):
                 zoomto(TITLE_BG_WIDTH, frame_h):
                 diffuse(0.0, 0.0, 0.0, 0.25 * a):
-                z(101)
+                z(Z_ROW_FOREGROUND)
             ));
         }
         // Left column (row titles)
@@ -252,20 +298,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                     horizalign(left): maxwidth(title_max_w):
-                    z(101)
+                    z(Z_ROW_FOREGROUND)
                 ));
                 actors.push(act!(text: font("miso"): settext(lines[1].to_string()):
                     align(0.0, 0.5): xy(title_x, current_row_y + 7.0): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                     horizalign(left): maxwidth(title_max_w):
-                    z(101)
+                    z(Z_ROW_FOREGROUND)
                 ));
             } else {
                 actors.push(act!(text: font("miso"): settext(display):
                     align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                     horizalign(left): maxwidth(title_max_w):
-                    z(101)
+                    z(Z_ROW_FOREGROUND)
                 ));
             }
         } else {
@@ -274,7 +320,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                     horizalign(left): maxwidth(title_max_w):
-                    z(101)
+                    z(Z_ROW_FOREGROUND)
                 ),
             );
         }
@@ -304,13 +350,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Align Exit horizontally with other single-value options (Speed Mod line)
             let choice_center_x = speed_mod_x;
             actors.push(act!(text: font("miso"): settext(choice_text.clone()):
-                align(0.5, 0.5): xy(choice_center_x, current_row_y): zoom(0.835):
+                align(0.5, 0.5): xy(choice_center_x, current_row_y): zoom(INLINE_CHOICE_VALUE_ZOOM):
                 diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                z(101)
+                z(Z_ROW_FOREGROUND)
             ));
             // Draw the selection cursor for the centered "Exit" text when active
             if is_active {
-                let border_w = widescale(2.0, 2.5);
+                let border_w = selection_border_width();
                 for player_idx in active_player_indices(active) {
                     if state.pane().selected_row[player_idx] != item_idx {
                         continue;
@@ -330,33 +376,33 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         align(0.5, 0.5): xy((left + right) * 0.5, top + border_w * 0.5):
                         zoomto(ring_w, border_w):
                         diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(101)
+                        z(Z_ROW_FOREGROUND)
                     ));
                     actors.push(act!(quad:
                         align(0.5, 0.5): xy((left + right) * 0.5, bottom - border_w * 0.5):
                         zoomto(ring_w, border_w):
                         diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(101)
+                        z(Z_ROW_FOREGROUND)
                     ));
                     actors.push(act!(quad:
                         align(0.5, 0.5): xy(left + border_w * 0.5, (top + bottom) * 0.5):
                         zoomto(border_w, ring_h):
                         diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(101)
+                        z(Z_ROW_FOREGROUND)
                     ));
                     actors.push(act!(quad:
                         align(0.5, 0.5): xy(right - border_w * 0.5, (top + bottom) * 0.5):
                         zoomto(border_w, ring_h):
                         diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(101)
+                        z(Z_ROW_FOREGROUND)
                     ));
                 }
             }
         } else if show_all_choices_inline {
             // Render every option horizontally; when active, all options should be white.
             // The active option gets an underline (quad) drawn just below the text.
-            let value_zoom = 0.835;
-            let spacing = 15.75;
+            let value_zoom = INLINE_CHOICE_VALUE_ZOOM;
+            let spacing = INLINE_CHOICE_SPACING;
             let next_row_item = show_arcade_next_row
                 .then(|| arcade_next_row_layout(state, item_idx, asset_manager, value_zoom));
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
@@ -390,8 +436,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // - For Scroll row: underline each enabled scroll mode (multi-select).
             // - For FA+ Options row: underline each enabled FA+ toggle (multi-select).
             if row.id == RowId::Scroll {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -421,14 +467,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::Hide {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -458,14 +504,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::Insert {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -495,14 +541,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::Remove {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -532,14 +578,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::Holds {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -569,14 +615,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::Accel {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -606,14 +652,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::Effect {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -643,14 +689,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::Appearance {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -680,14 +726,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::LifeBarOptions {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -717,14 +763,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::FAPlusOptions {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -754,14 +800,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::GameplayExtras {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -791,14 +837,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::GameplayExtrasMore {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -828,14 +874,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::ResultsExtras {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -865,14 +911,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::MeasureCounterOptions {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -902,14 +948,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::ErrorBar {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -939,14 +985,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::ErrorBarOptions {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -976,14 +1022,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else if row.id == RowId::EarlyDecentWayOffOptions {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -1013,14 +1059,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(sel_x, underline_y):
                                 zoomto(underline_w, line_thickness):
                                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
                 }
             } else {
-                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                let offset = widescale(3.0, 4.0);
+                let line_thickness = underline_thickness();
+                let offset = underline_offset();
                 let underline_base_y = current_row_y + text_h * 0.5 + offset;
                 let underline_y_for = |player_idx: usize| {
                     if active[P1] && active[P2] {
@@ -1043,14 +1089,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             xy(sel_x, underline_y):
                             zoomto(underline_w, line_thickness):
                             diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                            z(101)
+                            z(Z_ROW_FOREGROUND)
                         ));
                     }
                 }
             }
             // Draw the 4-sided cursor ring around the selected option when this row is active.
             if !widths.is_empty() {
-                let border_w = widescale(2.0, 2.5);
+                let border_w = selection_border_width();
                 for player_idx in active_player_indices(active) {
                     if state.pane().selected_row[player_idx] != item_idx {
                         continue;
@@ -1069,25 +1115,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         align(0.5, 0.5): xy((left + right) * 0.5, top + border_w * 0.5):
                         zoomto(ring_w, border_w):
                         diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(101)
+                        z(Z_ROW_FOREGROUND)
                     ));
                     actors.push(act!(quad:
                         align(0.5, 0.5): xy((left + right) * 0.5, bottom - border_w * 0.5):
                         zoomto(ring_w, border_w):
                         diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(101)
+                        z(Z_ROW_FOREGROUND)
                     ));
                     actors.push(act!(quad:
                         align(0.5, 0.5): xy(left + border_w * 0.5, (top + bottom) * 0.5):
                         zoomto(border_w, ring_h):
                         diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(101)
+                        z(Z_ROW_FOREGROUND)
                     ));
                     actors.push(act!(quad:
                         align(0.5, 0.5): xy(right - border_w * 0.5, (top + bottom) * 0.5):
                         zoomto(border_w, ring_h):
                         diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(101)
+                        z(Z_ROW_FOREGROUND)
                     ));
                 }
             }
@@ -1106,7 +1152,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         next_row_color[2],
                         next_row_color[3]
                     ):
-                    z(101)
+                    z(Z_ROW_FOREGROUND)
                 ));
             }
             for (idx, text) in row.choices.iter().enumerate() {
@@ -1119,7 +1165,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 actors.push(act!(text: font("miso"): settext(text.clone()):
                     align(0.0, 0.5): xy(x, current_row_y): zoom(value_zoom):
                     diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):
-                    z(101)
+                    z(Z_ROW_FOREGROUND)
                 ));
             }
         } else {
@@ -1165,18 +1211,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         text_w = 1.0;
                     }
                     let text_h = (metrics_font.height as f32).max(1.0);
-                    let value_zoom = 0.835;
+                    let value_zoom = INLINE_CHOICE_VALUE_ZOOM;
                     let draw_w = text_w * value_zoom;
                     let draw_h = text_h * value_zoom;
                     actors.push(act!(text: font("miso"): settext(choice_display_text):
                         align(0.5, 0.5): xy(choice_center_x, current_row_y): zoom(value_zoom):
                         diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                        z(101)
+                        z(Z_ROW_FOREGROUND)
                     ));
                     // Underline (always visible) — fixed pixel thickness for consistency
-                    let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                    let line_thickness = underline_thickness();
                     let underline_w = draw_w.ceil(); // pixel-align for crispness
-                    let offset = widescale(3.0, 4.0); // place just under the baseline
+                    let offset = underline_offset(); // place just under the baseline
                     let underline_y = current_row_y + draw_h * 0.5 + offset;
                     let underline_left_x = choice_center_x - draw_w * 0.5;
                     let mut line_color = color::decorative_rgba(player_color_index(primary_player_idx));
@@ -1186,11 +1232,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         xy(underline_left_x, underline_y):
                         zoomto(underline_w, line_thickness):
                         diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                        z(101)
+                        z(Z_ROW_FOREGROUND)
                     ));
                     // Encircling cursor around the active option value (programmatic border)
                     if active[primary_player_idx] && state.pane().selected_row[primary_player_idx] == item_idx {
-                        let border_w = widescale(2.0, 2.5);
+                        let border_w = selection_border_width();
                         if let Some((center_x, center_y, ring_w, ring_h)) =
                             cursor_now(primary_player_idx)
                         {
@@ -1205,25 +1251,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
                                 zoomto(ring_w, border_w):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                             actors.push(act!(quad:
                                 align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5):
                                 zoomto(ring_w, border_w):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                             actors.push(act!(quad:
                                 align(0.5, 0.5): xy(left + border_w * 0.5, center_y):
                                 zoomto(border_w, ring_h):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                             actors.push(act!(quad:
                                 align(0.5, 0.5): xy(right - border_w * 0.5, center_y):
                                 zoomto(border_w, ring_h):
                                 diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                                z(101)
+                                z(Z_ROW_FOREGROUND)
                             ));
                         }
                     }
@@ -1258,11 +1304,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         actors.push(act!(text: font("miso"): settext(p2_text.clone()):
                             align(0.5, 0.5): xy(p2_choice_center_x, current_row_y): zoom(value_zoom):
                             diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                            z(101)
+                            z(Z_ROW_FOREGROUND)
                         ));
-                        let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                        let line_thickness = underline_thickness();
                         let underline_w = p2_draw_w.ceil();
-                        let offset = widescale(3.0, 4.0);
+                        let offset = underline_offset();
                         let underline_y = current_row_y + draw_h * 0.5 + offset;
                         let underline_left_x = p2_choice_center_x - p2_draw_w * 0.5;
                         let mut line_color = color::decorative_rgba(player_color_index(P2));
@@ -1272,10 +1318,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             xy(underline_left_x, underline_y):
                             zoomto(underline_w, line_thickness):
                             diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                            z(101)
+                            z(Z_ROW_FOREGROUND)
                         ));
                         if active[P2] && state.pane().selected_row[P2] == item_idx {
-                            let border_w = widescale(2.0, 2.5);
+                            let border_w = selection_border_width();
                             if let Some((center_x, center_y, ring_w, ring_h)) = cursor_now(P2) {
                                 let left = center_x - ring_w * 0.5;
                                 let right = center_x + ring_w * 0.5;
@@ -1287,25 +1333,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
                                     zoomto(ring_w, border_w):
                                     diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                                    z(101)
+                                    z(Z_ROW_FOREGROUND)
                                 ));
                                 actors.push(act!(quad:
                                     align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5):
                                     zoomto(ring_w, border_w):
                                     diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                                    z(101)
+                                    z(Z_ROW_FOREGROUND)
                                 ));
                                 actors.push(act!(quad:
                                     align(0.5, 0.5): xy(left + border_w * 0.5, center_y):
                                     zoomto(border_w, ring_h):
                                     diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                                    z(101)
+                                    z(Z_ROW_FOREGROUND)
                                 ));
                                 actors.push(act!(quad:
                                     align(0.5, 0.5): xy(right - border_w * 0.5, center_y):
                                     zoomto(border_w, ring_h):
                                     diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                                    z(101)
+                                    z(Z_ROW_FOREGROUND)
                                 ));
                             }
                         }
@@ -1331,9 +1377,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 align(0.5, 0.5):
                                 xy(preview_x_for(primary_player_idx), current_row_y):
                                 setstate(0):
-                                zoom(0.225):
+                                zoom(JUDGMENT_PREVIEW_ZOOM):
                                 diffuse(1.0, 1.0, 1.0, a):
-                                z(102)
+                                z(Z_ROW_PREVIEW)
                             ));
                         }
                         if show_p2
@@ -1344,9 +1390,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 align(0.5, 0.5):
                                 xy(preview_x_for(P2), current_row_y):
                                 setstate(0):
-                                zoom(0.225):
+                                zoom(JUDGMENT_PREVIEW_ZOOM):
                                 diffuse(1.0, 1.0, 1.0, a):
-                                z(102)
+                                z(Z_ROW_PREVIEW)
                             ));
                         }
                     }
@@ -1367,7 +1413,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 })
                         };
                         let draw_hold_preview = |texture: &str, center_x: f32, actors: &mut Vec<Actor>| {
-                            let zoom = 0.225;
+                            let zoom = JUDGMENT_PREVIEW_ZOOM;
                             let tex_w = crate::assets::texture_dims(texture)
                                 .map_or(128.0, |meta| meta.w.max(1) as f32);
                             let center_offset = tex_w * zoom * 0.4;
@@ -1378,7 +1424,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 setstate(0):
                                 zoom(zoom):
                                 diffuse(1.0, 1.0, 1.0, a):
-                                z(102)
+                                z(Z_ROW_PREVIEW)
                             ));
                             actors.push(act!(sprite(texture):
                                 align(0.5, 0.5):
@@ -1386,7 +1432,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 setstate(1):
                                 zoom(zoom):
                                 diffuse(1.0, 1.0, 1.0, a):
-                                z(102)
+                                z(Z_ROW_PREVIEW)
                             ));
                         };
                         if let Some(texture) = texture_for(primary_player_idx) {
@@ -1406,8 +1452,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         || row.id == RowId::ReceptorSkin
                         || row.id == RowId::TapExplosionSkin
                     {
-                        const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
-                        const PREVIEW_SCALE: f32 = 0.45;
                         const PREVIEW_ARROWS: [(usize, f32, f32); 4] = [
                             (0, 0.0, -1.5),
                             (1, 1.0, -0.5),
@@ -1420,7 +1464,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                              quant_idx: f32,
                              center_x: f32,
                              actors: &mut Vec<Actor>| {
-                                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                                let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
                                 let elapsed = state.preview_time;
                                 let beat = state.preview_beat;
                                 let note_uv_phase = ns.tap_note_uv_phase(elapsed, beat, 0.0);
@@ -1437,7 +1481,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     let note_scale = if primary_h > f32::EPSILON {
                                         target_height / primary_h
                                     } else {
-                                        PREVIEW_SCALE
+                                        NOTESKIN_PREVIEW_SCALE
                                     };
                                     for (layer_idx, note_slot) in note_slots.iter().enumerate() {
                                         let draw = note_slot.model_draw_at(elapsed, beat);
@@ -1542,7 +1586,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 let scale = if height > 0.0 {
                                     target_height / height
                                 } else {
-                                    PREVIEW_SCALE
+                                    NOTESKIN_PREVIEW_SCALE
                                 };
                                 let size = [width * scale, target_height];
                                 let center = [center_x, current_row_y];
@@ -1567,13 +1611,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                         rotationz(-note_slot.def.rotation_deg as f32):
                                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                         diffuse(1.0, 1.0, 1.0, a):
-                                        z(102)
+                                        z(Z_ROW_PREVIEW)
                                     ));
                                 }
                             };
                         let draw_noteskin_preview =
                             |ns: &Noteskin, center_x: f32, actors: &mut Vec<Actor>| {
-                                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                                let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
                                 for (col, quant_idx, x_mult) in PREVIEW_ARROWS {
                                     let x = center_x + x_mult * target_height;
                                     let note_idx =
@@ -1583,7 +1627,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             };
                         let draw_mine_preview =
                             |mine_ns: &Noteskin, center_x: f32, actors: &mut Vec<Actor>| {
-                                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                                let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
                                 let mine_col = if mine_ns.mines.len() > 1 || mine_ns.mine_frames.len() > 1 {
                                     1
                                 } else {
@@ -1673,7 +1717,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             };
                         let draw_receptor_preview =
                             |receptor_ns: &Noteskin, center_x: f32, actors: &mut Vec<Actor>| {
-                                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                                let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
                                 let receptor_color =
                                     receptor_ns.receptor_pulse.color_for_beat(state.preview_beat);
                                 let color = [
@@ -1696,7 +1740,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     let scale = if height > f32::EPSILON {
                                         target_height / height
                                     } else {
-                                        PREVIEW_SCALE
+                                        NOTESKIN_PREVIEW_SCALE
                                     };
                                     let size = [width * scale, target_height];
                                     let center = [center_x + x_mult * target_height, current_row_y];
@@ -1721,7 +1765,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                             rotationz(-receptor_slot.def.rotation_deg as f32):
                                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                             diffuse(color[0], color[1], color[2], color[3]):
-                                            z(106)
+                                            z(Z_RECEPTOR_PREVIEW)
                                         ));
                                     }
                                 }
@@ -1765,11 +1809,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let logical = slot.logical_size();
                             let width = logical[0].max(1.0);
                             let height = logical[1].max(1.0);
-                            let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                            let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
                             let scale = if height > f32::EPSILON {
                                 target_height / height
                             } else {
-                                PREVIEW_SCALE
+                                NOTESKIN_PREVIEW_SCALE
                             };
                             let size = [width * scale, target_height];
                             let rotation_deg = receptor_ns
@@ -1814,7 +1858,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                     diffuse(color[0], color[1], color[2], color[3]):
                                     blend(add):
-                                    z(107)
+                                    z(Z_EXPLOSION_PREVIEW)
                                 ));
                             } else {
                                 actors.push(act!(sprite(slot.texture_key_shared()):
@@ -1826,7 +1870,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                     diffuse(color[0], color[1], color[2], color[3]):
                                     blend(normal):
-                                    z(107)
+                                    z(Z_EXPLOSION_PREVIEW)
                                 ));
                             }
                         };
@@ -1922,7 +1966,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     // Add combo preview for "Combo Font" row showing ticking numbers
                     if row.id == RowId::ComboFont {
                         let combo_text = state.combo_preview_count.to_string();
-                        let combo_zoom = 0.45;
+                        let combo_zoom = COMBO_PREVIEW_ZOOM;
                         // Choice indices are fixed by construction order:
                         // 0=Wendy, 1=ArialRounded, 2=Asap, 3=BebasNeue, 4=SourceCode,
                         // 5=Work, 6=WendyCursed, 7=None
@@ -1947,7 +1991,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(preview_x_for(primary_player_idx), current_row_y):
                                 zoom(combo_zoom): horizalign(center):
                                 diffuse(1.0, 1.0, 1.0, a):
-                                z(102)
+                                z(Z_ROW_PREVIEW)
                             ));
                         }
                         if show_p2 && primary_player_idx != P2 {
@@ -1960,7 +2004,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 xy(preview_x_for(P2), current_row_y):
                                 zoom(combo_zoom): horizalign(center):
                                 diffuse(1.0, 1.0, 1.0, a):
-                                z(102)
+                                z(Z_ROW_PREVIEW)
                             ));
                             }
                         }
@@ -2034,7 +2078,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     zoom(0.825):
                     diffuse(help_text_color[0], help_text_color[1], help_text_color[2], pane_alpha):
                     maxwidth(wrap_width): horizalign(left):
-                    z(101)
+                    z(Z_ROW_FOREGROUND)
                 ));
             }
         } else {
@@ -2051,7 +2095,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 zoom(0.825):
                 diffuse(help_text_color[0], help_text_color[1], help_text_color[2], pane_alpha):
                 maxwidth(wrap_width): horizalign(left):
-                z(101)
+                z(Z_ROW_FOREGROUND)
             ));
         }
     }
