@@ -1,12 +1,12 @@
 use crate::act;
 use crate::assets;
 use crate::engine::present::actors::Actor;
+use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
 use crate::game::{profile, scores};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
-use std::thread::LocalKey;
 
 const SCOREBOX_NUM_ENTRIES: usize = 5;
 const SCOREBOX_FETCH_NUM_ENTRIES: usize = 13;
@@ -33,31 +33,10 @@ const SCOREBOX_LOGO_MAX_H_FRAC: f32 = 0.94;
 const SCOREBOX_HARD_EX_BORDER_TINT: f32 = 0.35;
 const TEXT_CACHE_LIMIT: usize = 8192;
 
-type TextCache<K> = HashMap<K, Arc<str>>;
-
 thread_local! {
     static SCORE_PERCENT_TEXT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(2048));
     static SCORE_VALUE_TEXT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(2048));
     static RANK_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
-}
-
-#[inline(always)]
-fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
-where
-    K: Copy + Eq + std::hash::Hash,
-    F: FnOnce() -> String,
-{
-    cache.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&key) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(build());
-        if cache.len() < TEXT_CACHE_LIMIT {
-            cache.insert(key, text.clone());
-        }
-        text
-    })
 }
 
 #[inline(always)]
@@ -79,9 +58,12 @@ fn cached_percent_text(percent: f64) -> Arc<str> {
     } else {
         0.0
     };
-    cached_text(&SCORE_PERCENT_TEXT_CACHE, percent.to_bits(), || {
-        format!("{percent:.2}%")
-    })
+    cached_text(
+        &SCORE_PERCENT_TEXT_CACHE,
+        percent.to_bits(),
+        TEXT_CACHE_LIMIT,
+        || format!("{percent:.2}%"),
+    )
 }
 
 #[derive(Clone, Debug)]
@@ -279,14 +261,19 @@ fn score_text_without_percent(score_10000: f64) -> Arc<str> {
     } else {
         0.0
     };
-    cached_text(&SCORE_VALUE_TEXT_CACHE, score.to_bits(), || {
-        format!("{score:.2}")
-    })
+    cached_text(
+        &SCORE_VALUE_TEXT_CACHE,
+        score.to_bits(),
+        TEXT_CACHE_LIMIT,
+        || format!("{score:.2}"),
+    )
 }
 
 #[inline(always)]
 fn rank_text(rank: u32) -> Arc<str> {
-    cached_text(&RANK_TEXT_CACHE, rank, || format!("{rank}."))
+    cached_text(&RANK_TEXT_CACHE, rank, TEXT_CACHE_LIMIT, || {
+        format!("{rank}.")
+    })
 }
 
 #[inline(always)]

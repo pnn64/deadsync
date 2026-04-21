@@ -4,6 +4,7 @@ use crate::assets::i18n::tr;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, PadDir, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
 use crate::engine::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
@@ -25,7 +26,6 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
-use std::thread::LocalKey;
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
@@ -82,29 +82,8 @@ rgba_const!(COURSE_WHEEL_SONG_TEXT_COLOR, "#D77272");
 rgba_const!(COURSE_WHEEL_RANDOM_TEXT_COLOR, "#FFFF00");
 const TEXT_CACHE_LIMIT: usize = 4096;
 
-type TextCache<K> = HashMap<K, Arc<str>>;
-
 thread_local! {
     static SCORE_PERCENT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(1024));
-}
-
-#[inline(always)]
-fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
-where
-    K: Copy + Eq + std::hash::Hash,
-    F: FnOnce() -> String,
-{
-    cache.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&key) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(build());
-        if cache.len() < TEXT_CACHE_LIMIT {
-            cache.insert(key, text.clone());
-        }
-        text
-    })
 }
 
 #[inline(always)]
@@ -120,9 +99,12 @@ fn cached_score_percent_text(score_percent: f64) -> Arc<str> {
     } else {
         0.0
     };
-    cached_text(&SCORE_PERCENT_CACHE, score.to_bits(), || {
-        format!("{score:.2}%")
-    })
+    cached_text(
+        &SCORE_PERCENT_CACHE,
+        score.to_bits(),
+        TEXT_CACHE_LIMIT,
+        || format!("{score:.2}%"),
+    )
 }
 
 #[derive(Clone, Debug)]

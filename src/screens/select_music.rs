@@ -9,7 +9,7 @@ use crate::engine::audio;
 use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
 use crate::engine::input::{InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
-use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
+use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use crate::engine::present::color;
 use crate::engine::present::font;
 use crate::engine::space::{
@@ -43,7 +43,6 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::{Arc, OnceLock};
-use std::thread::LocalKey;
 use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
 
@@ -156,8 +155,6 @@ const AUTO_STAMINA_MAX_SIDESWITCHES: u32 = 9;
 const NUM_STANDARD_DIFFICULTIES: usize = color::FILE_DIFFICULTY_NAMES.len();
 const TEXT_CACHE_LIMIT: usize = 8192;
 
-type TextCache<K> = HashMap<K, Arc<str>>;
-
 thread_local! {
     static SESSION_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(2048));
     static CHART_LENGTH_CACHE: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity(2048));
@@ -185,32 +182,15 @@ fn music_wheel_hold_spin_speed() -> f32 {
 }
 
 #[inline(always)]
-fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
-where
-    K: Copy + Eq + std::hash::Hash,
-    F: FnOnce() -> String,
-{
-    cache.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&key) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(build());
-        if cache.len() < TEXT_CACHE_LIMIT {
-            cache.insert(key, text.clone());
-        }
-        text
+fn cached_u32_text(value: u32) -> Arc<str> {
+    cached_text(&UINT_TEXT_CACHE, value, TEXT_CACHE_LIMIT, || {
+        value.to_string()
     })
 }
 
 #[inline(always)]
-fn cached_u32_text(value: u32) -> Arc<str> {
-    cached_text(&UINT_TEXT_CACHE, value, || value.to_string())
-}
-
-#[inline(always)]
 fn cached_total_label_text(total: u32) -> Arc<str> {
-    cached_text(&TOTAL_LABEL_CACHE, total, || {
+    cached_text(&TOTAL_LABEL_CACHE, total, TEXT_CACHE_LIMIT, || {
         format!("{} {}", total, tr("SelectMusic", "TotalLabel"))
     })
 }
@@ -235,9 +215,12 @@ fn cached_score_percent_text(score_percent: f64) -> Arc<str> {
     } else {
         0.0
     };
-    cached_text(&SCORE_PERCENT_CACHE, score.to_bits(), || {
-        format!("{score:.2}%")
-    })
+    cached_text(
+        &SCORE_PERCENT_CACHE,
+        score.to_bits(),
+        TEXT_CACHE_LIMIT,
+        || format!("{score:.2}%"),
+    )
 }
 
 #[inline(always)]
@@ -276,6 +259,7 @@ fn cached_chart_info_text(
     cached_text(
         &CHART_INFO_CACHE,
         (mask, meter, peak_nps.to_bits(), matrix_rating.to_bits()),
+        TEXT_CACHE_LIMIT,
         || match mask {
             0b10 => matrix_rating_text,
             0b11 => tr_fmt(
@@ -300,27 +284,37 @@ fn cached_chart_info_text(
 #[inline(always)]
 fn cached_stamina_mono_text(percent: f64) -> Arc<str> {
     let percent = if percent.is_finite() { percent } else { 0.0 };
-    cached_text(&STAMINA_MONO_CACHE, percent.to_bits(), || {
-        tr_fmt(
-            "SelectMusic",
-            "StaminaMono",
-            &[("percent", &format!("{percent:.1}"))],
-        )
-        .to_string()
-    })
+    cached_text(
+        &STAMINA_MONO_CACHE,
+        percent.to_bits(),
+        TEXT_CACHE_LIMIT,
+        || {
+            tr_fmt(
+                "SelectMusic",
+                "StaminaMono",
+                &[("percent", &format!("{percent:.1}"))],
+            )
+            .to_string()
+        },
+    )
 }
 
 #[inline(always)]
 fn cached_stamina_candles_text(percent: f64) -> Arc<str> {
     let percent = if percent.is_finite() { percent } else { 0.0 };
-    cached_text(&STAMINA_CANDLES_CACHE, percent.to_bits(), || {
-        tr_fmt(
-            "SelectMusic",
-            "StaminaCandles",
-            &[("percent", &format!("{percent:.1}"))],
-        )
-        .to_string()
-    })
+    cached_text(
+        &STAMINA_CANDLES_CACHE,
+        percent.to_bits(),
+        TEXT_CACHE_LIMIT,
+        || {
+            tr_fmt(
+                "SelectMusic",
+                "StaminaCandles",
+                &[("percent", &format!("{percent:.1}"))],
+            )
+            .to_string()
+        },
+    )
 }
 
 #[inline(always)]
@@ -333,6 +327,7 @@ fn cached_stream_total_text(total_streams: u32, stream_percent: f32) -> Arc<str>
     cached_text(
         &STREAM_TOTAL_CACHE,
         (total_streams, stream_percent.to_bits()),
+        TEXT_CACHE_LIMIT,
         || format!("{total_streams} ({stream_percent:.1}%)"),
     )
 }
@@ -351,6 +346,7 @@ fn cached_tech_stream_text(
     cached_text(
         &TECH_STREAM_CACHE,
         (total_streams, total_measures, stream_percent.to_bits()),
+        TEXT_CACHE_LIMIT,
         || format!("{total_streams}/{total_measures} ({stream_percent:.1}%)"),
     )
 }
@@ -666,33 +662,43 @@ fn fallback_banner_key(active_color_index: i32) -> String {
 // Optimized formatter
 fn fmt_music_rate(rate: f32) -> Arc<str> {
     let rate = if rate.is_finite() { rate } else { 1.0 };
-    cached_text(&MUSIC_RATE_FMT_CACHE, rate.to_bits(), || {
-        let scaled = (rate * 100.0).round() as i32;
-        if scaled == 100 {
-            return "1.0".to_string();
-        }
-        let int_part = scaled / 100;
-        let frac2 = (scaled % 100).abs();
-        if frac2 == 0 {
-            int_part.to_string()
-        } else if frac2 % 10 == 0 {
-            format!("{int_part}.{}", frac2 / 10)
-        } else {
-            format!("{int_part}.{frac2:02}")
-        }
-    })
+    cached_text(
+        &MUSIC_RATE_FMT_CACHE,
+        rate.to_bits(),
+        TEXT_CACHE_LIMIT,
+        || {
+            let scaled = (rate * 100.0).round() as i32;
+            if scaled == 100 {
+                return "1.0".to_string();
+            }
+            let int_part = scaled / 100;
+            let frac2 = (scaled % 100).abs();
+            if frac2 == 0 {
+                int_part.to_string()
+            } else if frac2 % 10 == 0 {
+                format!("{int_part}.{}", frac2 / 10)
+            } else {
+                format!("{int_part}.{frac2:02}")
+            }
+        },
+    )
 }
 
 #[inline(always)]
 fn cached_music_rate_banner_text(rate: f32) -> Arc<str> {
     let rate = if rate.is_finite() { rate } else { 1.0 };
-    cached_text(&MUSIC_RATE_BANNER_CACHE, rate.to_bits(), || {
-        let rate_text = fmt_music_rate(rate);
-        let mut text = String::with_capacity(rate_text.len() + 12);
-        text.push_str(rate_text.as_ref());
-        text.push_str(&tr("SelectMusic", "MusicRateSuffix"));
-        text
-    })
+    cached_text(
+        &MUSIC_RATE_BANNER_CACHE,
+        rate.to_bits(),
+        TEXT_CACHE_LIMIT,
+        || {
+            let rate_text = fmt_music_rate(rate);
+            let mut text = String::with_capacity(rate_text.len() + 12);
+            text.push_str(rate_text.as_ref());
+            text.push_str(&tr("SelectMusic", "MusicRateSuffix"));
+            text
+        },
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -7716,7 +7722,7 @@ fn format_session_time(seconds: f32) -> Arc<str> {
         seconds as u64
     };
     let key = s.min(u32::MAX as u64) as u32;
-    cached_text(&SESSION_TIME_CACHE, key, || {
+    cached_text(&SESSION_TIME_CACHE, key, TEXT_CACHE_LIMIT, || {
         let (h, m, sec) = (s / 3600, (s % 3600) / 60, s % 60);
         if s < 3600 {
             format!("{m:02}:{sec:02}")
@@ -7730,7 +7736,7 @@ fn format_session_time(seconds: f32) -> Arc<str> {
 
 fn format_chart_length(seconds: i32) -> Arc<str> {
     let key = seconds.max(0);
-    cached_text(&CHART_LENGTH_CACHE, key, || {
+    cached_text(&CHART_LENGTH_CACHE, key, TEXT_CACHE_LIMIT, || {
         let s = key as u64;
         let (h, m, s) = (s / 3600, (s % 3600) / 60, s % 60);
         if h > 0 {

@@ -1,7 +1,7 @@
 use crate::act;
 use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
-use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
+use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use crate::engine::present::color;
 use crate::engine::space::widescale;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -35,7 +35,6 @@ use log::warn;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread::LocalKey;
 use std::time::Instant;
 
 use crate::engine::input::{InputEvent, VirtualAction};
@@ -86,8 +85,6 @@ const BANNER_FALLBACK_KEYS: [&str; 12] = [
     "banner12.png",
 ];
 
-type TextCache<K> = HashMap<K, Arc<str>>;
-
 thread_local! {
     static SESSION_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(2048));
     static BPM_TEXT_CACHE: RefCell<TextCache<(i32, i32, u32)>> = RefCell::new(HashMap::with_capacity(1024));
@@ -100,25 +97,6 @@ thread_local! {
 }
 
 #[inline(always)]
-fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
-where
-    K: Copy + Eq + std::hash::Hash,
-    F: FnOnce() -> String,
-{
-    cache.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&key) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(build());
-        if cache.len() < TEXT_CACHE_LIMIT {
-            cache.insert(key, text.clone());
-        }
-        text
-    })
-}
-
-#[inline(always)]
 fn cached_bpm_text(min_bpm: f64, max_bpm: f64, music_rate: f32) -> Arc<str> {
     let rate = if music_rate.is_finite() {
         music_rate
@@ -128,34 +106,39 @@ fn cached_bpm_text(min_bpm: f64, max_bpm: f64, music_rate: f32) -> Arc<str> {
     let rate_f64 = f64::from(rate);
     let min = (min_bpm * rate_f64).round() as i32;
     let max = (max_bpm * rate_f64).round() as i32;
-    cached_text(&BPM_TEXT_CACHE, (min, max, rate.to_bits()), || {
-        let base = if min == max {
-            tr_fmt("Evaluation", "BpmSingle", &[("bpm", &min.to_string())]).to_string()
-        } else {
-            tr_fmt(
-                "Evaluation",
-                "BpmRange",
-                &[("min", &min.to_string()), ("max", &max.to_string())],
-            )
-            .to_string()
-        };
-        if (rate - 1.0).abs() > 0.001 {
-            tr_fmt(
-                "Evaluation",
-                "BpmWithRate",
-                &[("base", &base), ("rate", &format!("{rate:.2}"))],
-            )
-            .to_string()
-        } else {
-            base
-        }
-    })
+    cached_text(
+        &BPM_TEXT_CACHE,
+        (min, max, rate.to_bits()),
+        TEXT_CACHE_LIMIT,
+        || {
+            let base = if min == max {
+                tr_fmt("Evaluation", "BpmSingle", &[("bpm", &min.to_string())]).to_string()
+            } else {
+                tr_fmt(
+                    "Evaluation",
+                    "BpmRange",
+                    &[("min", &min.to_string()), ("max", &max.to_string())],
+                )
+                .to_string()
+            };
+            if (rate - 1.0).abs() > 0.001 {
+                tr_fmt(
+                    "Evaluation",
+                    "BpmWithRate",
+                    &[("base", &base), ("rate", &format!("{rate:.2}"))],
+                )
+                .to_string()
+            } else {
+                base
+            }
+        },
+    )
 }
 
 #[inline(always)]
 fn cached_song_length_text(seconds: i32) -> Arc<str> {
     let key = seconds.max(0);
-    cached_text(&SONG_LENGTH_CACHE, key, || {
+    cached_text(&SONG_LENGTH_CACHE, key, TEXT_CACHE_LIMIT, || {
         if key >= 3600 {
             format!("{}:{:02}:{:02}", key / 3600, (key % 3600) / 60, key % 60)
         } else {
@@ -169,6 +152,7 @@ fn cached_record_text(is_machine: bool, rank: u32) -> Arc<str> {
     cached_text(
         &RECORD_TEXT_CACHE,
         (rank, if is_machine { 0 } else { 1 }),
+        TEXT_CACHE_LIMIT,
         || {
             if is_machine {
                 tr_fmt(
@@ -374,19 +358,24 @@ fn submit_footer_lines(
 
 #[inline(always)]
 fn cached_difficulty_text(style_label: &'static str, difficulty: &'static str) -> Arc<str> {
-    cached_text(&DIFFICULTY_TEXT_CACHE, (style_label, difficulty), || {
-        tr_fmt(
-            "Evaluation",
-            "DifficultyFormat",
-            &[("style", style_label), ("difficulty", difficulty)],
-        )
-        .to_string()
-    })
+    cached_text(
+        &DIFFICULTY_TEXT_CACHE,
+        (style_label, difficulty),
+        TEXT_CACHE_LIMIT,
+        || {
+            tr_fmt(
+                "Evaluation",
+                "DifficultyFormat",
+                &[("style", style_label), ("difficulty", difficulty)],
+            )
+            .to_string()
+        },
+    )
 }
 
 #[inline(always)]
 fn cached_total_label_text(total: u32) -> Arc<str> {
-    cached_text(&TOTAL_LABEL_CACHE, total, || {
+    cached_text(&TOTAL_LABEL_CACHE, total, TEXT_CACHE_LIMIT, || {
         format!("{} {}", total, tr("Evaluation", "TotalLabel"))
     })
 }
@@ -1960,7 +1949,7 @@ fn format_session_time(seconds_total: f32) -> Arc<str> {
         seconds_total as u64
     };
     let key = seconds_total.min(u32::MAX as u64) as u32;
-    cached_text(&SESSION_TIME_CACHE, key, || {
+    cached_text(&SESSION_TIME_CACHE, key, TEXT_CACHE_LIMIT, || {
         let hours = seconds_total / 3600;
         let minutes = (seconds_total % 3600) / 60;
         let seconds = seconds_total % 60;
@@ -1982,7 +1971,7 @@ fn cached_remaining_time_text(seconds_total: f32) -> Arc<str> {
         seconds_total as u64
     };
     let key = seconds_total.min(u32::MAX as u64) as u32;
-    cached_text(&REMAINING_TIME_CACHE, key, || {
+    cached_text(&REMAINING_TIME_CACHE, key, TEXT_CACHE_LIMIT, || {
         if seconds_total >= 3600 {
             format!(
                 "{}:{:02}:{:02}",

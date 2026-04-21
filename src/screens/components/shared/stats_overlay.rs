@@ -2,39 +2,19 @@ use crate::act;
 use crate::engine::audio::{OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality};
 use crate::engine::gfx::{BackendType, ClockDomainTrace, PresentModeTrace};
 use crate::engine::present::actors::Actor;
+use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::space::{screen_height, screen_width};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread::LocalKey;
 
 const TEXT_CACHE_LIMIT: usize = 4096;
 const DEBUG_OVERLAY_Z: i16 = 32020;
-type TextCache<K> = HashMap<K, Arc<str>>;
 
 thread_local! {
     static STATS_TEXT_CACHE: RefCell<TextCache<(u32, u32, u8)>> = RefCell::new(HashMap::with_capacity(256));
     static STUTTER_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(1024));
     static STUTTER_LINE_CACHE: RefCell<TextCache<(u32, u32, u32)>> = RefCell::new(HashMap::with_capacity(2048));
-}
-
-#[inline(always)]
-fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
-where
-    K: Copy + Eq + std::hash::Hash,
-    F: FnOnce() -> String,
-{
-    cache.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&key) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(build());
-        if cache.len() < TEXT_CACHE_LIMIT {
-            cache.insert(key, text.clone());
-        }
-        text
-    })
 }
 
 #[inline(always)]
@@ -57,7 +37,7 @@ const fn backend_key(backend: BackendType) -> u8 {
 #[inline(always)]
 fn cached_stats_text(backend: BackendType, fps: f32, vpf: u32) -> Arc<str> {
     let key = (fps.max(0.0).to_bits(), vpf, backend_key(backend));
-    cached_text(&STATS_TEXT_CACHE, key, || {
+    cached_text(&STATS_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
         format!("{:.0} FPS\n{} VPF\n{}", fps.max(0.0), vpf, backend)
     })
 }
@@ -207,7 +187,7 @@ pub fn build(backend: BackendType, fps: f32, vpf: u32, timing: Option<TimingHeal
 fn format_stutter_time(seconds: f32) -> Arc<str> {
     let centi_total = (seconds.max(0.0) * 100.0).round() as u64;
     let key = (centi_total.min(u32::MAX as u64)) as u32;
-    cached_text(&STUTTER_TIME_CACHE, key, || {
+    cached_text(&STUTTER_TIME_CACHE, key, TEXT_CACHE_LIMIT, || {
         let minutes = centi_total / 6_000;
         let rem = centi_total % 6_000;
         let secs = rem / 100;
@@ -274,6 +254,7 @@ pub fn build_stutter(events: &[StutterEvent]) -> Vec<Actor> {
                 event.frame_ms.max(0.0).to_bits(),
                 event.frame_multiple.max(0.0).to_bits(),
             ),
+            TEXT_CACHE_LIMIT,
             || {
                 format!(
                     "{t}: {:.0}ms ({:.0})",
