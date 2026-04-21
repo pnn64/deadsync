@@ -80,22 +80,12 @@ struct GrooveStatsSubmitRetryEntry {
     is_fail: bool,
     api_key: String,
     payload: GrooveStatsSubmitPlayerPayload,
-    /// Consecutive failures of an *auto-retryable* status (see
-    /// [`groovestats_status_is_auto_retryable`]). Drives the auto-retry
-    /// budget — when the count reaches `MAX_ATTEMPTS` the budget is
-    /// exhausted and we fall back to bare `F5 Retry`. Reset on manual F5
-    /// (so the user gets a fresh auto-retry curve) and on `Submitted`.
-    auto_retry_attempt: u8,
-    /// Consecutive failures of a *manual-retry-only* status (see
-    /// [`groovestats_status_is_auto_retryable`]). Drives the manual F5
-    /// cooldown. Saturates at `MAX_ATTEMPTS`. Reset only on `Submitted` or
-    /// fresh payload — manual fires do NOT reset, so the cooldown gate
-    /// keeps its teeth against F5 mashing.
-    manual_retry_attempt: u8,
+    /// Consecutive failures, capped at `SUBMIT_RETRY_MAX_ATTEMPTS`. Drives
+    /// the shared backoff schedule so mixed failure kinds keep ratcheting the
+    /// same curve. Reset only on a successful submit.
+    retry_attempt: u8,
     /// When the next retry is allowed (manual cooldown) or scheduled (auto).
-    /// `None` means no gate and no auto-retry pending. The tick only fires
-    /// when the current UI status is auto-retryable; for manual-only
-    /// statuses this field acts purely as a cooldown gate.
+    /// `None` means no gate and no auto-retry pending.
     next_retry_at: Option<Instant>,
 }
 
@@ -104,22 +94,20 @@ struct GrooveStatsSubmitRetryEntry {
 /// `MAX_ATTEMPTS` failures, auto-retry is exhausted and the user gets bare
 /// `F5 Retry`). For *manual-only* statuses the cooldown caps at
 /// `delay(MAX)` and stays there for subsequent failures.
-const GROOVESTATS_RETRY_MAX_ATTEMPTS: u8 = 4;
+/// Maximum number of attempts before the backoff schedule saturates.
+/// Re-exported alias of the shared [`SUBMIT_RETRY_MAX_ATTEMPTS`].
+const GROOVESTATS_RETRY_MAX_ATTEMPTS: u8 = crate::game::scores::SUBMIT_RETRY_MAX_ATTEMPTS;
 
-/// Exponential backoff schedule. `attempt` is 1-based.
-/// 1 → 2s, 2 → 4s, 3 → 8s, 4 → 16s. Total auto budget ≈ 30s.
+/// Exponential backoff schedule shared with every other submission backend.
+/// See [`crate::game::scores::submit_retry_delay_secs`] for the schedule.
 #[inline(always)]
 const fn groovestats_retry_delay_secs(attempt: u8) -> u64 {
-    1u64 << attempt
+    crate::game::scores::submit_retry_delay_secs(attempt)
 }
 
 /// Returns true when the given failure status should be retried automatically
 /// by the tick driver (with exponential backoff). Other retryable statuses
 /// still get a cooldown gate, but the user must press `F5` to actually fire.
-///
-/// Currently only `TimedOut` qualifies, but this is the single source of
-/// truth — adding more auto-retryable kinds later is just a matter of
-/// extending this match.
 #[inline]
 const fn groovestats_status_is_auto_retryable(status: GrooveStatsSubmitUiStatus) -> bool {
     matches!(status, GrooveStatsSubmitUiStatus::TimedOut)
@@ -1296,8 +1284,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             is_fail,
             api_key: profile.groovestats_api_key.trim().to_string(),
             payload: payload.clone(),
-            auto_retry_attempt: 0,
-            manual_retry_attempt: 0,
+            retry_attempt: 0,
             next_retry_at: None,
         });
         let token = groovestats_next_submit_ui_token();
@@ -1387,13 +1374,6 @@ fn retry_groovestats_submit_inner(
             }
         }
         stored.next_retry_at = None;
-        if manual {
-            // User explicitly chose to retry → give them a fresh auto-retry
-            // curve next time an auto-retryable failure happens. The manual
-            // cooldown counter is intentionally NOT reset here — that's what
-            // gives the F5 gate its teeth against mashing.
-            stored.auto_retry_attempt = 0;
-        }
         stored.clone()
     };
 
@@ -1415,13 +1395,13 @@ fn retry_groovestats_submit_inner(
 /// (i.e., the result wasn't from a stale token), so that late results from
 /// superseded requests cannot re-arm the schedule.
 ///
-/// Statuses where [`groovestats_status_is_auto_retryable`] returns true
-/// drive the *auto-retry* budget — the tick fires automatically up to
-/// `MAX_ATTEMPTS`, then falls back to bare `F5 Retry` (no cooldown).
-///
-/// Other retryable statuses drive the *manual* F5 cooldown using the same
-/// timestamp field — the tick refuses to fire them. The attempt counter
-/// saturates at `MAX_ATTEMPTS` so the cooldown caps at `delay(MAX)`.
+/// Every retryable failure — auto or manual — advances the same shared
+/// `retry_attempt` counter, so mixed failure kinds (e.g., timeout → 5xx →
+/// timeout) keep ratcheting along the same exponential curve instead of
+/// each kind walking its own track. Auto-firing is gated on the current
+/// status being [`groovestats_status_is_auto_retryable`] AND
+/// `retry_attempt <= MAX_ATTEMPTS`; otherwise `next_retry_at` acts purely
+/// as a manual F5 cooldown gate.
 fn groovestats_record_submit_failure(
     side: profile::PlayerSide,
     chart_hash: &str,
@@ -1439,31 +1419,12 @@ fn groovestats_record_submit_failure(
         entry.next_retry_at = None;
         return;
     }
-    if groovestats_status_is_auto_retryable(status) {
-        if entry.auto_retry_attempt < GROOVESTATS_RETRY_MAX_ATTEMPTS {
-            entry.auto_retry_attempt += 1;
-            let delay = groovestats_retry_delay_secs(entry.auto_retry_attempt);
-            entry.next_retry_at = Some(Instant::now() + Duration::from_secs(delay));
-        } else {
-            // Auto budget exhausted → degrade to manual-only, but keep the
-            // request gated by the max-delay cooldown so users can't mash F5
-            // against an unhealthy backend. The tick driver checks the
-            // attempt counter and refuses to auto-fire once we hit MAX, so
-            // setting `next_retry_at` here only arms the manual gate.
-            entry.next_retry_at = Some(
-                Instant::now() + Duration::from_secs(groovestats_retry_delay_secs(
-                    GROOVESTATS_RETRY_MAX_ATTEMPTS,
-                )),
-            );
-        }
-    } else {
-        entry.manual_retry_attempt = entry
-            .manual_retry_attempt
-            .saturating_add(1)
-            .min(GROOVESTATS_RETRY_MAX_ATTEMPTS);
-        let delay = groovestats_retry_delay_secs(entry.manual_retry_attempt);
-        entry.next_retry_at = Some(Instant::now() + Duration::from_secs(delay));
-    }
+    entry.retry_attempt = entry
+        .retry_attempt
+        .saturating_add(1)
+        .min(GROOVESTATS_RETRY_MAX_ATTEMPTS);
+    let delay = groovestats_retry_delay_secs(entry.retry_attempt);
+    entry.next_retry_at = Some(Instant::now() + Duration::from_secs(delay));
 }
 
 /// Resets all retry/backoff bookkeeping after a successful submit so the next
@@ -1477,8 +1438,7 @@ fn groovestats_record_submit_success(side: profile::PlayerSide, chart_hash: &str
     else {
         return;
     };
-    entry.auto_retry_attempt = 0;
-    entry.manual_retry_attempt = 0;
+    entry.retry_attempt = 0;
     entry.next_retry_at = None;
 }
 
@@ -1489,7 +1449,9 @@ fn groovestats_record_submit_success(side: profile::PlayerSide, chart_hash: &str
 pub fn groovestats_next_retry_remaining_secs(side: profile::PlayerSide) -> Option<u32> {
     let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
     let target = lock[submit_side_ix(side)].as_ref()?.next_retry_at?;
-    Some(target.saturating_duration_since(Instant::now()).as_secs() as u32)
+    Some(crate::game::scores::duration_to_ceil_secs(
+        target.saturating_duration_since(Instant::now()),
+    ))
 }
 
 /// Returns true when the next scheduled retry will be fired automatically by
@@ -1497,14 +1459,14 @@ pub fn groovestats_next_retry_remaining_secs(side: profile::PlayerSide) -> Optio
 /// auto-retry budget hasn't been exhausted). When false, any pending
 /// `next_retry_at` is acting purely as a manual F5 cooldown gate.
 pub fn groovestats_next_retry_is_auto(side: profile::PlayerSide) -> bool {
-    let (chart_hash, auto_attempt) = {
+    let (chart_hash, attempt) = {
         let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
         let Some(entry) = lock[submit_side_ix(side)].as_ref() else {
             return false;
         };
-        (entry.chart_hash.clone(), entry.auto_retry_attempt)
+        (entry.chart_hash.clone(), entry.retry_attempt)
     };
-    if auto_attempt >= GROOVESTATS_RETRY_MAX_ATTEMPTS {
+    if attempt >= GROOVESTATS_RETRY_MAX_ATTEMPTS {
         return false;
     }
     matches!(
@@ -1530,13 +1492,13 @@ pub fn tick_groovestats_auto_retries() -> bool {
                 entry
                     .next_retry_at
                     .filter(|t| *t <= now)
-                    .map(|_| (entry.chart_hash.clone(), entry.side, entry.auto_retry_attempt))
+                    .map(|_| (entry.chart_hash.clone(), entry.side, entry.retry_attempt))
             })
             .collect()
     };
     let mut fired = false;
-    for (hash, side, auto_attempt) in due {
-        if auto_attempt >= GROOVESTATS_RETRY_MAX_ATTEMPTS {
+    for (hash, side, attempt) in due {
+        if attempt >= GROOVESTATS_RETRY_MAX_ATTEMPTS {
             // Auto budget exhausted — `next_retry_at` is now a manual-only
             // cooldown gate. Don't auto-fire.
             continue;
@@ -1916,9 +1878,10 @@ mod tests {
         assert_eq!(groovestats_retry_delay_secs(1), 2);
         assert_eq!(groovestats_retry_delay_secs(2), 4);
         assert_eq!(groovestats_retry_delay_secs(3), 8);
+        assert_eq!(groovestats_retry_delay_secs(4), 16);
         assert_eq!(
             groovestats_retry_delay_secs(GROOVESTATS_RETRY_MAX_ATTEMPTS),
-            16
+            32
         );
     }
 

@@ -59,16 +59,10 @@ struct ArrowCloudSubmitRetryEntry {
     side: profile::PlayerSide,
     api_key: String,
     payload: ArrowCloudPayload,
-    /// Consecutive failures of an *auto-retryable* status (see
-    /// [`arrowcloud_status_is_auto_retryable`]). Drives the auto-retry
-    /// budget — when it reaches `MAX_ATTEMPTS` we fall back to bare
-    /// `F5 Retry`. Reset on manual F5 and on `Submitted`.
-    auto_retry_attempt: u8,
-    /// Consecutive failures of a *manual-retry-only* status (see
-    /// [`arrowcloud_status_is_auto_retryable`]). Drives the manual F5
-    /// cooldown. Saturates at `MAX_ATTEMPTS`. Reset only on `Submitted`
-    /// or fresh payload — manual fires do NOT reset.
-    manual_retry_attempt: u8,
+    /// Consecutive failures, capped at `SUBMIT_RETRY_MAX_ATTEMPTS`. Drives
+    /// the shared backoff schedule so mixed failure kinds keep ratcheting the
+    /// same curve. Reset only on a successful submit.
+    retry_attempt: u8,
     /// When the next retry is allowed (manual cooldown) or scheduled (auto).
     /// `None` means no gate and no auto-retry pending. The tick only fires
     /// when the current UI status is auto-retryable; for manual-only
@@ -79,13 +73,15 @@ struct ArrowCloudSubmitRetryEntry {
 /// Maximum number of attempts before the backoff schedule saturates.
 /// For *auto-retryable* statuses this is also the auto-retry budget. For
 /// *manual-only* statuses the cooldown caps at `delay(MAX)`.
-const ARROWCLOUD_RETRY_MAX_ATTEMPTS: u8 = 4;
+/// Maximum number of attempts before the backoff schedule saturates.
+/// Re-exported alias of the shared [`SUBMIT_RETRY_MAX_ATTEMPTS`].
+const ARROWCLOUD_RETRY_MAX_ATTEMPTS: u8 = crate::game::scores::SUBMIT_RETRY_MAX_ATTEMPTS;
 
-/// Exponential backoff schedule. `attempt` is 1-based:
-/// 1 → 2s, 2 → 4s, 3 → 8s, 4 → 16s.
+/// Exponential backoff schedule shared with every other submission backend.
+/// See [`crate::game::scores::submit_retry_delay_secs`] for the schedule.
 #[inline(always)]
 const fn arrowcloud_retry_delay_secs(attempt: u8) -> u64 {
-    1u64 << attempt
+    crate::game::scores::submit_retry_delay_secs(attempt)
 }
 
 /// Returns true when the given failure status should be retried automatically
@@ -377,6 +373,7 @@ struct ArrowCloudSubmitError {
     status: ArrowCloudSubmitUiStatus,
     message: String,
 }
+
 
 #[inline(always)]
 fn arrowcloud_format_length(seconds: f32) -> String {
@@ -905,8 +902,7 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
             side,
             api_key: api_key.to_string(),
             payload: payload.clone(),
-            auto_retry_attempt: 0,
-            manual_retry_attempt: 0,
+            retry_attempt: 0,
             next_retry_at: None,
         });
         let token = arrowcloud_next_submit_ui_token();
@@ -971,13 +967,6 @@ fn retry_arrowcloud_submit_inner(
             }
         }
         stored.next_retry_at = None;
-        if manual {
-            // User explicitly chose to retry → fresh auto-retry curve next
-            // time an auto-retryable failure happens. The manual cooldown
-            // counter is intentionally NOT reset here — that's what gives
-            // the F5 gate its teeth against mashing.
-            stored.auto_retry_attempt = 0;
-        }
         stored.clone()
     };
 
@@ -997,10 +986,13 @@ fn retry_arrowcloud_submit_inner(
 /// failure. Only call after the UI status update was accepted (token still
 /// matched), so stale results from superseded requests cannot re-arm.
 ///
-/// Statuses where [`arrowcloud_status_is_auto_retryable`] returns true
-/// drive the *auto-retry* budget. Other retryable statuses drive the
-/// *manual* F5 cooldown using the same timestamp field — the tick refuses
-/// to fire those.
+/// Every retryable failure — auto or manual — advances the same shared
+/// `retry_attempt` counter, so mixed failure kinds (e.g., timeout → 5xx →
+/// timeout) keep ratcheting along the same exponential curve instead of
+/// each kind walking its own track. Auto-firing is gated on the current
+/// status being [`arrowcloud_status_is_auto_retryable`] AND
+/// `retry_attempt <= MAX_ATTEMPTS`; otherwise `next_retry_at` acts purely
+/// as a manual F5 cooldown gate.
 fn arrowcloud_record_submit_failure(
     side: profile::PlayerSide,
     chart_hash: &str,
@@ -1017,29 +1009,12 @@ fn arrowcloud_record_submit_failure(
         entry.next_retry_at = None;
         return;
     }
-    if arrowcloud_status_is_auto_retryable(status) {
-        if entry.auto_retry_attempt < ARROWCLOUD_RETRY_MAX_ATTEMPTS {
-            entry.auto_retry_attempt += 1;
-            let delay = arrowcloud_retry_delay_secs(entry.auto_retry_attempt);
-            entry.next_retry_at = Some(Instant::now() + Duration::from_secs(delay));
-        } else {
-            // Auto budget exhausted → degrade to manual-only, but keep the
-            // request gated by the max-delay cooldown so users can't mash F5
-            // against an unhealthy backend.
-            entry.next_retry_at = Some(
-                Instant::now() + Duration::from_secs(arrowcloud_retry_delay_secs(
-                    ARROWCLOUD_RETRY_MAX_ATTEMPTS,
-                )),
-            );
-        }
-    } else {
-        entry.manual_retry_attempt = entry
-            .manual_retry_attempt
-            .saturating_add(1)
-            .min(ARROWCLOUD_RETRY_MAX_ATTEMPTS);
-        let delay = arrowcloud_retry_delay_secs(entry.manual_retry_attempt);
-        entry.next_retry_at = Some(Instant::now() + Duration::from_secs(delay));
-    }
+    entry.retry_attempt = entry
+        .retry_attempt
+        .saturating_add(1)
+        .min(ARROWCLOUD_RETRY_MAX_ATTEMPTS);
+    let delay = arrowcloud_retry_delay_secs(entry.retry_attempt);
+    entry.next_retry_at = Some(Instant::now() + Duration::from_secs(delay));
 }
 
 /// Resets all retry/backoff bookkeeping after a successful submit so the next
@@ -1053,8 +1028,7 @@ fn arrowcloud_record_submit_success(side: profile::PlayerSide, chart_hash: &str)
     else {
         return;
     };
-    entry.auto_retry_attempt = 0;
-    entry.manual_retry_attempt = 0;
+    entry.retry_attempt = 0;
     entry.next_retry_at = None;
 }
 
@@ -1064,21 +1038,23 @@ fn arrowcloud_record_submit_success(side: profile::PlayerSide, chart_hash: &str)
 pub fn arrowcloud_next_retry_remaining_secs(side: profile::PlayerSide) -> Option<u32> {
     let lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
     let target = lock[submit_side_ix(side)].as_ref()?.next_retry_at?;
-    Some(target.saturating_duration_since(Instant::now()).as_secs() as u32)
+    Some(crate::game::scores::duration_to_ceil_secs(
+        target.saturating_duration_since(Instant::now()),
+    ))
 }
 
 /// Returns true when the next scheduled retry will be fired automatically by
 /// the tick driver. When false, any pending `next_retry_at` is acting purely
 /// as a manual F5 cooldown gate.
 pub fn arrowcloud_next_retry_is_auto(side: profile::PlayerSide) -> bool {
-    let (chart_hash, auto_attempt) = {
+    let (chart_hash, attempt) = {
         let lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
         let Some(entry) = lock[submit_side_ix(side)].as_ref() else {
             return false;
         };
-        (entry.payload.hash.clone(), entry.auto_retry_attempt)
+        (entry.payload.hash.clone(), entry.retry_attempt)
     };
-    if auto_attempt >= ARROWCLOUD_RETRY_MAX_ATTEMPTS {
+    if attempt >= ARROWCLOUD_RETRY_MAX_ATTEMPTS {
         return false;
     }
     matches!(
@@ -1103,13 +1079,13 @@ pub fn tick_arrowcloud_auto_retries() -> bool {
                 entry
                     .next_retry_at
                     .filter(|t| *t <= now)
-                    .map(|_| (entry.payload.hash.clone(), entry.side, entry.auto_retry_attempt))
+                    .map(|_| (entry.payload.hash.clone(), entry.side, entry.retry_attempt))
             })
             .collect()
     };
     let mut fired = false;
-    for (hash, side, auto_attempt) in due {
-        if auto_attempt >= ARROWCLOUD_RETRY_MAX_ATTEMPTS {
+    for (hash, side, attempt) in due {
+        if attempt >= ARROWCLOUD_RETRY_MAX_ATTEMPTS {
             continue;
         }
         let Some(status) = get_arrowcloud_submit_ui_status_for_side(&hash, side) else {
@@ -1284,9 +1260,10 @@ mod tests {
         assert_eq!(arrowcloud_retry_delay_secs(1), 2);
         assert_eq!(arrowcloud_retry_delay_secs(2), 4);
         assert_eq!(arrowcloud_retry_delay_secs(3), 8);
+        assert_eq!(arrowcloud_retry_delay_secs(4), 16);
         assert_eq!(
             arrowcloud_retry_delay_secs(ARROWCLOUD_RETRY_MAX_ATTEMPTS),
-            16
+            32
         );
     }
 

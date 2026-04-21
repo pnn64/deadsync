@@ -35,6 +35,9 @@ pub use arrowcloud::{
     tick_arrowcloud_auto_retries,
 };
 pub use submit_status::RejectReason;
+pub(crate) use submit_status::{
+    SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs, submit_retry_delay_secs,
+};
 pub use groovestats::{
     GrooveStatsEvalState, GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus,
     get_groovestats_submit_itl_progress_for_side, get_groovestats_submit_record_banner_for_side,
