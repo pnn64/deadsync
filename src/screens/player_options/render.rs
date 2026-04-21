@@ -93,6 +93,24 @@ fn footer_for_card<'a>(
     (Some(text), avatar)
 }
 
+/// Resolve the texture key for a player's currently-selected choice
+/// from a fixed list of texture choices, returning `None` for "None".
+fn select_preview_texture<'a>(
+    row: &Row,
+    player_idx: usize,
+    choices: &'a [crate::assets::TextureChoice],
+) -> Option<&'a str> {
+    choices
+        .get(row.selected_choice_index[player_idx])
+        .and_then(|choice| {
+            if choice.key.eq_ignore_ascii_case("None") {
+                None
+            } else {
+                crate::assets::resolve_texture_choice(Some(choice.key.as_str()), choices)
+            }
+        })
+}
+
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
     let active = session_active_players();
@@ -1367,18 +1385,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     // Add previews for the selected value on each side.
                     if row.id == RowId::JudgmentFont {
                         let texture_for = |player_idx: usize| -> Option<&str> {
-                            assets::judgment_texture_choices()
-                                .get(row.selected_choice_index[player_idx])
-                                .and_then(|choice| {
-                                    if choice.key.eq_ignore_ascii_case("None") {
-                                        None
-                                    } else {
-                                        assets::resolve_texture_choice(
-                                            Some(choice.key.as_str()),
-                                            assets::judgment_texture_choices(),
-                                        )
-                                    }
-                                })
+                            select_preview_texture(
+                                row,
+                                player_idx,
+                                assets::judgment_texture_choices(),
+                            )
                         };
                         if let Some(texture) = texture_for(primary_player_idx) {
                             actors.push(act!(sprite(texture):
@@ -1407,18 +1418,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     // Add hold judgment preview for "Hold Judgment" row showing both frames (Held and Let Go)
                     if row.id == RowId::HoldJudgment {
                         let texture_for = |player_idx: usize| -> Option<&str> {
-                            assets::hold_judgment_texture_choices()
-                                .get(row.selected_choice_index[player_idx])
-                                .and_then(|choice| {
-                                    if choice.key.eq_ignore_ascii_case("None") {
-                                        None
-                                    } else {
-                                        assets::resolve_texture_choice(
-                                            Some(choice.key.as_str()),
-                                            assets::hold_judgment_texture_choices(),
-                                        )
-                                    }
-                                })
+                            select_preview_texture(
+                                row,
+                                player_idx,
+                                assets::hold_judgment_texture_choices(),
+                            )
                         };
                         let draw_hold_preview = |texture: &str, center_x: f32, actors: &mut Vec<Actor>| {
                             let zoom = JUDGMENT_PREVIEW_ZOOM;
