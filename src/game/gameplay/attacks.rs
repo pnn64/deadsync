@@ -4,8 +4,8 @@ use crate::game::note::Note;
 use crate::game::parsing::song_lua::{
     CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty,
     SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
-    SongLuaOverlayActor, SongLuaOverlayEase, SongLuaOverlayMessageCommand, SongLuaPlayerContext,
-    SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
+    SongLuaOverlayActor, SongLuaOverlayEase, SongLuaOverlayMessageCommand, SongLuaOverlayState,
+    SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
 };
 use crate::game::profile;
 use crate::game::scroll::ScrollSpeedSetting;
@@ -1952,8 +1952,35 @@ pub(super) fn build_song_lua_runtime_windows(
     let mut overlay_eases = Vec::new();
     let mut overlay_ease_ranges = Vec::new();
     let mut overlay_events = Vec::new();
+    let play_style = profile::get_session_play_style();
+    let player_side = profile::get_session_player_side();
+    let center_1player_notefield = crate::config::get().center_1player_notefield;
+    // Default player actor x/y must match StepMania's (SCREEN_CENTER_X, SCREEN_CENTER_Y)
+    // origin so that, when no song.lua override is present, the gameplay player
+    // transform path produces a zero translation. Without this, every non-lua song
+    // would translate the playfield by (-playfield_center_x, +screen_center_y),
+    // shoving it up and to the left.
+    let default_player_actor = |player_index: usize| SongLuaCapturedActor {
+        initial_state: SongLuaOverlayState {
+            x: if player_index < num_players {
+                song_lua_compile_player_screen_x(
+                    num_players,
+                    player_index,
+                    &player_profiles[player_index],
+                    play_style,
+                    player_side,
+                    center_1player_notefield,
+                )
+            } else {
+                screen_center_x()
+            },
+            y: screen_center_y(),
+            ..SongLuaOverlayState::default()
+        },
+        message_commands: Vec::new(),
+    };
     let mut player_actors: [SongLuaCapturedActor; MAX_PLAYERS] =
-        std::array::from_fn(|_| SongLuaCapturedActor::default());
+        std::array::from_fn(default_player_actor);
     let mut player_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
     let mut song_foreground = SongLuaCapturedActor::default();
@@ -2006,7 +2033,7 @@ pub(super) fn build_song_lua_runtime_windows(
     } else {
         1.0
     };
-    context.style_name = match profile::get_session_play_style() {
+    context.style_name = match play_style {
         profile::PlayStyle::Single => "single",
         profile::PlayStyle::Versus => "versus",
         profile::PlayStyle::Double => "double",
@@ -2018,9 +2045,6 @@ pub(super) fn build_song_lua_runtime_windows(
     context.confusion_offset_available = true;
     context.confusion_available = true;
     context.amod_available = false;
-    let play_style = profile::get_session_play_style();
-    let player_side = profile::get_session_player_side();
-    let center_1player_notefield = crate::config::get().center_1player_notefield;
     context.players = std::array::from_fn(|player| SongLuaPlayerContext {
         enabled: player < num_players,
         difficulty: if player < num_players {
