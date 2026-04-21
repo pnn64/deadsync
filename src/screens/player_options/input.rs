@@ -364,6 +364,13 @@ pub(super) fn finish_start_without_action(
     None
 }
 
+#[inline(always)]
+fn all_active_players_on_last_row(state: &State, active: [bool; PLAYER_SLOTS]) -> bool {
+    let last_row = state.pane().row_map.len().saturating_sub(1);
+    active_player_indices(active)
+        .all(|player_idx| state.pane().selected_row[player_idx] == last_row)
+}
+
 pub(super) fn handle_nav_event(
     state: &mut State,
     asset_manager: &AssetManager,
@@ -628,6 +635,10 @@ pub(super) fn handle_start_event(
     }
     if super::choice::dispatch_behavior_toggle(state, player_idx, id) {
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
+    }
+    // ITG ScreenOptions only exits once every active player is on the last row.
+    if row_index == num_rows.saturating_sub(1) && !all_active_players_on_last_row(state, active) {
+        return None;
     }
     if row_index == num_rows.saturating_sub(1)
         && let Some(what_comes_next_row) = state

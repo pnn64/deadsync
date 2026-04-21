@@ -4,7 +4,7 @@ use super::*;
 pub(super) mod tests {
     use super::{
         ErrorBarMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask,
-        NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, P1, Row, RowId, RowMap, ScrollMask,
+        NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, P1, P2, Row, RowId, RowMap, ScrollMask,
         SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event, hud_offset_choices,
         is_row_visible, judgment_tilt_intensity_visible, repeat_held_arcade_start, row_visibility,
         session_active_players, sync_profile_scroll_speed,
@@ -13,7 +13,7 @@ pub(super) mod tests {
     use crate::assets::i18n::{LookupKey, lookup_key};
     use crate::game::profile::{self, BackgroundFilter, PlayStyle, PlayerSide, Profile};
     use crate::game::scroll::ScrollSpeedSetting;
-    use crate::screens::Screen;
+    use crate::screens::{Screen, ScreenAction};
     use crate::test_support::{compose_scenarios, notefield_bench};
     use std::time::{Duration, Instant};
 
@@ -360,6 +360,20 @@ pub(super) mod tests {
         (state, asset_manager)
     }
 
+    fn setup_versus_state() -> (super::State, AssetManager) {
+        let base = notefield_bench::fixture();
+        let song = base.state().song.clone();
+        profile::set_session_play_style(PlayStyle::Versus);
+        profile::set_session_player_side(PlayerSide::P1);
+        profile::set_session_joined(true, true);
+        let mut asset_manager = AssetManager::new();
+        for (name, font) in compose_scenarios::bench_fonts() {
+            asset_manager.register_font(name, font);
+        }
+        let state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
+        (state, asset_manager)
+    }
+
     #[test]
     fn dispatch_with_zero_delta_commits_choice() {
         ensure_i18n();
@@ -664,6 +678,61 @@ pub(super) mod tests {
         assert_eq!(
             before, after,
             "RowBehavior::Exit must not advance its own choice index"
+        );
+    }
+
+    #[test]
+    fn versus_exit_requires_both_players_on_exit_row() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_versus_state();
+
+        let exit_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::Exit)
+            .expect("Exit should be in Main pane");
+        assert!(exit_row > 0, "Exit should follow WhatComesNext");
+        let other_row = exit_row - 1;
+        state.pane_mut().selected_row[P1] = exit_row;
+        state.pane_mut().selected_row[P2] = other_row;
+
+        let active = session_active_players();
+        assert_eq!(
+            active,
+            [true, true],
+            "versus setup should activate both players"
+        );
+
+        let action = handle_start_event(&mut state, &asset_manager, active, P1);
+        assert!(
+            matches!(action, None),
+            "ITG parity: pressing Exit in versus is a no-op until both players are on the last row"
+        );
+        assert_eq!(state.pane().selected_row[P1], exit_row);
+        assert_eq!(state.pane().selected_row[P2], other_row);
+    }
+
+    #[test]
+    fn versus_exit_navigates_once_both_players_are_on_exit_row() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_versus_state();
+
+        let exit_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::Exit)
+            .expect("Exit should be in Main pane");
+        state.pane_mut().selected_row = [exit_row, exit_row];
+
+        let active = session_active_players();
+        let action = handle_start_event(&mut state, &asset_manager, active, P2);
+        assert!(
+            matches!(action, Some(ScreenAction::Navigate(Screen::Gameplay))),
+            "once both players are on Exit, either player should be able to leave the screen"
         );
     }
 
