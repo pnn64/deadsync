@@ -64,7 +64,7 @@ const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
 const AUTO_SUBMIT_RECORD_TEXT_Y: f32 = 40.0;
 const AUTO_SUBMIT_RECORD_TEXT_ZOOM: f32 = 0.225;
 const AUTO_SUBMIT_RECORD_TEXT_PERIOD: f32 = 3.0;
-const SUBMIT_FOOTER_CHECK_GLYPH: &str = "✓";
+const SUBMIT_FOOTER_CHECK_GLYPH: &str = "✔";
 const SUBMIT_FOOTER_REJECT_GLYPH: &str = "⊘";
 const SUBMIT_FOOTER_F5_GLYPH: &str = "↻ F5";
 const SUBMIT_FOOTER_HOURGLASS_GLYPH: &str = "⧗";
@@ -316,7 +316,7 @@ impl SubmitFooterCell {
 
     /// Bracketed plain-text rendering used by tests and as a fallback when
     /// the renderer can't emit sprite actors. Format examples:
-    /// `[GS ✓]`, `[GS ⧗ 8s Timeout]`, `[GS ↻ F5 Network]`, `[GS ⊘ Invalid Score]`.
+    /// `[GS ✔]`, `[GS ⧗ 8s Timeout]`, `[GS ↻ F5 Network]`, `[GS ⊘ Invalid Score]`.
     fn display_text(&self) -> Arc<str> {
         let mut s = String::with_capacity(32);
         s.push('[');
@@ -853,7 +853,7 @@ mod tests {
         );
         assert_eq!(
             cells_text(&cells),
-            vec![format!("[{} ✓]", submit_footer_gs_label())]
+            vec![format!("[{} ✔]", submit_footer_gs_label())]
         );
     }
 
@@ -1088,7 +1088,7 @@ mod tests {
         );
         assert_eq!(
             cells_text(&cells),
-            vec![format!("[{} ✓]", submit_footer_gs_label()), "[AC ✓]".to_string()]
+            vec![format!("[{} ✔]", submit_footer_gs_label()), "[AC ✔]".to_string()]
         );
     }
 
@@ -1108,7 +1108,7 @@ mod tests {
         assert_eq!(
             cells_text(&cells),
             vec![
-                format!("[{} ✓]", submit_footer_gs_label()),
+                format!("[{} ✔]", submit_footer_gs_label()),
                 "[AC ⧗ 8s Timeout]".to_string()
             ]
         );
@@ -1156,7 +1156,7 @@ mod tests {
         assert_eq!(
             cells_text(&cells),
             vec![
-                format!("[{} ✓]", submit_footer_gs_label()),
+                format!("[{} ✔]", submit_footer_gs_label()),
                 "[AC ↻ F5 Network]".to_string()
             ]
         );
@@ -1197,7 +1197,7 @@ mod tests {
             false,
             false,
         );
-        assert_eq!(cells_text(&cells), vec!["[AC ✓]".to_string()]);
+        assert_eq!(cells_text(&cells), vec!["[AC ✔]".to_string()]);
     }
 
     #[test]

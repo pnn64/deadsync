@@ -4,7 +4,7 @@
 Replace the current multi-line, verbose evaluation submit footer with a
 single condensed line of bracketed per-backend status cells. Use two
 distinct animated sprites (spinner = active, hourglass = waiting) plus a
-small set of static glyphs (`✓`, `↻ F5`, `⊘`).
+small set of static glyphs (`✔`, `↻ F5`, `⊘`).
 
 See `submit-footer-redesign.md` (on Desktop) for the full design spec, state
 table, and example outputs. This file tracks the concrete work.
@@ -22,7 +22,7 @@ table, and example outputs. This file tracks the concrete work.
 | Backend State | Cell Output | Icon source |
 |---|---|---|
 | Submitting | `[GS ◐]` | `LoadingSpinner_10x3.png` (animated) |
-| Submitted | `[GS ✓]` | static text |
+| Submitted | `[GS ✔]` | static text |
 | Waiting (auto retry) | `[GS ⧗ 8s Timeout]` | `Hourglass_10x3.png` (animated) |
 | Waiting (manual cooldown) | `[GS ⧗ 4s Server 502]` | `Hourglass_10x3.png` (animated) |
 | Manual retry ready | `[GS ↻ F5 Network]` | static text |
@@ -65,7 +65,7 @@ table, and example outputs. This file tracks the concrete work.
 - [ ] Drop now-unused keys: `SubmittedCombined`, `Submitting`, `Retrying`,
       `RetryingIn`, `RetryableIn`, `F5Retry`, `TimedOutRetry`
 - [ ] Keep: `Rejected`, `BSLabel`, `GSLabel`, `ACLabel`, `Submitted` (may
-      reuse for `✓` cell tooltip later, otherwise drop)
+      reuse for `✔` cell tooltip later, otherwise drop)
 - [ ] Add: `F5Hint=F5`  (or just hard-code "F5" — tiny win)
 - [ ] Audit non-English `*.ini` files for the same keys; remove or update
       to keep parity (deferred if non-English support is not maintained).
@@ -121,7 +121,7 @@ table, and example outputs. This file tracks the concrete work.
       than `Vec<Arc<str>>`. Specifically test:
       - Empty when neither backend expected
       - Single-backend Submitting → one cell, icon=Spinner
-      - Single-backend Submitted → one cell, icon=Static("✓")
+      - Single-backend Submitted → one cell, icon=Static("✔")
       - Single-backend TimedOut auto pending → one cell, icon=Hourglass,
         countdown=Some(n), reason=Some("Timeout")
       - Single-backend TimedOut budget exhausted → icon=Static("↻ F5"),
@@ -131,7 +131,7 @@ table, and example outputs. This file tracks the concrete work.
       - Single-backend Rejected → icon=Static("⊘"), reason=label
       - Both expected, both Submitting → two cells
       - Both expected, mixed states → two cells, independent icons
-      - Both expected, both Submitted → two cells, both ✓
+      - Both expected, both Submitted → two cells, both ✔
 - [ ] Verify the `combined_submit_footer_text` test at line 775 is
       removed/replaced.
 
