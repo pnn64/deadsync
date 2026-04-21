@@ -804,7 +804,7 @@ mod tests {
             &*lines[0],
             format!("{} Submitted!", submit_footer_gs_label())
         );
-        assert_eq!(&*lines[1], "AC Timed Out - F5 Retry");
+        assert_eq!(&*lines[1], "AC Timeout - F5 Retry");
     }
 
     #[test]
@@ -884,7 +884,7 @@ mod tests {
         );
 
         assert_eq!(lines.len(), 1);
-        assert_eq!(&*lines[0], "Network Error - F5 Retry");
+        assert_eq!(&*lines[0], "Network - F5 Retry");
     }
 
     #[test]
@@ -902,7 +902,7 @@ mod tests {
         );
 
         assert_eq!(lines.len(), 1);
-        assert_eq!(&*lines[0], "Server Error 503 - F5 Retry");
+        assert_eq!(&*lines[0], "Server 503 - F5 Retry");
     }
 
     #[test]
@@ -920,7 +920,7 @@ mod tests {
         );
 
         assert_eq!(lines.len(), 1);
-        assert_eq!(&*lines[0], "Network Error - Retryable in 4s");
+        assert_eq!(&*lines[0], "Network - Retryable in 4s");
     }
 
     #[test]
@@ -938,7 +938,7 @@ mod tests {
         );
 
         assert_eq!(lines.len(), 1);
-        assert_eq!(&*lines[0], "Server Error 502 - Retryable in 8s");
+        assert_eq!(&*lines[0], "Server 502 - Retryable in 8s");
     }
 
     #[test]
@@ -956,7 +956,7 @@ mod tests {
             false,
             false,
         );
-        assert_eq!(&*lines[0], "Network Error - F5 Retry");
+        assert_eq!(&*lines[0], "Network - F5 Retry");
     }
 
     #[test]
@@ -974,7 +974,7 @@ mod tests {
         );
 
         assert_eq!(lines.len(), 1);
-        assert_eq!(&*lines[0], "Timed Out - F5 Retry");
+        assert_eq!(&*lines[0], "Timeout - F5 Retry");
     }
 
     #[test]
@@ -992,7 +992,7 @@ mod tests {
         );
 
         assert_eq!(lines.len(), 1);
-        assert_eq!(&*lines[0], "Timed Out - Retrying in 7s");
+        assert_eq!(&*lines[0], "Timeout - Retrying in 7s");
     }
 
     #[test]
@@ -1010,7 +1010,7 @@ mod tests {
         );
 
         assert_eq!(lines.len(), 1);
-        assert_eq!(&*lines[0], "Timed Out - Retrying...");
+        assert_eq!(&*lines[0], "Timeout - Retrying...");
     }
 
     #[test]
@@ -1032,7 +1032,7 @@ mod tests {
         );
 
         assert_eq!(lines.len(), 1);
-        assert_eq!(&*lines[0], "Timed Out - Retryable in 12s");
+        assert_eq!(&*lines[0], "Timeout - Retryable in 12s");
     }
 
     #[test]
@@ -1052,7 +1052,7 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert_eq!(
             &*lines[0],
-            format!("{} Timed Out - Retrying in 4s", submit_footer_gs_label())
+            format!("{} Timeout - Retrying in 4s", submit_footer_gs_label())
         );
         assert_eq!(&*lines[1], "AC Submitted!");
     }
