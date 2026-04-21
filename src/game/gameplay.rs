@@ -2713,6 +2713,13 @@ pub struct JudgmentRenderInfo {
     pub started_at_screen_s: f32,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct MineJudgmentRenderInfo {
+    pub result: MineResult,
+    pub column: usize,
+    pub started_at_screen_s: f32,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct HoldJudgmentRenderInfo {
     pub result: HoldResult,
@@ -3133,6 +3140,7 @@ pub struct PlayerRuntime {
     pub scoring_counts: judgment::JudgeCounts,
     pub provisional_scoring_counts: judgment::JudgeCounts,
     pub last_judgment: Option<JudgmentRenderInfo>,
+    pub last_mine_judgment: Option<MineJudgmentRenderInfo>,
 
     pub life: f32,
     pub combo_after_miss: u32,
@@ -3241,6 +3249,7 @@ fn init_player_runtime() -> PlayerRuntime {
         scoring_counts: [0; judgment::JUDGE_GRADE_COUNT],
         provisional_scoring_counts: [0; judgment::JUDGE_GRADE_COUNT],
         last_judgment: None,
+        last_mine_judgment: None,
         life: 0.5,
         combo_after_miss: 0,
         is_failing: false,
@@ -6318,6 +6327,7 @@ fn hit_mine(
     }
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
+    set_last_mine_judgment(state, player, column, MineResult::Hit);
     let note_time_ns = state.note_time_cache_ns[note_index];
     let hit_time_ns = note_time_ns.saturating_add(time_error_music_ns);
     debug!(
@@ -6662,6 +6672,15 @@ fn error_bar_register_tap(
 fn set_last_judgment(state: &mut State, player: usize, judgment: Judgment) {
     state.players[player].last_judgment = Some(JudgmentRenderInfo {
         judgment,
+        started_at_screen_s: state.total_elapsed_in_screen,
+    });
+}
+
+#[inline(always)]
+fn set_last_mine_judgment(state: &mut State, player: usize, column: usize, result: MineResult) {
+    state.players[player].last_mine_judgment = Some(MineJudgmentRenderInfo {
+        result,
+        column,
         started_at_screen_s: state.total_elapsed_in_screen,
     });
 }
@@ -7348,6 +7367,7 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_ns: SongTimeNs)
                 let row_index = note.row_index;
                 let column = note.column;
                 note.mine_result = Some(MineResult::Avoided);
+                set_last_mine_judgment(state, player, column, MineResult::Avoided);
                 avoided_count = avoided_count.saturating_add(1);
                 if log_mine_avoid {
                     trace!(
@@ -7895,7 +7915,7 @@ mod tests {
     use crate::engine::present::color;
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
     use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
-    use crate::game::note::{HoldData, HoldResult, Note, NoteType};
+    use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
     use crate::game::parsing::notes::ParsedNote;
     use crate::game::profile;
     use crate::game::song::SongData;
@@ -9013,6 +9033,22 @@ mod tests {
         });
         tick_visual_effects(&mut state, 0.0);
         assert!(state.hold_judgments[0].is_none());
+    }
+
+    #[test]
+    fn mine_judgment_feedback_records_result_column_and_time() {
+        let mut state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        state.total_elapsed_in_screen = 9.25;
+
+        super::set_last_mine_judgment(&mut state, 0, 2, MineResult::Avoided);
+
+        let info = state.players[0]
+            .last_mine_judgment
+            .expect("mine judgment should be recorded");
+        assert_eq!(info.result, MineResult::Avoided);
+        assert_eq!(info.column, 2);
+        assert_eq!(info.started_at_screen_s, 9.25);
     }
 
     #[test]
