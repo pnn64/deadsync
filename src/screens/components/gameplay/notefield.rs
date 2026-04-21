@@ -2918,6 +2918,13 @@ fn hold_overlaps_visible_window(
     true
 }
 
+#[inline(always)]
+const fn mine_hides_after_resolution(mine_result: Option<MineResult>) -> bool {
+    // ITG hides mines once they have received any final mine judgment, not
+    // only after a hit explosion.
+    mine_result.is_some()
+}
+
 pub fn build_bundles(
     state: &State,
     profile: &profile::Profile,
@@ -5659,7 +5666,7 @@ pub fn build_bundles(
                     }
                     if !note.is_fake {
                         if matches!(note.note_type, NoteType::Mine) {
-                            if matches!(note.mine_result, Some(MineResult::Hit)) {
+                            if mine_hides_after_resolution(note.mine_result) {
                                 return;
                             }
                         } else if note.result.is_some()
@@ -7291,7 +7298,7 @@ mod tests {
         ExScoreData, JUDGE_GRADE_COUNT, JudgeGrade, Judgment, TimingWindow, ex_score_percent,
         predictive_ex_score_percents,
     };
-    use crate::game::note::NoteType;
+    use crate::game::note::{MineResult, NoteType};
     use crate::game::parsing::noteskin::{
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
@@ -7308,6 +7315,13 @@ mod tests {
             window: Some(window),
             miss_because_held: false,
         }
+    }
+
+    #[test]
+    fn mine_hides_after_any_final_resolution() {
+        assert!(!super::mine_hides_after_resolution(None));
+        assert!(super::mine_hides_after_resolution(Some(MineResult::Hit)));
+        assert!(super::mine_hides_after_resolution(Some(MineResult::Avoided)));
     }
 
     #[test]
