@@ -23,10 +23,10 @@ CURVE_SAMPLES = 96             # silhouette resolution per side
 CURVE_POWER = 0.55             # < 1 rounds the bulbs and sharpens the neck
 
 CX = W // 2
-TOP_Y = 8
-BOT_Y = H - 8
+TOP_Y = 5
+BOT_Y = H - 5
 MID_Y = H // 2
-HALF_W = 24                    # bulb half-width
+HALF_W = 27                    # bulb half-width
 NECK_W = 2                     # narrow waist half-width
 
 

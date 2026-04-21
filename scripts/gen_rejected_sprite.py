@@ -24,7 +24,7 @@ def draw_rejected() -> Image.Image:
     draw = ImageDraw.Draw(img)
 
     cx, cy = big_w // 2, big_h // 2
-    radius = int(20 * SUPERSAMPLE)
+    radius = int(26 * SUPERSAMPLE)
     big_thick = STROKE_THICK * SUPERSAMPLE
 
     # Outer circle.

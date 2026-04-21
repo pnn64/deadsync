@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 
 W = H = 64
 SUPERSAMPLE = 4
-STROKE_THICK = 6   # logical pixels; multiplied by SUPERSAMPLE for the big draw
+STROKE_THICK = 11   # logical pixels; multiplied by SUPERSAMPLE for the big draw
 COLOR = (255, 255, 255, 255)
 
 
@@ -29,9 +29,9 @@ def draw_check() -> Image.Image:
     #   p2: upper-right where the long arm ends
     # The long arm is roughly twice the short arm so the shape reads as a
     # checkmark rather than a wide V.
-    p0 = (12, 32)
-    p1 = (26, 46)
-    p2 = (54, 18)
+    p0 = (11, 32)
+    p1 = (27, 50)
+    p2 = (53, 14)
 
     big_thick = STROKE_THICK * SUPERSAMPLE
 
