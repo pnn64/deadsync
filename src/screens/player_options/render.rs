@@ -407,7 +407,6 @@ pub(super) struct RowCtx<'a> {
     pub sl_gray: [f32; 4],
 }
 
-
 /// Render z-order layers for the player_options screen. Higher values
 /// draw on top of lower ones.
 pub(super) const Z_ROW_BACKGROUND: i16 = 100;
@@ -532,15 +531,23 @@ pub(super) fn multi_select_mask(state: &State, row_id: RowId, player_idx: usize)
         Holds => state.holds_active_mask[player_idx].bits().into(),
         Accel => state.accel_effects_active_mask[player_idx].bits().into(),
         Effect => state.visual_effects_active_mask[player_idx].bits(),
-        Appearance => state.appearance_effects_active_mask[player_idx].bits().into(),
+        Appearance => state.appearance_effects_active_mask[player_idx]
+            .bits()
+            .into(),
         LifeBarOptions => state.life_bar_options_active_mask[player_idx].bits().into(),
         FAPlusOptions => state.fa_plus_active_mask[player_idx].bits().into(),
         GameplayExtras => state.gameplay_extras_active_mask[player_idx].bits().into(),
-        GameplayExtrasMore => state.gameplay_extras_more_active_mask[player_idx].bits().into(),
+        GameplayExtrasMore => state.gameplay_extras_more_active_mask[player_idx]
+            .bits()
+            .into(),
         ResultsExtras => state.results_extras_active_mask[player_idx].bits().into(),
-        MeasureCounterOptions => state.measure_counter_options_active_mask[player_idx].bits().into(),
+        MeasureCounterOptions => state.measure_counter_options_active_mask[player_idx]
+            .bits()
+            .into(),
         ErrorBar => state.error_bar_active_mask[player_idx].bits().into(),
-        ErrorBarOptions => state.error_bar_options_active_mask[player_idx].bits().into(),
+        ErrorBarOptions => state.error_bar_options_active_mask[player_idx]
+            .bits()
+            .into(),
         EarlyDecentWayOffOptions => state.early_dw_active_mask[player_idx].bits().into(),
         _ => return None,
     })
@@ -745,8 +752,6 @@ pub(super) fn draw_cursor_ring(
     }
 }
 
-
-
 /// Render the inline-choices block for one row: every choice laid out
 /// horizontally, with multi-select or single-select underline, the
 /// optional cursor ring, the optional Arcade `next row` label, and
@@ -854,9 +859,9 @@ pub(super) fn draw_inline_choices(
     }
 }
 
-/// Render the single-value text + optional per-row preview block: 
-/// the chosen value text, its underline and cursor ring, the optional 
-/// P2 mirror, plus per-RowId preview sprites/text (judgment, hold, 
+/// Render the single-value text + optional per-row preview block:
+/// the chosen value text, its underline and cursor ring, the optional
+/// P2 mirror, plus per-RowId preview sprites/text (judgment, hold,
 /// noteskin, mineskin, receptor, explosion, combo).
 pub(super) fn draw_single_value_with_preview(actors: &mut Vec<Actor>, rc: &RowCtx) {
     let primary_player_idx = if rc.fc.active[P1] { P1 } else { P2 };
@@ -864,10 +869,9 @@ pub(super) fn draw_single_value_with_preview(actors: &mut Vec<Actor>, rc: &RowCt
     match rc.row.id {
         RowId::JudgmentFont => draw_judgment_preview(actors, rc, primary_player_idx),
         RowId::HoldJudgment => draw_hold_preview(actors, rc, primary_player_idx),
-        RowId::NoteSkin
-        | RowId::MineSkin
-        | RowId::ReceptorSkin
-        | RowId::TapExplosionSkin => draw_noteskin_family_preview(actors, rc, primary_player_idx),
+        RowId::NoteSkin | RowId::MineSkin | RowId::ReceptorSkin | RowId::TapExplosionSkin => {
+            draw_noteskin_family_preview(actors, rc, primary_player_idx)
+        }
         RowId::ComboFont => draw_combo_preview(actors, rc, primary_player_idx),
         _ => {}
     }
@@ -1110,8 +1114,8 @@ fn draw_hold_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: u
         };
         let draw_hold_preview = |texture: &str, center_x: f32, actors: &mut Vec<Actor>| {
             let zoom = JUDGMENT_PREVIEW_ZOOM;
-            let tex_w = crate::assets::texture_dims(texture)
-                .map_or(128.0, |meta| meta.w.max(1) as f32);
+            let tex_w =
+                crate::assets::texture_dims(texture).map_or(128.0, |meta| meta.w.max(1) as f32);
             let center_offset = tex_w * zoom * 0.4;
 
             actors.push(act!(sprite(texture):
@@ -1163,14 +1167,14 @@ fn draw_combo_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: 
         // 5=Work, 6=WendyCursed, 7=None
         let combo_font_for = |idx: usize| -> Option<&'static str> {
             match idx {
-            0 => Some("wendy_combo"),
-            1 => Some("combo_arial_rounded"),
-            2 => Some("combo_asap"),
-            3 => Some("combo_bebas_neue"),
-            4 => Some("combo_source_code"),
-            5 => Some("combo_work"),
-            6 => Some("combo_wendy_cursed"),
-            _ => None,
+                0 => Some("wendy_combo"),
+                1 => Some("combo_arial_rounded"),
+                2 => Some("combo_asap"),
+                3 => Some("combo_bebas_neue"),
+                4 => Some("combo_source_code"),
+                5 => Some("combo_work"),
+                6 => Some("combo_wendy_cursed"),
+                _ => None,
             }
         };
         let p1_choice_idx = rc.row.selected_choice_index[primary_player_idx]

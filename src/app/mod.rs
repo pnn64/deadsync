@@ -1,5 +1,6 @@
 mod commands;
 mod dynamic_media;
+mod fsr;
 mod graphics;
 mod input_routing;
 pub(crate) mod media_cache;
@@ -2435,6 +2436,7 @@ pub struct App {
     window: Option<Arc<Window>>,
     backend: Option<renderer::Backend>,
     backend_type: BackendType,
+    fsr_monitor: fsr::Monitor,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
     ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
@@ -2474,6 +2476,30 @@ impl App {
             self.state.shell.window_focused,
             self.state.shell.surface_active,
         )
+    }
+
+    #[inline(always)]
+    fn sync_input_fsr_view(&mut self) {
+        let on_input = self.state.screens.current_screen == CurrentScreen::Input;
+        let on_select_music = self.state.screens.current_screen == CurrentScreen::SelectMusic
+            && self
+                .state
+                .screens
+                .select_music_state
+                .test_input_overlay_visible;
+        let view = if config::get().use_fsrs && (on_input || on_select_music) {
+            self.fsr_monitor.poll_view()
+        } else {
+            None
+        };
+        input_screen::set_fsr_view(
+            &mut self.state.screens.input_state,
+            on_input.then_some(view.clone()).flatten(),
+        );
+        select_music::set_fsr_view(
+            &mut self.state.screens.select_music_state,
+            on_select_music.then_some(view).flatten(),
+        );
     }
 
     #[inline(always)]
@@ -2641,6 +2667,7 @@ impl App {
         crate::screens::components::shared::heart_bg::tick_global(logic_dt);
 
         self.sync_gameplay_input_capture();
+        self.sync_input_fsr_view();
         self.state.shell.update_gamepad_overlay(redraw_started);
 
         let mut upload_us: u32 = 0;
@@ -3040,6 +3067,7 @@ impl App {
             window: None,
             backend: None,
             backend_type,
+            fsr_monitor: fsr::Monitor::new(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
             // Screen transitions clear the UI cache, so saturating avoids full

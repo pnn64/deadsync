@@ -6996,6 +6996,11 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     test_input::apply_raw_pad_event(&mut state.test_input_overlay, pad_event);
 }
 
+#[inline(always)]
+pub fn set_fsr_view(state: &mut State, view: Option<test_input::FsrView>) {
+    test_input::set_fsr_view(&mut state.test_input_overlay, view);
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     update_select_hold_state(state, ev);
 
@@ -9190,6 +9195,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
         actors.extend(test_input::build_select_music_overlay(
             &state.test_input_overlay,
+            state.active_color_index,
             show_p1,
             show_p2,
             pad_spacing,

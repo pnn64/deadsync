@@ -248,6 +248,8 @@ pub struct Config {
     pub arcade_options_navigation: bool,
     /// ITGmania/Simply Love parity: use left/right/start style menu navigation.
     pub three_key_navigation: bool,
+    /// Enable direct FSR device diagnostics in Test Input for supported controllers.
+    pub use_fsrs: bool,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
     /// menu navigation. Only explicitly-bound menu buttons (p*_menu_*) work in menus.
     pub only_dedicated_menu_buttons: bool,
@@ -366,6 +368,7 @@ impl Default for Config {
             input_debounce_seconds: 0.02,
             arcade_options_navigation: false,
             three_key_navigation: false,
+            use_fsrs: false,
             only_dedicated_menu_buttons: false,
         }
     }

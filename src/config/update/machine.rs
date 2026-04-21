@@ -58,6 +58,17 @@ pub fn update_three_key_navigation(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_use_fsrs(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.use_fsrs == enabled {
+            return;
+        }
+        cfg.use_fsrs = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_only_dedicated_menu_buttons(enabled: bool) {
     let enabled = {
         let mut cfg = lock_config();
