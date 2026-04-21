@@ -1024,6 +1024,13 @@ impl AssetManager {
             textures_to_load.push((p.to_string(), p.to_string()));
         }
 
+        for p in [
+            "submit/LoadingSpinner_10x3.png",
+            "submit/Hourglass_10x3.png",
+        ] {
+            textures_to_load.push((p.to_string(), p.to_string()));
+        }
+
         append_noteskins_pngs_recursive(&mut textures_to_load, "noteskins");
         append_graphic_textures(&mut textures_to_load, "judgements", true);
         append_graphic_textures(&mut textures_to_load, "hold_judgements", false);
