@@ -46,6 +46,53 @@ fn selection_border_width() -> f32 {
     widescale(2.0, 2.5)
 }
 
+/// Resolved profile + session flags for one side, used by `get_actors`
+/// to populate the screen footer.
+struct PlayerCardInfo {
+    profile: crate::game::profile::Profile,
+    joined: bool,
+    guest: bool,
+}
+
+fn player_card_info(side: crate::game::profile::PlayerSide) -> PlayerCardInfo {
+    PlayerCardInfo {
+        profile: crate::game::profile::get_for_side(side),
+        joined: crate::game::profile::is_session_side_joined(side),
+        guest: crate::game::profile::is_session_side_guest(side),
+    }
+}
+
+/// Compute the footer text and optional avatar for one player side.
+///
+/// Lifetimes: the returned text borrows from either the player's
+/// `display_name` (via `card`), or from the localized `insert_card` /
+/// `press_start` strings, all of which the caller keeps alive on the
+/// stack. The optional avatar borrows the texture key directly from
+/// the profile.
+fn footer_for_card<'a>(
+    card: &'a PlayerCardInfo,
+    insert_card: &'a str,
+    press_start: &'a str,
+) -> (Option<&'a str>, Option<AvatarParams<'a>>) {
+    if !card.joined {
+        return (Some(press_start), None);
+    }
+    let text = if card.guest {
+        insert_card
+    } else {
+        card.profile.display_name.as_str()
+    };
+    let avatar = if card.guest {
+        None
+    } else {
+        card.profile
+            .avatar_texture_key
+            .as_deref()
+            .map(|texture_key| AvatarParams { texture_key })
+    };
+    (Some(text), avatar)
+}
+
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
     let active = session_active_players();
@@ -70,53 +117,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         right_avatar: None,
     }));
 
-    let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
-    let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
-    let p1_avatar = p1_profile
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
-    let p2_avatar = p2_profile
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
-
-    let p1_joined =
-        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P1);
-    let p2_joined =
-        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P2);
-    let p1_guest =
-        crate::game::profile::is_session_side_guest(crate::game::profile::PlayerSide::P1);
-    let p2_guest =
-        crate::game::profile::is_session_side_guest(crate::game::profile::PlayerSide::P2);
+    let p1_card = player_card_info(crate::game::profile::PlayerSide::P1);
+    let p2_card = player_card_info(crate::game::profile::PlayerSide::P2);
 
     let insert_card = tr("Common", "InsertCard");
     let press_start = tr("Common", "PressStart");
 
-    let (footer_left, left_avatar) = if p1_joined {
-        (
-            Some(if p1_guest {
-                insert_card.as_ref()
-            } else {
-                p1_profile.display_name.as_str()
-            }),
-            if p1_guest { None } else { p1_avatar },
-        )
-    } else {
-        (Some(press_start.as_ref()), None)
-    };
-    let (footer_right, right_avatar) = if p2_joined {
-        (
-            Some(if p2_guest {
-                insert_card.as_ref()
-            } else {
-                p2_profile.display_name.as_str()
-            }),
-            if p2_guest { None } else { p2_avatar },
-        )
-    } else {
-        (Some(press_start.as_ref()), None)
-    };
+    let (footer_left, left_avatar) = footer_for_card(&p1_card, &insert_card, &press_start);
+    let (footer_right, right_avatar) = footer_for_card(&p2_card, &insert_card, &press_start);
     let event_mode = tr("Common", "EventMode");
     actors.push(screen_bar::build(ScreenBarParams {
         title: &event_mode,
