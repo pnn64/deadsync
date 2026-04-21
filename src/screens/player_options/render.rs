@@ -306,49 +306,51 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 z(Z_ROW_FOREGROUND)
             ));
         }
-        // Left column (row titles)
-        let mut title_color = if is_active {
-            let mut c = color::simply_love_rgba(state.active_color_index);
-            c[3] = 1.0;
-            c
-        } else {
-            [1.0, 1.0, 1.0, 1.0]
-        };
-        title_color[3] *= a;
-        // Handle multi-line row titles (e.g., "Music Rate\nbpm: 120")
-        if row.id == RowId::MusicRate {
-            let display = music_rate_display_name(state);
-            let lines: Vec<&str> = display.split('\n').collect();
-            if lines.len() == 2 {
-                actors.push(act!(text: font("miso"): settext(lines[0].to_string()):
-                    align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(title_zoom):
-                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                    horizalign(left): maxwidth(title_max_w):
-                    z(Z_ROW_FOREGROUND)
-                ));
-                actors.push(act!(text: font("miso"): settext(lines[1].to_string()):
-                    align(0.0, 0.5): xy(title_x, current_row_y + 7.0): zoom(title_zoom):
-                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                    horizalign(left): maxwidth(title_max_w):
-                    z(Z_ROW_FOREGROUND)
-                ));
+        if row.id != RowId::Exit {
+            // Left column (row titles)
+            let mut title_color = if is_active {
+                let mut c = color::simply_love_rgba(state.active_color_index);
+                c[3] = 1.0;
+                c
             } else {
-                actors.push(act!(text: font("miso"): settext(display):
-                    align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
-                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                    horizalign(left): maxwidth(title_max_w):
-                    z(Z_ROW_FOREGROUND)
-                ));
+                [1.0, 1.0, 1.0, 1.0]
+            };
+            title_color[3] *= a;
+            // Handle multi-line row titles (e.g., "Music Rate\nbpm: 120")
+            if row.id == RowId::MusicRate {
+                let display = music_rate_display_name(state);
+                let lines: Vec<&str> = display.split('\n').collect();
+                if lines.len() == 2 {
+                    actors.push(act!(text: font("miso"): settext(lines[0].to_string()):
+                        align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(title_zoom):
+                        diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                        horizalign(left): maxwidth(title_max_w):
+                        z(Z_ROW_FOREGROUND)
+                    ));
+                    actors.push(act!(text: font("miso"): settext(lines[1].to_string()):
+                        align(0.0, 0.5): xy(title_x, current_row_y + 7.0): zoom(title_zoom):
+                        diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                        horizalign(left): maxwidth(title_max_w):
+                        z(Z_ROW_FOREGROUND)
+                    ));
+                } else {
+                    actors.push(act!(text: font("miso"): settext(display):
+                        align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
+                        diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                        horizalign(left): maxwidth(title_max_w):
+                        z(Z_ROW_FOREGROUND)
+                    ));
+                }
+            } else {
+                actors.push(
+                    act!(text: font("miso"): settext(row.name.get().to_string()):
+                        align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
+                        diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                        horizalign(left): maxwidth(title_max_w):
+                        z(Z_ROW_FOREGROUND)
+                    ),
+                );
             }
-        } else {
-            actors.push(
-                act!(text: font("miso"): settext(row.name.get().to_string()):
-                    align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
-                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                    horizalign(left): maxwidth(title_max_w):
-                    z(Z_ROW_FOREGROUND)
-                ),
-            );
         }
         // Inactive option text color should be #808080 (alpha 1.0)
         let mut sl_gray = color::rgba_hex("#808080");
