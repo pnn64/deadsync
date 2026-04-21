@@ -271,6 +271,72 @@ fn player_color_index(state: &State, player_idx: usize) -> i32 {
     }
 }
 
+/// Current animated cursor rectangle for a player (center xy + size),
+/// or `None` if the player is inactive or the cursor isn't initialised yet.
+fn cursor_for_player(state: &State, player_idx: usize) -> Option<(f32, f32, f32, f32)> {
+    if player_idx >= PLAYER_SLOTS || !state.pane().cursor_initialized[player_idx] {
+        return None;
+    }
+    let pane = state.pane();
+    let t = pane.cursor_t[player_idx].clamp(0.0, 1.0);
+    let r = CursorRect::lerp(pane.cursor_from[player_idx], pane.cursor_to[player_idx], t);
+    Some((r.x, r.y, r.w, r.h))
+}
+
+/// Draw the 4-sided cursor ring around each active player's selected
+/// option in row `item_idx`. No-ops for players whose cursor isn't on
+/// this row or hasn't been initialised yet.
+fn draw_cursor_ring(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    active: [bool; PLAYER_SLOTS],
+    item_idx: usize,
+    a: f32,
+) {
+    let border_w = selection_border_width();
+    for player_idx in active_player_indices(active) {
+        if state.pane().selected_row[player_idx] != item_idx {
+            continue;
+        }
+        let Some((center_x, center_y, ring_w, ring_h)) = cursor_for_player(state, player_idx)
+        else {
+            continue;
+        };
+
+        let left = center_x - ring_w * 0.5;
+        let right = center_x + ring_w * 0.5;
+        let top = center_y - ring_h * 0.5;
+        let bottom = center_y + ring_h * 0.5;
+        let mut ring_color = color::decorative_rgba(player_color_index(state, player_idx));
+        ring_color[3] *= a;
+
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy((left + right) * 0.5, top + border_w * 0.5):
+            zoomto(ring_w, border_w):
+            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+            z(Z_ROW_FOREGROUND)
+        ));
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy((left + right) * 0.5, bottom - border_w * 0.5):
+            zoomto(ring_w, border_w):
+            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+            z(Z_ROW_FOREGROUND)
+        ));
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy(left + border_w * 0.5, (top + bottom) * 0.5):
+            zoomto(border_w, ring_h):
+            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+            z(Z_ROW_FOREGROUND)
+        ));
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy(right - border_w * 0.5, (top + bottom) * 0.5):
+            zoomto(border_w, ring_h):
+            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
+            z(Z_ROW_FOREGROUND)
+        ));
+    }
+}
+
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
     let active = session_active_players();
@@ -398,15 +464,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let title_x = row_left + title_left_pad;
     // Keep header labels bounded to the title column so they never overlap option values.
     let title_max_w = (TITLE_BG_WIDTH - title_left_pad - 5.0).max(0.0);
-    let cursor_now = |player_idx: usize| -> Option<(f32, f32, f32, f32)> {
-        if player_idx >= PLAYER_SLOTS || !state.pane().cursor_initialized[player_idx] {
-            return None;
-        }
-        let pane = state.pane();
-        let t = pane.cursor_t[player_idx].clamp(0.0, 1.0);
-        let r = CursorRect::lerp(pane.cursor_from[player_idx], pane.cursor_to[player_idx], t);
-        Some((r.x, r.y, r.w, r.h))
-    };
 
     for item_idx in 0..total_rows {
         let (current_row_y, row_alpha) = state
@@ -537,47 +594,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
             // Draw the selection cursor for the centered "Exit" text when active
             if is_active {
-                let border_w = selection_border_width();
-                for player_idx in active_player_indices(active) {
-                    if state.pane().selected_row[player_idx] != item_idx {
-                        continue;
-                    }
-                    let Some((center_x, center_y, ring_w, ring_h)) = cursor_now(player_idx) else {
-                        continue;
-                    };
-
-                    let left = center_x - ring_w * 0.5;
-                    let right = center_x + ring_w * 0.5;
-                    let top = center_y - ring_h * 0.5;
-                    let bottom = center_y + ring_h * 0.5;
-                    let mut ring_color = color::decorative_rgba(player_color_index(state, player_idx));
-                    ring_color[3] *= a;
-
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy((left + right) * 0.5, top + border_w * 0.5):
-                        zoomto(ring_w, border_w):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy((left + right) * 0.5, bottom - border_w * 0.5):
-                        zoomto(ring_w, border_w):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(left + border_w * 0.5, (top + bottom) * 0.5):
-                        zoomto(border_w, ring_h):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(right - border_w * 0.5, (top + bottom) * 0.5):
-                        zoomto(border_w, ring_h):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                }
+                draw_cursor_ring(&mut actors, state, active, item_idx, a);
             }
         } else if show_all_choices_inline {
             // Render every option horizontally; when active, all options should be white.
@@ -643,46 +660,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
             // Draw the 4-sided cursor ring around the selected option when this row is active.
             if !widths.is_empty() {
-                let border_w = selection_border_width();
-                for player_idx in active_player_indices(active) {
-                    if state.pane().selected_row[player_idx] != item_idx {
-                        continue;
-                    }
-                    let Some((center_x, center_y, ring_w, ring_h)) = cursor_now(player_idx) else {
-                        continue;
-                    };
-
-                    let left = center_x - ring_w * 0.5;
-                    let right = center_x + ring_w * 0.5;
-                    let top = center_y - ring_h * 0.5;
-                    let bottom = center_y + ring_h * 0.5;
-                    let mut ring_color = color::decorative_rgba(player_color_index(state, player_idx));
-                    ring_color[3] *= a;
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy((left + right) * 0.5, top + border_w * 0.5):
-                        zoomto(ring_w, border_w):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy((left + right) * 0.5, bottom - border_w * 0.5):
-                        zoomto(ring_w, border_w):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(left + border_w * 0.5, (top + bottom) * 0.5):
-                        zoomto(border_w, ring_h):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(right - border_w * 0.5, (top + bottom) * 0.5):
-                        zoomto(border_w, ring_h):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                }
+                draw_cursor_ring(&mut actors, state, active, item_idx, a);
             }
             // Draw each option's text (active row: all white; inactive: #808080)
             if let Some((next_row_x, _, _)) = next_row_item {
@@ -785,7 +763,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     if active[primary_player_idx] && state.pane().selected_row[primary_player_idx] == item_idx {
                         let border_w = selection_border_width();
                         if let Some((center_x, center_y, ring_w, ring_h)) =
-                            cursor_now(primary_player_idx)
+                            cursor_for_player(state, primary_player_idx)
                         {
                             let left = center_x - ring_w * 0.5;
                             let right = center_x + ring_w * 0.5;
@@ -869,7 +847,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         ));
                         if active[P2] && state.pane().selected_row[P2] == item_idx {
                             let border_w = selection_border_width();
-                            if let Some((center_x, center_y, ring_w, ring_h)) = cursor_now(P2) {
+                            if let Some((center_x, center_y, ring_w, ring_h)) = cursor_for_player(state, P2) {
                                 let left = center_x - ring_w * 0.5;
                                 let right = center_x + ring_w * 0.5;
                                 let top = center_y - ring_h * 0.5;
@@ -1634,5 +1612,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
     actors
 }
+
 
 
