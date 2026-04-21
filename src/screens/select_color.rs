@@ -8,7 +8,7 @@ use crate::engine::present::color;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::shared::{heart_bg, screen_bar};
+use crate::screens::components::shared::{heart_bg, screen_bar, transitions};
 // Keyboard handling is centralized in app via virtual actions
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::screens::{Screen, ScreenAction};
@@ -105,26 +105,11 @@ pub fn exit_anim_duration() -> f32 {
 /* ------------------------------- drawing ------------------------------- */
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(1100):
-        linear(TRANSITION_IN_DURATION): alpha(0.0):
-        linear(0.0): visible(false)
-    );
-    (vec![actor], TRANSITION_IN_DURATION)
+    transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
 pub fn out_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 0.0):
-        z(1200):
-        linear(TRANSITION_OUT_DURATION): alpha(1.0)
-    );
-    (vec![actor], TRANSITION_OUT_DURATION)
+    transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
 pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {

@@ -6,19 +6,17 @@ use crate::engine::gfx::BlendMode;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
-use crate::engine::space::{
-    screen_center_x, screen_center_y, screen_height, screen_width, widescale,
-};
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, widescale};
 use crate::game::chart::ChartData;
 use crate::game::parsing::noteskin::{
     self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization, SpriteSlot,
 };
 use crate::game::song::SongData;
-use crate::screens::components::shared::heart_bg;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
+use crate::screens::components::shared::{heart_bg, transitions};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::collections::HashMap;
@@ -336,26 +334,11 @@ pub fn init(
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(1100):
-        linear(TRANSITION_IN_DURATION): alpha(0.0):
-        linear(0.0): visible(false)
-    );
-    (vec![actor], TRANSITION_IN_DURATION)
+    transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
 pub fn out_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 0.0):
-        z(1200):
-        linear(TRANSITION_OUT_DURATION): alpha(1.0)
-    );
-    (vec![actor], TRANSITION_OUT_DURATION)
+    transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
 #[inline(always)]

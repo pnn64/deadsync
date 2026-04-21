@@ -29,7 +29,7 @@ use crate::screens::components::{
     },
     shared::{
         banner as shared_banner, gs_scorebox, heart_bg, lobby_hud, mode_pads, profile_boxes,
-        test_input, timers,
+        test_input, timers, transitions,
     },
 };
 use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, ScreenAction};
@@ -7617,21 +7617,11 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
-    (
-        vec![
-            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): zoomto(screen_width(), screen_height()): diffuse(0.0, 0.0, 0.0, 1.0): z(1100): linear(TRANSITION_IN_DURATION): alpha(0.0): linear(0.0): visible(false)),
-        ],
-        TRANSITION_IN_DURATION,
-    )
+    transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
 pub fn out_transition() -> (Vec<Actor>, f32) {
-    (
-        vec![
-            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): zoomto(screen_width(), screen_height()): diffuse(0.0, 0.0, 0.0, 0.0): z(1200): linear(TRANSITION_OUT_DURATION): alpha(1.0)),
-        ],
-        TRANSITION_OUT_DURATION,
-    )
+    transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
 pub fn trigger_immediate_refresh(state: &mut State) {

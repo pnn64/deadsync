@@ -1,7 +1,8 @@
 use crate::act;
 use crate::engine::input::{GpSystemEvent, InputEvent, PadEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
-use crate::engine::space::{screen_center_x, screen_height, screen_width};
+use crate::engine::space::screen_center_x;
+use crate::screens::components::shared::transitions;
 use crate::screens::{Screen, ScreenAction};
 // Keyboard input is handled centrally via the virtual dispatcher in app
 use std::collections::VecDeque;
@@ -39,25 +40,11 @@ pub fn update(state: &mut State, dt: f32) {
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 1.0): z(1100):
-        linear(TRANSITION_IN_DURATION): alpha(0.0):
-        linear(0.0): visible(false)
-    );
-    (vec![actor], TRANSITION_IN_DURATION)
+    transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
 pub fn out_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 0.0):
-        z(1200):
-        linear(TRANSITION_OUT_DURATION): alpha(1.0)
-    );
-    (vec![actor], TRANSITION_OUT_DURATION)
+    transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
 pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> ScreenAction {

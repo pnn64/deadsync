@@ -13,3 +13,4 @@ pub mod screen_bar;
 pub mod stats_overlay;
 pub mod test_input;
 pub mod timers;
+pub mod transitions;

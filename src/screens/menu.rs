@@ -13,14 +13,14 @@ use crate::game::song::get_song_cache;
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::menu::menu_list::{self};
 use crate::screens::components::menu::menu_splash;
-use crate::screens::components::shared::{heart_bg, screen_bar};
+use crate::screens::components::shared::{heart_bg, screen_bar, transitions};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use winit::keyboard::KeyCode;
 
-use crate::engine::space::{screen_center_x, screen_height, screen_width};
+use crate::engine::space::{screen_center_x, screen_width};
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
@@ -135,15 +135,7 @@ pub fn handle_raw_key_event(_state: &mut State, key: &RawKeyboardEvent) -> Scree
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(1100):
-        linear(TRANSITION_IN_DURATION): alpha(0.0):
-        linear(0.0): visible(false)
-    );
-    (vec![actor], TRANSITION_IN_DURATION)
+    transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
 pub fn out_transition(active_color_index: i32) -> (Vec<Actor>, f32) {
@@ -153,13 +145,7 @@ pub fn out_transition(active_color_index: i32) -> (Vec<Actor>, f32) {
     actors.extend(menu_splash::build(active_color_index));
 
     // Full-screen fade to black behind the hearts.
-    let fade = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 0.0):
-        z(1200):
-        linear(TRANSITION_OUT_DURATION): alpha(1.0)
-    );
+    let fade = transitions::fade_out_black_actor(TRANSITION_OUT_DURATION, 1200);
     actors.push(fade);
 
     (actors, TRANSITION_OUT_DURATION)

@@ -11,7 +11,9 @@ use crate::screens::components::shared::screen_bar::{
 };
 use crate::screens::components::{
     evaluation::{self as eval_panes, eval_grades},
-    shared::{banner as shared_banner, heart_bg, lobby_hud, mode_pads, screen_bar, timers},
+    shared::{
+        banner as shared_banner, heart_bg, lobby_hud, mode_pads, screen_bar, timers, transitions,
+    },
 };
 
 use crate::assets::AssetManager;
@@ -1944,25 +1946,11 @@ pub(crate) fn auto_screenshot_ready_seconds() -> f32 {
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 1.0): z(1100):
-        linear(TRANSITION_IN_DURATION): alpha(0.0):
-        linear(0.0): visible(false)
-    );
-    (vec![actor], TRANSITION_IN_DURATION)
+    transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
 }
 
 pub fn out_transition() -> (Vec<Actor>, f32) {
-    let actor = act!(quad:
-        align(0.0, 0.0): xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 0.0):
-        z(1200):
-        linear(TRANSITION_OUT_DURATION): alpha(1.0)
-    );
-    (vec![actor], TRANSITION_OUT_DURATION)
+    transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
 fn format_session_time(seconds_total: f32) -> Arc<str> {
