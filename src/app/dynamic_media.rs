@@ -30,11 +30,7 @@ struct PreparedBannerVideo {
 
 enum BannerVideoPrepResult {
     Ready(PreparedBannerVideo),
-    Failed {
-        key: String,
-        path: PathBuf,
-        msg: String,
-    },
+    Failed { path: PathBuf, msg: String },
 }
 
 struct PreparedGameplayBackground {
@@ -983,7 +979,7 @@ impl DynamicMedia {
                         },
                     );
                 }
-                BannerVideoPrepResult::Failed { key: _, path, msg } => {
+                BannerVideoPrepResult::Failed { path, msg } => {
                     self.pending_banner_video_preps.remove(&path);
                     if Some(path.as_path()) == desired_path {
                         warn!("Failed to start banner video '{}': {msg}", path.display());
@@ -1018,7 +1014,7 @@ impl DynamicMedia {
                         },
                     );
                 }
-                BannerVideoPrepResult::Failed { key: _, path, msg } => {
+                BannerVideoPrepResult::Failed { path, msg } => {
                     self.pending_banner_video_preps.remove(&path);
                     if desired_paths.iter().any(|desired| {
                         dynamic::is_dynamic_video_path(desired)
@@ -1095,20 +1091,20 @@ fn prepare_banner_video(key: String, path: PathBuf) -> BannerVideoPrepResult {
                 poster: video.poster,
                 player: video.player,
             }),
-            Err(msg) => BannerVideoPrepResult::Failed { key, path, msg },
+            Err(msg) => BannerVideoPrepResult::Failed { path, msg },
         };
     }
 
     let poster = match media_cache::load_banner_source_rgba(&path) {
         Ok(rgba) => rgba,
         Err(msg) => {
-            return BannerVideoPrepResult::Failed { key, path, msg };
+            return BannerVideoPrepResult::Failed { path, msg };
         }
     };
     let player = match video::open_player(&path, true) {
         Ok(player) => player,
         Err(msg) => {
-            return BannerVideoPrepResult::Failed { key, path, msg };
+            return BannerVideoPrepResult::Failed { path, msg };
         }
     };
     BannerVideoPrepResult::Ready(PreparedBannerVideo {
@@ -1230,7 +1226,6 @@ mod tests {
         media
             .banner_video_prep_tx
             .send(BannerVideoPrepResult::Failed {
-                key: key.clone(),
                 path: PathBuf::from(&key),
                 msg: "failed".to_string(),
             })
