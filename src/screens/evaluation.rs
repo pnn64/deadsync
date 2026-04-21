@@ -69,6 +69,12 @@ const SUBMIT_FOOTER_REJECT_GLYPH: &str = "⊘";
 const SUBMIT_FOOTER_F5_GLYPH: &str = "↻ F5";
 const SUBMIT_FOOTER_HOURGLASS_GLYPH: &str = "⧗";
 const SUBMIT_FOOTER_SPINNER_GLYPH: &str = "◐";
+const SUBMIT_FOOTER_SPINNER_TEXTURE: &str = "submit/LoadingSpinner_10x3.png";
+const SUBMIT_FOOTER_HOURGLASS_TEXTURE: &str = "submit/Hourglass_10x3.png";
+const SUBMIT_FOOTER_SPRITE_FRAMES: u32 = 30;
+const SUBMIT_FOOTER_SPRITE_FPS: f32 = 30.0;
+const SUBMIT_FOOTER_TEXT_ZOOM: f32 = 0.8;
+const SUBMIT_FOOTER_SPRITE_PX: f32 = 14.0;
 const MACHINE_RECORD_ROWS: usize = 10;
 const GS_RECORD_ROWS: usize = 10;
 const ENABLE_GS_QR_PANE: bool = true;
@@ -329,6 +335,41 @@ impl SubmitFooterCell {
         s.push(']');
         Arc::from(s)
     }
+
+    /// For animated cells, returns `(prefix, suffix)` text fragments that
+    /// surround the icon position. The renderer composes:
+    /// `text(prefix) + sprite(icon) + text(suffix)`.
+    /// Returns `None` for `Static` icons; callers should render `display_text()`
+    /// as a single text actor instead.
+    fn animated_render_parts(&self) -> Option<(Arc<str>, Arc<str>)> {
+        match self.icon {
+            CellIcon::Static(_) => None,
+            CellIcon::Spinner | CellIcon::Hourglass => {
+                let prefix: Arc<str> = format!("[{} ", self.backend_label).into();
+                let mut suffix = String::with_capacity(16);
+                if let Some(n) = self.countdown_secs {
+                    suffix.push(' ');
+                    suffix.push_str(&n.to_string());
+                    suffix.push('s');
+                }
+                if let Some(reason) = &self.reason {
+                    suffix.push(' ');
+                    suffix.push_str(reason);
+                }
+                suffix.push(']');
+                Some((prefix, suffix.into()))
+            }
+        }
+    }
+
+    /// Texture key for animated icons; `None` for static ones.
+    fn sprite_texture_key(&self) -> Option<&'static str> {
+        match self.icon {
+            CellIcon::Spinner => Some(SUBMIT_FOOTER_SPINNER_TEXTURE),
+            CellIcon::Hourglass => Some(SUBMIT_FOOTER_HOURGLASS_TEXTURE),
+            CellIcon::Static(_) => None,
+        }
+    }
 }
 
 /// Pick icon/countdown/reason for any retryable status (TimedOut, NetworkError,
@@ -385,6 +426,20 @@ fn submit_footer_cell(backend_label: Arc<str>, status: SubmitFooterStatus) -> Su
         countdown_secs,
         reason,
     }
+}
+
+fn measure_footer_text_width(asset_manager: &AssetManager, text: &str, zoom: f32) -> f32 {
+    let mut out_w = 1.0_f32;
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager.with_font("miso", |miso_font| {
+            let mut w = font::measure_line_width_logical(miso_font, text, all_fonts) as f32;
+            if !w.is_finite() || w <= 0.0 {
+                w = 1.0;
+            }
+            out_w = w * zoom;
+        });
+    });
+    out_w
 }
 
 fn submit_footer_lines(
@@ -3936,20 +3991,95 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 screen_width() * 0.75
             };
             let base_y = screen_height() - 15.0;
-            let line: String = lines
+            let frame = ((state.screen_elapsed.max(0.0) * SUBMIT_FOOTER_SPRITE_FPS) as u32)
+                % SUBMIT_FOOTER_SPRITE_FRAMES;
+            let sep_w = measure_footer_text_width(asset_manager, " ", SUBMIT_FOOTER_TEXT_ZOOM);
+
+            #[derive(Clone)]
+            enum FooterFrag {
+                Text { text: Arc<str>, width: f32 },
+                Sprite { texture_key: &'static str },
+            }
+
+            let mut frags: Vec<FooterFrag> = Vec::with_capacity(lines.len() * 3);
+            for (idx, cell) in lines.iter().enumerate() {
+                if idx > 0 {
+                    frags.push(FooterFrag::Text {
+                        text: " ".into(),
+                        width: sep_w,
+                    });
+                }
+                if let Some((prefix, suffix)) = cell.animated_render_parts() {
+                    let pw = measure_footer_text_width(
+                        asset_manager,
+                        &prefix,
+                        SUBMIT_FOOTER_TEXT_ZOOM,
+                    );
+                    frags.push(FooterFrag::Text {
+                        text: prefix,
+                        width: pw,
+                    });
+                    let texture_key = cell
+                        .sprite_texture_key()
+                        .expect("animated cell must have sprite texture key");
+                    frags.push(FooterFrag::Sprite { texture_key });
+                    let sw = measure_footer_text_width(
+                        asset_manager,
+                        &suffix,
+                        SUBMIT_FOOTER_TEXT_ZOOM,
+                    );
+                    frags.push(FooterFrag::Text {
+                        text: suffix,
+                        width: sw,
+                    });
+                } else {
+                    let txt = cell.display_text();
+                    let w = measure_footer_text_width(
+                        asset_manager,
+                        &txt,
+                        SUBMIT_FOOTER_TEXT_ZOOM,
+                    );
+                    frags.push(FooterFrag::Text { text: txt, width: w });
+                }
+            }
+
+            let total_w: f32 = frags
                 .iter()
-                .map(|c| c.display_text().to_string())
-                .collect::<Vec<_>>()
-                .join(" ");
-            actors.push(act!(text:
-                font("miso"):
-                settext(Arc::<str>::from(line)):
-                align(0.5, 0.5):
-                xy(x, base_y):
-                zoom(0.8):
-                z(121):
-                diffuse(1.0, 1.0, 1.0, 1.0)
-            ));
+                .map(|f| match f {
+                    FooterFrag::Text { width, .. } => *width,
+                    FooterFrag::Sprite { .. } => SUBMIT_FOOTER_SPRITE_PX,
+                })
+                .sum();
+            let mut cursor = x - total_w * 0.5;
+            for frag in frags {
+                match frag {
+                    FooterFrag::Text { text, width } => {
+                        let cx = cursor + width * 0.5;
+                        actors.push(act!(text:
+                            font("miso"):
+                            settext(text):
+                            align(0.5, 0.5):
+                            xy(cx, base_y):
+                            zoom(SUBMIT_FOOTER_TEXT_ZOOM):
+                            z(121):
+                            diffuse(1.0, 1.0, 1.0, 1.0)
+                        ));
+                        cursor += width;
+                    }
+                    FooterFrag::Sprite { texture_key } => {
+                        let cx = cursor + SUBMIT_FOOTER_SPRITE_PX * 0.5;
+                        actors.push(act!(sprite(texture_key):
+                            align(0.5, 0.5):
+                            xy(cx, base_y):
+                            setsize(SUBMIT_FOOTER_SPRITE_PX, SUBMIT_FOOTER_SPRITE_PX):
+                            setstate(frame):
+                            z(121):
+                            diffuse(1.0, 1.0, 1.0, 1.0)
+                        ));
+                        cursor += SUBMIT_FOOTER_SPRITE_PX;
+                    }
+                }
+            }
         }
     }
 
