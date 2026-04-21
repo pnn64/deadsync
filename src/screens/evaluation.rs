@@ -1,6 +1,7 @@
 use crate::act;
 use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
 use crate::engine::space::widescale;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -93,7 +94,7 @@ thread_local! {
     static DIFFICULTY_TEXT_CACHE: RefCell<TextCache<(&'static str, &'static str)>> = RefCell::new(HashMap::with_capacity(64));
     static REMAINING_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(2048));
     static TOTAL_LABEL_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
-    static STR_REF_CACHE: RefCell<TextCache<(usize, usize)>> = RefCell::new(HashMap::with_capacity(4096));
+    static STR_REF_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(4096));
 }
 
 #[inline(always)]
@@ -390,8 +391,7 @@ fn cached_total_label_text(total: u32) -> Arc<str> {
 
 #[inline(always)]
 fn cached_str_ref(text: &str) -> Arc<str> {
-    let key = (text.as_ptr() as usize, text.len());
-    cached_text(&STR_REF_CACHE, key, || text.to_owned())
+    cached_shared_str(&STR_REF_CACHE, text, TEXT_CACHE_LIMIT)
 }
 
 // A struct to hold a snapshot of the final score data from the gameplay screen.

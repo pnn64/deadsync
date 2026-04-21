@@ -7858,12 +7858,11 @@ mod tests {
         input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
         lane_note_window_bounds_ns, lane_press_started, lane_release_finished,
         late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_step_distance_ns,
-        note_has_displayable_hold,
         mine_window_bounds_ns, music_time_ns_from_song_clock, mutate_timing_arc,
-        next_ready_row_in_lookahead, next_tick_mode, note_hit_eval, parse_attack_mods,
-        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
-        player_row_scan_state, recent_step_tracks, recompute_player_totals,
-        refresh_active_attack_masks, refresh_timing_after_offset_change,
+        next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold, note_hit_eval,
+        parse_attack_mods, parse_song_lua_runtime_mods,
+        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
+        recompute_player_totals, refresh_active_attack_masks, refresh_timing_after_offset_change,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
         row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
@@ -10220,7 +10219,11 @@ mod tests {
 
     #[test]
     fn displayable_hold_requires_runtime_hold_data() {
-        assert!(!note_has_displayable_hold(&test_note(0, 48, NoteType::Hold)));
+        assert!(!note_has_displayable_hold(&test_note(
+            0,
+            48,
+            NoteType::Hold
+        )));
         assert!(note_has_displayable_hold(&test_hold(0, 48, 96)));
     }
 

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::thread::LocalKey;
 
 pub type TextCache<K, S = RandomState> = HashMap<K, Arc<str>, S>;
+pub type SharedStrCache<S = RandomState> = HashMap<Box<str>, Arc<str>, S>;
 
 #[inline(always)]
 pub fn cached_text<K, S, F>(
@@ -31,16 +32,43 @@ where
     })
 }
 
+#[inline(always)]
+pub fn cached_shared_str<S>(
+    cache: &'static LocalKey<RefCell<SharedStrCache<S>>>,
+    text: &str,
+    limit: usize,
+) -> Arc<str>
+where
+    S: BuildHasher,
+{
+    cache.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(shared) = cache.get(text) {
+            return shared.clone();
+        }
+        let shared: Arc<str> = Arc::<str>::from(text);
+        if cache.len() < limit {
+            cache.insert(text.into(), shared.clone());
+        }
+        shared
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     thread_local! {
         static TEST_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(4));
+        static TEST_STR_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(4));
     }
 
     fn clear_test_cache() {
         TEST_CACHE.with(|cache| cache.borrow_mut().clear());
+    }
+
+    fn clear_test_str_cache() {
+        TEST_STR_CACHE.with(|cache| cache.borrow_mut().clear());
     }
 
     #[test]
@@ -65,6 +93,33 @@ mod tests {
             assert_eq!(cache.len(), 1);
             assert!(cache.contains_key(&1));
             assert!(!cache.contains_key(&2));
+        });
+    }
+
+    #[test]
+    fn cached_shared_str_reuses_by_content() {
+        clear_test_str_cache();
+        let first_input = "alpha".to_string();
+        let second_input = String::from("alpha");
+        let first = cached_shared_str(&TEST_STR_CACHE, first_input.as_str(), 4);
+        let second = cached_shared_str(&TEST_STR_CACHE, second_input.as_str(), 4);
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(second.as_ref(), "alpha");
+    }
+
+    #[test]
+    fn cached_shared_str_separates_different_content() {
+        clear_test_str_cache();
+        let first = cached_shared_str(&TEST_STR_CACHE, "alpha", 4);
+        let second = cached_shared_str(&TEST_STR_CACHE, "bravo", 4);
+        assert_eq!(first.as_ref(), "alpha");
+        assert_eq!(second.as_ref(), "bravo");
+        assert!(!Arc::ptr_eq(&first, &second));
+        TEST_STR_CACHE.with(|cache| {
+            let cache = cache.borrow();
+            assert_eq!(cache.len(), 2);
+            assert!(cache.contains_key("alpha"));
+            assert!(cache.contains_key("bravo"));
         });
     }
 }

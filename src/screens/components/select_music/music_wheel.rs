@@ -1,7 +1,7 @@
 use crate::act;
 use crate::config::SelectMusicItlWheelMode;
 use crate::engine::present::actors::{Actor, SizeSpec};
-use crate::engine::present::cache::{TextCache, cached_text};
+use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
 use crate::engine::space::widescale;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -58,7 +58,7 @@ thread_local! {
         RefCell::new(HashMap::with_capacity(256));
     static ITL_POINTS_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
         RefCell::new(HashMap::with_capacity(256));
-    static STR_REF_CACHE: RefCell<TextCache<(usize, usize)>> =
+    static STR_REF_CACHE: RefCell<SharedStrCache> =
         RefCell::new(HashMap::with_capacity(1024));
 }
 
@@ -130,8 +130,7 @@ fn cached_itl_points_text(points: u32) -> Arc<str> {
 
 #[inline(always)]
 fn cached_str_ref(text: &str) -> Arc<str> {
-    let key = (text.as_ptr() as usize, text.len());
-    cached_text(&STR_REF_CACHE, key, STR_REF_CACHE_LIMIT, || text.to_owned())
+    cached_shared_str(&STR_REF_CACHE, text, STR_REF_CACHE_LIMIT)
 }
 
 #[inline(always)]

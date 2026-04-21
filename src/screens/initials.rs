@@ -4,7 +4,7 @@ use crate::assets::i18n::tr;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
-use crate::engine::present::cache::{TextCache, cached_text};
+use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
@@ -69,7 +69,7 @@ static POSSIBLE_CHAR_TEXT: LazyLock<[Arc<str>; POSSIBLE_CHARS.len()]> =
     LazyLock::new(|| POSSIBLE_CHARS.map(Arc::<str>::from));
 
 thread_local! {
-    static STR_REF_CACHE: RefCell<TextCache<(usize, usize)>> =
+    static STR_REF_CACHE: RefCell<SharedStrCache> =
         RefCell::new(HashMap::with_capacity(64));
 }
 
@@ -316,8 +316,7 @@ fn month_abbr(index: usize) -> std::sync::Arc<str> {
 
 #[inline(always)]
 fn cached_str_ref(text: &str) -> Arc<str> {
-    let key = (text.as_ptr() as usize, text.len());
-    cached_text(&STR_REF_CACHE, key, TEXT_CACHE_LIMIT, || text.to_owned())
+    cached_shared_str(&STR_REF_CACHE, text, TEXT_CACHE_LIMIT)
 }
 
 fn format_highscore_date(date: &str) -> String {
