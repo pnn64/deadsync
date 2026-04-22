@@ -145,10 +145,10 @@ Suggested ordering for incremental commits:
 2. Step 6b — `init.rs` splash title + Evaluation banners (`Header`). ✅ `91b534b5`
 3. Step 6c — Evaluation panes (`Header` for `wendy_white`, `ScreenEval` for `wendy_screenevaluation`). ✅ `91b534b5`
 4. Step 6d — `options.rs`, `manage_local_profiles.rs`, `mappings.rs`
-   (`Bold`).
+   (`Bold`). ✅ (in bulk commit)
 5. Step 6e — `select_music`, `select_course`, `select_mode`
-   (`Header` + `Footer` + `Bold`).
-6. Step 6f — Remaining stragglers found by grep.
+   (`Header` + `Footer` + `Bold`). ✅ (in bulk commit)
+6. Step 6f — Remaining stragglers found by grep. ✅ (in bulk commit)
 
 After each sub-step: build clean, run focused tests (the affected
 screens), commit.
