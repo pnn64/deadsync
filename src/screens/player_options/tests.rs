@@ -403,7 +403,7 @@ pub(super) mod tests {
             .get_mut(RowId::BackgroundFilter)
             .unwrap()
             .selected_choice_index[P1] = 0;
-        state.player_profiles[P1].background_filter = BackgroundFilter::Darkest;
+        state.player_profiles[P1].background_filter = BackgroundFilter::from_percent(95);
         state.pane_mut().selected_row[P1] = row_index;
 
         // delta=0 should still apply the current choice
@@ -411,7 +411,7 @@ pub(super) mod tests {
 
         assert_eq!(
             state.player_profiles[P1].background_filter,
-            BackgroundFilter::Off,
+            BackgroundFilter::OFF,
             "delta=0 must apply the current selected index to the profile"
         );
     }
@@ -586,7 +586,7 @@ pub(super) mod tests {
         assert_eq!(row.selected_choice_index[0], 1, "P1 should have advanced");
         assert_eq!(
             row.selected_choice_index[1], 0,
-            "non-mirrored Cycle::Index must not touch P2's slot"
+            "non-mirrored Numeric must not touch P2's slot"
         );
     }
 
@@ -884,7 +884,7 @@ pub(super) mod tests {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
 
-        // BackgroundFilter is a Cycle row with mirror_across_players: false.
+        // BackgroundFilter is a Numeric row with mirror_across_players: false.
         let row_index = state
             .pane()
             .row_map

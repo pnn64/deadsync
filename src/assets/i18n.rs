@@ -338,6 +338,35 @@ pub fn available_locales() -> Vec<(String, String)> {
     locales
 }
 
+/// Test-only initializer that loads `en.ini` from the crate's
+/// `assets/languages/` directory using `CARGO_MANIFEST_DIR`. Production code
+/// uses [`init`], which resolves paths relative to the executable; that path
+/// is unavailable under `cargo test`. Idempotent across calls.
+#[cfg(test)]
+pub(crate) fn init_for_tests() {
+    use std::sync::Once;
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let en_path = std::path::Path::new(manifest_dir)
+            .join("assets")
+            .join("languages")
+            .join("en.ini");
+        let fallback = load_ini_to_map(&en_path);
+        let data = LangData {
+            active: HashMap::new(),
+            fallback,
+            locale: "en".to_string(),
+        };
+        if let Some(lang) = LANG.get() {
+            *lang.write().unwrap() = data;
+        } else {
+            let _ = LANG.set(RwLock::new(data));
+        }
+        LANG_REVISION.fetch_add(1, Ordering::AcqRel);
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

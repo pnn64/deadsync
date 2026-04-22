@@ -105,14 +105,15 @@ pub fn update_scroll_speed_for_side(side: PlayerSide, setting: ScrollSpeedSettin
     save_profile_ini_for_side(side);
 }
 
-pub fn update_background_filter_for_side(side: PlayerSide, setting: BackgroundFilter) {
+pub fn update_background_filter_for_side(side: PlayerSide, value: i32) {
+    let new = BackgroundFilter::from_i32(value);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
-        if profile.background_filter == setting {
+        if profile.background_filter == new {
             return;
         }
-        profile.background_filter = setting;
+        profile.background_filter = new;
     }
     save_profile_ini_for_side(side);
 }

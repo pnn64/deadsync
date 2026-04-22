@@ -7001,6 +7001,11 @@ pub fn set_fsr_view(state: &mut State, view: Option<test_input::FsrView>) {
     test_input::set_fsr_view(&mut state.test_input_overlay, view);
 }
 
+#[inline(always)]
+pub fn take_fsr_command(state: &mut State) -> Option<test_input::FsrCommand> {
+    test_input::take_fsr_command(&mut state.test_input_overlay)
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     update_select_hold_state(state, ev);
 
