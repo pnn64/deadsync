@@ -1,6 +1,10 @@
+use super::super::row::{BitmaskInit, CursorInit};
 use super::super::row::index_binding;
 use super::*;
 use crate::game::profile as gp;
+use crate::game::profile::{
+    AccelEffectsMask, AppearanceEffectsMask, HoldsMask, InsertMask, RemoveMask, VisualEffectsMask,
+};
 
 const ATTACKS: ChoiceBinding<usize> = index_binding!(
     ATTACK_MODE_VARIANTS,
@@ -19,27 +23,84 @@ const HIDE_LIGHT_TYPE: ChoiceBinding<usize> = index_binding!(
 
 const INSERT: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_insert_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| p.insert_active_mask.bits() as u32,
+        get_active: |m| m.insert.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(b & !(u8::MAX as u32), 0, "InsertMask init bits exceed u8 width");
+            m.insert = InsertMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 const REMOVE: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_remove_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| p.remove_active_mask.bits() as u32,
+        get_active: |m| m.remove.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(b & !(u8::MAX as u32), 0, "RemoveMask init bits exceed u8 width");
+            m.remove = RemoveMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 const HOLDS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_holds_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| p.holds_active_mask.bits() as u32,
+        get_active: |m| m.holds.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(b & !(u8::MAX as u32), 0, "HoldsMask init bits exceed u8 width");
+            m.holds = HoldsMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 const ACCEL: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_accel_effects_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| p.accel_effects_active_mask.bits() as u32,
+        get_active: |m| m.accel_effects.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(
+                b & !(u8::MAX as u32), 0,
+                "AccelEffectsMask init bits exceed u8 width",
+            );
+            m.accel_effects = AccelEffectsMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 const EFFECT: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_visual_effects_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| p.visual_effects_active_mask.bits() as u32,
+        get_active: |m| m.visual_effects.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(
+                b & !(u16::MAX as u32), 0,
+                "VisualEffectsMask init bits exceed u16 width",
+            );
+            m.visual_effects = VisualEffectsMask::from_bits_retain(b as u16);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 const APPEARANCE: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_appearance_effects_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| p.appearance_effects_active_mask.bits() as u32,
+        get_active: |m| m.appearance_effects.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(
+                b & !(u8::MAX as u32), 0,
+                "AppearanceEffectsMask init bits exceed u8 width",
+            );
+            m.appearance_effects = AppearanceEffectsMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 
 pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
