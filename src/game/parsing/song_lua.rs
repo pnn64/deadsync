@@ -2766,8 +2766,10 @@ fn read_overlay_actors(lua: &Lua, root: &Value) -> Result<Vec<OverlayCompileActo
     let Value::Table(root) = root else {
         return Ok(Vec::new());
     };
+    let mut aft_capture_names = HashSet::new();
+    collect_aft_capture_names(root, &mut aft_capture_names)?;
     let mut out = Vec::new();
-    read_overlay_actors_from_table(lua, root, None, &mut out)?;
+    read_overlay_actors_from_table(lua, root, None, &aft_capture_names, &mut out)?;
     Ok(out)
 }
 
@@ -2775,9 +2777,12 @@ fn read_overlay_actors_from_table(
     lua: &Lua,
     actor: &Table,
     parent_index: Option<usize>,
+    aft_capture_names: &HashSet<String>,
     out: &mut Vec<OverlayCompileActor>,
 ) -> Result<(), String> {
-    let next_parent_index = if let Some(overlay) = read_overlay_actor(lua, actor, parent_index)? {
+    let next_parent_index = if let Some(overlay) =
+        read_overlay_actor(lua, actor, parent_index, aft_capture_names)?
+    {
         let index = out.len();
         out.push(overlay);
         Some(index)
@@ -2788,7 +2793,7 @@ fn read_overlay_actors_from_table(
         let Value::Table(child) = child.map_err(|err| err.to_string())? else {
             continue;
         };
-        read_overlay_actors_from_table(lua, &child, next_parent_index, out)?;
+        read_overlay_actors_from_table(lua, &child, next_parent_index, aft_capture_names, out)?;
     }
     Ok(())
 }
@@ -2797,6 +2802,7 @@ fn read_overlay_actor(
     lua: &Lua,
     actor: &Table,
     parent_index: Option<usize>,
+    aft_capture_names: &HashSet<String>,
 ) -> Result<Option<OverlayCompileActor>, String> {
     let Some(actor_type) = actor
         .get::<Option<String>>("__songlua_actor_type")
@@ -2854,20 +2860,25 @@ fn read_overlay_actor(
         };
         SongLuaOverlayKind::ActorProxy { target }
     } else if actor_type.eq_ignore_ascii_case("Sprite") {
-        if let Some(capture_name) = actor
-            .get::<Option<String>>("__songlua_aft_capture_name")
-            .map_err(|err| err.to_string())?
-        {
+        if let Some(capture_name) = actor_aft_capture_name(actor).map_err(|err| err.to_string())? {
             SongLuaOverlayKind::AftSprite { capture_name }
         } else {
-            let Some(texture_path) = actor
+            let Some(texture) = actor
                 .get::<Option<String>>("Texture")
                 .map_err(|err| err.to_string())?
-                .and_then(|texture| resolve_actor_asset_path(actor, &texture).ok())
             else {
                 return Ok(None);
             };
-            SongLuaOverlayKind::Sprite { texture_path }
+            if aft_capture_names.contains(&texture) {
+                SongLuaOverlayKind::AftSprite {
+                    capture_name: texture,
+                }
+            } else {
+                let Some(texture_path) = resolve_actor_asset_path(actor, &texture).ok() else {
+                    return Ok(None);
+                };
+                SongLuaOverlayKind::Sprite { texture_path }
+            }
         }
     } else if actor_type.eq_ignore_ascii_case("BitmapText") {
         let Some(font_path) = actor
@@ -2904,6 +2915,37 @@ fn read_overlay_actor(
             message_commands,
         },
     }))
+}
+
+fn collect_aft_capture_names(actor: &Table, out: &mut HashSet<String>) -> Result<(), String> {
+    if actor
+        .get::<Option<String>>("__songlua_actor_type")
+        .map_err(|err| err.to_string())?
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorFrameTexture"))
+        && let Some(capture_name) = actor_aft_capture_name(actor).map_err(|err| err.to_string())?
+    {
+        out.insert(capture_name);
+    }
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child.map_err(|err| err.to_string())? else {
+            continue;
+        };
+        collect_aft_capture_names(&child, out)?;
+    }
+    Ok(())
+}
+
+fn actor_aft_capture_name(actor: &Table) -> mlua::Result<Option<String>> {
+    if let Some(capture_name) = actor
+        .get::<Option<String>>("__songlua_aft_capture_name")?
+        .filter(|name| !name.trim().is_empty())
+    {
+        return Ok(Some(capture_name));
+    }
+    Ok(actor
+        .get::<Option<String>>("Name")?
+        .filter(|name| !name.trim().is_empty()))
 }
 
 fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, String> {
@@ -3814,6 +3856,18 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                         }
                     }
                     _ => {}
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "SetTextureName",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                if let Some(name) = args.get(1).cloned().and_then(read_string) {
+                    actor.set("__songlua_aft_capture_name", name)?;
                 }
                 Ok(actor.clone())
             }
@@ -4878,8 +4932,8 @@ fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
         .as_deref()
         .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorFrameTexture"))
     {
-        if let Some(name) = actor.get::<Option<String>>("Name")? {
-            texture.set("__songlua_aft_capture_name", name)?;
+        if let Some(capture_name) = actor_aft_capture_name(actor)? {
+            texture.set("__songlua_aft_capture_name", capture_name)?;
         }
         install_texture_proxy_methods(
             lua,
@@ -8721,6 +8775,49 @@ return Def.ActorFrame{
             compiled.overlays[2].initial_state.effect_magnitude,
             [8.0, 4.0, 0.0]
         );
+    }
+
+    #[test]
+    fn compile_song_lua_supports_named_actorframetexture_sprites() {
+        let song_dir = test_dir("overlay-aft-texture-name");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.ActorFrameTexture{
+        Name="CaptureAFT",
+        InitCommand=function(self)
+            self:SetTextureName("ScreenTex")
+            self:SetWidth(640)
+            self:SetHeight(480)
+            self:EnableAlphaBuffer(false)
+            self:Create()
+        end,
+    },
+    Def.Sprite{
+        Texture="ScreenTex",
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Named AFT Sprite"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+        assert!(matches!(
+            compiled.overlays[0].kind,
+            SongLuaOverlayKind::ActorFrameTexture
+        ));
+        assert!(matches!(
+            compiled.overlays[1].kind,
+            SongLuaOverlayKind::AftSprite { ref capture_name }
+                if capture_name == "ScreenTex"
+        ));
     }
 
     #[test]
