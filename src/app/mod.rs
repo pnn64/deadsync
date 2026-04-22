@@ -5395,7 +5395,7 @@ impl App {
             if raw_key.pressed
                 && !raw_key.repeat
                 && raw_key.code == KeyCode::F5
-                && crate::screens::evaluation::retry_timed_out_submissions(
+                && crate::screens::evaluation::retry_submissions(
                     &self.state.screens.evaluation_state,
                 )
             {

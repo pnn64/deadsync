@@ -64,8 +64,28 @@ const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
 const AUTO_SUBMIT_RECORD_TEXT_Y: f32 = 40.0;
 const AUTO_SUBMIT_RECORD_TEXT_ZOOM: f32 = 0.225;
 const AUTO_SUBMIT_RECORD_TEXT_PERIOD: f32 = 3.0;
-const SUBMIT_STATUS_CHECK_GLYPH: &str = "✔";
-const SUBMIT_STATUS_CROSS_GLYPH: &str = "❌";
+const SUBMIT_FOOTER_CHECK_GLYPH: &str = "✔";
+const SUBMIT_FOOTER_REJECT_GLYPH: &str = "⊘";
+const SUBMIT_FOOTER_REFRESH_GLYPH: &str = "↻";
+const SUBMIT_FOOTER_F5_LABEL: &str = "F5";
+const SUBMIT_FOOTER_HOURGLASS_GLYPH: &str = "⧗";
+const SUBMIT_FOOTER_SPINNER_GLYPH: &str = "◐";
+const SUBMIT_FOOTER_SPINNER_TEXTURE: &str = "submit/LoadingSpinner_10x3.png";
+const SUBMIT_FOOTER_HOURGLASS_TEXTURE: &str = "submit/Hourglass_10x3.png";
+const SUBMIT_FOOTER_CHECK_TEXTURE: &str = "submit/Check_1x1.png";
+const SUBMIT_FOOTER_REFRESH_TEXTURE: &str = "submit/Refresh_1x1.png";
+const SUBMIT_FOOTER_REJECTED_TEXTURE: &str = "submit/Rejected_1x1.png";
+const SUBMIT_FOOTER_SPRITE_FRAMES: u32 = 30;
+const SUBMIT_FOOTER_SPRITE_FPS: f32 = 30.0;
+const SUBMIT_FOOTER_TEXT_ZOOM: f32 = 0.8;
+const SUBMIT_FOOTER_SPRITE_PX: f32 = 16.2;
+// Semantic tints for submit footer status icons. Indexes into
+// `color::JUDGMENT_RGBA` so the icons share the gameplay judgment palette.
+const SUBMIT_FOOTER_TINT_OK: [f32; 4] = color::JUDGMENT_RGBA[2]; // Great (green)
+const SUBMIT_FOOTER_TINT_AUTO_RETRY: [f32; 4] = color::JUDGMENT_RGBA[1]; // Excellent (amber)
+const SUBMIT_FOOTER_TINT_MANUAL_RETRY: [f32; 4] = color::JUDGMENT_RGBA[4]; // Way Off (orange-tan)
+const SUBMIT_FOOTER_TINT_ERROR: [f32; 4] = color::JUDGMENT_RGBA[5]; // Miss (red)
+const SUBMIT_FOOTER_TINT_NEUTRAL: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const MACHINE_RECORD_ROWS: usize = 10;
 const GS_RECORD_ROWS: usize = 10;
 const ENABLE_GS_QR_PANE: bool = true;
@@ -183,65 +203,6 @@ fn submit_record_text(banner: scores::GrooveStatsSubmitRecordBanner) -> Arc<str>
 }
 
 #[inline(always)]
-fn groovestats_submit_status_text(status: scores::GrooveStatsSubmitUiStatus) -> Arc<str> {
-    match status {
-        scores::GrooveStatsSubmitUiStatus::Submitting => tr("SubmitStatus", "Submitting"),
-        scores::GrooveStatsSubmitUiStatus::Submitted => tr("SubmitStatus", "Submitted"),
-        scores::GrooveStatsSubmitUiStatus::SubmitFailed => tr("SubmitStatus", "SubmitFailed"),
-        scores::GrooveStatsSubmitUiStatus::TimedOut => tr("SubmitStatus", "TimedOutRetry"),
-    }
-}
-
-#[inline(always)]
-fn arrowcloud_submit_status_text(status: scores::ArrowCloudSubmitUiStatus) -> Arc<str> {
-    match status {
-        scores::ArrowCloudSubmitUiStatus::Submitting => tr("SubmitStatus", "Submitting"),
-        scores::ArrowCloudSubmitUiStatus::Submitted => tr("SubmitStatus", "Submitted"),
-        scores::ArrowCloudSubmitUiStatus::SubmitFailed => tr("SubmitStatus", "SubmitFailed"),
-        scores::ArrowCloudSubmitUiStatus::TimedOut => tr("SubmitStatus", "TimedOutRetry"),
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum SubmitFooterStatus {
-    Submitting,
-    Submitted,
-    SubmitFailed,
-    TimedOut,
-}
-
-impl From<scores::GrooveStatsSubmitUiStatus> for SubmitFooterStatus {
-    fn from(value: scores::GrooveStatsSubmitUiStatus) -> Self {
-        match value {
-            scores::GrooveStatsSubmitUiStatus::Submitting => Self::Submitting,
-            scores::GrooveStatsSubmitUiStatus::Submitted => Self::Submitted,
-            scores::GrooveStatsSubmitUiStatus::SubmitFailed => Self::SubmitFailed,
-            scores::GrooveStatsSubmitUiStatus::TimedOut => Self::TimedOut,
-        }
-    }
-}
-
-impl From<scores::ArrowCloudSubmitUiStatus> for SubmitFooterStatus {
-    fn from(value: scores::ArrowCloudSubmitUiStatus) -> Self {
-        match value {
-            scores::ArrowCloudSubmitUiStatus::Submitting => Self::Submitting,
-            scores::ArrowCloudSubmitUiStatus::Submitted => Self::Submitted,
-            scores::ArrowCloudSubmitUiStatus::SubmitFailed => Self::SubmitFailed,
-            scores::ArrowCloudSubmitUiStatus::TimedOut => Self::TimedOut,
-        }
-    }
-}
-
-#[inline(always)]
-const fn submit_footer_status_glyph(status: SubmitFooterStatus) -> &'static str {
-    match status {
-        SubmitFooterStatus::Submitted => SUBMIT_STATUS_CHECK_GLYPH,
-        SubmitFooterStatus::SubmitFailed => SUBMIT_STATUS_CROSS_GLYPH,
-        SubmitFooterStatus::Submitting | SubmitFooterStatus::TimedOut => "",
-    }
-}
-
-#[inline(always)]
 fn submit_footer_gs_label() -> Arc<str> {
     if online::is_boogiestats_active() {
         tr("SubmitStatus", "BSLabel")
@@ -250,29 +211,278 @@ fn submit_footer_gs_label() -> Arc<str> {
     }
 }
 
-fn combined_submit_footer_text(
-    gs_status: SubmitFooterStatus,
-    ac_status: SubmitFooterStatus,
-) -> Arc<str> {
-    tr_fmt(
-        "SubmitStatus",
-        "SubmittedCombined",
-        &[
-            ("gs_glyph", submit_footer_status_glyph(gs_status)),
-            ("gs_label", &submit_footer_gs_label()),
-            ("ac_glyph", submit_footer_status_glyph(ac_status)),
-            ("ac_label", &tr("SubmitStatus", "ACLabel")),
-        ],
-    )
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SubmitFooterStatus {
+    Submitting,
+    Submitted,
+    /// Request timed out (HTTP 408/504 or transport timeout).
+    /// `retry_in_secs` is the time until the next retry is allowed/scheduled.
+    /// `is_auto_retry` is true while the auto-retry budget remains and the
+    /// tick driver will fire the retry automatically; false once the budget
+    /// is exhausted (in which case the same gate degrades to a manual F5
+    /// cooldown).
+    TimedOut {
+        retry_in_secs: Option<u32>,
+        is_auto_retry: bool,
+    },
+    /// Network/transport failure unrelated to a server response. No
+    /// auto-retry; `retry_in_secs` is the manual-F5 cooldown remaining.
+    NetworkError { retry_in_secs: Option<u32> },
+    /// Server returned a 5xx response. No auto-retry; HTTP code shown to user.
+    /// `retry_in_secs` is the manual-F5 cooldown remaining.
+    ServerError {
+        http_status: u16,
+        retry_in_secs: Option<u32>,
+    },
+    /// Terminal rejection — resubmitting will not change the outcome.
+    Rejected { reason: scores::RejectReason },
 }
 
 #[inline(always)]
-fn submit_footer_service_line(label: &str, status_text: &str, include_label: bool) -> Arc<str> {
-    if include_label {
-        Arc::<str>::from(format!("{label} {status_text}"))
-    } else {
-        cached_str_ref(status_text)
+fn footer_status_from_groovestats(
+    status: scores::GrooveStatsSubmitUiStatus,
+    next_retry_remaining_secs: Option<u32>,
+    next_retry_is_auto: bool,
+) -> SubmitFooterStatus {
+    match status {
+        scores::GrooveStatsSubmitUiStatus::Submitting => SubmitFooterStatus::Submitting,
+        scores::GrooveStatsSubmitUiStatus::Submitted => SubmitFooterStatus::Submitted,
+        scores::GrooveStatsSubmitUiStatus::TimedOut => SubmitFooterStatus::TimedOut {
+            retry_in_secs: next_retry_remaining_secs,
+            is_auto_retry: next_retry_is_auto,
+        },
+        scores::GrooveStatsSubmitUiStatus::NetworkError => SubmitFooterStatus::NetworkError {
+            retry_in_secs: next_retry_remaining_secs,
+        },
+        scores::GrooveStatsSubmitUiStatus::ServerError { http_status } => {
+            SubmitFooterStatus::ServerError {
+                http_status,
+                retry_in_secs: next_retry_remaining_secs,
+            }
+        }
+        scores::GrooveStatsSubmitUiStatus::Rejected { reason } => {
+            SubmitFooterStatus::Rejected { reason }
+        }
     }
+}
+
+#[inline(always)]
+fn footer_status_from_arrowcloud(
+    status: scores::ArrowCloudSubmitUiStatus,
+    next_retry_remaining_secs: Option<u32>,
+    next_retry_is_auto: bool,
+) -> SubmitFooterStatus {
+    match status {
+        scores::ArrowCloudSubmitUiStatus::Submitting => SubmitFooterStatus::Submitting,
+        scores::ArrowCloudSubmitUiStatus::Submitted => SubmitFooterStatus::Submitted,
+        scores::ArrowCloudSubmitUiStatus::TimedOut => SubmitFooterStatus::TimedOut {
+            retry_in_secs: next_retry_remaining_secs,
+            is_auto_retry: next_retry_is_auto,
+        },
+        scores::ArrowCloudSubmitUiStatus::NetworkError => SubmitFooterStatus::NetworkError {
+            retry_in_secs: next_retry_remaining_secs,
+        },
+        scores::ArrowCloudSubmitUiStatus::ServerError { http_status } => {
+            SubmitFooterStatus::ServerError {
+                http_status,
+                retry_in_secs: next_retry_remaining_secs,
+            }
+        }
+        scores::ArrowCloudSubmitUiStatus::Rejected { reason } => {
+            SubmitFooterStatus::Rejected { reason }
+        }
+    }
+}
+
+/// One per-backend cell in the condensed submit footer.
+///
+/// Rendering: each cell becomes a bracketed text run like `[GS ⧗ 4s Timeout]`.
+/// Animated icons (`Spinner`, `Hourglass`) are emitted as a sprite actor
+/// inserted between the bracket text fragments at render time; static glyphs
+/// are baked into the surrounding text.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum CellIcon {
+    Spinner,
+    Hourglass,
+    Check,
+    Refresh,
+    Rejected,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SubmitFooterCell {
+    backend_label: Arc<str>,
+    icon: CellIcon,
+    countdown_secs: Option<u32>,
+    reason: Option<Arc<str>>,
+}
+
+impl SubmitFooterCell {
+    #[inline(always)]
+    fn icon_glyph(&self) -> &str {
+        match &self.icon {
+            CellIcon::Spinner => SUBMIT_FOOTER_SPINNER_GLYPH,
+            CellIcon::Hourglass => SUBMIT_FOOTER_HOURGLASS_GLYPH,
+            CellIcon::Check => SUBMIT_FOOTER_CHECK_GLYPH,
+            CellIcon::Refresh => SUBMIT_FOOTER_REFRESH_GLYPH,
+            CellIcon::Rejected => SUBMIT_FOOTER_REJECT_GLYPH,
+        }
+    }
+
+    /// Bracketed plain-text rendering used by tests and as a fallback when
+    /// the renderer can't emit sprite actors. Format examples:
+    /// `[GS ✔]`, `[GS ⧗ 8s Timeout]`, `[GS ↻ F5 Network]`, `[GS ⊘ Invalid Score]`.
+    fn display_text(&self) -> Arc<str> {
+        let mut s = String::with_capacity(32);
+        s.push('[');
+        s.push_str(&self.backend_label);
+        s.push(' ');
+        s.push_str(self.icon_glyph());
+        if matches!(self.icon, CellIcon::Refresh) {
+            s.push(' ');
+            s.push_str(SUBMIT_FOOTER_F5_LABEL);
+        }
+        if let Some(n) = self.countdown_secs {
+            s.push(' ');
+            s.push_str(&n.to_string());
+            s.push('s');
+        }
+        if let Some(reason) = &self.reason {
+            s.push(' ');
+            s.push_str(reason);
+        }
+        s.push(']');
+        Arc::from(s)
+    }
+
+    /// All cells now use a sprite for their icon. Returns the `(prefix, suffix)`
+    /// text fragments that surround the icon. The renderer composes:
+    /// `text(prefix) + sprite(icon) + text(suffix)`.
+    fn sprite_render_parts(&self) -> (Arc<str>, Arc<str>) {
+        let prefix: Arc<str> = format!("[{} ", self.backend_label).into();
+        let mut suffix = String::with_capacity(16);
+        if let Some(n) = self.countdown_secs {
+            suffix.push(' ');
+            suffix.push_str(&n.to_string());
+            suffix.push('s');
+        }
+        if let Some(reason) = &self.reason {
+            suffix.push(' ');
+            suffix.push_str(reason);
+        }
+        suffix.push(']');
+        (prefix, suffix.into())
+    }
+
+    /// Texture key for the cell's icon sprite.
+    fn sprite_texture_key(&self) -> &'static str {
+        match self.icon {
+            CellIcon::Spinner => SUBMIT_FOOTER_SPINNER_TEXTURE,
+            CellIcon::Hourglass => SUBMIT_FOOTER_HOURGLASS_TEXTURE,
+            CellIcon::Check => SUBMIT_FOOTER_CHECK_TEXTURE,
+            CellIcon::Refresh => SUBMIT_FOOTER_REFRESH_TEXTURE,
+            CellIcon::Rejected => SUBMIT_FOOTER_REJECTED_TEXTURE,
+        }
+    }
+
+    /// Whether the icon is a multi-frame animation. Static (single-frame)
+    /// sprites should always use frame 0.
+    fn icon_is_animated(&self) -> bool {
+        matches!(self.icon, CellIcon::Spinner | CellIcon::Hourglass)
+    }
+
+    /// Semantic tint for the icon sprite. Cells render the surrounding
+    /// bracket text in white; only the icon itself is tinted, using colors
+    /// drawn from the gameplay judgment palette so the eye reads them the
+    /// same way it reads judgments.
+    fn sprite_tint(&self) -> [f32; 4] {
+        match self.icon {
+            CellIcon::Check => SUBMIT_FOOTER_TINT_OK,
+            CellIcon::Hourglass => SUBMIT_FOOTER_TINT_AUTO_RETRY,
+            CellIcon::Refresh => SUBMIT_FOOTER_TINT_MANUAL_RETRY,
+            CellIcon::Rejected => SUBMIT_FOOTER_TINT_ERROR,
+            CellIcon::Spinner => SUBMIT_FOOTER_TINT_NEUTRAL,
+        }
+    }
+
+    /// Per-icon vertical scale factor relative to `SUBMIT_FOOTER_SPRITE_PX`.
+    /// Used to fine-tune optical sizing — the hourglass silhouette is taller
+    /// than it is wide so we shave a few % off the height to keep it from
+    /// dominating the line.
+    fn sprite_scale_y(&self) -> f32 {
+        match self.icon {
+            CellIcon::Hourglass => 0.90,
+            _ => 1.0,
+        }
+    }
+}
+
+/// Pick icon/countdown/reason for any retryable status (TimedOut, NetworkError,
+/// ServerError). Behavior:
+/// - `None` (no retry armed) or `Some(0)` for non-auto status → manual F5 ready
+/// - `Some(0)` while auto-retry budget remains → spinner (request fires this tick)
+/// - `Some(n > 0)` → hourglass with countdown
+fn cell_for_retryable(
+    retry_in_secs: Option<u32>,
+    is_auto_retry: bool,
+    reason: Arc<str>,
+) -> (CellIcon, Option<u32>, Option<Arc<str>>) {
+    match retry_in_secs {
+        Some(0) if is_auto_retry => (CellIcon::Spinner, None, None),
+        None | Some(0) => (CellIcon::Refresh, None, Some(reason)),
+        Some(n) => (CellIcon::Hourglass, Some(n), Some(reason)),
+    }
+}
+
+fn submit_footer_cell(backend_label: Arc<str>, status: SubmitFooterStatus) -> SubmitFooterCell {
+    let (icon, countdown_secs, reason) = match status {
+        SubmitFooterStatus::Submitting => (CellIcon::Spinner, None, None),
+        SubmitFooterStatus::Submitted => (CellIcon::Check, None, None),
+        SubmitFooterStatus::TimedOut {
+            retry_in_secs,
+            is_auto_retry,
+        } => cell_for_retryable(retry_in_secs, is_auto_retry, tr("SubmitStatus", "TimedOut")),
+        SubmitFooterStatus::NetworkError { retry_in_secs } => {
+            cell_for_retryable(retry_in_secs, false, tr("SubmitStatus", "NetworkError"))
+        }
+        SubmitFooterStatus::ServerError {
+            http_status,
+            retry_in_secs,
+        } => cell_for_retryable(
+            retry_in_secs,
+            false,
+            tr_fmt(
+                "SubmitStatus",
+                "ServerError",
+                &[("code", &http_status.to_string())],
+            ),
+        ),
+        SubmitFooterStatus::Rejected { reason } => (
+            CellIcon::Rejected,
+            None,
+            Some(Arc::from(reason.label())),
+        ),
+    };
+    SubmitFooterCell {
+        backend_label,
+        icon,
+        countdown_secs,
+        reason,
+    }
+}
+
+fn measure_footer_text_width(asset_manager: &AssetManager, text: &str, zoom: f32) -> f32 {
+    let mut out_w = 1.0_f32;
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager.with_font("miso", |miso_font| {
+            let mut w = font::measure_line_width_logical(miso_font, text, all_fonts) as f32;
+            if !w.is_finite() || w <= 0.0 {
+                w = 1.0;
+            }
+            out_w = w * zoom;
+        });
+    });
+    out_w
 }
 
 fn submit_footer_lines(
@@ -280,80 +490,37 @@ fn submit_footer_lines(
     expected_arrowcloud_submit: bool,
     groovestats_status: Option<scores::GrooveStatsSubmitUiStatus>,
     arrowcloud_status: Option<scores::ArrowCloudSubmitUiStatus>,
-) -> Vec<Arc<str>> {
-    let gs_status = expected_groovestats_submit
-        .then(|| groovestats_status.map(SubmitFooterStatus::from))
-        .flatten();
-    let ac_status = expected_arrowcloud_submit
-        .then(|| arrowcloud_status.map(SubmitFooterStatus::from))
-        .flatten();
-    let gs_pending = expected_groovestats_submit
-        && matches!(gs_status, None | Some(SubmitFooterStatus::Submitting));
-    let ac_pending = expected_arrowcloud_submit
-        && matches!(ac_status, None | Some(SubmitFooterStatus::Submitting));
-
-    if !expected_groovestats_submit && !expected_arrowcloud_submit {
-        return Vec::new();
+    groovestats_next_retry_remaining_secs: Option<u32>,
+    arrowcloud_next_retry_remaining_secs: Option<u32>,
+    groovestats_next_retry_is_auto: bool,
+    arrowcloud_next_retry_is_auto: bool,
+) -> Vec<SubmitFooterCell> {
+    let mut cells = Vec::with_capacity(2);
+    if expected_groovestats_submit {
+        let status = groovestats_status
+            .map(|s| {
+                footer_status_from_groovestats(
+                    s,
+                    groovestats_next_retry_remaining_secs,
+                    groovestats_next_retry_is_auto,
+                )
+            })
+            .unwrap_or(SubmitFooterStatus::Submitting);
+        cells.push(submit_footer_cell(submit_footer_gs_label(), status));
     }
-    if gs_pending || ac_pending {
-        return vec![tr("SubmitStatus", "Submitting")];
+    if expected_arrowcloud_submit {
+        let status = arrowcloud_status
+            .map(|s| {
+                footer_status_from_arrowcloud(
+                    s,
+                    arrowcloud_next_retry_remaining_secs,
+                    arrowcloud_next_retry_is_auto,
+                )
+            })
+            .unwrap_or(SubmitFooterStatus::Submitting);
+        cells.push(submit_footer_cell(tr("SubmitStatus", "ACLabel"), status));
     }
-    if matches!(gs_status, Some(SubmitFooterStatus::TimedOut))
-        || matches!(ac_status, Some(SubmitFooterStatus::TimedOut))
-    {
-        let include_labels = gs_status.is_some() && ac_status.is_some();
-        let mut lines = Vec::with_capacity(2);
-        if let Some(status) = gs_status {
-            lines.push(submit_footer_service_line(
-                &submit_footer_gs_label(),
-                &groovestats_submit_status_text(match status {
-                    SubmitFooterStatus::Submitting => scores::GrooveStatsSubmitUiStatus::Submitting,
-                    SubmitFooterStatus::Submitted => scores::GrooveStatsSubmitUiStatus::Submitted,
-                    SubmitFooterStatus::SubmitFailed => {
-                        scores::GrooveStatsSubmitUiStatus::SubmitFailed
-                    }
-                    SubmitFooterStatus::TimedOut => scores::GrooveStatsSubmitUiStatus::TimedOut,
-                }),
-                include_labels,
-            ));
-        }
-        if let Some(status) = ac_status {
-            lines.push(submit_footer_service_line(
-                &tr("SubmitStatus", "ACLabel"),
-                &arrowcloud_submit_status_text(match status {
-                    SubmitFooterStatus::Submitting => scores::ArrowCloudSubmitUiStatus::Submitting,
-                    SubmitFooterStatus::Submitted => scores::ArrowCloudSubmitUiStatus::Submitted,
-                    SubmitFooterStatus::SubmitFailed => {
-                        scores::ArrowCloudSubmitUiStatus::SubmitFailed
-                    }
-                    SubmitFooterStatus::TimedOut => scores::ArrowCloudSubmitUiStatus::TimedOut,
-                }),
-                include_labels,
-            ));
-        }
-        return lines;
-    }
-
-    match (gs_status, ac_status) {
-        (Some(gs_status), Some(ac_status)) => {
-            if matches!(gs_status, SubmitFooterStatus::SubmitFailed)
-                && matches!(ac_status, SubmitFooterStatus::SubmitFailed)
-            {
-                vec![tr("SubmitStatus", "SubmitFailed")]
-            } else {
-                vec![combined_submit_footer_text(gs_status, ac_status)]
-            }
-        }
-        (Some(SubmitFooterStatus::Submitted), None)
-        | (None, Some(SubmitFooterStatus::Submitted)) => {
-            vec![tr("SubmitStatus", "Submitted")]
-        }
-        (Some(SubmitFooterStatus::SubmitFailed), None)
-        | (None, Some(SubmitFooterStatus::SubmitFailed)) => {
-            vec![tr("SubmitStatus", "SubmitFailed")]
-        }
-        _ => Vec::new(),
-    }
+    cells
 }
 
 #[inline(always)]
@@ -589,10 +756,11 @@ fn compute_column_judgments(
 #[cfg(test)]
 mod tests {
     use super::{
-        EvalPane, SubmitFooterStatus, combined_submit_footer_text, compute_column_judgments,
-        eval_grade_for_result, eval_pane_shift, stage_in_stinger_texture_key,
-        submit_footer_gs_label, submit_footer_lines,
+        EvalPane, SubmitFooterCell, compute_column_judgments, eval_grade_for_result,
+        eval_pane_shift, stage_in_stinger_texture_key, submit_footer_gs_label,
+        submit_footer_lines,
     };
+    use crate::assets::i18n;
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{Note, NoteType};
     use crate::game::scores;
@@ -673,73 +841,406 @@ mod tests {
         assert_eq!(out[0].early_total_w4, 1);
     }
 
-    #[test]
-    fn combined_submit_footer_text_collapses_resolved_mixed_results() {
-        let text = combined_submit_footer_text(
-            SubmitFooterStatus::SubmitFailed,
-            SubmitFooterStatus::Submitted,
-        );
+    fn cells_text(cells: &[SubmitFooterCell]) -> Vec<String> {
+        cells.iter().map(|c| c.display_text().to_string()).collect()
+    }
 
+    #[test]
+    fn submit_footer_lines_empty_when_no_backends_expected() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(false, false, None, None, None, None, false, false);
+        assert!(cells.is_empty());
+    }
+
+    #[test]
+    fn submit_footer_lines_pending_with_no_status_yet_shows_spinner() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(true, false, None, None, None, None, false, false);
         assert_eq!(
-            &*text,
-            format!("Submitted! ❌ {} ✔ AC", submit_footer_gs_label())
+            cells_text(&cells),
+            vec![format!("[{} ◐]", submit_footer_gs_label())]
         );
     }
 
     #[test]
-    fn submit_footer_lines_keeps_timeouts_unstacked() {
-        let lines = submit_footer_lines(
+    fn submit_footer_lines_single_backend_submitting() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
             true,
-            true,
-            Some(scores::GrooveStatsSubmitUiStatus::Submitted),
-            Some(scores::ArrowCloudSubmitUiStatus::TimedOut),
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::Submitting),
+            None,
+            None,
+            None,
+            false,
+            false,
         );
-
-        assert_eq!(lines.len(), 2);
         assert_eq!(
-            &*lines[0],
-            format!("{} Submitted!", submit_footer_gs_label())
+            cells_text(&cells),
+            vec![format!("[{} ◐]", submit_footer_gs_label())]
         );
-        assert_eq!(&*lines[1], "AC Timed Out - F5 Retry");
     }
 
     #[test]
-    fn submit_footer_lines_collapses_in_flight_submits_to_one_line() {
-        let lines = submit_footer_lines(
-            true,
-            true,
-            Some(scores::GrooveStatsSubmitUiStatus::Submitted),
-            Some(scores::ArrowCloudSubmitUiStatus::Submitting),
-        );
-
-        assert_eq!(lines.len(), 1);
-        assert_eq!(&*lines[0], "Submitting ...");
-    }
-
-    #[test]
-    fn submit_footer_lines_single_enabled_submit_stays_generic() {
-        let lines = submit_footer_lines(
+    fn submit_footer_lines_single_backend_submitted() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
             true,
             false,
             Some(scores::GrooveStatsSubmitUiStatus::Submitted),
             None,
+            None,
+            None,
+            false,
+            false,
         );
-
-        assert_eq!(lines.len(), 1);
-        assert_eq!(&*lines[0], "Submitted!");
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ✔]", submit_footer_gs_label())]
+        );
     }
 
     #[test]
-    fn submit_footer_lines_double_failure_stays_generic() {
-        let lines = submit_footer_lines(
+    fn submit_footer_lines_single_backend_rejected() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
             true,
-            true,
-            Some(scores::GrooveStatsSubmitUiStatus::SubmitFailed),
-            Some(scores::ArrowCloudSubmitUiStatus::SubmitFailed),
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::Rejected {
+                reason: scores::RejectReason::InvalidScore,
+            }),
+            None,
+            None,
+            None,
+            false,
+            false,
         );
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ⊘ Invalid Score]", submit_footer_gs_label())]
+        );
+    }
 
-        assert_eq!(lines.len(), 1);
-        assert_eq!(&*lines[0], "Submit Failed");
+    #[test]
+    fn submit_footer_lines_timed_out_no_retry_armed_shows_f5() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
+            None,
+            None,
+            None,
+            false,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ↻ F5 Timeout]", submit_footer_gs_label())]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_timed_out_with_auto_countdown_shows_hourglass() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
+            None,
+            Some(7),
+            None,
+            true,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ⧗ 7s Timeout]", submit_footer_gs_label())]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_timed_out_auto_due_now_shows_spinner() {
+        i18n::init_for_tests();
+        // The retry tick fires when retry_in_secs hits 0 with auto budget left;
+        // the cell collapses to the spinner because the request is on the wire
+        // (status will flip to Submitting on the next tick).
+        let cells = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
+            None,
+            Some(0),
+            None,
+            true,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ◐]", submit_footer_gs_label())]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_timed_out_after_auto_exhaustion_uses_hourglass() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::TimedOut),
+            None,
+            Some(12),
+            None,
+            false,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ⧗ 12s Timeout]", submit_footer_gs_label())]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_network_error_no_cooldown_shows_f5() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::NetworkError),
+            None,
+            None,
+            None,
+            false,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ↻ F5 Network]", submit_footer_gs_label())]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_network_error_with_cooldown_shows_hourglass() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::NetworkError),
+            None,
+            Some(4),
+            None,
+            false,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ⧗ 4s Network]", submit_footer_gs_label())]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_network_error_zero_cooldown_collapses_to_f5() {
+        i18n::init_for_tests();
+        // Manual cooldown with no auto budget: Some(0) means cooldown elapsed,
+        // user can press F5 now. No countdown rendered.
+        let cells = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::NetworkError),
+            None,
+            Some(0),
+            None,
+            false,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ↻ F5 Network]", submit_footer_gs_label())]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_server_error_includes_http_status() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::ServerError { http_status: 503 }),
+            None,
+            None,
+            None,
+            false,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ↻ F5 Server 503]", submit_footer_gs_label())]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_server_error_with_cooldown_shows_hourglass() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            false,
+            Some(scores::GrooveStatsSubmitUiStatus::ServerError { http_status: 502 }),
+            None,
+            Some(8),
+            None,
+            false,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ⧗ 8s Server 502]", submit_footer_gs_label())]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_both_backends_both_submitting() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            true,
+            Some(scores::GrooveStatsSubmitUiStatus::Submitting),
+            Some(scores::ArrowCloudSubmitUiStatus::Submitting),
+            None,
+            None,
+            false,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ◐]", submit_footer_gs_label()), "[AC ◐]".to_string()]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_both_backends_both_submitted() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            true,
+            Some(scores::GrooveStatsSubmitUiStatus::Submitted),
+            Some(scores::ArrowCloudSubmitUiStatus::Submitted),
+            None,
+            None,
+            false,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![format!("[{} ✔]", submit_footer_gs_label()), "[AC ✔]".to_string()]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_both_backends_mixed_states() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            true,
+            Some(scores::GrooveStatsSubmitUiStatus::Submitted),
+            Some(scores::ArrowCloudSubmitUiStatus::TimedOut),
+            None,
+            Some(8),
+            false,
+            true,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![
+                format!("[{} ✔]", submit_footer_gs_label()),
+                "[AC ⧗ 8s Timeout]".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_both_backends_both_rejected() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            true,
+            Some(scores::GrooveStatsSubmitUiStatus::Rejected {
+                reason: scores::RejectReason::InvalidScore,
+            }),
+            Some(scores::ArrowCloudSubmitUiStatus::Rejected {
+                reason: scores::RejectReason::InvalidScore,
+            }),
+            None,
+            None,
+            false,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![
+                format!("[{} ⊘ Invalid Score]", submit_footer_gs_label()),
+                "[AC ⊘ Invalid Score]".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_both_backends_one_done_one_f5() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            true,
+            Some(scores::GrooveStatsSubmitUiStatus::Submitted),
+            Some(scores::ArrowCloudSubmitUiStatus::NetworkError),
+            None,
+            None,
+            false,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![
+                format!("[{} ✔]", submit_footer_gs_label()),
+                "[AC ↻ F5 Network]".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_both_backends_one_pending_one_waiting() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            true,
+            true,
+            Some(scores::GrooveStatsSubmitUiStatus::Submitting),
+            Some(scores::ArrowCloudSubmitUiStatus::ServerError { http_status: 502 }),
+            None,
+            Some(4),
+            false,
+            false,
+        );
+        assert_eq!(
+            cells_text(&cells),
+            vec![
+                format!("[{} ◐]", submit_footer_gs_label()),
+                "[AC ⧗ 4s Server 502]".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn submit_footer_cell_arrowcloud_label_uses_ac() {
+        i18n::init_for_tests();
+        let cells = submit_footer_lines(
+            false,
+            true,
+            None,
+            Some(scores::ArrowCloudSubmitUiStatus::Submitted),
+            None,
+            None,
+            false,
+            false,
+        );
+        assert_eq!(cells_text(&cells), vec!["[AC ✔]".to_string()]);
     }
 
     #[test]
@@ -1637,7 +2138,9 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
             && state.submit_groovestats_fallback[player_idx].is_none()
         {
             state.submit_groovestats_fallback[player_idx] =
-                Some(scores::GrooveStatsSubmitUiStatus::SubmitFailed);
+                Some(scores::GrooveStatsSubmitUiStatus::Rejected {
+                    reason: scores::RejectReason::InvalidScore,
+                });
             warn!(
                 "Missing {} submit status for {:?} ({}); rendering evaluation footer as failed.",
                 online::groovestats_service_name(),
@@ -1651,7 +2154,9 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
             && state.submit_arrowcloud_fallback[player_idx].is_none()
         {
             state.submit_arrowcloud_fallback[player_idx] =
-                Some(scores::ArrowCloudSubmitUiStatus::SubmitFailed);
+                Some(scores::ArrowCloudSubmitUiStatus::Rejected {
+                    reason: scores::RejectReason::InvalidScore,
+                });
             warn!(
                 "Missing ArrowCloud submit status for {:?} ({}); rendering evaluation footer as failed.",
                 si.side, chart_hash,
@@ -1685,6 +2190,8 @@ pub fn update(state: &mut State, dt: f32) {
     }
     sync_submit_itl_progress(state);
     sync_missing_submit_status_fallbacks(state);
+    scores::tick_groovestats_auto_retries();
+    scores::tick_arrowcloud_auto_retries();
 }
 
 fn local_lobby_player_count() -> usize {
@@ -1808,12 +2315,11 @@ fn evaluation_lobby_status_text(state: &State) -> Option<String> {
     Some(text)
 }
 
-pub fn retry_timed_out_submissions(state: &State) -> bool {
+pub fn retry_submissions(state: &State) -> bool {
     let mut retried = false;
     for si in state.score_info.iter().flatten() {
-        retried |=
-            scores::retry_timed_out_groovestats_submit(si.chart.short_hash.as_str(), si.side);
-        retried |= scores::retry_timed_out_arrowcloud_submit(si.chart.short_hash.as_str(), si.side);
+        retried |= scores::retry_groovestats_submit(si.chart.short_hash.as_str(), si.side);
+        retried |= scores::retry_arrowcloud_submit(si.chart.short_hash.as_str(), si.side);
     }
     retried
 }
@@ -3505,32 +4011,148 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 side,
             )
             .or(state.submit_arrowcloud_fallback[player_idx]);
+            let groovestats_next_retry = scores::groovestats_next_retry_remaining_secs(side);
+            let arrowcloud_next_retry = scores::arrowcloud_next_retry_remaining_secs(side);
+            let groovestats_next_retry_is_auto = scores::groovestats_next_retry_is_auto(side);
+            let arrowcloud_next_retry_is_auto = scores::arrowcloud_next_retry_is_auto(side);
             let lines = submit_footer_lines(
                 si.expected_groovestats_submit,
                 si.expected_arrowcloud_submit,
                 groovestats_status,
                 arrowcloud_status,
+                groovestats_next_retry,
+                arrowcloud_next_retry,
+                groovestats_next_retry_is_auto,
+                arrowcloud_next_retry_is_auto,
             );
             if lines.is_empty() {
                 continue;
             }
-            let x = if side == profile::PlayerSide::P1 {
-                screen_width() * 0.25
+            let pane_left = if side == profile::PlayerSide::P1 {
+                screen_center_x() - 305.0
             } else {
-                screen_width() * 0.75
+                screen_center_x() + 5.0
+            };
+            let pane_right = if side == profile::PlayerSide::P1 {
+                if play_style == profile::PlayStyle::Versus {
+                    screen_center_x() - 5.0
+                } else {
+                    screen_center_x() + 305.0
+                }
+            } else {
+                screen_center_x() + 305.0
             };
             let base_y = screen_height() - 15.0;
-            for (idx, status_text) in lines.iter().enumerate() {
-                let y = base_y - (lines.len().saturating_sub(1 + idx) as f32 * 12.0);
-                actors.push(act!(text:
-                    font("miso"):
-                    settext(status_text.clone()):
-                    align(0.5, 0.5):
-                    xy(x, y):
-                    zoom(0.8):
-                    z(121):
-                    diffuse(1.0, 1.0, 1.0, 1.0)
-                ));
+            let frame = ((state.screen_elapsed.max(0.0) * SUBMIT_FOOTER_SPRITE_FPS) as u32)
+                % SUBMIT_FOOTER_SPRITE_FRAMES;
+            let sep_w = measure_footer_text_width(asset_manager, " ", SUBMIT_FOOTER_TEXT_ZOOM);
+
+            #[derive(Clone)]
+            enum FooterFrag {
+                Text {
+                    text: Arc<str>,
+                    width: f32,
+                },
+                Sprite {
+                    texture_key: &'static str,
+                    animated: bool,
+                    tint: [f32; 4],
+                    scale_y: f32,
+                },
+            }
+
+            let mut frags: Vec<FooterFrag> = Vec::with_capacity(lines.len() * 3);
+            for (idx, cell) in lines.iter().enumerate() {
+                if idx > 0 {
+                    frags.push(FooterFrag::Text {
+                        text: " ".into(),
+                        width: sep_w,
+                    });
+                }
+                let (prefix, suffix) = cell.sprite_render_parts();
+                let pw = measure_footer_text_width(
+                    asset_manager,
+                    &prefix,
+                    SUBMIT_FOOTER_TEXT_ZOOM,
+                );
+                frags.push(FooterFrag::Text {
+                    text: prefix,
+                    width: pw,
+                });
+                frags.push(FooterFrag::Sprite {
+                    texture_key: cell.sprite_texture_key(),
+                    animated: cell.icon_is_animated(),
+                    tint: cell.sprite_tint(),
+                    scale_y: cell.sprite_scale_y(),
+                });
+                // For the manual-retry icon (Refresh), append the "F5" key
+                // hint inside the brackets after the icon. e.g. `[GS ↻ F5 Network]`.
+                let suffix_text: Arc<str> = if matches!(cell.icon, CellIcon::Refresh) {
+                    let mut s = String::with_capacity(suffix.len() + 3);
+                    s.push(' ');
+                    s.push_str(SUBMIT_FOOTER_F5_LABEL);
+                    s.push_str(&suffix);
+                    s.into()
+                } else {
+                    suffix
+                };
+                let sw = measure_footer_text_width(
+                    asset_manager,
+                    &suffix_text,
+                    SUBMIT_FOOTER_TEXT_ZOOM,
+                );
+                frags.push(FooterFrag::Text {
+                    text: suffix_text,
+                    width: sw,
+                });
+            }
+
+            let total_w: f32 = frags
+                .iter()
+                .map(|f| match f {
+                    FooterFrag::Text { width, .. } => *width,
+                    FooterFrag::Sprite { .. } => SUBMIT_FOOTER_SPRITE_PX,
+                })
+                .sum();
+            let mut cursor = if side == profile::PlayerSide::P1 {
+                pane_left
+            } else {
+                pane_right - total_w
+            };
+            for frag in frags {
+                match frag {
+                    FooterFrag::Text { text, width } => {
+                        actors.push(act!(text:
+                            font("miso"):
+                            settext(text):
+                            align(0.0, 0.5):
+                            xy(cursor, base_y):
+                            zoom(SUBMIT_FOOTER_TEXT_ZOOM):
+                            z(121):
+                            diffuse(1.0, 1.0, 1.0, 1.0)
+                        ));
+                        cursor += width;
+                    }
+                    FooterFrag::Sprite {
+                        texture_key,
+                        animated,
+                        tint,
+                        scale_y,
+                    } => {
+                        let icon_frame = if animated { frame } else { 0 };
+                        let [tr, tg, tb, ta] = tint;
+                        let h = SUBMIT_FOOTER_SPRITE_PX * scale_y;
+                        actors.push(act!(sprite(texture_key):
+                            align(0.0, 0.5):
+                            xy(cursor, base_y):
+                            setsize(SUBMIT_FOOTER_SPRITE_PX, h):
+                            setstate(icon_frame):
+                            z(121):
+                            diffuse(tr, tg, tb, ta)
+                        ));
+                        cursor += SUBMIT_FOOTER_SPRITE_PX;
+                    }
+                }
             }
         }
     }

@@ -1,5 +1,5 @@
 use super::{
-    gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
+    RejectReason, gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
     invalidate_player_leaderboards_for_side, log_body_snippet, submit_side_ix,
 };
 use crate::engine::network;
@@ -11,6 +11,7 @@ use log::{debug, warn};
 use serde::Serialize;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::time::{Duration, Instant};
 
 const ARROWCLOUD_BODY_VERSION: &str = "1.4";
 const ARROWCLOUD_ENGINE_NAME: &str = "DeadSync";
@@ -35,8 +36,10 @@ const ARROWCLOUD_APPEARANCE_NAMES: [&str; 5] = ["Hidden", "Sudden", "Stealth", "
 pub enum ArrowCloudSubmitUiStatus {
     Submitting,
     Submitted,
-    SubmitFailed,
     TimedOut,
+    NetworkError,
+    ServerError { http_status: u16 },
+    Rejected { reason: RejectReason },
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +59,37 @@ struct ArrowCloudSubmitRetryEntry {
     side: profile::PlayerSide,
     api_key: String,
     payload: ArrowCloudPayload,
+    /// Consecutive failures, capped at `SUBMIT_RETRY_MAX_ATTEMPTS`. Drives
+    /// the shared backoff schedule so mixed failure kinds keep ratcheting the
+    /// same curve. Reset only on a successful submit.
+    retry_attempt: u8,
+    /// When the next retry is allowed (manual cooldown) or scheduled (auto).
+    /// `None` means no gate and no auto-retry pending. The tick only fires
+    /// when the current UI status is auto-retryable; for manual-only
+    /// statuses this field acts purely as a cooldown gate.
+    next_retry_at: Option<Instant>,
+}
+
+/// Maximum number of attempts before the backoff schedule saturates.
+/// For *auto-retryable* statuses this is also the auto-retry budget. For
+/// *manual-only* statuses the cooldown caps at `delay(MAX)`.
+/// Maximum number of attempts before the backoff schedule saturates.
+/// Re-exported alias of the shared [`SUBMIT_RETRY_MAX_ATTEMPTS`].
+const ARROWCLOUD_RETRY_MAX_ATTEMPTS: u8 = crate::game::scores::SUBMIT_RETRY_MAX_ATTEMPTS;
+
+/// Exponential backoff schedule shared with every other submission backend.
+/// See [`crate::game::scores::submit_retry_delay_secs`] for the schedule.
+#[inline(always)]
+const fn arrowcloud_retry_delay_secs(attempt: u8) -> u64 {
+    crate::game::scores::submit_retry_delay_secs(attempt)
+}
+
+/// Returns true when the given failure status should be retried automatically
+/// by the tick driver. Single source of truth — extend this match to add
+/// more auto-retryable kinds in the future.
+#[inline]
+const fn arrowcloud_status_is_auto_retryable(status: ArrowCloudSubmitUiStatus) -> bool {
+    matches!(status, ArrowCloudSubmitUiStatus::TimedOut)
 }
 
 static ARROWCLOUD_SUBMIT_RETRY: std::sync::LazyLock<
@@ -119,15 +153,16 @@ fn arrowcloud_update_submit_ui_status_if_token(
     chart_hash: &str,
     token: u64,
     status: ArrowCloudSubmitUiStatus,
-) {
+) -> bool {
     let mut state = ARROWCLOUD_SUBMIT_UI_STATUS.lock().unwrap();
     let Some(entry) = state[submit_side_ix(side)].as_mut() else {
-        return;
+        return false;
     };
     if entry.token != token || !entry.chart_hash.eq_ignore_ascii_case(chart_hash) {
-        return;
+        return false;
     }
     entry.status = status;
+    true
 }
 
 #[inline(always)]
@@ -139,17 +174,38 @@ fn arrowcloud_next_submit_ui_token() -> u64 {
 const fn arrowcloud_can_retry_submit(status: ArrowCloudSubmitUiStatus) -> bool {
     matches!(
         status,
-        ArrowCloudSubmitUiStatus::SubmitFailed | ArrowCloudSubmitUiStatus::TimedOut
+        ArrowCloudSubmitUiStatus::TimedOut
+            | ArrowCloudSubmitUiStatus::NetworkError
+            | ArrowCloudSubmitUiStatus::ServerError { .. }
     )
 }
 
 #[inline(always)]
-fn arrowcloud_status_from_error_message(message: &str) -> ArrowCloudSubmitUiStatus {
+fn arrowcloud_status_from_transport_error(message: &str) -> ArrowCloudSubmitUiStatus {
     let lower = message.to_ascii_lowercase();
     if lower.contains("timeout") || lower.contains("timed out") {
         ArrowCloudSubmitUiStatus::TimedOut
     } else {
-        ArrowCloudSubmitUiStatus::SubmitFailed
+        ArrowCloudSubmitUiStatus::NetworkError
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_status_from_http(status_code: u16) -> ArrowCloudSubmitUiStatus {
+    match status_code {
+        408 | 504 => ArrowCloudSubmitUiStatus::TimedOut,
+        500..=599 => ArrowCloudSubmitUiStatus::ServerError {
+            http_status: status_code,
+        },
+        401 | 403 => ArrowCloudSubmitUiStatus::Rejected {
+            reason: RejectReason::Unauthorized,
+        },
+        404 => ArrowCloudSubmitUiStatus::Rejected {
+            reason: RejectReason::NotFound,
+        },
+        _ => ArrowCloudSubmitUiStatus::Rejected {
+            reason: RejectReason::InvalidScore,
+        },
     }
 }
 
@@ -317,6 +373,7 @@ struct ArrowCloudSubmitError {
     status: ArrowCloudSubmitUiStatus,
     message: String,
 }
+
 
 #[inline(always)]
 fn arrowcloud_format_length(seconds: f32) -> String {
@@ -668,13 +725,17 @@ fn submit_arrowcloud_payload(
     let api_key = api_key.trim();
     if api_key.is_empty() {
         return Err(ArrowCloudSubmitError {
-            status: ArrowCloudSubmitUiStatus::SubmitFailed,
+            status: ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            },
             message: "missing ArrowCloud API key".to_string(),
         });
     }
     let Some(url) = online::arrowcloud_submit_url(payload.hash.as_str()) else {
         return Err(ArrowCloudSubmitError {
-            status: ArrowCloudSubmitUiStatus::SubmitFailed,
+            status: ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            },
             message: "missing chart hash".to_string(),
         });
     };
@@ -689,7 +750,7 @@ fn submit_arrowcloud_payload(
         .map_err(|e| {
             let msg = format!("network error: {e}");
             ArrowCloudSubmitError {
-                status: arrowcloud_status_from_error_message(msg.as_str()),
+                status: arrowcloud_status_from_transport_error(msg.as_str()),
                 message: msg,
             }
         })?;
@@ -716,11 +777,7 @@ fn submit_arrowcloud_payload(
     }
 
     let snippet = log_body_snippet(body.as_str());
-    let status_kind = if status_code == 408 || status_code == 504 {
-        ArrowCloudSubmitUiStatus::TimedOut
-    } else {
-        ArrowCloudSubmitUiStatus::SubmitFailed
-    };
+    let status_kind = arrowcloud_status_from_http(status_code);
     if snippet.is_empty() {
         Err(ArrowCloudSubmitError {
             status: status_kind,
@@ -738,14 +795,22 @@ fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
     std::thread::spawn(move || {
         for job in jobs {
             match submit_arrowcloud_payload(job.side, &job.api_key, &job.payload) {
-                Ok(()) => arrowcloud_update_submit_ui_status_if_token(
-                    job.side,
-                    job.payload.hash.as_str(),
-                    job.token,
-                    ArrowCloudSubmitUiStatus::Submitted,
-                ),
+                Ok(()) => {
+                    let accepted = arrowcloud_update_submit_ui_status_if_token(
+                        job.side,
+                        job.payload.hash.as_str(),
+                        job.token,
+                        ArrowCloudSubmitUiStatus::Submitted,
+                    );
+                    if accepted {
+                        arrowcloud_record_submit_success(
+                            job.side,
+                            job.payload.hash.as_str(),
+                        );
+                    }
+                }
                 Err(err) => {
-                    arrowcloud_update_submit_ui_status_if_token(
+                    let accepted = arrowcloud_update_submit_ui_status_if_token(
                         job.side,
                         job.payload.hash.as_str(),
                         job.token,
@@ -755,6 +820,13 @@ fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
                         "ArrowCloud submit failed for {:?} ({}) status={:?}: {}",
                         job.side, job.payload.hash, err.status, err.message
                     );
+                    if accepted {
+                        arrowcloud_record_submit_failure(
+                            job.side,
+                            job.payload.hash.as_str(),
+                            err.status,
+                        );
+                    }
                 }
             }
             invalidate_player_leaderboards_for_side(job.payload.hash.as_str(), job.side);
@@ -830,6 +902,8 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
             side,
             api_key: api_key.to_string(),
             payload: payload.clone(),
+            retry_attempt: 0,
+            next_retry_at: None,
         });
         let token = arrowcloud_next_submit_ui_token();
         arrowcloud_set_submit_ui_status(
@@ -852,7 +926,15 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
     spawn_arrowcloud_submit_jobs(jobs);
 }
 
-pub fn retry_timed_out_arrowcloud_submit(chart_hash: &str, side: profile::PlayerSide) -> bool {
+pub fn retry_arrowcloud_submit(chart_hash: &str, side: profile::PlayerSide) -> bool {
+    retry_arrowcloud_submit_inner(chart_hash, side, true)
+}
+
+fn retry_arrowcloud_submit_inner(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+    manual: bool,
+) -> bool {
     let hash = chart_hash.trim();
     if hash.is_empty() {
         return false;
@@ -867,12 +949,25 @@ pub fn retry_timed_out_arrowcloud_submit(chart_hash: &str, side: profile::Player
     if !arrowcloud_can_retry_submit(status) {
         return false;
     }
-    let Some(entry) = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap()[submit_side_ix(side)]
-        .as_ref()
-        .filter(|entry| entry.payload.hash.eq_ignore_ascii_case(hash))
-        .cloned()
-    else {
-        return false;
+    let entry = {
+        let mut lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
+        let slot = &mut lock[submit_side_ix(side)];
+        let Some(stored) = slot
+            .as_mut()
+            .filter(|entry| entry.payload.hash.eq_ignore_ascii_case(hash))
+        else {
+            return false;
+        };
+        // Manual fires are gated by the cooldown — refuse if it hasn't
+        // elapsed. Auto fires (driven by tick) are already filtered by the
+        // schedule, so they bypass this gate.
+        if manual && let Some(t) = stored.next_retry_at {
+            if t > Instant::now() {
+                return false;
+            }
+        }
+        stored.next_retry_at = None;
+        stored.clone()
     };
 
     let token = arrowcloud_next_submit_ui_token();
@@ -885,6 +980,124 @@ pub fn retry_timed_out_arrowcloud_submit(chart_hash: &str, side: profile::Player
         payload: entry.payload,
     }]);
     true
+}
+
+/// Updates the retry entry's backoff schedule based on a worker-reported
+/// failure. Only call after the UI status update was accepted (token still
+/// matched), so stale results from superseded requests cannot re-arm.
+///
+/// Every retryable failure — auto or manual — advances the same shared
+/// `retry_attempt` counter, so mixed failure kinds (e.g., timeout → 5xx →
+/// timeout) keep ratcheting along the same exponential curve instead of
+/// each kind walking its own track. Auto-firing is gated on the current
+/// status being [`arrowcloud_status_is_auto_retryable`] AND
+/// `retry_attempt <= MAX_ATTEMPTS`; otherwise `next_retry_at` acts purely
+/// as a manual F5 cooldown gate.
+fn arrowcloud_record_submit_failure(
+    side: profile::PlayerSide,
+    chart_hash: &str,
+    status: ArrowCloudSubmitUiStatus,
+) {
+    let mut lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
+    let Some(entry) = lock[submit_side_ix(side)]
+        .as_mut()
+        .filter(|entry| entry.payload.hash.eq_ignore_ascii_case(chart_hash))
+    else {
+        return;
+    };
+    if !arrowcloud_can_retry_submit(status) {
+        entry.next_retry_at = None;
+        return;
+    }
+    entry.retry_attempt = entry
+        .retry_attempt
+        .saturating_add(1)
+        .min(ARROWCLOUD_RETRY_MAX_ATTEMPTS);
+    let delay = arrowcloud_retry_delay_secs(entry.retry_attempt);
+    entry.next_retry_at = Some(Instant::now() + Duration::from_secs(delay));
+}
+
+/// Resets all retry/backoff bookkeeping after a successful submit so the next
+/// failure (if any) starts from a fresh schedule. Called from the worker's
+/// success path when the status update was accepted.
+fn arrowcloud_record_submit_success(side: profile::PlayerSide, chart_hash: &str) {
+    let mut lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
+    let Some(entry) = lock[submit_side_ix(side)]
+        .as_mut()
+        .filter(|entry| entry.payload.hash.eq_ignore_ascii_case(chart_hash))
+    else {
+        return;
+    };
+    entry.retry_attempt = 0;
+    entry.next_retry_at = None;
+}
+
+/// Returns the seconds remaining until the next retry is allowed (manual
+/// cooldown) or scheduled (auto). `Some(0)` means due-to-fire / gate just
+/// elapsed. `None` means no gate is currently armed (bare `F5 Retry`).
+pub fn arrowcloud_next_retry_remaining_secs(side: profile::PlayerSide) -> Option<u32> {
+    let lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
+    let target = lock[submit_side_ix(side)].as_ref()?.next_retry_at?;
+    Some(crate::game::scores::duration_to_ceil_secs(
+        target.saturating_duration_since(Instant::now()),
+    ))
+}
+
+/// Returns true when the next scheduled retry will be fired automatically by
+/// the tick driver. When false, any pending `next_retry_at` is acting purely
+/// as a manual F5 cooldown gate.
+pub fn arrowcloud_next_retry_is_auto(side: profile::PlayerSide) -> bool {
+    let (chart_hash, attempt) = {
+        let lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
+        let Some(entry) = lock[submit_side_ix(side)].as_ref() else {
+            return false;
+        };
+        (entry.payload.hash.clone(), entry.retry_attempt)
+    };
+    if attempt >= ARROWCLOUD_RETRY_MAX_ATTEMPTS {
+        return false;
+    }
+    matches!(
+        get_arrowcloud_submit_ui_status_for_side(&chart_hash, side),
+        Some(s) if arrowcloud_status_is_auto_retryable(s)
+    )
+}
+
+/// Fires any auto-retries whose scheduled time has elapsed. Only fires for
+/// entries whose current UI status is auto-retryable (see
+/// [`arrowcloud_status_is_auto_retryable`]) AND whose auto-retry budget
+/// hasn't been exhausted; other retryable statuses (and exhausted entries)
+/// use `next_retry_at` purely as a manual cooldown gate. Returns true if at
+/// least one retry was fired.
+pub fn tick_arrowcloud_auto_retries() -> bool {
+    let due: Vec<(String, profile::PlayerSide, u8)> = {
+        let lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
+        let now = Instant::now();
+        lock.iter()
+            .flatten()
+            .filter_map(|entry| {
+                entry
+                    .next_retry_at
+                    .filter(|t| *t <= now)
+                    .map(|_| (entry.payload.hash.clone(), entry.side, entry.retry_attempt))
+            })
+            .collect()
+    };
+    let mut fired = false;
+    for (hash, side, attempt) in due {
+        if attempt >= ARROWCLOUD_RETRY_MAX_ATTEMPTS {
+            continue;
+        }
+        let Some(status) = get_arrowcloud_submit_ui_status_for_side(&hash, side) else {
+            continue;
+        };
+        if arrowcloud_status_is_auto_retryable(status)
+            && retry_arrowcloud_submit_inner(&hash, side, false)
+        {
+            fired = true;
+        }
+    }
+    fired
 }
 
 #[cfg(test)]
@@ -1022,26 +1235,97 @@ mod tests {
             ArrowCloudSubmitUiStatus::Submitted
         ));
         assert!(arrowcloud_can_retry_submit(
-            ArrowCloudSubmitUiStatus::SubmitFailed
+            ArrowCloudSubmitUiStatus::TimedOut
         ));
         assert!(arrowcloud_can_retry_submit(
-            ArrowCloudSubmitUiStatus::TimedOut
+            ArrowCloudSubmitUiStatus::NetworkError
+        ));
+        assert!(arrowcloud_can_retry_submit(
+            ArrowCloudSubmitUiStatus::ServerError { http_status: 500 }
+        ));
+        assert!(!arrowcloud_can_retry_submit(
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        ));
+        assert!(!arrowcloud_can_retry_submit(
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
         ));
     }
 
     #[test]
-    fn arrowcloud_error_message_maps_timeout_status() {
+    fn arrowcloud_retry_delay_schedule_is_exponential() {
+        assert_eq!(arrowcloud_retry_delay_secs(1), 2);
+        assert_eq!(arrowcloud_retry_delay_secs(2), 4);
+        assert_eq!(arrowcloud_retry_delay_secs(3), 8);
+        assert_eq!(arrowcloud_retry_delay_secs(4), 16);
         assert_eq!(
-            arrowcloud_status_from_error_message("Timed Out"),
+            arrowcloud_retry_delay_secs(ARROWCLOUD_RETRY_MAX_ATTEMPTS),
+            32
+        );
+    }
+
+    #[test]
+    fn arrowcloud_transport_error_maps_timeout_status() {
+        assert_eq!(
+            arrowcloud_status_from_transport_error("Timed Out"),
             ArrowCloudSubmitUiStatus::TimedOut
         );
         assert_eq!(
-            arrowcloud_status_from_error_message("network error: timed out while connecting"),
+            arrowcloud_status_from_transport_error("network error: timed out while connecting"),
             ArrowCloudSubmitUiStatus::TimedOut
         );
         assert_eq!(
-            arrowcloud_status_from_error_message("Machine Offline"),
-            ArrowCloudSubmitUiStatus::SubmitFailed
+            arrowcloud_status_from_transport_error("Machine Offline"),
+            ArrowCloudSubmitUiStatus::NetworkError
+        );
+    }
+
+    #[test]
+    fn arrowcloud_status_from_http_classifies_codes() {
+        assert_eq!(
+            arrowcloud_status_from_http(408),
+            ArrowCloudSubmitUiStatus::TimedOut
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(504),
+            ArrowCloudSubmitUiStatus::TimedOut
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(500),
+            ArrowCloudSubmitUiStatus::ServerError { http_status: 500 }
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(401),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(403),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::Unauthorized,
+            }
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(404),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::NotFound,
+            }
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(400),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
+        );
+        assert_eq!(
+            arrowcloud_status_from_http(418),
+            ArrowCloudSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore,
+            }
         );
     }
 }
