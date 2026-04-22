@@ -2428,16 +2428,101 @@ fn install_file_loaders(lua: &Lua, song_dir: PathBuf) -> mlua::Result<()> {
 }
 
 fn load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<Value> {
-    let resolved = resolve_script_path(lua, song_dir, path)?;
+    let resolved = resolve_load_actor_path(lua, song_dir, path)?;
     if is_song_lua_media_path(&resolved) {
         let actor_type = if is_song_lua_audio_path(&resolved) {
             "Sound"
         } else {
             "Sprite"
         };
-        return Ok(Value::Table(create_media_actor(lua, actor_type, path)?));
+        return Ok(Value::Table(create_media_actor(
+            lua,
+            actor_type,
+            path,
+            resolved.as_path(),
+        )?));
     }
     load_script_file(lua, &resolved, song_dir)?.call::<Value>(())
+}
+
+fn resolve_load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
+    if let Ok(resolved) = resolve_script_path(lua, song_dir, path) {
+        if resolved.is_dir() {
+            return resolve_load_actor_directory(&resolved, song_dir, path);
+        }
+        if resolved.is_file() {
+            return Ok(resolved);
+        }
+    }
+    resolve_load_actor_with_extensions(lua, song_dir, path)
+}
+
+fn resolve_load_actor_directory(dir: &Path, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
+    for candidate in [dir.join("default.lua"), dir.join("default.xml")] {
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+    Err(mlua::Error::external(format!(
+        "script '{}' not found relative to '{}'",
+        path,
+        song_dir.display()
+    )))
+}
+
+fn resolve_load_actor_with_extensions(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
+    let raw = Path::new(path.trim());
+    if raw.extension().is_some() {
+        return Err(mlua::Error::external(format!(
+            "script '{}' not found relative to '{}'",
+            path,
+            song_dir.display()
+        )));
+    }
+
+    const LOAD_ACTOR_EXTENSIONS: &[&str] = &[
+        "lua", "xml", "png", "jpg", "jpeg", "gif", "bmp", "webp", "apng", "mp4", "avi", "m4v",
+        "mov", "webm", "mkv", "mpg", "mpeg", "ogg", "mp3", "wav", "flac", "opus", "m4a", "aac",
+    ];
+
+    for base_dir in load_actor_search_dirs(lua, song_dir)? {
+        let base = base_dir.join(path);
+        if base.is_dir()
+            && let Ok(resolved) = resolve_load_actor_directory(&base, song_dir, path)
+        {
+            return Ok(resolved);
+        }
+        for ext in LOAD_ACTOR_EXTENSIONS {
+            let candidate = base.with_extension(ext);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+
+    Err(mlua::Error::external(format!(
+        "script '{}' not found relative to '{}'",
+        path,
+        song_dir.display()
+    )))
+}
+
+fn load_actor_search_dirs(lua: &Lua, song_dir: &Path) -> mlua::Result<Vec<PathBuf>> {
+    let globals = lua.globals();
+    let mut out = Vec::with_capacity(2);
+    if let Some(current_dir) = globals
+        .get::<Option<String>>("__songlua_script_dir")?
+        .filter(|dir| !dir.trim().is_empty())
+    {
+        let current_dir = PathBuf::from(current_dir);
+        if !out.iter().any(|dir| dir == &current_dir) {
+            out.push(current_dir);
+        }
+    }
+    if !out.iter().any(|dir| dir == song_dir) {
+        out.push(song_dir.to_path_buf());
+    }
+    Ok(out)
 }
 
 fn create_loader_function(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<Function> {
@@ -3658,12 +3743,17 @@ fn create_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table
     Ok(actor)
 }
 
-fn create_media_actor(lua: &Lua, actor_type: &'static str, path: &str) -> mlua::Result<Table> {
+fn create_media_actor(
+    lua: &Lua,
+    actor_type: &'static str,
+    path: &str,
+    resolved_path: &Path,
+) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, actor_type)?;
     if actor_type.eq_ignore_ascii_case("Sound") {
         actor.set("File", path)?;
     } else {
-        actor.set("Texture", path)?;
+        actor.set("Texture", file_path_string(resolved_path))?;
     }
     Ok(actor)
 }
@@ -4482,6 +4572,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "animate",
         "clearzbuffer",
         "diffuseramp",
+        "Draw",
         "effectclock",
         "EnableAlphaBuffer",
         "EnableDepthBuffer",
@@ -7561,6 +7652,93 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_loadactor_resolves_extensionless_image() {
+        let song_dir = test_dir("loadactor-image-no-ext");
+        let lua_dir = song_dir.join("lua");
+        fs::create_dir_all(&lua_dir).unwrap();
+        let image_path = lua_dir.join("panel.png");
+        image::RgbaImage::new(12, 34).save(&image_path).unwrap();
+        let entry = lua_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local loaded = nil
+
+return Def.ActorFrame{
+    LoadActor("panel")..{
+        OnCommand=function(self)
+            loaded = self
+        end,
+    },
+    Def.Sprite{
+        OnCommand=function(self)
+            local texture = loaded:GetTexture()
+            mod_actions = {
+                {1, string.format(
+                    "%s:%.0f:%.0f",
+                    tostring(texture:GetPath():match("panel%.png$") ~= nil),
+                    texture:GetSourceWidth(),
+                    texture:GetSourceHeight()
+                ), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "LoadActor NoExt Image"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "true:12:34");
+    }
+
+    #[test]
+    fn compile_song_lua_loadactor_resolves_extensionless_script() {
+        let song_dir = test_dir("loadactor-script-no-ext");
+        let lua_dir = song_dir.join("lua");
+        fs::create_dir_all(&lua_dir).unwrap();
+        fs::write(
+            lua_dir.join("child.lua"),
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:SetSize(12, 34)
+            mod_actions = {
+                {1, string.format("%.0f:%.0f", self:GetWidth(), self:GetHeight()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+        let entry = lua_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    LoadActor("child"),
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "LoadActor NoExt Script"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "12:34");
+    }
+
+    #[test]
     fn compile_song_lua_loadactor_treats_binary_video_as_media() {
         let song_dir = test_dir("loadactor-video-media");
         let video_path = song_dir.join("clip.mp4");
@@ -8818,6 +8996,39 @@ return Def.ActorFrame{
             SongLuaOverlayKind::AftSprite { ref capture_name }
                 if capture_name == "ScreenTex"
         ));
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_actorframetexture_draw_call() {
+        let song_dir = test_dir("overlay-aft-draw");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.ActorFrameTexture{
+        Name="ScreenTex",
+        InitCommand=function(self)
+            self:Create()
+        end,
+        OnCommand=function(self)
+            self:visible(true)
+            self:Draw()
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled =
+            compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "AFT Draw")).unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        assert!(matches!(
+            compiled.overlays[0].kind,
+            SongLuaOverlayKind::ActorFrameTexture
+        ));
+        assert!(compiled.overlays[0].initial_state.visible);
     }
 
     #[test]
