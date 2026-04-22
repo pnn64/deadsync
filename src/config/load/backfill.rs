@@ -93,6 +93,7 @@ const THEME_KEYS: &[&str] = &[
     "MachineEnableReplays",
     "MachinePreferredStyle",
     "MachinePreferredPlayMode",
+    "ThemeFont",
     "ZmodRatingBoxText",
     "ShowBpmDecimal",
 ];

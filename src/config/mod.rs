@@ -28,7 +28,8 @@ pub use self::theme::{
     AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, GameFlag, LanguageFlag,
     LogLevel, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
     SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SyncGraphMode, ThemeFlag,
+    SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SyncGraphMode, THEME_FONT_VARIANTS,
+    ThemeFlag, ThemeFont,
     auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
@@ -170,6 +171,10 @@ pub struct Config {
     pub machine_preferred_style: MachinePreferredPlayStyle,
     /// Startup flow fallback mode used when Select Play Mode is disabled.
     pub machine_preferred_play_mode: MachinePreferredPlayMode,
+    /// Theme font for Bold/Header/Footer/numbers/ScreenEval roles.
+    /// Default `Common` keeps Wendy; `Mega` swaps those roles to Mega.
+    /// Body text (Normal role) stays Miso regardless.
+    pub theme_font: ThemeFont,
     /// Machine-wide replay recording and replay menu visibility.
     pub machine_enable_replays: bool,
     /// Allow players to add a personal timing shift on top of machine global offset.
@@ -310,6 +315,7 @@ impl Default for Config {
             machine_show_select_play_mode: true,
             machine_preferred_style: MachinePreferredPlayStyle::Single,
             machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
+            theme_font: ThemeFont::Common,
             machine_enable_replays: true,
             machine_allow_per_player_global_offsets: false,
             machine_show_eval_summary: true,
