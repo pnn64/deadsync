@@ -374,7 +374,6 @@ struct ArrowCloudSubmitError {
     message: String,
 }
 
-
 #[inline(always)]
 fn arrowcloud_format_length(seconds: f32) -> String {
     if !seconds.is_finite() || seconds <= 0.0 {
@@ -803,10 +802,7 @@ fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
                         ArrowCloudSubmitUiStatus::Submitted,
                     );
                     if accepted {
-                        arrowcloud_record_submit_success(
-                            job.side,
-                            job.payload.hash.as_str(),
-                        );
+                        arrowcloud_record_submit_success(job.side, job.payload.hash.as_str());
                     }
                 }
                 Err(err) => {

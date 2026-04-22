@@ -37,6 +37,7 @@ pub enum Category {
     Profile,
     Advanced,
     Styles,
+    Playlists,
 }
 
 /// A visible entry in the select music menu wheel.
@@ -120,6 +121,7 @@ pub struct CategoryItemLists {
     pub profile: Option<Vec<Item>>,
     pub advanced: Vec<Item>,
     pub styles: Option<Vec<Item>>,
+    pub playlists: Option<Vec<Item>>,
 }
 
 // --- Entry building ---
@@ -132,6 +134,7 @@ pub fn build_entries(lists: &CategoryItemLists, categories: &CategoryState) -> V
         lists.profile.as_deref(),
         &lists.advanced,
         lists.styles.as_deref(),
+        lists.playlists.as_deref(),
         categories,
     )
 }
@@ -142,6 +145,7 @@ fn build_entries_from_slices(
     items_profile: Option<&[Item]>,
     items_advanced: &[Item],
     items_styles: Option<&[Item]>,
+    items_playlists: Option<&[Item]>,
     categories: &CategoryState,
 ) -> Vec<Entry> {
     // If a category is expanded, show ONLY that category header + its items
@@ -152,7 +156,7 @@ fn build_entries_from_slices(
             label: "Sorts...",
         }];
         for item in items_sorts {
-            entries.push(Entry::CategoryItem(*item));
+            entries.push(Entry::CategoryItem(item.clone()));
         }
         return entries;
     }
@@ -163,7 +167,7 @@ fn build_entries_from_slices(
                 label: "Profile...",
             }];
             for item in profile_items {
-                entries.push(Entry::CategoryItem(*item));
+                entries.push(Entry::CategoryItem(item.clone()));
             }
             return entries;
         }
@@ -174,7 +178,7 @@ fn build_entries_from_slices(
             label: "Advanced...",
         }];
         for item in items_advanced {
-            entries.push(Entry::CategoryItem(*item));
+            entries.push(Entry::CategoryItem(item.clone()));
         }
         return entries;
     }
@@ -185,7 +189,19 @@ fn build_entries_from_slices(
                 label: "Styles...",
             }];
             for item in style_items {
-                entries.push(Entry::CategoryItem(*item));
+                entries.push(Entry::CategoryItem(item.clone()));
+            }
+            return entries;
+        }
+    }
+    if categories.is_expanded(Category::Playlists) {
+        if let Some(playlist_items) = items_playlists {
+            let mut entries = vec![Entry::CategoryHeader {
+                category: Category::Playlists,
+                label: "Playlists...",
+            }];
+            for item in playlist_items {
+                entries.push(Entry::CategoryItem(item.clone()));
             }
             return entries;
         }
@@ -195,7 +211,7 @@ fn build_entries_from_slices(
     let mut entries = Vec::new();
 
     for item in items_standalone {
-        entries.push(Entry::StandaloneItem(*item));
+        entries.push(Entry::StandaloneItem(item.clone()));
     }
 
     entries.push(Entry::CategoryHeader {
@@ -219,6 +235,12 @@ fn build_entries_from_slices(
         entries.push(Entry::CategoryHeader {
             category: Category::Styles,
             label: "Styles...",
+        });
+    }
+    if items_playlists.is_some() {
+        entries.push(Entry::CategoryHeader {
+            category: Category::Playlists,
+            label: "Playlists...",
         });
     }
 
@@ -305,7 +327,7 @@ fn activate(state: &mut VisibleState, entries: &[Entry]) -> InputOutcome {
             InputOutcome::ToggleCategory(*category)
         }
         Entry::CategoryItem(item) | Entry::StandaloneItem(item) => {
-            InputOutcome::ActivateAction(item.action)
+            InputOutcome::ActivateAction(item.action.clone())
         }
     }
 }
@@ -472,7 +494,7 @@ fn render_row(
                 align(0.0, 0.5):
                 xy(left_x + 27.0, y):
                 zoom(0.4):
-                maxwidth((WIDTH - 50.0) / 0.4):
+                maxwidth(WIDTH - 50.0):
                 diffuse(tint, tint, tint, row_alpha):
                 z(1454):
                 horizalign(left)
@@ -510,11 +532,11 @@ fn render_item_text(
     if !item.top_label.is_empty() {
         let mut top = act!(text:
             font(FONT_TOP):
-            settext(item.top_label):
+            settext(item.top_label.to_string()):
             align(0.0, 1.0):
             xy(x, y - 5.0):
             zoom(0.58):
-            maxwidth(max_w / 0.58):
+            maxwidth(max_w):
             diffuse(tint[0], tint[1], tint[2], row_alpha * 0.85):
             z(1454):
             horizalign(left)
@@ -524,11 +546,11 @@ fn render_item_text(
     }
     let mut bottom = act!(text:
         font(FONT_BOTTOM):
-        settext(item.bottom_label):
+        settext(item.bottom_label.to_string()):
         align(0.0, 0.5):
         xy(x, y + 4.0):
         zoom(0.36):
-        maxwidth(max_w / 0.36):
+        maxwidth(max_w):
         diffuse(tint[0], tint[1], tint[2], row_alpha):
         z(1454):
         horizalign(left)
@@ -539,7 +561,7 @@ fn render_item_text(
 
 #[inline(always)]
 fn item_tint(item: &Item, focus_lerp: f32) -> [f32; 3] {
-    if matches!(item.action, Action::BackToMain) {
+    if matches!(&item.action, Action::BackToMain) {
         [
             lerp_scalar(
                 GO_BACK_COLOR_UNFOCUSED[0],

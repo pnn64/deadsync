@@ -3546,8 +3546,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if player_idx == usize::MAX || player_idx >= state.num_players {
             continue;
         }
-        let filter_alpha =
-            state.player_profiles[player_idx].background_filter.alpha();
+        let filter_alpha = state.player_profiles[player_idx].background_filter.alpha();
         if filter_alpha <= 0.0 {
             continue;
         }

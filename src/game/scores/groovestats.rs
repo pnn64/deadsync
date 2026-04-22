@@ -1057,10 +1057,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     GrooveStatsSubmitUiStatus::Submitted,
                 );
                 if accepted {
-                    groovestats_record_submit_success(
-                        player.side,
-                        player.chart_hash.as_str(),
-                    );
+                    groovestats_record_submit_success(player.side, player.chart_hash.as_str());
                 }
                 if let Some(profile_id) = player.profile_id.as_deref() {
                     let score = cached_score_from_gs(

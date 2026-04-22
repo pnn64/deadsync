@@ -904,8 +904,9 @@ pub(super) fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
 
     state.option_masks[idx].results_extras.toggle(bit);
 
-    let track_early_judgments =
-        state.option_masks[idx].results_extras.contains(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
+    let track_early_judgments = state.option_masks[idx]
+        .results_extras
+        .contains(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
     state.player_profiles[idx].track_early_judgments = track_early_judgments;
 
     let play_style = crate::game::profile::get_session_play_style();

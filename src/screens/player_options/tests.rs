@@ -7,7 +7,8 @@ pub(super) mod tests {
         NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, P1, P2, PlayerOptionMasks, Row, RowId,
         RowMap, ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event,
         hud_offset_choices, is_row_visible, judgment_tilt_intensity_visible,
-        repeat_held_arcade_start, row_visibility, session_active_players, sync_profile_scroll_speed,
+        repeat_held_arcade_start, row_visibility, session_active_players,
+        sync_profile_scroll_speed,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -105,8 +106,16 @@ pub(super) mod tests {
             &row_map,
             [true, false],
             [
-                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
-                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+                PlayerOptionMasks {
+                    hide: HideMask::empty(),
+                    error_bar: ErrorBarMask::empty(),
+                    ..Default::default()
+                },
+                PlayerOptionMasks {
+                    hide: HideMask::empty(),
+                    error_bar: ErrorBarMask::empty(),
+                    ..Default::default()
+                },
             ],
             false,
         );
@@ -116,8 +125,16 @@ pub(super) mod tests {
             &row_map,
             [true, false],
             [
-                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::COLORFUL, ..Default::default() },
-                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+                PlayerOptionMasks {
+                    hide: HideMask::empty(),
+                    error_bar: ErrorBarMask::COLORFUL,
+                    ..Default::default()
+                },
+                PlayerOptionMasks {
+                    hide: HideMask::empty(),
+                    error_bar: ErrorBarMask::empty(),
+                    ..Default::default()
+                },
             ],
             false,
         );
@@ -145,8 +162,16 @@ pub(super) mod tests {
             &row_map,
             [true, false],
             [
-                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
-                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+                PlayerOptionMasks {
+                    hide: HideMask::empty(),
+                    error_bar: ErrorBarMask::empty(),
+                    ..Default::default()
+                },
+                PlayerOptionMasks {
+                    hide: HideMask::empty(),
+                    error_bar: ErrorBarMask::empty(),
+                    ..Default::default()
+                },
             ],
             false,
         );
@@ -170,8 +195,16 @@ pub(super) mod tests {
             &row_map,
             [true, false],
             [
-                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
-                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+                PlayerOptionMasks {
+                    hide: HideMask::empty(),
+                    error_bar: ErrorBarMask::empty(),
+                    ..Default::default()
+                },
+                PlayerOptionMasks {
+                    hide: HideMask::empty(),
+                    error_bar: ErrorBarMask::empty(),
+                    ..Default::default()
+                },
             ],
             false,
         );
@@ -199,8 +232,16 @@ pub(super) mod tests {
             &row_map,
             [true, true],
             [
-                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
-                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+                PlayerOptionMasks {
+                    hide: HideMask::empty(),
+                    error_bar: ErrorBarMask::empty(),
+                    ..Default::default()
+                },
+                PlayerOptionMasks {
+                    hide: HideMask::empty(),
+                    error_bar: ErrorBarMask::empty(),
+                    ..Default::default()
+                },
             ],
             false,
         );
@@ -224,8 +265,16 @@ pub(super) mod tests {
             &row_map,
             [true, true],
             [
-                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
-                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+                PlayerOptionMasks {
+                    hide: HideMask::empty(),
+                    error_bar: ErrorBarMask::empty(),
+                    ..Default::default()
+                },
+                PlayerOptionMasks {
+                    hide: HideMask::empty(),
+                    error_bar: ErrorBarMask::empty(),
+                    ..Default::default()
+                },
             ],
             false,
         );
@@ -317,7 +366,8 @@ pub(super) mod tests {
         assert!(second_row > first_row);
 
         let now = Instant::now();
-        state.start_input[P1].held_since = Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
+        state.start_input[P1].held_since =
+            Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
         state.start_input[P1].last_triggered_at =
             Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
 
@@ -347,7 +397,8 @@ pub(super) mod tests {
         state.pane_mut().prev_selected_row[P1] = last_row;
 
         let now = Instant::now();
-        state.start_input[P1].held_since = Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
+        state.start_input[P1].held_since =
+            Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
         state.start_input[P1].last_triggered_at =
             Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
 

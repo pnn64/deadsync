@@ -227,7 +227,9 @@ enum SubmitFooterStatus {
     },
     /// Network/transport failure unrelated to a server response. No
     /// auto-retry; `retry_in_secs` is the manual-F5 cooldown remaining.
-    NetworkError { retry_in_secs: Option<u32> },
+    NetworkError {
+        retry_in_secs: Option<u32>,
+    },
     /// Server returned a 5xx response. No auto-retry; HTTP code shown to user.
     /// `retry_in_secs` is the manual-F5 cooldown remaining.
     ServerError {
@@ -235,7 +237,9 @@ enum SubmitFooterStatus {
         retry_in_secs: Option<u32>,
     },
     /// Terminal rejection — resubmitting will not change the outcome.
-    Rejected { reason: scores::RejectReason },
+    Rejected {
+        reason: scores::RejectReason,
+    },
 }
 
 #[inline(always)]
@@ -457,11 +461,9 @@ fn submit_footer_cell(backend_label: Arc<str>, status: SubmitFooterStatus) -> Su
                 &[("code", &http_status.to_string())],
             ),
         ),
-        SubmitFooterStatus::Rejected { reason } => (
-            CellIcon::Rejected,
-            None,
-            Some(Arc::from(reason.label())),
-        ),
+        SubmitFooterStatus::Rejected { reason } => {
+            (CellIcon::Rejected, None, Some(Arc::from(reason.label())))
+        }
     };
     SubmitFooterCell {
         backend_label,
@@ -757,8 +759,7 @@ fn compute_column_judgments(
 mod tests {
     use super::{
         EvalPane, SubmitFooterCell, compute_column_judgments, eval_grade_for_result,
-        eval_pane_shift, stage_in_stinger_texture_key, submit_footer_gs_label,
-        submit_footer_lines,
+        eval_pane_shift, stage_in_stinger_texture_key, submit_footer_gs_label, submit_footer_lines,
     };
     use crate::assets::i18n;
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
@@ -1112,7 +1113,10 @@ mod tests {
         );
         assert_eq!(
             cells_text(&cells),
-            vec![format!("[{} ◐]", submit_footer_gs_label()), "[AC ◐]".to_string()]
+            vec![
+                format!("[{} ◐]", submit_footer_gs_label()),
+                "[AC ◐]".to_string()
+            ]
         );
     }
 
@@ -1131,7 +1135,10 @@ mod tests {
         );
         assert_eq!(
             cells_text(&cells),
-            vec![format!("[{} ✔]", submit_footer_gs_label()), "[AC ✔]".to_string()]
+            vec![
+                format!("[{} ✔]", submit_footer_gs_label()),
+                "[AC ✔]".to_string()
+            ]
         );
     }
 
@@ -4070,11 +4077,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     });
                 }
                 let (prefix, suffix) = cell.sprite_render_parts();
-                let pw = measure_footer_text_width(
-                    asset_manager,
-                    &prefix,
-                    SUBMIT_FOOTER_TEXT_ZOOM,
-                );
+                let pw = measure_footer_text_width(asset_manager, &prefix, SUBMIT_FOOTER_TEXT_ZOOM);
                 frags.push(FooterFrag::Text {
                     text: prefix,
                     width: pw,
@@ -4096,11 +4099,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 } else {
                     suffix
                 };
-                let sw = measure_footer_text_width(
-                    asset_manager,
-                    &suffix_text,
-                    SUBMIT_FOOTER_TEXT_ZOOM,
-                );
+                let sw =
+                    measure_footer_text_width(asset_manager, &suffix_text, SUBMIT_FOOTER_TEXT_ZOOM);
                 frags.push(FooterFrag::Text {
                     text: suffix_text,
                     width: sw,

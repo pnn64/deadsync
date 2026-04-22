@@ -40,7 +40,8 @@ use rssp::bpm::parse_bpm_map;
 use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
@@ -845,6 +846,7 @@ enum WheelSortMode {
     TopGradesP1,
     TopGradesP2,
     Favorites,
+    Playlist,
 }
 
 #[derive(Clone, Debug)]
@@ -868,6 +870,26 @@ struct EditSortCache {
     song: Arc<SongData>,
     chart_type: &'static str,
     indices: Vec<usize>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PlaylistMenuEntry {
+    id: String,
+    top_label: String,
+    bottom_label: String,
+}
+
+#[derive(Clone, Debug)]
+struct PlaylistCacheEntry {
+    menu_entry: PlaylistMenuEntry,
+    entries: Vec<MusicWheelEntry>,
+    pack_song_counts: HashMap<String, usize>,
+}
+
+struct PlaylistSongLookup {
+    by_path: HashMap<String, Arc<SongData>>,
+    by_pack_song: HashMap<(String, String), Arc<SongData>>,
+    by_group: HashMap<String, Vec<Arc<SongData>>>,
 }
 
 pub struct State {
@@ -928,6 +950,9 @@ pub struct State {
     top_grades_p1_entries: Vec<MusicWheelEntry>,
     top_grades_p2_entries: Vec<MusicWheelEntry>,
     favorites_entries: Vec<MusicWheelEntry>,
+    playlist_entries: Vec<MusicWheelEntry>,
+    playlist_library: Vec<PlaylistCacheEntry>,
+    active_playlist_id: Option<String>,
     expanded_pack_name: Option<String>,
     bg: heart_bg::State,
     last_requested_banner_path: Option<PathBuf>,
@@ -1005,6 +1030,7 @@ pub struct State {
     top_grades_p1_pack_song_counts: HashMap<String, usize>,
     top_grades_p2_pack_song_counts: HashMap<String, usize>,
     favorites_pack_song_counts: HashMap<String, usize>,
+    playlist_pack_song_counts: HashMap<String, usize>,
     new_pack_names: HashSet<String>,
 }
 
@@ -2353,6 +2379,345 @@ fn build_favorites_grouped_entries(
     (entries, counts)
 }
 
+#[inline(always)]
+fn path_ci_key(path: &Path) -> String {
+    let mut key = path.to_string_lossy().into_owned();
+    if cfg!(windows) {
+        key.make_ascii_lowercase();
+    }
+    key
+}
+
+fn find_child_dir_ci(root: &Path, name: &str) -> Option<PathBuf> {
+    let exact = root.join(name);
+    if exact.is_dir() {
+        return Some(exact);
+    }
+    let want = name.trim();
+    if want.is_empty() {
+        return None;
+    }
+    let Ok(entries) = fs::read_dir(root) else {
+        return None;
+    };
+    entries.flatten().find_map(|entry| {
+        let path = entry.path();
+        if !path.is_dir() {
+            return None;
+        }
+        entry
+            .file_name()
+            .to_str()
+            .filter(|got| got.eq_ignore_ascii_case(want))
+            .map(|_| path)
+    })
+}
+
+fn push_unique_playlist_dir(paths: &mut Vec<PathBuf>, seen: &mut HashSet<String>, path: PathBuf) {
+    let key = path_ci_key(path.as_path());
+    if seen.insert(key) {
+        paths.push(path);
+    }
+}
+
+fn machine_playlist_dirs() -> Vec<PathBuf> {
+    let app_dirs = dirs::app_dirs();
+    let mut paths = Vec::with_capacity(2);
+    let mut seen = HashSet::with_capacity(2);
+
+    if let Some(dir) = find_child_dir_ci(app_dirs.data_dir.as_path(), "playlists") {
+        push_unique_playlist_dir(&mut paths, &mut seen, dir);
+    }
+    if !app_dirs.portable
+        && let Some(dir) = find_child_dir_ci(app_dirs.exe_dir.as_path(), "playlists")
+    {
+        push_unique_playlist_dir(&mut paths, &mut seen, dir);
+    }
+
+    paths
+}
+
+fn playlist_txt_files(dir: &Path) -> Vec<PathBuf> {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut files: Vec<PathBuf> = read_dir
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
+        })
+        .collect();
+    files.sort_by_cached_key(|path| {
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| name.to_ascii_lowercase())
+            .unwrap_or_else(|| path.to_string_lossy().to_ascii_lowercase())
+    });
+    files
+}
+
+fn playlist_display_name(path: &Path) -> Option<String> {
+    path.file_stem()
+        .and_then(|name| name.to_str())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+}
+
+fn build_playlist_song_lookup(grouped_entries: &[MusicWheelEntry]) -> PlaylistSongLookup {
+    let mut by_path = HashMap::new();
+    let mut by_pack_song = HashMap::new();
+    let mut by_group: HashMap<String, Vec<Arc<SongData>>> = HashMap::new();
+    let mut current_group: Option<String> = None;
+
+    for entry in grouped_entries {
+        match entry {
+            MusicWheelEntry::PackHeader { name, .. } => {
+                current_group = Some(name.trim().to_ascii_lowercase());
+            }
+            MusicWheelEntry::Song(song) => {
+                if let Some(path) = lobby_song_path(song.as_ref()) {
+                    by_path
+                        .entry(normalize_lobby_song_path(path.as_str()).to_ascii_lowercase())
+                        .or_insert_with(|| song.clone());
+                }
+
+                let pack_header_key = current_group.clone();
+                let pack_dir_key = song_pack_and_dir_name(song.as_ref())
+                    .map(|(pack_dir, _)| pack_dir.trim().to_ascii_lowercase());
+                let song_dir_key = song_pack_and_dir_name(song.as_ref())
+                    .map(|(_, song_dir)| song_dir.trim().to_ascii_lowercase());
+
+                if let Some(song_dir) = song_dir_key {
+                    if let Some(group_key) = pack_header_key.as_ref() {
+                        by_pack_song
+                            .entry((group_key.clone(), song_dir.clone()))
+                            .or_insert_with(|| song.clone());
+                    }
+                    if let Some(pack_dir) = pack_dir_key.as_ref() {
+                        by_pack_song
+                            .entry((pack_dir.clone(), song_dir))
+                            .or_insert_with(|| song.clone());
+                    }
+                }
+
+                if let Some(group_key) = pack_header_key {
+                    by_group.entry(group_key).or_default().push(song.clone());
+                }
+                if let Some(pack_dir) = pack_dir_key
+                    && current_group.as_deref() != Some(pack_dir.as_str())
+                {
+                    by_group.entry(pack_dir).or_default().push(song.clone());
+                }
+            }
+        }
+    }
+
+    PlaylistSongLookup {
+        by_path,
+        by_pack_song,
+        by_group,
+    }
+}
+
+fn find_playlist_song(lookup: &PlaylistSongLookup, line: &str) -> Option<Arc<SongData>> {
+    let normalized = normalize_lobby_song_path(line).to_ascii_lowercase();
+    if normalized.is_empty() {
+        return None;
+    }
+    if let Some(song) = lookup.by_path.get(normalized.as_str()) {
+        return Some(song.clone());
+    }
+
+    let mut parts = normalized.split('/').filter(|part| !part.is_empty()).rev();
+    let song = parts.next()?;
+    let pack = parts.next()?;
+    lookup
+        .by_pack_song
+        .get(&(pack.to_string(), song.to_string()))
+        .cloned()
+}
+
+fn push_playlist_section(
+    entries: &mut Vec<MusicWheelEntry>,
+    counts: &mut HashMap<String, usize>,
+    section_name: Option<&str>,
+    fallback_name: &str,
+    songs: &mut Vec<Arc<SongData>>,
+    header_idx: &mut usize,
+) {
+    if songs.is_empty() {
+        return;
+    }
+    let name = section_name
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or(fallback_name)
+        .to_string();
+    counts.insert(name.clone(), songs.len());
+    entries.push(MusicWheelEntry::PackHeader {
+        name,
+        original_index: *header_idx,
+        banner_path: None,
+    });
+    *header_idx += 1;
+    entries.extend(songs.drain(..).map(MusicWheelEntry::Song));
+}
+
+fn build_playlist_entries_from_text(
+    text: &str,
+    fallback_name: &str,
+    lookup: &PlaylistSongLookup,
+) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+    let mut entries = Vec::new();
+    let mut counts = HashMap::new();
+    let mut current_section: Option<String> = None;
+    let mut current_songs = Vec::new();
+    let mut header_idx = 0usize;
+
+    for raw_line in text.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(section_name) = line.strip_prefix("---") {
+            push_playlist_section(
+                &mut entries,
+                &mut counts,
+                current_section.as_deref(),
+                fallback_name,
+                &mut current_songs,
+                &mut header_idx,
+            );
+            current_section = Some(section_name.trim().to_string());
+            continue;
+        }
+        if let Some(group_name) = line.strip_suffix("/*").map(str::trim)
+            && !group_name.is_empty()
+        {
+            if let Some(songs) = lookup
+                .by_group
+                .get(group_name.to_ascii_lowercase().as_str())
+            {
+                current_songs.extend(songs.iter().cloned());
+            }
+            continue;
+        }
+        if let Some(song) = find_playlist_song(lookup, line) {
+            current_songs.push(song);
+        }
+    }
+
+    push_playlist_section(
+        &mut entries,
+        &mut counts,
+        current_section.as_deref(),
+        fallback_name,
+        &mut current_songs,
+        &mut header_idx,
+    );
+    (entries, counts)
+}
+
+fn build_playlist_library(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistCacheEntry> {
+    let lookup = build_playlist_song_lookup(grouped_entries);
+    let mut playlists = Vec::new();
+    let mut seen_machine_names = HashSet::new();
+
+    for dir in machine_playlist_dirs() {
+        for path in playlist_txt_files(dir.as_path()) {
+            let Some(bottom_label) = playlist_display_name(path.as_path()) else {
+                continue;
+            };
+            if !seen_machine_names.insert(bottom_label.to_ascii_lowercase()) {
+                continue;
+            }
+            match fs::read_to_string(path.as_path()) {
+                Ok(text) => {
+                    let (entries, pack_song_counts) =
+                        build_playlist_entries_from_text(&text, &bottom_label, &lookup);
+                    playlists.push(PlaylistCacheEntry {
+                        menu_entry: PlaylistMenuEntry {
+                            id: path_ci_key(path.as_path()),
+                            top_label: "Machine Playlist".to_string(),
+                            bottom_label,
+                        },
+                        entries,
+                        pack_song_counts,
+                    });
+                }
+                Err(err) => warn!("Failed to read playlist '{}': {err}", path.display()),
+            }
+        }
+    }
+
+    let mut seen_profiles = HashSet::new();
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+            continue;
+        };
+        if !seen_profiles.insert(profile_id.clone()) {
+            continue;
+        }
+        let playlist_dir = find_child_dir_ci(
+            dirs::app_dirs().profile_dir(&profile_id).as_path(),
+            "playlists",
+        );
+        let Some(playlist_dir) = playlist_dir else {
+            continue;
+        };
+        let owner = profile::get_for_side(side).display_name;
+        let owner = if owner.trim().is_empty() {
+            profile_id.as_str()
+        } else {
+            owner.as_str()
+        };
+        let top_label = format!("{owner} Playlist");
+        for path in playlist_txt_files(playlist_dir.as_path()) {
+            let Some(bottom_label) = playlist_display_name(path.as_path()) else {
+                continue;
+            };
+            match fs::read_to_string(path.as_path()) {
+                Ok(text) => {
+                    let (entries, pack_song_counts) =
+                        build_playlist_entries_from_text(&text, &bottom_label, &lookup);
+                    playlists.push(PlaylistCacheEntry {
+                        menu_entry: PlaylistMenuEntry {
+                            id: path_ci_key(path.as_path()),
+                            top_label: top_label.clone(),
+                            bottom_label,
+                        },
+                        entries,
+                        pack_song_counts,
+                    });
+                }
+                Err(err) => warn!("Failed to read playlist '{}': {err}", path.display()),
+            }
+        }
+    }
+
+    playlists.sort_by_cached_key(|playlist| {
+        (
+            playlist.menu_entry.top_label.to_ascii_lowercase(),
+            playlist.menu_entry.bottom_label.to_ascii_lowercase(),
+        )
+    });
+    playlists
+}
+
+#[inline(always)]
+fn playlist_cache_entry<'a>(state: &'a State, id: &str) -> Option<&'a PlaylistCacheEntry> {
+    state
+        .playlist_library
+        .iter()
+        .find(|playlist| playlist.menu_entry.id == id)
+}
+
 fn refresh_recent_cache(state: &mut State) {
     let (recent_entries, recent_pack_song_counts) =
         build_recent_grouped_entries(&state.group_entries);
@@ -2373,6 +2738,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
     }
 
     let selected_song = selected_song_arc(state);
+    let mut effective_sort_mode = sort_mode;
 
     match sort_mode {
         WheelSortMode::Group => {
@@ -2503,9 +2869,32 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
                 .and_then(|song| group_name_for_song(&state.favorites_entries, song))
                 .or_else(|| first_header_name(&state.favorites_entries));
         }
+        WheelSortMode::Playlist => {
+            if let Some(active_id) = state.active_playlist_id.as_deref()
+                && let Some(playlist) = playlist_cache_entry(state, active_id).cloned()
+            {
+                state.playlist_entries = playlist.entries.clone();
+                state.playlist_pack_song_counts = playlist.pack_song_counts.clone();
+                state.all_entries = state.playlist_entries.clone();
+                state.pack_song_counts = state.playlist_pack_song_counts.clone();
+                state.expanded_pack_name = selected_song
+                    .as_ref()
+                    .and_then(|song| group_name_for_song(&state.playlist_entries, song))
+                    .or_else(|| first_header_name(&state.playlist_entries));
+            } else {
+                effective_sort_mode = WheelSortMode::Group;
+                state.active_playlist_id = None;
+                state.all_entries = state.group_entries.clone();
+                state.pack_song_counts = state.group_pack_song_counts.clone();
+                state.expanded_pack_name = selected_song
+                    .as_ref()
+                    .and_then(|song| group_name_for_song(&state.group_entries, song))
+                    .or_else(|| first_header_name(&state.group_entries));
+            }
+        }
     }
 
-    state.sort_mode = sort_mode;
+    state.sort_mode = effective_sort_mode;
     rebuild_displayed_entries(state);
 
     state.selected_index = if let Some(song) = selected_song.as_ref() {
@@ -2693,6 +3082,7 @@ pub fn init() -> State {
         );
     let (favorites_entries, favorites_pack_song_counts) =
         build_favorites_grouped_entries(&all_entries);
+    let playlist_library = build_playlist_library(&all_entries);
 
     let new_pack_names = sync_new_pack_names(
         &joined_profile_ids,
@@ -2720,6 +3110,9 @@ pub fn init() -> State {
         top_grades_p1_entries,
         top_grades_p2_entries,
         favorites_entries,
+        playlist_entries: Vec::new(),
+        playlist_library,
+        active_playlist_id: None,
         entries: Vec::new(),
         selected_index: 0,
         selected_steps_index: initial_diff_index,
@@ -2832,6 +3225,7 @@ pub fn init() -> State {
         top_grades_p1_pack_song_counts,
         top_grades_p2_pack_song_counts,
         favorites_pack_song_counts,
+        playlist_pack_song_counts: HashMap::new(),
         new_pack_names,
     };
 
@@ -2931,6 +3325,9 @@ pub fn init_placeholder() -> State {
         top_grades_p1_entries: Vec::new(),
         top_grades_p2_entries: Vec::new(),
         favorites_entries: Vec::new(),
+        playlist_entries: Vec::new(),
+        playlist_library: Vec::new(),
+        active_playlist_id: None,
         entries: Vec::new(),
         selected_index: 0,
         selected_steps_index: initial_diff_index,
@@ -3043,6 +3440,7 @@ pub fn init_placeholder() -> State {
         top_grades_p1_pack_song_counts: HashMap::new(),
         top_grades_p2_pack_song_counts: HashMap::new(),
         favorites_pack_song_counts: HashMap::new(),
+        playlist_pack_song_counts: HashMap::new(),
         new_pack_names: HashSet::new(),
     }
 }
@@ -3339,7 +3737,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         standalone.push(select_music_menu::ITEM_SORT_BY_FAVORITES);
     }
 
-    let sorts = select_music_menu::SORT_ITEMS.to_vec();
+    let sorts = select_music_menu::SORT_ITEMS.iter().cloned().collect();
 
     let p1_has_profile =
         p1_joined && profile::active_local_profile_id_for_side(profile::PlayerSide::P1).is_some();
@@ -3390,6 +3788,23 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         (profile::PlayStyle::Double, true) => Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE]),
         _ => None,
     };
+    let playlists = if state.playlist_library.is_empty() {
+        None
+    } else {
+        Some(
+            state
+                .playlist_library
+                .iter()
+                .map(|playlist| {
+                    select_music_menu::playlist_item(
+                        playlist.menu_entry.top_label.clone(),
+                        playlist.menu_entry.bottom_label.clone(),
+                        playlist.menu_entry.id.clone(),
+                    )
+                })
+                .collect(),
+        )
+    };
 
     select_music_menu::MenuLists {
         standalone,
@@ -3397,6 +3812,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         profile: profile_items,
         advanced,
         styles,
+        playlists,
     }
 }
 
@@ -4726,6 +5142,7 @@ fn refresh_after_reload(state: &mut State) {
         .map(|chart| chart.short_hash.clone());
 
     let sort_mode = state.sort_mode;
+    let active_playlist_id = state.active_playlist_id.clone();
     let expanded_pack_name = state.expanded_pack_name.clone();
     let active_color_index = state.active_color_index;
     let old_steps_index_p1 = state.selected_steps_index;
@@ -4737,6 +5154,7 @@ fn refresh_after_reload(state: &mut State) {
     refreshed.active_color_index = active_color_index;
     refreshed.preferred_difficulty_index = preferred_difficulty_index;
     refreshed.p2_preferred_difficulty_index = p2_preferred_difficulty_index;
+    refreshed.active_playlist_id = active_playlist_id;
 
     if sort_mode != WheelSortMode::Group {
         apply_wheel_sort(&mut refreshed, sort_mode);
@@ -6315,6 +6733,15 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
         }
         select_music_menu::Action::SortByTopGradesP2 => {
             apply_wheel_sort(state, WheelSortMode::TopGradesP2);
+            hide_select_music_menu(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SortByPlaylist(id) => {
+            state.active_playlist_id = Some(id);
+            if state.sort_mode == WheelSortMode::Playlist {
+                state.sort_mode = WheelSortMode::Group;
+            }
+            apply_wheel_sort(state, WheelSortMode::Playlist);
             hide_select_music_menu(state);
             ScreenAction::None
         }
@@ -9528,6 +9955,7 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
 mod tests {
     use super::{
         PREVIEW_DELAY_SECONDS, WheelSortMode, build_displayed_entries,
+        build_playlist_entries_from_text, build_playlist_song_lookup,
         delayed_selection_updates_blocked, init_placeholder, reset_preview_after_gameplay,
         select_music_lobby_lock_text_for, steps_index_for_side, sync_low_confidence_warning,
     };
@@ -9540,6 +9968,36 @@ mod tests {
     fn test_song(title: &str) -> Arc<SongData> {
         Arc::new(SongData {
             simfile_path: PathBuf::from(format!("{title}.ssc")),
+            title: title.to_string(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            genre: String::new(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            foreground_lua_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: String::new(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+            normalized_bpms: String::new(),
+            music_length_seconds: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts: Vec::new(),
+        })
+    }
+
+    fn test_song_in_pack(pack: &str, song_dir: &str, title: &str) -> Arc<SongData> {
+        Arc::new(SongData {
+            simfile_path: PathBuf::from(format!("/songs/{pack}/{song_dir}/song.ssc")),
             title: title.to_string(),
             subtitle: String::new(),
             translit_title: String::new(),
@@ -9582,6 +10040,24 @@ mod tests {
                 banner_path: None,
             },
             super::MusicWheelEntry::Song(test_song("Song B1")),
+        ]
+    }
+
+    fn test_playlist_entries() -> Vec<super::MusicWheelEntry> {
+        vec![
+            super::MusicWheelEntry::PackHeader {
+                name: "Pack A".to_string(),
+                original_index: 0,
+                banner_path: None,
+            },
+            super::MusicWheelEntry::Song(test_song_in_pack("Pack A", "Song A1", "Alpha")),
+            super::MusicWheelEntry::Song(test_song_in_pack("Pack A", "Song A2", "Beta")),
+            super::MusicWheelEntry::PackHeader {
+                name: "Pack B".to_string(),
+                original_index: 1,
+                banner_path: None,
+            },
+            super::MusicWheelEntry::Song(test_song_in_pack("Pack B", "Song B1", "Gamma")),
         ]
     }
 
@@ -9724,6 +10200,65 @@ mod tests {
             steps_index_for_side(profile::PlayStyle::Versus, profile::PlayerSide::P2, 3, 5),
             5
         );
+    }
+
+    #[test]
+    fn playlist_parser_supports_sections_and_pack_wildcards() {
+        let entries = test_playlist_entries();
+        let lookup = build_playlist_song_lookup(&entries);
+        let (playlist_entries, counts) = build_playlist_entries_from_text(
+            "---Warmup\nPack A/*\n---Finale\nPack B/Song B1\n",
+            "Night Shift",
+            &lookup,
+        );
+
+        assert_eq!(counts.get("Warmup"), Some(&2));
+        assert_eq!(counts.get("Finale"), Some(&1));
+        assert!(matches!(
+            playlist_entries[0],
+            super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Warmup"
+        ));
+        assert!(matches!(
+            playlist_entries[1],
+            super::MusicWheelEntry::Song(ref song) if song.title == "Alpha"
+        ));
+        assert!(matches!(
+            playlist_entries[2],
+            super::MusicWheelEntry::Song(ref song) if song.title == "Beta"
+        ));
+        assert!(matches!(
+            playlist_entries[3],
+            super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Finale"
+        ));
+        assert!(matches!(
+            playlist_entries[4],
+            super::MusicWheelEntry::Song(ref song) if song.title == "Gamma"
+        ));
+    }
+
+    #[test]
+    fn playlist_parser_uses_playlist_name_when_no_header_exists() {
+        let entries = test_playlist_entries();
+        let lookup = build_playlist_song_lookup(&entries);
+        let (playlist_entries, counts) = build_playlist_entries_from_text(
+            "Pack A/Song A2\nPack B/Song B1\n",
+            "Night Shift",
+            &lookup,
+        );
+
+        assert_eq!(counts.get("Night Shift"), Some(&2));
+        assert!(matches!(
+            playlist_entries[0],
+            super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Night Shift"
+        ));
+        assert!(matches!(
+            playlist_entries[1],
+            super::MusicWheelEntry::Song(ref song) if song.title == "Beta"
+        ));
+        assert!(matches!(
+            playlist_entries[2],
+            super::MusicWheelEntry::Song(ref song) if song.title == "Gamma"
+        ));
     }
 
     #[test]

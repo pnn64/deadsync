@@ -140,8 +140,8 @@ pub(super) fn apply_profile_defaults(
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
     // Initialize Background Filter row from profile setting (0..=100 %).
     if let Some(row) = row_map.get_mut(RowId::BackgroundFilter) {
-        row.selected_choice_index[player_idx] = (profile.background_filter.percent() as usize)
-            .min(row.choices.len().saturating_sub(1));
+        row.selected_choice_index[player_idx] =
+            (profile.background_filter.percent() as usize).min(row.choices.len().saturating_sub(1));
     }
     // Initialize Judgment Font row from profile setting
     if let Some(row) = row_map.get_mut(RowId::JudgmentFont) {

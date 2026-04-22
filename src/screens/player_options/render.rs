@@ -531,21 +531,28 @@ pub(super) fn multi_select_mask(state: &State, row_id: RowId, player_idx: usize)
         Holds => state.option_masks[player_idx].holds.bits().into(),
         Accel => state.option_masks[player_idx].accel_effects.bits().into(),
         Effect => state.option_masks[player_idx].visual_effects.bits(),
-        Appearance => state.option_masks[player_idx].appearance_effects
+        Appearance => state.option_masks[player_idx]
+            .appearance_effects
             .bits()
             .into(),
-        LifeBarOptions => state.option_masks[player_idx].life_bar_options.bits().into(),
+        LifeBarOptions => state.option_masks[player_idx]
+            .life_bar_options
+            .bits()
+            .into(),
         FAPlusOptions => state.option_masks[player_idx].fa_plus.bits().into(),
         GameplayExtras => state.option_masks[player_idx].gameplay_extras.bits().into(),
-        GameplayExtrasMore => state.option_masks[player_idx].gameplay_extras_more
+        GameplayExtrasMore => state.option_masks[player_idx]
+            .gameplay_extras_more
             .bits()
             .into(),
         ResultsExtras => state.option_masks[player_idx].results_extras.bits().into(),
-        MeasureCounterOptions => state.option_masks[player_idx].measure_counter_options
+        MeasureCounterOptions => state.option_masks[player_idx]
+            .measure_counter_options
             .bits()
             .into(),
         ErrorBar => state.option_masks[player_idx].error_bar.bits().into(),
-        ErrorBarOptions => state.option_masks[player_idx].error_bar_options
+        ErrorBarOptions => state.option_masks[player_idx]
+            .error_bar_options
             .bits()
             .into(),
         EarlyDecentWayOffOptions => state.option_masks[player_idx].early_dw.bits().into(),
@@ -1637,10 +1644,14 @@ fn draw_tap_explosion_preview(
 }
 
 fn draw_noteskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if let Some(ns) = rc.fc.state.noteskin_previews[primary_player_idx].base.as_ref() {
+    if let Some(ns) = rc.fc.state.noteskin_previews[primary_player_idx]
+        .base
+        .as_ref()
+    {
         draw_noteskin_preview(actors, rc, ns, rc.fc.preview_x[primary_player_idx]);
     }
-    if rc.fc.show_p2 && primary_player_idx != P2
+    if rc.fc.show_p2
+        && primary_player_idx != P2
         && let Some(ns) = rc.fc.state.noteskin_previews[P2].base.as_ref()
     {
         draw_noteskin_preview(actors, rc, ns, rc.fc.preview_x[P2]);
@@ -1648,14 +1659,21 @@ fn draw_noteskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_playe
 }
 
 fn draw_mineskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if let Some(mine_ns) = rc.fc.state.noteskin_previews[primary_player_idx].mine
+    if let Some(mine_ns) = rc.fc.state.noteskin_previews[primary_player_idx]
+        .mine
         .as_deref()
-        .or_else(|| rc.fc.state.noteskin_previews[primary_player_idx].base.as_deref())
+        .or_else(|| {
+            rc.fc.state.noteskin_previews[primary_player_idx]
+                .base
+                .as_deref()
+        })
     {
         draw_mine_preview(actors, rc, mine_ns, rc.fc.preview_x[primary_player_idx]);
     }
-    if rc.fc.show_p2 && primary_player_idx != P2
-        && let Some(mine_ns) = rc.fc.state.noteskin_previews[P2].mine
+    if rc.fc.show_p2
+        && primary_player_idx != P2
+        && let Some(mine_ns) = rc.fc.state.noteskin_previews[P2]
+            .mine
             .as_deref()
             .or_else(|| rc.fc.state.noteskin_previews[P2].base.as_deref())
     {
@@ -1664,15 +1682,21 @@ fn draw_mineskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_playe
 }
 
 fn draw_receptorskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if let Some(receptor_ns) = rc.fc.state.noteskin_previews[primary_player_idx].receptor
+    if let Some(receptor_ns) = rc.fc.state.noteskin_previews[primary_player_idx]
+        .receptor
         .as_deref()
-        .or_else(|| rc.fc.state.noteskin_previews[primary_player_idx].base.as_deref())
+        .or_else(|| {
+            rc.fc.state.noteskin_previews[primary_player_idx]
+                .base
+                .as_deref()
+        })
     {
         draw_receptor_preview(actors, rc, receptor_ns, rc.fc.preview_x[primary_player_idx]);
     }
     if rc.fc.show_p2
         && primary_player_idx != P2
-        && let Some(receptor_ns) = rc.fc.state.noteskin_previews[P2].receptor
+        && let Some(receptor_ns) = rc.fc.state.noteskin_previews[P2]
+            .receptor
             .as_deref()
             .or_else(|| rc.fc.state.noteskin_previews[P2].base.as_deref())
     {
@@ -1681,15 +1705,24 @@ fn draw_receptorskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_p
 }
 
 fn draw_tap_explosion_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if !rc.fc.state.player_profiles[primary_player_idx]
-        .tap_explosion_noteskin_hidden()
-        && let Some(explosion_ns) = rc.fc.state.noteskin_previews[primary_player_idx].tap_explosion
+    if !rc.fc.state.player_profiles[primary_player_idx].tap_explosion_noteskin_hidden()
+        && let Some(explosion_ns) = rc.fc.state.noteskin_previews[primary_player_idx]
+            .tap_explosion
             .as_deref()
-            .or_else(|| rc.fc.state.noteskin_previews[primary_player_idx].base.as_deref())
+            .or_else(|| {
+                rc.fc.state.noteskin_previews[primary_player_idx]
+                    .base
+                    .as_deref()
+            })
     {
-        let receptor_ns = rc.fc.state.noteskin_previews[primary_player_idx].receptor
+        let receptor_ns = rc.fc.state.noteskin_previews[primary_player_idx]
+            .receptor
             .as_deref()
-            .or_else(|| rc.fc.state.noteskin_previews[primary_player_idx].base.as_deref())
+            .or_else(|| {
+                rc.fc.state.noteskin_previews[primary_player_idx]
+                    .base
+                    .as_deref()
+            })
             .unwrap_or(explosion_ns);
         draw_tap_explosion_preview(
             actors,
@@ -1702,11 +1735,13 @@ fn draw_tap_explosion_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_
     if rc.fc.show_p2
         && primary_player_idx != P2
         && !rc.fc.state.player_profiles[P2].tap_explosion_noteskin_hidden()
-        && let Some(explosion_ns) = rc.fc.state.noteskin_previews[P2].tap_explosion
+        && let Some(explosion_ns) = rc.fc.state.noteskin_previews[P2]
+            .tap_explosion
             .as_deref()
             .or_else(|| rc.fc.state.noteskin_previews[P2].base.as_deref())
     {
-        let receptor_ns = rc.fc.state.noteskin_previews[P2].receptor
+        let receptor_ns = rc.fc.state.noteskin_previews[P2]
+            .receptor
             .as_deref()
             .or_else(|| rc.fc.state.noteskin_previews[P2].base.as_deref())
             .unwrap_or(explosion_ns);
