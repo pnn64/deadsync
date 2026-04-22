@@ -36,7 +36,7 @@ pub use scan::{
 };
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
-const SONG_CACHE_VERSION: u8 = 5;
+const SONG_CACHE_VERSION: u8 = 6;
 const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
@@ -1921,13 +1921,7 @@ fn resolve_foreground_media_dir(dir: &Path) -> Option<PathBuf> {
 
 fn resolve_foreground_media_path(song_dir: &Path, target: &str) -> Option<PathBuf> {
     let path = resolve_song_path_like_itg(song_dir, target)?;
-    if path_uses_lua_like_itg(&path) {
-        return None;
-    }
     if path.is_dir() {
-        if path.join("default.xml").is_file() {
-            return None;
-        }
         return resolve_foreground_media_dir(&path);
     }
     foreground_media_ext_rank(&path).is_some().then_some(path)
@@ -2351,6 +2345,7 @@ mod tests {
         let song_dir = root.join("Song");
         let fg_dir = song_dir.join("animations");
         fs::create_dir_all(&fg_dir).unwrap();
+        fs::write(fg_dir.join("default.lua"), "return Def.ActorFrame{}").unwrap();
         let movie = fg_dir.join("badapple.avi");
         fs::write(&movie, b"avi").unwrap();
 

@@ -1699,17 +1699,9 @@ fn gameplay_song_lua_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
     paths
 }
 
-fn gameplay_overlay_video_paths(
-    state: &gameplay::State,
-    show_video_backgrounds: bool,
-) -> Vec<PathBuf> {
+fn gameplay_overlay_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
     let mut paths = gameplay_song_lua_video_paths(state);
-    if !show_video_backgrounds {
-        return paths;
-    }
-    if let Some(path) = state
-        .song
-        .gameplay_foreground_path(state.current_beat, true)
+    if let Some(path) = state.song.active_foreground_path(state.current_beat)
         && crate::assets::dynamic::is_dynamic_video_path(path)
         && !paths.iter().any(|existing| existing == path)
     {
@@ -4354,7 +4346,7 @@ impl App {
             self.backend.as_mut(),
             self.state.screens.gameplay_state.as_ref(),
         ) {
-            let overlay_video_paths = gameplay_overlay_video_paths(gs, show_video_backgrounds);
+            let overlay_video_paths = gameplay_overlay_video_paths(gs);
             self.dynamic_media.sync_active_song_lua_videos(
                 &mut self.asset_manager,
                 backend,
@@ -6389,8 +6381,7 @@ impl App {
                     combo_carry,
                 );
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
-                let show_video_backgrounds = config::get().show_video_backgrounds;
-                let overlay_video_paths = gameplay_overlay_video_paths(&gs, show_video_backgrounds);
+                let overlay_video_paths = gameplay_overlay_video_paths(&gs);
 
                 let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {

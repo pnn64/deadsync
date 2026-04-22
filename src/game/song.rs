@@ -318,13 +318,4 @@ impl SongData {
             None => fallback,
         }
     }
-
-    pub fn gameplay_foreground_path(&self, beat: f32, allow_video: bool) -> Option<&PathBuf> {
-        let path = self.active_foreground_path(beat)?;
-        if allow_video || !Self::is_video_path(path) {
-            Some(path)
-        } else {
-            None
-        }
-    }
 }

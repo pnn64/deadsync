@@ -475,7 +475,7 @@ fn overlay_state_lerp(
 }
 
 pub(super) fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendMode> {
-    if raw.eq_ignore_ascii_case("add") {
+    if raw.eq_ignore_ascii_case("add") || raw.eq_ignore_ascii_case("blendmode_add") {
         Some(SongLuaOverlayBlendMode::Add)
     } else if raw.eq_ignore_ascii_case("alpha")
         || raw.eq_ignore_ascii_case("normal")
@@ -687,4 +687,17 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(size);
     copy_pair!(stretch_rect);
     (!overlay_delta_is_empty(&out_from)).then_some((out_from, out_to))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SongLuaOverlayBlendMode, parse_overlay_blend_mode};
+
+    #[test]
+    fn parse_overlay_blend_mode_accepts_stepmania_add_name() {
+        assert_eq!(
+            parse_overlay_blend_mode("BlendMode_Add"),
+            Some(SongLuaOverlayBlendMode::Add)
+        );
+    }
 }

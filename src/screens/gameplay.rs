@@ -30,6 +30,7 @@ use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
+use std::path::Path;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
@@ -849,11 +850,70 @@ fn build_background(state: &State, bg_brightness: f32) -> Actor {
     actor
 }
 
-fn build_foreground_media(state: &State) -> Option<Actor> {
-    let cfg = crate::config::get();
-    let path = state
-        .song
-        .gameplay_foreground_path(state.current_beat, cfg.show_video_backgrounds)?;
+fn song_lua_has_visible_tex(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    path: &Path,
+) -> bool {
+    overlays.iter().zip(overlay_states).any(|(overlay, state)| {
+        matches!(
+            &overlay.kind,
+            SongLuaOverlayKind::Sprite { texture_path } if texture_path.as_path() == path
+        ) && state.visible
+            && state.diffuse[3] > f32::EPSILON
+    })
+}
+
+fn song_lua_owns_fg_media(
+    state: &State,
+    overlay_states: &[SongLuaOverlayState],
+    path: &Path,
+) -> bool {
+    if song_lua_has_visible_tex(&state.song_lua_overlays, overlay_states, path) {
+        return true;
+    }
+    for layer in &state.song_lua_background_visual_layers {
+        if state.current_music_time_display < layer.start_second {
+            continue;
+        }
+        let layer_states = song_lua_overlay_states_from(
+            state.current_music_time_display,
+            &layer.overlays,
+            &layer.overlay_events,
+            &layer.overlay_eases,
+            &layer.overlay_ease_ranges,
+            layer.screen_width,
+            layer.screen_height,
+        );
+        if song_lua_has_visible_tex(&layer.overlays, &layer_states, path) {
+            return true;
+        }
+    }
+    for layer in &state.song_lua_foreground_visual_layers {
+        if state.current_music_time_display < layer.start_second {
+            continue;
+        }
+        let layer_states = song_lua_overlay_states_from(
+            state.current_music_time_display,
+            &layer.overlays,
+            &layer.overlay_events,
+            &layer.overlay_eases,
+            &layer.overlay_ease_ranges,
+            layer.screen_width,
+            layer.screen_height,
+        );
+        if song_lua_has_visible_tex(&layer.overlays, &layer_states, path) {
+            return true;
+        }
+    }
+    false
+}
+
+fn build_foreground_media(state: &State, overlay_states: &[SongLuaOverlayState]) -> Option<Actor> {
+    let path = state.song.active_foreground_path(state.current_beat)?;
+    if song_lua_owns_fg_media(state, overlay_states, path) {
+        return None;
+    }
     Some(shared_banner::cover_sprite(
         path.to_string_lossy().into_owned(),
         screen_center_x(),
@@ -4631,7 +4691,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         )
     };
     actors.extend(main_layer_actors);
-    if let Some(actor) = build_foreground_media(state) {
+    if let Some(actor) = build_foreground_media(state, &overlay_states) {
         actors.push(actor);
     }
     for layer in &state.song_lua_foreground_visual_layers {
@@ -5026,6 +5086,47 @@ mod tests {
             }
             other => panic!("expected projected textured mesh, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn song_lua_layer_detects_visible_sprite_texture() {
+        let path = std::path::PathBuf::from("badapple.avi");
+        let overlays = vec![SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: path.clone(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        }];
+        let states = vec![SongLuaOverlayState::default()];
+
+        assert!(song_lua_has_visible_tex(&overlays, &states, path.as_path()));
+    }
+
+    #[test]
+    fn song_lua_layer_ignores_hidden_sprite_texture() {
+        let path = std::path::PathBuf::from("badapple.avi");
+        let overlays = vec![SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: path.clone(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        }];
+        let states = vec![SongLuaOverlayState {
+            visible: false,
+            ..SongLuaOverlayState::default()
+        }];
+
+        assert!(!song_lua_has_visible_tex(
+            &overlays,
+            &states,
+            path.as_path()
+        ));
     }
 
     #[test]
