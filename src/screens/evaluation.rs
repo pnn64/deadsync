@@ -79,6 +79,13 @@ const SUBMIT_FOOTER_SPRITE_FRAMES: u32 = 30;
 const SUBMIT_FOOTER_SPRITE_FPS: f32 = 30.0;
 const SUBMIT_FOOTER_TEXT_ZOOM: f32 = 0.8;
 const SUBMIT_FOOTER_SPRITE_PX: f32 = 16.2;
+// Semantic tints for submit footer status icons. Indexes into
+// `color::JUDGMENT_RGBA` so the icons share the gameplay judgment palette.
+const SUBMIT_FOOTER_TINT_OK: [f32; 4] = color::JUDGMENT_RGBA[2]; // Great (green)
+const SUBMIT_FOOTER_TINT_AUTO_RETRY: [f32; 4] = color::JUDGMENT_RGBA[1]; // Excellent (amber)
+const SUBMIT_FOOTER_TINT_MANUAL_RETRY: [f32; 4] = color::JUDGMENT_RGBA[4]; // Way Off (orange-tan)
+const SUBMIT_FOOTER_TINT_ERROR: [f32; 4] = color::JUDGMENT_RGBA[5]; // Miss (red)
+const SUBMIT_FOOTER_TINT_NEUTRAL: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const MACHINE_RECORD_ROWS: usize = 10;
 const GS_RECORD_ROWS: usize = 10;
 const ENABLE_GS_QR_PANE: bool = true;
@@ -382,6 +389,31 @@ impl SubmitFooterCell {
     /// sprites should always use frame 0.
     fn icon_is_animated(&self) -> bool {
         matches!(self.icon, CellIcon::Spinner | CellIcon::Hourglass)
+    }
+
+    /// Semantic tint for the icon sprite. Cells render the surrounding
+    /// bracket text in white; only the icon itself is tinted, using colors
+    /// drawn from the gameplay judgment palette so the eye reads them the
+    /// same way it reads judgments.
+    fn sprite_tint(&self) -> [f32; 4] {
+        match self.icon {
+            CellIcon::Check => SUBMIT_FOOTER_TINT_OK,
+            CellIcon::Hourglass => SUBMIT_FOOTER_TINT_AUTO_RETRY,
+            CellIcon::Refresh => SUBMIT_FOOTER_TINT_MANUAL_RETRY,
+            CellIcon::Rejected => SUBMIT_FOOTER_TINT_ERROR,
+            CellIcon::Spinner => SUBMIT_FOOTER_TINT_NEUTRAL,
+        }
+    }
+
+    /// Per-icon vertical scale factor relative to `SUBMIT_FOOTER_SPRITE_PX`.
+    /// Used to fine-tune optical sizing — the hourglass silhouette is taller
+    /// than it is wide so we shave a few % off the height to keep it from
+    /// dominating the line.
+    fn sprite_scale_y(&self) -> f32 {
+        match self.icon {
+            CellIcon::Hourglass => 0.90,
+            _ => 1.0,
+        }
     }
 }
 
@@ -4024,6 +4056,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 Sprite {
                     texture_key: &'static str,
                     animated: bool,
+                    tint: [f32; 4],
+                    scale_y: f32,
                 },
             }
 
@@ -4048,6 +4082,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 frags.push(FooterFrag::Sprite {
                     texture_key: cell.sprite_texture_key(),
                     animated: cell.icon_is_animated(),
+                    tint: cell.sprite_tint(),
+                    scale_y: cell.sprite_scale_y(),
                 });
                 // For the manual-retry icon (Refresh), append the "F5" key
                 // hint inside the brackets after the icon. e.g. `[GS ↻ F5 Network]`.
@@ -4100,15 +4136,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     FooterFrag::Sprite {
                         texture_key,
                         animated,
+                        tint,
+                        scale_y,
                     } => {
                         let icon_frame = if animated { frame } else { 0 };
+                        let [tr, tg, tb, ta] = tint;
+                        let h = SUBMIT_FOOTER_SPRITE_PX * scale_y;
                         actors.push(act!(sprite(texture_key):
                             align(0.0, 0.5):
                             xy(cursor, base_y):
-                            setsize(SUBMIT_FOOTER_SPRITE_PX, SUBMIT_FOOTER_SPRITE_PX):
+                            setsize(SUBMIT_FOOTER_SPRITE_PX, h):
                             setstate(icon_frame):
                             z(121):
-                            diffuse(1.0, 1.0, 1.0, 1.0)
+                            diffuse(tr, tg, tb, ta)
                         ));
                         cursor += SUBMIT_FOOTER_SPRITE_PX;
                     }
