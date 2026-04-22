@@ -64,12 +64,7 @@ const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
 const AUTO_SUBMIT_RECORD_TEXT_Y: f32 = 40.0;
 const AUTO_SUBMIT_RECORD_TEXT_ZOOM: f32 = 0.225;
 const AUTO_SUBMIT_RECORD_TEXT_PERIOD: f32 = 3.0;
-const SUBMIT_FOOTER_CHECK_GLYPH: &str = "✔";
-const SUBMIT_FOOTER_REJECT_GLYPH: &str = "⊘";
-const SUBMIT_FOOTER_REFRESH_GLYPH: &str = "↻";
 const SUBMIT_FOOTER_F5_LABEL: &str = "F5";
-const SUBMIT_FOOTER_HOURGLASS_GLYPH: &str = "⧗";
-const SUBMIT_FOOTER_SPINNER_GLYPH: &str = "◐";
 const SUBMIT_FOOTER_SPINNER_TEXTURE: &str = "submit/LoadingSpinner_10x3.png";
 const SUBMIT_FOOTER_HOURGLASS_TEXTURE: &str = "submit/Hourglass_10x3.png";
 const SUBMIT_FOOTER_CHECK_TEXTURE: &str = "submit/Check_1x1.png";
@@ -322,43 +317,6 @@ struct SubmitFooterCell {
 }
 
 impl SubmitFooterCell {
-    #[inline(always)]
-    fn icon_glyph(&self) -> &str {
-        match &self.icon {
-            CellIcon::Spinner => SUBMIT_FOOTER_SPINNER_GLYPH,
-            CellIcon::Hourglass => SUBMIT_FOOTER_HOURGLASS_GLYPH,
-            CellIcon::Check => SUBMIT_FOOTER_CHECK_GLYPH,
-            CellIcon::Refresh => SUBMIT_FOOTER_REFRESH_GLYPH,
-            CellIcon::Rejected => SUBMIT_FOOTER_REJECT_GLYPH,
-        }
-    }
-
-    /// Bracketed plain-text rendering used by tests and as a fallback when
-    /// the renderer can't emit sprite actors. Format examples:
-    /// `[GS ✔]`, `[GS ⧗ 8s Timeout]`, `[GS ↻ F5 Network]`, `[GS ⊘ Invalid Score]`.
-    fn display_text(&self) -> Arc<str> {
-        let mut s = String::with_capacity(32);
-        s.push('[');
-        s.push_str(&self.backend_label);
-        s.push(' ');
-        s.push_str(self.icon_glyph());
-        if matches!(self.icon, CellIcon::Refresh) {
-            s.push(' ');
-            s.push_str(SUBMIT_FOOTER_F5_LABEL);
-        }
-        if let Some(n) = self.countdown_secs {
-            s.push(' ');
-            s.push_str(&n.to_string());
-            s.push('s');
-        }
-        if let Some(reason) = &self.reason {
-            s.push(' ');
-            s.push_str(reason);
-        }
-        s.push(']');
-        Arc::from(s)
-    }
-
     /// All cells now use a sprite for their icon. Returns the `(prefix, suffix)`
     /// text fragments that surround the icon. The renderer composes:
     /// `text(prefix) + sprite(icon) + text(suffix)`.
@@ -758,8 +716,9 @@ fn compute_column_judgments(
 #[cfg(test)]
 mod tests {
     use super::{
-        EvalPane, SubmitFooterCell, compute_column_judgments, eval_grade_for_result,
-        eval_pane_shift, stage_in_stinger_texture_key, submit_footer_gs_label, submit_footer_lines,
+        CellIcon, EvalPane, SUBMIT_FOOTER_F5_LABEL, SubmitFooterCell, compute_column_judgments,
+        eval_grade_for_result, eval_pane_shift, stage_in_stinger_texture_key,
+        submit_footer_gs_label, submit_footer_lines,
     };
     use crate::assets::i18n;
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
@@ -842,8 +801,31 @@ mod tests {
         assert_eq!(out[0].early_total_w4, 1);
     }
 
+    fn icon_glyph(icon: &CellIcon) -> &'static str {
+        match icon {
+            CellIcon::Spinner => "◐",
+            CellIcon::Hourglass => "⧗",
+            CellIcon::Check => "✔",
+            CellIcon::Refresh => "↻",
+            CellIcon::Rejected => "⊘",
+        }
+    }
+
+    fn cell_text(cell: &SubmitFooterCell) -> String {
+        let (prefix, suffix) = cell.sprite_render_parts();
+        let mut s = String::with_capacity(prefix.len() + suffix.len() + 6);
+        s.push_str(&prefix);
+        s.push_str(icon_glyph(&cell.icon));
+        if matches!(cell.icon, CellIcon::Refresh) {
+            s.push(' ');
+            s.push_str(SUBMIT_FOOTER_F5_LABEL);
+        }
+        s.push_str(&suffix);
+        s
+    }
+
     fn cells_text(cells: &[SubmitFooterCell]) -> Vec<String> {
-        cells.iter().map(|c| c.display_text().to_string()).collect()
+        cells.iter().map(cell_text).collect()
     }
 
     #[test]

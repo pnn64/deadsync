@@ -333,12 +333,9 @@ pub(super) fn set_cached_online_self_score(
         api_key: api_key.to_string(),
     };
     let profile_id = profile_id.map(str::trim).filter(|id| !id.is_empty());
-    let mut snapshot = None;
-    let mut changed = false;
-
-    if let Some(profile_id) = profile_id {
+    let (changed, snapshot) = if let Some(profile_id) = profile_id {
         ensure_online_itl_self_score_cache_loaded_for_profile(profile_id);
-        snapshot = {
+        {
             let mut state = ONLINE_ITL_SELF_SCORE_CACHE.lock().unwrap();
             let session_changed = if let Some(score) = score {
                 state.session_by_key.insert(key.clone(), score) != Some(score)
@@ -353,21 +350,22 @@ pub(super) fn set_cached_online_self_score(
             } else {
                 profile_scores.remove(&key).is_some()
             };
-            changed = session_changed || profile_changed;
-            if profile_changed {
-                Some((profile_id.to_string(), profile_scores.clone()))
-            } else {
-                None
-            }
-        };
+            (
+                session_changed || profile_changed,
+                profile_changed.then(|| (profile_id.to_string(), profile_scores.clone())),
+            )
+        }
     } else {
         let mut state = ONLINE_ITL_SELF_SCORE_CACHE.lock().unwrap();
-        changed = if let Some(score) = score {
-            state.session_by_key.insert(key, score) != Some(score)
-        } else {
-            state.session_by_key.remove(&key).is_some()
-        };
-    }
+        (
+            if let Some(score) = score {
+                state.session_by_key.insert(key, score) != Some(score)
+            } else {
+                state.session_by_key.remove(&key).is_some()
+            },
+            None,
+        )
+    };
 
     if changed {
         ONLINE_ITL_SELF_SCORE_GENERATION.fetch_add(1, AtomicOrdering::Relaxed);
