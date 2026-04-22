@@ -259,7 +259,6 @@ pub struct State {
     pub speed_mod: [SpeedMod; PLAYER_SLOTS],
     pub music_rate: f32,
     pub current_pane: OptionsPane,
-    pub scroll_focus_player: usize,
     pub(super) bg: heart_bg::State,
     pub nav_input: [PlayerNavInput; PLAYER_SLOTS],
     pub start_input: [PlayerStartInput; PLAYER_SLOTS],

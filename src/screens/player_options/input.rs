@@ -308,7 +308,6 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
 
 pub fn on_nav_press(state: &mut State, player_idx: usize, dir: NavDirection) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    state.scroll_focus_player = idx;
     state.nav_input[idx].held_direction = Some(dir);
     state.nav_input[idx].held_since = Some(Instant::now());
     state.nav_input[idx].last_scrolled_at = Some(Instant::now());
