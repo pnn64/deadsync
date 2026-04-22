@@ -18,13 +18,14 @@ const COMBO_FONT: ChoiceBinding<usize> = index_binding!(
     gp::update_combo_font_for_side,
     true
 );
-const BACKGROUND_FILTER: ChoiceBinding<usize> = index_binding!(
-    BACKGROUND_FILTER_VARIANTS,
-    gp::BackgroundFilter::Darkest,
-    background_filter,
-    gp::update_background_filter_for_side,
-    false
-);
+const BACKGROUND_FILTER: NumericBinding = NumericBinding {
+    parse: parse_i32_percent,
+    apply: |p, v| {
+        p.background_filter = gp::BackgroundFilter::from_i32(v);
+        Outcome::persisted()
+    },
+    persist_for_side: gp::update_background_filter_for_side,
+};
 
 const JUDGMENT_OFFSET_X: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -736,15 +737,12 @@ pub(super) fn build_main_rows(
     });
     b.push(Row {
         id: RowId::BackgroundFilter,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(BACKGROUND_FILTER)),
+        behavior: RowBehavior::Numeric(BACKGROUND_FILTER),
         name: lookup_key("PlayerOptions", "BackgroundFilter"),
-        choices: vec![
-            tr("PlayerOptions", "BackgroundFilterOff").to_string(),
-            tr("PlayerOptions", "BackgroundFilterDark").to_string(),
-            tr("PlayerOptions", "BackgroundFilterDarker").to_string(),
-            tr("PlayerOptions", "BackgroundFilterDarkest").to_string(),
-        ],
-        selected_choice_index: [3; PLAYER_SLOTS],
+        choices: (0..=gp::BackgroundFilter::MAX_PERCENT)
+            .map(|v| format!("{v}%"))
+            .collect(),
+        selected_choice_index: [gp::BackgroundFilter::DEFAULT.percent() as usize; PLAYER_SLOTS],
         help: tr("PlayerOptionsHelp", "BackgroundFilterHelp")
             .split("\\n")
             .map(|s| s.to_string())

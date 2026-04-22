@@ -1298,36 +1298,92 @@ struct ProfileStats {
     known_pack_names: HashSet<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum BackgroundFilter {
-    Off,
-    Dark,
-    Darker,
-    #[default]
-    Darkest,
+/// Background-darkening alpha for the per-notefield underlay quad, expressed
+/// as an integer percentage in `0..=100` (0 = no filter, 100 = fully opaque
+/// black). Reads accept the legacy enum labels (`Off|Dark|Darker|Darkest`) so
+/// existing profiles migrate automatically.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BackgroundFilter(u8);
+
+impl BackgroundFilter {
+    /// Default for new profiles. Matches the old `Darkest` enum variant.
+    pub const DEFAULT: Self = Self(95);
+    pub const OFF: Self = Self(0);
+    pub const MAX_PERCENT: u8 = 100;
+
+    /// Construct from a raw percentage, clamping to `0..=100`.
+    #[inline]
+    pub const fn from_percent(value: u8) -> Self {
+        let clamped = if value > Self::MAX_PERCENT {
+            Self::MAX_PERCENT
+        } else {
+            value
+        };
+        Self(clamped)
+    }
+
+    /// Construct from any signed integer, clamping to `0..=100`.
+    #[inline]
+    pub fn from_i32(value: i32) -> Self {
+        Self::from_percent(value.clamp(0, Self::MAX_PERCENT as i32) as u8)
+    }
+
+    /// Underlying percentage value `0..=100`.
+    #[inline]
+    pub const fn percent(self) -> u8 {
+        self.0
+    }
+
+    /// Alpha value in `0.0..=1.0` to be passed to `diffuse`.
+    #[inline]
+    pub fn alpha(self) -> f32 {
+        self.0 as f32 / Self::MAX_PERCENT as f32
+    }
+
+    /// Convenience for branches that toggle on the "no filter" case.
+    #[inline]
+    pub const fn is_off(self) -> bool {
+        self.0 == 0
+    }
+}
+
+impl Default for BackgroundFilter {
+    #[inline]
+    fn default() -> Self {
+        Self::DEFAULT
+    }
 }
 
 impl FromStr for BackgroundFilter {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "off" => Ok(Self::Off),
-            "dark" => Ok(Self::Dark),
-            "darker" => Ok(Self::Darker),
-            "darkest" => Ok(Self::Darkest),
-            _ => Err(format!("'{s}' is not a valid BackgroundFilter setting")),
+        let trimmed = s.trim();
+        // Backwards compatibility with the pre-percentage enum labels.
+        match trimmed.to_ascii_lowercase().as_str() {
+            "off" => return Ok(Self(0)),
+            "dark" => return Ok(Self(50)),
+            "darker" => return Ok(Self(75)),
+            "darkest" => return Ok(Self(95)),
+            _ => {}
         }
+        // Numeric form, optionally suffixed with `%`.
+        let numeric = trimmed.trim_end_matches('%').trim();
+        let value: i32 = numeric
+            .parse()
+            .map_err(|_| format!("'{s}' is not a valid BackgroundFilter setting"))?;
+        if !(0..=Self::MAX_PERCENT as i32).contains(&value) {
+            return Err(format!(
+                "BackgroundFilter percent {value} out of range 0..=100"
+            ));
+        }
+        Ok(Self(value as u8))
     }
 }
 
 impl core::fmt::Display for BackgroundFilter {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Off => write!(f, "Off"),
-            Self::Dark => write!(f, "Dark"),
-            Self::Darker => write!(f, "Darker"),
-            Self::Darkest => write!(f, "Darkest"),
-        }
+        // Always emit the numeric form so future reads round-trip cleanly.
+        write!(f, "{}", self.0)
     }
 }
 
@@ -4628,10 +4684,91 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LastPlayed, NoteSkin, PLAYER_INITIALS_MAX_LEN,
-        PlayStyle, Profile, TimingWindowsOption, initials_from_name,
+        BackgroundFilter, DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LastPlayed, NoteSkin,
+        PLAYER_INITIALS_MAX_LEN, PlayStyle, Profile, TimingWindowsOption, initials_from_name,
         parse_groovestats_is_pad_player, sanitize_player_initials,
     };
+    use std::str::FromStr;
+
+    #[test]
+    fn background_filter_default_matches_legacy_darkest_value() {
+        assert_eq!(BackgroundFilter::default(), BackgroundFilter::DEFAULT);
+        assert_eq!(BackgroundFilter::default().percent(), 95);
+    }
+
+    #[test]
+    fn background_filter_from_percent_clamps_above_max() {
+        assert_eq!(BackgroundFilter::from_percent(200).percent(), 100);
+        assert_eq!(BackgroundFilter::from_i32(-5).percent(), 0);
+        assert_eq!(BackgroundFilter::from_i32(250).percent(), 100);
+    }
+
+    #[test]
+    fn background_filter_alpha_maps_percent_to_unit_range() {
+        assert!((BackgroundFilter::from_percent(0).alpha() - 0.0).abs() < 1e-6);
+        assert!((BackgroundFilter::from_percent(100).alpha() - 1.0).abs() < 1e-6);
+        assert!((BackgroundFilter::from_percent(50).alpha() - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn background_filter_migrates_legacy_enum_labels() {
+        // Older profile.ini files still hold these labels; new builds must
+        // accept them so saved settings survive the upgrade.
+        assert_eq!(
+            BackgroundFilter::from_str("Off").unwrap(),
+            BackgroundFilter::OFF
+        );
+        assert_eq!(
+            BackgroundFilter::from_str("Dark").unwrap(),
+            BackgroundFilter::from_percent(50)
+        );
+        assert_eq!(
+            BackgroundFilter::from_str("DARKER").unwrap(),
+            BackgroundFilter::from_percent(75)
+        );
+        assert_eq!(
+            BackgroundFilter::from_str("darkest").unwrap(),
+            BackgroundFilter::from_percent(95)
+        );
+    }
+
+    #[test]
+    fn background_filter_parses_numeric_with_optional_percent_suffix() {
+        assert_eq!(
+            BackgroundFilter::from_str("0").unwrap(),
+            BackgroundFilter::OFF
+        );
+        assert_eq!(
+            BackgroundFilter::from_str("42").unwrap(),
+            BackgroundFilter::from_percent(42)
+        );
+        assert_eq!(
+            BackgroundFilter::from_str("42%").unwrap(),
+            BackgroundFilter::from_percent(42)
+        );
+        assert_eq!(
+            BackgroundFilter::from_str("100").unwrap(),
+            BackgroundFilter::from_percent(100)
+        );
+    }
+
+    #[test]
+    fn background_filter_rejects_out_of_range_or_garbage() {
+        assert!(BackgroundFilter::from_str("101").is_err());
+        assert!(BackgroundFilter::from_str("-1").is_err());
+        assert!(BackgroundFilter::from_str("Dimmer").is_err());
+        assert!(BackgroundFilter::from_str("").is_err());
+    }
+
+    #[test]
+    fn background_filter_display_round_trips_through_from_str() {
+        for v in [0u8, 1, 25, 50, 75, 95, 100] {
+            let filter = BackgroundFilter::from_percent(v);
+            let s = filter.to_string();
+            let parsed = BackgroundFilter::from_str(&s).expect("must round-trip");
+            assert_eq!(parsed, filter);
+        }
+    }
 
     #[test]
     fn groovestats_is_pad_player_requires_explicit_one() {

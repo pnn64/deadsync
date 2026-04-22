@@ -6523,10 +6523,7 @@ pub fn build_bundles(
                         profile.error_bar_trim,
                     );
 
-                    let bg_alpha = if matches!(
-                        profile.background_filter,
-                        crate::game::profile::BackgroundFilter::Off
-                    ) {
+                    let bg_alpha = if profile.background_filter.is_off() {
                         ERROR_BAR_MONO_BG_ALPHA
                     } else {
                         0.0

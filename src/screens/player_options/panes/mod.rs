@@ -184,12 +184,9 @@ pub(super) fn apply_profile_defaults(
     let mut measure_counter_options_active_mask = MeasureCounterOptionsMask::empty();
     let match_ns_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
-    // Initialize Background Filter row from profile setting (Off, Dark, Darker, Darkest)
+    // Initialize Background Filter row from profile setting (0..=100 %).
     if let Some(row) = row_map.get_mut(RowId::BackgroundFilter) {
-        row.selected_choice_index[player_idx] = BACKGROUND_FILTER_VARIANTS
-            .iter()
-            .position(|&v| v == profile.background_filter)
-            .unwrap_or(0)
+        row.selected_choice_index[player_idx] = (profile.background_filter.percent() as usize)
             .min(row.choices.len().saturating_sub(1));
     }
     // Initialize Judgment Font row from profile setting
