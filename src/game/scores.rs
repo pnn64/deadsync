@@ -49,7 +49,8 @@ use groovestats::{
 pub use itl::{
     CachedItlScore, ItlEvalState, ItlEventProgress, ItlOverlayPage, get_cached_itl_score_for_side,
     get_cached_itl_score_for_song, get_cached_itl_self_score_for_side,
-    get_or_fetch_itl_self_score_for_side, itl_eval_state_from_gameplay, itl_points_for_chart,
+    get_cached_itl_tournament_rank_for_side, get_or_fetch_itl_self_score_for_side,
+    get_or_fetch_itl_tournament_rank_for_side, itl_eval_state_from_gameplay, itl_points_for_chart,
     save_itl_data_from_gameplay, should_warn_cmod_for_itl_chart,
 };
 pub use submit_status::RejectReason;
@@ -2096,6 +2097,7 @@ impl LeaderboardPane {
 pub struct PlayerLeaderboardData {
     pub panes: Vec<LeaderboardPane>,
     pub itl_self_score: Option<u32>,
+    pub itl_self_rank: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -2423,7 +2425,8 @@ fn leaderboard_self_score_10000(entries: &[LeaderboardApiEntry], username: &str)
 
 #[inline(always)]
 fn leaderboard_self_rank(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
-    leaderboard_self_entry(entries, username).map(|entry| entry.rank)
+    let rank = leaderboard_self_entry(entries, username)?.rank;
+    (rank != 0).then_some(rank)
 }
 
 #[inline(always)]
@@ -2888,6 +2891,7 @@ fn fetch_player_leaderboards_internal(
     let mut panes = Vec::with_capacity(5);
     let mut gs_entries = Vec::new();
     let mut itl_self_score = None;
+    let mut itl_self_rank = None;
     let mut itl_self_found = false;
     if let Some(player) = decoded.player1 {
         let LeaderboardApiPlayer {
@@ -2922,6 +2926,7 @@ fn fetch_player_leaderboards_internal(
         {
             itl_self_found = leaderboard_self_entry(&itl.itl_leaderboard, username).is_some();
             itl_self_score = leaderboard_self_score_10000(&itl.itl_leaderboard, username);
+            itl_self_rank = leaderboard_self_rank(&itl.itl_leaderboard, username);
             let name = if itl.name.trim().is_empty() {
                 "ITL"
             } else {
@@ -2950,6 +2955,7 @@ fn fetch_player_leaderboards_internal(
         data: PlayerLeaderboardData {
             panes,
             itl_self_score,
+            itl_self_rank,
         },
         gs_entries,
         itl_self_found,
@@ -3179,21 +3185,17 @@ fn spawn_player_leaderboard_fetch(
     });
 }
 
-fn get_or_fetch_player_leaderboards_for_side_inner(
+#[inline(always)]
+fn player_leaderboard_cache_key_for_side(
     chart_hash: &str,
     side: profile::PlayerSide,
-    max_entries: usize,
-    refresh_cached: bool,
-) -> Option<CachedPlayerLeaderboardData> {
+) -> Option<PlayerLeaderboardCacheKey> {
     let cfg = crate::config::get();
     if !cfg.enable_groovestats {
         return None;
     }
     let chart_hash = chart_hash.trim();
-    if chart_hash.is_empty() || max_entries == 0 {
-        return None;
-    }
-    if !profile::is_session_side_joined(side) {
+    if chart_hash.is_empty() || !profile::is_session_side_joined(side) {
         return None;
     }
 
@@ -3202,8 +3204,44 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
     if gs_api_key.is_empty() {
         return None;
     }
+
     let arrowcloud_api_key = side_profile.arrowcloud_api_key.trim().to_string();
     let include_arrowcloud = cfg.enable_arrowcloud && !arrowcloud_api_key.is_empty();
+    Some(PlayerLeaderboardCacheKey {
+        chart_hash: chart_hash.to_string(),
+        api_key: gs_api_key.to_string(),
+        arrowcloud_api_key,
+        include_arrowcloud,
+        show_ex_score: side_profile.show_ex_score,
+    })
+}
+
+fn get_cached_player_leaderboard_data_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<PlayerLeaderboardData> {
+    let key = player_leaderboard_cache_key_for_side(chart_hash, side)?;
+    let cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+    let entry = cache.by_key.get(&key)?;
+    let PlayerLeaderboardCacheValue::Ready(data) = &entry.value else {
+        return None;
+    };
+    Some(data.clone())
+}
+
+fn get_or_fetch_player_leaderboards_for_side_inner(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+    max_entries: usize,
+    refresh_cached: bool,
+) -> Option<CachedPlayerLeaderboardData> {
+    let chart_hash = chart_hash.trim();
+    if chart_hash.is_empty() || max_entries == 0 {
+        return None;
+    }
+    let cfg = crate::config::get();
+    let key = player_leaderboard_cache_key_for_side(chart_hash, side)?;
+    let side_profile = profile::get_for_side(side);
     let persistent_profile_id = profile::active_local_profile_id_for_side(side);
     let auto_populate = cfg.auto_populate_gs_scores;
     let auto_profile_id = if auto_populate {
@@ -3214,14 +3252,6 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
     let gs_username = side_profile.groovestats_username.trim().to_string();
     let should_auto_populate =
         auto_populate && auto_profile_id.is_some() && !gs_username.is_empty();
-
-    let key = PlayerLeaderboardCacheKey {
-        chart_hash: chart_hash.to_string(),
-        api_key: gs_api_key.to_string(),
-        arrowcloud_api_key,
-        include_arrowcloud,
-        show_ex_score: side_profile.show_ex_score,
-    };
 
     let mut should_spawn = false;
     let mut requested_max_entries = max_entries;
@@ -4515,6 +4545,7 @@ mod tests {
             leaderboard_self_score_10000(&entries, "ignored"),
             Some(9789)
         );
+        assert_eq!(leaderboard_self_rank(&entries, "ignored"), Some(25));
     }
 
     #[test]
@@ -4535,6 +4566,24 @@ mod tests {
             leaderboard_self_score_10000(&entries, "perfecttaste"),
             Some(9712)
         );
+        assert_eq!(leaderboard_self_rank(&entries, "perfecttaste"), Some(25));
+    }
+
+    #[test]
+    fn leaderboard_self_rank_ignores_zero_rank() {
+        let entries = vec![LeaderboardApiEntry {
+            rank: 0,
+            name: "PerfectTaste".to_string(),
+            machine_tag: None,
+            score: 9712.0,
+            date: String::new(),
+            is_rival: false,
+            is_self: true,
+            is_fail: false,
+            comments: None,
+        }];
+
+        assert_eq!(leaderboard_self_rank(&entries, "perfecttaste"), None);
     }
 
     #[test]
@@ -4807,6 +4856,7 @@ mod tests {
             value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
                 panes: Vec::new(),
                 itl_self_score: None,
+                itl_self_rank: None,
             }),
             max_entries: 5,
             refreshed_at: Instant::now(),
@@ -4833,6 +4883,7 @@ mod tests {
             value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
                 panes: Vec::new(),
                 itl_self_score: None,
+                itl_self_rank: None,
             }),
             max_entries: 5,
             refreshed_at: Instant::now(),
@@ -5005,6 +5056,7 @@ mod tests {
             value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
                 panes: Vec::new(),
                 itl_self_score: None,
+                itl_self_rank: None,
             }),
             max_entries: 0,
             refreshed_at: Instant::now(),
@@ -5020,6 +5072,7 @@ mod tests {
             value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
                 panes: Vec::new(),
                 itl_self_score: None,
+                itl_self_rank: None,
             }),
             max_entries: 0,
             refreshed_at: Instant::now() - Duration::from_secs(1),

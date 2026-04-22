@@ -205,6 +205,11 @@ fn push_saved_options(
         cfg.show_music_wheel_grades,
     );
     push_bool(content, "SelectMusicWheelLamps", cfg.show_music_wheel_lamps);
+    push_bool(
+        content,
+        "SelectMusicShowITLChartRank",
+        cfg.show_select_music_itl_chart_rank,
+    );
     push_line(
         content,
         "SelectMusicWheelITL",

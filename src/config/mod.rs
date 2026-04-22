@@ -144,6 +144,7 @@ pub struct Config {
     pub show_select_music_cdtitles: bool,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
+    pub show_select_music_itl_chart_rank: bool,
     pub select_music_itl_wheel_mode: SelectMusicItlWheelMode,
     /// Simply Love MusicWheelStyle parity: IIDX only shows the active pack when expanded.
     pub select_music_wheel_style: SelectMusicWheelStyle,
@@ -293,6 +294,7 @@ impl Default for Config {
             show_select_music_cdtitles: true,
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
+            show_select_music_itl_chart_rank: true,
             select_music_itl_wheel_mode: SelectMusicItlWheelMode::Score,
             select_music_wheel_style: SelectMusicWheelStyle::Itg,
             select_music_new_pack_mode: NewPackMode::Disabled,

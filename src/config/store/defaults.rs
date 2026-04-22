@@ -138,6 +138,16 @@ fn push_default_options(content: &mut String, default: &Config) {
         "SelectMusicWheelLamps",
         default.show_music_wheel_lamps,
     );
+    push_bool(
+        content,
+        "SelectMusicShowITLChartRank",
+        default.show_select_music_itl_chart_rank,
+    );
+    push_line(
+        content,
+        "SelectMusicWheelITL",
+        default.select_music_itl_wheel_mode.as_str(),
+    );
     push_line(
         content,
         "SelectMusicWheelStyle",

@@ -316,6 +316,7 @@ pub enum ItemId {
     SmCdTitles,
     SmWheelGrades,
     SmWheelLamps,
+    SmWheelItlRank,
     SmWheelItl,
     SmNewPackBadge,
     SmPatternInfo,
@@ -534,6 +535,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowCDTitles")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowWheelGrades")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowWheelLamps")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowITLChartRank")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "NewPackBadge")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowPatternInfo")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ChartInfo")),
@@ -918,6 +920,7 @@ pub enum SubRowId {
     ShowCdTitles,
     ShowWheelGrades,
     ShowWheelLamps,
+    ShowItlChartRank,
     ItlWheelData,
     NewPackBadge,
     ShowPatternInfo,
@@ -1341,12 +1344,12 @@ const SELECT_MUSIC_SHOW_BANNERS_ROW_INDEX: usize = 0;
 const SELECT_MUSIC_SHOW_VIDEO_BANNERS_ROW_INDEX: usize = 1;
 const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 2;
 const SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX: usize = 3;
-const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 14;
-const SELECT_MUSIC_CHART_INFO_ROW_INDEX: usize = 13;
-const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 16;
-const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usize = 18;
-const SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX: usize = 19;
-const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 20;
+const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 15;
+const SELECT_MUSIC_CHART_INFO_ROW_INDEX: usize = 14;
+const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 17;
+const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usize = 19;
+const SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX: usize = 20;
+const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 21;
 const MACHINE_SELECT_STYLE_ROW_INDEX: usize = 2;
 const MACHINE_PREFERRED_STYLE_ROW_INDEX: usize = 3;
 const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
@@ -2551,6 +2554,15 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::ShowItlChartRank,
+        label: lookup_key("OptionsSelectMusic", "ShowITLChartRank"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::ItlWheelData,
         label: lookup_key("OptionsSelectMusic", "ITLWheelData"),
         choices: &[
@@ -2735,6 +2747,14 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "ShowWheelLampsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SmWheelItlRank,
+        name: lookup_key("OptionsSelectMusic", "ShowITLChartRank"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ShowITLChartRankHelp",
         ))],
     },
     Item {
@@ -6460,6 +6480,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::ShowItlChartRank,
+        yes_no_choice_index(cfg.show_select_music_itl_chart_rank),
+    );
+    set_choice_by_id(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ItlWheelData,
         select_music_itl_wheel_choice_index(cfg.select_music_itl_wheel_mode),
     );
@@ -8205,6 +8231,8 @@ fn apply_submenu_choice_delta(
             config::update_show_music_wheel_grades(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ShowWheelLamps {
             config::update_show_music_wheel_lamps(yes_no_from_choice(new_index));
+        } else if row.id == SubRowId::ShowItlChartRank {
+            config::update_show_select_music_itl_chart_rank(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ItlWheelData {
             config::update_select_music_itl_wheel_mode(select_music_itl_wheel_from_choice(
                 new_index,

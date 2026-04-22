@@ -44,6 +44,7 @@ const HEART_COLOR_P1: [f32; 4] = [0.3, 0.5, 1.0, 1.0]; // blue
 const HEART_COLOR_P2: [f32; 4] = [1.0, 0.47, 0.47, 1.0]; // pink (#ff7777)
 const HEART_ZOOM_SINGLE: f32 = 0.039; // 512 * 0.039 ≈ 20px
 const HEART_ZOOM_DUAL: f32 = 0.029; // 512 * 0.029 ≈ 15px
+const ITL_RANK_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
 const STR_REF_CACHE_LIMIT: usize = 4096;
@@ -54,6 +55,8 @@ const ITL_SCORE_ZOOM: f32 = 0.2;
 const ITL_POINTS_SCORE_ZOOM: f32 = 0.13;
 
 thread_local! {
+    static ITL_RANK_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
+        RefCell::new(HashMap::with_capacity(256));
     static ITL_EX_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
         RefCell::new(HashMap::with_capacity(256));
     static ITL_POINTS_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
@@ -108,6 +111,21 @@ fn cached_itl_ex_text(ex_hundredths: u32) -> Arc<str> {
         ));
         if cache.len() < ITL_EX_TEXT_CACHE_LIMIT {
             cache.insert(ex_hundredths, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
+fn cached_itl_rank_text(rank: u32) -> Arc<str> {
+    ITL_RANK_TEXT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&rank) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(rank.to_string());
+        if cache.len() < ITL_RANK_TEXT_CACHE_LIMIT {
+            cache.insert(rank, text.clone());
         }
         text
     })
@@ -179,6 +197,28 @@ const fn should_fetch_online_itl_score(is_selected_slot: bool, allow_online_fetc
     is_selected_slot && allow_online_fetch
 }
 
+#[inline(always)]
+fn itl_rank_color(rank: u32, is_double_style: bool) -> [f32; 4] {
+    let [t1, t2, t3, t4, t5] = if is_double_style {
+        [5, 20, 40, 50, 55]
+    } else {
+        [10, 25, 50, 75, 85]
+    };
+    if rank <= t1 {
+        color::JUDGMENT_RGBA[0]
+    } else if rank <= t2 {
+        color::JUDGMENT_RGBA[1]
+    } else if rank <= t3 {
+        color::JUDGMENT_RGBA[2]
+    } else if rank <= t4 {
+        color::JUDGMENT_RGBA[3]
+    } else if rank <= t5 {
+        color::JUDGMENT_RGBA[4]
+    } else {
+        color::JUDGMENT_RGBA[5]
+    }
+}
+
 // Helper from select_music.rs
 fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [
@@ -243,6 +283,7 @@ pub struct MusicWheelParams<'a> {
     pub song_has_edit_ptrs: Option<&'a HashSet<usize>>,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
+    pub show_itl_chart_rank: bool,
     pub itl_wheel_mode: SelectMusicItlWheelMode,
     pub allow_online_fetch: bool,
     pub new_pack_names: Option<&'a HashSet<String>>,
@@ -301,11 +342,13 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let grade_zoom = widescale(0.18, 0.3);
     let grade_x_p1 = widescale(10.0, 17.0);
     let grade_x_p2 = widescale(26.0, 47.0);
+    let itl_rank_zoom = widescale(0.2, 0.3);
     let itl_ex_x = screen_width() / widescale(2.15, 2.14) - 40.0;
     let itl_ex_color = color::JUDGMENT_RGBA[0];
     let itl_points_color = [1.0, 1.0, 1.0, 1.0];
     let joined_sides = usize::from(profile::is_session_side_joined(profile::PlayerSide::P1))
         + usize::from(profile::is_session_side_joined(profile::PlayerSide::P2));
+    let is_double_style = target_chart_type.to_ascii_lowercase().contains("double");
 
     let num_entries = p.entries.len();
 
@@ -518,7 +561,6 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             )
                         }
                     };
-                    let wheel_chart = wheel_chart_for_side(profile::PlayerSide::P1);
                     if p.show_music_wheel_grades || p.show_music_wheel_lamps {
                         for (side, grade_x) in [
                             (profile::PlayerSide::P1, grade_x_p1),
@@ -614,7 +656,44 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         }
                     }
 
-                    let itl_chart_hash = wheel_chart.map(|chart| chart.short_hash.as_str());
+                    let should_fetch_online_itl =
+                        should_fetch_online_itl_score(is_selected_slot, p.allow_online_fetch);
+
+                    if p.show_itl_chart_rank && joined_sides == 1 {
+                        for (side, rank_x) in [
+                            (profile::PlayerSide::P1, grade_x_p2),
+                            (profile::PlayerSide::P2, grade_x_p1),
+                        ] {
+                            if !profile::is_session_side_joined(side) {
+                                continue;
+                            }
+                            let Some(chart_hash) =
+                                wheel_chart_for_side(side).map(|chart| chart.short_hash.as_str())
+                            else {
+                                continue;
+                            };
+                            let rank = if should_fetch_online_itl {
+                                scores::get_or_fetch_itl_tournament_rank_for_side(chart_hash, side)
+                            } else {
+                                scores::get_cached_itl_tournament_rank_for_side(chart_hash, side)
+                            };
+                            let Some(rank) = rank else {
+                                continue;
+                            };
+                            let rank_color = itl_rank_color(rank, is_double_style);
+                            slot_children.push(act!(text:
+                                font("wendy"):
+                                settext(cached_itl_rank_text(rank)):
+                                align(0.5, 0.5):
+                                horizalign(center):
+                                xy(rank_x, grade_y):
+                                zoom(itl_rank_zoom):
+                                diffuse(rank_color[0], rank_color[1], rank_color[2], rank_color[3]):
+                                z(2)
+                            ));
+                        }
+                    }
+
                     for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
                         if matches!(p.itl_wheel_mode, SelectMusicItlWheelMode::Off) {
                             continue;
@@ -622,17 +701,18 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         if !profile::is_session_side_joined(side) {
                             continue;
                         }
+                        let side_chart = wheel_chart_for_side(side);
+                        let side_chart_hash = side_chart.map(|chart| chart.short_hash.as_str());
                         let local_itl = scores::get_cached_itl_score_for_song(info, side);
-                        let online_ex_hundredths = itl_chart_hash.and_then(|chart_hash| {
-                            if should_fetch_online_itl_score(is_selected_slot, p.allow_online_fetch)
-                            {
+                        let online_ex_hundredths = side_chart_hash.and_then(|chart_hash| {
+                            if should_fetch_online_itl {
                                 scores::get_or_fetch_itl_self_score_for_side(chart_hash, side)
                             } else {
                                 scores::get_cached_itl_self_score_for_side(chart_hash, side)
                             }
                         });
                         let online_points = online_ex_hundredths.and_then(|online_ex| {
-                            wheel_chart
+                            side_chart
                                 .and_then(|chart| scores::itl_points_for_chart(chart, online_ex))
                         });
                         let Some((ex_hundredths, points)) =
@@ -868,7 +948,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 
 #[cfg(test)]
 mod tests {
-    use super::{choose_itl_wheel_score, should_fetch_online_itl_score};
+    use super::{choose_itl_wheel_score, itl_rank_color, should_fetch_online_itl_score};
+    use crate::engine::present::color;
     use crate::game::scores::CachedItlScore;
 
     #[test]
@@ -922,5 +1003,33 @@ mod tests {
     fn online_itl_fetch_requires_settled_selection() {
         assert!(!should_fetch_online_itl_score(true, false));
         assert!(should_fetch_online_itl_score(true, true));
+    }
+
+    #[test]
+    fn itl_rank_color_matches_arrow_cloud_single_thresholds() {
+        assert_eq!(itl_rank_color(10, false), color::JUDGMENT_RGBA[0]);
+        assert_eq!(itl_rank_color(11, false), color::JUDGMENT_RGBA[1]);
+        assert_eq!(itl_rank_color(25, false), color::JUDGMENT_RGBA[1]);
+        assert_eq!(itl_rank_color(26, false), color::JUDGMENT_RGBA[2]);
+        assert_eq!(itl_rank_color(50, false), color::JUDGMENT_RGBA[2]);
+        assert_eq!(itl_rank_color(51, false), color::JUDGMENT_RGBA[3]);
+        assert_eq!(itl_rank_color(75, false), color::JUDGMENT_RGBA[3]);
+        assert_eq!(itl_rank_color(76, false), color::JUDGMENT_RGBA[4]);
+        assert_eq!(itl_rank_color(85, false), color::JUDGMENT_RGBA[4]);
+        assert_eq!(itl_rank_color(86, false), color::JUDGMENT_RGBA[5]);
+    }
+
+    #[test]
+    fn itl_rank_color_matches_arrow_cloud_double_thresholds() {
+        assert_eq!(itl_rank_color(5, true), color::JUDGMENT_RGBA[0]);
+        assert_eq!(itl_rank_color(6, true), color::JUDGMENT_RGBA[1]);
+        assert_eq!(itl_rank_color(20, true), color::JUDGMENT_RGBA[1]);
+        assert_eq!(itl_rank_color(21, true), color::JUDGMENT_RGBA[2]);
+        assert_eq!(itl_rank_color(40, true), color::JUDGMENT_RGBA[2]);
+        assert_eq!(itl_rank_color(41, true), color::JUDGMENT_RGBA[3]);
+        assert_eq!(itl_rank_color(50, true), color::JUDGMENT_RGBA[3]);
+        assert_eq!(itl_rank_color(51, true), color::JUDGMENT_RGBA[4]);
+        assert_eq!(itl_rank_color(55, true), color::JUDGMENT_RGBA[4]);
+        assert_eq!(itl_rank_color(56, true), color::JUDGMENT_RGBA[5]);
     }
 }

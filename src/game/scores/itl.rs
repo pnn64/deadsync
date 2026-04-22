@@ -2,8 +2,9 @@ use super::{
     GrooveStatsSubmitApiAchievement, GrooveStatsSubmitApiEvent, GrooveStatsSubmitApiPlayer,
     GrooveStatsSubmitApiProgress, GrooveStatsSubmitPlayerJob, LeaderboardApiEntry,
     LeaderboardEntry, gameplay_run_passed, gameplay_side_for_player,
-    get_or_fetch_player_leaderboards_for_side_inner, groovestats_eval_state_from_gameplay,
-    groovestats_judgment_counts, leaderboard_entries_from_api,
+    get_cached_player_leaderboard_data_for_side, get_or_fetch_player_leaderboards_for_side_inner,
+    groovestats_eval_state_from_gameplay, groovestats_judgment_counts,
+    leaderboard_entries_from_api,
 };
 use crate::config::dirs;
 use crate::game::gameplay;
@@ -24,6 +25,7 @@ use std::sync::Mutex;
 use bincode::{Decode, Encode};
 
 const ITL_FILE_NAME: &str = "ITL2026.json";
+const ITL_WHEEL_FETCH_ENTRIES: usize = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CachedItlScore {
@@ -342,6 +344,13 @@ pub fn get_cached_itl_score_for_song(
         .and_then(|data| itl_score_for_song(song, data))
 }
 
+pub fn get_cached_itl_tournament_rank_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<u32> {
+    get_cached_player_leaderboard_data_for_side(chart_hash, side)?.itl_self_rank
+}
+
 pub fn save_itl_data_from_gameplay(
     gs: &gameplay::State,
 ) -> [Option<ItlEventProgress>; gameplay::MAX_PLAYERS] {
@@ -561,7 +570,8 @@ fn ensure_itl_score_cache_loaded(profile_id: &str) {
         return;
     }
 
-    let data = read_itl_file(profile_id);
+    let mut data = read_itl_file(profile_id);
+    itl_rebuild_song_ranks(&mut data);
     ITL_SCORE_CACHE
         .lock()
         .unwrap()
@@ -985,9 +995,16 @@ fn itl_score_for_song(
     song: &crate::game::song::SongData,
     data: &ItlFileData,
 ) -> Option<CachedItlScore> {
+    itl_entry_for_song(song, data).map(itl_score_from_entry)
+}
+
+fn itl_entry_for_song<'a>(
+    song: &crate::game::song::SongData,
+    data: &'a ItlFileData,
+) -> Option<&'a ItlHashEntry> {
     let song_dir = itl_song_dir(song)?;
     let chart_hash = data.path_map.get(song_dir.as_str())?;
-    data.hash_map.get(chart_hash).map(itl_score_from_entry)
+    data.hash_map.get(chart_hash)
 }
 
 fn itl_song_dir(song: &crate::game::song::SongData) -> Option<String> {
@@ -1381,14 +1398,29 @@ pub fn get_or_fetch_itl_self_score_for_side(
     // Keep the wheel's ITL prefetch aligned with the Select Music scorebox cache width.
     // Smaller requests seed the shared leaderboard cache with partial panes, so the
     // scorebox briefly renders a truncated list before refetching the remaining rows.
-    const ITL_SELF_SCORE_FETCH_ENTRIES: usize = 5;
     let _ = get_or_fetch_player_leaderboards_for_side_inner(
         chart_hash,
         side,
-        ITL_SELF_SCORE_FETCH_ENTRIES,
+        ITL_WHEEL_FETCH_ENTRIES,
         false,
     )?;
     get_cached_itl_self_score_for_side(chart_hash, side)
+}
+
+pub fn get_or_fetch_itl_tournament_rank_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<u32> {
+    if let Some(rank) = get_cached_itl_tournament_rank_for_side(chart_hash, side) {
+        return Some(rank);
+    }
+    let _ = get_or_fetch_player_leaderboards_for_side_inner(
+        chart_hash,
+        side,
+        ITL_WHEEL_FETCH_ENTRIES,
+        false,
+    )?;
+    get_cached_itl_tournament_rank_for_side(chart_hash, side)
 }
 
 #[cfg(test)]
