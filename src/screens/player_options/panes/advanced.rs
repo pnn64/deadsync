@@ -185,7 +185,8 @@ const HIDE: BitmaskBinding = BitmaskBinding {
         },
         get_active: |m| m.hide.bits() as u32,
         set_active: |m, b| {
-            m.hide = super::super::state::HideMask::from_bits_truncate(b as u8);
+            debug_assert_eq!(b & !(u8::MAX as u32), 0, "HideMask init bits exceed u8 width");
+            m.hide = super::super::state::HideMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     }),
@@ -237,7 +238,8 @@ const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding {
         },
         get_active: |m| m.fa_plus.bits() as u32,
         set_active: |m, b| {
-            m.fa_plus = super::super::state::FaPlusMask::from_bits_truncate(b as u8);
+            debug_assert_eq!(b & !(u8::MAX as u32), 0, "FaPlusMask init bits exceed u8 width");
+            m.fa_plus = super::super::state::FaPlusMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::Fixed(0),
     }),

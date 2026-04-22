@@ -165,11 +165,13 @@ pub struct BitmaskInit {
     /// Compute the row's initial bits from the player's profile. Returned
     /// as `u32` for type erasure across the 17 different mask widths.
     pub from_profile: fn(&Profile) -> u32,
-    /// Read the row's current bits from a `PlayerOptionMasks`. Used by
-    /// `init_cursor_index` to compute the FirstActiveBit cursor.
+    /// Read the row's current bits from a `PlayerOptionMasks`. Used to
+    /// compute the cursor index from the *stored* (post-`set_active`) value.
     pub get_active: fn(&PlayerOptionMasks) -> u32,
-    /// Write the row's bits into a `PlayerOptionMasks`. Truncated to the
-    /// row's bitflag width.
+    /// Write the row's bits into a `PlayerOptionMasks`. Bindings should use
+    /// `from_bits_retain` (not `from_bits_truncate`) so unknown bits in
+    /// profile-sourced masks are preserved — matching the legacy
+    /// direct-assignment behaviour (`masks.x = profile.x`).
     pub set_active: fn(&mut PlayerOptionMasks, u32),
     /// Cursor placement policy at init time.
     pub cursor: CursorInit,
@@ -206,10 +208,13 @@ impl BitmaskInit {
 }
 
 /// Apply a `BitmaskBinding`'s init contract to a row: compute the bits
-/// from the profile, write them into `masks`, and place the row's cursor
-/// per its `CursorInit` policy. Returns `true` when the binding had an
-/// `init` contract and was applied; `false` when the binding still relies
-/// on the legacy init path in `apply_profile_defaults`.
+/// from the profile, write them into `masks`, then place the row's cursor
+/// based on the bits as **read back from `masks`** via `get_active` (so a
+/// binding's `set_active` semantics — including any masking applied by
+/// `from_bits_retain` — are reflected in cursor placement). Returns
+/// `true` when the binding had an `init` contract and was applied;
+/// `false` when the binding still relies on the legacy init path in
+/// `apply_profile_defaults`.
 pub fn init_bitmask_row_from_binding(
     row: &mut Row,
     binding: &BitmaskBinding,
@@ -222,7 +227,8 @@ pub fn init_bitmask_row_from_binding(
     };
     let bits = (init.from_profile)(profile);
     (init.set_active)(masks, bits);
-    row.selected_choice_index[player_idx] = init.init_cursor_index(bits, row.choices.len());
+    let stored = (init.get_active)(masks);
+    row.selected_choice_index[player_idx] = init.init_cursor_index(stored, row.choices.len());
     true
 }
 
