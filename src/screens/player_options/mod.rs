@@ -178,39 +178,30 @@ pub fn init(
         }
     }
     let mut noteskin_cache = build_noteskin_cache(cols_per_player, &initial_noteskin_names);
-    let noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] = std::array::from_fn(|i| {
-        cached_or_load_noteskin(
-            &mut noteskin_cache,
-            &player_profiles[i].noteskin,
-            cols_per_player,
-        )
-    });
-    let mine_noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] = std::array::from_fn(|i| {
-        resolved_noteskin_override_preview(
-            &mut noteskin_cache,
-            &player_profiles[i].noteskin,
-            player_profiles[i].mine_noteskin.as_ref(),
-            cols_per_player,
-        )
-    });
-    let receptor_noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] =
-        std::array::from_fn(|i| {
-            resolved_noteskin_override_preview(
+    let noteskin_previews: [PlayerNoteskinPreviews; PLAYER_SLOTS] = std::array::from_fn(|i| {
+        let profile_noteskin = &player_profiles[i].noteskin;
+        PlayerNoteskinPreviews {
+            base: cached_or_load_noteskin(&mut noteskin_cache, profile_noteskin, cols_per_player),
+            mine: resolved_noteskin_override_preview(
                 &mut noteskin_cache,
-                &player_profiles[i].noteskin,
+                profile_noteskin,
+                player_profiles[i].mine_noteskin.as_ref(),
+                cols_per_player,
+            ),
+            receptor: resolved_noteskin_override_preview(
+                &mut noteskin_cache,
+                profile_noteskin,
                 player_profiles[i].receptor_noteskin.as_ref(),
                 cols_per_player,
-            )
-        });
-    let tap_explosion_noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] =
-        std::array::from_fn(|i| {
-            resolved_tap_explosion_preview(
+            ),
+            tap_explosion: resolved_tap_explosion_preview(
                 &mut noteskin_cache,
-                &player_profiles[i].noteskin,
+                profile_noteskin,
                 player_profiles[i].tap_explosion_noteskin.as_ref(),
                 cols_per_player,
-            )
-        });
+            ),
+        }
+    });
     let active = session_active_players();
     let main_row_tweens = init_row_tweens(
         &main_row_map,
@@ -248,10 +239,7 @@ pub fn init(
         allow_per_player_global_offsets,
         player_profiles,
         noteskin_cache,
-        noteskin: noteskin_previews,
-        mine_noteskin: mine_noteskin_previews,
-        receptor_noteskin: receptor_noteskin_previews,
-        tap_explosion_noteskin: tap_explosion_noteskin_previews,
+        noteskin_previews,
         preview_time: 0.0,
         preview_beat: 0.0,
         help_anim_time: [0.0; PLAYER_SLOTS],

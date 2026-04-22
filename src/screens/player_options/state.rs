@@ -166,6 +166,18 @@ impl PlayerOptionMasks {
     }
 }
 
+/// Loaded noteskin previews for a single player slot.
+///
+/// Stored as `[PlayerNoteskinPreviews; PLAYER_SLOTS]` on `State` (one entry
+/// per player slot).
+#[derive(Clone, Default)]
+pub(super) struct PlayerNoteskinPreviews {
+    pub(super) base: Option<Arc<Noteskin>>,
+    pub(super) mine: Option<Arc<Noteskin>>,
+    pub(super) receptor: Option<Arc<Noteskin>>,
+    pub(super) tap_explosion: Option<Arc<Noteskin>>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(super) struct RowTween {
     pub(super) from_y: f32,
@@ -238,10 +250,7 @@ pub struct State {
     pub(super) allow_per_player_global_offsets: bool,
     pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
     pub(super) noteskin_cache: HashMap<String, Arc<Noteskin>>,
-    pub(super) noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
-    pub(super) mine_noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
-    pub(super) receptor_noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
-    pub(super) tap_explosion_noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
+    pub(super) noteskin_previews: [PlayerNoteskinPreviews; PLAYER_SLOTS],
     pub(super) preview_time: f32,
     pub(super) preview_beat: f32,
     pub(super) help_anim_time: [f32; PLAYER_SLOTS],

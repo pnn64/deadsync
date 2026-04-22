@@ -169,24 +169,25 @@ pub(super) fn sync_noteskin_previews_for_player(state: &mut State, player_idx: u
     let tap_explosion_noteskin_setting = state.player_profiles[player_idx]
         .tap_explosion_noteskin
         .clone();
-    state.noteskin[player_idx] = cached_or_load_noteskin(
+    let previews = &mut state.noteskin_previews[player_idx];
+    previews.base = cached_or_load_noteskin(
         &mut state.noteskin_cache,
         &noteskin_setting,
         cols_per_player,
     );
-    state.mine_noteskin[player_idx] = resolved_noteskin_override_preview(
+    previews.mine = resolved_noteskin_override_preview(
         &mut state.noteskin_cache,
         &noteskin_setting,
         mine_noteskin_setting.as_ref(),
         cols_per_player,
     );
-    state.receptor_noteskin[player_idx] = resolved_noteskin_override_preview(
+    previews.receptor = resolved_noteskin_override_preview(
         &mut state.noteskin_cache,
         &noteskin_setting,
         receptor_noteskin_setting.as_ref(),
         cols_per_player,
     );
-    state.tap_explosion_noteskin[player_idx] = resolved_tap_explosion_preview(
+    previews.tap_explosion = resolved_tap_explosion_preview(
         &mut state.noteskin_cache,
         &noteskin_setting,
         tap_explosion_noteskin_setting.as_ref(),
