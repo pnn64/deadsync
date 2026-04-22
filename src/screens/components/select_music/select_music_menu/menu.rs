@@ -257,7 +257,7 @@ pub enum InputOutcome {
     Close,
 }
 
-pub fn handle_input(state: &mut VisibleState, entries: &[Entry], ev: &InputEvent) -> InputOutcome {
+pub fn handle_input(state: &mut VisibleState, ev: &InputEvent) -> InputOutcome {
     if !ev.pressed {
         return InputOutcome::None;
     }
@@ -271,7 +271,7 @@ pub fn handle_input(state: &mut VisibleState, entries: &[Entry], ev: &InputEvent
         | VirtualAction::p2_menu_up
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
-            if move_selection(state, entries.len(), -1) {
+            if move_selection(state, state.cached_entries.len(), -1) {
                 InputOutcome::Moved
             } else {
                 InputOutcome::None
@@ -285,13 +285,13 @@ pub fn handle_input(state: &mut VisibleState, entries: &[Entry], ev: &InputEvent
         | VirtualAction::p2_menu_down
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
-            if move_selection(state, entries.len(), 1) {
+            if move_selection(state, state.cached_entries.len(), 1) {
                 InputOutcome::Moved
             } else {
                 InputOutcome::None
             }
         }
-        VirtualAction::p1_start | VirtualAction::p2_start => activate(state, entries),
+        VirtualAction::p1_start | VirtualAction::p2_start => activate(state),
         VirtualAction::p1_back
         | VirtualAction::p2_back
         | VirtualAction::p1_select
@@ -316,7 +316,8 @@ pub fn move_selection(state: &mut VisibleState, len: usize, delta: isize) -> boo
     true
 }
 
-fn activate(state: &mut VisibleState, entries: &[Entry]) -> InputOutcome {
+fn activate(state: &mut VisibleState) -> InputOutcome {
+    let entries = &state.cached_entries;
     if entries.is_empty() {
         return InputOutcome::Close;
     }
@@ -529,10 +530,10 @@ fn render_item_text(
     } else {
         WIDTH - 28.0
     };
-    if !item.top_label.is_empty() {
+    if !item.top_label.as_str().is_empty() {
         let mut top = act!(text:
             font(FONT_TOP):
-            settext(item.top_label.to_string()):
+            settext(item.top_label.clone()):
             align(0.0, 1.0):
             xy(x, y - 5.0):
             zoom(0.58):
@@ -546,7 +547,7 @@ fn render_item_text(
     }
     let mut bottom = act!(text:
         font(FONT_BOTTOM):
-        settext(item.bottom_label.to_string()):
+        settext(item.bottom_label.clone()):
         align(0.0, 0.5):
         xy(x, y + 4.0):
         zoom(0.36):

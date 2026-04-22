@@ -3826,7 +3826,6 @@ fn rebuild_select_music_menu(state: &mut State) {
 
 #[inline(always)]
 fn move_select_music_menu(state: &mut State, delta: isize) -> bool {
-    rebuild_select_music_menu(state);
     let select_music_menu::State::Visible(ref mut menu_state) = state.select_music_menu else {
         return false;
     };
@@ -6594,13 +6593,11 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
         clear_overlay_nav_hold(state);
     }
 
-    rebuild_select_music_menu(state);
     let select_music_menu::State::Visible(ref mut menu_state) = state.select_music_menu else {
         return ScreenAction::None;
     };
 
-    let outcome =
-        select_music_menu::handle_input(menu_state, &menu_state.cached_entries.clone(), ev);
+    let outcome = select_music_menu::handle_input(menu_state, ev);
     match outcome {
         select_music_menu::InputOutcome::None => {
             if let Some(dir) = dir {

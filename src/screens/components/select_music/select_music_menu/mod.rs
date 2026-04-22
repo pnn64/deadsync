@@ -14,7 +14,8 @@ pub use replay::*;
 pub use song_search::*;
 
 use crate::engine::present::actors::Actor;
-use std::borrow::Cow;
+use crate::engine::present::actors::TextContent;
+use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -55,169 +56,169 @@ pub enum Action {
 
 #[derive(Clone, Debug)]
 pub struct Item {
-    pub top_label: Cow<'static, str>,
-    pub bottom_label: Cow<'static, str>,
+    pub top_label: TextContent,
+    pub bottom_label: TextContent,
     pub action: Action,
 }
 
 const ITEM_SORT_BY_GROUP: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("Group"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("Group"),
     action: Action::SortByGroup,
 };
 const ITEM_SORT_BY_TITLE: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("Title"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("Title"),
     action: Action::SortByTitle,
 };
 const ITEM_SORT_BY_ARTIST: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("Artist"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("Artist"),
     action: Action::SortByArtist,
 };
 const ITEM_SORT_BY_BPM: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("BPM"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("BPM"),
     action: Action::SortByBpm,
 };
 const ITEM_SORT_BY_LENGTH: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("Length"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("Length"),
     action: Action::SortByLength,
 };
 const ITEM_SORT_BY_METER: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("Level"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("Level"),
     action: Action::SortByMeter,
 };
 const ITEM_SORT_BY_POPULARITY: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("Most Popular"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("Most Popular"),
     action: Action::SortByPopularity,
 };
 const ITEM_SORT_BY_RECENT: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("Recently Played"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("Recently Played"),
     action: Action::SortByRecent,
 };
 pub const ITEM_SORT_BY_GENRE: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("Genre"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("Genre"),
     action: Action::SortByGenre,
 };
 pub const ITEM_SORT_BY_TOP_GRADES: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("Machine Top Scores"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("Machine Top Scores"),
     action: Action::SortByTopGrades,
 };
 pub const ITEM_SORT_BY_POPULARITY_P1: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("P1 Most Played"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("P1 Most Played"),
     action: Action::SortByPopularityP1,
 };
 pub const ITEM_SORT_BY_POPULARITY_P2: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("P2 Most Played"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("P2 Most Played"),
     action: Action::SortByPopularityP2,
 };
 pub const ITEM_SORT_BY_RECENT_P1: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("P1 Recent Songs"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("P1 Recent Songs"),
     action: Action::SortByRecentP1,
 };
 pub const ITEM_SORT_BY_RECENT_P2: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("P2 Recent Songs"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("P2 Recent Songs"),
     action: Action::SortByRecentP2,
 };
 pub const ITEM_SORT_BY_TOP_GRADES_P1: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("P1 Clear Rank"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("P1 Clear Rank"),
     action: Action::SortByTopGradesP1,
 };
 pub const ITEM_SORT_BY_TOP_GRADES_P2: Item = Item {
-    top_label: Cow::Borrowed("Sort By"),
-    bottom_label: Cow::Borrowed("P2 Clear Rank"),
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("P2 Clear Rank"),
     action: Action::SortByTopGradesP2,
 };
 pub const ITEM_SWITCH_TO_SINGLE: Item = Item {
-    top_label: Cow::Borrowed("Change Style To"),
-    bottom_label: Cow::Borrowed("Single"),
+    top_label: TextContent::Static("Change Style To"),
+    bottom_label: TextContent::Static("Single"),
     action: Action::SwitchToSingle,
 };
 pub const ITEM_SWITCH_TO_DOUBLE: Item = Item {
-    top_label: Cow::Borrowed("Change Style To"),
-    bottom_label: Cow::Borrowed("Double"),
+    top_label: TextContent::Static("Change Style To"),
+    bottom_label: TextContent::Static("Double"),
     action: Action::SwitchToDouble,
 };
 pub const ITEM_TEST_INPUT: Item = Item {
-    top_label: Cow::Borrowed("Feeling salty?"),
-    bottom_label: Cow::Borrowed("Test Input"),
+    top_label: TextContent::Static("Feeling salty?"),
+    bottom_label: TextContent::Static("Test Input"),
     action: Action::TestInput,
 };
 pub const ITEM_SONG_SEARCH: Item = Item {
-    top_label: Cow::Borrowed("Wherefore Art Thou?"),
-    bottom_label: Cow::Borrowed("Song Search"),
+    top_label: TextContent::Static("Wherefore Art Thou?"),
+    bottom_label: TextContent::Static("Song Search"),
     action: Action::SongSearch,
 };
 pub const ITEM_SWITCH_PROFILE: Item = Item {
-    top_label: Cow::Borrowed("Next Please"),
-    bottom_label: Cow::Borrowed("Switch Profile"),
+    top_label: TextContent::Static("Next Please"),
+    bottom_label: TextContent::Static("Switch Profile"),
     action: Action::SwitchProfile,
 };
 pub const ITEM_RELOAD_SONGS_COURSES: Item = Item {
-    top_label: Cow::Borrowed("Take a Breather~"),
-    bottom_label: Cow::Borrowed("Load New Songs"),
+    top_label: TextContent::Static("Take a Breather~"),
+    bottom_label: TextContent::Static("Load New Songs"),
     action: Action::ReloadSongsCourses,
 };
 pub const ITEM_SHOW_LOBBIES: Item = Item {
-    top_label: Cow::Borrowed("Friends Online?"),
-    bottom_label: Cow::Borrowed("Online Lobbies"),
+    top_label: TextContent::Static("Friends Online?"),
+    bottom_label: TextContent::Static("Online Lobbies"),
     action: Action::ShowLobbies,
 };
 pub const ITEM_VIEW_DOWNLOADS: Item = Item {
-    top_label: Cow::Borrowed("Need More RAM"),
-    bottom_label: Cow::Borrowed("View Downloads"),
+    top_label: TextContent::Static("Need More RAM"),
+    bottom_label: TextContent::Static("View Downloads"),
     action: Action::ViewDownloads,
 };
 pub const ITEM_SYNC_SONG: Item = Item {
-    top_label: Cow::Borrowed("Sync"),
-    bottom_label: Cow::Borrowed("null-or-die"),
+    top_label: TextContent::Static("Sync"),
+    bottom_label: TextContent::Static("null-or-die"),
     action: Action::SyncSong,
 };
 pub const ITEM_SYNC_PACK: Item = Item {
-    top_label: Cow::Borrowed("Sync"),
-    bottom_label: Cow::Borrowed("Sync Pack"),
+    top_label: TextContent::Static("Sync"),
+    bottom_label: TextContent::Static("Sync Pack"),
     action: Action::SyncPack,
 };
 pub const ITEM_PLAY_REPLAY: Item = Item {
-    top_label: Cow::Borrowed("Machine Data"),
-    bottom_label: Cow::Borrowed("Play Replay"),
+    top_label: TextContent::Static("Machine Data"),
+    bottom_label: TextContent::Static("Play Replay"),
     action: Action::PlayReplay,
 };
 pub const ITEM_SHOW_LEADERBOARD: Item = Item {
-    top_label: Cow::Borrowed("GrooveStats"),
-    bottom_label: Cow::Borrowed("Leaderboard"),
+    top_label: TextContent::Static("GrooveStats"),
+    bottom_label: TextContent::Static("Leaderboard"),
     action: Action::ShowLeaderboard,
 };
 pub const ITEM_TOGGLE_FAVORITE: Item = Item {
-    top_label: Cow::Borrowed("I'm Lovin' It"),
-    bottom_label: Cow::Borrowed("Add Favorite"),
+    top_label: TextContent::Static("I'm Lovin' It"),
+    bottom_label: TextContent::Static("Add Favorite"),
     action: Action::ToggleFavorite,
 };
 pub const ITEM_SORT_BY_FAVORITES: Item = Item {
-    top_label: Cow::Borrowed("Check Out My Mix Tape"),
-    bottom_label: Cow::Borrowed("Favorites"),
+    top_label: TextContent::Static("Check Out My Mix Tape"),
+    bottom_label: TextContent::Static("Favorites"),
     action: Action::SortByFavorites,
 };
 pub const ITEM_GO_BACK: Item = Item {
-    top_label: Cow::Borrowed(""),
-    bottom_label: Cow::Borrowed("Go Back"),
+    top_label: TextContent::Static(""),
+    bottom_label: TextContent::Static("Go Back"),
     action: Action::BackToMain,
 };
 pub const ITEM_SET_SUMMARY: Item = Item {
-    top_label: Cow::Borrowed("Relive Your Memories"),
-    bottom_label: Cow::Borrowed("Set Summary"),
+    top_label: TextContent::Static("Relive Your Memories"),
+    bottom_label: TextContent::Static("Set Summary"),
     action: Action::ShowSetSummary,
 };
 
@@ -227,8 +228,8 @@ pub fn playlist_item(
     id: impl Into<String>,
 ) -> Item {
     Item {
-        top_label: Cow::Owned(top_label.into()),
-        bottom_label: Cow::Owned(bottom_label.into()),
+        top_label: TextContent::Shared(Arc::<str>::from(top_label.into())),
+        bottom_label: TextContent::Shared(Arc::<str>::from(bottom_label.into())),
         action: Action::SortByPlaylist(id.into()),
     }
 }
