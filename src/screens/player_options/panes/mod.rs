@@ -108,14 +108,20 @@ fn find_noteskin_choice_index(
     }
 }
 
+/// Initialize per-row cursor positions from `profile` and accumulate any
+/// bitmask state into `masks`. Production calls this once per (pane, player)
+/// pair, passing the same `&mut PlayerOptionMasks` for both pane calls of a
+/// given player so per-pane mask writes accumulate without needing a merge
+/// step. Each `BitmaskBinding` writes a disjoint mask field, and the derived
+/// pass is a pure function of `profile`, so multiple invocations are safe.
 pub(super) fn apply_profile_defaults(
     row_map: &mut RowMap,
     profile: &crate::game::profile::Profile,
     player_idx: usize,
-) -> PlayerOptionMasks {
-    let mut masks = PlayerOptionMasks::default();
-    init_opted_in_bitmask_rows(row_map, profile, &mut masks, player_idx);
-    apply_derived_masks(profile, &mut masks);
+    masks: &mut PlayerOptionMasks,
+) {
+    init_opted_in_bitmask_rows(row_map, profile, masks, player_idx);
+    apply_derived_masks(profile, masks);
 
     let match_ns_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
@@ -460,7 +466,6 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    masks
 }
 
 /// Run the data-driven init contract for every bitmask row whose

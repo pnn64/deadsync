@@ -362,21 +362,23 @@ pub(super) mod tests {
             [0, 0],
         )]);
 
-        let main = super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1);
-        let adv = super::super::panes::apply_profile_defaults(&mut advanced_rows, &profile, P1);
-        let unc = super::super::panes::apply_profile_defaults(&mut uncommon_rows, &profile, P1);
-
+        let mut main = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut main);
         // Main alone: Scroll row absent, mask comes back empty (the bug source).
         assert_eq!(main.scroll, ScrollMask::empty());
+
         // Accumulated across all three panes (the fix): Reverse + Cross preserved.
-        let combined = main.merge(adv).merge(unc);
+        let mut combined = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut combined);
+        super::super::panes::apply_profile_defaults(&mut advanced_rows, &profile, P1, &mut combined);
+        super::super::panes::apply_profile_defaults(&mut uncommon_rows, &profile, P1, &mut combined);
         assert!(
             combined.scroll.contains(ScrollMask::REVERSE),
-            "Reverse bit preserved after OR-accumulation"
+            "Reverse bit preserved after in-place accumulation"
         );
         assert!(
             combined.scroll.contains(ScrollMask::CROSS),
-            "Cross bit preserved after OR-accumulation"
+            "Cross bit preserved after in-place accumulation"
         );
     }
 
@@ -421,7 +423,8 @@ pub(super) mod tests {
             hide_binding,
         )]);
 
-        let masks = super::super::panes::apply_profile_defaults(&mut hide_rows, &profile, P1);
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut hide_rows, &profile, P1, &mut masks);
 
         assert_eq!(
             masks.hide,
@@ -475,7 +478,8 @@ pub(super) mod tests {
             fa_plus_binding,
         )]);
 
-        let masks = super::super::panes::apply_profile_defaults(&mut fa_plus_rows, &profile, P1);
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut fa_plus_rows, &profile, P1, &mut masks);
 
         assert_eq!(
             masks.fa_plus,
@@ -539,7 +543,8 @@ pub(super) mod tests {
             gameplay_extras_binding,
         )]);
 
-        let masks = super::super::panes::apply_profile_defaults(&mut rows, &profile, P1);
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut rows, &profile, P1, &mut masks);
 
         assert!(
             masks

@@ -147,21 +147,19 @@ pub fn init(
         fixed_stepchart.as_ref(),
     );
     let player_profiles = [p1_profile.clone(), p2_profile.clone()];
-    // `apply_profile_defaults` populates 8 of its 17 returned masks (Scroll,
-    // Insert, Remove, Holds, Accel, Effect, Appearance, EarlyDw) only when
-    // the corresponding row exists in the passed `row_map`. Those rows live
-    // on the Advanced and Uncommon panes, so we must call the function on
-    // every pane and OR the results together. Otherwise persisted profile
-    // state for those rows would silently appear empty here and get
-    // overwritten the moment the user touches any choice on those rows.
-    let p1_main = apply_profile_defaults(&mut main_row_map, &player_profiles[P1], P1);
-    let p2_main = apply_profile_defaults(&mut main_row_map, &player_profiles[P2], P2);
-    let p1_advanced = apply_profile_defaults(&mut advanced_row_map, &player_profiles[P1], P1);
-    let p2_advanced = apply_profile_defaults(&mut advanced_row_map, &player_profiles[P2], P2);
-    let p1_uncommon = apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P1], P1);
-    let p2_uncommon = apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P2], P2);
-    let p1_masks = p1_main.merge(p1_advanced).merge(p1_uncommon);
-    let p2_masks = p2_main.merge(p2_advanced).merge(p2_uncommon);
+    // Each `BitmaskBinding` lives on exactly one pane's row, and
+    // `apply_derived_masks` is a pure function of `profile`, so calling
+    // `apply_profile_defaults` once per (pane, player) with the same
+    // `&mut PlayerOptionMasks` accumulates writes safely without needing
+    // a per-pane merge step.
+    let mut p1_masks = PlayerOptionMasks::default();
+    let mut p2_masks = PlayerOptionMasks::default();
+    apply_profile_defaults(&mut main_row_map, &player_profiles[P1], P1, &mut p1_masks);
+    apply_profile_defaults(&mut main_row_map, &player_profiles[P2], P2, &mut p2_masks);
+    apply_profile_defaults(&mut advanced_row_map, &player_profiles[P1], P1, &mut p1_masks);
+    apply_profile_defaults(&mut advanced_row_map, &player_profiles[P2], P2, &mut p2_masks);
+    apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P1], P1, &mut p1_masks);
+    apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P2], P2, &mut p2_masks);
 
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
     let mut initial_noteskin_names = vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()];
