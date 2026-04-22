@@ -3217,17 +3217,17 @@ fn player_leaderboard_cache_key_for_side(
     })
 }
 
-fn get_cached_player_leaderboard_data_for_side(
+fn get_cached_player_leaderboard_itl_self_rank_for_side(
     chart_hash: &str,
     side: profile::PlayerSide,
-) -> Option<PlayerLeaderboardData> {
+) -> Option<u32> {
     let key = player_leaderboard_cache_key_for_side(chart_hash, side)?;
     let cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
     let entry = cache.by_key.get(&key)?;
     let PlayerLeaderboardCacheValue::Ready(data) = &entry.value else {
         return None;
     };
-    Some(data.clone())
+    data.itl_self_rank
 }
 
 fn get_or_fetch_player_leaderboards_for_side_inner(
