@@ -171,7 +171,7 @@ pub struct Config {
     pub machine_preferred_style: MachinePreferredPlayStyle,
     /// Startup flow fallback mode used when Select Play Mode is disabled.
     pub machine_preferred_play_mode: MachinePreferredPlayMode,
-    /// Theme font for Bold/Header/Footer/numbers/ScreenEval roles.
+    /// Machine font for Bold/Header/Footer/numbers/ScreenEval roles.
     /// Default `Common` keeps Wendy; `Mega` swaps those roles to Mega.
     /// Body text (Normal role) stays Miso regardless.
     pub machine_font: MachineFont,

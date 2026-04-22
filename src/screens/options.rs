@@ -275,7 +275,7 @@ pub enum ItemId {
     MchPreferredStyle,
     MchSelectPlayMode,
     MchPreferredMode,
-    MchMachineFont,
+    MchFont,
     MchEvalSummary,
     MchNameEntry,
     MchGameoverScreen,
@@ -896,7 +896,7 @@ pub enum SubRowId {
     PreferredStyle,
     SelectPlayMode,
     PreferredMode,
-    MachineFont,
+    Font,
     EvalSummary,
     NameEntry,
     GameoverScreen,
@@ -1862,7 +1862,7 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::MachineFont,
+        id: SubRowId::Font,
         label: lookup_key("OptionsMachine", "MachineFont"),
         choices: &[
             localized_choice("OptionsMachine", "MachineFontCommon"),
@@ -2003,7 +2003,7 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
-        id: ItemId::MchMachineFont,
+        id: ItemId::MchFont,
         name: lookup_key("OptionsMachine", "MachineFont"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
@@ -6230,7 +6230,7 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        SubRowId::MachineFont,
+        SubRowId::Font,
         machine_font_choice_index(cfg.machine_font),
     );
     set_choice_by_id(
@@ -8117,7 +8117,7 @@ fn apply_submenu_choice_delta(
             SubRowId::PreferredMode => config::update_machine_preferred_play_mode(
                 machine_preferred_mode_from_choice(new_index),
             ),
-            SubRowId::MachineFont => {
+            SubRowId::Font => {
                 config::update_machine_font(machine_font_from_choice(new_index))
             }
             SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),

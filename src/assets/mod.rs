@@ -578,7 +578,7 @@ impl AssetManager {
 }
 
 /// Logical font role in the theme, mirroring Simply Love's per-role .redir
-/// table (`Themes/Simply Love/Fonts/<MachineFont> <Role>.redir`).
+/// table (one .redir per `<ThemeFont> <Role>` combination).
 ///
 /// Use [`machine_font_key`] to resolve a role to a registered font key under
 /// the active [`crate::config::MachineFont`].
@@ -589,7 +589,8 @@ impl AssetManager {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontRole {
     /// Body text (option labels, descriptions). Always Miso, regardless
-    /// of `MachineFont` — matches SL's `Mega Normal.redir -> Miso/_miso light`.
+    /// of the chosen MachineFont — matches SL's `Mega Normal.redir` mapping
+    /// to `Miso/_miso light`.
     Normal,
     /// Emphasised UI labels (in-screen highlights, prompt answers).
     Bold,
@@ -606,7 +607,7 @@ pub enum FontRole {
 /// Resolve a logical [`FontRole`] under the given [`crate::config::MachineFont`]
 /// to the registered font key in [`AssetManager::load_initial_fonts`].
 ///
-/// Mirrors the Simply Love `<MachineFont> <Role>.redir` table:
+/// Mirrors the Simply Love `<ThemeFont> <Role>.redir` table:
 ///
 /// | Role         | Common (default)            | Mega                          |
 /// | ------------ | --------------------------- | ----------------------------- |

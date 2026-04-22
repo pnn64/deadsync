@@ -422,8 +422,7 @@ impl FromStr for MachinePreferredPlayMode {
     }
 }
 
-/// Machine-wide machine font preference, mirrors Simply Love's `MachineFont`
-/// pref (`Themes/Simply Love/Scripts/99 SL-ThemePrefs.lua:370`).
+/// Machine-wide font preference, ported from Simply Love's `ThemeFont` pref.
 ///
 /// Controls which font is used for the Bold / Header / Footer / numbers /
 /// ScreenEval roles in static UI text. The Normal (body) role stays Miso
