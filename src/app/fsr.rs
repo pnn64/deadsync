@@ -18,6 +18,7 @@ mod imp {
     const REPORT_ID_NAME: u8 = 0x05;
 
     const SENSOR_COUNT: usize = 12;
+    const VIEW_SENSOR_COUNT: usize = 4;
     const MAX_NAME_SIZE: usize = 50;
     const MAX_SENSOR_VALUE: u16 = 850;
     const LINEARIZATION_POWER: u32 = 4;
@@ -28,6 +29,8 @@ mod imp {
     #[derive(Clone, Copy, Debug, Default)]
     struct ConfigReport {
         sensor_thresholds: [u16; SENSOR_COUNT],
+        release_threshold: f32,
+        sensor_to_button_mapping: [i8; SENSOR_COUNT],
     }
 
     #[derive(Clone, Copy, Debug, Default)]
@@ -65,6 +68,22 @@ mod imp {
                     active: self.input.sensor_values[i] >= self.config.sensor_thresholds[i],
                 }),
             })
+        }
+
+        pub fn update_threshold(&mut self, sensor_index: usize, threshold: u16) -> bool {
+            if sensor_index >= VIEW_SENSOR_COUNT || threshold > MAX_SENSOR_VALUE {
+                return false;
+            }
+            self.ensure_device();
+            let Some(device) = self.device.as_ref() else {
+                return false;
+            };
+            self.config.sensor_thresholds[sensor_index] = threshold;
+            if write_config(device, &self.config).is_ok() {
+                return true;
+            }
+            self.drop_device();
+            false
         }
 
         fn ensure_device(&mut self) {
@@ -107,6 +126,13 @@ mod imp {
             self.device = Some(device);
         }
 
+        fn drop_device(&mut self) {
+            self.device = None;
+            self.device_name = None;
+            self.config = ConfigReport::default();
+            self.input = InputReport::default();
+        }
+
         fn read_pending_reports(&mut self) {
             let Some(device) = self.device.as_ref() else {
                 return;
@@ -128,9 +154,7 @@ mod imp {
                 }
             }
             if lost_device {
-                self.device = None;
-                self.device_name = None;
-                self.input = InputReport::default();
+                self.drop_device();
             }
         }
     }
@@ -159,6 +183,20 @@ mod imp {
         parse_config_report(&buf[..len]).ok_or(())
     }
 
+    fn write_config(device: &HidDevice, config: &ConfigReport) -> Result<(), ()> {
+        let mut buf = Vec::with_capacity(1 + SENSOR_COUNT * 2 + 4 + SENSOR_COUNT);
+        buf.push(REPORT_ID_PAD_CONFIGURATION);
+        for threshold in config.sensor_thresholds {
+            buf.extend_from_slice(&threshold.to_le_bytes());
+        }
+        buf.extend_from_slice(&config.release_threshold.to_le_bytes());
+        for mapping in config.sensor_to_button_mapping {
+            buf.push(mapping as u8);
+        }
+        device.send_feature_report(&buf).map_err(|_| ())?;
+        Ok(())
+    }
+
     fn parse_input_report(bytes: &[u8]) -> Option<InputReport> {
         let payload = match bytes {
             [REPORT_ID_SENSOR_VALUES, rest @ ..] if rest.len() >= 2 + SENSOR_COUNT * 2 => rest,
@@ -166,6 +204,7 @@ mod imp {
             _ => return None,
         };
 
+        let _button_bits = u16::from_le_bytes(payload[0..2].try_into().ok()?);
         let mut sensor_values = [0u16; SENSOR_COUNT];
         let mut offset = 2usize;
         for value in &mut sensor_values {
@@ -191,7 +230,20 @@ mod imp {
             offset = end;
         }
 
-        Some(ConfigReport { sensor_thresholds })
+        let release_threshold = f32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?);
+        offset += 4;
+
+        let mut sensor_to_button_mapping = [0i8; SENSOR_COUNT];
+        for value in &mut sensor_to_button_mapping {
+            *value = bytes[offset] as i8;
+            offset += 1;
+        }
+
+        Some(ConfigReport {
+            sensor_thresholds,
+            release_threshold,
+            sensor_to_button_mapping,
+        })
     }
 
     fn parse_name_report(bytes: &[u8]) -> Option<String> {

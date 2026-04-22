@@ -2480,6 +2480,8 @@ impl App {
 
     #[inline(always)]
     fn sync_input_fsr_view(&mut self) {
+        let pending = input_screen::take_fsr_command(&mut self.state.screens.input_state)
+            .or_else(|| select_music::take_fsr_command(&mut self.state.screens.select_music_state));
         let on_input = self.state.screens.current_screen == CurrentScreen::Input;
         let on_select_music = self.state.screens.current_screen == CurrentScreen::SelectMusic
             && self
@@ -2487,6 +2489,13 @@ impl App {
                 .screens
                 .select_music_state
                 .test_input_overlay_visible;
+        if config::get().use_fsrs
+            && let Some(cmd) = pending
+        {
+            let _ = self
+                .fsr_monitor
+                .update_threshold(cmd.sensor_index, cmd.threshold);
+        }
         let view = if config::get().use_fsrs && (on_input || on_select_music) {
             self.fsr_monitor.poll_view()
         } else {

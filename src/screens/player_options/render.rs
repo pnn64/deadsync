@@ -891,7 +891,8 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
     }
     let choice_text_idx = rc.row.selected_choice_index[primary_player_idx]
         .min(rc.row.choices.len().saturating_sub(1));
-    let choice_text = rc.row
+    let choice_text = rc
+        .row
         .choices
         .get(choice_text_idx)
         .unwrap_or_else(|| rc.row.choices.first().expect("OptionRow must have choices"));
@@ -933,7 +934,8 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
             let offset = underline_offset(); // place just under the baseline
             let underline_y = rc.current_row_y + draw_h * 0.5 + offset;
             let underline_left_x = choice_center_x - draw_w * 0.5;
-            let mut line_color = color::decorative_rgba(player_color_index(rc.fc.state, primary_player_idx));
+            let mut line_color =
+                color::decorative_rgba(player_color_index(rc.fc.state, primary_player_idx));
             line_color[3] *= rc.a;
             actors.push(act!(quad:
                 align(0.0, 0.5): // start at text's left edge
@@ -943,7 +945,9 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
                 z(Z_ROW_FOREGROUND)
             ));
             // Encircling cursor around the rc.fc.active option value (programmatic border)
-            if rc.fc.active[primary_player_idx] && rc.fc.state.pane().selected_row[primary_player_idx] == rc.item_idx {
+            if rc.fc.active[primary_player_idx]
+                && rc.fc.state.pane().selected_row[primary_player_idx] == rc.item_idx
+            {
                 let border_w = selection_border_width();
                 if let Some((center_x, center_y, ring_w, ring_h)) =
                     cursor_for_player(rc.fc.state, primary_player_idx)
@@ -990,8 +994,7 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
                     let idx = rc.fc.state.speed_mod[P2].mod_type.choice_index();
                     rc.row.choices.get(idx).cloned().unwrap_or_default()
                 } else {
-                    let idx = rc.row
-                        .selected_choice_index[P2]
+                    let idx = rc.row.selected_choice_index[P2]
                         .min(rc.row.choices.len().saturating_sub(1));
                     rc.row.choices.get(idx).cloned().unwrap_or_default()
                 }
@@ -1030,12 +1033,15 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
                 ));
                 if rc.fc.active[P2] && rc.fc.state.pane().selected_row[P2] == rc.item_idx {
                     let border_w = selection_border_width();
-                    if let Some((center_x, center_y, ring_w, ring_h)) = cursor_for_player(rc.fc.state, P2) {
+                    if let Some((center_x, center_y, ring_w, ring_h)) =
+                        cursor_for_player(rc.fc.state, P2)
+                    {
                         let left = center_x - ring_w * 0.5;
                         let right = center_x + ring_w * 0.5;
                         let top = center_y - ring_h * 0.5;
                         let bottom = center_y + ring_h * 0.5;
-                        let mut ring_color = color::decorative_rgba(player_color_index(rc.fc.state, P2));
+                        let mut ring_color =
+                            color::decorative_rgba(player_color_index(rc.fc.state, P2));
                         ring_color[3] *= rc.a;
                         actors.push(act!(quad:
                             align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
@@ -1071,11 +1077,7 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
 fn draw_judgment_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::JudgmentFont {
         let texture_for = |player_idx: usize| -> Option<&str> {
-            select_preview_texture(
-                rc.row,
-                player_idx,
-                assets::judgment_texture_choices(),
-            )
+            select_preview_texture(rc.row, player_idx, assets::judgment_texture_choices())
         };
         if let Some(texture) = texture_for(primary_player_idx) {
             actors.push(act!(sprite(texture):
@@ -1106,11 +1108,7 @@ fn draw_judgment_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_id
 fn draw_hold_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::HoldJudgment {
         let texture_for = |player_idx: usize| -> Option<&str> {
-            select_preview_texture(
-                rc.row,
-                player_idx,
-                assets::hold_judgment_texture_choices(),
-            )
+            select_preview_texture(rc.row, player_idx, assets::hold_judgment_texture_choices())
         };
         let draw_hold_preview = |texture: &str, center_x: f32, actors: &mut Vec<Actor>| {
             let zoom = JUDGMENT_PREVIEW_ZOOM;
@@ -1150,9 +1148,9 @@ fn draw_hold_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: u
 #[allow(clippy::too_many_lines)]
 fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     match rc.row.id {
-        RowId::NoteSkin         => draw_noteskin_row_preview(actors, rc, primary_player_idx),
-        RowId::MineSkin         => draw_mineskin_row_preview(actors, rc, primary_player_idx),
-        RowId::ReceptorSkin     => draw_receptorskin_row_preview(actors, rc, primary_player_idx),
+        RowId::NoteSkin => draw_noteskin_row_preview(actors, rc, primary_player_idx),
+        RowId::MineSkin => draw_mineskin_row_preview(actors, rc, primary_player_idx),
+        RowId::ReceptorSkin => draw_receptorskin_row_preview(actors, rc, primary_player_idx),
         RowId::TapExplosionSkin => draw_tap_explosion_row_preview(actors, rc, primary_player_idx),
         _ => {}
     }
@@ -1190,28 +1188,24 @@ fn draw_combo_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: 
             ));
         }
         if rc.fc.show_p2 && primary_player_idx != P2 {
-            let p2_choice_idx = rc.row.selected_choice_index[P2]
-                .min(rc.row.choices.len().saturating_sub(1));
+            let p2_choice_idx =
+                rc.row.selected_choice_index[P2].min(rc.row.choices.len().saturating_sub(1));
             if let Some(font_name) = combo_font_for(p2_choice_idx) {
-            actors.push(act!(text:
-                font(font_name): settext(combo_text):
-                align(0.5, 0.5):
-                xy(rc.fc.preview_x[P2], rc.current_row_y):
-                zoom(combo_zoom): horizalign(center):
-                diffuse(1.0, 1.0, 1.0, rc.a):
-                z(Z_ROW_PREVIEW)
-            ));
+                actors.push(act!(text:
+                    font(font_name): settext(combo_text):
+                    align(0.5, 0.5):
+                    xy(rc.fc.preview_x[P2], rc.current_row_y):
+                    zoom(combo_zoom): horizalign(center):
+                    diffuse(1.0, 1.0, 1.0, rc.a):
+                    z(Z_ROW_PREVIEW)
+                ));
             }
         }
     }
 }
 
-const PREVIEW_ARROWS: [(usize, f32, f32); 4] = [
-    (0, 0.0, -1.5),
-    (1, 1.0, -0.5),
-    (2, 3.0, 0.5),
-    (3, 2.0, 1.5),
-];
+const PREVIEW_ARROWS: [(usize, f32, f32); 4] =
+    [(0, 0.0, -1.5), (1, 1.0, -0.5), (2, 3.0, 0.5), (3, 2.0, 1.5)];
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn draw_noteskin_note(
@@ -1226,11 +1220,9 @@ fn draw_noteskin_note(
     let elapsed = rc.fc.state.preview_time;
     let beat = rc.fc.state.preview_beat;
     let note_uv_phase = ns.tap_note_uv_phase(elapsed, beat, 0.0);
-    let tap_spacing = ns.note_display_metrics.part_texture_translate
-        [NoteAnimPart::Tap as usize]
+    let tap_spacing = ns.note_display_metrics.part_texture_translate[NoteAnimPart::Tap as usize]
         .note_color_spacing;
-    let uv_translate =
-        [tap_spacing[0] * quant_idx, tap_spacing[1] * quant_idx];
+    let uv_translate = [tap_spacing[0] * quant_idx, tap_spacing[1] * quant_idx];
     if let Some(note_slots) = ns.note_layers.get(note_idx) {
         let primary_h = note_slots
             .first()
@@ -1276,7 +1268,12 @@ fn draw_noteskin_note(
             if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
                 continue;
             }
-            let color = [draw.tint[0], draw.tint[1], draw.tint[2], draw.tint[3] * rc.a];
+            let color = [
+                draw.tint[0],
+                draw.tint[1],
+                draw.tint[2],
+                draw.tint[3] * rc.a,
+            ];
             let blend = if draw.blend_add {
                 BlendMode::Add
             } else {
@@ -1378,8 +1375,7 @@ fn draw_noteskin_preview(actors: &mut Vec<Actor>, rc: &RowCtx, ns: &Noteskin, ce
     let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
     for (col, quant_idx, x_mult) in PREVIEW_ARROWS {
         let x = center_x + x_mult * target_height;
-        let note_idx =
-            col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+        let note_idx = col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
         draw_noteskin_note(actors, rc, ns, note_idx, quant_idx, x);
     }
 }
@@ -1391,8 +1387,7 @@ fn draw_mine_preview(actors: &mut Vec<Actor>, rc: &RowCtx, mine_ns: &Noteskin, c
     } else {
         0
     };
-    let fill_slot =
-        mine_ns.mines.get(mine_col).and_then(|slot| slot.as_ref());
+    let fill_slot = mine_ns.mines.get(mine_col).and_then(|slot| slot.as_ref());
     let frame_slot = mine_ns
         .mine_frames
         .get(mine_col)
@@ -1402,8 +1397,7 @@ fn draw_mine_preview(actors: &mut Vec<Actor>, rc: &RowCtx, mine_ns: &Noteskin, c
     };
     let mine_phase =
         mine_ns.tap_mine_uv_phase(rc.fc.state.preview_time, rc.fc.state.preview_beat, 0.0);
-    let mine_translation =
-        mine_ns.part_uv_translation(NoteAnimPart::Mine, 0.0, false);
+    let mine_translation = mine_ns.part_uv_translation(NoteAnimPart::Mine, 0.0, false);
     let mine_center = [center_x, rc.current_row_y];
     let scale_mine_slot = |slot: &SpriteSlot| {
         let size = slot
@@ -1419,51 +1413,50 @@ fn draw_mine_preview(actors: &mut Vec<Actor>, rc: &RowCtx, mine_ns: &Noteskin, c
         let scale = target_height / height;
         [width * scale, target_height]
     };
-    let draw_mine_slot =
-        |slot: &SpriteSlot, alpha: f32, z: i32, actors: &mut Vec<Actor>| {
-            let draw = slot.model_draw_at(rc.fc.state.preview_time, rc.fc.state.preview_beat);
-            if !draw.visible {
-                return;
-            }
-            let frame = slot.frame_index_from_phase(mine_phase);
-            let uv_elapsed = if slot.model.is_some() {
-                mine_phase
-            } else {
-                rc.fc.state.preview_time
-            };
-            let uv = slot.uv_for_frame_at(frame, uv_elapsed);
-            let uv = [
-                uv[0] + mine_translation[0],
-                uv[1] + mine_translation[1],
-                uv[2] + mine_translation[0],
-                uv[3] + mine_translation[1],
-            ];
-            let size = scale_mine_slot(slot);
-            if let Some(model_actor) = noteskin_model_actor(
-                slot,
-                mine_center,
-                size,
-                uv,
-                -slot.def.rotation_deg as f32,
-                rc.fc.state.preview_time,
-                rc.fc.state.preview_beat,
-                [1.0, 1.0, 1.0, alpha],
-                BlendMode::Alpha,
-                z as i16,
-            ) {
-                actors.push(model_actor);
-            } else {
-                actors.push(act!(sprite(slot.texture_key_shared()):
-                    align(0.5, 0.5):
-                    xy(mine_center[0], mine_center[1]):
-                    setsize(size[0], size[1]):
-                    rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
-                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                    diffuse(1.0, 1.0, 1.0, alpha):
-                    z(z)
-                ));
-            }
+    let draw_mine_slot = |slot: &SpriteSlot, alpha: f32, z: i32, actors: &mut Vec<Actor>| {
+        let draw = slot.model_draw_at(rc.fc.state.preview_time, rc.fc.state.preview_beat);
+        if !draw.visible {
+            return;
+        }
+        let frame = slot.frame_index_from_phase(mine_phase);
+        let uv_elapsed = if slot.model.is_some() {
+            mine_phase
+        } else {
+            rc.fc.state.preview_time
         };
+        let uv = slot.uv_for_frame_at(frame, uv_elapsed);
+        let uv = [
+            uv[0] + mine_translation[0],
+            uv[1] + mine_translation[1],
+            uv[2] + mine_translation[0],
+            uv[3] + mine_translation[1],
+        ];
+        let size = scale_mine_slot(slot);
+        if let Some(model_actor) = noteskin_model_actor(
+            slot,
+            mine_center,
+            size,
+            uv,
+            -slot.def.rotation_deg as f32,
+            rc.fc.state.preview_time,
+            rc.fc.state.preview_beat,
+            [1.0, 1.0, 1.0, alpha],
+            BlendMode::Alpha,
+            z as i16,
+        ) {
+            actors.push(model_actor);
+        } else {
+            actors.push(act!(sprite(slot.texture_key_shared()):
+                align(0.5, 0.5):
+                xy(mine_center[0], mine_center[1]):
+                setsize(size[0], size[1]):
+                rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
+                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                diffuse(1.0, 1.0, 1.0, alpha):
+                z(z)
+            ));
+        }
+    };
     if let Some(slot) = fill_slot {
         draw_mine_slot(slot, 0.85 * rc.a, 106, actors);
     }
@@ -1474,10 +1467,16 @@ fn draw_mine_preview(actors: &mut Vec<Actor>, rc: &RowCtx, mine_ns: &Noteskin, c
     }
 }
 
-fn draw_receptor_preview(actors: &mut Vec<Actor>, rc: &RowCtx, receptor_ns: &Noteskin, center_x: f32) {
+fn draw_receptor_preview(
+    actors: &mut Vec<Actor>,
+    rc: &RowCtx,
+    receptor_ns: &Noteskin,
+    center_x: f32,
+) {
     let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
-    let receptor_color =
-        receptor_ns.receptor_pulse.color_for_beat(rc.fc.state.preview_beat);
+    let receptor_color = receptor_ns
+        .receptor_pulse
+        .color_for_beat(rc.fc.state.preview_beat);
     let color = [
         receptor_color[0],
         receptor_color[1],
@@ -1488,10 +1487,8 @@ fn draw_receptor_preview(actors: &mut Vec<Actor>, rc: &RowCtx, receptor_ns: &Not
         let Some(receptor_slot) = receptor_ns.receptor_off.get(col) else {
             continue;
         };
-        let frame = receptor_slot
-            .frame_index(rc.fc.state.preview_time, rc.fc.state.preview_beat);
-        let uv = receptor_slot
-            .uv_for_frame_at(frame, rc.fc.state.preview_time);
+        let frame = receptor_slot.frame_index(rc.fc.state.preview_time, rc.fc.state.preview_beat);
+        let uv = receptor_slot.uv_for_frame_at(frame, rc.fc.state.preview_time);
         let logical = receptor_slot.logical_size();
         let width = logical[0].max(1.0);
         let height = logical[1].max(1.0);
@@ -1642,7 +1639,8 @@ fn draw_noteskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_playe
     if let Some(ns) = rc.fc.state.noteskin[primary_player_idx].as_ref() {
         draw_noteskin_preview(actors, rc, ns, rc.fc.preview_x[primary_player_idx]);
     }
-    if rc.fc.show_p2 && primary_player_idx != P2
+    if rc.fc.show_p2
+        && primary_player_idx != P2
         && let Some(ns) = rc.fc.state.noteskin[P2].as_ref()
     {
         draw_noteskin_preview(actors, rc, ns, rc.fc.preview_x[P2]);
@@ -1656,7 +1654,8 @@ fn draw_mineskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_playe
     {
         draw_mine_preview(actors, rc, mine_ns, rc.fc.preview_x[primary_player_idx]);
     }
-    if rc.fc.show_p2 && primary_player_idx != P2
+    if rc.fc.show_p2
+        && primary_player_idx != P2
         && let Some(mine_ns) = rc.fc.state.mine_noteskin[P2]
             .as_deref()
             .or_else(|| rc.fc.state.noteskin[P2].as_deref())
@@ -1683,10 +1682,8 @@ fn draw_receptorskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_p
 }
 
 fn draw_tap_explosion_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if !rc.fc.state.player_profiles[primary_player_idx]
-        .tap_explosion_noteskin_hidden()
-        && let Some(explosion_ns) = rc.fc.state.tap_explosion_noteskin
-            [primary_player_idx]
+    if !rc.fc.state.player_profiles[primary_player_idx].tap_explosion_noteskin_hidden()
+        && let Some(explosion_ns) = rc.fc.state.tap_explosion_noteskin[primary_player_idx]
             .as_deref()
             .or_else(|| rc.fc.state.noteskin[primary_player_idx].as_deref())
     {

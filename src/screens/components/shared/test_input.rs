@@ -20,6 +20,8 @@ const FSR_BAR_GAP: f32 = 18.0;
 const FSR_BAR_HEIGHT: f32 = 160.0;
 const FSR_PANEL_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.68];
 const FSR_PANEL_BORDER_H: f32 = 3.0;
+const FSR_MAX_THRESHOLD: u16 = 850;
+const FSR_THRESHOLD_STEP: u16 = 5;
 
 #[derive(Clone, Copy, Debug)]
 struct FsrTheme {
@@ -47,6 +49,19 @@ pub struct FsrView {
     pub bars: [FsrBarView; FSR_BAR_COUNT],
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FsrCommand {
+    pub sensor_index: usize,
+    pub threshold: u16,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FsrEditResult {
+    None,
+    Selected,
+    Threshold,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LogicalButton {
     Up,
@@ -71,6 +86,8 @@ pub struct State {
     unmapped: UnmappedTracker,
     event_rate: EventRateTracker,
     fsr_view: Option<FsrView>,
+    fsr_selected_bar: usize,
+    fsr_pending: Option<FsrCommand>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -314,6 +331,14 @@ pub fn clear(state: &mut State) {
 #[inline(always)]
 pub fn set_fsr_view(state: &mut State, view: Option<FsrView>) {
     state.fsr_view = view;
+    if state.fsr_selected_bar >= FSR_BAR_COUNT {
+        state.fsr_selected_bar = 0;
+    }
+}
+
+#[inline(always)]
+pub fn take_fsr_command(state: &mut State) -> Option<FsrCommand> {
+    state.fsr_pending.take()
 }
 
 const fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
@@ -348,11 +373,92 @@ const fn logical_button_from_action(act: VirtualAction) -> Option<LogicalButton>
     }
 }
 
-pub fn apply_virtual_input(state: &mut State, ev: &InputEvent) {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FsrUiAction {
+    PrevSensor,
+    NextSensor,
+    RaiseThreshold,
+    LowerThreshold,
+}
+
+const fn fsr_ui_action(act: VirtualAction) -> Option<FsrUiAction> {
+    match act {
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => Some(FsrUiAction::PrevSensor),
+        VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => Some(FsrUiAction::NextSensor),
+        VirtualAction::p1_up | VirtualAction::p2_up => Some(FsrUiAction::RaiseThreshold),
+        VirtualAction::p1_down | VirtualAction::p2_down => Some(FsrUiAction::LowerThreshold),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn selected_fsr_bar(state: &State) -> usize {
+    state.fsr_selected_bar.min(FSR_BAR_COUNT.saturating_sub(1))
+}
+
+#[inline(always)]
+fn current_fsr_threshold(state: &State, sensor_index: usize) -> Option<u16> {
+    if let Some(pending) = state.fsr_pending
+        && pending.sensor_index == sensor_index
+    {
+        return Some(pending.threshold);
+    }
+    state
+        .fsr_view
+        .as_ref()
+        .map(|view| view.bars[sensor_index].raw_threshold)
+}
+
+fn adjust_fsr_threshold(state: &mut State, delta: i32) -> FsrEditResult {
+    if state.fsr_view.is_none() {
+        return FsrEditResult::None;
+    }
+    let sensor_index = selected_fsr_bar(state);
+    let Some(current) = current_fsr_threshold(state, sensor_index) else {
+        return FsrEditResult::None;
+    };
+    let next = (i32::from(current) + delta).clamp(0, i32::from(FSR_MAX_THRESHOLD)) as u16;
+    if next == current {
+        return FsrEditResult::None;
+    }
+    state.fsr_pending = Some(FsrCommand {
+        sensor_index,
+        threshold: next,
+    });
+    FsrEditResult::Threshold
+}
+
+pub fn apply_virtual_input(state: &mut State, ev: &InputEvent) -> FsrEditResult {
     if let Some(player) = player_from_action(ev.action)
         && let Some(btn) = logical_button_from_action(ev.action)
     {
         state.buttons_held.insert((player, btn), ev.pressed);
+    }
+    if !ev.pressed || state.fsr_view.is_none() {
+        return FsrEditResult::None;
+    }
+    match fsr_ui_action(ev.action) {
+        Some(FsrUiAction::PrevSensor) => {
+            state.fsr_selected_bar = selected_fsr_bar(state).wrapping_sub(1) % FSR_BAR_COUNT;
+            FsrEditResult::Selected
+        }
+        Some(FsrUiAction::NextSensor) => {
+            state.fsr_selected_bar = (selected_fsr_bar(state) + 1) % FSR_BAR_COUNT;
+            FsrEditResult::Selected
+        }
+        Some(FsrUiAction::RaiseThreshold) => {
+            adjust_fsr_threshold(state, i32::from(FSR_THRESHOLD_STEP))
+        }
+        Some(FsrUiAction::LowerThreshold) => {
+            adjust_fsr_threshold(state, -i32::from(FSR_THRESHOLD_STEP))
+        }
+        None => FsrEditResult::None,
     }
 }
 
@@ -675,6 +781,44 @@ fn push_fsr_frame(
     ));
 }
 
+fn push_fsr_outline(
+    actors: &mut Vec<Actor>,
+    center_x: f32,
+    top_y: f32,
+    width: f32,
+    height: f32,
+    color: [f32; 4],
+    thickness: f32,
+    z: f32,
+) {
+    let left = center_x - width * 0.5;
+    let right = center_x + width * 0.5;
+    push_fsr_quad(actors, center_x, top_y, width, thickness, color, z);
+    push_fsr_quad(
+        actors,
+        center_x,
+        top_y + height - thickness,
+        width,
+        thickness,
+        color,
+        z,
+    );
+    actors.push(act!(quad:
+        align(0.0, 0.0):
+        xy(left, top_y):
+        zoomto(thickness, height):
+        diffuse(color[0], color[1], color[2], color[3]):
+        z(z)
+    ));
+    actors.push(act!(quad:
+        align(0.0, 0.0):
+        xy(right - thickness, top_y):
+        zoomto(thickness, height):
+        diffuse(color[0], color[1], color[2], color[3]):
+        z(z)
+    ));
+}
+
 fn push_fsr_bar(
     actors: &mut Vec<Actor>,
     bar: &FsrBarView,
@@ -682,6 +826,7 @@ fn push_fsr_bar(
     y: f32,
     scale: f32,
     theme: FsrTheme,
+    selected: bool,
     z: f32,
 ) {
     let bar_w = FSR_BAR_WIDTH * scale;
@@ -741,6 +886,25 @@ fn push_fsr_bar(
         z + 2.0,
     );
 
+    if selected {
+        push_fsr_outline(
+            actors,
+            x,
+            y - 14.0 * scale,
+            bar_w + 10.0 * scale,
+            bar_h + 42.0 * scale,
+            [1.0, 1.0, 1.0, 1.0],
+            (2.0 * scale).max(2.0),
+            z + 2.5,
+        );
+    }
+
+    let text_color = if selected {
+        theme.frame
+    } else {
+        [1.0, 1.0, 1.0, 0.95]
+    };
+
     actors.push(act!(text:
         font("miso"):
         settext(bar.raw_value.to_string()):
@@ -748,7 +912,7 @@ fn push_fsr_bar(
         xy(x, y - 6.0 * scale):
         zoom(0.65 * scale):
         horizalign(center):
-        diffuse(1.0, 1.0, 1.0, 0.95):
+        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
         z(z + 3.0)
     ));
     actors.push(act!(text:
@@ -758,7 +922,7 @@ fn push_fsr_bar(
         xy(x, threshold_y - 10.0 * scale):
         zoom(0.48 * scale):
         horizalign(center):
-        diffuse(1.0, 1.0, 1.0, 0.9):
+        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
         z(z + 3.0)
     ));
     actors.push(act!(text:
@@ -768,7 +932,7 @@ fn push_fsr_bar(
         xy(x, y + bar_h + 6.0 * scale):
         zoom(0.65 * scale):
         horizalign(center):
-        diffuse(1.0, 1.0, 1.0, 0.95):
+        diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
         z(z + 3.0)
     ));
 }
@@ -786,13 +950,17 @@ fn push_fsr_readout(
         return;
     };
 
+    let selected = selected_fsr_bar(state);
+    let selected_bar = &fsr.bars[selected];
+    let selected_threshold =
+        current_fsr_threshold(state, selected).unwrap_or(selected_bar.raw_threshold);
     let theme = fsr_theme(active_color_index);
     let bar_w = FSR_BAR_WIDTH * scale;
     let bar_gap = FSR_BAR_GAP * scale;
     let bar_h = FSR_BAR_HEIGHT * scale;
     let span = bar_w * FSR_BAR_COUNT as f32 + bar_gap * (FSR_BAR_COUNT - 1) as f32;
     let panel_w = span + 34.0 * scale;
-    let panel_h = bar_h + 86.0 * scale;
+    let panel_h = bar_h + 116.0 * scale;
     push_fsr_frame(actors, panel_x, panel_y, panel_w, panel_h, theme.frame, z);
     actors.push(act!(text:
         font("miso"):
@@ -814,13 +982,42 @@ fn push_fsr_readout(
         diffuse(1.0, 1.0, 1.0, 0.8):
         z(z + 2.0)
     ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(format!("{} selected  threshold {}", selected_bar.label, selected_threshold)):
+        align(0.5, 0.0):
+        xy(panel_x, panel_y + 44.0 * scale):
+        zoom(0.55 * scale):
+        horizalign(center):
+        diffuse(theme.frame[0], theme.frame[1], theme.frame[2], 0.95):
+        z(z + 2.0)
+    ));
 
-    let track_y = panel_y + 52.0 * scale;
+    let track_y = panel_y + 64.0 * scale;
     let left = panel_x - span * 0.5 + bar_w * 0.5;
     for (i, bar) in fsr.bars.iter().enumerate() {
         let x = left + i as f32 * (bar_w + bar_gap);
-        push_fsr_bar(actors, bar, x, track_y, scale, theme, z + 1.0);
+        push_fsr_bar(
+            actors,
+            bar,
+            x,
+            track_y,
+            scale,
+            theme,
+            i == selected,
+            z + 1.0,
+        );
     }
+    actors.push(act!(text:
+        font("miso"):
+        settext(format!("L/R sensor   U/D threshold +/-{}", FSR_THRESHOLD_STEP)):
+        align(0.5, 0.0):
+        xy(panel_x, panel_y + panel_h - 20.0 * scale):
+        zoom(0.5 * scale):
+        horizalign(center):
+        diffuse(1.0, 1.0, 1.0, 0.85):
+        z(z + 2.0)
+    ));
 }
 
 pub fn build_test_input_screen_content(state: &State, active_color_index: i32) -> Vec<Actor> {
@@ -981,8 +1178,40 @@ pub fn build_select_music_overlay(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::input::{PadCode, PadId};
+    use crate::engine::input::{InputEvent, InputSource, PadCode, PadId};
     use std::time::Duration;
+
+    fn test_fsr_view() -> FsrView {
+        FsrView {
+            device_name: Some("FSR".to_owned()),
+            bars: std::array::from_fn(|i| FsrBarView {
+                label: match i {
+                    0 => "S0",
+                    1 => "S1",
+                    2 => "S2",
+                    _ => "S3",
+                },
+                raw_value: 0,
+                value_norm: 0.0,
+                raw_threshold: 100 + i as u16 * 10,
+                threshold_norm: 0.0,
+                active: false,
+            }),
+        }
+    }
+
+    fn input_event(action: VirtualAction) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            pressed: true,
+            source: InputSource::Keyboard,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
 
     #[test]
     fn dedups_pad_events_from_the_same_report() {
@@ -1099,5 +1328,27 @@ mod tests {
     fn caps_display_above_one_thousand_hz() {
         assert_eq!(format_hz(1000), "1000 Hz");
         assert_eq!(format_hz(1001), ">1000 Hz");
+    }
+
+    #[test]
+    fn fsr_virtual_input_selects_and_queues_threshold_changes() {
+        let mut state = State::default();
+        set_fsr_view(&mut state, Some(test_fsr_view()));
+
+        assert_eq!(
+            apply_virtual_input(&mut state, &input_event(VirtualAction::p1_right)),
+            FsrEditResult::Selected
+        );
+        assert_eq!(
+            apply_virtual_input(&mut state, &input_event(VirtualAction::p1_up)),
+            FsrEditResult::Threshold
+        );
+        assert_eq!(
+            take_fsr_command(&mut state),
+            Some(FsrCommand {
+                sensor_index: 1,
+                threshold: 115,
+            })
+        );
     }
 }
