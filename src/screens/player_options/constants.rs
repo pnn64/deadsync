@@ -93,7 +93,7 @@ pub(super) const PERSPECTIVE_VARIANTS: [Perspective; 5] = [
     Perspective::Space,
 ];
 
-pub(super) const COMBO_FONT_VARIANTS: [ComboFont; 8] = [
+pub(super) const COMBO_FONT_VARIANTS: [ComboFont; 9] = [
     ComboFont::Wendy,
     ComboFont::ArialRounded,
     ComboFont::Asap,
@@ -101,6 +101,7 @@ pub(super) const COMBO_FONT_VARIANTS: [ComboFont; 8] = [
     ComboFont::SourceCode,
     ComboFont::Work,
     ComboFont::WendyCursed,
+    ComboFont::Mega,
     ComboFont::None,
 ];
 

@@ -58,6 +58,7 @@ const COMBO_BEBAS_NEUE_FONT: &str = "combo_bebas_neue";
 const COMBO_SOURCE_CODE_FONT: &str = "combo_source_code";
 const COMBO_WENDY_CURSED_FONT: &str = "combo_wendy_cursed";
 const COMBO_WORK_FONT: &str = "combo_work";
+const COMBO_MEGA_FONT: &str = "combo_mega";
 const SCREENEVAL_FONT: &str = "wendy_screenevaluation";
 const FONT_MAIN: &str = "bench/font_main.png";
 const FONT_STROKE: &str = "bench/font_stroke.png";
@@ -345,6 +346,7 @@ pub(crate) fn bench_fonts() -> HashMap<&'static str, Font> {
         COMBO_SOURCE_CODE_FONT,
         COMBO_WENDY_CURSED_FONT,
         COMBO_WORK_FONT,
+        COMBO_MEGA_FONT,
         SCREENEVAL_FONT,
     ] {
         fonts.insert(name, bench_font());

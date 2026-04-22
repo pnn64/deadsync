@@ -1162,7 +1162,7 @@ fn draw_combo_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: 
         let combo_zoom = COMBO_PREVIEW_ZOOM;
         // Choice indices are fixed by construction order:
         // 0=Wendy, 1=ArialRounded, 2=Asap, 3=BebasNeue, 4=SourceCode,
-        // 5=Work, 6=WendyCursed, 7=None
+        // 5=Work, 6=WendyCursed, 7=Mega, 8=None
         let combo_font_for = |idx: usize| -> Option<&'static str> {
             match idx {
                 0 => Some("wendy_combo"),
@@ -1172,6 +1172,7 @@ fn draw_combo_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: 
                 4 => Some("combo_source_code"),
                 5 => Some("combo_work"),
                 6 => Some("combo_wendy_cursed"),
+                7 => Some("combo_mega"),
                 _ => None,
             }
         };

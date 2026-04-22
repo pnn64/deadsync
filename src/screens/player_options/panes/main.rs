@@ -683,6 +683,7 @@ pub(super) fn build_main_rows(
             tr("PlayerOptions", "ComboFontSourceCode").to_string(),
             tr("PlayerOptions", "ComboFontWork").to_string(),
             tr("PlayerOptions", "ComboFontWendyCursed").to_string(),
+            tr("PlayerOptions", "ComboFontMega").to_string(),
             tr("PlayerOptions", "ComboFontNone").to_string(),
         ],
         selected_choice_index: [0; PLAYER_SLOTS],

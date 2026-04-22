@@ -1934,6 +1934,7 @@ fn zmod_small_combo_font(combo_font: profile::ComboFont) -> &'static str {
         profile::ComboFont::BebasNeue => "combo_bebas_neue",
         profile::ComboFont::SourceCode => "combo_source_code",
         profile::ComboFont::Work => "combo_work",
+        profile::ComboFont::Mega => "combo_mega",
         profile::ComboFont::None => "wendy",
     }
 }
@@ -1948,6 +1949,7 @@ fn zmod_combo_font_name(combo_font: profile::ComboFont) -> Option<&'static str> 
         profile::ComboFont::SourceCode => Some("combo_source_code"),
         profile::ComboFont::Work => Some("combo_work"),
         profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
+        profile::ComboFont::Mega => Some("combo_mega"),
         profile::ComboFont::None => None,
     }
 }

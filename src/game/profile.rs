@@ -2158,6 +2158,7 @@ pub enum ComboFont {
     SourceCode,
     Work,
     WendyCursed,
+    Mega,
     None,
 }
 
@@ -2173,6 +2174,7 @@ impl FromStr for ComboFont {
             "source code" | "sourcecode" => Ok(Self::SourceCode),
             "work" => Ok(Self::Work),
             "wendy (cursed)" | "wendy cursed" | "wendycursed" => Ok(Self::WendyCursed),
+            "mega" => Ok(Self::Mega),
             "none" => Ok(Self::None),
             other => Err(format!("'{other}' is not a valid ComboFont setting")),
         }
@@ -2189,6 +2191,7 @@ impl core::fmt::Display for ComboFont {
             Self::SourceCode => write!(f, "Source Code"),
             Self::Work => write!(f, "Work"),
             Self::WendyCursed => write!(f, "Wendy (Cursed)"),
+            Self::Mega => write!(f, "Mega"),
             Self::None => write!(f, "None"),
         }
     }
