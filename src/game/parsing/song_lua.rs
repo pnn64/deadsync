@@ -573,6 +573,16 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
         )?;
     }
     globals.set("unpack", table.get::<Value>("unpack")?)?;
+    globals.set(
+        "ivalues",
+        lua.create_function(|lua, table: Table| {
+            let mut index = 0_i64;
+            lua.create_function_mut(move |_, ()| {
+                index += 1;
+                table.raw_get::<Value>(index)
+            })
+        })?,
+    )?;
     globals.set("Trace", lua.create_function(|_, _msg: String| Ok(()))?)?;
     globals.set("debug", create_debug_table(lua)?)?;
     globals.set(
@@ -6469,6 +6479,32 @@ return Def.ActorFrame{}
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "1:3");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_ivalues_helper() {
+        let song_dir = test_dir("ivalues-helper");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local sum = 0
+for value in ivalues({10, 20, 30}) do
+    sum = sum + value
+end
+mod_actions = {
+    {1, tostring(sum), true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "IValues"))
+            .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "60");
     }
 
     #[test]
