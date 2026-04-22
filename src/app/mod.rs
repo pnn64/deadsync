@@ -1699,6 +1699,25 @@ fn gameplay_song_lua_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
     paths
 }
 
+fn gameplay_overlay_video_paths(
+    state: &gameplay::State,
+    show_video_backgrounds: bool,
+) -> Vec<PathBuf> {
+    let mut paths = gameplay_song_lua_video_paths(state);
+    if !show_video_backgrounds {
+        return paths;
+    }
+    if let Some(path) = state
+        .song
+        .gameplay_foreground_path(state.current_beat, true)
+        && crate::assets::dynamic::is_dynamic_video_path(path)
+        && !paths.iter().any(|existing| existing == path)
+    {
+        paths.push(path.clone());
+    }
+    paths
+}
+
 fn prewarm_gameplay_assets(
     assets: &mut AssetManager,
     backend: &mut renderer::Backend,
@@ -1728,9 +1747,12 @@ fn prewarm_gameplay_assets(
                 .any(|block| uses_repeat_delta(&block.delta))
     }
 
-    fn gameplay_background_paths(state: &gameplay::State) -> Vec<&PathBuf> {
-        let mut paths =
-            Vec::with_capacity(1usize.saturating_add(state.song.background_changes.len()));
+    fn gameplay_media_paths(state: &gameplay::State) -> Vec<&PathBuf> {
+        let mut paths = Vec::with_capacity(
+            1usize
+                .saturating_add(state.song.background_changes.len())
+                .saturating_add(state.song.foreground_changes.len()),
+        );
         if let Some(path) = state.song.background_path.as_ref() {
             paths.push(path);
         }
@@ -1739,6 +1761,9 @@ fn prewarm_gameplay_assets(
                 continue;
             };
             paths.push(path);
+        }
+        for change in &state.song.foreground_changes {
+            paths.push(&change.path);
         }
         paths
     }
@@ -1773,7 +1798,7 @@ fn prewarm_gameplay_assets(
             }
         });
     }
-    for path in gameplay_background_paths(state) {
+    for path in gameplay_media_paths(state) {
         let key = path.to_string_lossy().into_owned();
         if seen.insert(key) {
             media_cache::ensure_banner_texture(assets, backend, path);
@@ -1889,8 +1914,12 @@ fn prewarm_gameplay_text_layout_cache(
     );
 }
 
-fn gameplay_background_keys(state: &gameplay::State) -> Vec<String> {
-    let mut keys = Vec::with_capacity(1usize.saturating_add(state.song.background_changes.len()));
+fn gameplay_media_keys(state: &gameplay::State) -> Vec<String> {
+    let mut keys = Vec::with_capacity(
+        1usize
+            .saturating_add(state.song.background_changes.len())
+            .saturating_add(state.song.foreground_changes.len()),
+    );
     if let Some(path) = state.song.background_path.as_ref() {
         keys.push(path.to_string_lossy().into_owned());
     }
@@ -1899,6 +1928,9 @@ fn gameplay_background_keys(state: &gameplay::State) -> Vec<String> {
             continue;
         };
         keys.push(path.to_string_lossy().into_owned());
+    }
+    for change in &state.song.foreground_changes {
+        keys.push(change.path.to_string_lossy().into_owned());
     }
     keys
 }
@@ -4318,6 +4350,17 @@ impl App {
         {
             gs.background_texture_key = key;
         }
+        if let (Some(backend), Some(gs)) = (
+            self.backend.as_mut(),
+            self.state.screens.gameplay_state.as_ref(),
+        ) {
+            let overlay_video_paths = gameplay_overlay_video_paths(gs, show_video_backgrounds);
+            self.dynamic_media.sync_active_song_lua_videos(
+                &mut self.asset_manager,
+                backend,
+                &overlay_video_paths,
+            );
+        }
     }
 
     fn append_gameplay_offset_prompt_actors(&self, actors: &mut Vec<Actor>) {
@@ -6346,7 +6389,8 @@ impl App {
                     combo_carry,
                 );
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
-                let song_lua_video_paths = gameplay_song_lua_video_paths(&gs);
+                let show_video_backgrounds = config::get().show_video_backgrounds;
+                let overlay_video_paths = gameplay_overlay_video_paths(&gs, show_video_backgrounds);
 
                 let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
@@ -6354,12 +6398,12 @@ impl App {
                     self.dynamic_media.set_gameplay_background_keys(
                         &mut self.asset_manager,
                         backend,
-                        gameplay_background_keys(&gs),
+                        gameplay_media_keys(&gs),
                     );
                     self.dynamic_media.sync_active_song_lua_videos(
                         &mut self.asset_manager,
                         backend,
-                        &song_lua_video_paths,
+                        &overlay_video_paths,
                     );
                     if let Some(path) = gs.song.banner_path.as_ref() {
                         media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
@@ -7295,6 +7339,7 @@ mod tests {
             banner_path: None,
             background_path: None,
             background_changes: Vec::new(),
+            foreground_changes: Vec::new(),
             background_lua_changes: Vec::new(),
             foreground_lua_changes: Vec::new(),
             has_lua: false,

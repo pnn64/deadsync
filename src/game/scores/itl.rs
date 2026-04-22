@@ -1732,6 +1732,7 @@ mod tests {
             banner_path: None,
             background_path: None,
             background_changes: Vec::new(),
+            foreground_changes: Vec::new(),
             background_lua_changes: Vec::new(),
             foreground_lua_changes: Vec::new(),
             has_lua: false,

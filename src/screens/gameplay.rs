@@ -849,6 +849,22 @@ fn build_background(state: &State, bg_brightness: f32) -> Actor {
     actor
 }
 
+fn build_foreground_media(state: &State) -> Option<Actor> {
+    let cfg = crate::config::get();
+    let path = state
+        .song
+        .gameplay_foreground_path(state.current_beat, cfg.show_video_backgrounds)?;
+    Some(shared_banner::cover_sprite(
+        path.to_string_lossy().into_owned(),
+        screen_center_x(),
+        screen_center_y(),
+        screen_width(),
+        screen_height(),
+        1.0,
+        1000,
+    ))
+}
+
 #[inline(always)]
 fn song_lua_overlay_space_width(state: &State) -> f32 {
     state.song_lua_screen_width.max(1.0)
@@ -1218,7 +1234,9 @@ fn song_lua_overlay_states_from(
         let composed = overlay
             .parent_index
             .and_then(|parent_index| {
-                out.get(parent_index).copied().zip(overlays.get(parent_index))
+                out.get(parent_index)
+                    .copied()
+                    .zip(overlays.get(parent_index))
             })
             .map(|(parent, parent_overlay)| {
                 song_lua_overlay_compose_state(
@@ -4613,6 +4631,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         )
     };
     actors.extend(main_layer_actors);
+    if let Some(actor) = build_foreground_media(state) {
+        actors.push(actor);
+    }
     for layer in &state.song_lua_foreground_visual_layers {
         if state.current_music_time_display < layer.start_second {
             continue;

@@ -23,6 +23,12 @@ pub struct SongForegroundLuaChange {
 }
 
 #[derive(Clone, Debug)]
+pub struct SongForegroundChange {
+    pub start_beat: f32,
+    pub path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
 pub struct SongBackgroundLuaChange {
     pub start_beat: f32,
     pub path: PathBuf,
@@ -40,6 +46,7 @@ pub struct SongData {
     pub banner_path: Option<PathBuf>,
     pub background_path: Option<PathBuf>,
     pub background_changes: Vec<SongBackgroundChange>,
+    pub foreground_changes: Vec<SongForegroundChange>,
     pub background_lua_changes: Vec<SongBackgroundLuaChange>,
     pub foreground_lua_changes: Vec<SongForegroundLuaChange>,
     pub has_lua: bool,
@@ -118,6 +125,18 @@ impl SongData {
     fn active_background_change(&self, beat: f32) -> Option<&SongBackgroundChange> {
         let mut active = None;
         for change in &self.background_changes {
+            if change.start_beat > beat {
+                break;
+            }
+            active = Some(change);
+        }
+        active
+    }
+
+    #[inline(always)]
+    fn active_foreground_change(&self, beat: f32) -> Option<&SongForegroundChange> {
+        let mut active = None;
+        for change in &self.foreground_changes {
             if change.start_beat > beat {
                 break;
             }
@@ -275,6 +294,11 @@ impl SongData {
         }
     }
 
+    pub fn active_foreground_path(&self, beat: f32) -> Option<&PathBuf> {
+        let path = &self.active_foreground_change(beat)?.path;
+        path.is_file().then_some(path)
+    }
+
     pub fn gameplay_background_path(&self, beat: f32, allow_video: bool) -> Option<&PathBuf> {
         let fallback = self.fallback_background_path(allow_video);
         match self
@@ -292,6 +316,15 @@ impl SongData {
             Some(SongBackgroundChangeTarget::Random) => fallback,
             Some(SongBackgroundChangeTarget::NoSongBg) => None,
             None => fallback,
+        }
+    }
+
+    pub fn gameplay_foreground_path(&self, beat: f32, allow_video: bool) -> Option<&PathBuf> {
+        let path = self.active_foreground_path(beat)?;
+        if allow_video || !Self::is_video_path(path) {
+            Some(path)
+        } else {
+            None
         }
     }
 }

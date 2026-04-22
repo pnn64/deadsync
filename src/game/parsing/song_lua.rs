@@ -2470,7 +2470,11 @@ fn resolve_load_actor_directory(dir: &Path, song_dir: &Path, path: &str) -> mlua
     )))
 }
 
-fn resolve_load_actor_with_extensions(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
+fn resolve_load_actor_with_extensions(
+    lua: &Lua,
+    song_dir: &Path,
+    path: &str,
+) -> mlua::Result<PathBuf> {
     let raw = Path::new(path.trim());
     if raw.extension().is_some() {
         return Err(mlua::Error::external(format!(
@@ -2865,15 +2869,14 @@ fn read_overlay_actors_from_table(
     aft_capture_names: &HashSet<String>,
     out: &mut Vec<OverlayCompileActor>,
 ) -> Result<(), String> {
-    let next_parent_index = if let Some(overlay) =
-        read_overlay_actor(lua, actor, parent_index, aft_capture_names)?
-    {
-        let index = out.len();
-        out.push(overlay);
-        Some(index)
-    } else {
-        parent_index
-    };
+    let next_parent_index =
+        if let Some(overlay) = read_overlay_actor(lua, actor, parent_index, aft_capture_names)? {
+            let index = out.len();
+            out.push(overlay);
+            Some(index)
+        } else {
+            parent_index
+        };
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child.map_err(|err| err.to_string())? else {
             continue;
@@ -6678,8 +6681,8 @@ return Def.ActorFrame{}
         )
         .unwrap();
 
-        let compiled = compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "IValues"))
-            .unwrap();
+        let compiled =
+            compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "IValues")).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "60");
     }

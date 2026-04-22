@@ -5,7 +5,7 @@ use crate::game::{
     parsing::notes::ParsedNote,
     song::{
         SongBackgroundChange, SongBackgroundChangeTarget, SongBackgroundLuaChange, SongData,
-        SongForegroundLuaChange, get_song_cache,
+        SongForegroundChange, SongForegroundLuaChange, get_song_cache,
     },
     timing::{
         DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment, TimingData,
@@ -36,7 +36,7 @@ pub use scan::{
 };
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
-const SONG_CACHE_VERSION: u8 = 4;
+const SONG_CACHE_VERSION: u8 = 5;
 const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
@@ -525,6 +525,12 @@ struct SerializableSongForegroundLuaChange {
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+struct SerializableSongForegroundChange {
+    start_beat: f32,
+    path: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 struct SerializableSongBackgroundLuaChange {
     start_beat: f32,
     path: String,
@@ -584,6 +590,24 @@ impl From<SerializableSongForegroundLuaChange> for SongForegroundLuaChange {
     }
 }
 
+impl From<&SongForegroundChange> for SerializableSongForegroundChange {
+    fn from(change: &SongForegroundChange) -> Self {
+        Self {
+            start_beat: change.start_beat,
+            path: change.path.to_string_lossy().into_owned(),
+        }
+    }
+}
+
+impl From<SerializableSongForegroundChange> for SongForegroundChange {
+    fn from(change: SerializableSongForegroundChange) -> Self {
+        Self {
+            start_beat: change.start_beat,
+            path: PathBuf::from(change.path),
+        }
+    }
+}
+
 impl From<&SongBackgroundLuaChange> for SerializableSongBackgroundLuaChange {
     fn from(change: &SongBackgroundLuaChange) -> Self {
         Self {
@@ -614,6 +638,7 @@ struct SerializableSongData {
     banner_path: Option<String>,
     background_path: Option<String>,
     background_changes: Vec<SerializableSongBackgroundChange>,
+    foreground_changes: Vec<SerializableSongForegroundChange>,
     background_lua_changes: Vec<SerializableSongBackgroundLuaChange>,
     foreground_lua_changes: Vec<SerializableSongForegroundLuaChange>,
     has_lua: bool,
@@ -682,6 +707,7 @@ struct CachedSongMeta {
     banner_path: Option<String>,
     background_path: Option<String>,
     background_changes: Vec<SerializableSongBackgroundChange>,
+    foreground_changes: Vec<SerializableSongForegroundChange>,
     background_lua_changes: Vec<SerializableSongBackgroundLuaChange>,
     foreground_lua_changes: Vec<SerializableSongForegroundLuaChange>,
     has_lua: bool,
@@ -994,6 +1020,11 @@ fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -> So
             .into_iter()
             .map(SongBackgroundChange::from)
             .collect(),
+        foreground_changes: song
+            .foreground_changes
+            .into_iter()
+            .map(SongForegroundChange::from)
+            .collect(),
         background_lua_changes: song
             .background_lua_changes
             .into_iter()
@@ -1041,6 +1072,7 @@ fn build_cached_song_meta(
         banner_path: song.banner_path.clone(),
         background_path: song.background_path.clone(),
         background_changes: song.background_changes.clone(),
+        foreground_changes: song.foreground_changes.clone(),
         background_lua_changes: song.background_lua_changes.clone(),
         foreground_lua_changes: song.foreground_lua_changes.clone(),
         has_lua: song.has_lua,
@@ -1079,6 +1111,11 @@ fn build_song_meta_from_cache(song: CachedSongMeta) -> SongData {
             .background_changes
             .into_iter()
             .map(SongBackgroundChange::from)
+            .collect(),
+        foreground_changes: song
+            .foreground_changes
+            .into_iter()
+            .map(SongForegroundChange::from)
             .collect(),
         background_lua_changes: song
             .background_lua_changes
@@ -1827,6 +1864,114 @@ fn simfile_uses_lua(song_dir: &Path, simfile_data: &[u8], background_tag: &str) 
         )
 }
 
+#[inline(always)]
+fn foreground_media_ext_rank(path: &Path) -> Option<u8> {
+    let ext = path.extension()?.to_str()?;
+    if matches!(
+        ext.to_ascii_lowercase().as_str(),
+        "avi"
+            | "f4v"
+            | "flv"
+            | "m4v"
+            | "mkv"
+            | "mov"
+            | "mp4"
+            | "mpeg"
+            | "mpg"
+            | "ogv"
+            | "webm"
+            | "wmv"
+    ) {
+        Some(0)
+    } else if ext.eq_ignore_ascii_case("png") {
+        Some(1)
+    } else if ext.eq_ignore_ascii_case("jpg") {
+        Some(2)
+    } else if ext.eq_ignore_ascii_case("jpeg") {
+        Some(3)
+    } else if ext.eq_ignore_ascii_case("gif") {
+        Some(4)
+    } else if ext.eq_ignore_ascii_case("bmp") {
+        Some(5)
+    } else {
+        None
+    }
+}
+
+fn resolve_foreground_media_dir(dir: &Path) -> Option<PathBuf> {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return None;
+    };
+    let mut media = read_dir
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file())
+        .filter_map(|path| {
+            let rank = foreground_media_ext_rank(&path)?;
+            let name = path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_ascii_lowercase())
+                .unwrap_or_default();
+            Some(((rank, name), path))
+        })
+        .collect::<Vec<_>>();
+    media.sort_by(|left, right| left.0.cmp(&right.0));
+    media.into_iter().next().map(|(_, path)| path)
+}
+
+fn resolve_foreground_media_path(song_dir: &Path, target: &str) -> Option<PathBuf> {
+    let path = resolve_song_path_like_itg(song_dir, target)?;
+    if path_uses_lua_like_itg(&path) {
+        return None;
+    }
+    if path.is_dir() {
+        if path.join("default.xml").is_file() {
+            return None;
+        }
+        return resolve_foreground_media_dir(&path);
+    }
+    foreground_media_ext_rank(&path).is_some().then_some(path)
+}
+
+fn extract_foreground_changes(
+    song_dir: &Path,
+    simfile_data: &[u8],
+) -> Vec<SerializableSongForegroundChange> {
+    let entries = list_song_dir_rel_entries(song_dir);
+    let mut out = Vec::new();
+    for raw in extract_named_tag_values(simfile_data, &[b"#FGCHANGES:"]) {
+        let text = unescape_tag(decode_bytes(raw).as_ref()).into_owned();
+        for fields in split_bgchange_sets_like_itg(&text, &entries) {
+            let Some(start_beat) = fields
+                .first()
+                .and_then(|value| value.trim().parse::<f32>().ok())
+                .filter(|value| value.is_finite())
+            else {
+                continue;
+            };
+            let Some(target) = fields.get(1) else {
+                continue;
+            };
+            let Some(path) = resolve_foreground_media_path(song_dir, target) else {
+                continue;
+            };
+            out.push(SerializableSongForegroundChange {
+                start_beat,
+                path: path.to_string_lossy().into_owned(),
+            });
+        }
+    }
+    out.sort_by(|left, right| {
+        left.start_beat
+            .total_cmp(&right.start_beat)
+            .then_with(|| left.path.cmp(&right.path))
+    });
+    out.dedup_by(|left, right| {
+        left.start_beat.to_bits() == right.start_beat.to_bits() && left.path == right.path
+    });
+    out
+}
+
 fn extract_foreground_lua_changes(
     song_dir: &Path,
     simfile_data: &[u8],
@@ -2051,6 +2196,7 @@ fn parse_and_process_song_file(
     let has_lua = simfile_uses_lua(simfile_dir, &simfile_data, &summary.background_path);
     let background_lua_changes =
         extract_background_lua_changes(simfile_dir, &simfile_data, &summary.background_path);
+    let foreground_changes = extract_foreground_changes(simfile_dir, &simfile_data);
     let foreground_lua_changes = extract_foreground_lua_changes(simfile_dir, &simfile_data);
     let background_changes =
         rssp::assets::resolve_background_changes_like_itg(simfile_dir, &simfile_data)
@@ -2090,6 +2236,7 @@ fn parse_and_process_song_file(
             banner_path: banner_path.map(|p| p.to_string_lossy().into_owned()),
             background_path: background_path_opt.map(|p| p.to_string_lossy().into_owned()),
             background_changes,
+            foreground_changes,
             background_lua_changes,
             foreground_lua_changes,
             has_lua,
@@ -2136,7 +2283,10 @@ fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_background_lua_changes, extract_foreground_lua_changes, simfile_uses_lua};
+    use super::{
+        extract_background_lua_changes, extract_foreground_changes, extract_foreground_lua_changes,
+        simfile_uses_lua,
+    };
     use std::fs;
     use std::path::PathBuf;
 
@@ -2193,6 +2343,25 @@ mod tests {
         assert_eq!(changes.len(), 1);
         assert_eq!(changes[0].start_beat, 4.0);
         assert_eq!(PathBuf::from(&changes[0].path), default_lua);
+    }
+
+    #[test]
+    fn extract_foreground_changes_resolves_media_dir_movie() {
+        let root = test_dir("fgchange-media-dir");
+        let song_dir = root.join("Song");
+        let fg_dir = song_dir.join("animations");
+        fs::create_dir_all(&fg_dir).unwrap();
+        let movie = fg_dir.join("badapple.avi");
+        fs::write(&movie, b"avi").unwrap();
+
+        let changes = extract_foreground_changes(
+            &song_dir,
+            b"#TITLE:Video Test;#FGCHANGES:0=animations=1=0=0=0=0;",
+        );
+
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].start_beat, 0.0);
+        assert_eq!(PathBuf::from(&changes[0].path), movie);
     }
 
     #[test]

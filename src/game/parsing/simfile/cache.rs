@@ -179,6 +179,10 @@ fn cached_song_paths_exist(song: &CachedSong) -> bool {
             SerializableSongBackgroundChangeTarget::NoSongBg
             | SerializableSongBackgroundChangeTarget::Random => true,
         });
+    let foreground_paths_ok = data
+        .foreground_changes
+        .iter()
+        .all(|change| cached_path_exists(Some(&change.path)));
     let foreground_lua_paths_ok = data
         .foreground_lua_changes
         .iter()
@@ -194,6 +198,7 @@ fn cached_song_paths_exist(song: &CachedSong) -> bool {
     cached_path_exists(data.banner_path.as_deref())
         && cached_path_exists(data.background_path.as_deref())
         && bgchange_paths_ok
+        && foreground_paths_ok
         && background_lua_paths_ok
         && foreground_lua_paths_ok
         && chart_music_paths_ok

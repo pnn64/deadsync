@@ -2055,17 +2055,17 @@ fn build_song_lua_visual_layer_runtime(
         return None;
     }
 
-    let mut overlay_eases = build_song_lua_overlay_ease_windows(
-        compiled,
-        timing_player,
-        machine_global_offset_seconds,
-    );
+    let mut overlay_eases =
+        build_song_lua_overlay_ease_windows(compiled, timing_player, machine_global_offset_seconds);
     offset_song_lua_overlay_eases(&mut overlay_eases, start_second);
     let (overlay_eases, overlay_ease_ranges) =
         group_song_lua_overlay_eases(compiled.overlays.len(), overlay_eases);
 
-    let mut overlay_events =
-        build_song_lua_overlay_message_events(compiled, timing_player, machine_global_offset_seconds);
+    let mut overlay_events = build_song_lua_overlay_message_events(
+        compiled,
+        timing_player,
+        machine_global_offset_seconds,
+    );
     for events in &mut overlay_events {
         offset_song_lua_message_events(events, start_second);
     }
