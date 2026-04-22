@@ -180,6 +180,11 @@ pub(super) fn parse_i32_ms(s: &str) -> Option<i32> {
     s.trim_end_matches("ms").parse::<i32>().ok()
 }
 
+#[inline]
+pub(super) fn parse_i32_percent(s: &str) -> Option<i32> {
+    s.trim_end_matches('%').parse::<i32>().ok()
+}
+
 /// Build a `ChoiceBinding<usize>` for a row whose choices map 1:1 to a static
 /// `[Enum; N]` variant table. Cuts per-binding boilerplate down to its data.
 macro_rules! index_binding {

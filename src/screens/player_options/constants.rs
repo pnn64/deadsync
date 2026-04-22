@@ -57,8 +57,8 @@ pub(super) const MATCH_NOTESKIN_LABEL: &str = "MatchNoteSkinLabel";
 pub(super) const NO_TAP_EXPLOSION_LABEL: &str = "NoTapExplosionLabel";
 
 use crate::game::profile::{
-    AttackMode, BackgroundFilter, ComboColors, ComboFont, ComboMode, DataVisualizations,
-    ErrorBarTrim, HideLightType, LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator,
+    AttackMode, ComboColors, ComboFont, ComboMode, DataVisualizations, ErrorBarTrim,
+    HideLightType, LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator,
     MiniIndicatorScoreType, Perspective, TargetScoreSetting, TimingWindowsOption, TurnOption,
 };
 
@@ -83,13 +83,6 @@ pub(super) const TURN_OPTION_VARIANTS: [TurnOption; 9] = [
     TurnOption::Shuffle,
     TurnOption::Blender,
     TurnOption::Random,
-];
-
-pub(super) const BACKGROUND_FILTER_VARIANTS: [BackgroundFilter; 4] = [
-    BackgroundFilter::Off,
-    BackgroundFilter::Dark,
-    BackgroundFilter::Darker,
-    BackgroundFilter::Darkest,
 ];
 
 pub(super) const PERSPECTIVE_VARIANTS: [Perspective; 5] = [
