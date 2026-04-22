@@ -8929,8 +8929,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         selection_animation_beat,
         pack_song_counts: &state.pack_song_counts, // O(1) Lookup
         color_pack_headers: state.sort_mode == WheelSortMode::Group,
-        preferred_difficulty_index: state.preferred_difficulty_index,
-        selected_steps_index: state.selected_steps_index,
+        preferred_difficulty_index: [
+            state.preferred_difficulty_index,
+            state.p2_preferred_difficulty_index,
+        ],
+        selected_steps_index: [state.selected_steps_index, state.p2_selected_steps_index],
         song_box_color: None,
         song_text_color: None,
         song_text_color_overrides: None,
