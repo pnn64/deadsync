@@ -474,7 +474,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsSound", "SoundDevice")),
             HelpEntry::Bullet(lookup_key("OptionsSound", "AudioSampleRate")),
             HelpEntry::Bullet(lookup_key("OptionsSound", "MasterVolume")),
-            HelpEntry::Bullet(lookup_key("OptionsSound", "SfxVolume")),
+            HelpEntry::Bullet(lookup_key("OptionsSound", "SFXVolume")),
             HelpEntry::Bullet(lookup_key("OptionsSound", "AssistTickVolume")),
             HelpEntry::Bullet(lookup_key("OptionsSound", "MusicVolume")),
             HelpEntry::Bullet(lookup_key("OptionsSound", "MineSounds")),
@@ -2309,7 +2309,7 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         id: SubRowId::SfxVolume,
-        label: lookup_key("OptionsSound", "SfxVolume"),
+        label: lookup_key("OptionsSound", "SFXVolume"),
         choices: &[literal_choice("100%")],
         inline: false,
     },
@@ -2404,7 +2404,7 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         id: ItemId::SndSfxVolume,
-        name: lookup_key("OptionsSound", "SfxVolume"),
+        name: lookup_key("OptionsSound", "SFXVolume"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSoundHelp",
             "SfxVolumeHelp",

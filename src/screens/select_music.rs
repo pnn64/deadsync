@@ -4573,7 +4573,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             let confidence = overlay.final_confidence.unwrap_or(0.0) * 100.0;
             tr_fmt(
                 "SelectMusic",
-                "SyncSuggestedSync",
+                "SuggestedSync",
                 &[
                     ("bias", &format!("{bias:+.2}")),
                     ("confidence", &format!("{confidence:.0}")),
@@ -4584,7 +4584,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             .error_text
             .as_deref()
             .map(Arc::from)
-            .unwrap_or_else(|| tr("SelectMusic", "SyncUnknownError")),
+            .unwrap_or_else(|| tr("SelectMusic", "UnknownSyncError")),
     };
     let status_y =
         if matches!(overlay.phase, SyncOverlayPhase::Ready) && ready_offset_line.is_some() {
