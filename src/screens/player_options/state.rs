@@ -178,6 +178,25 @@ pub(super) struct PlayerNoteskinPreviews {
     pub(super) tap_explosion: Option<Arc<Noteskin>>,
 }
 
+/// Per-player navigation key hold/repeat timing.
+///
+/// Stored as `[PlayerNavInput; PLAYER_SLOTS]` on `State`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PlayerNavInput {
+    pub held_direction: Option<NavDirection>,
+    pub held_since: Option<Instant>,
+    pub last_scrolled_at: Option<Instant>,
+}
+
+/// Per-player Start button hold/repeat timing.
+///
+/// Stored as `[PlayerStartInput; PLAYER_SLOTS]` on `State`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PlayerStartInput {
+    pub held_since: Option<Instant>,
+    pub last_triggered_at: Option<Instant>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(super) struct RowTween {
     pub(super) from_y: f32,
@@ -242,11 +261,8 @@ pub struct State {
     pub current_pane: OptionsPane,
     pub scroll_focus_player: usize,
     pub(super) bg: heart_bg::State,
-    pub nav_key_held_direction: [Option<NavDirection>; PLAYER_SLOTS],
-    pub nav_key_held_since: [Option<Instant>; PLAYER_SLOTS],
-    pub nav_key_last_scrolled_at: [Option<Instant>; PLAYER_SLOTS],
-    pub start_held_since: [Option<Instant>; PLAYER_SLOTS],
-    pub start_last_triggered_at: [Option<Instant>; PLAYER_SLOTS],
+    pub nav_input: [PlayerNavInput; PLAYER_SLOTS],
+    pub start_input: [PlayerStartInput; PLAYER_SLOTS],
     pub(super) allow_per_player_global_offsets: bool,
     pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
     pub(super) noteskin_cache: HashMap<String, Arc<Noteskin>>,
