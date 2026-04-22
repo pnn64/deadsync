@@ -8,7 +8,7 @@ use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
     SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicWheelStyle, SimpleIni, SyncGraphMode, dirs,
+    SelectMusicWheelStyle, SimpleIni, SyncGraphMode, ThemeFont, dirs,
 };
 use crate::engine::audio;
 #[cfg(target_os = "windows")]
@@ -274,6 +274,7 @@ pub enum ItemId {
     MchPreferredStyle,
     MchSelectPlayMode,
     MchPreferredMode,
+    MchThemeFont,
     MchEvalSummary,
     MchNameEntry,
     MchGameoverScreen,
@@ -894,6 +895,7 @@ pub enum SubRowId {
     PreferredStyle,
     SelectPlayMode,
     PreferredMode,
+    ThemeFont,
     EvalSummary,
     NameEntry,
     GameoverScreen,
@@ -1859,6 +1861,15 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::ThemeFont,
+        label: lookup_key("OptionsMachine", "ThemeFont"),
+        choices: &[
+            localized_choice("OptionsMachine", "ThemeFontCommon"),
+            localized_choice("OptionsMachine", "ThemeFontMega"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::EvalSummary,
         label: lookup_key("OptionsMachine", "EvalSummary"),
         choices: &[
@@ -1988,6 +1999,14 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "PreferredModeHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::MchThemeFont,
+        name: lookup_key("OptionsMachine", "ThemeFont"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "ThemeFontHelp",
         ))],
     },
     Item {
@@ -5739,6 +5758,20 @@ const fn machine_preferred_mode_from_choice(idx: usize) -> MachinePreferredPlayM
     }
 }
 
+const fn theme_font_choice_index(font: ThemeFont) -> usize {
+    match font {
+        ThemeFont::Common => 0,
+        ThemeFont::Mega => 1,
+    }
+}
+
+const fn theme_font_from_choice(idx: usize) -> ThemeFont {
+    match idx {
+        1 => ThemeFont::Mega,
+        _ => ThemeFont::Common,
+    }
+}
+
 const fn log_level_choice_index(level: LogLevel) -> usize {
     match level {
         LogLevel::Error => 0,
@@ -6192,6 +6225,12 @@ pub fn init() -> State {
         MACHINE_OPTIONS_ROWS,
         SubRowId::PreferredMode,
         machine_preferred_mode_choice_index(cfg.machine_preferred_play_mode),
+    );
+    set_choice_by_id(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::ThemeFont,
+        theme_font_choice_index(cfg.theme_font),
     );
     set_choice_by_id(
         &mut state.sub_choice_indices_machine,
@@ -8077,6 +8116,9 @@ fn apply_submenu_choice_delta(
             SubRowId::PreferredMode => config::update_machine_preferred_play_mode(
                 machine_preferred_mode_from_choice(new_index),
             ),
+            SubRowId::ThemeFont => {
+                config::update_theme_font(theme_font_from_choice(new_index))
+            }
             SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
             SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),

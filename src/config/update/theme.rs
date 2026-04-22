@@ -1,5 +1,16 @@
 use super::*;
 
+pub fn update_theme_font(font: ThemeFont) {
+    {
+        let mut cfg = lock_config();
+        if cfg.theme_font == font {
+            return;
+        }
+        cfg.theme_font = font;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_select_music_breakdown_style(style: BreakdownStyle) {
     {
         let mut cfg = lock_config();
