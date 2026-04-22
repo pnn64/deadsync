@@ -19,10 +19,10 @@ from PIL import Image, ImageDraw
 W = H = 64
 SUPERSAMPLE = 4
 RADIUS_LOGICAL = 21       # mid-line radius of the ring
-STROKE_LOGICAL = 6        # ring thickness
+STROKE_LOGICAL = 9        # ring thickness
 GAP_DEG = 60.0            # wedge of arc removed for the arrow's head/tail gap
-HEAD_LEN_LOGICAL = 14     # length of the arrowhead from base to tip
-HEAD_WIDTH_LOGICAL = 16   # full width of the arrowhead base
+HEAD_LEN_LOGICAL = 17     # length of the arrowhead from base to tip
+HEAD_WIDTH_LOGICAL = 19   # full width of the arrowhead base
 COLOR = (255, 255, 255, 255)
 
 
@@ -88,7 +88,7 @@ def main() -> None:
     sheet = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     sheet.paste(draw_refresh(), (0, 0))
     out = (
-        Path(__file__).resolve().parent.parent
+        Path(__file__).resolve().parent.parent.parent
         / "assets"
         / "graphics"
         / "submit"

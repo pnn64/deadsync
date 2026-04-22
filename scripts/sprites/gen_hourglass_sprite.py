@@ -168,7 +168,7 @@ def main() -> None:
         col, row = i % COLS, i // COLS
         sheet.paste(frame, (col * W, row * H), frame)
 
-    out = Path(__file__).resolve().parent.parent / "assets" / "graphics" / "submit" / "Hourglass_10x3.png"
+    out = Path(__file__).resolve().parent.parent.parent / "assets" / "graphics" / "submit" / "Hourglass_10x3.png"
     out.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(out)
     print(f"wrote {out} ({sheet.size[0]}x{sheet.size[1]})")

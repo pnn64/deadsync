@@ -3,7 +3,7 @@ from pathlib import Path
 
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parent.parent / "assets" / "graphics" / "submit"
+ROOT = Path(__file__).resolve().parent.parent.parent / "assets" / "graphics" / "submit"
 
 
 def cell_bbox(im: Image.Image, x0: int, y0: int, w: int, h: int):

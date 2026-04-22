@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 
 W = H = 64
 SUPERSAMPLE = 4
-STROKE_THICK = 6
+STROKE_THICK = 9
 COLOR = (255, 255, 255, 255)
 
 
@@ -51,7 +51,7 @@ def main() -> None:
     sheet = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     sheet.paste(draw_rejected(), (0, 0))
     out = (
-        Path(__file__).resolve().parent.parent
+        Path(__file__).resolve().parent.parent.parent
         / "assets"
         / "graphics"
         / "submit"
