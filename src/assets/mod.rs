@@ -636,6 +636,57 @@ pub fn current_theme_font_key(role: FontRole) -> &'static str {
     theme_font_key(crate::config::get().theme_font, role)
 }
 
+/// Codepoints supported by `assets/fonts/Mega/_mega font.ini`. Mega ships
+/// upper + lower Latin + digits + a small punctuation set; anything outside
+/// this range is missing and would per-glyph fall back through Miso, which
+/// produces ugly mixed-font strings (e.g. uppercase Mega + lowercase Miso).
+fn mega_alpha_supports_char(c: char) -> bool {
+    matches!(c,
+        'A'..='Z' | 'a'..='z' | '0'..='9' |
+        ' ' | '?' | '!' | '.' | ',' | ';' | ':' | '\'' | '"' |
+        '+' | '=' | '-' | '_' | '<' | '>' | '[' | ']' |
+        '@' | '#' | '$' | '%' | '^' | '&' | '(' | ')' | '{' | '}' |
+        '/' | '\\'
+    )
+}
+
+#[inline]
+fn mega_alpha_supports(text: &str) -> bool {
+    text.chars().all(mega_alpha_supports_char)
+}
+
+/// Variant of [`theme_font_key`] that, for the alphabetic roles
+/// (`Bold` / `Header` / `Footer`) under [`crate::config::ThemeFont::Mega`],
+/// **wholesale** falls the entire string back to Wendy when it contains
+/// any glyph Mega can't render. This avoids the mixed-font appearance you
+/// get from per-glyph fallback through Miso (e.g., a CJK or symbol-heavy
+/// `submit_footer` rendering as half Mega / half Miso).
+///
+/// Numeric roles (`Numbers` / `ScreenEval`) stay on the direct resolver
+/// since their inputs are always digits Mega supports.
+pub fn theme_font_key_for_text(
+    theme_font: crate::config::ThemeFont,
+    role: FontRole,
+    text: &str,
+) -> &'static str {
+    use crate::config::ThemeFont::Mega;
+    match (theme_font, role) {
+        (Mega, FontRole::Bold | FontRole::Header | FontRole::Footer)
+            if !mega_alpha_supports(text) =>
+        {
+            "wendy"
+        }
+        _ => theme_font_key(theme_font, role),
+    }
+}
+
+/// Convenience wrapper that reads the active [`crate::config::ThemeFont`]
+/// from the global config and applies the wholesale-fallback policy.
+#[inline]
+pub fn current_theme_font_key_for_text(role: FontRole, text: &str) -> &'static str {
+    theme_font_key_for_text(crate::config::get().theme_font, role, text)
+}
+
 impl Default for AssetManager {
     fn default() -> Self {
         Self::new()
@@ -687,6 +738,70 @@ mod tests {
         );
         assert_eq!(
             theme_font_key(ThemeFont::Mega, FontRole::ScreenEval),
+            "mega_screenevaluation"
+        );
+    }
+
+    #[test]
+    fn theme_font_key_for_text_passes_through_when_common() {
+        // Common is the default; the for_text policy must never alter it.
+        for role in [
+            FontRole::Normal,
+            FontRole::Bold,
+            FontRole::Header,
+            FontRole::Footer,
+            FontRole::Numbers,
+            FontRole::ScreenEval,
+        ] {
+            assert_eq!(
+                theme_font_key_for_text(ThemeFont::Common, role, "anything"),
+                theme_font_key(ThemeFont::Common, role),
+                "role={role:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn theme_font_key_for_text_uses_mega_alpha_for_ascii() {
+        assert_eq!(
+            theme_font_key_for_text(ThemeFont::Mega, FontRole::Header, "Select Music"),
+            "mega_alpha"
+        );
+        assert_eq!(
+            theme_font_key_for_text(ThemeFont::Mega, FontRole::Footer, "Press Start"),
+            "mega_alpha"
+        );
+    }
+
+    #[test]
+    fn theme_font_key_for_text_falls_back_wholesale_for_unsupported_chars() {
+        // CJK title -- entire actor falls back to Wendy, not per-glyph mix.
+        assert_eq!(
+            theme_font_key_for_text(ThemeFont::Mega, FontRole::Header, "リズム"),
+            "wendy"
+        );
+        // Symbol-heavy submit footer (icons in deadsync's strings).
+        assert_eq!(
+            theme_font_key_for_text(ThemeFont::Mega, FontRole::Footer, "◐ ✔ ⊘"),
+            "wendy"
+        );
+        // Even one bad char triggers fallback.
+        assert_eq!(
+            theme_font_key_for_text(ThemeFont::Mega, FontRole::Bold, "Hello\u{2014}World"),
+            "wendy"
+        );
+    }
+
+    #[test]
+    fn theme_font_key_for_text_keeps_numeric_roles_on_mega_unconditionally() {
+        // Numeric roles are always digits Mega supports; for_text shouldn't
+        // ever fall them back even if the caller passes weird input.
+        assert_eq!(
+            theme_font_key_for_text(ThemeFont::Mega, FontRole::Numbers, "リズム"),
+            "mega_monospace_numbers"
+        );
+        assert_eq!(
+            theme_font_key_for_text(ThemeFont::Mega, FontRole::ScreenEval, "リズム"),
             "mega_screenevaluation"
         );
     }
