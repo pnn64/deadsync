@@ -117,13 +117,8 @@ pub(super) fn apply_profile_defaults(
     init_opted_in_bitmask_rows(row_map, profile, &mut masks, player_idx);
 
     let mut scroll_active_mask = ScrollMask::empty();
-    let mut hide_active_mask = HideMask::empty();
-    let mut fa_plus_active_mask = FaPlusMask::empty();
-    let mut early_dw_active_mask = EarlyDwMask::empty();
     let mut gameplay_extras_active_mask = GameplayExtrasMask::empty();
     let mut gameplay_extras_more_active_mask = GameplayExtrasMoreMask::empty();
-    let mut results_extras_active_mask = ResultsExtrasMask::empty();
-    let mut life_bar_options_active_mask = LifeBarOptionsMask::empty();
     let mut error_bar_active_mask = profile.error_bar_active_mask;
     if error_bar_active_mask.is_empty() {
         error_bar_active_mask = crate::game::profile::error_bar_mask_from_style(
@@ -131,8 +126,6 @@ pub(super) fn apply_profile_defaults(
             profile.error_bar_text,
         );
     }
-    let mut error_bar_options_active_mask = ErrorBarOptionsMask::empty();
-    let mut measure_counter_options_active_mask = MeasureCounterOptionsMask::empty();
     let match_ns_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
     // Initialize Background Filter row from profile setting (0..=100 %).
@@ -393,53 +386,12 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if profile.rainbow_max {
-        life_bar_options_active_mask.insert(LifeBarOptionsMask::RAINBOW_MAX);
-    }
-    if profile.responsive_colors {
-        life_bar_options_active_mask.insert(LifeBarOptionsMask::RESPONSIVE_COLORS);
-    }
-    if profile.show_life_percent {
-        life_bar_options_active_mask.insert(LifeBarOptionsMask::SHOW_LIFE_PERCENT);
-    }
-    if let Some(row) = row_map.get_mut(RowId::LifeBarOptions) {
-        if !life_bar_options_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (life_bar_options_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
     if let Some(row) = row_map.get_mut(RowId::ErrorBarTrim) {
         row.selected_choice_index[player_idx] = ERROR_BAR_TRIM_VARIANTS
             .iter()
             .position(|&v| v == profile.error_bar_trim)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
-    }
-    if profile.error_bar_up {
-        error_bar_options_active_mask.insert(ErrorBarOptionsMask::MOVE_UP);
-    }
-    if profile.error_bar_multi_tick {
-        error_bar_options_active_mask.insert(ErrorBarOptionsMask::MULTI_TICK);
-    }
-    if let Some(row) = row_map.get_mut(RowId::ErrorBarOptions) {
-        if !error_bar_options_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (error_bar_options_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
     }
     // Initialize Measure Counter rows (zmod semantics).
     if let Some(row) = row_map.get_mut(RowId::MeasureCounter) {
@@ -452,34 +404,6 @@ pub(super) fn apply_profile_defaults(
     if let Some(row) = row_map.get_mut(RowId::MeasureCounterLookahead) {
         row.selected_choice_index[player_idx] = (profile.measure_counter_lookahead.min(4) as usize)
             .min(row.choices.len().saturating_sub(1));
-    }
-    if profile.measure_counter_left {
-        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::MOVE_LEFT);
-    }
-    if profile.measure_counter_up {
-        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::MOVE_UP);
-    }
-    if profile.measure_counter_vert {
-        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::VERTICAL_LOOKAHEAD);
-    }
-    if profile.broken_run {
-        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::BROKEN_RUN_TOTAL);
-    }
-    if profile.run_timer {
-        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::RUN_TIMER);
-    }
-    if let Some(row) = row_map.get_mut(RowId::MeasureCounterOptions) {
-        if !measure_counter_options_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (measure_counter_options_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
     }
     if let Some(row) = row_map.get_mut(RowId::MeasureLines) {
         row.selected_choice_index[player_idx] = MEASURE_LINES_VARIANTS
@@ -506,22 +430,6 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if profile.track_early_judgments {
-        results_extras_active_mask.insert(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
-    }
-    if let Some(row) = row_map.get_mut(RowId::ResultsExtras) {
-        if !results_extras_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (results_extras_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
     if let Some(row) = row_map.get_mut(RowId::MiniIndicator) {
         row.selected_choice_index[player_idx] = MINI_INDICATOR_VARIANTS
             .iter()
@@ -535,49 +443,6 @@ pub(super) fn apply_profile_defaults(
             .position(|&v| v == profile.mini_indicator_score_type)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
-    }
-    if let Some(row) = row_map.get_mut(RowId::EarlyDecentWayOffOptions) {
-        if profile.hide_early_dw_judgments {
-            early_dw_active_mask.insert(EarlyDwMask::HIDE_JUDGMENTS);
-        }
-        if profile.hide_early_dw_flash {
-            early_dw_active_mask.insert(EarlyDwMask::HIDE_FLASH);
-        }
-
-        if !early_dw_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (early_dw_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
-    // Initialize FA+ Options row from profile (independent toggles).
-    if let Some(row) = row_map.get_mut(RowId::FAPlusOptions) {
-        // Cursor always starts on the first option; toggled state is reflected visually.
-        row.selected_choice_index[player_idx] = 0;
-    }
-    if profile.show_fa_plus_window {
-        fa_plus_active_mask.insert(FaPlusMask::WINDOW);
-    }
-    if profile.show_ex_score {
-        fa_plus_active_mask.insert(FaPlusMask::EX_SCORE);
-    }
-    if profile.show_hard_ex_score {
-        fa_plus_active_mask.insert(FaPlusMask::HARD_EX_SCORE);
-    }
-    if profile.show_fa_plus_pane {
-        fa_plus_active_mask.insert(FaPlusMask::PANE);
-    }
-    if profile.fa_plus_10ms_blue_window {
-        fa_plus_active_mask.insert(FaPlusMask::BLUE_WINDOW_10MS);
-    }
-    if profile.split_15_10ms {
-        fa_plus_active_mask.insert(FaPlusMask::SPLIT_15_10MS);
     }
     if let Some(row) = row_map.get_mut(RowId::CustomBlueFantasticWindow) {
         row.selected_choice_index[player_idx] = if profile.custom_fantastic_window {
@@ -647,42 +512,6 @@ pub(super) fn apply_profile_defaults(
         }
     }
 
-    // Initialize Hide row from profile (multi-choice toggle group).
-    if profile.hide_targets {
-        hide_active_mask.insert(HideMask::TARGETS);
-    }
-    if profile.hide_song_bg {
-        hide_active_mask.insert(HideMask::BACKGROUND);
-    }
-    if profile.hide_combo {
-        hide_active_mask.insert(HideMask::COMBO);
-    }
-    if profile.hide_lifebar {
-        hide_active_mask.insert(HideMask::LIFE);
-    }
-    if profile.hide_score {
-        hide_active_mask.insert(HideMask::SCORE);
-    }
-    if profile.hide_danger {
-        hide_active_mask.insert(HideMask::DANGER);
-    }
-    if profile.hide_combo_explosions {
-        hide_active_mask.insert(HideMask::COMBO_EXPLOSIONS);
-    }
-    if let Some(row) = row_map.get_mut(RowId::Hide) {
-        if !hide_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (hide_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
-
     // Initialize Scroll row from profile setting (multi-choice toggle group).
     if let Some(row) = row_map.get_mut(RowId::Scroll) {
         use crate::game::profile::ScrollOption;
@@ -734,16 +563,9 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     masks.scroll = scroll_active_mask;
-    masks.hide = hide_active_mask;
-    masks.fa_plus = fa_plus_active_mask;
-    masks.early_dw = early_dw_active_mask;
     masks.gameplay_extras = gameplay_extras_active_mask;
     masks.gameplay_extras_more = gameplay_extras_more_active_mask;
-    masks.results_extras = results_extras_active_mask;
-    masks.life_bar_options = life_bar_options_active_mask;
     masks.error_bar = error_bar_active_mask;
-    masks.error_bar_options = error_bar_options_active_mask;
-    masks.measure_counter_options = measure_counter_options_active_mask;
     masks
 }
 

@@ -193,7 +193,30 @@ const HIDE: BitmaskBinding = BitmaskBinding {
 };
 const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_life_bar_options_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| {
+            let mut bits = super::super::state::LifeBarOptionsMask::empty();
+            if p.rainbow_max {
+                bits.insert(super::super::state::LifeBarOptionsMask::RAINBOW_MAX);
+            }
+            if p.responsive_colors {
+                bits.insert(super::super::state::LifeBarOptionsMask::RESPONSIVE_COLORS);
+            }
+            if p.show_life_percent {
+                bits.insert(super::super::state::LifeBarOptionsMask::SHOW_LIFE_PERCENT);
+            }
+            bits.bits() as u32
+        },
+        get_active: |m| m.life_bar_options.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(
+                b & !(u8::MAX as u32), 0,
+                "LifeBarOptionsMask init bits exceed u8 width",
+            );
+            m.life_bar_options = super::super::state::LifeBarOptionsMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_gameplay_extras_row,
@@ -205,11 +228,62 @@ const ERROR_BAR: BitmaskBinding = BitmaskBinding {
 };
 const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_error_bar_options_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| {
+            let mut bits = super::super::state::ErrorBarOptionsMask::empty();
+            if p.error_bar_up {
+                bits.insert(super::super::state::ErrorBarOptionsMask::MOVE_UP);
+            }
+            if p.error_bar_multi_tick {
+                bits.insert(super::super::state::ErrorBarOptionsMask::MULTI_TICK);
+            }
+            bits.bits() as u32
+        },
+        get_active: |m| m.error_bar_options.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(
+                b & !(u8::MAX as u32), 0,
+                "ErrorBarOptionsMask init bits exceed u8 width",
+            );
+            m.error_bar_options =
+                super::super::state::ErrorBarOptionsMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_measure_counter_options_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| {
+            let mut bits = super::super::state::MeasureCounterOptionsMask::empty();
+            if p.measure_counter_left {
+                bits.insert(super::super::state::MeasureCounterOptionsMask::MOVE_LEFT);
+            }
+            if p.measure_counter_up {
+                bits.insert(super::super::state::MeasureCounterOptionsMask::MOVE_UP);
+            }
+            if p.measure_counter_vert {
+                bits.insert(super::super::state::MeasureCounterOptionsMask::VERTICAL_LOOKAHEAD);
+            }
+            if p.broken_run {
+                bits.insert(super::super::state::MeasureCounterOptionsMask::BROKEN_RUN_TOTAL);
+            }
+            if p.run_timer {
+                bits.insert(super::super::state::MeasureCounterOptionsMask::RUN_TIMER);
+            }
+            bits.bits() as u32
+        },
+        get_active: |m| m.measure_counter_options.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(
+                b & !(u8::MAX as u32), 0,
+                "MeasureCounterOptionsMask init bits exceed u8 width",
+            );
+            m.measure_counter_options =
+                super::super::state::MeasureCounterOptionsMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_fa_plus_row,
@@ -246,11 +320,45 @@ const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding {
 };
 const EARLY_DW_OPTIONS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_early_dw_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| {
+            let mut bits = super::super::state::EarlyDwMask::empty();
+            if p.hide_early_dw_judgments {
+                bits.insert(super::super::state::EarlyDwMask::HIDE_JUDGMENTS);
+            }
+            if p.hide_early_dw_flash {
+                bits.insert(super::super::state::EarlyDwMask::HIDE_FLASH);
+            }
+            bits.bits() as u32
+        },
+        get_active: |m| m.early_dw.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(b & !(u8::MAX as u32), 0, "EarlyDwMask init bits exceed u8 width");
+            m.early_dw = super::super::state::EarlyDwMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_results_extras_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| {
+            let mut bits = super::super::state::ResultsExtrasMask::empty();
+            if p.track_early_judgments {
+                bits.insert(super::super::state::ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
+            }
+            bits.bits() as u32
+        },
+        get_active: |m| m.results_extras.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(
+                b & !(u8::MAX as u32), 0,
+                "ResultsExtrasMask init bits exceed u8 width",
+            );
+            m.results_extras = super::super::state::ResultsExtrasMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 
 const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {

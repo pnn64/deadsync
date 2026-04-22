@@ -3,12 +3,13 @@ use super::*;
 #[cfg(test)]
 pub(super) mod tests {
     use super::{
-        ErrorBarMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask, HUD_OFFSET_MAX,
-        HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
-        NAV_REPEAT_SCROLL_INTERVAL, P1, P2, PlayerOptionMasks, Row, RowId, RowMap, ScrollMask,
-        SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event, hud_offset_choices,
-        is_row_visible, judgment_tilt_intensity_visible, repeat_held_arcade_start, row_visibility,
-        session_active_players, sync_profile_scroll_speed,
+        BitmaskBinding, BitmaskInit, CursorInit, ErrorBarMask, FaPlusMask, GameplayExtrasMask,
+        GameplayExtrasMoreMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask,
+        NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, P1, P2, PlayerOptionMasks, Row,
+        RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event,
+        handle_start_event, hud_offset_choices, is_row_visible, judgment_tilt_intensity_visible,
+        repeat_held_arcade_start, row_visibility, session_active_players,
+        sync_profile_scroll_speed,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -38,6 +39,24 @@ pub(super) mod tests {
             name,
             choices: choices.iter().map(ToString::to_string).collect(),
             selected_choice_index,
+            help: Vec::new(),
+            choice_difficulty_indices: None,
+            mirror_across_players: false,
+        }
+    }
+
+    fn test_bitmask_row(
+        id: RowId,
+        name: LookupKey,
+        choices: &[&str],
+        binding: BitmaskBinding,
+    ) -> Row {
+        Row {
+            id,
+            behavior: RowBehavior::Bitmask(binding),
+            name,
+            choices: choices.iter().map(ToString::to_string).collect(),
+            selected_choice_index: [0, 0],
             help: Vec::new(),
             choice_difficulty_indices: None,
             mirror_across_players: false,
@@ -344,11 +363,32 @@ pub(super) mod tests {
         profile.hide_targets = false;
         profile.hide_song_bg = true;
 
-        let mut hide_rows = test_row_map(vec![test_row(
+        let hide_binding = BitmaskBinding {
+            toggle: super::super::choice::toggle_hide_row,
+            init: Some(BitmaskInit {
+                from_profile: |p| {
+                    let mut bits = HideMask::empty();
+                    if p.hide_targets { bits.insert(HideMask::TARGETS); }
+                    if p.hide_song_bg { bits.insert(HideMask::BACKGROUND); }
+                    if p.hide_combo { bits.insert(HideMask::COMBO); }
+                    if p.hide_lifebar { bits.insert(HideMask::LIFE); }
+                    if p.hide_score { bits.insert(HideMask::SCORE); }
+                    if p.hide_danger { bits.insert(HideMask::DANGER); }
+                    if p.hide_combo_explosions { bits.insert(HideMask::COMBO_EXPLOSIONS); }
+                    bits.bits() as u32
+                },
+                get_active: |m| m.hide.bits() as u32,
+                set_active: |m, b| {
+                    m.hide = HideMask::from_bits_retain(b as u8);
+                },
+                cursor: CursorInit::FirstActiveBit,
+            }),
+        };
+        let mut hide_rows = test_row_map(vec![test_bitmask_row(
             RowId::Hide,
             lookup_key("PlayerOptions", "Hide"),
             &["Targets", "BG", "Combo", "Life", "Score", "Danger", "ComboExp"],
-            [0, 0],
+            hide_binding,
         )]);
 
         let masks = super::super::panes::apply_profile_defaults(&mut hide_rows, &profile, P1);
@@ -378,11 +418,31 @@ pub(super) mod tests {
         profile.show_fa_plus_window = false;
         profile.show_ex_score = true;
 
-        let mut fa_plus_rows = test_row_map(vec![test_row(
+        let fa_plus_binding = BitmaskBinding {
+            toggle: super::super::choice::toggle_fa_plus_row,
+            init: Some(BitmaskInit {
+                from_profile: |p| {
+                    let mut bits = FaPlusMask::empty();
+                    if p.show_fa_plus_window { bits.insert(FaPlusMask::WINDOW); }
+                    if p.show_ex_score { bits.insert(FaPlusMask::EX_SCORE); }
+                    if p.show_hard_ex_score { bits.insert(FaPlusMask::HARD_EX_SCORE); }
+                    if p.show_fa_plus_pane { bits.insert(FaPlusMask::PANE); }
+                    if p.fa_plus_10ms_blue_window { bits.insert(FaPlusMask::BLUE_WINDOW_10MS); }
+                    if p.split_15_10ms { bits.insert(FaPlusMask::SPLIT_15_10MS); }
+                    bits.bits() as u32
+                },
+                get_active: |m| m.fa_plus.bits() as u32,
+                set_active: |m, b| {
+                    m.fa_plus = FaPlusMask::from_bits_retain(b as u8);
+                },
+                cursor: CursorInit::Fixed(0),
+            }),
+        };
+        let mut fa_plus_rows = test_row_map(vec![test_bitmask_row(
             RowId::FAPlusOptions,
             lookup_key("PlayerOptions", "FAPlusOptions"),
             &["Window", "EX", "HardEX", "Pane", "Blue10", "Split"],
-            [0, 0],
+            fa_plus_binding,
         )]);
 
         let masks = super::super::panes::apply_profile_defaults(&mut fa_plus_rows, &profile, P1);
