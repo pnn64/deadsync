@@ -3137,7 +3137,7 @@ impl Profile {
     }
 }
 
-const PLAYER_SLOTS: usize = 2;
+pub const PLAYER_SLOTS: usize = 2;
 
 #[inline(always)]
 const fn side_ix(side: PlayerSide) -> usize {

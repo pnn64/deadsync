@@ -236,8 +236,8 @@ pub struct MusicWheelParams<'a> {
     pub selection_animation_beat: f32,
     pub pack_song_counts: &'a HashMap<String, usize>,
     pub color_pack_headers: bool,
-    pub preferred_difficulty_index: usize,
-    pub selected_steps_index: usize,
+    pub preferred_difficulty_index: [usize; profile::PLAYER_SLOTS],
+    pub selected_steps_index: [usize; profile::PLAYER_SLOTS],
     pub song_box_color: Option<[f32; 4]>,
     pub song_text_color: Option<[f32; 4]>,
     pub song_text_color_overrides: Option<&'a HashMap<usize, [f32; 4]>>,
@@ -500,22 +500,27 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         ));
                     }
 
-                    let wheel_chart = if is_selected_slot {
-                        crate::screens::select_music::chart_for_steps_index(
-                            info,
-                            target_chart_type,
-                            p.selected_steps_index,
-                        )
-                    } else {
-                        chart_for_preferred_or_nearest_standard(
-                            info,
-                            target_chart_type,
-                            p.preferred_difficulty_index,
-                        )
+                    let wheel_chart_for_side = |side: profile::PlayerSide| {
+                        let ix = match side {
+                            profile::PlayerSide::P2 => 1,
+                            _ => 0,
+                        };
+                        if is_selected_slot {
+                            crate::screens::select_music::chart_for_steps_index(
+                                info,
+                                target_chart_type,
+                                p.selected_steps_index[ix],
+                            )
+                        } else {
+                            chart_for_preferred_or_nearest_standard(
+                                info,
+                                target_chart_type,
+                                p.preferred_difficulty_index[ix],
+                            )
+                        }
                     };
-                    if (p.show_music_wheel_grades || p.show_music_wheel_lamps)
-                        && let Some(chart) = wheel_chart
-                    {
+                    let wheel_chart = wheel_chart_for_side(profile::PlayerSide::P1);
+                    if p.show_music_wheel_grades || p.show_music_wheel_lamps {
                         for (side, grade_x) in [
                             (profile::PlayerSide::P1, grade_x_p1),
                             (profile::PlayerSide::P2, grade_x_p2),
@@ -523,6 +528,9 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             if !profile::is_session_side_joined(side) {
                                 continue;
                             }
+                            let Some(chart) = wheel_chart_for_side(side) else {
+                                continue;
+                            };
                             let Some(cached_score) =
                                 scores::get_cached_score_for_side(&chart.short_hash, side)
                             else {
