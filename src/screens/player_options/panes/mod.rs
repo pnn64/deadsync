@@ -108,57 +108,11 @@ fn find_noteskin_choice_index(
     }
 }
 
-type ActiveMaskTuple = (
-    ScrollMask,
-    HideMask,
-    InsertMask,
-    RemoveMask,
-    HoldsMask,
-    AccelEffectsMask,
-    VisualEffectsMask,
-    AppearanceEffectsMask,
-    FaPlusMask,
-    EarlyDwMask,
-    GameplayExtrasMask,
-    GameplayExtrasMoreMask,
-    ResultsExtrasMask,
-    LifeBarOptionsMask,
-    ErrorBarMask,
-    ErrorBarOptionsMask,
-    MeasureCounterOptionsMask,
-);
-
-/// OR two `ActiveMaskTuple`s element-wise. Used by `init()` to accumulate
-/// per-pane mask results, because `apply_profile_defaults` only populates
-/// some masks when the corresponding row exists in the passed `row_map`,
-/// and the rows are split across the Main/Advanced/Uncommon panes.
-pub(super) fn or_active_masks(a: ActiveMaskTuple, b: ActiveMaskTuple) -> ActiveMaskTuple {
-    (
-        a.0 | b.0,
-        a.1 | b.1,
-        a.2 | b.2,
-        a.3 | b.3,
-        a.4 | b.4,
-        a.5 | b.5,
-        a.6 | b.6,
-        a.7 | b.7,
-        a.8 | b.8,
-        a.9 | b.9,
-        a.10 | b.10,
-        a.11 | b.11,
-        a.12 | b.12,
-        a.13 | b.13,
-        a.14 | b.14,
-        a.15 | b.15,
-        a.16 | b.16,
-    )
-}
-
 pub(super) fn apply_profile_defaults(
     row_map: &mut RowMap,
     profile: &crate::game::profile::Profile,
     player_idx: usize,
-) -> ActiveMaskTuple {
+) -> PlayerOptionMasks {
     let mut scroll_active_mask = ScrollMask::empty();
     let mut hide_active_mask = HideMask::empty();
     let mut insert_active_mask = InsertMask::empty();
@@ -857,23 +811,23 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    (
-        scroll_active_mask,
-        hide_active_mask,
-        insert_active_mask,
-        remove_active_mask,
-        holds_active_mask,
-        accel_effects_active_mask,
-        visual_effects_active_mask,
-        appearance_effects_active_mask,
-        fa_plus_active_mask,
-        early_dw_active_mask,
-        gameplay_extras_active_mask,
-        gameplay_extras_more_active_mask,
-        results_extras_active_mask,
-        life_bar_options_active_mask,
-        error_bar_active_mask,
-        error_bar_options_active_mask,
-        measure_counter_options_active_mask,
-    )
+    PlayerOptionMasks {
+        scroll: scroll_active_mask,
+        hide: hide_active_mask,
+        insert: insert_active_mask,
+        remove: remove_active_mask,
+        holds: holds_active_mask,
+        accel_effects: accel_effects_active_mask,
+        visual_effects: visual_effects_active_mask,
+        appearance_effects: appearance_effects_active_mask,
+        fa_plus: fa_plus_active_mask,
+        early_dw: early_dw_active_mask,
+        gameplay_extras: gameplay_extras_active_mask,
+        gameplay_extras_more: gameplay_extras_more_active_mask,
+        results_extras: results_extras_active_mask,
+        life_bar_options: life_bar_options_active_mask,
+        error_bar: error_bar_active_mask,
+        error_bar_options: error_bar_options_active_mask,
+        measure_counter_options: measure_counter_options_active_mask,
+    }
 }

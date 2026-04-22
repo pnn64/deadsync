@@ -218,8 +218,7 @@ pub(super) fn move_selection_vertical(
     let visibility = row_visibility(
         &state.pane().row_map,
         active,
-        state.hide_active_mask,
-        state.error_bar_active_mask,
+        state.option_masks,
         state.allow_per_player_global_offsets,
     );
     let current_row =

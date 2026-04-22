@@ -160,44 +160,8 @@ pub fn init(
     let p2_advanced = apply_profile_defaults(&mut advanced_row_map, &player_profiles[P2], P2);
     let p1_uncommon = apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P1], P1);
     let p2_uncommon = apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P2], P2);
-    let (
-        scroll_active_mask_p1,
-        hide_active_mask_p1,
-        insert_active_mask_p1,
-        remove_active_mask_p1,
-        holds_active_mask_p1,
-        accel_effects_active_mask_p1,
-        visual_effects_active_mask_p1,
-        appearance_effects_active_mask_p1,
-        fa_plus_active_mask_p1,
-        early_dw_active_mask_p1,
-        gameplay_extras_active_mask_p1,
-        gameplay_extras_more_active_mask_p1,
-        results_extras_active_mask_p1,
-        life_bar_options_active_mask_p1,
-        error_bar_active_mask_p1,
-        error_bar_options_active_mask_p1,
-        measure_counter_options_active_mask_p1,
-    ) = or_active_masks(or_active_masks(p1_main, p1_advanced), p1_uncommon);
-    let (
-        scroll_active_mask_p2,
-        hide_active_mask_p2,
-        insert_active_mask_p2,
-        remove_active_mask_p2,
-        holds_active_mask_p2,
-        accel_effects_active_mask_p2,
-        visual_effects_active_mask_p2,
-        appearance_effects_active_mask_p2,
-        fa_plus_active_mask_p2,
-        early_dw_active_mask_p2,
-        gameplay_extras_active_mask_p2,
-        gameplay_extras_more_active_mask_p2,
-        results_extras_active_mask_p2,
-        life_bar_options_active_mask_p2,
-        error_bar_active_mask_p2,
-        error_bar_options_active_mask_p2,
-        measure_counter_options_active_mask_p2,
-    ) = or_active_masks(or_active_masks(p2_main, p2_advanced), p2_uncommon);
+    let p1_masks = p1_main.merge(p1_advanced).merge(p1_uncommon);
+    let p2_masks = p2_main.merge(p2_advanced).merge(p2_uncommon);
 
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
     let mut initial_noteskin_names = vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()];
@@ -252,8 +216,7 @@ pub fn init(
         &main_row_map,
         [0; PLAYER_SLOTS],
         active,
-        [hide_active_mask_p1, hide_active_mask_p2],
-        [error_bar_active_mask_p1, error_bar_active_mask_p2],
+        [p1_masks, p2_masks],
         allow_per_player_global_offsets,
     );
     let mut panes = [
@@ -270,41 +233,7 @@ pub fn init(
         chart_steps_index,
         chart_difficulty_index,
         panes,
-        scroll_active_mask: [scroll_active_mask_p1, scroll_active_mask_p2],
-        hide_active_mask: [hide_active_mask_p1, hide_active_mask_p2],
-        insert_active_mask: [insert_active_mask_p1, insert_active_mask_p2],
-        remove_active_mask: [remove_active_mask_p1, remove_active_mask_p2],
-        holds_active_mask: [holds_active_mask_p1, holds_active_mask_p2],
-        accel_effects_active_mask: [accel_effects_active_mask_p1, accel_effects_active_mask_p2],
-        visual_effects_active_mask: [visual_effects_active_mask_p1, visual_effects_active_mask_p2],
-        appearance_effects_active_mask: [
-            appearance_effects_active_mask_p1,
-            appearance_effects_active_mask_p2,
-        ],
-        fa_plus_active_mask: [fa_plus_active_mask_p1, fa_plus_active_mask_p2],
-        early_dw_active_mask: [early_dw_active_mask_p1, early_dw_active_mask_p2],
-        gameplay_extras_active_mask: [
-            gameplay_extras_active_mask_p1,
-            gameplay_extras_active_mask_p2,
-        ],
-        gameplay_extras_more_active_mask: [
-            gameplay_extras_more_active_mask_p1,
-            gameplay_extras_more_active_mask_p2,
-        ],
-        results_extras_active_mask: [results_extras_active_mask_p1, results_extras_active_mask_p2],
-        life_bar_options_active_mask: [
-            life_bar_options_active_mask_p1,
-            life_bar_options_active_mask_p2,
-        ],
-        error_bar_active_mask: [error_bar_active_mask_p1, error_bar_active_mask_p2],
-        error_bar_options_active_mask: [
-            error_bar_options_active_mask_p1,
-            error_bar_options_active_mask_p2,
-        ],
-        measure_counter_options_active_mask: [
-            measure_counter_options_active_mask_p1,
-            measure_counter_options_active_mask_p2,
-        ],
+        option_masks: [p1_masks, p2_masks],
         active_color_index,
         speed_mod: [speed_mod_p1, speed_mod_p2],
         music_rate: session_music_rate,

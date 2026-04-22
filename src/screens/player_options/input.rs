@@ -138,16 +138,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             &state.pane().row_map,
             state.pane().selected_row,
             active,
-            state.hide_active_mask,
-            state.error_bar_active_mask,
+            state.option_masks,
             state.allow_per_player_global_offsets,
         );
     } else {
         let visibility = row_visibility(
             &state.pane().row_map,
             active,
-            state.hide_active_mask,
-            state.error_bar_active_mask,
+            state.option_masks,
             state.allow_per_player_global_offsets,
         );
         let visible_rows = count_visible_rows(&state.pane().row_map, visibility);

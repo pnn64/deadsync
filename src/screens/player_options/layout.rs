@@ -118,8 +118,7 @@ pub(super) fn init_row_tweens(
     row_map: &RowMap,
     selected_row: [usize; PLAYER_SLOTS],
     active: [bool; PLAYER_SLOTS],
-    hide_active_mask: [HideMask; PLAYER_SLOTS],
-    error_bar_active_mask: [ErrorBarMask; PLAYER_SLOTS],
+    option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
     allow_per_player_global_offsets: bool,
 ) -> Vec<RowTween> {
     let total_rows = row_map.display_order().len();
@@ -131,8 +130,7 @@ pub(super) fn init_row_tweens(
     let visibility = row_visibility(
         row_map,
         active,
-        hide_active_mask,
-        error_bar_active_mask,
+        option_masks,
         allow_per_player_global_offsets,
     );
     let visible_rows = count_visible_rows(row_map, visibility);
@@ -252,8 +250,7 @@ pub(super) fn cursor_dest_for_player(
     let visibility = row_visibility(
         &state.pane().row_map,
         session_active_players(),
-        state.hide_active_mask,
-        state.error_bar_active_mask,
+        state.option_masks,
         state.allow_per_player_global_offsets,
     );
     let mut row_idx =
