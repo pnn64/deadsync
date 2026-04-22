@@ -112,6 +112,60 @@ bitflags! {
     }
 }
 
+/// All per-player active bitmasks for option rows.
+///
+/// Stored as `[PlayerOptionMasks; PLAYER_SLOTS]` on `State` (one entry per
+/// player slot). Adding a new mask row only requires adding one field here.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PlayerOptionMasks {
+    pub scroll: ScrollMask,
+    pub hide: HideMask,
+    pub insert: InsertMask,
+    pub remove: RemoveMask,
+    pub holds: HoldsMask,
+    pub accel_effects: AccelEffectsMask,
+    pub visual_effects: VisualEffectsMask,
+    pub appearance_effects: AppearanceEffectsMask,
+    pub fa_plus: FaPlusMask,
+    pub early_dw: EarlyDwMask,
+    pub gameplay_extras: GameplayExtrasMask,
+    pub gameplay_extras_more: GameplayExtrasMoreMask,
+    pub results_extras: ResultsExtrasMask,
+    pub life_bar_options: LifeBarOptionsMask,
+    pub error_bar: ErrorBarMask,
+    pub error_bar_options: ErrorBarOptionsMask,
+    pub measure_counter_options: MeasureCounterOptionsMask,
+}
+
+impl PlayerOptionMasks {
+    /// Field-wise bitwise OR of two mask sets. Used to accumulate the partial
+    /// results of `apply_profile_defaults` across the Main/Advanced/Uncommon
+    /// panes (each pane only populates the masks for rows it contains; the
+    /// rest are left at `Default::default()` and are identity under OR).
+    #[inline]
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            scroll: self.scroll | other.scroll,
+            hide: self.hide | other.hide,
+            insert: self.insert | other.insert,
+            remove: self.remove | other.remove,
+            holds: self.holds | other.holds,
+            accel_effects: self.accel_effects | other.accel_effects,
+            visual_effects: self.visual_effects | other.visual_effects,
+            appearance_effects: self.appearance_effects | other.appearance_effects,
+            fa_plus: self.fa_plus | other.fa_plus,
+            early_dw: self.early_dw | other.early_dw,
+            gameplay_extras: self.gameplay_extras | other.gameplay_extras,
+            gameplay_extras_more: self.gameplay_extras_more | other.gameplay_extras_more,
+            results_extras: self.results_extras | other.results_extras,
+            life_bar_options: self.life_bar_options | other.life_bar_options,
+            error_bar: self.error_bar | other.error_bar,
+            error_bar_options: self.error_bar_options | other.error_bar_options,
+            measure_counter_options: self.measure_counter_options | other.measure_counter_options,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(super) struct RowTween {
     pub(super) from_y: f32,
@@ -168,42 +222,8 @@ pub struct State {
     pub chart_steps_index: [usize; PLAYER_SLOTS],
     pub chart_difficulty_index: [usize; PLAYER_SLOTS],
     pub(super) panes: [PaneState; OptionsPane::COUNT],
-    pub scroll_active_mask: [ScrollMask; PLAYER_SLOTS],
-    pub hide_active_mask: [HideMask; PLAYER_SLOTS],
-    pub fa_plus_active_mask: [FaPlusMask; PLAYER_SLOTS],
-    pub early_dw_active_mask: [EarlyDwMask; PLAYER_SLOTS],
-    pub gameplay_extras_active_mask: [GameplayExtrasMask; PLAYER_SLOTS],
-    pub gameplay_extras_more_active_mask: [GameplayExtrasMoreMask; PLAYER_SLOTS],
-    pub results_extras_active_mask: [ResultsExtrasMask; PLAYER_SLOTS],
-    pub life_bar_options_active_mask: [LifeBarOptionsMask; PLAYER_SLOTS],
-    // For Error Bar row: bitmask of which options are enabled.
-    // bit0 = Colorful, bit1 = Monochrome, bit2 = Text, bit3 = Highlight, bit4 = Average.
-    pub error_bar_active_mask: [ErrorBarMask; PLAYER_SLOTS],
-    pub error_bar_options_active_mask: [ErrorBarOptionsMask; PLAYER_SLOTS],
-    pub measure_counter_options_active_mask: [MeasureCounterOptionsMask; PLAYER_SLOTS],
-    // For Insert row: bitmask of enabled chart insert transforms.
-    // bit0 = Wide, bit1 = Big, bit2 = Quick, bit3 = BMRize,
-    // bit4 = Skippy, bit5 = Echo, bit6 = Stomp.
-    pub insert_active_mask: [InsertMask; PLAYER_SLOTS],
-    // For Remove row: bitmask of enabled chart removal transforms.
-    // bit0 = Little, bit1 = No Mines, bit2 = No Holds, bit3 = No Jumps,
-    // bit4 = No Hands, bit5 = No Quads, bit6 = No Lifts, bit7 = No Fakes.
-    pub remove_active_mask: [RemoveMask; PLAYER_SLOTS],
-    // For Holds row: bitmask of enabled hold transforms.
-    // bit0 = Planted, bit1 = Floored, bit2 = Twister,
-    // bit3 = No Rolls, bit4 = Holds To Rolls.
-    pub holds_active_mask: [HoldsMask; PLAYER_SLOTS],
-    // For Accel Effects row: bitmask of enabled acceleration transforms.
-    // bit0 = Boost, bit1 = Brake, bit2 = Wave, bit3 = Expand, bit4 = Boomerang.
-    pub accel_effects_active_mask: [AccelEffectsMask; PLAYER_SLOTS],
-    // For Visual Effects row: bitmask of enabled visual transforms.
-    // bit0 = Drunk, bit1 = Dizzy, bit2 = Confusion, bit3 = Big,
-    // bit4 = Flip, bit5 = Invert, bit6 = Tornado, bit7 = Tipsy,
-    // bit8 = Bumpy, bit9 = Beat.
-    pub visual_effects_active_mask: [VisualEffectsMask; PLAYER_SLOTS],
-    // For Appearance Effects row: bitmask of enabled appearance transforms.
-    // bit0 = Hidden, bit1 = Sudden, bit2 = Stealth, bit3 = Blink, bit4 = R.Vanish.
-    pub appearance_effects_active_mask: [AppearanceEffectsMask; PLAYER_SLOTS],
+    /// All per-player option bitmasks. See `PlayerOptionMasks` for field meanings.
+    pub option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
     pub active_color_index: i32,
     pub speed_mod: [SpeedMod; PLAYER_SLOTS],
     pub music_rate: f32,

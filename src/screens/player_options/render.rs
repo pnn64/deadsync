@@ -524,31 +524,31 @@ pub(super) fn select_preview_texture<'a>(
 pub(super) fn multi_select_mask(state: &State, row_id: RowId, player_idx: usize) -> Option<u16> {
     use RowId::*;
     Some(match row_id {
-        Scroll => state.scroll_active_mask[player_idx].bits().into(),
-        Hide => state.hide_active_mask[player_idx].bits().into(),
-        Insert => state.insert_active_mask[player_idx].bits().into(),
-        Remove => state.remove_active_mask[player_idx].bits().into(),
-        Holds => state.holds_active_mask[player_idx].bits().into(),
-        Accel => state.accel_effects_active_mask[player_idx].bits().into(),
-        Effect => state.visual_effects_active_mask[player_idx].bits(),
-        Appearance => state.appearance_effects_active_mask[player_idx]
+        Scroll => state.option_masks[player_idx].scroll.bits().into(),
+        Hide => state.option_masks[player_idx].hide.bits().into(),
+        Insert => state.option_masks[player_idx].insert.bits().into(),
+        Remove => state.option_masks[player_idx].remove.bits().into(),
+        Holds => state.option_masks[player_idx].holds.bits().into(),
+        Accel => state.option_masks[player_idx].accel_effects.bits().into(),
+        Effect => state.option_masks[player_idx].visual_effects.bits(),
+        Appearance => state.option_masks[player_idx].appearance_effects
             .bits()
             .into(),
-        LifeBarOptions => state.life_bar_options_active_mask[player_idx].bits().into(),
-        FAPlusOptions => state.fa_plus_active_mask[player_idx].bits().into(),
-        GameplayExtras => state.gameplay_extras_active_mask[player_idx].bits().into(),
-        GameplayExtrasMore => state.gameplay_extras_more_active_mask[player_idx]
+        LifeBarOptions => state.option_masks[player_idx].life_bar_options.bits().into(),
+        FAPlusOptions => state.option_masks[player_idx].fa_plus.bits().into(),
+        GameplayExtras => state.option_masks[player_idx].gameplay_extras.bits().into(),
+        GameplayExtrasMore => state.option_masks[player_idx].gameplay_extras_more
             .bits()
             .into(),
-        ResultsExtras => state.results_extras_active_mask[player_idx].bits().into(),
-        MeasureCounterOptions => state.measure_counter_options_active_mask[player_idx]
+        ResultsExtras => state.option_masks[player_idx].results_extras.bits().into(),
+        MeasureCounterOptions => state.option_masks[player_idx].measure_counter_options
             .bits()
             .into(),
-        ErrorBar => state.error_bar_active_mask[player_idx].bits().into(),
-        ErrorBarOptions => state.error_bar_options_active_mask[player_idx]
+        ErrorBar => state.option_masks[player_idx].error_bar.bits().into(),
+        ErrorBarOptions => state.option_masks[player_idx].error_bar_options
             .bits()
             .into(),
-        EarlyDecentWayOffOptions => state.early_dw_active_mask[player_idx].bits().into(),
+        EarlyDecentWayOffOptions => state.option_masks[player_idx].early_dw.bits().into(),
         _ => return None,
     })
 }

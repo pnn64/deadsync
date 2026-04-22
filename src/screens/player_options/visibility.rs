@@ -173,12 +173,12 @@ pub(super) fn combo_offsets_visible(row_map: &RowMap, active: [bool; PLAYER_SLOT
 
 pub(super) fn error_bar_children_visible(
     active: [bool; PLAYER_SLOTS],
-    error_bar_active_mask: [ErrorBarMask; PLAYER_SLOTS],
+    option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
 ) -> bool {
     let mut any_active = false;
     for player_idx in active_player_indices(active) {
         any_active = true;
-        if !error_bar_active_mask[player_idx].is_empty() {
+        if !option_masks[player_idx].error_bar.is_empty() {
             return true;
         }
     }
@@ -225,12 +225,12 @@ pub(super) fn density_graph_background_visible(
 
 pub(super) fn combo_rows_visible(
     active: [bool; PLAYER_SLOTS],
-    hide_active_mask: [HideMask; PLAYER_SLOTS],
+    option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
 ) -> bool {
     let mut any_active = false;
     for player_idx in active_player_indices(active) {
         any_active = true;
-        let hide_combo = hide_active_mask[player_idx].contains(HideMask::COMBO);
+        let hide_combo = option_masks[player_idx].hide.contains(HideMask::COMBO);
         if !hide_combo {
             return true;
         }
@@ -240,12 +240,12 @@ pub(super) fn combo_rows_visible(
 
 pub(super) fn lifebar_rows_visible(
     active: [bool; PLAYER_SLOTS],
-    hide_active_mask: [HideMask; PLAYER_SLOTS],
+    option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
 ) -> bool {
     let mut any_active = false;
     for player_idx in active_player_indices(active) {
         any_active = true;
-        let hide_lifebar = hide_active_mask[player_idx].contains(HideMask::LIFE);
+        let hide_lifebar = option_masks[player_idx].hide.contains(HideMask::LIFE);
         if !hide_lifebar {
             return true;
         }
@@ -274,8 +274,7 @@ pub(super) fn indicator_score_type_visible(row_map: &RowMap, active: [bool; PLAY
 pub(super) fn row_visibility(
     row_map: &RowMap,
     active: [bool; PLAYER_SLOTS],
-    hide_active_mask: [HideMask; PLAYER_SLOTS],
-    error_bar_active_mask: [ErrorBarMask; PLAYER_SLOTS],
+    option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
     allow_per_player_global_offsets: bool,
 ) -> RowVisibility {
     RowVisibility {
@@ -283,11 +282,11 @@ pub(super) fn row_visibility(
         show_judgment_offsets: judgment_offsets_visible(row_map, active),
         show_judgment_tilt_intensity: judgment_tilt_intensity_visible(row_map, active),
         show_combo_offsets: combo_offsets_visible(row_map, active),
-        show_error_bar_children: error_bar_children_visible(active, error_bar_active_mask),
+        show_error_bar_children: error_bar_children_visible(active, option_masks),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(row_map, active),
         show_density_graph_background: density_graph_background_visible(row_map, active),
-        show_combo_rows: combo_rows_visible(active, hide_active_mask),
-        show_lifebar_rows: lifebar_rows_visible(active, hide_active_mask),
+        show_combo_rows: combo_rows_visible(active, option_masks),
+        show_lifebar_rows: lifebar_rows_visible(active, option_masks),
         show_indicator_score_type: indicator_score_type_visible(row_map, active),
         show_global_offset_shift: allow_per_player_global_offsets,
     }
@@ -399,8 +398,7 @@ pub(super) fn sync_selected_rows_with_visibility(state: &mut State, active: [boo
     let visibility = row_visibility(
         &state.pane().row_map,
         active,
-        state.hide_active_mask,
-        state.error_bar_active_mask,
+        state.option_masks,
         state.allow_per_player_global_offsets,
     );
     for player_idx in [P1, P2] {

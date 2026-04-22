@@ -4,10 +4,10 @@ use super::*;
 pub(super) mod tests {
     use super::{
         ErrorBarMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask,
-        NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, P1, P2, Row, RowId, RowMap, ScrollMask,
-        SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event, hud_offset_choices,
-        is_row_visible, judgment_tilt_intensity_visible, repeat_held_arcade_start, row_visibility,
-        session_active_players, sync_profile_scroll_speed,
+        NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, P1, P2, PlayerOptionMasks, Row, RowId,
+        RowMap, ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event,
+        hud_offset_choices, is_row_visible, judgment_tilt_intensity_visible,
+        repeat_held_arcade_start, row_visibility, session_active_players, sync_profile_scroll_speed,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -104,8 +104,10 @@ pub(super) mod tests {
         let visibility = row_visibility(
             &row_map,
             [true, false],
-            [HideMask::empty(), HideMask::empty()],
-            [ErrorBarMask::empty(), ErrorBarMask::empty()],
+            [
+                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+            ],
             false,
         );
         assert!(!is_row_visible(&row_map, 1, visibility));
@@ -113,8 +115,10 @@ pub(super) mod tests {
         let visibility = row_visibility(
             &row_map,
             [true, false],
-            [HideMask::empty(), HideMask::empty()],
-            [ErrorBarMask::COLORFUL, ErrorBarMask::empty()],
+            [
+                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::COLORFUL, ..Default::default() },
+                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+            ],
             false,
         );
         assert!(is_row_visible(&row_map, 1, visibility));
@@ -140,8 +144,10 @@ pub(super) mod tests {
         let visibility = row_visibility(
             &row_map,
             [true, false],
-            [HideMask::empty(), HideMask::empty()],
-            [ErrorBarMask::empty(), ErrorBarMask::empty()],
+            [
+                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+            ],
             false,
         );
         assert!(!is_row_visible(&row_map, 1, visibility));
@@ -163,8 +169,10 @@ pub(super) mod tests {
         let visibility = row_visibility(
             &row_map,
             [true, false],
-            [HideMask::empty(), HideMask::empty()],
-            [ErrorBarMask::empty(), ErrorBarMask::empty()],
+            [
+                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+            ],
             false,
         );
         assert!(is_row_visible(&row_map, 1, visibility));
@@ -190,8 +198,10 @@ pub(super) mod tests {
         let visibility = row_visibility(
             &row_map,
             [true, true],
-            [HideMask::empty(), HideMask::empty()],
-            [ErrorBarMask::empty(), ErrorBarMask::empty()],
+            [
+                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+            ],
             false,
         );
         assert!(!is_row_visible(&row_map, 1, visibility));
@@ -213,8 +223,10 @@ pub(super) mod tests {
         let visibility = row_visibility(
             &row_map,
             [true, true],
-            [HideMask::empty(), HideMask::empty()],
-            [ErrorBarMask::empty(), ErrorBarMask::empty()],
+            [
+                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+                PlayerOptionMasks { hide: HideMask::empty(), error_bar: ErrorBarMask::empty(), ..Default::default() },
+            ],
             false,
         );
         assert!(is_row_visible(&row_map, 1, visibility));
@@ -257,18 +269,15 @@ pub(super) mod tests {
         let unc = super::super::panes::apply_profile_defaults(&mut uncommon_rows, &profile, P1);
 
         // Main alone: Scroll row absent, mask comes back empty (the bug source).
-        assert_eq!(main.0, ScrollMask::empty());
+        assert_eq!(main.scroll, ScrollMask::empty());
         // Accumulated across all three panes (the fix): Reverse + Cross preserved.
-        let combined = super::super::panes::or_active_masks(
-            super::super::panes::or_active_masks(main, adv),
-            unc,
-        );
+        let combined = main.merge(adv).merge(unc);
         assert!(
-            combined.0.contains(ScrollMask::REVERSE),
+            combined.scroll.contains(ScrollMask::REVERSE),
             "Reverse bit preserved after OR-accumulation"
         );
         assert!(
-            combined.0.contains(ScrollMask::CROSS),
+            combined.scroll.contains(ScrollMask::CROSS),
             "Cross bit preserved after OR-accumulation"
         );
     }
@@ -468,13 +477,13 @@ pub(super) mod tests {
         state.pane_mut().row_map.insert(scroll_row);
         let row_index = state.pane().row_map.display_order().len() - 1;
         state.pane_mut().selected_row[P1] = row_index;
-        state.scroll_active_mask[P1] = ScrollMask::empty();
+        state.option_masks[P1].scroll = ScrollMask::empty();
 
         let active = session_active_players();
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_ne!(
-            state.scroll_active_mask[P1],
+            state.option_masks[P1].scroll,
             ScrollMask::empty(),
             "Scroll bitmask should have been toggled"
         );
@@ -762,7 +771,8 @@ pub(super) mod tests {
         state.pane_mut().row_map.insert(scroll_row);
         let row_index = state.pane().row_map.display_order().len() - 1;
         state.pane_mut().selected_row[P1] = row_index;
-        state.scroll_active_mask = [ScrollMask::empty(), ScrollMask::empty()];
+        state.option_masks[P1].scroll = ScrollMask::empty();
+        state.option_masks[P2].scroll = ScrollMask::empty();
 
         // L/R on a bitmask row returns Outcome::NONE — mask must not change,
         // and no SFX should be played (audio uninit in tests would panic).
@@ -770,7 +780,7 @@ pub(super) mod tests {
         super::change_choice_for_player(&mut state, &asset_manager, P1, -1);
 
         assert_eq!(
-            state.scroll_active_mask,
+            [state.option_masks[P1].scroll, state.option_masks[P2].scroll],
             [ScrollMask::empty(), ScrollMask::empty()],
             "delta on Bitmask row must not toggle the mask"
         );
