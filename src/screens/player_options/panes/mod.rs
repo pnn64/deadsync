@@ -115,9 +115,9 @@ pub(super) fn apply_profile_defaults(
 ) -> PlayerOptionMasks {
     let mut masks = PlayerOptionMasks::default();
     init_opted_in_bitmask_rows(row_map, profile, &mut masks, player_idx);
+    apply_derived_masks(profile, &mut masks);
 
     let mut gameplay_extras_active_mask = GameplayExtrasMask::empty();
-    let mut gameplay_extras_more_active_mask = GameplayExtrasMoreMask::empty();
     let match_ns_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
     // Initialize Background Filter row from profile setting (0..=100 %).
@@ -448,11 +448,9 @@ pub(super) fn apply_profile_defaults(
     }
     if profile.column_cues {
         gameplay_extras_active_mask.insert(GameplayExtrasMask::COLUMN_CUES);
-        gameplay_extras_more_active_mask.insert(GameplayExtrasMoreMask::COLUMN_CUES);
     }
     if profile.display_scorebox {
         gameplay_extras_active_mask.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
-        gameplay_extras_more_active_mask.insert(GameplayExtrasMoreMask::DISPLAY_SCOREBOX);
     }
     if let Some(row) = row_map.get_mut(RowId::GameplayExtras) {
         if !gameplay_extras_active_mask.is_empty() {
@@ -475,21 +473,6 @@ pub(super) fn apply_profile_defaults(
         };
     }
 
-    // Initialize Gameplay Extras (More) row from profile (multi-choice toggle group).
-    if let Some(row) = row_map.get_mut(RowId::GameplayExtrasMore) {
-        if !gameplay_extras_more_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (gameplay_extras_more_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
-
     if let Some(row) = row_map.get_mut(RowId::Attacks) {
         row.selected_choice_index[player_idx] = ATTACK_MODE_VARIANTS
             .iter()
@@ -505,7 +488,6 @@ pub(super) fn apply_profile_defaults(
             .min(row.choices.len().saturating_sub(1));
     }
     masks.gameplay_extras = gameplay_extras_active_mask;
-    masks.gameplay_extras_more = gameplay_extras_more_active_mask;
     masks
 }
 
@@ -534,5 +516,40 @@ fn init_opted_in_bitmask_rows(
         super::row::init_bitmask_row_from_binding(
             row, &binding, profile, masks, player_idx,
         );
+    }
+}
+
+/// Mask fields that are populated as a function of profile state alone, with
+/// no user-facing Row of their own. Each rule writes the entire target field
+/// based on the current profile, so the order of rules is irrelevant. Run
+/// after `init_opted_in_bitmask_rows` so the per-row contracts can no longer
+/// stomp derived state.
+struct DerivedMaskRule {
+    apply: fn(&crate::game::profile::Profile, &mut PlayerOptionMasks),
+}
+
+const DERIVED_MASKS: &[DerivedMaskRule] = &[DerivedMaskRule {
+    // GameplayExtrasMore has no constructed Row; its bits are derived from
+    // sibling profile fields that the GameplayExtras row also reads. Keeping
+    // both reads in one place prevents the two masks from drifting if a new
+    // shared toggle is added later.
+    apply: |profile, masks| {
+        let mut bits = super::state::GameplayExtrasMoreMask::empty();
+        if profile.column_cues {
+            bits.insert(super::state::GameplayExtrasMoreMask::COLUMN_CUES);
+        }
+        if profile.display_scorebox {
+            bits.insert(super::state::GameplayExtrasMoreMask::DISPLAY_SCOREBOX);
+        }
+        masks.gameplay_extras_more = bits;
+    },
+}];
+
+fn apply_derived_masks(
+    profile: &crate::game::profile::Profile,
+    masks: &mut PlayerOptionMasks,
+) {
+    for rule in DERIVED_MASKS {
+        (rule.apply)(profile, masks);
     }
 }
