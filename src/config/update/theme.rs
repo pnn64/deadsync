@@ -1,12 +1,12 @@
 use super::*;
 
-pub fn update_theme_font(font: ThemeFont) {
+pub fn update_machine_font(font: MachineFont) {
     {
         let mut cfg = lock_config();
-        if cfg.theme_font == font {
+        if cfg.machine_font == font {
             return;
         }
-        cfg.theme_font = font;
+        cfg.machine_font = font;
     }
     save_without_keymaps();
 }

@@ -81,8 +81,9 @@ fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Theme", "MachinePreferredPlayMode")
         .and_then(|v| MachinePreferredPlayMode::from_str(&v).ok())
         .unwrap_or(default.machine_preferred_play_mode);
-    cfg.theme_font = conf
-        .get("Theme", "ThemeFont")
-        .and_then(|v| ThemeFont::from_str(&v).ok())
-        .unwrap_or(default.theme_font);
+    cfg.machine_font = conf
+        .get("Theme", "MachineFont")
+        .or_else(|| conf.get("Theme", "ThemeFont"))
+        .and_then(|v| MachineFont::from_str(&v).ok())
+        .unwrap_or(default.machine_font);
 }

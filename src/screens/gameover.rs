@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{FontRole, current_theme_font_key};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::input::{InputEvent, VirtualAction};
@@ -258,7 +258,7 @@ pub fn get_actors(
         let cy = screen_center_y();
 
         actors.push(act!(text:
-            font(current_theme_font_key(FontRole::Header)):
+            font(current_machine_font_key(FontRole::Header)):
             settext(tr("GameOver", "GameText")):
             align(0.5, 0.5):
             xy(cx, cy - 40.0):
@@ -269,7 +269,7 @@ pub fn get_actors(
             decelerate(0.5): croptop(0.0): fadetop(0.0)
         ));
         actors.push(act!(text:
-            font(current_theme_font_key(FontRole::Header)):
+            font(current_machine_font_key(FontRole::Header)):
             settext(tr("GameOver", "OverText")):
             align(0.5, 0.5):
             xy(cx, cy + 40.0):

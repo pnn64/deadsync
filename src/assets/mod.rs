@@ -578,18 +578,18 @@ impl AssetManager {
 }
 
 /// Logical font role in the theme, mirroring Simply Love's per-role .redir
-/// table (`Themes/Simply Love/Fonts/<ThemeFont> <Role>.redir`).
+/// table (`Themes/Simply Love/Fonts/<MachineFont> <Role>.redir`).
 ///
-/// Use [`theme_font_key`] to resolve a role to a registered font key under
-/// the active [`crate::config::ThemeFont`].
+/// Use [`machine_font_key`] to resolve a role to a registered font key under
+/// the active [`crate::config::MachineFont`].
 ///
 /// **Do not** use this for gameplay-side text (notefield combo, judgment
 /// label, hold judgment) — those follow each player's per-profile
-/// `ComboFont`, not the machine theme font.
+/// `ComboFont`, not the machine machine font.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontRole {
     /// Body text (option labels, descriptions). Always Miso, regardless
-    /// of `ThemeFont` — matches SL's `Mega Normal.redir -> Miso/_miso light`.
+    /// of `MachineFont` — matches SL's `Mega Normal.redir -> Miso/_miso light`.
     Normal,
     /// Emphasised UI labels (in-screen highlights, prompt answers).
     Bold,
@@ -603,10 +603,10 @@ pub enum FontRole {
     ScreenEval,
 }
 
-/// Resolve a logical [`FontRole`] under the given [`crate::config::ThemeFont`]
+/// Resolve a logical [`FontRole`] under the given [`crate::config::MachineFont`]
 /// to the registered font key in [`AssetManager::load_initial_fonts`].
 ///
-/// Mirrors the Simply Love `<ThemeFont> <Role>.redir` table:
+/// Mirrors the Simply Love `<MachineFont> <Role>.redir` table:
 ///
 /// | Role         | Common (default)            | Mega                          |
 /// | ------------ | --------------------------- | ----------------------------- |
@@ -616,9 +616,9 @@ pub enum FontRole {
 /// | `Footer`     | `wendy`                     | `mega_alpha`                  |
 /// | `Numbers`    | `wendy_monospace_numbers`   | `mega_monospace_numbers`      |
 /// | `ScreenEval` | `wendy_screenevaluation`    | `mega_screenevaluation`       |
-pub fn theme_font_key(theme_font: crate::config::ThemeFont, role: FontRole) -> &'static str {
-    use crate::config::ThemeFont::{Common, Mega};
-    match (theme_font, role) {
+pub fn machine_font_key(machine_font: crate::config::MachineFont, role: FontRole) -> &'static str {
+    use crate::config::MachineFont::{Common, Mega};
+    match (machine_font, role) {
         (_, FontRole::Normal) => "miso",
         (Common, FontRole::Bold | FontRole::Header | FontRole::Footer) => "wendy",
         (Mega, FontRole::Bold | FontRole::Header | FontRole::Footer) => "mega_alpha",
@@ -629,11 +629,11 @@ pub fn theme_font_key(theme_font: crate::config::ThemeFont, role: FontRole) -> &
     }
 }
 
-/// Convenience wrapper that reads the active [`crate::config::ThemeFont`]
+/// Convenience wrapper that reads the active [`crate::config::MachineFont`]
 /// from the global config and resolves the role.
 #[inline]
-pub fn current_theme_font_key(role: FontRole) -> &'static str {
-    theme_font_key(crate::config::get().theme_font, role)
+pub fn current_machine_font_key(role: FontRole) -> &'static str {
+    machine_font_key(crate::config::get().machine_font, role)
 }
 
 /// Codepoints supported by `assets/fonts/Mega/_mega font.ini`. Mega ships
@@ -655,8 +655,8 @@ fn mega_alpha_supports(text: &str) -> bool {
     text.chars().all(mega_alpha_supports_char)
 }
 
-/// Variant of [`theme_font_key`] that, for the alphabetic roles
-/// (`Bold` / `Header` / `Footer`) under [`crate::config::ThemeFont::Mega`],
+/// Variant of [`machine_font_key`] that, for the alphabetic roles
+/// (`Bold` / `Header` / `Footer`) under [`crate::config::MachineFont::Mega`],
 /// **wholesale** falls the entire string back to Wendy when it contains
 /// any glyph Mega can't render. This avoids the mixed-font appearance you
 /// get from per-glyph fallback through Miso (e.g., a CJK or symbol-heavy
@@ -664,27 +664,27 @@ fn mega_alpha_supports(text: &str) -> bool {
 ///
 /// Numeric roles (`Numbers` / `ScreenEval`) stay on the direct resolver
 /// since their inputs are always digits Mega supports.
-pub fn theme_font_key_for_text(
-    theme_font: crate::config::ThemeFont,
+pub fn machine_font_key_for_text(
+    machine_font: crate::config::MachineFont,
     role: FontRole,
     text: &str,
 ) -> &'static str {
-    use crate::config::ThemeFont::Mega;
-    match (theme_font, role) {
+    use crate::config::MachineFont::Mega;
+    match (machine_font, role) {
         (Mega, FontRole::Bold | FontRole::Header | FontRole::Footer)
             if !mega_alpha_supports(text) =>
         {
             "wendy"
         }
-        _ => theme_font_key(theme_font, role),
+        _ => machine_font_key(machine_font, role),
     }
 }
 
-/// Convenience wrapper that reads the active [`crate::config::ThemeFont`]
+/// Convenience wrapper that reads the active [`crate::config::MachineFont`]
 /// from the global config and applies the wholesale-fallback policy.
 #[inline]
-pub fn current_theme_font_key_for_text(role: FontRole, text: &str) -> &'static str {
-    theme_font_key_for_text(crate::config::get().theme_font, role, text)
+pub fn current_machine_font_key_for_text(role: FontRole, text: &str) -> &'static str {
+    machine_font_key_for_text(crate::config::get().machine_font, role, text)
 }
 
 impl Default for AssetManager {
@@ -696,7 +696,7 @@ impl Default for AssetManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::ThemeFont;
+    use crate::config::MachineFont;
     use std::{
         fs,
         path::{Path, PathBuf},
@@ -704,45 +704,45 @@ mod tests {
     };
 
     #[test]
-    fn theme_font_key_normal_is_always_miso() {
+    fn machine_font_key_normal_is_always_miso() {
         // Mirrors SL's `Mega Normal.redir -> Miso/_miso light`: body text
-        // never swaps to Mega even when the theme font is Mega.
-        assert_eq!(theme_font_key(ThemeFont::Common, FontRole::Normal), "miso");
-        assert_eq!(theme_font_key(ThemeFont::Mega, FontRole::Normal), "miso");
+        // never swaps to Mega even when the machine font is Mega.
+        assert_eq!(machine_font_key(MachineFont::Common, FontRole::Normal), "miso");
+        assert_eq!(machine_font_key(MachineFont::Mega, FontRole::Normal), "miso");
     }
 
     #[test]
-    fn theme_font_key_common_routes_to_wendy_family() {
-        assert_eq!(theme_font_key(ThemeFont::Common, FontRole::Bold), "wendy");
-        assert_eq!(theme_font_key(ThemeFont::Common, FontRole::Header), "wendy");
-        assert_eq!(theme_font_key(ThemeFont::Common, FontRole::Footer), "wendy");
+    fn machine_font_key_common_routes_to_wendy_family() {
+        assert_eq!(machine_font_key(MachineFont::Common, FontRole::Bold), "wendy");
+        assert_eq!(machine_font_key(MachineFont::Common, FontRole::Header), "wendy");
+        assert_eq!(machine_font_key(MachineFont::Common, FontRole::Footer), "wendy");
         assert_eq!(
-            theme_font_key(ThemeFont::Common, FontRole::Numbers),
+            machine_font_key(MachineFont::Common, FontRole::Numbers),
             "wendy_monospace_numbers"
         );
         assert_eq!(
-            theme_font_key(ThemeFont::Common, FontRole::ScreenEval),
+            machine_font_key(MachineFont::Common, FontRole::ScreenEval),
             "wendy_screenevaluation"
         );
     }
 
     #[test]
-    fn theme_font_key_mega_routes_to_mega_family() {
-        assert_eq!(theme_font_key(ThemeFont::Mega, FontRole::Bold), "mega_alpha");
-        assert_eq!(theme_font_key(ThemeFont::Mega, FontRole::Header), "mega_alpha");
-        assert_eq!(theme_font_key(ThemeFont::Mega, FontRole::Footer), "mega_alpha");
+    fn machine_font_key_mega_routes_to_mega_family() {
+        assert_eq!(machine_font_key(MachineFont::Mega, FontRole::Bold), "mega_alpha");
+        assert_eq!(machine_font_key(MachineFont::Mega, FontRole::Header), "mega_alpha");
+        assert_eq!(machine_font_key(MachineFont::Mega, FontRole::Footer), "mega_alpha");
         assert_eq!(
-            theme_font_key(ThemeFont::Mega, FontRole::Numbers),
+            machine_font_key(MachineFont::Mega, FontRole::Numbers),
             "mega_monospace_numbers"
         );
         assert_eq!(
-            theme_font_key(ThemeFont::Mega, FontRole::ScreenEval),
+            machine_font_key(MachineFont::Mega, FontRole::ScreenEval),
             "mega_screenevaluation"
         );
     }
 
     #[test]
-    fn theme_font_key_for_text_passes_through_when_common() {
+    fn machine_font_key_for_text_passes_through_when_common() {
         // Common is the default; the for_text policy must never alter it.
         for role in [
             FontRole::Normal,
@@ -753,54 +753,54 @@ mod tests {
             FontRole::ScreenEval,
         ] {
             assert_eq!(
-                theme_font_key_for_text(ThemeFont::Common, role, "anything"),
-                theme_font_key(ThemeFont::Common, role),
+                machine_font_key_for_text(MachineFont::Common, role, "anything"),
+                machine_font_key(MachineFont::Common, role),
                 "role={role:?}"
             );
         }
     }
 
     #[test]
-    fn theme_font_key_for_text_uses_mega_alpha_for_ascii() {
+    fn machine_font_key_for_text_uses_mega_alpha_for_ascii() {
         assert_eq!(
-            theme_font_key_for_text(ThemeFont::Mega, FontRole::Header, "Select Music"),
+            machine_font_key_for_text(MachineFont::Mega, FontRole::Header, "Select Music"),
             "mega_alpha"
         );
         assert_eq!(
-            theme_font_key_for_text(ThemeFont::Mega, FontRole::Footer, "Press Start"),
+            machine_font_key_for_text(MachineFont::Mega, FontRole::Footer, "Press Start"),
             "mega_alpha"
         );
     }
 
     #[test]
-    fn theme_font_key_for_text_falls_back_wholesale_for_unsupported_chars() {
+    fn machine_font_key_for_text_falls_back_wholesale_for_unsupported_chars() {
         // CJK title -- entire actor falls back to Wendy, not per-glyph mix.
         assert_eq!(
-            theme_font_key_for_text(ThemeFont::Mega, FontRole::Header, "リズム"),
+            machine_font_key_for_text(MachineFont::Mega, FontRole::Header, "リズム"),
             "wendy"
         );
         // Symbol-heavy submit footer (icons in deadsync's strings).
         assert_eq!(
-            theme_font_key_for_text(ThemeFont::Mega, FontRole::Footer, "◐ ✔ ⊘"),
+            machine_font_key_for_text(MachineFont::Mega, FontRole::Footer, "◐ ✔ ⊘"),
             "wendy"
         );
         // Even one bad char triggers fallback.
         assert_eq!(
-            theme_font_key_for_text(ThemeFont::Mega, FontRole::Bold, "Hello\u{2014}World"),
+            machine_font_key_for_text(MachineFont::Mega, FontRole::Bold, "Hello\u{2014}World"),
             "wendy"
         );
     }
 
     #[test]
-    fn theme_font_key_for_text_keeps_numeric_roles_on_mega_unconditionally() {
+    fn machine_font_key_for_text_keeps_numeric_roles_on_mega_unconditionally() {
         // Numeric roles are always digits Mega supports; for_text shouldn't
         // ever fall them back even if the caller passes weird input.
         assert_eq!(
-            theme_font_key_for_text(ThemeFont::Mega, FontRole::Numbers, "リズム"),
+            machine_font_key_for_text(MachineFont::Mega, FontRole::Numbers, "リズム"),
             "mega_monospace_numbers"
         );
         assert_eq!(
-            theme_font_key_for_text(ThemeFont::Mega, FontRole::ScreenEval, "リズム"),
+            machine_font_key_for_text(MachineFont::Mega, FontRole::ScreenEval, "リズム"),
             "mega_screenevaluation"
         );
     }

@@ -422,7 +422,7 @@ impl FromStr for MachinePreferredPlayMode {
     }
 }
 
-/// Machine-wide theme font preference, mirrors Simply Love's `ThemeFont`
+/// Machine-wide machine font preference, mirrors Simply Love's `MachineFont`
 /// pref (`Themes/Simply Love/Scripts/99 SL-ThemePrefs.lua:370`).
 ///
 /// Controls which font is used for the Bold / Header / Footer / numbers /
@@ -433,7 +433,7 @@ impl FromStr for MachinePreferredPlayMode {
 /// Gameplay-side fonts (combo, judgment, hold judgment) are not affected;
 /// those follow each player's `ComboFont` profile pref.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-pub enum ThemeFont {
+pub enum MachineFont {
     /// Default; Bold/Header/Footer = Wendy, numbers = Wendy monospace.
     #[default]
     Common,
@@ -441,7 +441,7 @@ pub enum ThemeFont {
     Mega,
 }
 
-impl ThemeFont {
+impl MachineFont {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Common => "Common",
@@ -450,7 +450,7 @@ impl ThemeFont {
     }
 }
 
-impl FromStr for ThemeFont {
+impl FromStr for MachineFont {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -462,7 +462,7 @@ impl FromStr for ThemeFont {
     }
 }
 
-pub const THEME_FONT_VARIANTS: [ThemeFont; 2] = [ThemeFont::Common, ThemeFont::Mega];
+pub const MACHINE_FONT_VARIANTS: [MachineFont; 2] = [MachineFont::Common, MachineFont::Mega];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameFlag {
@@ -651,42 +651,42 @@ mod tests {
     use super::*;
 
     #[test]
-    fn theme_font_default_is_common() {
-        assert_eq!(ThemeFont::default(), ThemeFont::Common);
+    fn machine_font_default_is_common() {
+        assert_eq!(MachineFont::default(), MachineFont::Common);
     }
 
     #[test]
-    fn theme_font_round_trips_through_from_str_display() {
-        for &v in &THEME_FONT_VARIANTS {
-            assert_eq!(ThemeFont::from_str(v.as_str()), Ok(v));
+    fn machine_font_round_trips_through_from_str_display() {
+        for &v in &MACHINE_FONT_VARIANTS {
+            assert_eq!(MachineFont::from_str(v.as_str()), Ok(v));
         }
     }
 
     #[test]
-    fn theme_font_from_str_is_case_insensitive_and_accepts_wendy_alias() {
-        assert_eq!(ThemeFont::from_str("common"), Ok(ThemeFont::Common));
-        assert_eq!(ThemeFont::from_str("COMMON"), Ok(ThemeFont::Common));
-        assert_eq!(ThemeFont::from_str("Mega"), Ok(ThemeFont::Mega));
-        assert_eq!(ThemeFont::from_str("mega"), Ok(ThemeFont::Mega));
+    fn machine_font_from_str_is_case_insensitive_and_accepts_wendy_alias() {
+        assert_eq!(MachineFont::from_str("common"), Ok(MachineFont::Common));
+        assert_eq!(MachineFont::from_str("COMMON"), Ok(MachineFont::Common));
+        assert_eq!(MachineFont::from_str("Mega"), Ok(MachineFont::Mega));
+        assert_eq!(MachineFont::from_str("mega"), Ok(MachineFont::Mega));
         // SL labels Common as "Wendy" in its UI; accept that token too so a
         // user editing the ini by hand isn't surprised.
-        assert_eq!(ThemeFont::from_str("Wendy"), Ok(ThemeFont::Common));
+        assert_eq!(MachineFont::from_str("Wendy"), Ok(MachineFont::Common));
     }
 
     #[test]
-    fn theme_font_from_str_rejects_unknown() {
-        assert_eq!(ThemeFont::from_str(""), Err(()));
-        assert_eq!(ThemeFont::from_str("Unprofessional"), Err(()));
-        assert_eq!(ThemeFont::from_str("miso"), Err(()));
+    fn machine_font_from_str_rejects_unknown() {
+        assert_eq!(MachineFont::from_str(""), Err(()));
+        assert_eq!(MachineFont::from_str("Unprofessional"), Err(()));
+        assert_eq!(MachineFont::from_str("miso"), Err(()));
     }
 
     #[test]
-    fn theme_font_variants_table_is_exhaustive() {
-        // Sanity: every enum variant is in THEME_FONT_VARIANTS so the
+    fn machine_font_variants_table_is_exhaustive() {
+        // Sanity: every enum variant is in MACHINE_FONT_VARIANTS so the
         // operator UI cycles through everything the type can represent.
         // Update this if a new variant is added.
-        assert_eq!(THEME_FONT_VARIANTS.len(), 2);
-        assert!(THEME_FONT_VARIANTS.contains(&ThemeFont::Common));
-        assert!(THEME_FONT_VARIANTS.contains(&ThemeFont::Mega));
+        assert_eq!(MACHINE_FONT_VARIANTS.len(), 2);
+        assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Common));
+        assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Mega));
     }
 }

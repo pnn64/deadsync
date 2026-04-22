@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{FontRole, current_theme_font_key};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key, tr};
 use crate::engine::gfx::{BlendMode, MeshMode};
@@ -343,7 +343,7 @@ fn push_versus_count_texts(
     if is_p1 {
         if !dim_text.is_empty() {
             let mut a = act!(text:
-                font(current_theme_font_key(FontRole::ScreenEval)): settext(dim_text):
+                font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                 align(0.0, 0.5): xy(anchor_x, y):
                 zoom(numbers_zoom_y):
                 diffuse(dim[0], dim[1], dim[2], dim[3]):
@@ -358,7 +358,7 @@ fn push_versus_count_texts(
         }
         if !bright_text.is_empty() {
             let mut a = act!(text:
-                font(current_theme_font_key(FontRole::ScreenEval)): settext(bright_text):
+                font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                 align(0.0, 0.5): xy(anchor_x + dim_len * digit_w, y):
                 zoom(numbers_zoom_y):
                 diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -374,7 +374,7 @@ fn push_versus_count_texts(
     } else {
         if !bright_text.is_empty() {
             let mut a = act!(text:
-                font(current_theme_font_key(FontRole::ScreenEval)): settext(bright_text):
+                font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                 align(1.0, 0.5): xy(anchor_x, y):
                 zoom(numbers_zoom_y):
                 diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -389,7 +389,7 @@ fn push_versus_count_texts(
         }
         if !dim_text.is_empty() {
             let mut a = act!(text:
-                font(current_theme_font_key(FontRole::ScreenEval)): settext(dim_text):
+                font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                 align(1.0, 0.5): xy(anchor_x - bright_len * digit_w, y):
                 zoom(numbers_zoom_y):
                 diffuse(dim[0], dim[1], dim[2], dim[3]):
@@ -467,12 +467,12 @@ pub fn prewarm_text_layout(
     };
     for count in 0..=max_count.min(COUNT_PREWARM_CAP) {
         let (dim, bright) = cached_padded_runs(count, digits);
-        cache.prewarm_text(fonts, current_theme_font_key(FontRole::ScreenEval), dim.as_ref(), None);
-        cache.prewarm_text(fonts, current_theme_font_key(FontRole::ScreenEval), bright.as_ref(), None);
+        cache.prewarm_text(fonts, current_machine_font_key(FontRole::ScreenEval), dim.as_ref(), None);
+        cache.prewarm_text(fonts, current_machine_font_key(FontRole::ScreenEval), bright.as_ref(), None);
     }
     let (dim, bright) = cached_padded_runs(max_count, digits);
-    cache.prewarm_text(fonts, current_theme_font_key(FontRole::ScreenEval), dim.as_ref(), None);
-    cache.prewarm_text(fonts, current_theme_font_key(FontRole::ScreenEval), bright.as_ref(), None);
+    cache.prewarm_text(fonts, current_machine_font_key(FontRole::ScreenEval), dim.as_ref(), None);
+    cache.prewarm_text(fonts, current_machine_font_key(FontRole::ScreenEval), bright.as_ref(), None);
     for player in 0..state.num_players {
         for count in [
             state.total_steps[player],
@@ -481,8 +481,8 @@ pub fn prewarm_text_layout(
             state.mines_total[player],
         ] {
             let (dim, bright) = cached_padded_runs(count, digits);
-            cache.prewarm_text(fonts, current_theme_font_key(FontRole::ScreenEval), dim.as_ref(), None);
-            cache.prewarm_text(fonts, current_theme_font_key(FontRole::ScreenEval), bright.as_ref(), None);
+            cache.prewarm_text(fonts, current_machine_font_key(FontRole::ScreenEval), dim.as_ref(), None);
+            cache.prewarm_text(fonts, current_machine_font_key(FontRole::ScreenEval), bright.as_ref(), None);
         }
     }
     let end_seconds = crate::game::gameplay::song_time_ns_to_seconds(
@@ -674,7 +674,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
     ));
 
     asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font(current_theme_font_key(FontRole::ScreenEval), |f| {
+        asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
             let digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom_x);
             if digit_w <= 0.0 {
                 return;
@@ -908,7 +908,7 @@ pub fn build_double_step_stats(
         let y_base = -280.0;
 
         asset_manager.with_fonts(|all_fonts| {
-            asset_manager.with_font(current_theme_font_key(FontRole::ScreenEval), |f| {
+            asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
                 let numbers_zoom = base_zoom * 0.5;
                 let digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom);
                 if digit_w <= 0.0 {
@@ -943,7 +943,7 @@ pub fn build_double_step_stats(
 
                         if !dim_text.is_empty() {
                             actors.push(act!(text:
-                                font(current_theme_font_key(FontRole::ScreenEval)): settext(dim_text):
+                                font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                                 align(0.0, 0.5): xy(numbers_left_x, y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(dim[0], dim[1], dim[2], dim[3]):
@@ -953,7 +953,7 @@ pub fn build_double_step_stats(
                         }
                         if !bright_text.is_empty() {
                             actors.push(act!(text:
-                                font(current_theme_font_key(FontRole::ScreenEval)): settext(bright_text):
+                                font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                                 align(0.0, 0.5): xy(numbers_left_x + dim_len * digit_w, y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1029,7 +1029,7 @@ pub fn build_double_step_stats(
 
                         if !dim_text.is_empty() {
                             actors.push(act!(text:
-                                font(current_theme_font_key(FontRole::ScreenEval)): settext(dim_text):
+                                font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                                 align(0.0, 0.5): xy(numbers_left_x, y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(dim[0], dim[1], dim[2], dim[3]):
@@ -1039,7 +1039,7 @@ pub fn build_double_step_stats(
                         }
                         if !bright_text.is_empty() {
                             actors.push(act!(text:
-                                font(current_theme_font_key(FontRole::ScreenEval)): settext(bright_text):
+                                font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                                 align(0.0, 0.5): xy(numbers_left_x + dim_len * digit_w, y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1466,7 +1466,7 @@ fn build_holds_mines_rolls_pane_at(
     let mut children = Vec::with_capacity(categories.len() * (digits_to_fmt * 2 + 2));
 
     asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font(current_theme_font_key(FontRole::ScreenEval), |metrics_font| {
+        asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |metrics_font| {
             let value_zoom = 0.4 * frame_zoom;
             let label_zoom = 0.833 * frame_zoom;
             const GRAY: [f32; 4] = color::rgba_hex("#5A6166");
@@ -1499,7 +1499,7 @@ fn build_holds_mines_rolls_pane_at(
                     let color = if original_index < possible_split { GRAY } else { white };
                     let x_pos = cursor_x - (char_idx as f32 * digit_width);
                     children.push(act!(text:
-                        font(current_theme_font_key(FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
+                        font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
                         align(1.0, 0.5): xy(x_pos, item_y):
                         zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
                     ));
@@ -1507,7 +1507,7 @@ fn build_holds_mines_rolls_pane_at(
                 cursor_x -= possible_bytes.len() as f32 * digit_width;
 
                 children.push(act!(text:
-                    font(current_theme_font_key(FontRole::ScreenEval)): settext(SLASH_TEXT.clone()):
+                    font(current_machine_font_key(FontRole::ScreenEval)): settext(SLASH_TEXT.clone()):
                     align(1.0, 0.5): xy(cursor_x, item_y):
                     zoom(value_zoom): diffuse(GRAY[0], GRAY[1], GRAY[2], GRAY[3])
                 ));
@@ -1518,7 +1518,7 @@ fn build_holds_mines_rolls_pane_at(
                     let color = if original_index < achieved_split { GRAY } else { white };
                     let x_pos = cursor_x - (char_idx as f32 * digit_width);
                     children.push(act!(text:
-                        font(current_theme_font_key(FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
+                        font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
                         align(1.0, 0.5): xy(x_pos, item_y):
                         zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
                     ));
@@ -1625,7 +1625,7 @@ fn build_holds_mines_rolls_pane(
     let row_height = 28.0 * frame_zoom;
     let mut children = Vec::with_capacity(categories.len() * (digits_to_fmt * 2 + 2));
 
-    asset_manager.with_fonts(|all_fonts| asset_manager.with_font(current_theme_font_key(FontRole::ScreenEval), |metrics_font| {
+    asset_manager.with_fonts(|all_fonts| asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |metrics_font| {
         let value_zoom = 0.4 * frame_zoom;
         let label_zoom = 0.833 * frame_zoom;
         let gray = color::rgba_hex("#5A6166");
@@ -1667,7 +1667,7 @@ fn build_holds_mines_rolls_pane(
                 };
                 let x_pos = cursor_x - (char_idx as f32 * digit_width);
                 children.push(act!(text:
-                    font(current_theme_font_key(FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
+                    font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
                     align(1.0, 0.5): xy(x_pos, item_y):
                     zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
                 ));
@@ -1675,7 +1675,7 @@ fn build_holds_mines_rolls_pane(
             cursor_x -= possible_bytes.len() as f32 * digit_width;
 
             // 2. Draw slash
-            children.push(act!(text: font(current_theme_font_key(FontRole::ScreenEval)): settext(SLASH_TEXT.clone()): align(1.0, 0.5): xy(cursor_x, item_y): zoom(value_zoom): diffuse(gray[0], gray[1], gray[2], gray[3])));
+            children.push(act!(text: font(current_machine_font_key(FontRole::ScreenEval)): settext(SLASH_TEXT.clone()): align(1.0, 0.5): xy(cursor_x, item_y): zoom(value_zoom): diffuse(gray[0], gray[1], gray[2], gray[3])));
             cursor_x -= slash_width;
 
             // 3. Draw "achieved" number
@@ -1688,7 +1688,7 @@ fn build_holds_mines_rolls_pane(
                 };
                 let x_pos = cursor_x - (char_idx as f32 * digit_width);
                 children.push(act!(text:
-                    font(current_theme_font_key(FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
+                    font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
                     align(1.0, 0.5): xy(x_pos, item_y):
                     zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
                 ));
@@ -1807,7 +1807,7 @@ fn build_side_pane(
     let row_height = if show_fa_split { 29.0 } else { 35.0 };
     let y_base = -280.0;
 
-    asset_manager.with_fonts(|all_fonts| asset_manager.with_font(current_theme_font_key(FontRole::ScreenEval), |f| {
+    asset_manager.with_fonts(|all_fonts| asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
         let numbers_zoom = final_text_base_zoom * 0.5;
         let max_digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom);
         if max_digit_w <= 0.0 { return; }
@@ -1839,14 +1839,14 @@ fn build_side_pane(
                 if player_side == profile::PlayerSide::P1 {
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_theme_font_key(FontRole::ScreenEval)): settext(bright_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                             align(1.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71)
                         ));
                     }
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_theme_font_key(FontRole::ScreenEval)): settext(dim_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                             align(1.0, 0.5): xy(numbers_cx - bright_len * max_digit_w, world_y):
                             zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71)
@@ -1855,7 +1855,7 @@ fn build_side_pane(
                 } else {
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_theme_font_key(FontRole::ScreenEval)): settext(dim_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                             align(0.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71):
                             horizalign(left)
@@ -1863,7 +1863,7 @@ fn build_side_pane(
                     }
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_theme_font_key(FontRole::ScreenEval)): settext(bright_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                             align(0.0, 0.5): xy(numbers_cx + dim_len * max_digit_w, world_y):
                             zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71):
@@ -1938,14 +1938,14 @@ fn build_side_pane(
                 if player_side == profile::PlayerSide::P1 {
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_theme_font_key(FontRole::ScreenEval)): settext(bright_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                             align(1.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71)
                         ));
                     }
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_theme_font_key(FontRole::ScreenEval)): settext(dim_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                             align(1.0, 0.5): xy(numbers_cx - bright_len * max_digit_w, world_y):
                             zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71)
@@ -1954,7 +1954,7 @@ fn build_side_pane(
                 } else {
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_theme_font_key(FontRole::ScreenEval)): settext(dim_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                             align(0.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71):
                             horizalign(left)
@@ -1962,7 +1962,7 @@ fn build_side_pane(
                     }
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font(current_theme_font_key(FontRole::ScreenEval)): settext(bright_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                             align(0.0, 0.5): xy(numbers_cx + dim_len * max_digit_w, world_y):
                             zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71):

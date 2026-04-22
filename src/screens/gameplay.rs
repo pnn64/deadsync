@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{FontRole, current_theme_font_key};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::engine::gfx::{
@@ -694,7 +694,7 @@ pub fn prewarm_text_layout(
     let cfg = crate::config::get();
     for centi in 0..=10_000 {
         let text = cached_score_2dp(centi as f64 / 100.0);
-        cache.prewarm_text(fonts, current_theme_font_key(FontRole::Numbers), text.as_ref(), None);
+        cache.prewarm_text(fonts, current_machine_font_key(FontRole::Numbers), text.as_ref(), None);
     }
     for tenths in 0..=1_000 {
         let text = cached_life_percent_text(tenths as f32 / 10.0);
@@ -703,7 +703,7 @@ pub fn prewarm_text_layout(
     for player in 0..state.num_players {
         let chart = &state.charts[player];
         let meter_text = cached_meter_text(chart.meter);
-        cache.prewarm_text(fonts, current_theme_font_key(FontRole::Header), meter_text.as_ref(), None);
+        cache.prewarm_text(fonts, current_machine_font_key(FontRole::Header), meter_text.as_ref(), None);
         let detail = color::difficulty_display_name_for_song(
             &chart.difficulty,
             &state.song.title,
@@ -804,7 +804,7 @@ pub fn in_transition(state: Option<&State>) -> (Vec<Actor>, f32) {
             decelerate(0.8): rotationz(0.0): zoom(0.9): alpha(0.0)
         ),
         act!(text:
-            font(current_theme_font_key(FontRole::Header)): settext(text):
+            font(current_machine_font_key(FontRole::Header)): settext(text):
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             shadowlength(1.0):
             diffuse(1.0, 1.0, 1.0, 0.0):
@@ -3993,7 +3993,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
         let meter_y = if cfg.zmod_rating_box_text { -4.0 } else { 0.0 };
         diff_children.push(act!(text:
-            font(current_theme_font_key(FontRole::Header)): settext(meter_text): align(0.5, 0.5): xy(0.0, meter_y):
+            font(current_machine_font_key(FontRole::Header)): settext(meter_text): align(0.5, 0.5): xy(0.0, meter_y):
             zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0)
         ));
         if cfg.zmod_rating_box_text {
@@ -4050,7 +4050,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Arrow Cloud parity: EX remains the "normal" score position/anchor.
             // H.EX is placed at a different x on P2 so it appears to the left of EX.
             actors.push(act!(text:
-                font(current_theme_font_key(FontRole::Numbers)): settext(score_text):
+                font(current_machine_font_key(FontRole::Numbers)): settext(score_text):
                 align(1.0, 1.0): xy(score_x, score_y):
                 zoom(0.5): horizalign(right):
                 diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
@@ -4077,7 +4077,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                 if is_p2_side {
                     actors.push(act!(text:
-                        font(current_theme_font_key(FontRole::Numbers)):
+                        font(current_machine_font_key(FontRole::Numbers)):
                         settext(cached_score_2dp(hard_ex_percent.max(0.0))):
                         align(1.0, 0.0): xy(hard_ex_x, score_y):
                         zoom(0.25): horizalign(right):
@@ -4086,7 +4086,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     ));
                 } else {
                     actors.push(act!(text:
-                        font(current_theme_font_key(FontRole::Numbers)):
+                        font(current_machine_font_key(FontRole::Numbers)):
                         settext(cached_score_2dp(hard_ex_percent.max(0.0))):
                         align(0.0, 0.0): xy(hard_ex_x, score_y):
                         zoom(0.25): horizalign(left):
@@ -4546,7 +4546,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         && state.total_elapsed_in_screen >= INTRO_TEXT_SETTLE_SECONDS
     {
         actors.push(act!(text:
-            font(current_theme_font_key(FontRole::Header)): settext(state.stage_intro_text.clone()):
+            font(current_machine_font_key(FontRole::Header)): settext(state.stage_intro_text.clone()):
             align(0.5, 0.5): xy(screen_center_x(), screen_height() - 30.0):
             zoom(0.4):
             shadowlength(1.0):

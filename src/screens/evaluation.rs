@@ -18,7 +18,7 @@ use crate::screens::components::{
 
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, current_theme_font_key, current_theme_font_key_for_text};
+use crate::assets::{FontRole, current_machine_font_key, current_machine_font_key_for_text};
 use crate::engine::present::font;
 use crate::game::chart::ChartData;
 use crate::game::gameplay::MAX_PLAYERS;
@@ -2878,7 +2878,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     let Some(score_info) = state.score_info.iter().find_map(|s| s.as_ref()) else {
         let no_data_text = tr("Evaluation", "NoScoreDataAvailable");
-        let no_data_font = current_theme_font_key_for_text(FontRole::Header, &no_data_text);
+        let no_data_font = current_machine_font_key_for_text(FontRole::Header, &no_data_text);
         actors.push(act!(text:
             font(no_data_font):
             settext(no_data_text):
@@ -3066,7 +3066,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                 if let Some(rank) = machine_record_rank {
                     let mr_text = cached_record_text(true, rank);
-                    let mr_font = current_theme_font_key_for_text(FontRole::Header, &mr_text);
+                    let mr_font = current_machine_font_key_for_text(FontRole::Header, &mr_text);
                     actors.push(act!(text: font(mr_font):
                         settext(mr_text):
                         align(0.5, 0.5):
@@ -3078,7 +3078,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                 if let Some(rank) = personal_record_rank {
                     let pr_text = cached_record_text(false, rank);
-                    let pr_font = current_theme_font_key_for_text(FontRole::Header, &pr_text);
+                    let pr_font = current_machine_font_key_for_text(FontRole::Header, &pr_text);
                     actors.push(act!(text: font(pr_font):
                         settext(pr_text):
                         align(0.5, 0.5):
@@ -3120,7 +3120,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
                     ));
                     actors.push(act!(text:
-                        font(current_theme_font_key(FontRole::Numbers)):
+                        font(current_machine_font_key(FontRole::Numbers)):
                         settext(si.chart.meter.to_string()):
                         align(0.5, 0.5):
                         xy(box_x, cy - 76.0):
@@ -3179,7 +3179,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
                     ));
                     actors.push(act!(text:
-                        font(current_theme_font_key(FontRole::Numbers)):
+                        font(current_machine_font_key(FontRole::Numbers)):
                         settext(si.chart.meter.to_string()):
                         align(0.5, 0.5):
                         xy(box_x, cy - 71.0):
@@ -3944,7 +3944,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
 
             let dq_text = tr("Evaluation", "DisqualifiedFromRanking");
-            let dq_font = current_theme_font_key_for_text(FontRole::Header, &dq_text);
+            let dq_font = current_machine_font_key_for_text(FontRole::Header, &dq_text);
             actors.push(act!(text:
                 font(dq_font):
                 settext(dq_text):
@@ -3959,7 +3959,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Auto-submit UI text (SL/zmod parity with AutoSubmitScore.lua):
     // top PB/WR banner plus bottom submit-status actors.
-    // Common Normal/ThemeFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
+    // Common Normal/MachineFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
     // In SL/zmod, Common Normal.redir points to Miso/_miso light.
     // When both GrooveStats/BoogieStats and ArrowCloud resolve to submitted/failed,
     // collapse them into one summary line; keep stacked lines for pending/timeouts.
@@ -3990,7 +3990,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     screen_center_x() + 225.0
                 };
                 let banner_text = submit_record_text(banner);
-                let banner_font = current_theme_font_key_for_text(FontRole::Header, &banner_text);
+                let banner_font = current_machine_font_key_for_text(FontRole::Header, &banner_text);
                 actors.push(act!(text:
                     font(banner_font):
                     settext(banner_text):
@@ -4158,7 +4158,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     {
         let itg_text_x = screen_width() - widescale(55.0, 62.0);
         let itg_text = tr("Evaluation", "ITGLabel");
-        let itg_font = current_theme_font_key_for_text(FontRole::Header, &itg_text);
+        let itg_font = current_machine_font_key_for_text(FontRole::Header, &itg_text);
         actors.push(act!(text: font(itg_font): settext(itg_text): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
         actors.extend(mode_pads::build());
     }

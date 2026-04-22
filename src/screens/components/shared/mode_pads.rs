@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{FontRole, current_theme_font_key};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{screen_width, widescale};
 use crate::game::profile;
@@ -7,7 +7,7 @@ use crate::screens::components::shared::pad_display;
 
 pub fn build_label(text: String) -> Actor {
     act!(text:
-        font(current_theme_font_key(FontRole::Header)):
+        font(current_machine_font_key(FontRole::Header)):
         settext(text):
         align(1.0, 0.5):
         xy(screen_width() - widescale(55.0, 62.0), 15.0):

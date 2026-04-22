@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{FontRole, current_theme_font_key};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::{self, AssetManager};
 use crate::engine::display::{self, MonitorSpec};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
@@ -9,7 +9,7 @@ use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
     SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicWheelStyle, SimpleIni, SyncGraphMode, ThemeFont, dirs,
+    SelectMusicWheelStyle, SimpleIni, SyncGraphMode, MachineFont, dirs,
 };
 use crate::engine::audio;
 #[cfg(target_os = "windows")]
@@ -275,7 +275,7 @@ pub enum ItemId {
     MchPreferredStyle,
     MchSelectPlayMode,
     MchPreferredMode,
-    MchThemeFont,
+    MchMachineFont,
     MchEvalSummary,
     MchNameEntry,
     MchGameoverScreen,
@@ -896,7 +896,7 @@ pub enum SubRowId {
     PreferredStyle,
     SelectPlayMode,
     PreferredMode,
-    ThemeFont,
+    MachineFont,
     EvalSummary,
     NameEntry,
     GameoverScreen,
@@ -1862,11 +1862,11 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::ThemeFont,
-        label: lookup_key("OptionsMachine", "ThemeFont"),
+        id: SubRowId::MachineFont,
+        label: lookup_key("OptionsMachine", "MachineFont"),
         choices: &[
-            localized_choice("OptionsMachine", "ThemeFontCommon"),
-            localized_choice("OptionsMachine", "ThemeFontMega"),
+            localized_choice("OptionsMachine", "MachineFontCommon"),
+            localized_choice("OptionsMachine", "MachineFontMega"),
         ],
         inline: true,
     },
@@ -2003,11 +2003,11 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
-        id: ItemId::MchThemeFont,
-        name: lookup_key("OptionsMachine", "ThemeFont"),
+        id: ItemId::MchMachineFont,
+        name: lookup_key("OptionsMachine", "MachineFont"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
-            "ThemeFontHelp",
+            "MachineFontHelp",
         ))],
     },
     Item {
@@ -5759,17 +5759,17 @@ const fn machine_preferred_mode_from_choice(idx: usize) -> MachinePreferredPlayM
     }
 }
 
-const fn theme_font_choice_index(font: ThemeFont) -> usize {
+const fn machine_font_choice_index(font: MachineFont) -> usize {
     match font {
-        ThemeFont::Common => 0,
-        ThemeFont::Mega => 1,
+        MachineFont::Common => 0,
+        MachineFont::Mega => 1,
     }
 }
 
-const fn theme_font_from_choice(idx: usize) -> ThemeFont {
+const fn machine_font_from_choice(idx: usize) -> MachineFont {
     match idx {
-        1 => ThemeFont::Mega,
-        _ => ThemeFont::Common,
+        1 => MachineFont::Mega,
+        _ => MachineFont::Common,
     }
 }
 
@@ -6230,8 +6230,8 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        SubRowId::ThemeFont,
-        theme_font_choice_index(cfg.theme_font),
+        SubRowId::MachineFont,
+        machine_font_choice_index(cfg.machine_font),
     );
     set_choice_by_id(
         &mut state.sub_choice_indices_machine,
@@ -8117,8 +8117,8 @@ fn apply_submenu_choice_delta(
             SubRowId::PreferredMode => config::update_machine_preferred_play_mode(
                 machine_preferred_mode_from_choice(new_index),
             ),
-            SubRowId::ThemeFont => {
-                config::update_theme_font(theme_font_from_choice(new_index))
+            SubRowId::MachineFont => {
+                config::update_machine_font(machine_font_from_choice(new_index))
             }
             SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
@@ -9803,7 +9803,7 @@ fn build_yes_no_confirm_overlay(
         act!(text:
             align(0.5, 0.5):
             xy(yes_x, answer_y):
-            font(current_theme_font_key(FontRole::Header)):
+            font(current_machine_font_key(FontRole::Header)):
             zoom(0.72):
             settext(tr("Common", "Yes")):
             diffuse(1.0, 1.0, 1.0, 1.0):
@@ -9813,7 +9813,7 @@ fn build_yes_no_confirm_overlay(
         act!(text:
             align(0.5, 0.5):
             xy(no_x, answer_y):
-            font(current_theme_font_key(FontRole::Header)):
+            font(current_machine_font_key(FontRole::Header)):
             zoom(0.72):
             settext(tr("Common", "No")):
             diffuse(1.0, 1.0, 1.0, 1.0):

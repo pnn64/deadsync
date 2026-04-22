@@ -401,7 +401,7 @@ fn push_saved_theme(content: &mut String, cfg: &Config) {
         "MachinePreferredPlayMode",
         cfg.machine_preferred_play_mode.as_str(),
     );
-    push_line(content, "ThemeFont", cfg.theme_font.as_str());
+    push_line(content, "MachineFont", cfg.machine_font.as_str());
     push_bool(
         content,
         "ShowSelectMusicGameplayTimer",

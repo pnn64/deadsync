@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{FontRole, current_theme_font_key};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::input::{GpSystemEvent, InputEvent, PadEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::space::screen_center_x;
@@ -163,7 +163,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
 
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), 20.0):
-        zoomtoheight(15.0): font(current_theme_font_key(FontRole::Header)): settext("Actor System & Input Sandbox"): horizalign(center)
+        zoomtoheight(15.0): font(current_machine_font_key(FontRole::Header)): settext("Actor System & Input Sandbox"): horizalign(center)
     ));
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), 60.0):

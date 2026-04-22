@@ -338,7 +338,7 @@ fn push_default_theme(content: &mut String, default: &Config) {
         "MachinePreferredPlayMode",
         default.machine_preferred_play_mode.as_str(),
     );
-    push_line(content, "ThemeFont", default.theme_font.as_str());
+    push_line(content, "MachineFont", default.machine_font.as_str());
     push_bool(
         content,
         "ShowSelectMusicGameplayTimer",

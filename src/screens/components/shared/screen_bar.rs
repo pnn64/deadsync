@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{FontRole, current_theme_font_key_for_text};
+use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::engine::present::actors::{self, Actor, Background, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
@@ -114,7 +114,7 @@ pub fn build(params: ScreenBarParams) -> Actor {
             };
 
             // Create the actor first without the horizalign, then modify it.
-            let title_font = current_theme_font_key_for_text(FontRole::Header, &title);
+            let title_font = current_machine_font_key_for_text(FontRole::Header, &title);
             let mut title_actor = act!(text:
                 align(title_align[0], title_align[1]):
                 xy(title_xy[0], title_xy[1]):
@@ -134,8 +134,8 @@ pub fn build(params: ScreenBarParams) -> Actor {
 
         /* ============================ BOTTOM BAR ============================ */
         ScreenBarPosition::Bottom => {
-            // Center title (Wendy by default; Mega when ThemeFont = Mega).
-            let bottom_title_font = current_theme_font_key_for_text(FontRole::Header, &title);
+            // Center title (Wendy by default; Mega when MachineFont = Mega).
+            let bottom_title_font = current_machine_font_key_for_text(FontRole::Header, &title);
             children.push(act!(text:
                 align(0.5, 0.5):
                 xy(screen_center_x(), 16.0):

@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::i18n::tr;
-use crate::assets::{FontRole, current_theme_font_key_for_text};
+use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::config::dirs;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
@@ -652,7 +652,7 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>, loading_elapsed_
         z(104.0)
     ));
     let title_text = tr("Init", "TitleText");
-    let title_font = current_theme_font_key_for_text(FontRole::Header, &title_text);
+    let title_font = current_machine_font_key_for_text(FontRole::Header, &title_text);
     actors.push(act!(text:
         font(title_font):
         settext(title_text):
