@@ -468,10 +468,6 @@ pub(super) fn apply_profile_defaults(
     }
 }
 
-/// Run the data-driven init contract for every bitmask row whose
-/// binding has opted in via `BitmaskBinding::init = Some(_)`. Walks the
-/// row map's display order so behavior is identical to the legacy
-/// per-row branches in `apply_profile_defaults`.
 fn init_opted_in_bitmask_rows(
     row_map: &mut RowMap,
     profile: &crate::game::profile::Profile,
@@ -501,6 +497,11 @@ fn init_opted_in_bitmask_rows(
 /// based on the current profile, so the order of rules is irrelevant. Run
 /// after `init_opted_in_bitmask_rows` so the per-row contracts can no longer
 /// stomp derived state.
+///
+/// To add a derived mask: append a new `DerivedMaskRule` with an `apply`
+/// closure that reads the relevant `profile` fields and assigns the target
+/// `masks.<field>`. Multiple rules writing the same field are allowed but
+/// discouraged; prefer a single closure that builds the full value.
 struct DerivedMaskRule {
     apply: fn(&crate::game::profile::Profile, &mut PlayerOptionMasks),
 }

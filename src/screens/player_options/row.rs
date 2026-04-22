@@ -149,14 +149,29 @@ pub struct ChoiceBinding<T: Copy + 'static> {
     pub persist_for_side: fn(PlayerSide, T),
 }
 
+/// # Adding a new mask row
+///
+/// 1. Add the bitflags type to `state.rs` (or use one from `game::profile`)
+///    and a field on `PlayerOptionMasks`.
+/// 2. Build the row in the appropriate pane's `build_*_rows` (or its row
+///    catalogue) with `behavior: RowBehavior::Bitmask(MY_BINDING)`.
+/// 3. Declare `const MY_BINDING: BitmaskBinding` in that pane's module
+///    (e.g. `panes/advanced.rs`) with `init: Some(BitmaskInit { ... })`:
+///    - `from_profile` reads the relevant profile fields and emits
+///      `mask.bits() as u32`.
+///    - `set_active` uses `from_bits_retain` plus a `debug_assert_eq!`
+///      width check (so unknown bits in profile-sourced masks are
+///      preserved, matching legacy direct-assignment semantics).
+///    - `cursor: CursorInit::FirstActiveBit` for normal rows, or
+///      `CursorInit::Fixed(0)` for pinned-cursor rows like FA+ Options.
+/// 4. Write the matching `toggle_my_row` helper in `choice.rs`.
 #[derive(Clone, Copy, Debug)]
 pub struct BitmaskBinding {
     pub toggle: fn(&mut State, usize),
     /// Opt-in init contract. When `Some`, a row's initial mask bits and
-    /// cursor position can be derived directly from a `Profile` via the
-    /// helpers in this struct, without going through the hand-written
-    /// branches in `panes/mod.rs::apply_profile_defaults`. `None` means
-    /// the row still relies on the legacy init path.
+    /// cursor position are derived directly from a `Profile` via the
+    /// helpers in `BitmaskInit`. Every production binding currently opts
+    /// in; `None` is reserved for synthetic bindings used in tests.
     pub init: Option<BitmaskInit>,
 }
 
@@ -213,8 +228,8 @@ impl BitmaskInit {
 /// binding's `set_active` semantics — including any masking applied by
 /// `from_bits_retain` — are reflected in cursor placement). Returns
 /// `true` when the binding had an `init` contract and was applied;
-/// `false` when the binding still relies on the legacy init path in
-/// `apply_profile_defaults`.
+/// `false` when the binding has no init (a synthetic test binding or a
+/// future row that has not yet been wired).
 pub fn init_bitmask_row_from_binding(
     row: &mut Row,
     binding: &BitmaskBinding,
