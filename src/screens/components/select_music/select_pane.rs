@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_theme_font_key};
 use crate::assets::i18n::tr;
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
@@ -96,7 +97,7 @@ pub fn build_base(p: StatsPaneParams) -> Vec<Actor> {
 
     if let Some(meter) = meter {
         let mut meter_actor = act!(text:
-            font("wendy"):
+            font(current_theme_font_key(FontRole::Header)):
             settext(meter):
             align(1.0, 0.5):
             horizalign(right):

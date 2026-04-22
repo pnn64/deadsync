@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_theme_font_key};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -209,7 +210,7 @@ pub fn build_song_search_overlay(
                 z(1452)
             ));
             actors.push(act!(text:
-                font("wendy"):
+                font(current_theme_font_key(FontRole::Header)):
                 settext(SONG_SEARCH_PROMPT_TITLE):
                 align(0.5, 0.5):
                 xy(cx, cy - panel_h * 0.5 + 22.0):

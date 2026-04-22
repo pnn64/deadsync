@@ -1,3 +1,4 @@
+use crate::assets::{FontRole, current_theme_font_key};
 use super::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -302,7 +303,7 @@ pub(super) fn speed_mod_helper_scaled_text(
 pub(super) fn measure_wendy_text_width(asset_manager: &AssetManager, text: &str) -> f32 {
     let mut out_w = 1.0_f32;
     asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font("wendy", |metrics_font| {
+        asset_manager.with_font(current_theme_font_key(FontRole::Header), |metrics_font| {
             let w = crate::engine::present::font::measure_line_width_logical(
                 metrics_font,
                 text,

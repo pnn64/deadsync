@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_theme_font_key};
 use crate::config::{SelectMusicItlRankMode, SelectMusicItlWheelMode};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
@@ -685,7 +686,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                     let judge_y = grade_y + 10.0;
                                     let judge_col = lamp_judge_count_color(lamp_index);
                                     slot_children.push(act!(text:
-                                        font("wendy_screenevaluation"):
+                                        font(current_theme_font_key(FontRole::ScreenEval)):
                                         settext(digit_text(count)):
                                         align(0.5, 0.5):
                                         horizalign(center):
@@ -744,7 +745,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             };
                             let rank_color = itl_rank_color(rank, is_double_style);
                             slot_children.push(act!(text:
-                                font("wendy"):
+                                font(current_theme_font_key(FontRole::Header)):
                                 settext(cached_itl_rank_text(rank)):
                                 align(0.5, 0.5):
                                 horizalign(center):
@@ -786,7 +787,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             SelectMusicItlWheelMode::Off => {}
                             SelectMusicItlWheelMode::Score => {
                                 slot_children.push(act!(text:
-                                    font("wendy_monospace_numbers"):
+                                    font(current_theme_font_key(FontRole::Numbers)):
                                     settext(cached_itl_ex_text(ex_hundredths)):
                                     align(1.0, 0.5):
                                     horizalign(right):
@@ -799,7 +800,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             SelectMusicItlWheelMode::PointsAndScore => {
                                 let Some(points) = points else {
                                     slot_children.push(act!(text:
-                                        font("wendy_monospace_numbers"):
+                                        font(current_theme_font_key(FontRole::Numbers)):
                                         settext(cached_itl_ex_text(ex_hundredths)):
                                         align(1.0, 0.5):
                                         horizalign(right):
@@ -812,7 +813,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 };
                                 let (points_y, ex_y) = itl_score_line_y(side, joined_sides);
                                 slot_children.push(act!(text:
-                                    font("wendy_monospace_numbers"):
+                                    font(current_theme_font_key(FontRole::Numbers)):
                                     settext(cached_itl_points_text(points)):
                                     align(1.0, 0.5):
                                     horizalign(right):
@@ -827,7 +828,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                     z(2)
                                 ));
                                 slot_children.push(act!(text:
-                                    font("wendy_monospace_numbers"):
+                                    font(current_theme_font_key(FontRole::Numbers)):
                                     settext(cached_itl_ex_text(ex_hundredths)):
                                     align(1.0, 0.5):
                                     horizalign(right):

@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_theme_font_key};
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
@@ -506,7 +507,7 @@ pub fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Ve
         z(OVERLAY_Z + 2)
     ));
     actors.push(act!(text:
-        font("wendy"):
+        font(current_theme_font_key(FontRole::Header)):
         settext("Online Lobbies"):
         align(0.5, 0.5):
         xy(center_x, center_y + TITLE_Y):
@@ -633,7 +634,7 @@ fn build_browse_overlay(
             select_color,
         ));
         actors.push(act!(text:
-            font("wendy"):
+            font(current_theme_font_key(FontRole::Header)):
             settext(lobby.code.clone()):
             align(0.0, 0.5):
             xy(center_x + LOBBY_LIST_X - 164.0, row_y - 7.0):
@@ -701,7 +702,7 @@ fn build_browse_overlay(
             select_color,
         ));
         actors.push(act!(text:
-            font("wendy"):
+            font(current_theme_font_key(FontRole::Header)):
             settext(*label):
             align(0.5, 0.5):
             xy(center_x + ACTION_PANEL_X, row_y):
@@ -734,7 +735,7 @@ fn build_joined_overlay(
         horizalign(left)
     ));
     actors.push(act!(text:
-        font("wendy"):
+        font(current_theme_font_key(FontRole::Header)):
         settext(format!("Lobby Code: {}", joined.code)):
         align(0.0, 0.5):
         xy(center_x - 300.0, center_y - 102.0):
@@ -805,7 +806,7 @@ fn build_joined_overlay(
             select_color,
         ));
         actors.push(act!(text:
-            font("wendy"):
+            font(current_theme_font_key(FontRole::Header)):
             settext(*label):
             align(0.5, 0.5):
             xy(center_x + ACTION_PANEL_X, row_y):
@@ -926,7 +927,7 @@ fn build_password_prompt(
         horizalign(center)
     ));
     actors.push(act!(text:
-        font("wendy_white"):
+        font(current_theme_font_key(FontRole::Header)):
         settext(value):
         align(0.5, 0.5):
         xy(center_x, center_y + PASSWORD_PROMPT_VALUE_Y):
@@ -958,7 +959,7 @@ fn build_password_prompt(
             0.3
         };
         actors.push(act!(text:
-            font("wendy_white"):
+            font(current_theme_font_key(FontRole::Header)):
             settext(PASSWORD_CHARS[item.info_index]):
             align(0.5, 0.5):
             xy(
@@ -1013,7 +1014,7 @@ fn push_password_prompt_footer(actors: &mut Vec<Actor>, center_x: f32, center_y:
         (18.0, 38.0, "&OK;", "confirm"),
     ] {
         actors.push(act!(text:
-            font("wendy_white"):
+            font(current_theme_font_key(FontRole::Header)):
             settext(icon):
             align(0.5, 0.5):
             xy(center_x + icon_x, y):

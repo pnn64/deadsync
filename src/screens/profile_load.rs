@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_theme_font_key};
 use crate::assets::i18n::tr;
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -169,7 +170,7 @@ pub fn get_actors(_: &State) -> Vec<Actor> {
         ),
         // "Common Bold" (Simply Love) -> Wendy small.
         act!(text:
-            font("wendy"): settext(tr("Common", "Loading")):
+            font(current_theme_font_key(FontRole::Header)): settext(tr("Common", "Loading")):
             align(0.5, 0.5): xy(cx, cy):
             zoom(0.6):
             diffuse(0.0, 0.0, 0.0, 1.0):

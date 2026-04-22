@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_theme_font_key};
 use crate::engine::input::{
     InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
 };
@@ -576,7 +577,7 @@ fn push_pad(
             align(0.5, 0.5):
             xy(pad_x, pad_y - 130.0):
             zoom(0.7):
-            font("wendy"):
+            font(current_theme_font_key(FontRole::Header)):
             settext(label):
             horizalign(center):
             z(z + 1.0)

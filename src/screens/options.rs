@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_theme_font_key};
 use crate::assets::{self, AssetManager};
 use crate::engine::display::{self, MonitorSpec};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
@@ -9802,7 +9803,7 @@ fn build_yes_no_confirm_overlay(
         act!(text:
             align(0.5, 0.5):
             xy(yes_x, answer_y):
-            font("wendy"):
+            font(current_theme_font_key(FontRole::Header)):
             zoom(0.72):
             settext(tr("Common", "Yes")):
             diffuse(1.0, 1.0, 1.0, 1.0):
@@ -9812,7 +9813,7 @@ fn build_yes_no_confirm_overlay(
         act!(text:
             align(0.5, 0.5):
             xy(no_x, answer_y):
-            font("wendy"):
+            font(current_theme_font_key(FontRole::Header)):
             zoom(0.72):
             settext(tr("Common", "No")):
             diffuse(1.0, 1.0, 1.0, 1.0):
