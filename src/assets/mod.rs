@@ -698,7 +698,6 @@ mod tests {
     use super::*;
     use crate::config::ThemeFont;
     use std::{
-        collections::HashSet,
         fs,
         path::{Path, PathBuf},
         sync::atomic::{AtomicUsize, Ordering},
