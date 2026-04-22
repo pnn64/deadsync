@@ -352,6 +352,11 @@ fn push_saved_keymaps(content: &mut String, keymap: &Keymap) {
 fn push_saved_theme(content: &mut String, cfg: &Config) {
     push_section(content, "[Theme]");
     push_bool(content, "KeyboardFeatures", cfg.keyboard_features);
+    push_line(
+        content,
+        "MenuBackgroundStyle",
+        cfg.menu_background_style.as_str(),
+    );
     push_bool(content, "VideoBackgrounds", cfg.show_video_backgrounds);
     push_bool(
         content,

@@ -6,9 +6,9 @@ use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
-    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicWheelStyle, SimpleIni, SyncGraphMode, dirs,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, MenuBackgroundStyle, NewPackMode,
+    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SimpleIni, SyncGraphMode, dirs,
 };
 use crate::engine::audio;
 #[cfg(target_os = "windows")]
@@ -279,6 +279,7 @@ pub enum ItemId {
     MchGameoverScreen,
     MchWriteCurrentScreen,
     MchMenuMusic,
+    MchMenuBackground,
     MchReplays,
     MchPerPlayerGlobalOffsets,
     MchKeyboardFeatures,
@@ -506,6 +507,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsMachine", "NameEntry")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "GameoverScreen")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuMusic")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuBackground")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "KeyboardFeatures")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "VideoBGs")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "WriteCurrentScreen")),
@@ -899,6 +901,7 @@ pub enum SubRowId {
     GameoverScreen,
     WriteCurrentScreen,
     MenuMusic,
+    MenuBackground,
     Replays,
     PerPlayerGlobalOffsets,
     KeyboardFeatures,
@@ -1904,6 +1907,15 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::MenuBackground,
+        label: lookup_key("OptionsMachine", "MenuBackground"),
+        choices: &[
+            localized_choice("OptionsMachine", "MenuBackgroundHearts"),
+            localized_choice("OptionsMachine", "MenuBackgroundTechnique"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::Replays,
         label: lookup_key("OptionsMachine", "Replays"),
         choices: &[
@@ -2028,6 +2040,14 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "MenuMusicHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::MchMenuBackground,
+        name: lookup_key("OptionsMachine", "MenuBackground"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "MenuBackgroundHelp",
         ))],
     },
     Item {
@@ -5739,6 +5759,20 @@ const fn machine_preferred_mode_from_choice(idx: usize) -> MachinePreferredPlayM
     }
 }
 
+const fn menu_background_style_choice_index(style: MenuBackgroundStyle) -> usize {
+    match style {
+        MenuBackgroundStyle::Hearts => 0,
+        MenuBackgroundStyle::Technique => 1,
+    }
+}
+
+const fn menu_background_style_from_choice(idx: usize) -> MenuBackgroundStyle {
+    match idx {
+        1 => MenuBackgroundStyle::Technique,
+        _ => MenuBackgroundStyle::Hearts,
+    }
+}
+
 const fn log_level_choice_index(level: LogLevel) -> usize {
     match level {
         LogLevel::Error => 0,
@@ -6216,6 +6250,12 @@ pub fn init() -> State {
         MACHINE_OPTIONS_ROWS,
         SubRowId::MenuMusic,
         usize::from(cfg.menu_music),
+    );
+    set_choice_by_id(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::MenuBackground,
+        menu_background_style_choice_index(cfg.menu_background_style),
     );
     set_choice_by_id(
         &mut state.sub_choice_indices_machine,
@@ -8081,6 +8121,9 @@ fn apply_submenu_choice_delta(
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
             SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),
             SubRowId::MenuMusic => config::update_menu_music(enabled),
+            SubRowId::MenuBackground => {
+                config::update_menu_background_style(menu_background_style_from_choice(new_index))
+            }
             SubRowId::Replays => config::update_machine_enable_replays(enabled),
             SubRowId::PerPlayerGlobalOffsets => {
                 config::update_machine_allow_per_player_global_offsets(enabled)

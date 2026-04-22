@@ -26,8 +26,8 @@ pub use self::runtime::{
 pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
     AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, GameFlag, LanguageFlag,
-    LogLevel, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
-    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    LogLevel, MachinePreferredPlayMode, MachinePreferredPlayStyle, MenuBackgroundStyle,
+    NewPackMode, SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
     SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SyncGraphMode, ThemeFlag,
     auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
@@ -154,6 +154,8 @@ pub struct Config {
     pub select_music_preview_loop: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart in gameplay/evaluation.
     pub keyboard_features: bool,
+    /// Shared menu-family background style used outside gameplay.
+    pub menu_background_style: MenuBackgroundStyle,
     /// Enable or disable animated gameplay background videos.
     pub show_video_backgrounds: bool,
     /// Startup flow: show Select Profile before continuing.
@@ -302,6 +304,7 @@ impl Default for Config {
             show_select_music_preview_marker: false,
             select_music_preview_loop: true,
             keyboard_features: true,
+            menu_background_style: MenuBackgroundStyle::Hearts,
             show_video_backgrounds: true,
             machine_show_select_profile: true,
             allow_switch_profile_in_menu: false,

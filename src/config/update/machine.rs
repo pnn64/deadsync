@@ -102,6 +102,17 @@ pub fn update_keyboard_features(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_menu_background_style(style: MenuBackgroundStyle) {
+    {
+        let mut cfg = lock_config();
+        if cfg.menu_background_style == style {
+            return;
+        }
+        cfg.menu_background_style = style;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_machine_show_select_profile(enabled: bool) {
     {
         let mut cfg = lock_config();

@@ -190,6 +190,39 @@ impl FromStr for SelectMusicWheelStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuBackgroundStyle {
+    Hearts,
+    Technique,
+}
+
+impl MenuBackgroundStyle {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Hearts => "Hearts",
+            Self::Technique => "Technique",
+        }
+    }
+}
+
+impl FromStr for MenuBackgroundStyle {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "hearts" | "heart" | "default" => Ok(Self::Hearts),
+            "technique" => Ok(Self::Technique),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NewPackMode {
     Disabled,
     OpenPack,

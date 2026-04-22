@@ -1803,6 +1803,84 @@ pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, 
     Ok(entry.clone())
 }
 
+pub(crate) fn load_itg_model_slots_from_path(path: &Path) -> Result<Arc<[SpriteSlot]>, String> {
+    let model_path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        dirs::app_dirs().resolve_asset_path(&path.to_string_lossy())
+    };
+    if !model_path.is_file() {
+        return Err(format!("model '{}' was not found", model_path.display()));
+    }
+
+    let Some(search_dir) = model_path.parent() else {
+        return Err(format!(
+            "model '{}' has no parent directory",
+            model_path.display()
+        ));
+    };
+    let data = noteskin_itg::NoteskinData {
+        name: "shared-model".to_string(),
+        metrics: noteskin_itg::IniData::default(),
+        search_dirs: vec![search_dir.to_path_buf()],
+    };
+    let model_auto_rot = itg_parse_milkshape_model_auto_rot(&model_path);
+    let mut slots = Vec::new();
+
+    if let Some(model_layers) = itg_parse_milkshape_model_layers(&data, &model_path) {
+        for layer in model_layers {
+            let Some(mut slot) = itg_model_slot_from_texture_path(&layer.texture.texture_path)
+            else {
+                continue;
+            };
+            slot.model = Some(layer.mesh);
+            if let Some(auto_rot) = model_auto_rot.as_ref() {
+                slot.model_auto_rot_total_frames = auto_rot.total_frames;
+                slot.model_auto_rot_z_keys = Arc::clone(&auto_rot.z_keys);
+            }
+            slot.note_color_translate = !layer.flags.nomove;
+            slot.uv_velocity = if layer.flags.nomove {
+                [0.0, 0.0]
+            } else {
+                layer.texture.tex.uv_velocity
+            };
+            slot.uv_offset = layer.texture.tex.uv_offset;
+            slots.push(slot);
+        }
+    }
+
+    if slots.is_empty() {
+        let Some(model_texture) = itg_resolve_model_texture_path(&data, &model_path) else {
+            return Err(format!(
+                "model '{}' did not resolve a texture",
+                model_path.display()
+            ));
+        };
+        let Some(mut slot) = itg_model_slot_from_texture_path(&model_texture.texture_path) else {
+            return Err(format!(
+                "model texture '{}' did not load",
+                model_texture.texture_path.display()
+            ));
+        };
+        slot.model = itg_parse_milkshape_model(&data, &model_path);
+        if slot.model.is_none() {
+            return Err(format!(
+                "model '{}' did not produce any geometry",
+                model_path.display()
+            ));
+        }
+        if let Some(auto_rot) = model_auto_rot.as_ref() {
+            slot.model_auto_rot_total_frames = auto_rot.total_frames;
+            slot.model_auto_rot_z_keys = Arc::clone(&auto_rot.z_keys);
+        }
+        slot.uv_velocity = model_texture.tex.uv_velocity;
+        slot.uv_offset = model_texture.tex.uv_offset;
+        slots.push(slot);
+    }
+
+    Ok(Arc::from(slots))
+}
+
 pub fn prewarm_itg_preview_cache() {
     let _ = compile_all_itg_caches_with_progress(|_, _, _, _| {});
     let skins = discover_itg_skins("dance");
@@ -3753,6 +3831,23 @@ fn itg_texture_key(path: &Path) -> Option<String> {
         key.remove(0);
     }
     Some(key)
+}
+
+fn itg_register_texture_dims_for_path(path: &Path) {
+    let Some(key) = itg_texture_key(path) else {
+        return;
+    };
+    if assets::texture_dims(&key).is_some() {
+        return;
+    }
+    if let Ok((w, h)) = image_dimensions(path) {
+        assets::register_texture_dims(&key, w, h);
+    }
+}
+
+fn itg_model_slot_from_texture_path(path: &Path) -> Option<SpriteSlot> {
+    itg_register_texture_dims_for_path(path);
+    itg_slot_from_path(path)
 }
 
 fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
@@ -5903,9 +5998,11 @@ mod tests {
         AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode,
         ModelTweenSegment, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, Quantization,
         SpriteDefinition, SpriteSlot, SpriteSource, Style, itg_apply_state_properties_from_script,
-        itg_model_draw_program, load_itg_skin, parse_explosion_animation,
+        itg_model_draw_program, load_itg_model_slots_from_path, load_itg_skin,
+        parse_explosion_animation,
     };
     use std::collections::{HashMap, HashSet};
+    use std::path::Path;
     use std::sync::Arc;
 
     fn test_auto_rot_slot(total_frames: f32, keys: Vec<ModelAutoRotKey>) -> SpriteSlot {
@@ -5978,6 +6075,29 @@ mod tests {
         assert!(ns.notes.iter().any(|slot| {
             slot.uv_velocity[0].abs() > f32::EPSILON || slot.uv_velocity[1].abs() > f32::EPSILON
         }));
+    }
+
+    #[test]
+    fn shared_background_arrow_model_loads_with_texture_scroll() {
+        let slots = load_itg_model_slots_from_path(Path::new(
+            "assets/graphics/menu_bg_technique/arrow_model.txt",
+        ))
+        .expect("technique arrow model should load");
+        assert_eq!(slots.len(), 1, "expected one arrow model layer");
+        let slot = &slots[0];
+        assert!(
+            slot.model.is_some(),
+            "shared model slot should contain geometry"
+        );
+        assert_eq!(
+            slot.texture_key(),
+            "graphics/menu_bg_technique/arrow_tex.png"
+        );
+        assert!(
+            slot.uv_velocity[1] < -0.9 && slot.uv_velocity[1] > -1.1,
+            "expected AnimatedTexture TexVelocityY to carry through, got {:?}",
+            slot.uv_velocity
+        );
     }
 
     #[test]
