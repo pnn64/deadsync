@@ -229,7 +229,6 @@ pub fn init(
         speed_mod: [speed_mod_p1, speed_mod_p2],
         music_rate: session_music_rate,
         current_pane: OptionsPane::Main,
-        scroll_focus_player: P1,
         bg: heart_bg::State::new(),
         nav_input: [PlayerNavInput::default(); PLAYER_SLOTS],
         start_input: [PlayerStartInput::default(); PLAYER_SLOTS],
