@@ -23,6 +23,12 @@ pub struct SongForegroundLuaChange {
 }
 
 #[derive(Clone, Debug)]
+pub struct SongBackgroundLuaChange {
+    pub start_beat: f32,
+    pub path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
 pub struct SongData {
     pub simfile_path: PathBuf,
     pub title: String,
@@ -34,6 +40,7 @@ pub struct SongData {
     pub banner_path: Option<PathBuf>,
     pub background_path: Option<PathBuf>,
     pub background_changes: Vec<SongBackgroundChange>,
+    pub background_lua_changes: Vec<SongBackgroundLuaChange>,
     pub foreground_lua_changes: Vec<SongForegroundLuaChange>,
     pub has_lua: bool,
     pub cdtitle_path: Option<PathBuf>,

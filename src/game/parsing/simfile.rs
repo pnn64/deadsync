@@ -4,8 +4,8 @@ use crate::game::{
     note::NoteType,
     parsing::notes::ParsedNote,
     song::{
-        SongBackgroundChange, SongBackgroundChangeTarget, SongData, SongForegroundLuaChange,
-        get_song_cache,
+        SongBackgroundChange, SongBackgroundChangeTarget, SongBackgroundLuaChange, SongData,
+        SongForegroundLuaChange, get_song_cache,
     },
     timing::{
         DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment, TimingData,
@@ -36,7 +36,7 @@ pub use scan::{
 };
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
-const SONG_CACHE_VERSION: u8 = 3;
+const SONG_CACHE_VERSION: u8 = 4;
 const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
@@ -524,6 +524,12 @@ struct SerializableSongForegroundLuaChange {
     path: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+struct SerializableSongBackgroundLuaChange {
+    start_beat: f32,
+    path: String,
+}
+
 impl From<&SongBackgroundChange> for SerializableSongBackgroundChange {
     fn from(change: &SongBackgroundChange) -> Self {
         let target = match &change.target {
@@ -578,6 +584,24 @@ impl From<SerializableSongForegroundLuaChange> for SongForegroundLuaChange {
     }
 }
 
+impl From<&SongBackgroundLuaChange> for SerializableSongBackgroundLuaChange {
+    fn from(change: &SongBackgroundLuaChange) -> Self {
+        Self {
+            start_beat: change.start_beat,
+            path: change.path.to_string_lossy().into_owned(),
+        }
+    }
+}
+
+impl From<SerializableSongBackgroundLuaChange> for SongBackgroundLuaChange {
+    fn from(change: SerializableSongBackgroundLuaChange) -> Self {
+        Self {
+            start_beat: change.start_beat,
+            path: PathBuf::from(change.path),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 struct SerializableSongData {
     simfile_path: String,
@@ -590,6 +614,7 @@ struct SerializableSongData {
     banner_path: Option<String>,
     background_path: Option<String>,
     background_changes: Vec<SerializableSongBackgroundChange>,
+    background_lua_changes: Vec<SerializableSongBackgroundLuaChange>,
     foreground_lua_changes: Vec<SerializableSongForegroundLuaChange>,
     has_lua: bool,
     cdtitle_path: Option<String>,
@@ -657,6 +682,7 @@ struct CachedSongMeta {
     banner_path: Option<String>,
     background_path: Option<String>,
     background_changes: Vec<SerializableSongBackgroundChange>,
+    background_lua_changes: Vec<SerializableSongBackgroundLuaChange>,
     foreground_lua_changes: Vec<SerializableSongForegroundLuaChange>,
     has_lua: bool,
     cdtitle_path: Option<String>,
@@ -968,6 +994,11 @@ fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -> So
             .into_iter()
             .map(SongBackgroundChange::from)
             .collect(),
+        background_lua_changes: song
+            .background_lua_changes
+            .into_iter()
+            .map(SongBackgroundLuaChange::from)
+            .collect(),
         foreground_lua_changes: song
             .foreground_lua_changes
             .into_iter()
@@ -1010,6 +1041,7 @@ fn build_cached_song_meta(
         banner_path: song.banner_path.clone(),
         background_path: song.background_path.clone(),
         background_changes: song.background_changes.clone(),
+        background_lua_changes: song.background_lua_changes.clone(),
         foreground_lua_changes: song.foreground_lua_changes.clone(),
         has_lua: song.has_lua,
         cdtitle_path: song.cdtitle_path.clone(),
@@ -1047,6 +1079,11 @@ fn build_song_meta_from_cache(song: CachedSongMeta) -> SongData {
             .background_changes
             .into_iter()
             .map(SongBackgroundChange::from)
+            .collect(),
+        background_lua_changes: song
+            .background_lua_changes
+            .into_iter()
+            .map(SongBackgroundLuaChange::from)
             .collect(),
         foreground_lua_changes: song
             .foreground_lua_changes
@@ -1836,6 +1873,64 @@ fn extract_foreground_lua_changes(
     out
 }
 
+fn extract_background_lua_changes(
+    song_dir: &Path,
+    simfile_data: &[u8],
+    background_tag: &str,
+) -> Vec<SerializableSongBackgroundLuaChange> {
+    let entries = list_song_dir_rel_entries(song_dir);
+    let mut out = Vec::new();
+    let mut push_change = |start_beat: f32, path: PathBuf| {
+        let path = if path.is_dir() {
+            path.join("default.lua")
+        } else {
+            path
+        };
+        out.push(SerializableSongBackgroundLuaChange {
+            start_beat,
+            path: path.to_string_lossy().into_owned(),
+        });
+    };
+
+    if let Some(path) = resolve_song_path_like_itg(song_dir, background_tag)
+        .filter(|path| path_uses_lua_like_itg(path))
+    {
+        push_change(0.0, path);
+    }
+
+    for raw in extract_bgchanges_values(simfile_data) {
+        let text = unescape_tag(decode_bytes(raw).as_ref()).into_owned();
+        for fields in split_bgchange_sets_like_itg(&text, &entries) {
+            let Some(start_beat) = fields
+                .first()
+                .and_then(|value| value.trim().parse::<f32>().ok())
+                .filter(|value| value.is_finite())
+            else {
+                continue;
+            };
+            let Some(target) = fields.get(1) else {
+                continue;
+            };
+            let Some(path) = resolve_song_path_like_itg(song_dir, target)
+                .filter(|path| path_uses_lua_like_itg(path))
+            else {
+                continue;
+            };
+            push_change(start_beat, path);
+        }
+    }
+
+    out.sort_by(|left, right| {
+        left.start_beat
+            .total_cmp(&right.start_beat)
+            .then_with(|| left.path.cmp(&right.path))
+    });
+    out.dedup_by(|left, right| {
+        left.start_beat.to_bits() == right.start_beat.to_bits() && left.path == right.path
+    });
+    out
+}
+
 fn convert_background_change(
     change: rssp::assets::ResolvedBackgroundChange,
 ) -> SongBackgroundChange {
@@ -1954,6 +2049,8 @@ fn parse_and_process_song_file(
         &summary.background_path,
     );
     let has_lua = simfile_uses_lua(simfile_dir, &simfile_data, &summary.background_path);
+    let background_lua_changes =
+        extract_background_lua_changes(simfile_dir, &simfile_data, &summary.background_path);
     let foreground_lua_changes = extract_foreground_lua_changes(simfile_dir, &simfile_data);
     let background_changes =
         rssp::assets::resolve_background_changes_like_itg(simfile_dir, &simfile_data)
@@ -1993,6 +2090,7 @@ fn parse_and_process_song_file(
             banner_path: banner_path.map(|p| p.to_string_lossy().into_owned()),
             background_path: background_path_opt.map(|p| p.to_string_lossy().into_owned()),
             background_changes,
+            background_lua_changes,
             foreground_lua_changes,
             has_lua,
             cdtitle_path: cdtitle_path.map(|p| p.to_string_lossy().into_owned()),
@@ -2038,7 +2136,7 @@ fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_foreground_lua_changes, simfile_uses_lua};
+    use super::{extract_background_lua_changes, extract_foreground_lua_changes, simfile_uses_lua};
     use std::fs;
     use std::path::PathBuf;
 
@@ -2094,6 +2192,25 @@ mod tests {
         );
         assert_eq!(changes.len(), 1);
         assert_eq!(changes[0].start_beat, 4.0);
+        assert_eq!(PathBuf::from(&changes[0].path), default_lua);
+    }
+
+    #[test]
+    fn extract_background_lua_changes_resolves_default_lua_file() {
+        let root = test_dir("lua-bgchange-path");
+        let song_dir = root.join("Song");
+        let bg_dir = song_dir.join("Visuals");
+        fs::create_dir_all(&bg_dir).unwrap();
+        let default_lua = bg_dir.join("default.lua");
+        fs::write(&default_lua, "return Def.ActorFrame{}").unwrap();
+
+        let changes = extract_background_lua_changes(
+            &song_dir,
+            b"#TITLE:Lua Test;#BGCHANGES:2=Visuals=1=0=0=0=0;",
+            "",
+        );
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].start_beat, 2.0);
         assert_eq!(PathBuf::from(&changes[0].path), default_lua);
     }
 }

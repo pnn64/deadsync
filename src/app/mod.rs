@@ -1655,11 +1655,11 @@ fn build_course_summary_eval_state(
     state
 }
 
-fn song_lua_video_paths(
+fn push_song_lua_video_paths(
     overlays: &[crate::game::parsing::song_lua::SongLuaOverlayActor],
-) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-    let mut seen = HashSet::new();
+    seen: &mut HashSet<String>,
+    paths: &mut Vec<PathBuf>,
+) {
     for overlay in overlays {
         let crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } =
             &overlay.kind
@@ -1673,6 +1673,28 @@ fn song_lua_video_paths(
         if seen.insert(key) {
             paths.push(texture_path.clone());
         }
+    }
+}
+
+#[cfg(test)]
+fn song_lua_video_paths(
+    overlays: &[crate::game::parsing::song_lua::SongLuaOverlayActor],
+) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let mut seen = HashSet::new();
+    push_song_lua_video_paths(overlays, &mut seen, &mut paths);
+    paths
+}
+
+fn gameplay_song_lua_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let mut seen = HashSet::new();
+    push_song_lua_video_paths(&state.song_lua_overlays, &mut seen, &mut paths);
+    for layer in &state.song_lua_background_visual_layers {
+        push_song_lua_video_paths(&layer.overlays, &mut seen, &mut paths);
+    }
+    for layer in &state.song_lua_foreground_visual_layers {
+        push_song_lua_video_paths(&layer.overlays, &mut seen, &mut paths);
     }
     paths
 }
@@ -1757,55 +1779,66 @@ fn prewarm_gameplay_assets(
             media_cache::ensure_banner_texture(assets, backend, path);
         }
     }
-    for overlay in &state.song_lua_overlays {
-        match &overlay.kind {
-            crate::game::parsing::song_lua::SongLuaOverlayKind::BitmapText {
-                font_name,
-                font_path,
-                ..
-            } => {
-                if seen_song_lua_fonts.insert(*font_name)
-                    && assets.with_font(font_name, |_| ()).is_none()
-                    && let Err(err) = assets.load_font_from_ini_path(backend, *font_name, font_path)
-                {
-                    warn!(
-                        "Failed to load song lua bitmap font '{}': {}",
-                        font_path.display(),
-                        err
-                    );
-                }
-            }
-            crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } => {
-                let key = texture_path.to_string_lossy().into_owned();
-                if seen.insert(key.clone()) {
-                    if song_lua_overlay_uses_repeat_sampler(overlay) {
-                        match media_cache::load_banner_source_rgba(texture_path) {
-                            Ok(rgba) => {
-                                let sampler = SamplerDesc {
-                                    wrap: SamplerWrap::Repeat,
-                                    ..SamplerDesc::default()
-                                };
-                                if let Err(e) = assets.update_texture_for_key_with_sampler(
-                                    backend, &key, &rgba, sampler,
-                                ) {
-                                    warn!(
-                                        "Failed to create repeating GPU texture for image {texture_path:?}: {e}. Skipping."
-                                    );
+    let mut prewarm_song_lua_overlays =
+        |overlays: &[crate::game::parsing::song_lua::SongLuaOverlayActor]| {
+            for overlay in overlays {
+                match &overlay.kind {
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::BitmapText {
+                        font_name,
+                        font_path,
+                        ..
+                    } => {
+                        if seen_song_lua_fonts.insert(*font_name)
+                            && assets.with_font(font_name, |_| ()).is_none()
+                            && let Err(err) =
+                                assets.load_font_from_ini_path(backend, *font_name, font_path)
+                        {
+                            warn!(
+                                "Failed to load song lua bitmap font '{}': {}",
+                                font_path.display(),
+                                err
+                            );
+                        }
+                    }
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } => {
+                        let key = texture_path.to_string_lossy().into_owned();
+                        if seen.insert(key.clone()) {
+                            if song_lua_overlay_uses_repeat_sampler(overlay) {
+                                match media_cache::load_banner_source_rgba(texture_path) {
+                                    Ok(rgba) => {
+                                        let sampler = SamplerDesc {
+                                            wrap: SamplerWrap::Repeat,
+                                            ..SamplerDesc::default()
+                                        };
+                                        if let Err(e) = assets.update_texture_for_key_with_sampler(
+                                            backend, &key, &rgba, sampler,
+                                        ) {
+                                            warn!(
+                                                "Failed to create repeating GPU texture for image {texture_path:?}: {e}. Skipping."
+                                            );
+                                        }
+                                    }
+                                    Err(e) => {
+                                        warn!(
+                                            "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
+                                        );
+                                    }
                                 }
-                            }
-                            Err(e) => {
-                                warn!(
-                                    "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
-                                );
+                            } else {
+                                media_cache::ensure_banner_texture(assets, backend, texture_path);
                             }
                         }
-                    } else {
-                        media_cache::ensure_banner_texture(assets, backend, texture_path);
                     }
+                    _ => {}
                 }
             }
-            _ => {}
-        }
+        };
+    prewarm_song_lua_overlays(&state.song_lua_overlays);
+    for layer in &state.song_lua_background_visual_layers {
+        prewarm_song_lua_overlays(&layer.overlays);
+    }
+    for layer in &state.song_lua_foreground_visual_layers {
+        prewarm_song_lua_overlays(&layer.overlays);
     }
     crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");
     crate::engine::audio::preload_sfx("assets/sounds/assist_tick.ogg");
@@ -6313,7 +6346,7 @@ impl App {
                     combo_carry,
                 );
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
-                let song_lua_video_paths = song_lua_video_paths(&gs.song_lua_overlays);
+                let song_lua_video_paths = gameplay_song_lua_video_paths(&gs);
 
                 let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
@@ -7262,6 +7295,7 @@ mod tests {
             banner_path: None,
             background_path: None,
             background_changes: Vec::new(),
+            background_lua_changes: Vec::new(),
             foreground_lua_changes: Vec::new(),
             has_lua: false,
             cdtitle_path: None,

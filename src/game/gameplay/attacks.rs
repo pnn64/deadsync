@@ -89,6 +89,19 @@ pub struct SongLuaOverlayMessageRuntime {
     pub command_index: usize,
 }
 
+#[derive(Clone, Debug)]
+pub struct SongLuaVisualLayerRuntime {
+    pub start_second: f32,
+    pub screen_width: f32,
+    pub screen_height: f32,
+    pub overlays: Vec<SongLuaOverlayActor>,
+    pub overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime>,
+    pub overlay_ease_ranges: Vec<std::ops::Range<usize>>,
+    pub overlay_events: Vec<Vec<SongLuaOverlayMessageRuntime>>,
+    pub song_foreground: SongLuaCapturedActor,
+    pub song_foreground_events: Vec<SongLuaOverlayMessageRuntime>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SongLuaEaseMaskTarget {
     AccelBoost,
@@ -1919,106 +1932,20 @@ fn song_lua_compile_player_screen_x(
     }
 }
 
-pub(super) fn build_song_lua_runtime_windows(
+fn build_song_lua_compile_context(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
-    timing_players: &[Arc<TimingData>; MAX_PLAYERS],
     num_players: usize,
     player_profiles: &[profile::Profile; MAX_PLAYERS],
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
     music_rate: f32,
     machine_global_offset_seconds: f32,
-    player_global_offset_shift_seconds: &[f32; MAX_PLAYERS],
-) -> (
-    [Vec<AttackMaskWindow>; MAX_PLAYERS],
-    [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
-    Vec<SongLuaOverlayActor>,
-    Vec<SongLuaOverlayEaseWindowRuntime>,
-    Vec<std::ops::Range<usize>>,
-    Vec<Vec<SongLuaOverlayMessageRuntime>>,
-    [SongLuaCapturedActor; MAX_PLAYERS],
-    [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS],
-    SongLuaCapturedActor,
-    Vec<SongLuaOverlayMessageRuntime>,
-    [bool; MAX_PLAYERS],
-    f32,
-    f32,
-) {
-    let mut constant_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] =
-        std::array::from_fn(|_| Vec::new());
-    let mut ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS] =
-        std::array::from_fn(|_| Vec::new());
-    let mut overlays = Vec::new();
-    let mut overlay_eases = Vec::new();
-    let mut overlay_ease_ranges = Vec::new();
-    let mut overlay_events = Vec::new();
+) -> SongLuaCompileContext {
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
-    let center_1player_notefield = crate::config::get().center_1player_notefield;
-    // Default player actor x/y must match StepMania's (SCREEN_CENTER_X, SCREEN_CENTER_Y)
-    // origin so that, when no song.lua override is present, the gameplay player
-    // transform path produces a zero translation. Without this, every non-lua song
-    // would translate the playfield by (-playfield_center_x, +screen_center_y),
-    // shoving it up and to the left.
-    let default_player_actor = |player_index: usize| SongLuaCapturedActor {
-        initial_state: SongLuaOverlayState {
-            x: if player_index < num_players {
-                song_lua_compile_player_screen_x(
-                    num_players,
-                    player_index,
-                    &player_profiles[player_index],
-                    play_style,
-                    player_side,
-                    center_1player_notefield,
-                )
-            } else {
-                screen_center_x()
-            },
-            y: screen_center_y(),
-            ..SongLuaOverlayState::default()
-        },
-        message_commands: Vec::new(),
-    };
-    let mut player_actors: [SongLuaCapturedActor; MAX_PLAYERS] =
-        std::array::from_fn(default_player_actor);
-    let mut player_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS] =
-        std::array::from_fn(|_| Vec::new());
-    let mut song_foreground = SongLuaCapturedActor::default();
-    let mut song_foreground_events = Vec::new();
-    let mut hidden_players = [false; MAX_PLAYERS];
     let screen_width = screen_width();
     let screen_height = screen_height();
-
-    let Some(entry) = song
-        .foreground_lua_changes
-        .iter()
-        .find(|change| change.start_beat <= 0.0 && change.path.is_file())
-    else {
-        return (
-            constant_windows,
-            ease_windows,
-            overlays,
-            overlay_eases,
-            overlay_ease_ranges,
-            overlay_events,
-            player_actors,
-            player_events,
-            song_foreground,
-            song_foreground_events,
-            hidden_players,
-            screen_width,
-            screen_height,
-        );
-    };
-
-    if song.foreground_lua_changes.len() > 1 {
-        debug!(
-            "Song '{}' has {} foreground lua changes; gameplay currently compiles only the first non-positive entry.",
-            song.title,
-            song.foreground_lua_changes.len(),
-        );
-    }
-
+    let center_1player_notefield = crate::config::get().center_1player_notefield;
     let mut context = SongLuaCompileContext::new(
         song.simfile_path
             .parent()
@@ -2081,121 +2008,379 @@ pub(super) fn build_song_lua_runtime_windows(
         },
         screen_y: screen_center_y(),
     });
+    context
+}
 
-    let compiled = match compile_song_lua(&entry.path, &context) {
-        Ok(compiled) => compiled,
-        Err(err) => {
-            warn!(
-                "Failed to compile gameplay lua for '{}' from '{}': {}",
-                song.title,
-                entry.path.display(),
-                err,
-            );
-            return (
-                constant_windows,
-                ease_windows,
-                overlays,
-                overlay_eases,
-                overlay_ease_ranges,
-                overlay_events,
-                player_actors,
-                player_events,
-                song_foreground,
-                song_foreground_events,
-                hidden_players,
-                screen_width,
-                screen_height,
-            );
-        }
+#[inline(always)]
+fn offset_song_lua_overlay_eases(eases: &mut [SongLuaOverlayEaseWindowRuntime], delta: f32) {
+    if !delta.is_finite() || delta.abs() <= f32::EPSILON {
+        return;
+    }
+    for ease in eases {
+        ease.start_second += delta;
+        ease.end_second += delta;
+        ease.sustain_end_second += delta;
+        ease.cutoff_second = ease.cutoff_second.map(|cutoff| cutoff + delta);
+    }
+}
+
+#[inline(always)]
+fn offset_song_lua_message_events(events: &mut [SongLuaOverlayMessageRuntime], delta: f32) {
+    if !delta.is_finite() || delta.abs() <= f32::EPSILON {
+        return;
+    }
+    for event in events {
+        event.event_second += delta;
+    }
+}
+
+fn build_song_lua_visual_layer_runtime(
+    song: &SongData,
+    start_beat: f32,
+    compiled: &CompiledSongLua,
+    timing_player: &TimingData,
+    machine_global_offset_seconds: f32,
+) -> Option<SongLuaVisualLayerRuntime> {
+    let start_second = song_lua_time_to_second(
+        SongLuaTimeUnit::Beat,
+        start_beat,
+        timing_player,
+        machine_global_offset_seconds,
+    );
+    if !start_second.is_finite() {
+        warn!(
+            "Skipping song lua visual layer for '{}' at beat {:.3}: invalid start time",
+            song.title, start_beat
+        );
+        return None;
+    }
+
+    let mut overlay_eases = build_song_lua_overlay_ease_windows(
+        compiled,
+        timing_player,
+        machine_global_offset_seconds,
+    );
+    offset_song_lua_overlay_eases(&mut overlay_eases, start_second);
+    let (overlay_eases, overlay_ease_ranges) =
+        group_song_lua_overlay_eases(compiled.overlays.len(), overlay_eases);
+
+    let mut overlay_events =
+        build_song_lua_overlay_message_events(compiled, timing_player, machine_global_offset_seconds);
+    for events in &mut overlay_events {
+        offset_song_lua_message_events(events, start_second);
+    }
+
+    let mut song_foreground_events = build_song_lua_actor_message_events(
+        &compiled.messages,
+        &compiled.song_foreground.message_commands,
+        timing_player,
+        machine_global_offset_seconds,
+    );
+    offset_song_lua_message_events(&mut song_foreground_events, start_second);
+
+    Some(SongLuaVisualLayerRuntime {
+        start_second,
+        screen_width: compiled.screen_width,
+        screen_height: compiled.screen_height,
+        overlays: compiled.overlays.clone(),
+        overlay_eases,
+        overlay_ease_ranges,
+        overlay_events,
+        song_foreground: compiled.song_foreground.clone(),
+        song_foreground_events,
+    })
+}
+
+pub(super) fn build_song_lua_runtime_windows(
+    song: &SongData,
+    charts: &[Arc<ChartData>; MAX_PLAYERS],
+    timing_players: &[Arc<TimingData>; MAX_PLAYERS],
+    num_players: usize,
+    player_profiles: &[profile::Profile; MAX_PLAYERS],
+    scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
+    music_rate: f32,
+    machine_global_offset_seconds: f32,
+    player_global_offset_shift_seconds: &[f32; MAX_PLAYERS],
+) -> (
+    [Vec<AttackMaskWindow>; MAX_PLAYERS],
+    [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
+    Vec<SongLuaOverlayActor>,
+    Vec<SongLuaOverlayEaseWindowRuntime>,
+    Vec<std::ops::Range<usize>>,
+    Vec<Vec<SongLuaOverlayMessageRuntime>>,
+    Vec<SongLuaVisualLayerRuntime>,
+    Vec<SongLuaVisualLayerRuntime>,
+    [SongLuaCapturedActor; MAX_PLAYERS],
+    [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS],
+    SongLuaCapturedActor,
+    Vec<SongLuaOverlayMessageRuntime>,
+    [bool; MAX_PLAYERS],
+    f32,
+    f32,
+) {
+    let mut constant_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    let mut ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    let mut overlays = Vec::new();
+    let mut overlay_eases = Vec::new();
+    let mut overlay_ease_ranges = Vec::new();
+    let mut overlay_events = Vec::new();
+    let mut background_visual_layers = Vec::new();
+    let mut foreground_visual_layers = Vec::new();
+    let play_style = profile::get_session_play_style();
+    let player_side = profile::get_session_player_side();
+    let center_1player_notefield = crate::config::get().center_1player_notefield;
+    // Default player actor x/y must match StepMania's (SCREEN_CENTER_X, SCREEN_CENTER_Y)
+    // origin so that, when no song.lua override is present, the gameplay player
+    // transform path produces a zero translation. Without this, every non-lua song
+    // would translate the playfield by (-playfield_center_x, +screen_center_y),
+    // shoving it up and to the left.
+    let default_player_actor = |player_index: usize| SongLuaCapturedActor {
+        initial_state: SongLuaOverlayState {
+            x: if player_index < num_players {
+                song_lua_compile_player_screen_x(
+                    num_players,
+                    player_index,
+                    &player_profiles[player_index],
+                    play_style,
+                    player_side,
+                    center_1player_notefield,
+                )
+            } else {
+                screen_center_x()
+            },
+            y: screen_center_y(),
+            ..SongLuaOverlayState::default()
+        },
+        message_commands: Vec::new(),
     };
-    overlays = compiled.overlays.clone();
-    let overlay_runtime_eases = build_song_lua_overlay_ease_windows(
-        &compiled,
-        timing_players[0].as_ref(),
+    let mut player_actors: [SongLuaCapturedActor; MAX_PLAYERS] =
+        std::array::from_fn(default_player_actor);
+    let mut player_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    let mut song_foreground = SongLuaCapturedActor::default();
+    let mut song_foreground_events = Vec::new();
+    let mut hidden_players = [false; MAX_PLAYERS];
+    let screen_width = screen_width();
+    let screen_height = screen_height();
+
+    let primary_entry = song
+        .foreground_lua_changes
+        .iter()
+        .find(|change| change.start_beat <= 0.0 && change.path.is_file());
+
+    if primary_entry.is_none()
+        && song.background_lua_changes.is_empty()
+        && song.foreground_lua_changes.is_empty()
+    {
+        return (
+            constant_windows,
+            ease_windows,
+            overlays,
+            overlay_eases,
+            overlay_ease_ranges,
+            overlay_events,
+            background_visual_layers,
+            foreground_visual_layers,
+            player_actors,
+            player_events,
+            song_foreground,
+            song_foreground_events,
+            hidden_players,
+            screen_width,
+            screen_height,
+        );
+    }
+
+    let context = build_song_lua_compile_context(
+        song,
+        charts,
+        num_players,
+        player_profiles,
+        scroll_speed,
+        music_rate,
         machine_global_offset_seconds,
     );
-    (overlay_eases, overlay_ease_ranges) =
-        group_song_lua_overlay_eases(compiled.overlays.len(), overlay_runtime_eases);
-    overlay_events = build_song_lua_overlay_message_events(
-        &compiled,
-        timing_players[0].as_ref(),
-        machine_global_offset_seconds,
-    );
-    player_actors[..compiled.player_actors.len()].clone_from_slice(&compiled.player_actors);
-    for (player, actor) in compiled.player_actors.iter().enumerate() {
-        player_events[player] = build_song_lua_actor_message_events(
-            &compiled.messages,
-            &actor.message_commands,
+
+    let mut out_screen_width = screen_width;
+    let mut out_screen_height = screen_height;
+
+    if let Some(entry) = primary_entry {
+        let compiled = match compile_song_lua(&entry.path, &context) {
+            Ok(compiled) => compiled,
+            Err(err) => {
+                warn!(
+                    "Failed to compile gameplay lua for '{}' from '{}': {}",
+                    song.title,
+                    entry.path.display(),
+                    err,
+                );
+                return (
+                    constant_windows,
+                    ease_windows,
+                    overlays,
+                    overlay_eases,
+                    overlay_ease_ranges,
+                    overlay_events,
+                    background_visual_layers,
+                    foreground_visual_layers,
+                    player_actors,
+                    player_events,
+                    song_foreground,
+                    song_foreground_events,
+                    hidden_players,
+                    screen_width,
+                    screen_height,
+                );
+            }
+        };
+        overlays = compiled.overlays.clone();
+        let overlay_runtime_eases = build_song_lua_overlay_ease_windows(
+            &compiled,
             timing_players[0].as_ref(),
             machine_global_offset_seconds,
         );
-    }
-    song_foreground = compiled.song_foreground.clone();
-    song_foreground_events = build_song_lua_actor_message_events(
-        &compiled.messages,
-        &compiled.song_foreground.message_commands,
-        timing_players[0].as_ref(),
-        machine_global_offset_seconds,
-    );
-    hidden_players[..compiled.hidden_players.len()].copy_from_slice(&compiled.hidden_players);
-
-    let mut unsupported_targets = 0usize;
-    let mut total_constant = 0usize;
-    let mut total_eases = 0usize;
-    for player in 0..num_players {
-        let player_global_offset_seconds =
-            machine_global_offset_seconds + player_global_offset_shift_seconds[player];
-        constant_windows[player] = build_song_lua_constant_windows_for_player(
+        (overlay_eases, overlay_ease_ranges) =
+            group_song_lua_overlay_eases(compiled.overlays.len(), overlay_runtime_eases);
+        overlay_events = build_song_lua_overlay_message_events(
             &compiled,
-            timing_players[player].as_ref(),
-            player,
-            player_global_offset_seconds,
+            timing_players[0].as_ref(),
+            machine_global_offset_seconds,
         );
-        let (player_eases, player_unsupported_targets) = build_song_lua_ease_windows_for_player(
-            &compiled,
-            timing_players[player].as_ref(),
-            player,
-            player_global_offset_seconds,
-        );
-        unsupported_targets += player_unsupported_targets;
-        total_constant += constant_windows[player].len();
-        total_eases += player_eases.len();
-        ease_windows[player] = player_eases;
-    }
-
-    if total_constant > 0
-        || total_eases > 0
-        || !overlays.is_empty()
-        || !overlay_eases.is_empty()
-        || !compiled.messages.is_empty()
-        || compiled.info.unsupported_perframes > 0
-        || compiled.info.unsupported_function_eases > 0
-        || compiled.info.unsupported_function_actions > 0
-        || unsupported_targets > 0
-    {
-        info!(
-            "Compiled gameplay lua for '{}' (constants={}, eases={}, overlay_eases={}, overlays={}, messages={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}).",
-            song.title,
-            total_constant,
-            total_eases,
-            overlay_eases.len(),
-            overlays.len(),
-            compiled.messages.len(),
-            unsupported_targets,
-            compiled.info.unsupported_function_eases,
-            compiled.info.unsupported_function_actions,
-            compiled.info.unsupported_perframes,
-        );
-        log_song_lua_runtime_debug(
-            song.title.as_str(),
-            &compiled,
-            &overlay_eases,
+        player_actors[..compiled.player_actors.len()].clone_from_slice(&compiled.player_actors);
+        for (player, actor) in compiled.player_actors.iter().enumerate() {
+            player_events[player] = build_song_lua_actor_message_events(
+                &compiled.messages,
+                &actor.message_commands,
+                timing_players[0].as_ref(),
+                machine_global_offset_seconds,
+            );
+        }
+        song_foreground = compiled.song_foreground.clone();
+        song_foreground_events = build_song_lua_actor_message_events(
             &compiled.messages,
-            &hidden_players,
-            total_constant,
-            total_eases,
-            unsupported_targets,
+            &compiled.song_foreground.message_commands,
+            timing_players[0].as_ref(),
+            machine_global_offset_seconds,
         );
+        hidden_players[..compiled.hidden_players.len()].copy_from_slice(&compiled.hidden_players);
+
+        let mut unsupported_targets = 0usize;
+        let mut total_constant = 0usize;
+        let mut total_eases = 0usize;
+        for player in 0..num_players {
+            let player_global_offset_seconds =
+                machine_global_offset_seconds + player_global_offset_shift_seconds[player];
+            constant_windows[player] = build_song_lua_constant_windows_for_player(
+                &compiled,
+                timing_players[player].as_ref(),
+                player,
+                player_global_offset_seconds,
+            );
+            let (player_eases, player_unsupported_targets) = build_song_lua_ease_windows_for_player(
+                &compiled,
+                timing_players[player].as_ref(),
+                player,
+                player_global_offset_seconds,
+            );
+            unsupported_targets += player_unsupported_targets;
+            total_constant += constant_windows[player].len();
+            total_eases += player_eases.len();
+            ease_windows[player] = player_eases;
+        }
+
+        if total_constant > 0
+            || total_eases > 0
+            || !overlays.is_empty()
+            || !overlay_eases.is_empty()
+            || !compiled.messages.is_empty()
+            || compiled.info.unsupported_perframes > 0
+            || compiled.info.unsupported_function_eases > 0
+            || compiled.info.unsupported_function_actions > 0
+            || unsupported_targets > 0
+        {
+            info!(
+                "Compiled gameplay lua for '{}' (constants={}, eases={}, overlay_eases={}, overlays={}, messages={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}).",
+                song.title,
+                total_constant,
+                total_eases,
+                overlay_eases.len(),
+                overlays.len(),
+                compiled.messages.len(),
+                unsupported_targets,
+                compiled.info.unsupported_function_eases,
+                compiled.info.unsupported_function_actions,
+                compiled.info.unsupported_perframes,
+            );
+            log_song_lua_runtime_debug(
+                song.title.as_str(),
+                &compiled,
+                &overlay_eases,
+                &compiled.messages,
+                &hidden_players,
+                total_constant,
+                total_eases,
+                unsupported_targets,
+            );
+        }
+
+        out_screen_width = compiled.screen_width;
+        out_screen_height = compiled.screen_height;
+    }
+
+    for change in &song.background_lua_changes {
+        let compiled = match compile_song_lua(&change.path, &context) {
+            Ok(compiled) => compiled,
+            Err(err) => {
+                warn!(
+                    "Failed to compile background lua layer for '{}' from '{}': {}",
+                    song.title,
+                    change.path.display(),
+                    err,
+                );
+                continue;
+            }
+        };
+        if let Some(layer) = build_song_lua_visual_layer_runtime(
+            song,
+            change.start_beat,
+            &compiled,
+            timing_players[0].as_ref(),
+            machine_global_offset_seconds,
+        ) {
+            background_visual_layers.push(layer);
+        }
+    }
+
+    for change in song.foreground_lua_changes.iter().filter(|change| {
+        change.path.is_file()
+            && !primary_entry.is_some_and(|primary| {
+                change.start_beat.to_bits() == primary.start_beat.to_bits()
+                    && change.path == primary.path
+            })
+    }) {
+        let compiled = match compile_song_lua(&change.path, &context) {
+            Ok(compiled) => compiled,
+            Err(err) => {
+                warn!(
+                    "Failed to compile foreground lua layer for '{}' from '{}': {}",
+                    song.title,
+                    change.path.display(),
+                    err,
+                );
+                continue;
+            }
+        };
+        if let Some(layer) = build_song_lua_visual_layer_runtime(
+            song,
+            change.start_beat,
+            &compiled,
+            timing_players[0].as_ref(),
+            machine_global_offset_seconds,
+        ) {
+            foreground_visual_layers.push(layer);
+        }
     }
 
     (
@@ -2205,13 +2390,15 @@ pub(super) fn build_song_lua_runtime_windows(
         overlay_eases,
         overlay_ease_ranges,
         overlay_events,
+        background_visual_layers,
+        foreground_visual_layers,
         player_actors,
         player_events,
         song_foreground,
         song_foreground_events,
         hidden_players,
-        compiled.screen_width,
-        compiled.screen_height,
+        out_screen_width,
+        out_screen_height,
     )
 }
 
