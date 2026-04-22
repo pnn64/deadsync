@@ -3,12 +3,12 @@ use super::*;
 #[cfg(test)]
 pub(super) mod tests {
     use super::{
-        ErrorBarMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask,
-        NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, P1, P2, PlayerOptionMasks, Row, RowId,
-        RowMap, ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event,
-        hud_offset_choices, is_row_visible, judgment_tilt_intensity_visible,
-        repeat_held_arcade_start, row_visibility, session_active_players,
-        sync_profile_scroll_speed,
+        ErrorBarMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask, HUD_OFFSET_MAX,
+        HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
+        NAV_REPEAT_SCROLL_INTERVAL, P1, P2, PlayerOptionMasks, Row, RowId, RowMap, ScrollMask,
+        SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event, hud_offset_choices,
+        is_row_visible, judgment_tilt_intensity_visible, repeat_held_arcade_start, row_visibility,
+        session_active_players, sync_profile_scroll_speed,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -328,6 +328,126 @@ pub(super) mod tests {
         assert!(
             combined.scroll.contains(ScrollMask::CROSS),
             "Cross bit preserved after OR-accumulation"
+        );
+    }
+
+    /// Regression guard: bitmask rows initialise their cursor to the
+    /// position of the first active bit. If a future refactor moves mask
+    /// init out of `apply_profile_defaults` (e.g. into a
+    /// `BitmaskBinding`-driven table), this behaviour must be preserved.
+    #[test]
+    fn init_bitmask_row_cursor_starts_at_first_active_bit() {
+        ensure_i18n();
+        let mut profile = Profile::default();
+        // Only the second Hide bit (BACKGROUND, 1 << 1) — cursor must land on
+        // choice index 1, not 0.
+        profile.hide_targets = false;
+        profile.hide_song_bg = true;
+
+        let mut hide_rows = test_row_map(vec![test_row(
+            RowId::Hide,
+            lookup_key("PlayerOptions", "Hide"),
+            &["Targets", "BG", "Combo", "Life", "Score", "Danger", "ComboExp"],
+            [0, 0],
+        )]);
+
+        let masks = super::super::panes::apply_profile_defaults(&mut hide_rows, &profile, P1);
+
+        assert_eq!(
+            masks.hide,
+            HideMask::BACKGROUND,
+            "only BACKGROUND bit should be active",
+        );
+        let row = hide_rows.get(RowId::Hide).expect("Hide row present");
+        assert_eq!(
+            row.selected_choice_index[P1], 1,
+            "cursor must start at the first active bit (BACKGROUND = index 1)",
+        );
+    }
+
+    /// Regression guard: `FAPlusOptions` is the lone bitmask row whose
+    /// cursor always starts at 0, regardless of which bits are active. Any
+    /// data-driven mask-init scheme must preserve this Fixed(0) policy.
+    #[test]
+    fn init_fa_plus_options_cursor_always_zero() {
+        ensure_i18n();
+        let mut profile = Profile::default();
+        // Activate only the second FA+ bit (EX_SCORE = 1 << 1). Under the
+        // generic FirstActiveBit policy the cursor would land on 1; FAPlus
+        // pins it to 0.
+        profile.show_fa_plus_window = false;
+        profile.show_ex_score = true;
+
+        let mut fa_plus_rows = test_row_map(vec![test_row(
+            RowId::FAPlusOptions,
+            lookup_key("PlayerOptions", "FAPlusOptions"),
+            &["Window", "EX", "HardEX", "Pane", "Blue10", "Split"],
+            [0, 0],
+        )]);
+
+        let masks = super::super::panes::apply_profile_defaults(&mut fa_plus_rows, &profile, P1);
+
+        assert_eq!(
+            masks.fa_plus,
+            FaPlusMask::EX_SCORE,
+            "only EX_SCORE bit should be active",
+        );
+        let row = fa_plus_rows
+            .get(RowId::FAPlusOptions)
+            .expect("FAPlusOptions row present");
+        assert_eq!(
+            row.selected_choice_index[P1], 0,
+            "FAPlusOptions cursor must be pinned to 0 even when a non-first bit is active",
+        );
+    }
+
+    /// Regression guard: `GameplayExtrasMore` is a derived mask with no
+    /// constructed Row. Its bits are populated as a side effect of the
+    /// `GameplayExtras` profile processing (`column_cues` and
+    /// `display_scorebox` toggles contribute to BOTH masks). A row-driven
+    /// mask registry must explicitly handle this derivation.
+    #[test]
+    fn init_gameplay_extras_more_derived_from_sibling_profile_fields() {
+        ensure_i18n();
+        let mut profile = Profile::default();
+        profile.column_cues = true;
+        profile.display_scorebox = true;
+
+        // No GameplayExtrasMore row exists (orphan; see the
+        // `every_row_id_is_constructed_by_some_pane` test) — we still expect
+        // the derived mask bits to be populated.
+        let mut rows = test_row_map(vec![test_row(
+            RowId::GameplayExtras,
+            lookup_key("PlayerOptions", "GameplayExtras"),
+            &["FlashMiss", "DensityTop", "ColumnCues", "Scorebox"],
+            [0, 0],
+        )]);
+
+        let masks = super::super::panes::apply_profile_defaults(&mut rows, &profile, P1);
+
+        assert!(
+            masks
+                .gameplay_extras
+                .contains(GameplayExtrasMask::COLUMN_CUES),
+            "GameplayExtras COLUMN_CUES bit set from profile",
+        );
+        assert!(
+            masks
+                .gameplay_extras
+                .contains(GameplayExtrasMask::DISPLAY_SCOREBOX),
+            "GameplayExtras DISPLAY_SCOREBOX bit set from profile",
+        );
+        assert!(
+            masks
+                .gameplay_extras_more
+                .contains(GameplayExtrasMoreMask::COLUMN_CUES),
+            "derived GameplayExtrasMore COLUMN_CUES bit set from sibling profile field",
+        );
+        assert!(
+            masks
+                .gameplay_extras_more
+                .contains(GameplayExtrasMoreMask::DISPLAY_SCOREBOX),
+            "derived GameplayExtrasMore DISPLAY_SCOREBOX bit set from sibling profile field",
         );
     }
 
