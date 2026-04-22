@@ -1256,8 +1256,7 @@ pub(super) fn apply_pane(state: &mut State, pane: OptionsPane) {
     // to the top, and recompute its row tweens for the new layout.
     state.current_pane = pane;
     state.pane_mut().reset_cursor();
-    state.start_held_since = [None; PLAYER_SLOTS];
-    state.start_last_triggered_at = [None; PLAYER_SLOTS];
+    state.start_input = [PlayerStartInput::default(); PLAYER_SLOTS];
     state.help_anim_time = [0.0; PLAYER_SLOTS];
     let active = session_active_players();
     let allow = state.allow_per_player_global_offsets;
@@ -1275,11 +1274,8 @@ pub(super) fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     }
     audio::play_sfx("assets/sounds/start.ogg");
 
-    state.nav_key_held_direction = [None; PLAYER_SLOTS];
-    state.nav_key_held_since = [None; PLAYER_SLOTS];
-    state.nav_key_last_scrolled_at = [None; PLAYER_SLOTS];
-    state.start_held_since = [None; PLAYER_SLOTS];
-    state.start_last_triggered_at = [None; PLAYER_SLOTS];
+    state.nav_input = [PlayerNavInput::default(); PLAYER_SLOTS];
+    state.start_input = [PlayerStartInput::default(); PLAYER_SLOTS];
 
     state.pane_transition = match state.pane_transition {
         PaneTransition::FadingOut { t, .. } => PaneTransition::FadingOut { target: pane, t },

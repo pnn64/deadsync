@@ -16,9 +16,9 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     // Hold-to-scroll per player.
     for player_idx in active_player_indices(active) {
         let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
-            state.nav_key_held_direction[player_idx],
-            state.nav_key_held_since[player_idx],
-            state.nav_key_last_scrolled_at[player_idx],
+            state.nav_input[player_idx].held_direction,
+            state.nav_input[player_idx].held_since,
+            state.nav_input[player_idx].last_scrolled_at,
         ) else {
             continue;
         };
@@ -55,7 +55,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 }
             }
         }
-        state.nav_key_last_scrolled_at[player_idx] = Some(now);
+        state.nav_input[player_idx].last_scrolled_at = Some(now);
     }
 
     if arcade_style {
@@ -245,7 +245,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         if state.pane().selected_row[player_idx] == state.pane().prev_selected_row[player_idx] {
             continue;
         }
-        match state.nav_key_held_direction[player_idx] {
+        match state.nav_input[player_idx].held_direction {
             Some(NavDirection::Up) => audio::play_sfx("assets/sounds/prev_row.ogg"),
             Some(NavDirection::Down) => audio::play_sfx("assets/sounds/next_row.ogg"),
             _ => audio::play_sfx("assets/sounds/next_row.ogg"),
@@ -309,17 +309,17 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
 pub fn on_nav_press(state: &mut State, player_idx: usize, dir: NavDirection) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     state.scroll_focus_player = idx;
-    state.nav_key_held_direction[idx] = Some(dir);
-    state.nav_key_held_since[idx] = Some(Instant::now());
-    state.nav_key_last_scrolled_at[idx] = Some(Instant::now());
+    state.nav_input[idx].held_direction = Some(dir);
+    state.nav_input[idx].held_since = Some(Instant::now());
+    state.nav_input[idx].last_scrolled_at = Some(Instant::now());
 }
 
 pub fn on_nav_release(state: &mut State, player_idx: usize, dir: NavDirection) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    if state.nav_key_held_direction[idx] == Some(dir) {
-        state.nav_key_held_direction[idx] = None;
-        state.nav_key_held_since[idx] = None;
-        state.nav_key_last_scrolled_at[idx] = None;
+    if state.nav_input[idx].held_direction == Some(dir) {
+        state.nav_input[idx].held_direction = None;
+        state.nav_input[idx].held_since = None;
+        state.nav_input[idx].last_scrolled_at = None;
     }
 }
 
@@ -327,15 +327,15 @@ pub fn on_nav_release(state: &mut State, player_idx: usize, dir: NavDirection) {
 pub(super) fn on_start_press(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let now = Instant::now();
-    state.start_held_since[idx] = Some(now);
-    state.start_last_triggered_at[idx] = Some(now);
+    state.start_input[idx].held_since = Some(now);
+    state.start_input[idx].last_triggered_at = Some(now);
 }
 
 #[inline(always)]
 pub(super) fn clear_start_hold(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    state.start_held_since[idx] = None;
-    state.start_last_triggered_at[idx] = None;
+    state.start_input[idx].held_since = None;
+    state.start_input[idx].last_triggered_at = None;
 }
 
 pub(super) fn focus_exit_row(state: &mut State, active: [bool; PLAYER_SLOTS], player_idx: usize) {
@@ -419,9 +419,9 @@ pub(super) fn handle_nav_event(
 #[inline(always)]
 pub(super) fn clear_nav_hold(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
-    state.nav_key_held_direction[idx] = None;
-    state.nav_key_held_since[idx] = None;
-    state.nav_key_last_scrolled_at[idx] = None;
+    state.nav_input[idx].held_direction = None;
+    state.nav_input[idx].held_since = None;
+    state.nav_input[idx].last_scrolled_at = None;
 }
 
 #[inline(always)]
@@ -468,8 +468,8 @@ pub(super) fn repeat_held_arcade_start(
     }
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let (Some(held_since), Some(last_triggered_at)) = (
-        state.start_held_since[idx],
-        state.start_last_triggered_at[idx],
+        state.start_input[idx].held_since,
+        state.start_input[idx].last_triggered_at,
     ) else {
         return None;
     };
@@ -478,7 +478,7 @@ pub(super) fn repeat_held_arcade_start(
     {
         return None;
     }
-    state.start_last_triggered_at[idx] = Some(now);
+    state.start_input[idx].last_triggered_at = Some(now);
     handle_arcade_start_press(state, asset_manager, active, player_idx, true)
 }
 

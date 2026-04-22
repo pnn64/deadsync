@@ -317,8 +317,8 @@ pub(super) mod tests {
         assert!(second_row > first_row);
 
         let now = Instant::now();
-        state.start_held_since[P1] = Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
-        state.start_last_triggered_at[P1] =
+        state.start_input[P1].held_since = Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
+        state.start_input[P1].last_triggered_at =
             Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
 
         assert!(repeat_held_arcade_start(&mut state, &asset_manager, active, P1, now).is_none());
@@ -347,8 +347,8 @@ pub(super) mod tests {
         state.pane_mut().prev_selected_row[P1] = last_row;
 
         let now = Instant::now();
-        state.start_held_since[P1] = Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
-        state.start_last_triggered_at[P1] =
+        state.start_input[P1].held_since = Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
+        state.start_input[P1].last_triggered_at =
             Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
 
         assert!(repeat_held_arcade_start(&mut state, &asset_manager, active, P1, now).is_none());
