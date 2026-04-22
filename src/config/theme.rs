@@ -85,6 +85,42 @@ impl FromStr for SelectMusicPatternInfoMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectMusicItlRankMode {
+    None,
+    Chart,
+    Overall,
+}
+
+impl SelectMusicItlRankMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Chart => "Chart",
+            Self::Overall => "Overall",
+        }
+    }
+}
+
+impl FromStr for SelectMusicItlRankMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "none" | "off" | "disabled" | "disable" => Ok(Self::None),
+            "chart" | "chartrank" | "leaderboard" | "leaderrank" => Ok(Self::Chart),
+            "overall" | "overallrank" | "zmod" | "tournament" => Ok(Self::Overall),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectMusicItlWheelMode {
     Off,
     Score,

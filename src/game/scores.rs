@@ -49,9 +49,10 @@ use groovestats::{
 pub use itl::{
     CachedItlScore, ItlEvalState, ItlEventProgress, ItlOverlayPage, get_cached_itl_score_for_side,
     get_cached_itl_score_for_song, get_cached_itl_self_score_for_side,
-    get_cached_itl_tournament_rank_for_side, get_or_fetch_itl_self_score_for_side,
-    get_or_fetch_itl_tournament_rank_for_side, itl_eval_state_from_gameplay, itl_points_for_chart,
-    save_itl_data_from_gameplay, should_warn_cmod_for_itl_chart,
+    get_cached_itl_tournament_overall_ranks_for_side, get_cached_itl_tournament_rank_for_side,
+    get_or_fetch_itl_self_score_for_side, get_or_fetch_itl_tournament_rank_for_side,
+    itl_eval_state_from_gameplay, itl_points_for_chart, save_itl_data_from_gameplay,
+    should_warn_cmod_for_itl_chart,
 };
 pub use submit_status::RejectReason;
 pub(crate) use submit_status::{

@@ -331,10 +331,21 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicWheelLamps")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.show_music_wheel_lamps, |v| v != 0);
-    cfg.show_select_music_itl_chart_rank = conf
-        .get("Options", "SelectMusicShowITLChartRank")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_select_music_itl_chart_rank, |v| v != 0);
+    cfg.select_music_itl_rank_mode = conf
+        .get("Options", "SelectMusicWheelITLRank")
+        .and_then(|v| SelectMusicItlRankMode::from_str(&v).ok())
+        .or_else(|| {
+            conf.get("Options", "SelectMusicShowITLChartRank")
+                .and_then(|v| v.parse::<u8>().ok())
+                .map(|v| {
+                    if v != 0 {
+                        SelectMusicItlRankMode::Chart
+                    } else {
+                        SelectMusicItlRankMode::None
+                    }
+                })
+        })
+        .unwrap_or(default.select_music_itl_rank_mode);
     cfg.select_music_itl_wheel_mode = conf
         .get("Options", "SelectMusicWheelITL")
         .and_then(|v| SelectMusicItlWheelMode::from_str(&v).ok())

@@ -42,7 +42,7 @@ impl MusicWheelBenchFixture {
             song_has_edit_ptrs: Some(&self.song_has_edit_ptrs),
             show_music_wheel_grades: false,
             show_music_wheel_lamps: false,
-            show_itl_chart_rank: false,
+            itl_rank_mode: crate::config::SelectMusicItlRankMode::None,
             itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
             allow_online_fetch: false,
             new_pack_names: None,

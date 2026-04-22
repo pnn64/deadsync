@@ -351,6 +351,95 @@ pub fn get_cached_itl_tournament_rank_for_side(
     get_cached_player_leaderboard_data_for_side(chart_hash, side)?.itl_self_rank
 }
 
+fn cached_online_itl_scores_by_chart_for_side(side: profile::PlayerSide) -> HashMap<String, u32> {
+    if !profile::is_session_side_joined(side) {
+        return HashMap::new();
+    }
+    let side_profile = profile::get_for_side(side);
+    let api_key = side_profile.groovestats_api_key.trim();
+    if api_key.is_empty() {
+        return HashMap::new();
+    }
+
+    let profile_id = profile::active_local_profile_id_for_side(side);
+    if let Some(profile_id) = profile_id.as_deref() {
+        ensure_online_itl_self_score_cache_loaded_for_profile(profile_id);
+    }
+
+    let cache = ONLINE_ITL_SELF_SCORE_CACHE.lock().unwrap();
+    let mut by_chart = HashMap::new();
+    if let Some(profile_id) = profile_id.as_deref()
+        && let Some(scores) = cache.loaded_profiles.get(profile_id)
+    {
+        for (key, score) in scores {
+            if key.api_key == api_key {
+                by_chart.insert(key.chart_hash.clone(), *score);
+            }
+        }
+    }
+    for (key, score) in &cache.session_by_key {
+        if key.api_key == api_key {
+            by_chart.insert(key.chart_hash.clone(), *score);
+        }
+    }
+    by_chart
+}
+
+fn apply_online_itl_overall_ranks(
+    out: &mut HashMap<String, u32>,
+    by_chart_points: Vec<(String, u32)>,
+) {
+    let mut sorted_points: Vec<u32> = by_chart_points.iter().map(|(_, points)| *points).collect();
+    sorted_points.sort_unstable_by(|a, b| b.cmp(a));
+    for (chart_hash, points) in by_chart_points {
+        if let Some(rank) = rank_for_points(sorted_points.as_slice(), points) {
+            out.insert(chart_hash, rank);
+        }
+    }
+}
+
+pub fn get_cached_itl_tournament_overall_ranks_for_side(
+    side: profile::PlayerSide,
+) -> HashMap<String, u32> {
+    let by_chart_score = cached_online_itl_scores_by_chart_for_side(side);
+    if by_chart_score.is_empty() {
+        return HashMap::new();
+    }
+
+    let song_cache = get_song_cache();
+    let mut single_points = Vec::new();
+    let mut double_points = Vec::new();
+    for pack in song_cache.iter() {
+        if !group_name_matches(pack.group_name.as_str()) {
+            continue;
+        }
+        for song in &pack.songs {
+            for chart in &song.charts {
+                if !chart.has_note_data {
+                    continue;
+                }
+                let Some(ex_hundredths) = by_chart_score.get(chart.short_hash.as_str()).copied()
+                else {
+                    continue;
+                };
+                let Some(points) = itl_points_for_chart(chart, ex_hundredths) else {
+                    continue;
+                };
+                if itl_steps_type(chart).eq_ignore_ascii_case("double") {
+                    double_points.push((chart.short_hash.clone(), points));
+                } else {
+                    single_points.push((chart.short_hash.clone(), points));
+                }
+            }
+        }
+    }
+
+    let mut ranks = HashMap::with_capacity(single_points.len() + double_points.len());
+    apply_online_itl_overall_ranks(&mut ranks, single_points);
+    apply_online_itl_overall_ranks(&mut ranks, double_points);
+    ranks
+}
+
 pub fn save_itl_data_from_gameplay(
     gs: &gameplay::State,
 ) -> [Option<ItlEventProgress>; gameplay::MAX_PLAYERS] {
@@ -1588,6 +1677,23 @@ mod tests {
         assert_eq!(load_online_itl_self_score_index(&path), Some(expected));
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn online_itl_overall_ranks_share_tied_points() {
+        let mut ranks = HashMap::new();
+        apply_online_itl_overall_ranks(
+            &mut ranks,
+            vec![
+                ("a".to_string(), 19_500),
+                ("b".to_string(), 19_500),
+                ("c".to_string(), 18_000),
+            ],
+        );
+
+        assert_eq!(ranks.get("a"), Some(&1));
+        assert_eq!(ranks.get("b"), Some(&1));
+        assert_eq!(ranks.get("c"), Some(&3));
     }
 
     #[test]

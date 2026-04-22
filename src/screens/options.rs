@@ -6,9 +6,9 @@ use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlWheelMode,
-    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SimpleIni,
-    SyncGraphMode, dirs,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
+    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SelectMusicWheelStyle, SimpleIni, SyncGraphMode, dirs,
 };
 use crate::engine::audio;
 #[cfg(target_os = "windows")]
@@ -535,7 +535,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowCDTitles")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowWheelGrades")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowWheelLamps")),
-            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowITLChartRank")),
+            HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ITLRank")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "NewPackBadge")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ShowPatternInfo")),
             HelpEntry::Bullet(lookup_key("OptionsSelectMusic", "ChartInfo")),
@@ -920,7 +920,7 @@ pub enum SubRowId {
     ShowCdTitles,
     ShowWheelGrades,
     ShowWheelLamps,
-    ShowItlChartRank,
+    ItlRank,
     ItlWheelData,
     NewPackBadge,
     ShowPatternInfo,
@@ -2554,11 +2554,12 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::ShowItlChartRank,
-        label: lookup_key("OptionsSelectMusic", "ShowITLChartRank"),
+        id: SubRowId::ItlRank,
+        label: lookup_key("OptionsSelectMusic", "ITLRank"),
         choices: &[
-            localized_choice("Common", "No"),
-            localized_choice("Common", "Yes"),
+            localized_choice("OptionsSelectMusic", "ItlRankNone"),
+            localized_choice("OptionsSelectMusic", "ItlRankChart"),
+            localized_choice("OptionsSelectMusic", "ItlRankOverall"),
         ],
         inline: true,
     },
@@ -2751,10 +2752,10 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         id: ItemId::SmWheelItlRank,
-        name: lookup_key("OptionsSelectMusic", "ShowITLChartRank"),
+        name: lookup_key("OptionsSelectMusic", "ITLRank"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
-            "ShowITLChartRankHelp",
+            "ITLRankHelp",
         ))],
     },
     Item {
@@ -5638,6 +5639,22 @@ const fn select_music_itl_wheel_choice_index(mode: SelectMusicItlWheelMode) -> u
     }
 }
 
+const fn select_music_itl_rank_choice_index(mode: SelectMusicItlRankMode) -> usize {
+    match mode {
+        SelectMusicItlRankMode::None => 0,
+        SelectMusicItlRankMode::Chart => 1,
+        SelectMusicItlRankMode::Overall => 2,
+    }
+}
+
+const fn select_music_itl_rank_from_choice(idx: usize) -> SelectMusicItlRankMode {
+    match idx {
+        1 => SelectMusicItlRankMode::Chart,
+        2 => SelectMusicItlRankMode::Overall,
+        _ => SelectMusicItlRankMode::None,
+    }
+}
+
 const fn select_music_itl_wheel_from_choice(idx: usize) -> SelectMusicItlWheelMode {
     match idx {
         1 => SelectMusicItlWheelMode::Score,
@@ -6480,8 +6497,8 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SubRowId::ShowItlChartRank,
-        yes_no_choice_index(cfg.show_select_music_itl_chart_rank),
+        SubRowId::ItlRank,
+        select_music_itl_rank_choice_index(cfg.select_music_itl_rank_mode),
     );
     set_choice_by_id(
         &mut state.sub_choice_indices_select_music,
@@ -8231,8 +8248,8 @@ fn apply_submenu_choice_delta(
             config::update_show_music_wheel_grades(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ShowWheelLamps {
             config::update_show_music_wheel_lamps(yes_no_from_choice(new_index));
-        } else if row.id == SubRowId::ShowItlChartRank {
-            config::update_show_select_music_itl_chart_rank(yes_no_from_choice(new_index));
+        } else if row.id == SubRowId::ItlRank {
+            config::update_select_music_itl_rank_mode(select_music_itl_rank_from_choice(new_index));
         } else if row.id == SubRowId::ItlWheelData {
             config::update_select_music_itl_wheel_mode(select_music_itl_wheel_from_choice(
                 new_index,

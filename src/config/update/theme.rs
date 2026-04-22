@@ -77,13 +77,13 @@ pub fn update_show_music_wheel_lamps(enabled: bool) {
     save_without_keymaps();
 }
 
-pub fn update_show_select_music_itl_chart_rank(enabled: bool) {
+pub fn update_select_music_itl_rank_mode(mode: SelectMusicItlRankMode) {
     {
         let mut cfg = lock_config();
-        if cfg.show_select_music_itl_chart_rank == enabled {
+        if cfg.select_music_itl_rank_mode == mode {
             return;
         }
-        cfg.show_select_music_itl_chart_rank = enabled;
+        cfg.select_music_itl_rank_mode = mode;
     }
     save_without_keymaps();
 }

@@ -1,5 +1,5 @@
 use crate::act;
-use crate::config::SelectMusicItlWheelMode;
+use crate::config::{SelectMusicItlRankMode, SelectMusicItlWheelMode};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
@@ -283,7 +283,7 @@ pub struct MusicWheelParams<'a> {
     pub song_has_edit_ptrs: Option<&'a HashSet<usize>>,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
-    pub show_itl_chart_rank: bool,
+    pub itl_rank_mode: SelectMusicItlRankMode,
     pub itl_wheel_mode: SelectMusicItlWheelMode,
     pub allow_online_fetch: bool,
     pub new_pack_names: Option<&'a HashSet<String>>,
@@ -349,6 +349,49 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let joined_sides = usize::from(profile::is_session_side_joined(profile::PlayerSide::P1))
         + usize::from(profile::is_session_side_joined(profile::PlayerSide::P2));
     let is_double_style = target_chart_type.to_ascii_lowercase().contains("double");
+    let selected_chart_hash_for_side = |side: profile::PlayerSide| {
+        let Some(MusicWheelEntry::Song(info)) = p.entries.get(p.selected_index) else {
+            return None;
+        };
+        let ix = match side {
+            profile::PlayerSide::P2 => 1,
+            _ => 0,
+        };
+        crate::screens::select_music::chart_for_steps_index(
+            info,
+            target_chart_type,
+            p.selected_steps_index[ix],
+        )
+        .map(|chart| chart.short_hash.as_str())
+    };
+    if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall) && p.allow_online_fetch {
+        for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+            if !profile::is_session_side_joined(side) {
+                continue;
+            }
+            if let Some(chart_hash) = selected_chart_hash_for_side(side) {
+                let _ = scores::get_or_fetch_itl_self_score_for_side(chart_hash, side);
+            }
+        }
+    }
+    let overall_itl_ranks_p1 = if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall)
+        && profile::is_session_side_joined(profile::PlayerSide::P1)
+    {
+        Some(scores::get_cached_itl_tournament_overall_ranks_for_side(
+            profile::PlayerSide::P1,
+        ))
+    } else {
+        None
+    };
+    let overall_itl_ranks_p2 = if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall)
+        && profile::is_session_side_joined(profile::PlayerSide::P2)
+    {
+        Some(scores::get_cached_itl_tournament_overall_ranks_for_side(
+            profile::PlayerSide::P2,
+        ))
+    } else {
+        None
+    };
 
     let num_entries = p.entries.len();
 
@@ -659,7 +702,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     let should_fetch_online_itl =
                         should_fetch_online_itl_score(is_selected_slot, p.allow_online_fetch);
 
-                    if p.show_itl_chart_rank && joined_sides == 1 {
+                    if !matches!(p.itl_rank_mode, SelectMusicItlRankMode::None) && joined_sides == 1
+                    {
                         for (side, rank_x) in [
                             (profile::PlayerSide::P1, grade_x_p2),
                             (profile::PlayerSide::P2, grade_x_p1),
@@ -667,15 +711,33 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             if !profile::is_session_side_joined(side) {
                                 continue;
                             }
-                            let Some(chart_hash) =
-                                wheel_chart_for_side(side).map(|chart| chart.short_hash.as_str())
-                            else {
+                            let Some(side_chart) = wheel_chart_for_side(side) else {
                                 continue;
                             };
-                            let rank = if should_fetch_online_itl {
-                                scores::get_or_fetch_itl_tournament_rank_for_side(chart_hash, side)
-                            } else {
-                                scores::get_cached_itl_tournament_rank_for_side(chart_hash, side)
+                            let rank = match p.itl_rank_mode {
+                                SelectMusicItlRankMode::None => None,
+                                SelectMusicItlRankMode::Chart => {
+                                    let chart_hash = side_chart.short_hash.as_str();
+                                    if should_fetch_online_itl {
+                                        scores::get_or_fetch_itl_tournament_rank_for_side(
+                                            chart_hash, side,
+                                        )
+                                    } else {
+                                        scores::get_cached_itl_tournament_rank_for_side(
+                                            chart_hash, side,
+                                        )
+                                    }
+                                }
+                                SelectMusicItlRankMode::Overall => match side {
+                                    profile::PlayerSide::P2 => overall_itl_ranks_p2
+                                        .as_ref()
+                                        .and_then(|ranks| ranks.get(side_chart.short_hash.as_str()))
+                                        .copied(),
+                                    _ => overall_itl_ranks_p1
+                                        .as_ref()
+                                        .and_then(|ranks| ranks.get(side_chart.short_hash.as_str()))
+                                        .copied(),
+                                },
                             };
                             let Some(rank) = rank else {
                                 continue;
