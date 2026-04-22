@@ -116,16 +116,8 @@ pub(super) fn apply_profile_defaults(
     let mut masks = PlayerOptionMasks::default();
     init_opted_in_bitmask_rows(row_map, profile, &mut masks, player_idx);
 
-    let mut scroll_active_mask = ScrollMask::empty();
     let mut gameplay_extras_active_mask = GameplayExtrasMask::empty();
     let mut gameplay_extras_more_active_mask = GameplayExtrasMoreMask::empty();
-    let mut error_bar_active_mask = profile.error_bar_active_mask;
-    if error_bar_active_mask.is_empty() {
-        error_bar_active_mask = crate::game::profile::error_bar_mask_from_style(
-            profile.error_bar,
-            profile.error_bar_text,
-        );
-    }
     let match_ns_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
     // Initialize Background Filter row from profile setting (0..=100 %).
@@ -351,20 +343,6 @@ pub(super) fn apply_profile_defaults(
     if let Some(row) = row_map.get_mut(RowId::OffsetIndicator) {
         row.selected_choice_index[player_idx] = if profile.error_ms_display { 1 } else { 0 };
     }
-    if let Some(row) = row_map.get_mut(RowId::ErrorBar) {
-        if !error_bar_active_mask.is_empty() {
-            let bits = error_bar_active_mask.bits();
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (bits & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
     if let Some(row) = row_map.get_mut(RowId::DataVisualizations) {
         row.selected_choice_index[player_idx] = DATA_VISUALIZATIONS_VARIANTS
             .iter()
@@ -512,42 +490,6 @@ pub(super) fn apply_profile_defaults(
         }
     }
 
-    // Initialize Scroll row from profile setting (multi-choice toggle group).
-    if let Some(row) = row_map.get_mut(RowId::Scroll) {
-        use crate::game::profile::ScrollOption;
-        // Choice indices are fixed by construction order in build_advanced_rows:
-        // 0=Reverse, 1=Split, 2=Alternate, 3=Cross, 4=Centered
-        const REVERSE: usize = 0;
-        const SPLIT: usize = 1;
-        const ALTERNATE: usize = 2;
-        const CROSS: usize = 3;
-        const CENTERED: usize = 4;
-        let flags: &[(ScrollOption, usize)] = &[
-            (ScrollOption::Reverse, REVERSE),
-            (ScrollOption::Split, SPLIT),
-            (ScrollOption::Alternate, ALTERNATE),
-            (ScrollOption::Cross, CROSS),
-            (ScrollOption::Centered, CENTERED),
-        ];
-        for &(flag, idx) in flags {
-            if profile.scroll_option.contains(flag) && idx < row.choices.len() && idx < 8 {
-                scroll_active_mask.insert(ScrollMask::from_bits_truncate(1u8 << (idx as u8)));
-            }
-        }
-
-        // Cursor starts at the first active choice if any, otherwise at the first option.
-        if !scroll_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (scroll_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
     if let Some(row) = row_map.get_mut(RowId::Attacks) {
         row.selected_choice_index[player_idx] = ATTACK_MODE_VARIANTS
             .iter()
@@ -562,10 +504,8 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    masks.scroll = scroll_active_mask;
     masks.gameplay_extras = gameplay_extras_active_mask;
     masks.gameplay_extras_more = gameplay_extras_more_active_mask;
-    masks.error_bar = error_bar_active_mask;
     masks
 }
 

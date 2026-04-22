@@ -153,7 +153,40 @@ const ERROR_BAR_OFFSET_Y: NumericBinding = NumericBinding {
 
 const SCROLL: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_scroll_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| {
+            // The Scroll row's choice indices are fixed by build order
+            // (0=Reverse, 1=Split, 2=Alternate, 3=Cross, 4=Centered) and the
+            // ScrollOption bit positions match. The order assertion in
+            // ``scroll_choice_order_matches_scroll_option_bits`` guards the
+            // invariant. We translate per-flag rather than copying ``.0`` so
+            // any future divergence is caught here.
+            use crate::game::profile::ScrollOption;
+            let mut bits = super::super::state::ScrollMask::empty();
+            if p.scroll_option.contains(ScrollOption::Reverse) {
+                bits.insert(super::super::state::ScrollMask::from_bits_retain(1u8 << 0));
+            }
+            if p.scroll_option.contains(ScrollOption::Split) {
+                bits.insert(super::super::state::ScrollMask::from_bits_retain(1u8 << 1));
+            }
+            if p.scroll_option.contains(ScrollOption::Alternate) {
+                bits.insert(super::super::state::ScrollMask::from_bits_retain(1u8 << 2));
+            }
+            if p.scroll_option.contains(ScrollOption::Cross) {
+                bits.insert(super::super::state::ScrollMask::from_bits_retain(1u8 << 3));
+            }
+            if p.scroll_option.contains(ScrollOption::Centered) {
+                bits.insert(super::super::state::ScrollMask::from_bits_retain(1u8 << 4));
+            }
+            bits.bits() as u32
+        },
+        get_active: |m| m.scroll.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(b & !(u8::MAX as u32), 0, "ScrollMask init bits exceed u8 width");
+            m.scroll = super::super::state::ScrollMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 const HIDE: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_hide_row,
@@ -224,7 +257,25 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding {
 };
 const ERROR_BAR: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_error_bar_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| {
+            // Profile already stores the desired mask; if it's empty (e.g.
+            // legacy profile or unset) fall back to the canonical mapping
+            // from the visual style + text-mode pair.
+            let mask = if p.error_bar_active_mask.is_empty() {
+                crate::game::profile::error_bar_mask_from_style(p.error_bar, p.error_bar_text)
+            } else {
+                p.error_bar_active_mask
+            };
+            mask.bits() as u32
+        },
+        get_active: |m| m.error_bar.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(b & !(u8::MAX as u32), 0, "ErrorBarMask init bits exceed u8 width");
+            m.error_bar = crate::game::profile::ErrorBarMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_error_bar_options_row,
@@ -1114,16 +1165,53 @@ mod bitmask_binding_init_tests {
     fn binding_without_init_is_noop() {
         ensure_i18n();
         let mut row = make_bitmask_row(
-            RowId::Scroll,
-            lookup_key("PlayerOptions", "Scroll"),
-            &["Reverse", "Split", "Alternate", "Cross", "Centered"],
+            RowId::GameplayExtras,
+            lookup_key("PlayerOptions", "GameplayExtras"),
+            &["FlashMiss", "DensityTop", "ColumnCues", "Scorebox"],
         );
         row.selected_choice_index = [3, 4];
         let mut masks = PlayerOptionMasks::default();
         let profile = Profile::default();
-        let applied = init_bitmask_row_from_binding(&mut row, &SCROLL, &profile, &mut masks, 0);
-        assert!(!applied, "SCROLL binding has no init contract yet");
+        let applied = init_bitmask_row_from_binding(&mut row, &GAMEPLAY_EXTRAS, &profile, &mut masks, 0);
+        assert!(!applied, "GAMEPLAY_EXTRAS binding has no init contract yet");
         assert_eq!(row.selected_choice_index, [3, 4], "row untouched");
         assert_eq!(masks, PlayerOptionMasks::default(), "masks untouched");
+    }
+
+    /// Order assertion: Scroll choice index N maps to ScrollMask bit (1 << N)
+    /// maps to ScrollOption variant N. The SCROLL binding's from_profile
+    /// closure relies on this 1:1 ordering; if any of the three orderings
+    /// drifts, this test must fail before reaching production.
+    #[test]
+    fn scroll_choice_order_matches_scroll_option_bits() {
+        use crate::game::profile::ScrollOption;
+        let cases = [
+            (0u8, ScrollOption::Reverse),
+            (1, ScrollOption::Split),
+            (2, ScrollOption::Alternate),
+            (3, ScrollOption::Cross),
+            (4, ScrollOption::Centered),
+        ];
+        for (idx, opt) in cases {
+            let mut profile = Profile::default();
+            profile.scroll_option = opt;
+            let mut row = make_bitmask_row(
+                RowId::Scroll,
+                lookup_key("PlayerOptions", "Scroll"),
+                &["Reverse", "Split", "Alternate", "Cross", "Centered"],
+            );
+            let mut masks = PlayerOptionMasks::default();
+            let applied = init_bitmask_row_from_binding(&mut row, &SCROLL, &profile, &mut masks, 0);
+            assert!(applied, "SCROLL binding has init contract");
+            assert_eq!(
+                masks.scroll.bits(),
+                1u8 << idx,
+                "ScrollOption variant at choice index {idx} must set bit (1 << {idx})",
+            );
+            assert_eq!(
+                row.selected_choice_index[0], idx as usize,
+                "FirstActiveBit cursor lands on choice index {idx}",
+            );
+        }
     }
 }

@@ -319,11 +319,41 @@ pub(super) mod tests {
             &["Exit"],
             [0, 0],
         )]);
-        let mut advanced_rows = test_row_map(vec![test_row(
+        let scroll_binding = BitmaskBinding {
+            toggle: super::super::choice::toggle_scroll_row,
+            init: Some(BitmaskInit {
+                from_profile: |p| {
+                    use crate::game::profile::ScrollOption;
+                    let mut bits = ScrollMask::empty();
+                    if p.scroll_option.contains(ScrollOption::Reverse) {
+                        bits.insert(ScrollMask::from_bits_retain(1 << 0));
+                    }
+                    if p.scroll_option.contains(ScrollOption::Split) {
+                        bits.insert(ScrollMask::from_bits_retain(1 << 1));
+                    }
+                    if p.scroll_option.contains(ScrollOption::Alternate) {
+                        bits.insert(ScrollMask::from_bits_retain(1 << 2));
+                    }
+                    if p.scroll_option.contains(ScrollOption::Cross) {
+                        bits.insert(ScrollMask::from_bits_retain(1 << 3));
+                    }
+                    if p.scroll_option.contains(ScrollOption::Centered) {
+                        bits.insert(ScrollMask::from_bits_retain(1 << 4));
+                    }
+                    bits.bits() as u32
+                },
+                get_active: |m| m.scroll.bits() as u32,
+                set_active: |m, b| {
+                    m.scroll = ScrollMask::from_bits_retain(b as u8);
+                },
+                cursor: CursorInit::FirstActiveBit,
+            }),
+        };
+        let mut advanced_rows = test_row_map(vec![test_bitmask_row(
             RowId::Scroll,
             lookup_key("PlayerOptions", "Scroll"),
             &["Reverse", "Split", "Alternate", "Cross", "Centered"],
-            [0, 0],
+            scroll_binding,
         )]);
         let mut uncommon_rows = test_row_map(vec![test_row(
             RowId::Exit,
