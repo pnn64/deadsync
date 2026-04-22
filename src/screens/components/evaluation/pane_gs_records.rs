@@ -3,6 +3,7 @@ use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
 use crate::game::profile;
 use crate::game::scores;
+use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
 
 use super::utils::{format_machine_record_date, pane_origin_x};
 
@@ -45,8 +46,81 @@ fn gs_player_name(entry: &scores::LeaderboardEntry) -> String {
     GS_ROW_PLACEHOLDER_NAME.to_string()
 }
 
+#[inline(always)]
+fn same_leaderboard_entry(a: &scores::LeaderboardEntry, b: &scores::LeaderboardEntry) -> bool {
+    a.rank == b.rank && a.name.eq_ignore_ascii_case(b.name.as_str())
+}
+
+#[inline(always)]
+fn selected_contains(
+    selected: &[&scores::LeaderboardEntry],
+    entry: &scores::LeaderboardEntry,
+) -> bool {
+    selected
+        .iter()
+        .any(|chosen| same_leaderboard_entry(chosen, entry))
+}
+
+fn next_record_entry<'a>(
+    entries: &'a [scores::LeaderboardEntry],
+    selected: &[&'a scores::LeaderboardEntry],
+    include: impl Fn(&scores::LeaderboardEntry) -> bool,
+) -> Option<&'a scores::LeaderboardEntry> {
+    entries
+        .iter()
+        .filter(|entry| include(entry) && !selected_contains(selected, entry))
+        .min_by_key(|entry| entry.rank)
+}
+
+fn prioritized_record_entries(
+    entries: &[scores::LeaderboardEntry],
+    max_rows: usize,
+) -> Vec<scores::LeaderboardEntry> {
+    if max_rows == 0 {
+        return Vec::new();
+    }
+    if entries.len() <= max_rows {
+        return entries.to_vec();
+    }
+
+    let mut selected = Vec::with_capacity(max_rows);
+    if let Some(top) = next_record_entry(entries, selected.as_slice(), |_| true) {
+        selected.push(top);
+    }
+    if let Some(self_entry) = next_record_entry(entries, selected.as_slice(), |entry| entry.is_self)
+    {
+        selected.push(self_entry);
+    }
+    while selected.len() < max_rows {
+        let Some(rival) = next_record_entry(entries, selected.as_slice(), |entry| entry.is_rival)
+        else {
+            break;
+        };
+        selected.push(rival);
+    }
+    while selected.len() < max_rows {
+        let Some(entry) = next_record_entry(entries, selected.as_slice(), |_| true) else {
+            break;
+        };
+        selected.push(entry);
+    }
+    selected.sort_unstable_by_key(|entry| entry.rank);
+    selected.into_iter().cloned().collect()
+}
+
+fn pane_display_entries(
+    score_side: profile::PlayerSide,
+    chart_hash: Option<&str>,
+    pane: &scores::LeaderboardPane,
+) -> Vec<scores::LeaderboardEntry> {
+    let entries = entries_with_local_self_state(score_side, chart_hash, pane);
+    prioritized_record_entries(entries.as_slice(), GS_RECORD_ROWS)
+}
+
 fn build_records_pane(
     controller: profile::PlayerSide,
+    score_side: profile::PlayerSide,
+    chart_hash: Option<&str>,
     snapshot: Option<&scores::CachedPlayerLeaderboardData>,
     arrowcloud: bool,
 ) -> Vec<Actor> {
@@ -108,7 +182,8 @@ fn build_records_pane(
                 })
             });
             if let Some(pane) = records_pane {
-                if pane.entries.is_empty() {
+                let display_entries = pane_display_entries(score_side, chart_hash, pane);
+                if display_entries.is_empty() {
                     rows.push((
                         String::new(),
                         GS_NO_SCORES_TEXT.to_string(),
@@ -118,7 +193,7 @@ fn build_records_pane(
                         [1.0, 1.0, 1.0, 1.0],
                     ));
                 } else {
-                    for entry in pane.entries.iter().take(GS_RECORD_ROWS) {
+                    for entry in display_entries {
                         let base_col = if entry.is_rival {
                             GS_RIVAL_COLOR
                         } else if entry.is_self {
@@ -138,7 +213,7 @@ fn build_records_pane(
                         }
                         rows.push((
                             format!("{}.", entry.rank),
-                            gs_player_name(entry),
+                            gs_player_name(&entry),
                             format!("{:.2}%", entry.score / 100.0),
                             format_machine_record_date(&entry.date),
                             base_col,
@@ -242,14 +317,51 @@ fn build_records_pane(
 
 pub fn build_gs_records_pane(
     controller: profile::PlayerSide,
+    score_side: profile::PlayerSide,
+    chart_hash: Option<&str>,
     snapshot: Option<&scores::CachedPlayerLeaderboardData>,
 ) -> Vec<Actor> {
-    build_records_pane(controller, snapshot, false)
+    build_records_pane(controller, score_side, chart_hash, snapshot, false)
 }
 
 pub fn build_arrowcloud_records_pane(
     controller: profile::PlayerSide,
+    score_side: profile::PlayerSide,
+    chart_hash: Option<&str>,
     snapshot: Option<&scores::CachedPlayerLeaderboardData>,
 ) -> Vec<Actor> {
-    build_records_pane(controller, snapshot, true)
+    build_records_pane(controller, score_side, chart_hash, snapshot, true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(rank: u32, name: &str, is_self: bool, is_rival: bool) -> scores::LeaderboardEntry {
+        scores::LeaderboardEntry {
+            rank,
+            name: name.to_string(),
+            machine_tag: None,
+            score: 9800.0 - f64::from(rank),
+            date: String::new(),
+            is_rival,
+            is_self,
+            is_fail: false,
+        }
+    }
+
+    #[test]
+    fn prioritized_entries_keep_self_and_rivals_visible() {
+        let mut entries = (1..=12)
+            .map(|rank| entry(rank, &format!("top-{rank}"), false, false))
+            .collect::<Vec<_>>();
+        entries.push(entry(20, "self", true, false));
+        entries.push(entry(30, "rival-a", false, true));
+        entries.push(entry(40, "rival-b", false, true));
+
+        let selected = prioritized_record_entries(entries.as_slice(), GS_RECORD_ROWS);
+        let ranks = selected.iter().map(|entry| entry.rank).collect::<Vec<_>>();
+
+        assert_eq!(ranks, vec![1, 2, 3, 4, 5, 6, 7, 20, 30, 40]);
+    }
 }

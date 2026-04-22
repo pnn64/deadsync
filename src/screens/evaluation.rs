@@ -3491,6 +3491,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 EvalPane::QrCode => actors.extend(eval_panes::build_gs_qr_pane(si, controller)),
                 EvalPane::GrooveStats => actors.extend(eval_panes::build_gs_records_pane(
                     controller,
+                    gs_side,
+                    Some(si.chart.short_hash.as_str()),
                     scores::get_or_fetch_player_leaderboards_for_side(
                         &si.chart.short_hash,
                         gs_side,
@@ -3500,6 +3502,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 )),
                 EvalPane::ArrowCloud => actors.extend(eval_panes::build_arrowcloud_records_pane(
                     controller,
+                    gs_side,
+                    Some(si.chart.short_hash.as_str()),
                     scores::get_or_fetch_player_leaderboards_for_side(
                         &si.chart.short_hash,
                         gs_side,
