@@ -502,6 +502,7 @@ impl AssetManager {
             "combo_source_code",
             "combo_work",
             "combo_wendy_cursed",
+            "combo_mega",
             "wendy_white",
         ] {
             let ini_path_str = match name {
@@ -519,6 +520,7 @@ impl AssetManager {
                 "combo_source_code" => "assets/fonts/_combo/Source Code/Source Code.ini",
                 "combo_work" => "assets/fonts/_combo/Work/Work.ini",
                 "combo_wendy_cursed" => "assets/fonts/_combo/Wendy (Cursed)/Wendy (Cursed).ini",
+                "combo_mega" => "assets/fonts/_combo/Mega/Mega.ini",
                 "wendy_white" => "assets/fonts/wendy/_wendy white.ini",
                 _ => return Err(AssetError::UnknownFont(name)),
             };
