@@ -417,6 +417,38 @@ pub fn get_cached_itl_tournament_rank_for_side(
     get_cached_player_leaderboard_itl_self_rank_for_side(chart_hash, side)
 }
 
+fn online_itl_overall_rank_cache_key_for_side(
+    side: profile::PlayerSide,
+) -> Option<OnlineItlOverallRankCacheKey> {
+    if !profile::is_session_side_joined(side) {
+        return None;
+    }
+    let side_profile = profile::get_for_side(side);
+    let api_key = side_profile.groovestats_api_key.trim();
+    if api_key.is_empty() {
+        return None;
+    }
+
+    let profile_id = profile::active_local_profile_id_for_side(side);
+    if let Some(profile_id) = profile_id.as_deref() {
+        ensure_online_itl_self_score_cache_loaded_for_profile(profile_id);
+    }
+
+    let self_score_generation = {
+        let _cache = ONLINE_ITL_SELF_SCORE_CACHE.lock().unwrap();
+        ONLINE_ITL_SELF_SCORE_GENERATION.load(AtomicOrdering::Relaxed)
+    };
+    let song_cache = get_song_cache();
+    let key = OnlineItlOverallRankCacheKey {
+        api_key: api_key.to_string(),
+        profile_id,
+        song_cache_generation: song_cache_generation(),
+        self_score_generation,
+    };
+    drop(song_cache);
+    Some(key)
+}
+
 fn cached_online_itl_scores_by_chart_for_side(
     side: profile::PlayerSide,
 ) -> Option<OnlineItlOverallRankInput> {
@@ -453,9 +485,6 @@ fn cached_online_itl_scores_by_chart_for_side(
         if key.api_key == api_key {
             by_chart.insert(key.chart_hash.clone(), *score);
         }
-    }
-    if by_chart.is_empty() {
-        return None;
     }
     Some(OnlineItlOverallRankInput {
         api_key: api_key.to_string(),
@@ -528,6 +557,18 @@ fn build_online_itl_overall_ranks(
 pub fn get_cached_itl_tournament_overall_ranks_for_side(
     side: profile::PlayerSide,
 ) -> Arc<HashMap<String, u32>> {
+    let Some(cache_key) = online_itl_overall_rank_cache_key_for_side(side) else {
+        return EMPTY_ONLINE_ITL_OVERALL_RANKS.clone();
+    };
+    {
+        let cache = ONLINE_ITL_OVERALL_RANK_CACHE.lock().unwrap();
+        if let Some(entry) = online_itl_overall_rank_entry_for_side(&cache, side)
+            && entry.key == cache_key
+        {
+            return entry.ranks.clone();
+        }
+    }
+
     let Some(input) = cached_online_itl_scores_by_chart_for_side(side) else {
         return EMPTY_ONLINE_ITL_OVERALL_RANKS.clone();
     };
@@ -538,15 +579,6 @@ pub fn get_cached_itl_tournament_overall_ranks_for_side(
         song_cache_generation: song_cache_generation(),
         self_score_generation: input.self_score_generation,
     };
-    {
-        let cache = ONLINE_ITL_OVERALL_RANK_CACHE.lock().unwrap();
-        if let Some(entry) = online_itl_overall_rank_entry_for_side(&cache, side)
-            && entry.key == key
-        {
-            return entry.ranks.clone();
-        }
-    }
-
     let ranks = Arc::new(build_online_itl_overall_ranks(
         song_cache.as_slice(),
         &input.by_chart_score,
