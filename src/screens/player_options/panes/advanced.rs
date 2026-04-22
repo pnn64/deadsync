@@ -253,7 +253,34 @@ const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding {
 };
 const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_gameplay_extras_row,
-    init: None,
+    init: Some(BitmaskInit {
+        from_profile: |p| {
+            let mut bits = super::super::state::GameplayExtrasMask::empty();
+            if p.column_flash_on_miss {
+                bits.insert(super::super::state::GameplayExtrasMask::FLASH_COLUMN_FOR_MISS);
+            }
+            if p.nps_graph_at_top {
+                bits.insert(super::super::state::GameplayExtrasMask::DENSITY_GRAPH_AT_TOP);
+            }
+            if p.column_cues {
+                bits.insert(super::super::state::GameplayExtrasMask::COLUMN_CUES);
+            }
+            if p.display_scorebox {
+                bits.insert(super::super::state::GameplayExtrasMask::DISPLAY_SCOREBOX);
+            }
+            bits.bits() as u32
+        },
+        get_active: |m| m.gameplay_extras.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(
+                b & !(u8::MAX as u32), 0,
+                "GameplayExtrasMask init bits exceed u8 width",
+            );
+            m.gameplay_extras =
+                super::super::state::GameplayExtrasMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    }),
 };
 const ERROR_BAR: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_error_bar_row,
@@ -1160,7 +1187,9 @@ mod bitmask_binding_init_tests {
     }
 
     /// Bindings without an init contract must report `false` and leave
-    /// row/masks untouched (legacy init path remains in charge).
+    /// row/masks untouched. Now that all production bindings opt in, this
+    /// guard uses a synthetic init-less binding to assert the contract
+    /// shape directly.
     #[test]
     fn binding_without_init_is_noop() {
         ensure_i18n();
@@ -1172,8 +1201,13 @@ mod bitmask_binding_init_tests {
         row.selected_choice_index = [3, 4];
         let mut masks = PlayerOptionMasks::default();
         let profile = Profile::default();
-        let applied = init_bitmask_row_from_binding(&mut row, &GAMEPLAY_EXTRAS, &profile, &mut masks, 0);
-        assert!(!applied, "GAMEPLAY_EXTRAS binding has no init contract yet");
+        let init_less = BitmaskBinding {
+            toggle: |_, _| {},
+            init: None,
+        };
+        let applied =
+            init_bitmask_row_from_binding(&mut row, &init_less, &profile, &mut masks, 0);
+        assert!(!applied, "init-less binding must short-circuit");
         assert_eq!(row.selected_choice_index, [3, 4], "row untouched");
         assert_eq!(masks, PlayerOptionMasks::default(), "masks untouched");
     }

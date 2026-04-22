@@ -506,11 +506,37 @@ pub(super) mod tests {
         // No GameplayExtrasMore row exists (orphan; see the
         // `every_row_id_is_constructed_by_some_pane` test) — we still expect
         // the derived mask bits to be populated.
-        let mut rows = test_row_map(vec![test_row(
+        let gameplay_extras_binding = BitmaskBinding {
+            toggle: super::super::choice::toggle_gameplay_extras_row,
+            init: Some(BitmaskInit {
+                from_profile: |p| {
+                    let mut bits = GameplayExtrasMask::empty();
+                    if p.column_flash_on_miss {
+                        bits.insert(GameplayExtrasMask::FLASH_COLUMN_FOR_MISS);
+                    }
+                    if p.nps_graph_at_top {
+                        bits.insert(GameplayExtrasMask::DENSITY_GRAPH_AT_TOP);
+                    }
+                    if p.column_cues {
+                        bits.insert(GameplayExtrasMask::COLUMN_CUES);
+                    }
+                    if p.display_scorebox {
+                        bits.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
+                    }
+                    bits.bits() as u32
+                },
+                get_active: |m| m.gameplay_extras.bits() as u32,
+                set_active: |m, b| {
+                    m.gameplay_extras = GameplayExtrasMask::from_bits_retain(b as u8);
+                },
+                cursor: CursorInit::FirstActiveBit,
+            }),
+        };
+        let mut rows = test_row_map(vec![test_bitmask_row(
             RowId::GameplayExtras,
             lookup_key("PlayerOptions", "GameplayExtras"),
             &["FlashMiss", "DensityTop", "ColumnCues", "Scorebox"],
-            [0, 0],
+            gameplay_extras_binding,
         )]);
 
         let masks = super::super::panes::apply_profile_defaults(&mut rows, &profile, P1);

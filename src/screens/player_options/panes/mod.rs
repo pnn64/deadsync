@@ -117,7 +117,6 @@ pub(super) fn apply_profile_defaults(
     init_opted_in_bitmask_rows(row_map, profile, &mut masks, player_idx);
     apply_derived_masks(profile, &mut masks);
 
-    let mut gameplay_extras_active_mask = GameplayExtrasMask::empty();
     let match_ns_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
     // Initialize Background Filter row from profile setting (0..=100 %).
@@ -439,32 +438,6 @@ pub(super) fn apply_profile_defaults(
         }
     }
 
-    // Initialize Gameplay Extras row from profile (multi-choice toggle group).
-    if profile.column_flash_on_miss {
-        gameplay_extras_active_mask.insert(GameplayExtrasMask::FLASH_COLUMN_FOR_MISS);
-    }
-    if profile.nps_graph_at_top {
-        gameplay_extras_active_mask.insert(GameplayExtrasMask::DENSITY_GRAPH_AT_TOP);
-    }
-    if profile.column_cues {
-        gameplay_extras_active_mask.insert(GameplayExtrasMask::COLUMN_CUES);
-    }
-    if profile.display_scorebox {
-        gameplay_extras_active_mask.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
-    }
-    if let Some(row) = row_map.get_mut(RowId::GameplayExtras) {
-        if !gameplay_extras_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (gameplay_extras_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
     if let Some(row) = row_map.get_mut(RowId::DensityGraphBackground) {
         row.selected_choice_index[player_idx] = if profile.transparent_density_graph_bg {
             1
@@ -487,7 +460,6 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    masks.gameplay_extras = gameplay_extras_active_mask;
     masks
 }
 
