@@ -103,6 +103,18 @@ impl SongLuaDifficulty {
     pub const fn default_enabled() -> Self {
         Self::Challenge
     }
+
+    #[inline(always)]
+    pub const fn sort_key(self) -> u8 {
+        match self {
+            Self::Beginner => 0,
+            Self::Easy => 1,
+            Self::Medium => 2,
+            Self::Hard => 3,
+            Self::Challenge => 4,
+            Self::Edit => 5,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -142,6 +154,16 @@ impl Default for SongLuaPlayerContext {
             screen_y: 240.0,
         }
     }
+}
+
+fn easiest_steps_difficulty(
+    players: &[SongLuaPlayerContext; LUA_PLAYERS],
+) -> Option<SongLuaDifficulty> {
+    players
+        .iter()
+        .filter(|player| player.enabled)
+        .map(|player| player.difficulty)
+        .min_by_key(|difficulty| difficulty.sort_key())
 }
 
 #[derive(Debug, Clone)]
@@ -1071,6 +1093,16 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
                 return Ok(Value::Nil);
             };
             Ok(Value::Table(current_steps[player].clone()))
+        })?,
+    )?;
+    let easiest_steps_difficulty = easiest_steps_difficulty(&context.players);
+    gamestate.set(
+        "GetEasiestStepsDifficulty",
+        lua.create_function(move |lua, _args: MultiValue| {
+            let Some(difficulty) = easiest_steps_difficulty else {
+                return Ok(Value::Nil);
+            };
+            Ok(Value::String(lua.create_string(difficulty.sm_name())?))
         })?,
     )?;
     gamestate.set(
@@ -7370,6 +7402,31 @@ return Def.ActorFrame{}
             compiled.messages[0].message,
             "Beginner:Edit:Hard:Difficulty_Hard"
         );
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_gamestate_easiest_steps_difficulty() {
+        let song_dir = test_dir("easiest-steps-difficulty");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {1, ToEnumShortString(GAMESTATE:GetEasiestStepsDifficulty()), true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Easiest Steps Difficulty");
+        context.players[0].difficulty = SongLuaDifficulty::Hard;
+        context.players[1].difficulty = SongLuaDifficulty::Medium;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "Medium");
     }
 
     #[test]
