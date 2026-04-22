@@ -1,5 +1,6 @@
 use super::*;
 use crate::game::profile::{PlayerSide, Profile};
+use super::state::PlayerOptionMasks;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(usize)]
@@ -151,6 +152,78 @@ pub struct ChoiceBinding<T: Copy + 'static> {
 #[derive(Clone, Copy, Debug)]
 pub struct BitmaskBinding {
     pub toggle: fn(&mut State, usize),
+    /// Opt-in init contract. When `Some`, a row's initial mask bits and
+    /// cursor position can be derived directly from a `Profile` via the
+    /// helpers in this struct, without going through the hand-written
+    /// branches in `panes/mod.rs::apply_profile_defaults`. `None` means
+    /// the row still relies on the legacy init path.
+    pub init: Option<BitmaskInit>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BitmaskInit {
+    /// Compute the row's initial bits from the player's profile. Returned
+    /// as `u32` for type erasure across the 17 different mask widths.
+    pub from_profile: fn(&Profile) -> u32,
+    /// Read the row's current bits from a `PlayerOptionMasks`. Used by
+    /// `init_cursor_index` to compute the FirstActiveBit cursor.
+    pub get_active: fn(&PlayerOptionMasks) -> u32,
+    /// Write the row's bits into a `PlayerOptionMasks`. Truncated to the
+    /// row's bitflag width.
+    pub set_active: fn(&mut PlayerOptionMasks, u32),
+    /// Cursor placement policy at init time.
+    pub cursor: CursorInit,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum CursorInit {
+    /// Cursor lands on the first set bit, or `0` if no bits are set. Used
+    /// by every mask row except `FAPlusOptions`.
+    FirstActiveBit,
+    /// Cursor is pinned to a fixed index regardless of which bits are
+    /// active. Used by `FAPlusOptions` (always 0).
+    Fixed(usize),
+}
+
+impl BitmaskInit {
+    /// Compute the cursor index for a row of `choices_len` choices given
+    /// its currently-active bits (as `u32`).
+    #[inline]
+    pub fn init_cursor_index(&self, active_bits: u32, choices_len: usize) -> usize {
+        match self.cursor {
+            CursorInit::Fixed(idx) => idx,
+            CursorInit::FirstActiveBit => {
+                if active_bits == 0 {
+                    0
+                } else {
+                    (0..choices_len)
+                        .find(|i| (active_bits & (1u32 << *i as u32)) != 0)
+                        .unwrap_or(0)
+                }
+            }
+        }
+    }
+}
+
+/// Apply a `BitmaskBinding`'s init contract to a row: compute the bits
+/// from the profile, write them into `masks`, and place the row's cursor
+/// per its `CursorInit` policy. Returns `true` when the binding had an
+/// `init` contract and was applied; `false` when the binding still relies
+/// on the legacy init path in `apply_profile_defaults`.
+pub fn init_bitmask_row_from_binding(
+    row: &mut Row,
+    binding: &BitmaskBinding,
+    profile: &Profile,
+    masks: &mut PlayerOptionMasks,
+    player_idx: usize,
+) -> bool {
+    let Some(init) = binding.init.as_ref() else {
+        return false;
+    };
+    let bits = (init.from_profile)(profile);
+    (init.set_active)(masks, bits);
+    row.selected_choice_index[player_idx] = init.init_cursor_index(bits, row.choices.len());
+    true
 }
 
 #[derive(Clone, Copy, Debug)]

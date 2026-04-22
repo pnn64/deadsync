@@ -633,6 +633,7 @@ pub(super) mod tests {
             id: RowId::Scroll,
             behavior: super::RowBehavior::Bitmask(super::BitmaskBinding {
                 toggle: super::choice::toggle_scroll_row,
+                init: None,
             }),
             name: lookup_key("PlayerOptions", "Scroll"),
             choices: ["Reverse", "Split", "Alternate", "Cross", "Centered"]
@@ -927,6 +928,7 @@ pub(super) mod tests {
             id: RowId::Scroll,
             behavior: super::RowBehavior::Bitmask(super::BitmaskBinding {
                 toggle: super::choice::toggle_scroll_row,
+                init: None,
             }),
             name: lookup_key("PlayerOptions", "Scroll"),
             choices: ["Reverse", "Split", "Alternate", "Cross", "Centered"]

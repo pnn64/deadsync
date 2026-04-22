@@ -19,21 +19,27 @@ const HIDE_LIGHT_TYPE: ChoiceBinding<usize> = index_binding!(
 
 const INSERT: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_insert_row,
+    init: None,
 };
 const REMOVE: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_remove_row,
+    init: None,
 };
 const HOLDS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_holds_row,
+    init: None,
 };
 const ACCEL: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_accel_effects_row,
+    init: None,
 };
 const EFFECT: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_visual_effects_row,
+    init: None,
 };
 const APPEARANCE: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_appearance_effects_row,
+    init: None,
 };
 
 pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
