@@ -321,7 +321,6 @@ pub struct FixedStepchart {
 #[inline(always)]
 pub(super) fn row_shows_all_choices_inline(id: RowId) -> bool {
     id == RowId::Perspective
-        || id == RowId::BackgroundFilter
         || id == RowId::Stepchart
         || id == RowId::WhatComesNext
         || id == RowId::ActionOnMissedTarget
