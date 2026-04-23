@@ -2654,7 +2654,7 @@ fn resolve_sprite_size_like_sm(
         is_solid: bool,
         texture_name: &str,
         texture_key_ptr: Option<*const str>,
-        uv: Option<[f32; 4]>,
+        _uv: Option<[f32; 4]>,
         cell: Option<(u32, u32)>,
         grid: Option<(u32, u32)>,
         texture_cache: &mut TextureLookupCache,
@@ -2666,10 +2666,7 @@ fn resolve_sprite_size_like_sm(
             return (0.0, 0.0);
         };
         let (mut tw, mut th) = (meta.w as f32, meta.h as f32);
-        if let Some([u0, v0, u1, v1]) = uv {
-            tw *= (u1 - u0).abs().max(1e-6);
-            th *= (v1 - v0).abs().max(1e-6);
-        } else if cell.is_some() {
+        if cell.is_some() {
             let (gc, gr) = grid.unwrap_or_else(|| {
                 texture_cache.sprite_sheet_dims_with_ptr(texture_key_ptr, texture_name)
             });
@@ -3668,8 +3665,8 @@ mod tests {
         CachedTextLayout, CachedTextMeshVariants, ComposeScratch, TextAttrCursor, TextLayoutCache,
         TextLayoutKey, TextLayoutOverflowPolicy, TextureLookupCache, WorldRect,
         build_cached_text_layout, build_screen, clip_object_to_world_masks,
-        clip_sprite_object_to_world_rect, fold_sprite_xy_rot, sort_render_objects,
-        wrap_text_lines_by_words,
+        clip_sprite_object_to_world_rect, fold_sprite_xy_rot, resolve_sprite_size_like_sm,
+        sort_render_objects, wrap_text_lines_by_words,
     };
     use crate::assets;
     use crate::engine::gfx::{
@@ -4094,6 +4091,67 @@ mod tests {
         assert_eq!(meta.h, 32);
         assert_eq!(cache.sheets.get("frame_tex"), Some(&(4, 2)));
         assert_eq!(cache.handles.get("frame_tex"), Some(&11));
+    }
+
+    #[test]
+    fn custom_texture_rect_does_not_change_native_sprite_size() {
+        const KEY: &str = "compose_test/custom_rect_size.png";
+        assets::register_texture_dims(KEY, 256, 128);
+        let mut cache = TextureLookupCache::default();
+
+        let plain = resolve_sprite_size_like_sm(
+            [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            false,
+            KEY,
+            None,
+            None,
+            None,
+            None,
+            [1.0, 1.0],
+            &mut cache,
+        );
+        let repeated = resolve_sprite_size_like_sm(
+            [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            false,
+            KEY,
+            None,
+            Some([0.0, 0.0, 60.0, 60.0]),
+            None,
+            None,
+            [1.0, 1.0],
+            &mut cache,
+        );
+        let zoomed = resolve_sprite_size_like_sm(
+            [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            false,
+            KEY,
+            None,
+            Some([0.0, 0.0, 60.0, 60.0]),
+            None,
+            None,
+            [20.0, 20.0],
+            &mut cache,
+        );
+
+        fn assert_px_size(size: [SizeSpec; 2], want: [f32; 2]) {
+            let [SizeSpec::Px(got_w), SizeSpec::Px(got_h)] = size else {
+                panic!("expected pixel size, got {size:?}");
+            };
+            assert!(
+                (got_w - want[0]).abs() <= 1e-6,
+                "width mismatch: {got_w} vs {}",
+                want[0]
+            );
+            assert!(
+                (got_h - want[1]).abs() <= 1e-6,
+                "height mismatch: {got_h} vs {}",
+                want[1]
+            );
+        }
+
+        assert_px_size(plain, [256.0, 128.0]);
+        assert_px_size(repeated, [256.0, 128.0]);
+        assert_px_size(zoomed, [5120.0, 2560.0]);
     }
 
     #[test]
