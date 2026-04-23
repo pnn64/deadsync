@@ -75,6 +75,8 @@ pub struct SongLuaOverlayState {
     pub effect_period: f32,
     pub effect_offset: f32,
     pub sprite_animate: bool,
+    pub sprite_loop: bool,
+    pub sprite_playback_rate: f32,
     pub sprite_state_delay: f32,
     pub sprite_state_index: Option<u32>,
     pub custom_texture_rect: Option<[f32; 4]>,
@@ -117,6 +119,8 @@ impl Default for SongLuaOverlayState {
             effect_period: 1.0,
             effect_offset: 0.0,
             sprite_animate: false,
+            sprite_loop: true,
+            sprite_playback_rate: 1.0,
             sprite_state_delay: 0.1,
             sprite_state_index: None,
             custom_texture_rect: None,
@@ -160,6 +164,8 @@ pub struct SongLuaOverlayStateDelta {
     pub effect_period: Option<f32>,
     pub effect_offset: Option<f32>,
     pub sprite_animate: Option<bool>,
+    pub sprite_loop: Option<bool>,
+    pub sprite_playback_rate: Option<f32>,
     pub sprite_state_delay: Option<f32>,
     pub sprite_state_index: Option<u32>,
     pub custom_texture_rect: Option<[f32; 4]>,
@@ -337,6 +343,12 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.sprite_animate {
         state.sprite_animate = value;
     }
+    if let Some(value) = delta.sprite_loop {
+        state.sprite_loop = value;
+    }
+    if let Some(value) = delta.sprite_playback_rate {
+        state.sprite_playback_rate = value;
+    }
     if let Some(value) = delta.sprite_state_delay {
         state.sprite_state_delay = value;
     }
@@ -456,6 +468,10 @@ fn overlay_state_lerp(
     if delta.effect_offset.is_some() {
         from.effect_offset = (to.effect_offset - from.effect_offset).mul_add(t, from.effect_offset);
     }
+    if delta.sprite_playback_rate.is_some() {
+        from.sprite_playback_rate = (to.sprite_playback_rate - from.sprite_playback_rate)
+            .mul_add(t, from.sprite_playback_rate);
+    }
     if delta.sprite_state_delay.is_some() {
         from.sprite_state_delay =
             (to.sprite_state_delay - from.sprite_state_delay).mul_add(t, from.sprite_state_delay);
@@ -516,6 +532,9 @@ fn overlay_state_lerp(
     }
     if delta.sprite_animate.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_animate = to.sprite_animate;
+    }
+    if delta.sprite_loop.is_some() && t >= 1.0 - f32::EPSILON {
+        from.sprite_loop = to.sprite_loop;
     }
     from
 }
@@ -596,6 +615,8 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.effect_period.is_none()
         && delta.effect_offset.is_none()
         && delta.sprite_animate.is_none()
+        && delta.sprite_loop.is_none()
+        && delta.sprite_playback_rate.is_none()
         && delta.sprite_state_delay.is_none()
         && delta.sprite_state_index.is_none()
         && delta.custom_texture_rect.is_none()
@@ -698,6 +719,12 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.sprite_animate.is_some() {
         into.sprite_animate = from.sprite_animate;
     }
+    if from.sprite_loop.is_some() {
+        into.sprite_loop = from.sprite_loop;
+    }
+    if from.sprite_playback_rate.is_some() {
+        into.sprite_playback_rate = from.sprite_playback_rate;
+    }
     if from.sprite_state_delay.is_some() {
         into.sprite_state_delay = from.sprite_state_delay;
     }
@@ -773,6 +800,8 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(effect_period);
     copy_pair!(effect_offset);
     copy_pair!(sprite_animate);
+    copy_pair!(sprite_loop);
+    copy_pair!(sprite_playback_rate);
     copy_pair!(sprite_state_delay);
     copy_pair!(sprite_state_index);
     copy_pair!(custom_texture_rect);

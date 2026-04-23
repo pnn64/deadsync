@@ -3442,6 +3442,18 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.sprite_animate = value;
     }
     if let Some(value) = actor
+        .get::<Option<bool>>("__songlua_state_sprite_loop")
+        .map_err(|err| err.to_string())?
+    {
+        state.sprite_loop = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_sprite_playback_rate")
+        .map_err(|err| err.to_string())?
+    {
+        state.sprite_playback_rate = value;
+    }
+    if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_sprite_state_delay")
         .map_err(|err| err.to_string())?
     {
@@ -3797,19 +3809,6 @@ fn song_lua_valid_sprite_state_index(index: Option<u32>) -> Option<u32> {
     index.filter(|&value| value != SONG_LUA_SPRITE_STATE_CLEAR)
 }
 
-#[inline(always)]
-fn sprite_sheet_rect(index: u32, cols: u32, rows: u32) -> [f32; 4] {
-    let cols = cols.max(1);
-    let rows = rows.max(1);
-    let col = index % cols;
-    let row = (index / cols).min(rows.saturating_sub(1));
-    let width = 1.0 / cols as f32;
-    let height = 1.0 / rows as f32;
-    let left = col as f32 * width;
-    let top = row as f32 * height;
-    [left, top, left + width, top + height]
-}
-
 fn actor_sprite_sheet_dims(actor: &Table) -> mlua::Result<Option<(u32, u32)>> {
     if let Some(path) = actor_texture_path(actor)? {
         return Ok(Some(crate::assets::parse_sprite_sheet_dims(
@@ -3828,14 +3827,10 @@ fn actor_sprite_sheet_dims(actor: &Table) -> mlua::Result<Option<(u32, u32)>> {
 
 fn set_actor_sprite_state(lua: &Lua, actor: &Table, state_index: u32) -> mlua::Result<()> {
     capture_block_set_u32(lua, actor, "sprite_state_index", state_index)?;
-    if let Some((cols, rows)) = actor_sprite_sheet_dims(actor)? {
-        capture_block_set_vec4(
-            lua,
-            actor,
-            "custom_texture_rect",
-            sprite_sheet_rect(state_index, cols, rows),
-        )?;
-    }
+    let block = actor_current_capture_block(lua, actor)?;
+    block.set("custom_texture_rect", Value::Nil)?;
+    block.set("__songlua_has_changes", true)?;
+    actor.set("__songlua_state_custom_texture_rect", Value::Nil)?;
     Ok(())
 }
 
@@ -3866,6 +3861,13 @@ fn set_actor_effect_defaults(
         capture_block_set_vec4(lua, actor, "effect_color2", value)?;
     }
     Ok(())
+}
+
+fn actor_sprite_frame_count(actor: &Table) -> mlua::Result<u32> {
+    let Some((cols, rows)) = actor_sprite_sheet_dims(actor)? else {
+        return Ok(1);
+    };
+    Ok(cols.max(1).saturating_mul(rows.max(1)).max(1))
 }
 
 fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandBlock>, String> {
@@ -4006,6 +4008,12 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .map_err(|err| err.to_string())?,
                 sprite_animate: block
                     .get::<Option<bool>>("sprite_animate")
+                    .map_err(|err| err.to_string())?,
+                sprite_loop: block
+                    .get::<Option<bool>>("sprite_loop")
+                    .map_err(|err| err.to_string())?,
+                sprite_playback_rate: block
+                    .get::<Option<f32>>("sprite_playback_rate")
                     .map_err(|err| err.to_string())?,
                 sprite_state_delay: block
                     .get::<Option<f32>>("sprite_state_delay")
@@ -4946,14 +4954,55 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             move |lua, args: MultiValue| {
                 let value = method_arg(&args, 0)
                     .cloned()
-                    .and_then(|value| match value {
-                        Value::Boolean(value) => Some(value),
-                        Value::Integer(value) => Some(value != 0),
-                        Value::Number(value) => Some(value != 0.0),
-                        _ => None,
-                    })
+                    .and_then(read_boolish)
                     .unwrap_or(true);
                 capture_block_set_bool(lua, &actor, "sprite_animate", value)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "play",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                capture_block_set_bool(lua, &actor, "sprite_animate", true)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "pause",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                capture_block_set_bool(lua, &actor, "sprite_animate", false)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "loop",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let value = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_boolish)
+                    .unwrap_or(true);
+                capture_block_set_bool(lua, &actor, "sprite_loop", value)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "rate",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "sprite_playback_rate", value)?;
+                }
                 Ok(actor.clone())
             }
         })?,
@@ -5208,10 +5257,6 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "fardistz",
         "hibernate",
         "load",
-        "loop",
-        "pause",
-        "play",
-        "rate",
         "StartTransitioningScreen",
         "stop",
         "texturetranslate",
@@ -5509,6 +5554,13 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "GetNumStates",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| Ok(i64::from(actor_sprite_frame_count(&actor)?))
+        })?,
+    )?;
+    actor.set(
         "GetHeight",
         lua.create_function({
             let actor = actor.clone();
@@ -5661,6 +5713,7 @@ fn actor_base_size(actor: &Table) -> mlua::Result<(f32, f32)> {
 fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let texture = lua.create_table()?;
     let (screen_width, screen_height) = song_lua_screen_size(lua)?;
+    let frame_count = actor_sprite_frame_count(actor)?;
     if actor
         .get::<Option<String>>("__songlua_actor_type")?
         .as_deref()
@@ -5672,11 +5725,13 @@ fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
         install_texture_proxy_methods(
             lua,
             &texture,
+            actor,
             String::new(),
             screen_width,
             screen_height,
             screen_width,
             screen_height,
+            frame_count,
         )?;
         return Ok(texture);
     }
@@ -5697,11 +5752,13 @@ fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     install_texture_proxy_methods(
         lua,
         &texture,
+        actor,
         path,
         source_width,
         source_height,
         source_width,
         source_height,
+        frame_count,
     )?;
     Ok(texture)
 }
@@ -5709,11 +5766,13 @@ fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
 fn install_texture_proxy_methods(
     lua: &Lua,
     texture: &Table,
+    actor: &Table,
     path: String,
     source_width: f32,
     source_height: f32,
     texture_width: f32,
     texture_height: f32,
+    frame_count: u32,
 ) -> mlua::Result<()> {
     texture.set("__songlua_texture_path", path.clone())?;
     texture.set(
@@ -5737,6 +5796,38 @@ fn install_texture_proxy_methods(
     texture.set(
         "GetTextureHeight",
         lua.create_function(move |_, _args: MultiValue| Ok(texture_height))?,
+    )?;
+    texture.set(
+        "GetNumFrames",
+        lua.create_function(move |_, _args: MultiValue| Ok(i64::from(frame_count)))?,
+    )?;
+    texture.set(
+        "loop",
+        lua.create_function({
+            let actor = actor.clone();
+            let texture = texture.clone();
+            move |lua, args: MultiValue| {
+                let value = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_boolish)
+                    .unwrap_or(true);
+                capture_block_set_bool(lua, &actor, "sprite_loop", value)?;
+                Ok(Value::Table(texture.clone()))
+            }
+        })?,
+    )?;
+    texture.set(
+        "rate",
+        lua.create_function({
+            let actor = actor.clone();
+            let texture = texture.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "sprite_playback_rate", value)?;
+                }
+                Ok(Value::Table(texture.clone()))
+            }
+        })?,
     )?;
     Ok(())
 }
@@ -6806,6 +6897,8 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(effect_period);
     copy_value_field!(effect_offset);
     copy_value_field!(sprite_animate);
+    copy_value_field!(sprite_loop);
+    copy_value_field!(sprite_playback_rate);
     copy_value_field!(sprite_state_delay);
     copy_option_field!(sprite_state_index);
     copy_option_field!(custom_texture_rect);
@@ -9404,10 +9497,7 @@ return Def.ActorFrame{
             compiled.overlays[0].initial_state.sprite_state_index,
             Some(5)
         );
-        assert_eq!(
-            compiled.overlays[0].initial_state.custom_texture_rect,
-            Some([0.25, 1.0 / 3.0, 0.5, 2.0 / 3.0])
-        );
+        assert_eq!(compiled.overlays[0].initial_state.custom_texture_rect, None);
     }
 
     #[test]
@@ -9444,9 +9534,11 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 1);
         let state = compiled.overlays[0].initial_state;
         assert!(state.sprite_animate);
+        assert!(state.sprite_loop);
+        assert_eq!(state.sprite_playback_rate, 1.0);
         assert_eq!(state.sprite_state_delay, 0.5);
         assert_eq!(state.sprite_state_index, Some(1));
-        assert_eq!(state.custom_texture_rect, Some([0.25, 0.0, 0.5, 1.0 / 3.0]));
+        assert_eq!(state.custom_texture_rect, None);
     }
 
     #[test]
@@ -9789,16 +9881,21 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_supports_animate_loop_rate_chain_methods() {
         let song_dir = test_dir("actor-animate-loop-rate");
+        let image_path = song_dir.join("panel 4x3.png");
+        image::RgbaImage::new(40, 30).save(&image_path).unwrap();
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
 return Def.ActorFrame{
     Def.Sprite{
+        Texture="panel 4x3.png",
         OnCommand=function(self)
-            self:animate(false):loop(false):rate(1.5):diffusealpha(0.2)
+            local texture = self:GetTexture()
+            texture:loop(false):rate(1.5)
+            self:setstate(2):play():pause():play():diffusealpha(0.2)
             mod_actions = {
-                {1, string.format("%.2f", self:GetDiffuseAlpha()), true},
+                {1, string.format("%.2f:%d:%d", self:GetDiffuseAlpha(), self:GetNumStates(), texture:GetNumFrames()), true},
             }
         end,
     },
@@ -9813,7 +9910,13 @@ return Def.ActorFrame{
         )
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "0.20");
+        assert_eq!(compiled.messages[0].message, "0.20:12:12");
+        assert_eq!(compiled.overlays.len(), 1);
+        let state = compiled.overlays[0].initial_state;
+        assert!(state.sprite_animate);
+        assert!(!state.sprite_loop);
+        assert_eq!(state.sprite_playback_rate, 1.5);
+        assert_eq!(state.sprite_state_index, Some(2));
     }
 
     #[test]

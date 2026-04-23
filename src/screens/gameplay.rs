@@ -1030,6 +1030,12 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.sprite_animate {
         state.sprite_animate = value;
     }
+    if let Some(value) = delta.sprite_loop {
+        state.sprite_loop = value;
+    }
+    if let Some(value) = delta.sprite_playback_rate {
+        state.sprite_playback_rate = value;
+    }
     if let Some(value) = delta.sprite_state_delay {
         state.sprite_state_delay = value;
     }
@@ -1157,6 +1163,10 @@ fn song_lua_overlay_state_lerp(
     if delta.effect_offset.is_some() {
         from.effect_offset = (to.effect_offset - from.effect_offset).mul_add(t, from.effect_offset);
     }
+    if delta.sprite_playback_rate.is_some() {
+        from.sprite_playback_rate = (to.sprite_playback_rate - from.sprite_playback_rate)
+            .mul_add(t, from.sprite_playback_rate);
+    }
     if delta.sprite_state_delay.is_some() {
         from.sprite_state_delay =
             (to.sprite_state_delay - from.sprite_state_delay).mul_add(t, from.sprite_state_delay);
@@ -1218,6 +1228,9 @@ fn song_lua_overlay_state_lerp(
     if delta.sprite_animate.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_animate = to.sprite_animate;
     }
+    if delta.sprite_loop.is_some() && t >= 1.0 - f32::EPSILON {
+        from.sprite_loop = to.sprite_loop;
+    }
     from
 }
 
@@ -1236,8 +1249,15 @@ fn song_lua_sprite_sheet_index(
     let (cols, rows) = sprite_sheet_dims(texture_key);
     let total = cols.saturating_mul(rows).max(1);
     if state.sprite_animate && state.sprite_state_delay > 0.0 && total > 1 {
-        let steps = (total_elapsed / state.sprite_state_delay).floor().max(0.0) as u32;
-        return Some((start + (steps % total)) % total);
+        let steps =
+            (total_elapsed * state.sprite_playback_rate / state.sprite_state_delay).floor() as i64;
+        let frame = i64::from(start) + steps;
+        let total = i64::from(total);
+        return Some(if state.sprite_loop {
+            frame.rem_euclid(total) as u32
+        } else {
+            frame.clamp(0, total - 1) as u32
+        });
     }
     (state.sprite_animate || song_lua_valid_sprite_state_index(state).is_some()).then_some(start)
 }
@@ -5516,6 +5536,8 @@ mod tests {
                 y: 240.0,
                 sprite_state_index: Some(1),
                 sprite_animate: true,
+                sprite_loop: true,
+                sprite_playback_rate: 1.0,
                 sprite_state_delay: 0.5,
                 ..SongLuaOverlayState::default()
             },
@@ -5534,6 +5556,52 @@ mod tests {
             Actor::Sprite { uv_rect, z, .. } => {
                 assert_eq!(z, 779);
                 assert_eq!(uv_rect, Some([0.75, 0.0, 1.0, 1.0 / 3.0]));
+            }
+            other => panic!("expected animated sprite overlay, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_sprite_animation_applies_rate_and_loop_controls_at_runtime() {
+        let key = "song-lua-animate-rate 4x3.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: std::path::PathBuf::from(&key),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                sprite_state_index: Some(1),
+                sprite_animate: true,
+                sprite_loop: false,
+                sprite_playback_rate: 2.0,
+                sprite_state_delay: 0.5,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            780,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            10.0,
+        )
+        .expect("rate-controlled sprite should render");
+
+        match actor {
+            Actor::Sprite { uv_rect, z, .. } => {
+                assert_eq!(z, 780);
+                assert_eq!(uv_rect, Some([0.75, 2.0 / 3.0, 1.0, 1.0]));
             }
             other => panic!("expected animated sprite overlay, got {other:?}"),
         }
