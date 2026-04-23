@@ -2157,11 +2157,7 @@ fn build_tmesh_pipeline(
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,
             strip_index_format: None,
-            front_face: if use_depth {
-                wgpu::FrontFace::Cw
-            } else {
-                wgpu::FrontFace::Ccw
-            },
+            front_face: wgpu::FrontFace::Ccw,
             cull_mode: use_depth.then_some(wgpu::Face::Back),
             unclipped_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
