@@ -435,6 +435,7 @@ pub fn compile_song_lua(
             entry_path.display()
         )
     })?;
+    run_actor_draw_functions(&lua, &root);
 
     let globals = lua.globals();
     let mut out = CompiledSongLua {
@@ -2704,6 +2705,15 @@ fn run_actor_update_functions(lua: &Lua, root: &Value) -> mlua::Result<()> {
     run_actor_update_functions_for_table(lua, root)
 }
 
+fn run_actor_draw_functions(lua: &Lua, root: &Value) {
+    let Value::Table(root) = root else {
+        return;
+    };
+    if let Err(err) = run_actor_draw_functions_for_table(lua, root) {
+        debug!("Skipping song lua draw function capture: {err}");
+    }
+}
+
 fn read_update_function_actions(
     lua: &Lua,
     root: &Value,
@@ -2777,6 +2787,35 @@ fn run_actor_update_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Resul
         };
         child.set("__songlua_parent", actor.clone())?;
         run_actor_update_functions_for_table(lua, &child)?;
+    }
+    Ok(())
+}
+
+fn run_actor_draw_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if let Some(draw) = actor.get::<Option<Function>>("__songlua_draw_function")? {
+        let draw_result = call_actor_function(lua, actor, &draw);
+        let drain_result = drain_actor_command_queue(lua, actor);
+        if let Err(err) = draw_result {
+            debug!(
+                "Skipping song lua draw capture for {}: {}",
+                actor_debug_label(actor),
+                err
+            );
+        }
+        if let Err(err) = drain_result {
+            debug!(
+                "Skipping queued song lua draw commands for {}: {}",
+                actor_debug_label(actor),
+                err
+            );
+        }
+    }
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child? else {
+            continue;
+        };
+        child.set("__songlua_parent", actor.clone())?;
+        run_actor_draw_functions_for_table(lua, &child)?;
     }
     Ok(())
 }
@@ -9402,6 +9441,40 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "true");
+        assert_eq!(compiled.overlays.len(), 1);
+        assert!(compiled.overlays[0].initial_state.visible);
+    }
+
+    #[test]
+    fn compile_song_lua_ignores_unsupported_draw_function_errors() {
+        let song_dir = test_dir("set-draw-function-error");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local function draw_fn(self)
+    self:MissingDrawMethod()
+end
+
+return Def.ActorFrame{
+    OnCommand=function(self)
+        self:SetDrawFunction(draw_fn)
+        mod_actions = {
+            {1, "draw-ok", true},
+        }
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Set Draw Function Error"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "draw-ok");
     }
 
     #[test]
