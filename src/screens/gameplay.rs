@@ -1069,6 +1069,21 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.sprite_state_index {
         state.sprite_state_index = Some(value);
     }
+    if let Some(value) = delta.wrap_width_pixels {
+        state.wrap_width_pixels = Some(value);
+    }
+    if let Some(value) = delta.max_width {
+        state.max_width = Some(value);
+    }
+    if let Some(value) = delta.max_height {
+        state.max_height = Some(value);
+    }
+    if let Some(value) = delta.max_w_pre_zoom {
+        state.max_w_pre_zoom = value;
+    }
+    if let Some(value) = delta.max_h_pre_zoom {
+        state.max_h_pre_zoom = value;
+    }
     if let Some(value) = delta.texture_wrapping {
         state.texture_wrapping = value;
     }
@@ -1233,6 +1248,25 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.sprite_state_index.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_state_index = to.sprite_state_index;
+    }
+    if delta.wrap_width_pixels.is_some() && t >= 1.0 - f32::EPSILON {
+        from.wrap_width_pixels = to.wrap_width_pixels;
+    }
+    if delta.max_width.is_some()
+        && let (Some(from_width), Some(to_width)) = (from.max_width, to.max_width)
+    {
+        from.max_width = Some((to_width - from_width).mul_add(t, from_width));
+    }
+    if delta.max_height.is_some()
+        && let (Some(from_height), Some(to_height)) = (from.max_height, to.max_height)
+    {
+        from.max_height = Some((to_height - from_height).mul_add(t, from_height));
+    }
+    if delta.max_w_pre_zoom.is_some() && t >= 1.0 - f32::EPSILON {
+        from.max_w_pre_zoom = to.max_w_pre_zoom;
+    }
+    if delta.max_h_pre_zoom.is_some() && t >= 1.0 - f32::EPSILON {
+        from.max_h_pre_zoom = to.max_h_pre_zoom;
     }
     if delta.texcoord_offset.is_some()
         && let (Some(from_offset), Some(to_offset)) = (from.texcoord_offset, to.texcoord_offset)
@@ -3078,11 +3112,13 @@ fn build_song_lua_overlay_actor(
                 ],
                 fit_width: None,
                 fit_height: None,
-                wrap_width_pixels: None,
-                max_width: None,
-                max_height: None,
-                max_w_pre_zoom: false,
-                max_h_pre_zoom: false,
+                wrap_width_pixels: state
+                    .wrap_width_pixels
+                    .map(|value| ((value as f32) * x_scale).round() as i32),
+                max_width: state.max_width.map(|value| value * x_scale),
+                max_height: state.max_height.map(|value| value * y_scale),
+                max_w_pre_zoom: state.max_w_pre_zoom,
+                max_h_pre_zoom: state.max_h_pre_zoom,
                 clip: None,
                 mask_dest: state.mask_dest,
                 blend: overlay_blend,
@@ -5985,6 +6021,64 @@ mod tests {
                 assert_eq!(align_text, TextAlign::Right);
             }
             other => panic!("expected aligned text actor, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_overlay_applies_bitmaptext_layout_at_runtime() {
+        let text = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("WRAP"),
+                stroke_color: None,
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let text_actor = build_song_lua_overlay_actor(
+            &text,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                wrap_width_pixels: Some(64),
+                max_width: Some(80.0),
+                max_height: Some(40.0),
+                max_w_pre_zoom: true,
+                max_h_pre_zoom: false,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            787,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("bitmap text layout should render");
+
+        match text_actor {
+            Actor::Text {
+                wrap_width_pixels,
+                max_width,
+                max_height,
+                max_w_pre_zoom,
+                max_h_pre_zoom,
+                z,
+                ..
+            } => {
+                assert_eq!(z, 787);
+                assert_eq!(wrap_width_pixels, Some(64));
+                assert_eq!(max_width, Some(80.0));
+                assert_eq!(max_height, Some(40.0));
+                assert!(max_w_pre_zoom);
+                assert!(!max_h_pre_zoom);
+            }
+            other => panic!("expected bitmap text actor with layout settings, got {other:?}"),
         }
     }
 

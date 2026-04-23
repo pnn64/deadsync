@@ -3518,6 +3518,36 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.sprite_state_delay = value;
     }
     if let Some(value) = actor
+        .get::<Option<i32>>("__songlua_state_wrap_width_pixels")
+        .map_err(|err| err.to_string())?
+    {
+        state.wrap_width_pixels = Some(value);
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_max_width")
+        .map_err(|err| err.to_string())?
+    {
+        state.max_width = Some(value);
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_max_height")
+        .map_err(|err| err.to_string())?
+    {
+        state.max_height = Some(value);
+    }
+    if let Some(value) = actor
+        .get::<Option<bool>>("__songlua_state_max_w_pre_zoom")
+        .map_err(|err| err.to_string())?
+    {
+        state.max_w_pre_zoom = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<bool>>("__songlua_state_max_h_pre_zoom")
+        .map_err(|err| err.to_string())?
+    {
+        state.max_h_pre_zoom = value;
+    }
+    if let Some(value) = actor
         .get::<Option<u32>>("__songlua_state_sprite_state_index")
         .map_err(|err| err.to_string())?
     {
@@ -3781,6 +3811,14 @@ fn capture_block_set_vec4(
 }
 
 fn capture_block_set_u32(lua: &Lua, actor: &Table, key: &str, value: u32) -> mlua::Result<()> {
+    let block = actor_current_capture_block(lua, actor)?;
+    block.set(key, value)?;
+    block.set("__songlua_has_changes", true)?;
+    actor.set(format!("__songlua_state_{key}"), value)?;
+    Ok(())
+}
+
+fn capture_block_set_i32(lua: &Lua, actor: &Table, key: &str, value: i32) -> mlua::Result<()> {
     let block = actor_current_capture_block(lua, actor)?;
     block.set(key, value)?;
     block.set("__songlua_has_changes", true)?;
@@ -4121,6 +4159,21 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                 sprite_state_index: block
                     .get::<Option<u32>>("sprite_state_index")
                     .map_err(|err| err.to_string())?,
+                wrap_width_pixels: block
+                    .get::<Option<i32>>("wrap_width_pixels")
+                    .map_err(|err| err.to_string())?,
+                max_width: block
+                    .get::<Option<f32>>("max_width")
+                    .map_err(|err| err.to_string())?,
+                max_height: block
+                    .get::<Option<f32>>("max_height")
+                    .map_err(|err| err.to_string())?,
+                max_w_pre_zoom: block
+                    .get::<Option<bool>>("max_w_pre_zoom")
+                    .map_err(|err| err.to_string())?,
+                max_h_pre_zoom: block
+                    .get::<Option<bool>>("max_h_pre_zoom")
+                    .map_err(|err| err.to_string())?,
                 texture_wrapping: block
                     .get::<Option<bool>>("texture_wrapping")
                     .map_err(|err| err.to_string())?,
@@ -4203,6 +4256,31 @@ fn overlay_text_align_label(value: TextAlign) -> &'static str {
         TextAlign::Center => "center",
         TextAlign::Right => "right",
     }
+}
+
+fn actor_is_bitmap_text(actor: &Table) -> mlua::Result<bool> {
+    Ok(actor
+        .get::<Option<String>>("__songlua_actor_type")?
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("BitmapText")))
+}
+
+fn actor_update_text_pre_zoom_flags(
+    lua: &Lua,
+    actor: &Table,
+    update_width: bool,
+    update_height: bool,
+) -> mlua::Result<()> {
+    if !actor_is_bitmap_text(actor)? {
+        return Ok(());
+    }
+    if update_width && actor.get::<Option<bool>>("__songlua_text_saw_max_width")? == Some(true) {
+        capture_block_set_bool(lua, actor, "max_w_pre_zoom", true)?;
+    }
+    if update_height && actor.get::<Option<bool>>("__songlua_text_saw_max_height")? == Some(true) {
+        capture_block_set_bool(lua, actor, "max_h_pre_zoom", true)?;
+    }
+    Ok(())
 }
 
 fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
@@ -4854,6 +4932,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "zoom", value)?;
                     capture_block_set_zoom_axes(lua, &actor, value, "zoom_x", "zoom_y", "zoom_z")?;
+                    actor_update_text_pre_zoom_flags(lua, &actor, true, true)?;
                 }
                 Ok(actor.clone())
             }
@@ -4947,11 +5026,31 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     actor.set(
         "zoomx",
-        make_actor_capture_f32_method(lua, actor, "zoom_x", Some("zoomx"))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                record_probe_method_call(lua, &actor, "zoomx")?;
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "zoom_x", value)?;
+                    actor_update_text_pre_zoom_flags(lua, &actor, true, false)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
     )?;
     actor.set(
         "zoomy",
-        make_actor_capture_f32_method(lua, actor, "zoom_y", Some("zoomy"))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                record_probe_method_call(lua, &actor, "zoomy")?;
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "zoom_y", value)?;
+                    actor_update_text_pre_zoom_flags(lua, &actor, false, true)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
     )?;
     actor.set(
         "zoomto",
@@ -5541,6 +5640,52 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     _ => String::new(),
                 };
                 actor.set("Text", text)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "wrapwidthpixels",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let wrap = value as i32;
+                if wrap >= 0 {
+                    capture_block_set_i32(lua, &actor, "wrap_width_pixels", wrap)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "maxwidth",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                capture_block_set_f32(lua, &actor, "max_width", value)?;
+                capture_block_set_bool(lua, &actor, "max_w_pre_zoom", false)?;
+                actor.set("__songlua_text_saw_max_width", true)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "maxheight",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                capture_block_set_f32(lua, &actor, "max_height", value)?;
+                capture_block_set_bool(lua, &actor, "max_h_pre_zoom", false)?;
+                actor.set("__songlua_text_saw_max_height", true)?;
                 Ok(actor.clone())
             }
         })?,
@@ -7156,6 +7301,11 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(sprite_playback_rate);
     copy_value_field!(sprite_state_delay);
     copy_option_field!(sprite_state_index);
+    copy_option_field!(wrap_width_pixels);
+    copy_option_field!(max_width);
+    copy_option_field!(max_height);
+    copy_value_field!(max_w_pre_zoom);
+    copy_value_field!(max_h_pre_zoom);
     copy_value_field!(texture_wrapping);
     copy_option_field!(texcoord_offset);
     copy_option_field!(custom_texture_rect);
@@ -10329,6 +10479,54 @@ return Def.ActorFrame{
         assert_eq!(text.halign, 1.0);
         assert_eq!(text.valign, 0.0);
         assert_eq!(text.text_align, TextAlign::Right);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_bitmaptext_layout_methods() {
+        let song_dir = test_dir("bitmaptext-layout-methods");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="WRAP",
+        OnCommand=function(self)
+            self:wrapwidthpixels(64):maxwidth(80):maxheight(40):zoom(2)
+        end,
+    },
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="POST",
+        OnCommand=function(self)
+            self:zoom(2):maxwidth(90):maxheight(50)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "BitmapText Layout Methods"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+
+        let pre_zoom = compiled.overlays[0].initial_state;
+        assert_eq!(pre_zoom.wrap_width_pixels, Some(64));
+        assert_eq!(pre_zoom.max_width, Some(80.0));
+        assert_eq!(pre_zoom.max_height, Some(40.0));
+        assert!(pre_zoom.max_w_pre_zoom);
+        assert!(pre_zoom.max_h_pre_zoom);
+
+        let post_zoom = compiled.overlays[1].initial_state;
+        assert_eq!(post_zoom.max_width, Some(90.0));
+        assert_eq!(post_zoom.max_height, Some(50.0));
+        assert!(!post_zoom.max_w_pre_zoom);
+        assert!(!post_zoom.max_h_pre_zoom);
     }
 
     #[test]

@@ -1927,6 +1927,11 @@ fn song_lua_overlay_delta_overlaps(
     overlap!(effect_color1);
     overlap!(effect_color2);
     overlap!(effect_period);
+    overlap!(wrap_width_pixels);
+    overlap!(max_width);
+    overlap!(max_height);
+    overlap!(max_w_pre_zoom);
+    overlap!(max_h_pre_zoom);
     overlap!(texture_wrapping);
     overlap!(texcoord_offset);
     overlap!(custom_texture_rect);

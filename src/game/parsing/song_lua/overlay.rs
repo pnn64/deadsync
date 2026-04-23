@@ -89,6 +89,11 @@ pub struct SongLuaOverlayState {
     pub sprite_playback_rate: f32,
     pub sprite_state_delay: f32,
     pub sprite_state_index: Option<u32>,
+    pub wrap_width_pixels: Option<i32>,
+    pub max_width: Option<f32>,
+    pub max_height: Option<f32>,
+    pub max_w_pre_zoom: bool,
+    pub max_h_pre_zoom: bool,
     pub texture_wrapping: bool,
     pub texcoord_offset: Option<[f32; 2]>,
     pub custom_texture_rect: Option<[f32; 4]>,
@@ -144,6 +149,11 @@ impl Default for SongLuaOverlayState {
             sprite_playback_rate: 1.0,
             sprite_state_delay: 0.1,
             sprite_state_index: None,
+            wrap_width_pixels: None,
+            max_width: None,
+            max_height: None,
+            max_w_pre_zoom: false,
+            max_h_pre_zoom: false,
             texture_wrapping: false,
             texcoord_offset: None,
             custom_texture_rect: None,
@@ -200,6 +210,11 @@ pub struct SongLuaOverlayStateDelta {
     pub sprite_playback_rate: Option<f32>,
     pub sprite_state_delay: Option<f32>,
     pub sprite_state_index: Option<u32>,
+    pub wrap_width_pixels: Option<i32>,
+    pub max_width: Option<f32>,
+    pub max_height: Option<f32>,
+    pub max_w_pre_zoom: Option<bool>,
+    pub max_h_pre_zoom: Option<bool>,
     pub texture_wrapping: Option<bool>,
     pub texcoord_offset: Option<[f32; 2]>,
     pub custom_texture_rect: Option<[f32; 4]>,
@@ -416,6 +431,21 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.sprite_state_index {
         state.sprite_state_index = Some(value);
     }
+    if let Some(value) = delta.wrap_width_pixels {
+        state.wrap_width_pixels = Some(value);
+    }
+    if let Some(value) = delta.max_width {
+        state.max_width = Some(value);
+    }
+    if let Some(value) = delta.max_height {
+        state.max_height = Some(value);
+    }
+    if let Some(value) = delta.max_w_pre_zoom {
+        state.max_w_pre_zoom = value;
+    }
+    if let Some(value) = delta.max_h_pre_zoom {
+        state.max_h_pre_zoom = value;
+    }
     if let Some(value) = delta.texture_wrapping {
         state.texture_wrapping = value;
     }
@@ -572,6 +602,25 @@ fn overlay_state_lerp(
     }
     if delta.sprite_state_index.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_state_index = to.sprite_state_index;
+    }
+    if delta.wrap_width_pixels.is_some() && t >= 1.0 - f32::EPSILON {
+        from.wrap_width_pixels = to.wrap_width_pixels;
+    }
+    if delta.max_width.is_some()
+        && let (Some(from_width), Some(to_width)) = (from.max_width, to.max_width)
+    {
+        from.max_width = Some((to_width - from_width).mul_add(t, from_width));
+    }
+    if delta.max_height.is_some()
+        && let (Some(from_height), Some(to_height)) = (from.max_height, to.max_height)
+    {
+        from.max_height = Some((to_height - from_height).mul_add(t, from_height));
+    }
+    if delta.max_w_pre_zoom.is_some() && t >= 1.0 - f32::EPSILON {
+        from.max_w_pre_zoom = to.max_w_pre_zoom;
+    }
+    if delta.max_h_pre_zoom.is_some() && t >= 1.0 - f32::EPSILON {
+        from.max_h_pre_zoom = to.max_h_pre_zoom;
     }
     if delta.texcoord_offset.is_some()
         && let (Some(from_offset), Some(to_offset)) = (from.texcoord_offset, to.texcoord_offset)
@@ -747,6 +796,11 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.sprite_playback_rate.is_none()
         && delta.sprite_state_delay.is_none()
         && delta.sprite_state_index.is_none()
+        && delta.wrap_width_pixels.is_none()
+        && delta.max_width.is_none()
+        && delta.max_height.is_none()
+        && delta.max_w_pre_zoom.is_none()
+        && delta.max_h_pre_zoom.is_none()
         && delta.texture_wrapping.is_none()
         && delta.texcoord_offset.is_none()
         && delta.custom_texture_rect.is_none()
@@ -888,6 +942,21 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.sprite_state_index.is_some() {
         into.sprite_state_index = from.sprite_state_index;
     }
+    if from.wrap_width_pixels.is_some() {
+        into.wrap_width_pixels = from.wrap_width_pixels;
+    }
+    if from.max_width.is_some() {
+        into.max_width = from.max_width;
+    }
+    if from.max_height.is_some() {
+        into.max_height = from.max_height;
+    }
+    if from.max_w_pre_zoom.is_some() {
+        into.max_w_pre_zoom = from.max_w_pre_zoom;
+    }
+    if from.max_h_pre_zoom.is_some() {
+        into.max_h_pre_zoom = from.max_h_pre_zoom;
+    }
     if from.texture_wrapping.is_some() {
         into.texture_wrapping = from.texture_wrapping;
     }
@@ -976,6 +1045,11 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(sprite_playback_rate);
     copy_pair!(sprite_state_delay);
     copy_pair!(sprite_state_index);
+    copy_pair!(wrap_width_pixels);
+    copy_pair!(max_width);
+    copy_pair!(max_height);
+    copy_pair!(max_w_pre_zoom);
+    copy_pair!(max_h_pre_zoom);
     copy_pair!(texture_wrapping);
     copy_pair!(texcoord_offset);
     copy_pair!(custom_texture_rect);
