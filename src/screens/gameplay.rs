@@ -1060,6 +1060,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.effect_offset {
         state.effect_offset = value;
     }
+    if let Some(value) = delta.effect_timing {
+        state.effect_timing = Some(value);
+    }
     if let Some(value) = delta.sprite_animate {
         state.sprite_animate = value;
     }
@@ -1255,6 +1258,17 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.effect_offset.is_some() {
         from.effect_offset = (to.effect_offset - from.effect_offset).mul_add(t, from.effect_offset);
+    }
+    if delta.effect_timing.is_some()
+        && let (Some(from_timing), Some(to_timing)) = (from.effect_timing, to.effect_timing)
+    {
+        from.effect_timing = Some([
+            (to_timing[0] - from_timing[0]).mul_add(t, from_timing[0]),
+            (to_timing[1] - from_timing[1]).mul_add(t, from_timing[1]),
+            (to_timing[2] - from_timing[2]).mul_add(t, from_timing[2]),
+            (to_timing[3] - from_timing[3]).mul_add(t, from_timing[3]),
+            (to_timing[4] - from_timing[4]).mul_add(t, from_timing[4]),
+        ]);
     }
     if delta.sprite_playback_rate.is_some() {
         from.sprite_playback_rate = (to.sprite_playback_rate - from.sprite_playback_rate)
@@ -2573,7 +2587,9 @@ fn song_lua_overlay_effect_state(state: SongLuaOverlayState) -> EffectState {
         color2: state.effect_color2,
         period,
         offset: state.effect_offset,
-        timing: [period * 0.5, 0.0, period * 0.5, 0.0, 0.0],
+        timing: state
+            .effect_timing
+            .unwrap_or([period * 0.5, 0.0, period * 0.5, 0.0, 0.0]),
         magnitude: state.effect_magnitude,
         ..EffectState::default()
     }
@@ -5644,6 +5660,54 @@ mod tests {
                 assert!((world_z - 5.0).abs() <= 0.000_1);
                 assert!(scale[0] > 0.0);
                 assert!(scale[1] > 0.0);
+            }
+            other => panic!("expected sprite-backed quad, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_quad_applies_custom_effect_timing_at_runtime() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                size: Some([100.0, 50.0]),
+                effect_mode: crate::engine::present::anim::EffectMode::Bob,
+                effect_clock: crate::engine::present::anim::EffectClock::Time,
+                effect_period: 2.0,
+                effect_timing: Some([0.0, 1.0, 0.0, 0.0, 1.0]),
+                effect_magnitude: [10.0, 20.0, 5.0],
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            778,
+            640.0,
+            480.0,
+            0.5,
+            0.0,
+            0.0,
+        )
+        .expect("custom-timed effect quad should render");
+
+        match actor {
+            Actor::Sprite {
+                offset, world_z, z, ..
+            } => {
+                let x_scale = screen_width() / 640.0;
+                let y_scale = screen_height() / 480.0;
+                assert_eq!(z, 778);
+                assert!((offset[0] - 320.0 * x_scale).abs() <= 0.000_1);
+                assert!((offset[1] - 240.0 * y_scale).abs() <= 0.000_1);
+                assert!(world_z.abs() <= 0.000_1);
             }
             other => panic!("expected sprite-backed quad, got {other:?}"),
         }

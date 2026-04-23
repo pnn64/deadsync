@@ -86,6 +86,7 @@ pub struct SongLuaOverlayState {
     pub effect_color2: [f32; 4],
     pub effect_period: f32,
     pub effect_offset: f32,
+    pub effect_timing: Option<[f32; 5]>,
     pub sprite_animate: bool,
     pub sprite_loop: bool,
     pub sprite_playback_rate: f32,
@@ -148,6 +149,7 @@ impl Default for SongLuaOverlayState {
             effect_color2: [1.0, 1.0, 1.0, 1.0],
             effect_period: 1.0,
             effect_offset: 0.0,
+            effect_timing: None,
             sprite_animate: false,
             sprite_loop: true,
             sprite_playback_rate: 1.0,
@@ -211,6 +213,7 @@ pub struct SongLuaOverlayStateDelta {
     pub effect_color2: Option<[f32; 4]>,
     pub effect_period: Option<f32>,
     pub effect_offset: Option<f32>,
+    pub effect_timing: Option<[f32; 5]>,
     pub sprite_animate: Option<bool>,
     pub sprite_loop: Option<bool>,
     pub sprite_playback_rate: Option<f32>,
@@ -428,6 +431,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.effect_offset {
         state.effect_offset = value;
     }
+    if let Some(value) = delta.effect_timing {
+        state.effect_timing = Some(value);
+    }
     if let Some(value) = delta.sprite_animate {
         state.sprite_animate = value;
     }
@@ -615,6 +621,17 @@ fn overlay_state_lerp(
     }
     if delta.effect_offset.is_some() {
         from.effect_offset = (to.effect_offset - from.effect_offset).mul_add(t, from.effect_offset);
+    }
+    if delta.effect_timing.is_some()
+        && let (Some(from_timing), Some(to_timing)) = (from.effect_timing, to.effect_timing)
+    {
+        from.effect_timing = Some([
+            (to_timing[0] - from_timing[0]).mul_add(t, from_timing[0]),
+            (to_timing[1] - from_timing[1]).mul_add(t, from_timing[1]),
+            (to_timing[2] - from_timing[2]).mul_add(t, from_timing[2]),
+            (to_timing[3] - from_timing[3]).mul_add(t, from_timing[3]),
+            (to_timing[4] - from_timing[4]).mul_add(t, from_timing[4]),
+        ]);
     }
     if delta.sprite_playback_rate.is_some() {
         from.sprite_playback_rate = (to.sprite_playback_rate - from.sprite_playback_rate)
@@ -817,6 +834,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.effect_color2.is_none()
         && delta.effect_period.is_none()
         && delta.effect_offset.is_none()
+        && delta.effect_timing.is_none()
         && delta.sprite_animate.is_none()
         && delta.sprite_loop.is_none()
         && delta.sprite_playback_rate.is_none()
@@ -959,6 +977,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.effect_offset.is_some() {
         into.effect_offset = from.effect_offset;
     }
+    if from.effect_timing.is_some() {
+        into.effect_timing = from.effect_timing;
+    }
     if from.sprite_animate.is_some() {
         into.sprite_animate = from.sprite_animate;
     }
@@ -1074,6 +1095,7 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(effect_color2);
     copy_pair!(effect_period);
     copy_pair!(effect_offset);
+    copy_pair!(effect_timing);
     copy_pair!(sprite_animate);
     copy_pair!(sprite_loop);
     copy_pair!(sprite_playback_rate);

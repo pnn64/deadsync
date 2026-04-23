@@ -3508,6 +3508,13 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.effect_offset = value;
     }
     if let Some(value) = actor
+        .get::<Option<Table>>("__songlua_state_effect_timing")
+        .map_err(|err| err.to_string())?
+        .and_then(|value| table_vec5(&value))
+    {
+        state.effect_timing = Some(value);
+    }
+    if let Some(value) = actor
         .get::<Option<bool>>("__songlua_state_sprite_animate")
         .map_err(|err| err.to_string())?
     {
@@ -3832,6 +3839,25 @@ fn capture_block_set_vec4(
     value.raw_set(2, value4[1])?;
     value.raw_set(3, value4[2])?;
     value.raw_set(4, value4[3])?;
+    block.set(key, value.clone())?;
+    block.set("__songlua_has_changes", true)?;
+    actor.set(format!("__songlua_state_{key}"), value)?;
+    Ok(())
+}
+
+fn capture_block_set_vec5(
+    lua: &Lua,
+    actor: &Table,
+    key: &str,
+    value5: [f32; 5],
+) -> mlua::Result<()> {
+    let block = actor_current_capture_block(lua, actor)?;
+    let value = lua.create_table()?;
+    value.raw_set(1, value5[0])?;
+    value.raw_set(2, value5[1])?;
+    value.raw_set(3, value5[2])?;
+    value.raw_set(4, value5[3])?;
+    value.raw_set(5, value5[4])?;
     block.set(key, value.clone())?;
     block.set("__songlua_has_changes", true)?;
     actor.set(format!("__songlua_state_{key}"), value)?;
@@ -4180,6 +4206,10 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                 effect_offset: block
                     .get::<Option<f32>>("effect_offset")
                     .map_err(|err| err.to_string())?,
+                effect_timing: block
+                    .get::<Option<Table>>("effect_timing")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec5(&value)),
                 sprite_animate: block
                     .get::<Option<bool>>("sprite_animate")
                     .map_err(|err| err.to_string())?,
@@ -4245,6 +4275,16 @@ fn table_vec4(table: &Table) -> Option<[f32; 4]> {
         table.raw_get::<f32>(2).ok()?,
         table.raw_get::<f32>(3).ok()?,
         table.raw_get::<f32>(4).ok()?,
+    ])
+}
+
+fn table_vec5(table: &Table) -> Option<[f32; 5]> {
+    Some([
+        table.raw_get::<f32>(1).ok()?,
+        table.raw_get::<f32>(2).ok()?,
+        table.raw_get::<f32>(3).ok()?,
+        table.raw_get::<f32>(4).ok()?,
+        table.raw_get::<f32>(5).ok()?,
     ])
 }
 
@@ -5640,6 +5680,37 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             move |lua, args: MultiValue| {
                 if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "effect_offset", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "effecttiming",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(a) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let Some(b) = method_arg(&args, 1).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let Some(c) = method_arg(&args, 2).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let Some(d) = method_arg(&args, 3).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let timing = if let Some(e) = method_arg(&args, 4).cloned().and_then(read_f32) {
+                    [a.max(0.0), b.max(0.0), c.max(0.0), e.max(0.0), d.max(0.0)]
+                } else {
+                    [a.max(0.0), b.max(0.0), c.max(0.0), 0.0, d.max(0.0)]
+                };
+                let total = timing.iter().sum::<f32>();
+                if total > 0.0 {
+                    capture_block_set_vec5(lua, &actor, "effect_timing", timing)?;
+                    capture_block_set_f32(lua, &actor, "effect_period", total)?;
                 }
                 Ok(actor.clone())
             }
@@ -7390,6 +7461,7 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(effect_color2);
     copy_value_field!(effect_period);
     copy_value_field!(effect_offset);
+    copy_option_field!(effect_timing);
     copy_value_field!(sprite_animate);
     copy_value_field!(sprite_loop);
     copy_value_field!(sprite_playback_rate);
@@ -12182,6 +12254,49 @@ return Def.ActorFrame{
         let vibrate = compiled.overlays[6].initial_state;
         assert!(vibrate.vibrate);
         assert_eq!(vibrate.effect_magnitude, [10.0, 10.0, 10.0]);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_overlay_effect_timing() {
+        let song_dir = test_dir("overlay-effect-timing");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:bob()
+            self:effecttiming(0.25, 0.5, 0.75, 1.25)
+        end,
+    },
+    Def.Quad{
+        OnCommand=function(self)
+            self:bounce()
+            self:effecttiming(0.25, 0.5, 0.75, 1.25, 1.5)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Overlay Effect Timing"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+
+        let bob = compiled.overlays[0].initial_state;
+        assert_eq!(bob.effect_mode, EffectMode::Bob);
+        assert_eq!(bob.effect_period, 2.75);
+        assert_eq!(bob.effect_timing, Some([0.25, 0.5, 0.75, 0.0, 1.25]));
+
+        let bounce = compiled.overlays[1].initial_state;
+        assert_eq!(bounce.effect_mode, EffectMode::Bounce);
+        assert_eq!(bounce.effect_period, 4.25);
+        assert_eq!(bounce.effect_timing, Some([0.25, 0.5, 0.75, 1.5, 1.25]));
     }
 
     #[test]
