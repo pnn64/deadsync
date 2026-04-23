@@ -1027,6 +1027,12 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.effect_offset {
         state.effect_offset = value;
     }
+    if let Some(value) = delta.sprite_animate {
+        state.sprite_animate = value;
+    }
+    if let Some(value) = delta.sprite_state_delay {
+        state.sprite_state_delay = value;
+    }
     if let Some(value) = delta.sprite_state_index {
         state.sprite_state_index = Some(value);
     }
@@ -1151,6 +1157,10 @@ fn song_lua_overlay_state_lerp(
     if delta.effect_offset.is_some() {
         from.effect_offset = (to.effect_offset - from.effect_offset).mul_add(t, from.effect_offset);
     }
+    if delta.sprite_state_delay.is_some() {
+        from.sprite_state_delay =
+            (to.sprite_state_delay - from.sprite_state_delay).mul_add(t, from.sprite_state_delay);
+    }
     if delta.sprite_state_index.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_state_index = to.sprite_state_index;
     }
@@ -1205,12 +1215,31 @@ fn song_lua_overlay_state_lerp(
     if delta.effect_mode.is_some() && t >= 1.0 - f32::EPSILON {
         from.effect_mode = to.effect_mode;
     }
+    if delta.sprite_animate.is_some() && t >= 1.0 - f32::EPSILON {
+        from.sprite_animate = to.sprite_animate;
+    }
     from
 }
 
 #[inline(always)]
 fn song_lua_valid_sprite_state_index(state: SongLuaOverlayState) -> Option<u32> {
     state.sprite_state_index.filter(|&value| value != u32::MAX)
+}
+
+#[inline(always)]
+fn song_lua_sprite_sheet_index(
+    state: SongLuaOverlayState,
+    texture_key: &str,
+    total_elapsed: f32,
+) -> Option<u32> {
+    let start = song_lua_valid_sprite_state_index(state).unwrap_or(0);
+    let (cols, rows) = sprite_sheet_dims(texture_key);
+    let total = cols.saturating_mul(rows).max(1);
+    if state.sprite_animate && state.sprite_state_delay > 0.0 && total > 1 {
+        let steps = (total_elapsed / state.sprite_state_delay).floor().max(0.0) as u32;
+        return Some((start + (steps % total)) % total);
+    }
+    (state.sprite_animate || song_lua_valid_sprite_state_index(state).is_some()).then_some(start)
 }
 
 #[inline(always)]
@@ -1232,7 +1261,7 @@ fn song_lua_overlay_sprite_size(state: SongLuaOverlayState, texture_key: &str) -
     }
     let tex = crate::assets::texture_dims(texture_key)?;
     let (mut width, mut height) = (tex.w as f32, tex.h as f32);
-    if song_lua_valid_sprite_state_index(state).is_some() {
+    if state.sprite_animate || song_lua_valid_sprite_state_index(state).is_some() {
         let (cols, rows) = sprite_sheet_dims(texture_key);
         width /= cols.max(1) as f32;
         height /= rows.max(1) as f32;
@@ -1243,10 +1272,11 @@ fn song_lua_overlay_sprite_size(state: SongLuaOverlayState, texture_key: &str) -
 fn song_lua_overlay_uv_rect(
     state: SongLuaOverlayState,
     texture_key: Option<&str>,
+    total_elapsed: f32,
 ) -> Option<[f32; 4]> {
     state.custom_texture_rect.or_else(|| {
-        let state_index = song_lua_valid_sprite_state_index(state)?;
         let texture_key = texture_key?;
+        let state_index = song_lua_sprite_sheet_index(state, texture_key, total_elapsed)?;
         let (cols, rows) = sprite_sheet_dims(texture_key);
         Some(song_lua_sprite_sheet_rect(state_index, cols, rows))
     })
@@ -2624,7 +2654,8 @@ fn song_lua_overlay_uvs(
         mut uv_scale_y,
         mut uv_offset_x,
         mut uv_offset_y,
-    ] = if let Some([u0, v0, u1, v1]) = song_lua_overlay_uv_rect(state, texture_key) {
+    ] = if let Some([u0, v0, u1, v1]) = song_lua_overlay_uv_rect(state, texture_key, total_elapsed)
+    {
         [
             (u1 - u0).abs().max(1e-6),
             (v1 - v0).abs().max(1e-6),
@@ -2874,7 +2905,7 @@ fn build_song_lua_overlay_actor(
                 *world_z += effect_offset[2];
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
-                *uv_rect = song_lua_overlay_uv_rect(state, Some(key.as_ref()));
+                *uv_rect = song_lua_overlay_uv_rect(state, Some(key.as_ref()), total_elapsed);
                 *texcoordvelocity = state.texcoord_velocity;
                 *actor_effect = EffectState::default();
                 *actor_flip_x ^= flip_x;
@@ -5461,6 +5492,50 @@ mod tests {
                 }
             }
             other => panic!("expected sprite overlay, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_sprite_animation_advances_sheet_frames_at_runtime() {
+        let key = "song-lua-animate 4x3.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: std::path::PathBuf::from(&key),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                sprite_state_index: Some(1),
+                sprite_animate: true,
+                sprite_state_delay: 0.5,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            779,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            1.1,
+        )
+        .expect("animated sprite should render");
+
+        match actor {
+            Actor::Sprite { uv_rect, z, .. } => {
+                assert_eq!(z, 779);
+                assert_eq!(uv_rect, Some([0.75, 0.0, 1.0, 1.0 / 3.0]));
+            }
+            other => panic!("expected animated sprite overlay, got {other:?}"),
         }
     }
 

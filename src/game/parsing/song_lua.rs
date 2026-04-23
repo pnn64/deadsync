@@ -3436,6 +3436,18 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.effect_offset = value;
     }
     if let Some(value) = actor
+        .get::<Option<bool>>("__songlua_state_sprite_animate")
+        .map_err(|err| err.to_string())?
+    {
+        state.sprite_animate = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_sprite_state_delay")
+        .map_err(|err| err.to_string())?
+    {
+        state.sprite_state_delay = value;
+    }
+    if let Some(value) = actor
         .get::<Option<u32>>("__songlua_state_sprite_state_index")
         .map_err(|err| err.to_string())?
     {
@@ -3991,6 +4003,12 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .map_err(|err| err.to_string())?,
                 effect_offset: block
                     .get::<Option<f32>>("effect_offset")
+                    .map_err(|err| err.to_string())?,
+                sprite_animate: block
+                    .get::<Option<bool>>("sprite_animate")
+                    .map_err(|err| err.to_string())?,
+                sprite_state_delay: block
+                    .get::<Option<f32>>("sprite_state_delay")
                     .map_err(|err| err.to_string())?,
                 sprite_state_index: block
                     .get::<Option<u32>>("sprite_state_index")
@@ -4922,6 +4940,39 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "animate",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let value = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(|value| match value {
+                        Value::Boolean(value) => Some(value),
+                        Value::Integer(value) => Some(value != 0),
+                        Value::Number(value) => Some(value != 0.0),
+                        _ => None,
+                    })
+                    .unwrap_or(true);
+                capture_block_set_bool(lua, &actor, "sprite_animate", value)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    for name in ["SetAllStateDelays", "setallstatedelays"] {
+        actor.set(
+            name,
+            lua.create_function({
+                let actor = actor.clone();
+                move |lua, args: MultiValue| {
+                    if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                        capture_block_set_f32(lua, &actor, "sprite_state_delay", value.max(0.0))?;
+                    }
+                    Ok(actor.clone())
+                }
+            })?,
+        )?;
+    }
+    actor.set(
         "texcoordvelocity",
         lua.create_function({
             let actor = actor.clone();
@@ -5147,7 +5198,6 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     for name in [
-        "animate",
         "clearzbuffer",
         "Draw",
         "EnableAlphaBuffer",
@@ -5590,10 +5640,13 @@ fn actor_base_size(actor: &Table) -> mlua::Result<(f32, f32)> {
         && let Ok((width, height)) = image_dimensions(&path)
     {
         let (mut width, mut height) = (width as f32, height as f32);
-        if song_lua_valid_sprite_state_index(
-            actor.get::<Option<u32>>("__songlua_state_sprite_state_index")?,
-        )
-        .is_some()
+        if actor
+            .get::<Option<bool>>("__songlua_state_sprite_animate")?
+            .unwrap_or(false)
+            || song_lua_valid_sprite_state_index(
+                actor.get::<Option<u32>>("__songlua_state_sprite_state_index")?,
+            )
+            .is_some()
         {
             let (cols, rows) =
                 crate::assets::parse_sprite_sheet_dims(path.to_string_lossy().as_ref());
@@ -6752,6 +6805,8 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(effect_color2);
     copy_value_field!(effect_period);
     copy_value_field!(effect_offset);
+    copy_value_field!(sprite_animate);
+    copy_value_field!(sprite_state_delay);
     copy_option_field!(sprite_state_index);
     copy_option_field!(custom_texture_rect);
     copy_option_field!(texcoord_velocity);
@@ -9353,6 +9408,45 @@ return Def.ActorFrame{
             compiled.overlays[0].initial_state.custom_texture_rect,
             Some([0.25, 1.0 / 3.0, 0.5, 2.0 / 3.0])
         );
+    }
+
+    #[test]
+    fn compile_song_lua_tracks_sprite_animation_state() {
+        let song_dir = test_dir("sprite-animate");
+        let image_path = song_dir.join("panel 4x3.png");
+        image::RgbaImage::new(40, 30).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel 4x3.png",
+        OnCommand=function(self)
+            self:setstate(1):animate(true):SetAllStateDelays(0.5)
+            mod_actions = {
+                {1, string.format("%.0f:%.0f", self:GetWidth(), self:GetHeight()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Sprite Animate"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "10:10");
+        assert_eq!(compiled.overlays.len(), 1);
+        let state = compiled.overlays[0].initial_state;
+        assert!(state.sprite_animate);
+        assert_eq!(state.sprite_state_delay, 0.5);
+        assert_eq!(state.sprite_state_index, Some(1));
+        assert_eq!(state.custom_texture_rect, Some([0.25, 0.0, 0.5, 1.0 / 3.0]));
     }
 
     #[test]
