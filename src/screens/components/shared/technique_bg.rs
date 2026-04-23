@@ -12,7 +12,7 @@ const CIRCLE_FRAG_PATH: &str = "assets/graphics/menu_bg_technique/circlefrag_mod
 const RING_PATH: &str = "assets/graphics/menu_bg_technique/ring_model.txt";
 const ARROW_PATH: &str = "assets/graphics/menu_bg_technique/arrow_model.txt";
 
-const FRONT_COLOR_ADD: [i32; 10] = [-1, 0, 0, -1, -1, -1, 0, -1, 0, -1];
+const FRONT_COLOR_ADD: [f32; 10] = [-0.75, 0.0, 0.0, -0.75, -0.75, -0.75, 0.0, -0.75, 0.0, -0.75];
 const GRID_VELOCITY: [[f32; 2]; 3] = [[0.05, 0.07], [0.04, 0.02], [0.02, 0.015]];
 const GRID_ALPHA: [f32; 3] = [0.1, 0.05, 0.025];
 const GRID_RECT_SPAN: f32 = 60.0;
@@ -79,17 +79,15 @@ impl State {
         }
 
         let mut model_actors = Vec::with_capacity(21);
-        let mut order = 0usize;
 
         for i in 1..=10 {
             let zoom = random_xd(i as f32 * 1.6) + 0.35;
             let z_pos = (random_xd(i as f32 * 13.0) - 0.6) * (1.0 / zoom) * 850.0;
             let rot_z = random_xd(i as f32) * 400.0 + random_xd(i as f32 * 3.4) * 14.0 * elapsed_s;
-            let mut color = color::decorative_rgba(active_color_index + FRONT_COLOR_ADD[i - 1]);
+            let mut color = technique_front_color(active_color_index, FRONT_COLOR_ADD[i - 1]);
             color[3] = random_xd(i as f32) * alpha_mul;
             push_layers(
                 &mut model_actors,
-                &mut order,
                 &assets.circle_frag,
                 center,
                 zoom,
@@ -102,7 +100,6 @@ impl State {
 
         push_layers(
             &mut model_actors,
-            &mut order,
             &assets.ring,
             center,
             1.75,
@@ -113,7 +110,6 @@ impl State {
         );
         push_layers(
             &mut model_actors,
-            &mut order,
             &assets.ring,
             center,
             0.75,
@@ -124,7 +120,6 @@ impl State {
         );
         push_layers(
             &mut model_actors,
-            &mut order,
             &assets.arrow,
             center,
             1.2,
@@ -142,7 +137,6 @@ impl State {
             let color = [1.0, 1.0, 1.0, random_xd(i as f32 / 1.6) * alpha_mul];
             push_layers(
                 &mut model_actors,
-                &mut order,
                 &assets.circle_frag,
                 center,
                 zoom,
@@ -153,13 +147,13 @@ impl State {
             );
         }
 
-        model_actors.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+        // Simply Love's Technique.lua appends these models in a fixed ActorFrame
+        // order, and ITGmania's default ActorFrame draw path preserves that order.
+        // Do not depth-sort or z-buffer them here; that changes which ring family
+        // sits on top and breaks parity with the theme.
         actors.push(Actor::Camera {
             view_proj: technique_view_proj(),
-            children: model_actors
-                .into_iter()
-                .map(|(_, _, actor)| actor)
-                .collect(),
+            children: model_actors,
         });
 
         Some(actors)
@@ -205,8 +199,7 @@ fn load_layers(path: &str) -> Result<Arc<[TechniqueLayer]>, String> {
 }
 
 fn push_layers(
-    out: &mut Vec<(f32, usize, Actor)>,
-    order: &mut usize,
+    out: &mut Vec<Actor>,
     layers: &[TechniqueLayer],
     center: [f32; 2],
     zoom: f32,
@@ -222,9 +215,8 @@ fn push_layers(
         draw.rot[2] += base_rot[2];
         draw.pos[2] += z_pos;
         let size = [layer.size[0] * zoom, layer.size[1] * zoom];
-        let sort_depth = draw.pos[2];
         let uv = layer.slot.uv_for_frame_at(0, elapsed_s);
-        if let Some(actor) = noteskin_model_actor_from_draw_depth_sorted_affine(
+        if let Some(mut actor) = noteskin_model_actor_from_draw_depth_sorted_affine(
             &layer.slot,
             draw,
             center,
@@ -235,9 +227,21 @@ fn push_layers(
             crate::engine::gfx::BlendMode::Alpha,
             MODEL_Z,
         ) {
-            out.push((sort_depth, *order, actor));
-            *order += 1;
+            if let Actor::TexturedMesh { depth_test, .. } = &mut actor {
+                *depth_test = false;
+            }
+            out.push(actor);
         }
+    }
+}
+
+fn technique_front_color(active_color_index: i32, offset: f32) -> [f32; 4] {
+    let palette_index = active_color_index as f32 + offset;
+    let rounded = palette_index.round();
+    if (palette_index - rounded).abs() > 0.001 {
+        [1.0, 1.0, 1.0, 1.0]
+    } else {
+        color::decorative_rgba(rounded as i32)
     }
 }
 
@@ -283,4 +287,15 @@ fn wrapped_grid_uv_rect(velocity: [f32; 2], elapsed_s: f32) -> [f32; 4] {
 fn scale_alpha(mut color: [f32; 4], alpha: f32) -> [f32; 4] {
     color[3] *= alpha;
     color
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn technique_fractional_color_offsets_fall_back_to_white() {
+        assert_eq!(technique_front_color(2, -0.75), [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(technique_front_color(2, 0.0), color::decorative_rgba(2));
+    }
 }
