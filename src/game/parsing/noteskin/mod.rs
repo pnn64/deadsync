@@ -192,6 +192,7 @@ pub struct SpriteSlot {
     pub source: Arc<SpriteSource>,
     pub uv_velocity: [f32; 2],
     pub uv_offset: [f32; 2],
+    pub uv_cycle_seconds: Option<f32>,
     pub note_color_translate: bool,
     pub model: Option<Arc<ModelMesh>>,
     pub model_draw: ModelDrawState,
@@ -254,6 +255,13 @@ impl SpriteSlot {
     #[inline(always)]
     pub const fn base_rot_sin_cos(&self) -> [f32; 2] {
         self.base_rot_sin_cos
+    }
+
+    #[inline(always)]
+    fn uv_scroll_clock(&self, elapsed: f32) -> f32 {
+        self.uv_cycle_seconds
+            .filter(|total| *total > f32::EPSILON && total.is_finite())
+            .map_or(elapsed, |total| elapsed.rem_euclid(total) / total)
     }
 
     #[inline(always)]
@@ -579,19 +587,23 @@ impl SpriteSlot {
         };
 
         // ITG model textures can scroll via AnimatedTexture TexVelocity/TexOffset.
-        // Model UVs often rely on a full [0..1] span, so preserve span width when
-        // offsetting and avoid per-endpoint wrapping here.
+        // ITGmania applies TexVelocity over the animation cycle percentage, not
+        // raw seconds (see AnimatedTexture::GetTextureTranslate), so keep model
+        // UVs on that clock while preserving the full [0..1] span.
         if self.uv_velocity != [0.0, 0.0] || self.uv_offset != [0.0, 0.0] {
             let w = (uv[2] - uv[0]).abs();
             let h = (uv[3] - uv[1]).abs();
-            let shift_u = self.uv_offset[0] + self.uv_velocity[0] * elapsed;
-            let shift_v = self.uv_offset[1] + self.uv_velocity[1] * elapsed;
             if self.model.is_some() {
+                let clock = self.uv_scroll_clock(elapsed);
+                let shift_u = self.uv_offset[0] + self.uv_velocity[0] * clock;
+                let shift_v = self.uv_offset[1] + self.uv_velocity[1] * clock;
                 uv[0] += shift_u;
                 uv[2] += shift_u;
                 uv[1] += shift_v;
                 uv[3] += shift_v;
             } else {
+                let shift_u = self.uv_offset[0] + self.uv_velocity[0] * elapsed;
+                let shift_v = self.uv_offset[1] + self.uv_velocity[1] * elapsed;
                 let u_span = (1.0 - w).max(0.0);
                 let v_span = (1.0 - h).max(0.0);
                 let u_shift = if u_span > f32::EPSILON {
@@ -1659,6 +1671,7 @@ fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {
         source,
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
+        uv_cycle_seconds: None,
         note_color_translate: false,
         model: None,
         model_draw: ModelDrawState::default(),
@@ -1845,6 +1858,7 @@ pub(crate) fn load_itg_model_slots_from_path(path: &Path) -> Result<Arc<[SpriteS
                 layer.texture.tex.uv_velocity
             };
             slot.uv_offset = layer.texture.tex.uv_offset;
+            slot.uv_cycle_seconds = layer.texture.tex.uv_cycle_seconds;
             slots.push(slot);
         }
     }
@@ -1875,6 +1889,7 @@ pub(crate) fn load_itg_model_slots_from_path(path: &Path) -> Result<Arc<[SpriteS
         }
         slot.uv_velocity = model_texture.tex.uv_velocity;
         slot.uv_offset = model_texture.tex.uv_offset;
+        slot.uv_cycle_seconds = model_texture.tex.uv_cycle_seconds;
         slots.push(slot);
     }
 
@@ -3871,6 +3886,7 @@ fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
         source,
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
+        uv_cycle_seconds: None,
         note_color_translate: true,
         model: None,
         model_draw: ModelDrawState::default(),
@@ -4739,6 +4755,7 @@ fn itg_resolve_actor_file_compiled(
                     layer.texture.tex.uv_velocity
                 };
                 slot.uv_offset = layer.texture.tex.uv_offset;
+                slot.uv_cycle_seconds = layer.texture.tex.uv_cycle_seconds;
                 if let Some(rot) = rotation_z {
                     slot.set_rotation_deg(rot);
                 }
@@ -4776,6 +4793,7 @@ fn itg_resolve_actor_file_compiled(
         }
         slot.uv_velocity = model_texture.tex.uv_velocity;
         slot.uv_offset = model_texture.tex.uv_offset;
+        slot.uv_cycle_seconds = model_texture.tex.uv_cycle_seconds;
         if let Some(rot) = rotation_z {
             slot.set_rotation_deg(rot);
         }
@@ -4856,6 +4874,7 @@ fn itg_resolve_actor_file_compiled(
 struct ItgModelTexturePath {
     uv_velocity: [f32; 2],
     uv_offset: [f32; 2],
+    uv_cycle_seconds: Option<f32>,
 }
 
 impl Default for ItgModelTexturePath {
@@ -4863,6 +4882,7 @@ impl Default for ItgModelTexturePath {
         Self {
             uv_velocity: [0.0, 0.0],
             uv_offset: [0.0, 0.0],
+            uv_cycle_seconds: None,
         }
     }
 }
@@ -4976,9 +4996,13 @@ fn itg_resolve_relative_or_noteskin_path(
 
 fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTexture> {
     let ini = noteskin_itg::IniData::parse_file(path).ok()?;
-    let frame = ini
-        .get("AnimatedTexture", "Frame0000")
-        .or_else(|| ini.get("AnimatedTexture", "Frame0001"))?;
+    let first_frame_idx = if ini.get("AnimatedTexture", "Frame0000").is_some() {
+        0
+    } else {
+        1
+    };
+    let frame_key = format!("Frame{first_frame_idx:04}");
+    let frame = ini.get("AnimatedTexture", &frame_key)?;
     let rel = frame.trim().trim_matches('"').trim_matches('\'');
     if rel.is_empty() {
         return None;
@@ -5010,11 +5034,28 @@ fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTextu
         .get("AnimatedTexture", "TexOffsetY")
         .and_then(itg_parse_ini_float)
         .unwrap_or(0.0);
+    let mut cycle_seconds = 0.0f32;
+    for idx in first_frame_idx..1000 {
+        let frame_key = format!("Frame{idx:04}");
+        let delay_key = format!("Delay{idx:04}");
+        if ini.get("AnimatedTexture", &frame_key).is_none() {
+            break;
+        }
+        let Some(delay) = ini
+            .get("AnimatedTexture", &delay_key)
+            .and_then(itg_parse_ini_float)
+        else {
+            break;
+        };
+        cycle_seconds += delay.max(0.0);
+    }
     Some(ItgResolvedModelTexture {
         texture_path,
         tex: ItgModelTexturePath {
             uv_velocity: [tex_velocity_x, tex_velocity_y],
             uv_offset: [tex_offset_x, tex_offset_y],
+            uv_cycle_seconds: (cycle_seconds > f32::EPSILON && cycle_seconds.is_finite())
+                .then_some(cycle_seconds),
         },
     })
 }
@@ -5564,6 +5605,7 @@ fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot
         source,
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
+        uv_cycle_seconds: None,
         note_color_translate: true,
         model: None,
         model_draw: ModelDrawState::default(),
@@ -5638,6 +5680,7 @@ fn itg_slot_from_path_animated(
         source,
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
+        uv_cycle_seconds: None,
         note_color_translate: true,
         model: None,
         model_draw: ModelDrawState::default(),
@@ -6016,6 +6059,7 @@ mod tests {
             }),
             uv_velocity: [0.0, 0.0],
             uv_offset: [0.0, 0.0],
+            uv_cycle_seconds: None,
             note_color_translate: false,
             model: None,
             model_draw: ModelDrawState::default(),
@@ -6097,6 +6141,27 @@ mod tests {
             slot.uv_velocity[1] < -0.9 && slot.uv_velocity[1] > -1.1,
             "expected AnimatedTexture TexVelocityY to carry through, got {:?}",
             slot.uv_velocity
+        );
+        assert_eq!(slot.uv_cycle_seconds, Some(10.0));
+    }
+
+    #[test]
+    fn shared_background_arrow_model_uv_scroll_uses_animation_cycle() {
+        let slots = load_itg_model_slots_from_path(Path::new(
+            "assets/graphics/menu_bg_technique/arrow_model.txt",
+        ))
+        .expect("technique arrow model should load");
+        let slot = &slots[0];
+        let uv_0 = slot.uv_for_frame_at(0, 0.0);
+        let uv_5 = slot.uv_for_frame_at(0, 5.0);
+        let uv_10 = slot.uv_for_frame_at(0, 10.0);
+        assert!(
+            (uv_5[1] - (uv_0[1] - 0.5)).abs() <= 1e-6 && (uv_5[3] - (uv_0[3] - 0.5)).abs() <= 1e-6,
+            "expected half-cycle UV shift after 5 seconds, got {uv_0:?} -> {uv_5:?}"
+        );
+        assert!(
+            (uv_10[1] - uv_0[1]).abs() <= 1e-6 && (uv_10[3] - uv_0[3]).abs() <= 1e-6,
+            "expected UVs to wrap after one 10-second cycle, got {uv_0:?} -> {uv_10:?}"
         );
     }
 

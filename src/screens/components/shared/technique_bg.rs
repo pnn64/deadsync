@@ -15,6 +15,7 @@ const ARROW_PATH: &str = "assets/graphics/menu_bg_technique/arrow_model.txt";
 const FRONT_COLOR_ADD: [i32; 10] = [-1, 0, 0, -1, -1, -1, 0, -1, 0, -1];
 const GRID_VELOCITY: [[f32; 2]; 3] = [[0.05, 0.07], [0.04, 0.02], [0.02, 0.015]];
 const GRID_ALPHA: [f32; 3] = [0.1, 0.05, 0.025];
+const GRID_RECT_SPAN: f32 = 60.0;
 const GRID_ZOOM: f32 = 20.0;
 const BACKDROP_RGBA: [f32; 4] = [20.0 / 255.0, 20.0 / 255.0, 20.0 / 255.0, 1.0];
 const MODEL_Z: i16 = -96;
@@ -66,12 +67,12 @@ impl State {
         ));
 
         for i in 0..GRID_VELOCITY.len() {
+            let uv = wrapped_grid_uv_rect(GRID_VELOCITY[i], elapsed_s);
             actors.push(act!(sprite(SQUARE_TEX):
                 align(0.5, 0.5):
                 xy(center[0], center[1]):
                 zoom(GRID_ZOOM):
-                customtexturerect(0.0, 0.0, 60.0, 60.0):
-                texcoordvelocity(GRID_VELOCITY[i][0], GRID_VELOCITY[i][1]):
+                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                 diffuse(1.0, 1.0, 1.0, GRID_ALPHA[i] * alpha_mul):
                 z(-98)
             ));
@@ -266,6 +267,17 @@ fn random_xd(t: f32) -> f32 {
     } else {
         ((t * 3229.3).sin() * 43758.5453).rem_euclid(1.0)
     }
+}
+
+#[inline(always)]
+fn wrapped_grid_uv_rect(velocity: [f32; 2], elapsed_s: f32) -> [f32; 4] {
+    // StepMania's Sprite::Update keeps scrolling custom texture rects bounded by
+    // subtracting floor() from the top-left corner each frame. Rebuild that
+    // wrapped rect directly here so the repeating square layers stay numerically
+    // stable and don't leak seams across the full screen.
+    let u0 = (velocity[0] * elapsed_s).rem_euclid(1.0);
+    let v0 = (velocity[1] * elapsed_s).rem_euclid(1.0);
+    [u0, v0, u0 + GRID_RECT_SPAN, v0 + GRID_RECT_SPAN]
 }
 
 fn scale_alpha(mut color: [f32; 4], alpha: f32) -> [f32; 4] {
