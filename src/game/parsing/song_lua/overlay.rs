@@ -850,9 +850,9 @@ pub(super) fn parse_overlay_text_align(raw: &str) -> Option<TextAlign> {
         .trim_matches('\'')
         .to_ascii_lowercase();
     match lower.as_str() {
-        "left" => Some(TextAlign::Left),
-        "center" | "middle" => Some(TextAlign::Center),
-        "right" => Some(TextAlign::Right),
+        "left" | "horizalign_left" => Some(TextAlign::Left),
+        "center" | "middle" | "horizalign_center" | "horizalign_middle" => Some(TextAlign::Center),
+        "right" | "horizalign_right" => Some(TextAlign::Right),
         _ => None,
     }
 }

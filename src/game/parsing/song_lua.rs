@@ -707,6 +707,22 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
         })?,
     )?;
     globals.set("Color", create_color_constants_table(lua)?)?;
+    for (name, value) in [
+        ("left", "left"),
+        ("center", "center"),
+        ("middle", "middle"),
+        ("right", "right"),
+        ("top", "top"),
+        ("bottom", "bottom"),
+        ("HorizAlign_Left", "HorizAlign_Left"),
+        ("HorizAlign_Center", "HorizAlign_Center"),
+        ("HorizAlign_Right", "HorizAlign_Right"),
+        ("VertAlign_Top", "VertAlign_Top"),
+        ("VertAlign_Middle", "VertAlign_Middle"),
+        ("VertAlign_Bottom", "VertAlign_Bottom"),
+    ] {
+        globals.set(name, value)?;
+    }
     globals.set(
         "setfenv",
         lua.create_function(|lua, (target, env): (Value, Table)| match target {
@@ -4358,24 +4374,38 @@ fn table_vec3(table: &Table) -> Option<[f32; 3]> {
 
 fn song_lua_halign_value(value: &Value) -> Option<f32> {
     read_f32(value.clone()).or_else(|| {
-        read_string(value.clone()).and_then(|raw| match raw.trim().to_ascii_lowercase().as_str() {
-            "left" => Some(0.0),
-            "center" | "middle" => Some(0.5),
-            "right" => Some(1.0),
-            _ => None,
+        read_string(value.clone()).and_then(|raw| {
+            match song_lua_align_token(raw.as_str()).as_str() {
+                "left" => Some(0.0),
+                "center" | "middle" => Some(0.5),
+                "right" => Some(1.0),
+                _ => None,
+            }
         })
     })
 }
 
 fn song_lua_valign_value(value: &Value) -> Option<f32> {
     read_f32(value.clone()).or_else(|| {
-        read_string(value.clone()).and_then(|raw| match raw.trim().to_ascii_lowercase().as_str() {
-            "top" => Some(0.0),
-            "center" | "middle" => Some(0.5),
-            "bottom" => Some(1.0),
-            _ => None,
+        read_string(value.clone()).and_then(|raw| {
+            match song_lua_align_token(raw.as_str()).as_str() {
+                "top" => Some(0.0),
+                "center" | "middle" => Some(0.5),
+                "bottom" => Some(1.0),
+                _ => None,
+            }
         })
     })
+}
+
+fn song_lua_align_token(raw: &str) -> String {
+    raw.trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_ascii_lowercase()
+        .trim_start_matches("horizalign_")
+        .trim_start_matches("vertalign_")
+        .to_string()
 }
 
 fn song_lua_text_align_value(value: &Value) -> Option<TextAlign> {
@@ -4879,19 +4909,36 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "vertalign",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = method_arg(&args, 0).and_then(song_lua_valign_value) {
+                    capture_block_set_f32(lua, &actor, "valign", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "horizalign",
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
-                let Some(value) = method_arg(&args, 0).and_then(song_lua_text_align_value) else {
+                let Some(raw) = method_arg(&args, 0) else {
                     return Ok(actor.clone());
                 };
-                capture_block_set_string(
-                    lua,
-                    &actor,
-                    "text_align",
-                    overlay_text_align_label(value),
-                )?;
+                if let Some(value) = song_lua_halign_value(raw) {
+                    capture_block_set_f32(lua, &actor, "halign", value)?;
+                }
+                if let Some(value) = song_lua_text_align_value(raw) {
+                    capture_block_set_string(
+                        lua,
+                        &actor,
+                        "text_align",
+                        overlay_text_align_label(value),
+                    )?;
+                }
                 Ok(actor.clone())
             }
         })?,
@@ -10887,6 +10934,47 @@ return Def.ActorFrame{
         let sprite = compiled.overlays[0].initial_state;
         assert_eq!(sprite.halign, 0.0);
         assert_eq!(sprite.valign, 1.0);
+
+        let text = compiled.overlays[1].initial_state;
+        assert_eq!(text.halign, 1.0);
+        assert_eq!(text.valign, 0.0);
+        assert_eq!(text.text_align, TextAlign::Right);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_stepmania_alignment_enums() {
+        let song_dir = test_dir("actor-alignment-enums");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:horizalign(HorizAlign_Left):vertalign(bottom)
+        end,
+    },
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="ENUM",
+        OnCommand=function(self)
+            self:horizalign("HorizAlign_Right"):vertalign("VertAlign_Top")
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Alignment Enums"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+        let quad = compiled.overlays[0].initial_state;
+        assert_eq!(quad.halign, 0.0);
+        assert_eq!(quad.valign, 1.0);
 
         let text = compiled.overlays[1].initial_state;
         assert_eq!(text.halign, 1.0);
