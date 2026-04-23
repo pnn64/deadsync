@@ -50,6 +50,7 @@ pub struct SongLuaOverlayState {
     pub x: f32,
     pub y: f32,
     pub z: f32,
+    pub draw_order: i32,
     pub halign: f32,
     pub valign: f32,
     pub text_align: TextAlign,
@@ -118,6 +119,7 @@ impl Default for SongLuaOverlayState {
             x: 0.0,
             y: 0.0,
             z: 0.0,
+            draw_order: 0,
             halign: 0.5,
             valign: 0.5,
             text_align: TextAlign::Center,
@@ -187,6 +189,7 @@ pub struct SongLuaOverlayStateDelta {
     pub x: Option<f32>,
     pub y: Option<f32>,
     pub z: Option<f32>,
+    pub draw_order: Option<i32>,
     pub halign: Option<f32>,
     pub valign: Option<f32>,
     pub text_align: Option<TextAlign>,
@@ -333,6 +336,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     }
     if let Some(value) = delta.z {
         state.z = value;
+    }
+    if let Some(value) = delta.draw_order {
+        state.draw_order = value;
     }
     if let Some(value) = delta.halign {
         state.halign = value;
@@ -530,6 +536,9 @@ fn overlay_state_lerp(
     }
     if delta.z.is_some() {
         from.z = (to.z - from.z).mul_add(t, from.z);
+    }
+    if delta.draw_order.is_some() && t >= 1.0 - f32::EPSILON {
+        from.draw_order = to.draw_order;
     }
     if delta.halign.is_some() {
         from.halign = (to.halign - from.halign).mul_add(t, from.halign);
@@ -852,6 +861,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
     delta.x.is_none()
         && delta.y.is_none()
         && delta.z.is_none()
+        && delta.draw_order.is_none()
         && delta.halign.is_none()
         && delta.valign.is_none()
         && delta.text_align.is_none()
@@ -923,6 +933,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.z.is_some() {
         into.z = from.z;
+    }
+    if from.draw_order.is_some() {
+        into.draw_order = from.draw_order;
     }
     if from.halign.is_some() {
         into.halign = from.halign;
@@ -1151,6 +1164,7 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(x);
     copy_pair!(y);
     copy_pair!(z);
+    copy_pair!(draw_order);
     copy_pair!(halign);
     copy_pair!(valign);
     copy_pair!(text_align);

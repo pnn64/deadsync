@@ -3294,6 +3294,12 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.z = value;
     }
     if let Some(value) = actor
+        .get::<Option<i32>>("__songlua_state_draw_order")
+        .map_err(|err| err.to_string())?
+    {
+        state.draw_order = value;
+    }
+    if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_halign")
         .map_err(|err| err.to_string())?
     {
@@ -4107,6 +4113,9 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .map_err(|err| err.to_string())?,
                 z: block
                     .get::<Option<f32>>("z")
+                    .map_err(|err| err.to_string())?,
+                draw_order: block
+                    .get::<Option<i32>>("draw_order")
                     .map_err(|err| err.to_string())?,
                 halign: block
                     .get::<Option<f32>>("halign")
@@ -5095,6 +5104,18 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "draworder",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = method_arg(&args, 0).cloned().and_then(read_i32_value) {
+                    capture_block_set_i32(lua, &actor, "draw_order", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "SetDrawFunction",
         lua.create_function({
             let actor = actor.clone();
@@ -5875,10 +5896,10 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "hibernate",
         "load",
         "StartTransitioningScreen",
-        "draworder",
         "stop",
         "volume",
         "ztest",
+        "ztestmode",
         "zwrite",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
@@ -8228,6 +8249,26 @@ fn read_u32_value(value: Value) -> Option<u32> {
         Value::Number(value) if value.is_finite() && value >= 0.0 && value.fract() == 0.0 => {
             u32::try_from(value as u64).ok()
         }
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn read_i32_value(value: Value) -> Option<i32> {
+    match value {
+        Value::Integer(value) => Some(value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32),
+        Value::Number(value) if value.is_finite() => Some(
+            value
+                .round()
+                .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32,
+        ),
+        Value::String(text) => text
+            .to_str()
+            .ok()?
+            .trim()
+            .parse::<i32>()
+            .ok()
+            .or_else(|| read_f32(Value::String(text)).map(|value| value.round() as i32)),
         _ => None,
     }
 }
@@ -11571,7 +11612,7 @@ return Def.ActorFrame{
         OnCommand=function(self)
             local before = self:getaux()
             self:aux(before + 0.25)
-            self:SetTextureFiltering(false):zwrite(true):ztest(true):draworder(100)
+            self:SetTextureFiltering(false):zwrite(true):ztest(true):ztestmode("WriteOnFail"):draworder(100)
             self:aux(self:getaux() + 0.75)
             mod_actions = {
                 {1, string.format("%.2f", self:getaux()), true},
@@ -11591,6 +11632,52 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "1.00");
         assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(compiled.overlays[0].initial_state.draw_order, 100);
+    }
+
+    #[test]
+    fn compile_song_lua_captures_actor_draw_order() {
+        let song_dir = test_dir("actor-draw-order");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Late",
+        InitCommand=function(self)
+            self:draworder(100)
+        end,
+    },
+    Def.Quad{
+        Name="Early",
+        InitCommand=function(self)
+            self:draworder(-10)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Draw Order"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+        let late = compiled
+            .overlays
+            .iter()
+            .find(|overlay| overlay.name.as_deref() == Some("Late"))
+            .unwrap();
+        let early = compiled
+            .overlays
+            .iter()
+            .find(|overlay| overlay.name.as_deref() == Some("Early"))
+            .unwrap();
+        assert_eq!(late.initial_state.draw_order, 100);
+        assert_eq!(early.initial_state.draw_order, -10);
     }
 
     #[test]
