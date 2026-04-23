@@ -2898,6 +2898,100 @@ fn song_lua_overlay_uvs(
     ]
 }
 
+#[inline(always)]
+fn song_lua_projected_edge_factor(t: f32, feather_l: f32, feather_r: f32) -> f32 {
+    let mut left = 1.0;
+    let mut right = 1.0;
+    if feather_l > f32::EPSILON {
+        left = ((t - 0.0) / feather_l).clamp(0.0, 1.0);
+    }
+    if feather_r > f32::EPSILON {
+        right = ((1.0 - t) / feather_r).clamp(0.0, 1.0);
+    }
+    left.min(right)
+}
+
+#[inline(always)]
+fn song_lua_projected_overlay_edge_fade(
+    state: SongLuaOverlayState,
+    flip_x: bool,
+    flip_y: bool,
+) -> [f32; 4] {
+    let cl = state.cropleft.clamp(0.0, 1.0);
+    let cr = state.cropright.clamp(0.0, 1.0);
+    let ct = state.croptop.clamp(0.0, 1.0);
+    let cb = state.cropbottom.clamp(0.0, 1.0);
+    let sx_crop = (1.0 - cl - cr).max(0.0);
+    let sy_crop = (1.0 - ct - cb).max(0.0);
+    if sx_crop <= f32::EPSILON || sy_crop <= f32::EPSILON {
+        return [0.0, 0.0, 0.0, 0.0];
+    }
+
+    let fl = state.fadeleft.clamp(0.0, 1.0);
+    let fr = state.faderight.clamp(0.0, 1.0);
+    let ft = state.fadetop.clamp(0.0, 1.0);
+    let fb = state.fadebottom.clamp(0.0, 1.0);
+
+    let mut fl_size = (fl + state.cropleft.min(0.0)).max(0.0);
+    let mut fr_size = (fr + state.cropright.min(0.0)).max(0.0);
+    let mut ft_size = (ft + state.croptop.min(0.0)).max(0.0);
+    let mut fb_size = (fb + state.cropbottom.min(0.0)).max(0.0);
+
+    let sum_x = fl_size + fr_size;
+    if sum_x > 0.0 && sx_crop < sum_x {
+        let scale = sx_crop / sum_x;
+        fl_size *= scale;
+        fr_size *= scale;
+    }
+
+    let sum_y = ft_size + fb_size;
+    if sum_y > 0.0 && sy_crop < sum_y {
+        let scale = sy_crop / sum_y;
+        ft_size *= scale;
+        fb_size *= scale;
+    }
+
+    let mut fl_eff = (fl_size / sx_crop).clamp(0.0, 1.0);
+    let mut fr_eff = (fr_size / sx_crop).clamp(0.0, 1.0);
+    let mut ft_eff = (ft_size / sy_crop).clamp(0.0, 1.0);
+    let mut fb_eff = (fb_size / sy_crop).clamp(0.0, 1.0);
+
+    if flip_x {
+        std::mem::swap(&mut fl_eff, &mut fr_eff);
+    }
+    if flip_y {
+        std::mem::swap(&mut ft_eff, &mut fb_eff);
+    }
+
+    [fl_eff, fr_eff, ft_eff, fb_eff]
+}
+
+fn song_lua_projected_overlay_axis_slices(start_fade: f32, end_fade: f32) -> Vec<f32> {
+    let mut out = vec![0.0];
+    for value in [start_fade, 1.0 - end_fade, 1.0] {
+        let value = value.clamp(0.0, 1.0);
+        if out
+            .last()
+            .is_none_or(|last| (value - *last).abs() > f32::EPSILON)
+        {
+            out.push(value);
+        }
+    }
+    out
+}
+
+#[inline(always)]
+fn song_lua_projected_overlay_uv_point(uv: [[f32; 2]; 4], x: f32, y: f32) -> [f32; 2] {
+    let top_u = song_lua_effect_lerp(uv[0][0], uv[1][0], x);
+    let top_v = song_lua_effect_lerp(uv[0][1], uv[1][1], x);
+    let bottom_u = song_lua_effect_lerp(uv[3][0], uv[2][0], x);
+    let bottom_v = song_lua_effect_lerp(uv[3][1], uv[2][1], x);
+    [
+        song_lua_effect_lerp(top_u, bottom_u, y),
+        song_lua_effect_lerp(top_v, bottom_v, y),
+    ]
+}
+
 fn song_lua_projected_overlay_actor(
     texture: Arc<str>,
     tint: [f32; 4],
@@ -2907,6 +3001,9 @@ fn song_lua_projected_overlay_actor(
     size: [f32; 2],
     rot_deg: [f32; 3],
     uv: [[f32; 2]; 4],
+    state: SongLuaOverlayState,
+    flip_x: bool,
+    flip_y: bool,
     view_proj: Matrix4,
 ) -> Option<Actor> {
     let half_w = 0.5 * size[0];
@@ -2914,26 +3011,45 @@ fn song_lua_projected_overlay_actor(
     if half_w <= f32::EPSILON || half_h <= f32::EPSILON {
         return None;
     }
+    let edge_fade = song_lua_projected_overlay_edge_fade(state, flip_x, flip_y);
+    let xs = song_lua_projected_overlay_axis_slices(edge_fade[0], edge_fade[1]);
+    let ys = song_lua_projected_overlay_axis_slices(edge_fade[2], edge_fade[3]);
     let model = Matrix4::from_translation(Vector3::new(center[0], center[1], center[2]))
         * Matrix4::from_rotation_x(rot_deg[0].to_radians())
         * Matrix4::from_rotation_y(rot_deg[1].to_radians())
         * Matrix4::from_rotation_z(rot_deg[2].to_radians());
-    let local = [
-        ([-half_w, -half_h, 0.0], uv[0]),
-        ([half_w, -half_h, 0.0], uv[1]),
-        ([half_w, half_h, 0.0], uv[2]),
-        ([-half_w, half_h, 0.0], uv[3]),
-    ];
-    let mut corners = [TexturedMeshVertex::default(); 4];
-    for (idx, (pos, uv)) in local.into_iter().enumerate() {
-        let world = model * Vector4::new(pos[0], pos[1], pos[2], 1.0);
-        let screen = song_lua_project_overlay_point(view_proj, [world.x, world.y, world.z])?;
-        corners[idx] = TexturedMeshVertex {
-            pos: [screen[0], screen[1], 0.0],
-            uv,
-            tex_matrix_scale: [1.0, 1.0],
-            color: tint,
-        };
+    let mut grid = Vec::with_capacity(xs.len() * ys.len());
+    for &y in &ys {
+        for &x in &xs {
+            let local_x = song_lua_effect_lerp(-half_w, half_w, x);
+            let local_y = song_lua_effect_lerp(-half_h, half_h, y);
+            let world = model * Vector4::new(local_x, local_y, 0.0, 1.0);
+            let screen = song_lua_project_overlay_point(view_proj, [world.x, world.y, world.z])?;
+            let fade_x = song_lua_projected_edge_factor(x, edge_fade[0], edge_fade[1]);
+            let fade_y = song_lua_projected_edge_factor(y, edge_fade[2], edge_fade[3]);
+            grid.push(TexturedMeshVertex {
+                pos: [screen[0], screen[1], 0.0],
+                uv: song_lua_projected_overlay_uv_point(uv, x, y),
+                tex_matrix_scale: [1.0, 1.0],
+                color: [1.0, 1.0, 1.0, fade_x.min(fade_y)],
+            });
+        }
+    }
+    let width = xs.len();
+    let mut vertices = Vec::with_capacity((xs.len() - 1) * (ys.len() - 1) * 6);
+    for y in 0..ys.len().saturating_sub(1) {
+        for x in 0..xs.len().saturating_sub(1) {
+            let tl = y * width + x;
+            let tr = tl + 1;
+            let bl = (y + 1) * width + x;
+            let br = bl + 1;
+            vertices.push(grid[tl]);
+            vertices.push(grid[tr]);
+            vertices.push(grid[br]);
+            vertices.push(grid[tl]);
+            vertices.push(grid[br]);
+            vertices.push(grid[bl]);
+        }
     }
     Some(Actor::TexturedMesh {
         align: [0.0, 0.0],
@@ -2942,13 +3058,8 @@ fn song_lua_projected_overlay_actor(
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         local_transform: Matrix4::IDENTITY,
         texture,
-        tint: [1.0, 1.0, 1.0, 1.0],
-        vertices: Arc::from(
-            vec![
-                corners[0], corners[1], corners[2], corners[0], corners[2], corners[3],
-            ]
-            .into_boxed_slice(),
-        ),
+        tint,
+        vertices: Arc::from(vertices.into_boxed_slice()),
         geom_cache_key: INVALID_TMESH_CACHE_KEY,
         mode: MeshMode::Triangles,
         uv_scale: [1.0, 1.0],
@@ -3044,6 +3155,9 @@ fn build_song_lua_overlay_actor(
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
                     song_lua_overlay_uvs(state, Some(key.as_ref()), flip_x, flip_y, total_elapsed),
+                    state,
+                    flip_x,
+                    flip_y,
                     view_proj,
                 )?;
                 return Some(finalize_actor(actor, glow));
@@ -3250,6 +3364,9 @@ fn build_song_lua_overlay_actor(
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
                     song_lua_overlay_uvs(state, None, flip_x, flip_y, total_elapsed),
+                    state,
+                    flip_x,
+                    flip_y,
                     view_proj,
                 )?;
                 return Some(finalize_actor(actor, glow));
@@ -3516,7 +3633,7 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
         } => {
             let mut glow_vertices = vertices.as_ref().to_vec();
             for vertex in &mut glow_vertices {
-                vertex.color = [1.0, 1.0, 1.0, 1.0];
+                vertex.color = [1.0, 1.0, 1.0, vertex.color[3]];
             }
             Some(Actor::TexturedMesh {
                 align: *align,
@@ -6599,6 +6716,68 @@ mod tests {
                 other => panic!("expected glowshift sprite child, got {other:?}"),
             },
             other => panic!("expected glowshift wrapper frame, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_projected_overlay_applies_fade_edges_at_runtime() {
+        let sprite_key = "song-lua-projected-fade.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(sprite_key.clone(), image::RgbaImage::new(64, 32));
+
+        let sprite = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: std::path::PathBuf::from(&sprite_key),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &sprite,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                diffuse: [0.8, 0.7, 0.6, 0.5],
+                fadeleft: 0.25,
+                faderight: 0.25,
+                ..SongLuaOverlayState::default()
+            },
+            Some(SongLuaOverlayState {
+                fov: Some(45.0),
+                ..SongLuaOverlayState::default()
+            }),
+            &asset_manager,
+            792,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("projected fading sprite should render");
+
+        match actor {
+            Actor::TexturedMesh {
+                tint, vertices, z, ..
+            } => {
+                assert_eq!(z, 792);
+                assert_eq!(tint, [0.8, 0.7, 0.6, 0.5]);
+                assert_eq!(vertices.len(), 18);
+                assert!(vertices.iter().all(|vertex| {
+                    (vertex.color[0] - 1.0).abs() <= 0.000_1
+                        && (vertex.color[1] - 1.0).abs() <= 0.000_1
+                        && (vertex.color[2] - 1.0).abs() <= 0.000_1
+                }));
+                assert!(vertices.iter().any(|vertex| vertex.color[3] <= 0.000_1));
+                assert!(
+                    vertices
+                        .iter()
+                        .any(|vertex| (vertex.color[3] - 1.0).abs() <= 0.000_1)
+                );
+            }
+            other => panic!("expected projected textured mesh, got {other:?}"),
         }
     }
 
