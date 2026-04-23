@@ -1144,14 +1144,22 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
             Ok(Value::Table(player_states[player].clone()))
         })?,
     )?;
-    let current_steps = players.steps.clone();
+    let current_steps = lua.create_table()?;
+    for (player_index, steps) in players.steps.iter().enumerate() {
+        current_steps.raw_set(player_index + 1, steps.clone())?;
+    }
     gamestate.set(
         "GetCurrentSteps",
-        lua.create_function(move |_, args: MultiValue| {
-            let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
-                return Ok(Value::Nil);
-            };
-            Ok(Value::Table(current_steps[player].clone()))
+        lua.create_function({
+            let current_steps = current_steps.clone();
+            move |_, args: MultiValue| {
+                let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
+                    return Ok(Value::Nil);
+                };
+                Ok(current_steps
+                    .raw_get::<Option<Table>>(player + 1)?
+                    .map_or(Value::Nil, Value::Table))
+            }
         })?,
     )?;
     let easiest_steps_difficulty = easiest_steps_difficulty(&context.players);
@@ -1166,7 +1174,22 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     )?;
     gamestate.set(
         "SetCurrentSteps",
-        lua.create_function(|_, _args: MultiValue| Ok(()))?,
+        lua.create_function({
+            let current_steps = current_steps.clone();
+            move |_, args: MultiValue| {
+                let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
+                    return Ok(());
+                };
+                let Some(steps) = method_arg(&args, 1).and_then(|value| match value {
+                    Value::Table(table) => Some(table.clone()),
+                    _ => None,
+                }) else {
+                    return Ok(());
+                };
+                current_steps.raw_set(player + 1, steps)?;
+                Ok(())
+            }
+        })?,
     )?;
     gamestate.set(
         "GetSongBeat",
@@ -8423,6 +8446,51 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "6:1x, Overhead");
+    }
+
+    #[test]
+    fn compile_song_lua_set_current_steps_updates_selected_steps() {
+        let song_dir = test_dir("set-current-steps");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local song_steps = GAMESTATE:GetCurrentSong():GetStepsByStepsType("StepsType_Dance_Single")
+        local before = ToEnumShortString(GAMESTATE:GetCurrentSteps(PLAYER_1):GetDifficulty())
+        GAMESTATE:SetCurrentSteps(PLAYER_1, song_steps[2])
+        local after = GAMESTATE:GetCurrentSteps(PLAYER_1)
+        local bpms = after:GetDisplayBpms()
+        mod_actions = {
+            {
+                1,
+                string.format(
+                    "%s:%s:%d:%d:%s",
+                    before,
+                    ToEnumShortString(after:GetDifficulty()),
+                    bpms[1],
+                    bpms[2],
+                    ToEnumShortString(GAMESTATE:GetCurrentSteps(PLAYER_2):GetDifficulty())
+                ),
+                true,
+            },
+        }
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Set Current Steps");
+        context.song_display_bpms = [120.0, 180.0];
+        context.players[0].difficulty = SongLuaDifficulty::Challenge;
+        context.players[0].display_bpms = [200.0, 240.0];
+        context.players[1].difficulty = SongLuaDifficulty::Hard;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "Challenge:Easy:120:180:Hard");
     }
 
     #[test]
