@@ -6,7 +6,7 @@ use crate::engine::gfx::{
     BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, TexturedMeshVertex,
 };
 use crate::engine::input::{InputEvent, VirtualAction};
-use crate::engine::present::actors::{Actor, SizeSpec, TextAlign, TextContent};
+use crate::engine::present::actors::{Actor, SizeSpec, TextContent};
 use crate::engine::present::anim::EffectState;
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
@@ -946,6 +946,15 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.z {
         state.z = value;
     }
+    if let Some(value) = delta.halign {
+        state.halign = value;
+    }
+    if let Some(value) = delta.valign {
+        state.valign = value;
+    }
+    if let Some(value) = delta.text_align {
+        state.text_align = value;
+    }
     if let Some(value) = delta.fov {
         state.fov = Some(value);
     }
@@ -1102,6 +1111,15 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.z.is_some() {
         from.z = (to.z - from.z).mul_add(t, from.z);
+    }
+    if delta.halign.is_some() {
+        from.halign = (to.halign - from.halign).mul_add(t, from.halign);
+    }
+    if delta.valign.is_some() {
+        from.valign = (to.valign - from.valign).mul_add(t, from.valign);
+    }
+    if delta.text_align.is_some() && t >= 1.0 - f32::EPSILON {
+        from.text_align = to.text_align;
     }
     if delta.fov.is_some()
         && let (Some(from_fov), Some(to_fov)) = (from.fov, to.fov)
@@ -2694,7 +2712,12 @@ fn song_lua_overlay_rect(
         )
     } else {
         (
-            [state.x * x_scale, state.y * y_scale],
+            [
+                (0.5 - state.halign)
+                    .mul_add(default_size[0] * x_scale * size_scale_x, state.x * x_scale),
+                (0.5 - state.valign)
+                    .mul_add(default_size[1] * y_scale * size_scale_y, state.y * y_scale),
+            ],
             [
                 default_size[0] * x_scale * size_scale_x,
                 default_size[1] * y_scale * size_scale_y,
@@ -2931,7 +2954,7 @@ fn build_song_lua_overlay_actor(
             } else {
                 let size = song_lua_overlay_sprite_size(state, key.as_ref())?;
                 act!(sprite(key.clone()):
-                    align(0.5, 0.5):
+                    align(state.halign, state.valign):
                     xy(state.x * x_scale, state.y * y_scale):
                     setsize(
                         size[0] * x_scale * size_scale_x,
@@ -3036,7 +3059,7 @@ fn build_song_lua_overlay_actor(
             );
             let _ = effect_rot;
             Some(Actor::Text {
-                align: [0.5, 0.5],
+                align: [state.halign, state.valign],
                 offset: [
                     state.x * x_scale + effect_offset[0] * x_scale,
                     state.y * y_scale + effect_offset[1] * y_scale,
@@ -3047,7 +3070,7 @@ fn build_song_lua_overlay_actor(
                 font,
                 content: TextContent::from(text),
                 attributes: Vec::new(),
-                align_text: TextAlign::Center,
+                align_text: state.text_align,
                 z,
                 scale: [
                     size_scale_x * x_scale * effect_scale[0],
@@ -3119,7 +3142,7 @@ fn build_song_lua_overlay_actor(
             } else {
                 let size = state.size.unwrap_or([1.0, 1.0]);
                 act!(quad:
-                    align(0.5, 0.5):
+                    align(state.halign, state.valign):
                     xy(state.x * x_scale, state.y * y_scale):
                     zoomto(
                         size[0] * x_scale * size_scale_x,
@@ -5149,7 +5172,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::present::actors::SizeSpec;
+    use crate::engine::present::actors::{SizeSpec, TextAlign};
 
     fn ensure_i18n() {
         crate::assets::i18n::init("en");
@@ -5876,6 +5899,92 @@ mod tests {
                 assert!(mask_dest);
             }
             other => panic!("expected masked text actor, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_overlay_applies_alignment_at_runtime() {
+        let quad = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let quad_actor = build_song_lua_overlay_actor(
+            &quad,
+            SongLuaOverlayState {
+                x: 100.0,
+                y: 200.0,
+                size: Some([80.0, 40.0]),
+                halign: 0.0,
+                valign: 1.0,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            785,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("aligned quad should render");
+
+        match quad_actor {
+            Actor::Sprite { align, z, .. } => {
+                assert_eq!(z, 785);
+                assert_eq!(align, [0.0, 1.0]);
+            }
+            other => panic!("expected aligned quad sprite, got {other:?}"),
+        }
+
+        let text = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("ALIGN"),
+                stroke_color: None,
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let text_actor = build_song_lua_overlay_actor(
+            &text,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                halign: 1.0,
+                valign: 0.0,
+                text_align: TextAlign::Right,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            786,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("aligned text should render");
+
+        match text_actor {
+            Actor::Text {
+                align,
+                align_text,
+                z,
+                ..
+            } => {
+                assert_eq!(z, 786);
+                assert_eq!(align, [1.0, 0.0]);
+                assert_eq!(align_text, TextAlign::Right);
+            }
+            other => panic!("expected aligned text actor, got {other:?}"),
         }
     }
 

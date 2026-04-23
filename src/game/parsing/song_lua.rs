@@ -9,6 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
+use crate::engine::present::actors::TextAlign;
 use crate::engine::present::anim::EffectClock;
 #[cfg(test)]
 use crate::engine::present::anim::EffectMode;
@@ -24,6 +25,7 @@ pub use self::overlay::{
 use self::overlay::{
     overlay_delta_from_blocks, overlay_delta_intersection, overlay_state_after_blocks,
     parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
+    parse_overlay_text_align,
 };
 
 const LUA_PLAYERS: usize = 2;
@@ -3292,6 +3294,26 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.z = value;
     }
     if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_halign")
+        .map_err(|err| err.to_string())?
+    {
+        state.halign = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_valign")
+        .map_err(|err| err.to_string())?
+    {
+        state.valign = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<String>>("__songlua_state_text_align")
+        .map_err(|err| err.to_string())?
+        .as_deref()
+        .and_then(parse_overlay_text_align)
+    {
+        state.text_align = value;
+    }
+    if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_fov")
         .map_err(|err| err.to_string())?
     {
@@ -3963,6 +3985,17 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                 z: block
                     .get::<Option<f32>>("z")
                     .map_err(|err| err.to_string())?,
+                halign: block
+                    .get::<Option<f32>>("halign")
+                    .map_err(|err| err.to_string())?,
+                valign: block
+                    .get::<Option<f32>>("valign")
+                    .map_err(|err| err.to_string())?,
+                text_align: block
+                    .get::<Option<String>>("text_align")
+                    .map_err(|err| err.to_string())?
+                    .as_deref()
+                    .and_then(parse_overlay_text_align),
                 fov: block
                     .get::<Option<f32>>("fov")
                     .map_err(|err| err.to_string())?,
@@ -4136,6 +4169,40 @@ fn table_vec3(table: &Table) -> Option<[f32; 3]> {
         table.raw_get::<f32>(2).ok()?,
         table.raw_get::<f32>(3).ok()?,
     ])
+}
+
+fn song_lua_halign_value(value: &Value) -> Option<f32> {
+    read_f32(value.clone()).or_else(|| {
+        read_string(value.clone()).and_then(|raw| match raw.trim().to_ascii_lowercase().as_str() {
+            "left" => Some(0.0),
+            "center" | "middle" => Some(0.5),
+            "right" => Some(1.0),
+            _ => None,
+        })
+    })
+}
+
+fn song_lua_valign_value(value: &Value) -> Option<f32> {
+    read_f32(value.clone()).or_else(|| {
+        read_string(value.clone()).and_then(|raw| match raw.trim().to_ascii_lowercase().as_str() {
+            "top" => Some(0.0),
+            "center" | "middle" => Some(0.5),
+            "bottom" => Some(1.0),
+            _ => None,
+        })
+    })
+}
+
+fn song_lua_text_align_value(value: &Value) -> Option<TextAlign> {
+    read_string(value.clone()).and_then(|raw| parse_overlay_text_align(raw.as_str()))
+}
+
+fn overlay_text_align_label(value: TextAlign) -> &'static str {
+    match value {
+        TextAlign::Left => "left",
+        TextAlign::Center => "center",
+        TextAlign::Right => "right",
+    }
 }
 
 fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
@@ -4573,6 +4640,48 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 if let Some(y) = args.get(2).cloned().and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "y", y)?;
                 }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "halign",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = method_arg(&args, 0).and_then(song_lua_halign_value) {
+                    capture_block_set_f32(lua, &actor, "halign", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "valign",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = method_arg(&args, 0).and_then(song_lua_valign_value) {
+                    capture_block_set_f32(lua, &actor, "valign", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "horizalign",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(value) = method_arg(&args, 0).and_then(song_lua_text_align_value) else {
+                    return Ok(actor.clone());
+                };
+                capture_block_set_string(
+                    lua,
+                    &actor,
+                    "text_align",
+                    overlay_text_align_label(value),
+                )?;
                 Ok(actor.clone())
             }
         })?,
@@ -7006,6 +7115,9 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(x);
     copy_value_field!(y);
     copy_value_field!(z);
+    copy_value_field!(halign);
+    copy_value_field!(valign);
+    copy_value_field!(text_align);
     copy_option_field!(fov);
     copy_option_field!(vanishpoint);
     copy_value_field!(diffuse);
@@ -7812,6 +7924,7 @@ mod tests {
         SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaPlayerContext, SongLuaProxyTarget,
         SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua, file_path_string,
     };
+    use crate::engine::present::actors::TextAlign;
     use chrono::{Datelike, Local};
     use std::fs;
     use std::path::PathBuf;
@@ -10172,6 +10285,50 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 2);
         assert!(compiled.overlays[0].initial_state.mask_source);
         assert!(compiled.overlays[1].initial_state.mask_dest);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_alignment_methods() {
+        let song_dir = test_dir("actor-alignment-methods");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(40, 30).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:halign(0):valign(1)
+        end,
+    },
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="ALIGN",
+        OnCommand=function(self)
+            self:halign(1):valign(0):horizalign("right")
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Alignment Methods"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+        let sprite = compiled.overlays[0].initial_state;
+        assert_eq!(sprite.halign, 0.0);
+        assert_eq!(sprite.valign, 1.0);
+
+        let text = compiled.overlays[1].initial_state;
+        assert_eq!(text.halign, 1.0);
+        assert_eq!(text.valign, 0.0);
+        assert_eq!(text.text_align, TextAlign::Right);
     }
 
     #[test]

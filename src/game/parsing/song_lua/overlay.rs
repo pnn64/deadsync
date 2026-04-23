@@ -1,3 +1,4 @@
+use crate::engine::present::actors::TextAlign;
 use crate::engine::present::anim::{EffectClock, EffectMode};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -47,6 +48,9 @@ pub struct SongLuaOverlayState {
     pub x: f32,
     pub y: f32,
     pub z: f32,
+    pub halign: f32,
+    pub valign: f32,
+    pub text_align: TextAlign,
     pub fov: Option<f32>,
     pub vanishpoint: Option<[f32; 2]>,
     pub diffuse: [f32; 4],
@@ -99,6 +103,9 @@ impl Default for SongLuaOverlayState {
             x: 0.0,
             y: 0.0,
             z: 0.0,
+            halign: 0.5,
+            valign: 0.5,
+            text_align: TextAlign::Center,
             fov: None,
             vanishpoint: None,
             diffuse: [1.0, 1.0, 1.0, 1.0],
@@ -152,6 +159,9 @@ pub struct SongLuaOverlayStateDelta {
     pub x: Option<f32>,
     pub y: Option<f32>,
     pub z: Option<f32>,
+    pub halign: Option<f32>,
+    pub valign: Option<f32>,
+    pub text_align: Option<TextAlign>,
     pub fov: Option<f32>,
     pub vanishpoint: Option<[f32; 2]>,
     pub diffuse: Option<[f32; 4]>,
@@ -282,6 +292,15 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     }
     if let Some(value) = delta.z {
         state.z = value;
+    }
+    if let Some(value) = delta.halign {
+        state.halign = value;
+    }
+    if let Some(value) = delta.valign {
+        state.valign = value;
+    }
+    if let Some(value) = delta.text_align {
+        state.text_align = value;
     }
     if let Some(value) = delta.fov {
         state.fov = Some(value);
@@ -431,6 +450,15 @@ fn overlay_state_lerp(
     }
     if delta.z.is_some() {
         from.z = (to.z - from.z).mul_add(t, from.z);
+    }
+    if delta.halign.is_some() {
+        from.halign = (to.halign - from.halign).mul_add(t, from.halign);
+    }
+    if delta.valign.is_some() {
+        from.valign = (to.valign - from.valign).mul_add(t, from.valign);
+    }
+    if delta.text_align.is_some() && t >= 1.0 - f32::EPSILON {
+        from.text_align = to.text_align;
     }
     if delta.fov.is_some()
         && let (Some(from_fov), Some(to_fov)) = (from.fov, to.fov)
@@ -660,10 +688,27 @@ pub(super) fn parse_overlay_effect_clock(raw: &str) -> Option<EffectClock> {
     }
 }
 
+pub(super) fn parse_overlay_text_align(raw: &str) -> Option<TextAlign> {
+    let lower = raw
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_ascii_lowercase();
+    match lower.as_str() {
+        "left" => Some(TextAlign::Left),
+        "center" | "middle" => Some(TextAlign::Center),
+        "right" => Some(TextAlign::Right),
+        _ => None,
+    }
+}
+
 fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
     delta.x.is_none()
         && delta.y.is_none()
         && delta.z.is_none()
+        && delta.halign.is_none()
+        && delta.valign.is_none()
+        && delta.text_align.is_none()
         && delta.fov.is_none()
         && delta.vanishpoint.is_none()
         && delta.diffuse.is_none()
@@ -761,6 +806,15 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.mask_dest.is_some() {
         into.mask_dest = from.mask_dest;
+    }
+    if from.halign.is_some() {
+        into.halign = from.halign;
+    }
+    if from.valign.is_some() {
+        into.valign = from.valign;
+    }
+    if from.text_align.is_some() {
+        into.text_align = from.text_align;
     }
     if from.zoom.is_some() {
         into.zoom = from.zoom;
@@ -881,6 +935,9 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(x);
     copy_pair!(y);
     copy_pair!(z);
+    copy_pair!(halign);
+    copy_pair!(valign);
+    copy_pair!(text_align);
     copy_pair!(fov);
     copy_pair!(vanishpoint);
     copy_pair!(diffuse);

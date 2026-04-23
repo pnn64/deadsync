@@ -11,7 +11,7 @@ pub enum Background {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TextAlign {
     #[default]
     Left,

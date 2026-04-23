@@ -1895,6 +1895,9 @@ fn song_lua_overlay_delta_overlaps(
     overlap!(x);
     overlap!(y);
     overlap!(z);
+    overlap!(halign);
+    overlap!(valign);
+    overlap!(text_align);
     overlap!(diffuse);
     overlap!(visible);
     overlap!(cropleft);
