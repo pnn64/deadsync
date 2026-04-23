@@ -81,11 +81,12 @@ impl State {
         let mut model_actors = Vec::with_capacity(21);
 
         for i in 1..=10 {
-            let zoom = random_xd(i as f32 * 1.6) + 0.35;
-            let z_pos = (random_xd(i as f32 * 13.0) - 0.6) * (1.0 / zoom) * 850.0;
-            let rot_z = random_xd(i as f32) * 400.0 + random_xd(i as f32 * 3.4) * 14.0 * elapsed_s;
+            let fi = i as f64;
+            let zoom = random_xd(fi * 1.6) + 0.35;
+            let z_pos = (random_xd(fi * 13.0) - 0.6) * (1.0 / zoom) * 850.0;
+            let rot_z = random_xd(fi) * 400.0 + random_xd(fi * 3.4) * 14.0 * elapsed_s;
             let mut color = technique_front_color(active_color_index, FRONT_COLOR_ADD[i - 1]);
-            color[3] = random_xd(i as f32) * alpha_mul;
+            color[3] = random_xd(fi) * alpha_mul;
             push_layers(
                 &mut model_actors,
                 &assets.circle_frag,
@@ -130,11 +131,12 @@ impl State {
         );
 
         for i in 11..=18 {
-            let zoom = random_xd(i as f32 * 2.8) + 0.35;
-            let z_pos = (random_xd(i as f32 * 13.0) - 0.6) * (2.0 / zoom) * 850.0;
-            let rot_z = random_xd(i as f32) * 2000.0
-                + random_xd(i as f32 * 3.6) * 14.0 * (elapsed_s + i as f32 * 2000.0);
-            let color = [1.0, 1.0, 1.0, random_xd(i as f32 / 1.6) * alpha_mul];
+            let fi = i as f64;
+            let zoom = random_xd(fi * 2.8) + 0.35;
+            let z_pos = (random_xd(fi * 13.0) - 0.6) * (2.0 / zoom) * 850.0;
+            let rot_z = random_xd(fi) * 2000.0
+                + random_xd(fi * 3.6) * 14.0 * (elapsed_s + i as f32 * 2000.0);
+            let color = [1.0, 1.0, 1.0, random_xd(fi / 1.6) * alpha_mul];
             push_layers(
                 &mut model_actors,
                 &assets.circle_frag,
@@ -265,11 +267,11 @@ fn technique_view_proj() -> Matrix4 {
     proj * Matrix4::look_at_rh(eye, target, Vector3::new(0.0, 1.0, 0.0))
 }
 
-fn random_xd(t: f32) -> f32 {
+fn random_xd(t: f64) -> f32 {
     if t == 0.0 {
         0.5
     } else {
-        ((t * 3229.3).sin() * 43758.5453).rem_euclid(1.0)
+        ((t * 3229.3).sin() * 43758.5453).rem_euclid(1.0) as f32
     }
 }
 
@@ -297,5 +299,22 @@ mod tests {
     fn technique_fractional_color_offsets_fall_back_to_white() {
         assert_eq!(technique_front_color(2, -0.75), [1.0, 1.0, 1.0, 1.0]);
         assert_eq!(technique_front_color(2, 0.0), color::decorative_rgba(2));
+    }
+
+    #[test]
+    fn technique_random_matches_lua_double_precision() {
+        let samples = [
+            (0.0, 0.5),
+            (1.0, 0.95219797),
+            (1.6, 0.67487276),
+            (13.0, 0.23824042),
+            (26.0, 0.862378),
+            (52.0, 0.5716033),
+            (117.0, 0.9204272),
+        ];
+
+        for (input, expected) in samples {
+            assert!((random_xd(input) - expected).abs() < 0.000001);
+        }
     }
 }
