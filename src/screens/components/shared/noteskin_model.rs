@@ -126,36 +126,6 @@ fn sm_rotation_xyz(rot_x_deg: f32, rot_y_deg: f32, rot_z_deg: f32) -> Matrix4 {
     )
 }
 
-fn depth_sorted_vertices(
-    vertices: &[TexturedMeshVertex],
-    local_transform: Matrix4,
-) -> Arc<[TexturedMeshVertex]> {
-    if vertices.len() <= 3 {
-        return Arc::from(vertices.to_vec());
-    }
-
-    let mut tris = Vec::with_capacity(vertices.len() / 3);
-    for tri in vertices.chunks_exact(3) {
-        let p0 = local_transform * Vec4::new(tri[0].pos[0], tri[0].pos[1], tri[0].pos[2], 1.0);
-        let p1 = local_transform * Vec4::new(tri[1].pos[0], tri[1].pos[1], tri[1].pos[2], 1.0);
-        let p2 = local_transform * Vec4::new(tri[2].pos[0], tri[2].pos[1], tri[2].pos[2], 1.0);
-        let e1 = Vector3::new(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z);
-        let e2 = Vector3::new(p2.x - p0.x, p2.y - p0.y, p2.z - p0.z);
-        if e1.cross(e2).z >= 0.0 {
-            continue;
-        }
-        let z = (p0.z + p1.z + p2.z) / 3.0;
-        tris.push((z, tri));
-    }
-    tris.sort_by(|a, b| a.0.total_cmp(&b.0));
-
-    let mut out = Vec::with_capacity(vertices.len());
-    for (_, tri) in tris {
-        out.extend_from_slice(tri);
-    }
-    Arc::from(out)
-}
-
 #[inline(always)]
 fn actor_from_vertices(
     slot: &SpriteSlot,
@@ -167,6 +137,7 @@ fn actor_from_vertices(
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
+    depth_test: bool,
     blend: BlendMode,
     z: i16,
 ) -> Actor {
@@ -184,6 +155,7 @@ fn actor_from_vertices(
         uv_scale,
         uv_offset,
         uv_tex_shift,
+        depth_test,
         visible: true,
         blend,
         z,
@@ -223,6 +195,7 @@ fn actor_from_draw(
         uv_scale,
         uv_offset,
         uv_tex_shift,
+        false,
         blend,
         z,
     ))
@@ -261,6 +234,7 @@ pub(crate) fn noteskin_model_actor_from_draw_cached(
         uv_scale,
         uv_offset,
         uv_tex_shift,
+        false,
         model_blend(draw, blend),
         z,
     ))
@@ -286,21 +260,18 @@ pub(crate) fn noteskin_model_actor_from_draw_depth_sorted_affine(
     let blend = model_blend(draw, blend);
     let affine = model_affine_transform(model, size, rotation_deg, draw);
     let local_transform = affine * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
-    let vertices = depth_sorted_vertices(build_model_geometry(slot).as_ref(), local_transform);
-    if vertices.is_empty() {
-        return None;
-    }
     let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
     Some(actor_from_vertices(
         slot,
         xy,
         tint,
-        vertices,
+        build_model_geometry(slot),
         crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
         local_transform,
         uv_scale,
         uv_offset,
         uv_tex_shift,
+        true,
         blend,
         z,
     ))

@@ -46,5 +46,9 @@ fn vs_main(input: VertexIn) -> VertexOut {
 
 @fragment
 fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
-    return textureSample(u_texture, u_sampler, input.uv) * input.color;
+    let color = textureSample(u_texture, u_sampler, input.uv) * input.color;
+    if color.a <= (1.0 / 256.0) {
+        discard;
+    }
+    return color;
 }

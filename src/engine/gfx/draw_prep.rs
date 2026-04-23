@@ -131,6 +131,7 @@ pub struct TexturedMeshRun {
     pub blend: BlendMode,
     pub texture_handle: TextureHandle,
     pub camera: u8,
+    pub depth_test: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -445,6 +446,7 @@ where
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
+                depth_test,
                 ..
             } => {
                 flush_sprite_run(&mut sprite_run, &mut scratch.ops);
@@ -494,6 +496,7 @@ where
                     && last.texture_handle == texture_handle
                     && last.blend == obj.blend
                     && last.camera == obj.camera
+                    && last.depth_test == *depth_test
                     && last.mode == *mode
                     && last.source == source
                     && last.instance_start + last.instance_count == instance_start
@@ -510,6 +513,7 @@ where
                     blend: obj.blend,
                     texture_handle,
                     camera: obj.camera,
+                    depth_test: *depth_test,
                 }));
             }
         }

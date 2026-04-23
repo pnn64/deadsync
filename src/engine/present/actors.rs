@@ -147,6 +147,7 @@ pub enum Actor {
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
+        depth_test: bool,
         visible: bool,
         blend: BlendMode,
         z: i16,

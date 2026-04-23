@@ -831,6 +831,7 @@ fn textured_mesh() -> Actor {
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
+        depth_test: false,
         visible: true,
         blend: BlendMode::Alpha,
         z: 2,

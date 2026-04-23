@@ -2195,6 +2195,7 @@ fn build_actor_recursive<'a>(
             uv_scale,
             uv_offset,
             uv_tex_shift,
+            depth_test,
             visible,
             blend,
             z,
@@ -2220,6 +2221,7 @@ fn build_actor_recursive<'a>(
                     uv_scale: *uv_scale,
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
+                    depth_test: *depth_test,
                 },
                 texture_handle: texture_cache
                     .texture_handle_with_ptr(Some(str_ptr(texture.as_ref())), texture.as_ref()),
@@ -3040,6 +3042,7 @@ fn push_text_mesh_batches(
                 uv_scale: [1.0, 1.0],
                 uv_offset: [0.0, 0.0],
                 uv_tex_shift: [0.0, 0.0],
+                depth_test: false,
             },
             texture_handle: texture_cache.texture_handle_stable_ptr(batch.texture_key, texture_key),
             transform,
@@ -3086,6 +3089,7 @@ fn push_transient_text_mesh_builders(
                 uv_scale: [1.0, 1.0],
                 uv_offset: [0.0, 0.0],
                 uv_tex_shift: [0.0, 0.0],
+                depth_test: false,
             },
             texture_handle: texture_cache
                 .texture_handle_stable_ptr(builder.texture_key, texture_key),
@@ -3579,6 +3583,7 @@ fn clip_textured_mesh_to_world_rect(
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
+            depth_test: false,
         },
         transform: Matrix4::IDENTITY,
     })
@@ -3651,6 +3656,7 @@ fn clip_rotated_sprite_to_world_rect(
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
+            depth_test: false,
         },
         transform: Matrix4::IDENTITY,
     })
@@ -4161,6 +4167,7 @@ mod tests {
                     uv_scale: [1.0, 1.0],
                     uv_offset: [0.0, 0.0],
                     uv_tex_shift: [0.0, 0.0],
+                    depth_test: false,
                 },
                 texture_handle: 9,
                 transform: Matrix4::IDENTITY,
@@ -4235,6 +4242,7 @@ mod tests {
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
+            depth_test: false,
             visible: true,
             blend: BlendMode::Alpha,
             z: 5,

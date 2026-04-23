@@ -174,6 +174,8 @@ pub enum ActorSnapshot {
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
+        #[serde(default)]
+        depth_test: bool,
         visible: bool,
         blend: BlendModeSnapshot,
         z: i16,
@@ -327,6 +329,8 @@ pub enum RenderObjectTypeSnapshot {
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
+        #[serde(default)]
+        depth_test: bool,
     },
 }
 
@@ -973,6 +977,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             uv_scale,
             uv_offset,
             uv_tex_shift,
+            depth_test,
             visible,
             blend,
             z,
@@ -988,6 +993,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             uv_scale: *uv_scale,
             uv_offset: *uv_offset,
             uv_tex_shift: *uv_tex_shift,
+            depth_test: *depth_test,
             visible: *visible,
             blend: BlendModeSnapshot::from(*blend),
             z: *z,
@@ -1172,6 +1178,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             uv_scale,
             uv_offset,
             uv_tex_shift,
+            depth_test,
             visible,
             blend,
             z,
@@ -1189,6 +1196,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             uv_scale: *uv_scale,
             uv_offset: *uv_offset,
             uv_tex_shift: *uv_tex_shift,
+            depth_test: *depth_test,
             visible: *visible,
             blend: BlendMode::from(*blend),
             z: *z,
@@ -1282,6 +1290,7 @@ fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
+                depth_test,
                 ..
             } => RenderObjectTypeSnapshot::TexturedMesh {
                 texture_id: None,
@@ -1291,6 +1300,7 @@ fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
                 uv_scale: *uv_scale,
                 uv_offset: *uv_offset,
                 uv_tex_shift: *uv_tex_shift,
+                depth_test: *depth_test,
             },
         },
         texture_handle: render.texture_handle,
@@ -1363,6 +1373,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
+                depth_test,
                 ..
             } => ObjectType::TexturedMesh {
                 tint: *tint,
@@ -1374,6 +1385,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                 uv_scale: *uv_scale,
                 uv_offset: *uv_offset,
                 uv_tex_shift: *uv_tex_shift,
+                depth_test: *depth_test,
             },
         },
         texture_handle,
