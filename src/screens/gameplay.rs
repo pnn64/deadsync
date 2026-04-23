@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
+use crate::assets::sprite_sheet_dims;
 use crate::engine::gfx::{
     BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, TexturedMeshVertex,
 };
@@ -1026,6 +1027,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.effect_offset {
         state.effect_offset = value;
     }
+    if let Some(value) = delta.sprite_state_index {
+        state.sprite_state_index = Some(value);
+    }
     if let Some(value) = delta.custom_texture_rect {
         state.custom_texture_rect = Some(value);
     }
@@ -1147,6 +1151,9 @@ fn song_lua_overlay_state_lerp(
     if delta.effect_offset.is_some() {
         from.effect_offset = (to.effect_offset - from.effect_offset).mul_add(t, from.effect_offset);
     }
+    if delta.sprite_state_index.is_some() && t >= 1.0 - f32::EPSILON {
+        from.sprite_state_index = to.sprite_state_index;
+    }
     if delta.custom_texture_rect.is_some()
         && let (Some(from_rect), Some(to_rect)) = (from.custom_texture_rect, to.custom_texture_rect)
     {
@@ -1199,6 +1206,50 @@ fn song_lua_overlay_state_lerp(
         from.effect_mode = to.effect_mode;
     }
     from
+}
+
+#[inline(always)]
+fn song_lua_valid_sprite_state_index(state: SongLuaOverlayState) -> Option<u32> {
+    state.sprite_state_index.filter(|&value| value != u32::MAX)
+}
+
+#[inline(always)]
+fn song_lua_sprite_sheet_rect(index: u32, cols: u32, rows: u32) -> [f32; 4] {
+    let cols = cols.max(1);
+    let rows = rows.max(1);
+    let col = index % cols;
+    let row = (index / cols).min(rows.saturating_sub(1));
+    let width = 1.0 / cols as f32;
+    let height = 1.0 / rows as f32;
+    let left = col as f32 * width;
+    let top = row as f32 * height;
+    [left, top, left + width, top + height]
+}
+
+fn song_lua_overlay_sprite_size(state: SongLuaOverlayState, texture_key: &str) -> Option<[f32; 2]> {
+    if let Some(size) = state.size {
+        return Some(size);
+    }
+    let tex = crate::assets::texture_dims(texture_key)?;
+    let (mut width, mut height) = (tex.w as f32, tex.h as f32);
+    if song_lua_valid_sprite_state_index(state).is_some() {
+        let (cols, rows) = sprite_sheet_dims(texture_key);
+        width /= cols.max(1) as f32;
+        height /= rows.max(1) as f32;
+    }
+    Some([width, height])
+}
+
+fn song_lua_overlay_uv_rect(
+    state: SongLuaOverlayState,
+    texture_key: Option<&str>,
+) -> Option<[f32; 4]> {
+    state.custom_texture_rect.or_else(|| {
+        let state_index = song_lua_valid_sprite_state_index(state)?;
+        let texture_key = texture_key?;
+        let (cols, rows) = sprite_sheet_dims(texture_key);
+        Some(song_lua_sprite_sheet_rect(state_index, cols, rows))
+    })
 }
 
 #[inline(always)]
@@ -2559,6 +2610,7 @@ fn song_lua_overlay_rect(
 
 fn song_lua_overlay_uvs(
     state: SongLuaOverlayState,
+    texture_key: Option<&str>,
     flip_x: bool,
     flip_y: bool,
     total_elapsed: f32,
@@ -2572,7 +2624,7 @@ fn song_lua_overlay_uvs(
         mut uv_scale_y,
         mut uv_offset_x,
         mut uv_offset_y,
-    ] = if let Some([u0, v0, u1, v1]) = state.custom_texture_rect {
+    ] = if let Some([u0, v0, u1, v1]) = song_lua_overlay_uv_rect(state, texture_key) {
         [
             (u1 - u0).abs().max(1e-6),
             (v1 - v0).abs().max(1e-6),
@@ -2713,8 +2765,7 @@ fn build_song_lua_overlay_actor(
                 return None;
             }
             if let Some(view_proj) = perspective_view_proj {
-                let tex = crate::assets::texture_dims(key.as_ref())?;
-                let size = state.size.unwrap_or([tex.w as f32, tex.h as f32]);
+                let size = song_lua_overlay_sprite_size(state, key.as_ref())?;
                 let (center, size) = song_lua_overlay_rect(
                     state,
                     size,
@@ -2737,7 +2788,7 @@ fn build_song_lua_overlay_actor(
                     &mut rot_deg,
                 );
                 return song_lua_projected_overlay_actor(
-                    key,
+                    key.clone(),
                     tint,
                     overlay_blend,
                     z,
@@ -2748,7 +2799,7 @@ fn build_song_lua_overlay_actor(
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
-                    song_lua_overlay_uvs(state, flip_x, flip_y, total_elapsed),
+                    song_lua_overlay_uvs(state, Some(key.as_ref()), flip_x, flip_y, total_elapsed),
                     view_proj,
                 );
             }
@@ -2763,8 +2814,7 @@ fn build_song_lua_overlay_actor(
                     z(z)
                 )
             } else {
-                let tex = crate::assets::texture_dims(key.as_ref())?;
-                let size = state.size.unwrap_or([tex.w as f32, tex.h as f32]);
+                let size = song_lua_overlay_sprite_size(state, key.as_ref())?;
                 act!(sprite(key.clone()):
                     align(0.5, 0.5):
                     xy(state.x * x_scale, state.y * y_scale):
@@ -2824,7 +2874,7 @@ fn build_song_lua_overlay_actor(
                 *world_z += effect_offset[2];
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
-                *uv_rect = state.custom_texture_rect;
+                *uv_rect = song_lua_overlay_uv_rect(state, Some(key.as_ref()));
                 *texcoordvelocity = state.texcoord_velocity;
                 *actor_effect = EffectState::default();
                 *actor_flip_x ^= flip_x;
@@ -2923,7 +2973,7 @@ fn build_song_lua_overlay_actor(
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
-                    song_lua_overlay_uvs(state, flip_x, flip_y, total_elapsed),
+                    song_lua_overlay_uvs(state, None, flip_x, flip_y, total_elapsed),
                     view_proj,
                 );
             }
@@ -5358,6 +5408,59 @@ mod tests {
                 assert!(scale[1] > 0.0);
             }
             other => panic!("expected sprite-backed quad, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_sprite_setstate_uses_sheet_cell_size_at_runtime() {
+        let key = "song-lua-test 4x3.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: std::path::PathBuf::from(&key),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                sprite_state_index: Some(5),
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            778,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("setstate sprite should render");
+
+        match actor {
+            Actor::Sprite {
+                size, uv_rect, z, ..
+            } => {
+                let expected_w = 10.0 * screen_width() / 640.0;
+                let expected_h = 10.0 * screen_height() / 480.0;
+                assert_eq!(z, 778);
+                assert_eq!(uv_rect, Some([0.25, 1.0 / 3.0, 0.5, 2.0 / 3.0]));
+                match size {
+                    [SizeSpec::Px(w), SizeSpec::Px(h)] => {
+                        assert!((w - expected_w).abs() <= 0.000_1);
+                        assert!((h - expected_h).abs() <= 0.000_1);
+                    }
+                    other => panic!("expected explicit sprite size, got {other:?}"),
+                }
+            }
+            other => panic!("expected sprite overlay, got {other:?}"),
         }
     }
 

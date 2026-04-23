@@ -40,6 +40,7 @@ const SONG_LUA_RUNTIME_SECONDS_KEY: &str = "__songlua_music_seconds";
 const SONG_LUA_RUNTIME_BPS_KEY: &str = "__songlua_song_bps";
 const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
+const SONG_LUA_SPRITE_STATE_CLEAR: u32 = u32::MAX;
 const EASING_NAMES: &[&str] = &[
     "linear",
     "inQuad",
@@ -3435,6 +3436,12 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.effect_offset = value;
     }
     if let Some(value) = actor
+        .get::<Option<u32>>("__songlua_state_sprite_state_index")
+        .map_err(|err| err.to_string())?
+    {
+        state.sprite_state_index = Some(value);
+    }
+    if let Some(value) = actor
         .get::<Option<Table>>("__songlua_state_custom_texture_rect")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec4(&value))
@@ -3678,6 +3685,14 @@ fn capture_block_set_vec4(
     Ok(())
 }
 
+fn capture_block_set_u32(lua: &Lua, actor: &Table, key: &str, value: u32) -> mlua::Result<()> {
+    let block = actor_current_capture_block(lua, actor)?;
+    block.set(key, value)?;
+    block.set("__songlua_has_changes", true)?;
+    actor.set(format!("__songlua_state_{key}"), value)?;
+    Ok(())
+}
+
 fn capture_block_set_vec2(
     lua: &Lua,
     actor: &Table,
@@ -3763,6 +3778,53 @@ fn effect_clock_label(clock: EffectClock) -> &'static str {
         EffectClock::Time => "time",
         EffectClock::Beat => "beat",
     }
+}
+
+#[inline(always)]
+fn song_lua_valid_sprite_state_index(index: Option<u32>) -> Option<u32> {
+    index.filter(|&value| value != SONG_LUA_SPRITE_STATE_CLEAR)
+}
+
+#[inline(always)]
+fn sprite_sheet_rect(index: u32, cols: u32, rows: u32) -> [f32; 4] {
+    let cols = cols.max(1);
+    let rows = rows.max(1);
+    let col = index % cols;
+    let row = (index / cols).min(rows.saturating_sub(1));
+    let width = 1.0 / cols as f32;
+    let height = 1.0 / rows as f32;
+    let left = col as f32 * width;
+    let top = row as f32 * height;
+    [left, top, left + width, top + height]
+}
+
+fn actor_sprite_sheet_dims(actor: &Table) -> mlua::Result<Option<(u32, u32)>> {
+    if let Some(path) = actor_texture_path(actor)? {
+        return Ok(Some(crate::assets::parse_sprite_sheet_dims(
+            path.to_string_lossy().as_ref(),
+        )));
+    }
+    let Some(texture) = actor.get::<Option<String>>("Texture")? else {
+        return Ok(None);
+    };
+    let texture = texture.trim();
+    if texture.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(crate::assets::parse_sprite_sheet_dims(texture)))
+}
+
+fn set_actor_sprite_state(lua: &Lua, actor: &Table, state_index: u32) -> mlua::Result<()> {
+    capture_block_set_u32(lua, actor, "sprite_state_index", state_index)?;
+    if let Some((cols, rows)) = actor_sprite_sheet_dims(actor)? {
+        capture_block_set_vec4(
+            lua,
+            actor,
+            "custom_texture_rect",
+            sprite_sheet_rect(state_index, cols, rows),
+        )?;
+    }
+    Ok(())
 }
 
 fn set_actor_effect_mode(lua: &Lua, actor: &Table, mode: &str) -> mlua::Result<()> {
@@ -3929,6 +3991,9 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .map_err(|err| err.to_string())?,
                 effect_offset: block
                     .get::<Option<f32>>("effect_offset")
+                    .map_err(|err| err.to_string())?,
+                sprite_state_index: block
+                    .get::<Option<u32>>("sprite_state_index")
                     .map_err(|err| err.to_string())?,
                 custom_texture_rect: block
                     .get::<Option<Table>>("custom_texture_rect")
@@ -4831,7 +4896,27 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     args.get(3).cloned().and_then(read_f32).unwrap_or(0.0),
                     args.get(4).cloned().and_then(read_f32).unwrap_or(0.0),
                 ];
+                capture_block_set_u32(
+                    lua,
+                    &actor,
+                    "sprite_state_index",
+                    SONG_LUA_SPRITE_STATE_CLEAR,
+                )?;
                 capture_block_set_vec4(lua, &actor, "custom_texture_rect", rect)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "setstate",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(state_index) = method_arg(&args, 0).cloned().and_then(read_u32_value)
+                else {
+                    return Ok(actor.clone());
+                };
+                set_actor_sprite_state(lua, &actor, state_index)?;
                 Ok(actor.clone())
             }
         })?,
@@ -5504,7 +5589,18 @@ fn actor_base_size(actor: &Table) -> mlua::Result<(f32, f32)> {
     if let Some(path) = actor_texture_path(actor)?
         && let Ok((width, height)) = image_dimensions(&path)
     {
-        return Ok((width as f32, height as f32));
+        let (mut width, mut height) = (width as f32, height as f32);
+        if song_lua_valid_sprite_state_index(
+            actor.get::<Option<u32>>("__songlua_state_sprite_state_index")?,
+        )
+        .is_some()
+        {
+            let (cols, rows) =
+                crate::assets::parse_sprite_sheet_dims(path.to_string_lossy().as_ref());
+            width /= cols.max(1) as f32;
+            height /= rows.max(1) as f32;
+        }
+        return Ok((width, height));
     }
     Ok((1.0, 1.0))
 }
@@ -6656,6 +6752,7 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(effect_color2);
     copy_value_field!(effect_period);
     copy_value_field!(effect_offset);
+    copy_option_field!(sprite_state_index);
     copy_option_field!(custom_texture_rect);
     copy_option_field!(texcoord_velocity);
     copy_option_field!(size);
@@ -7258,6 +7355,17 @@ fn read_color_call(args: &MultiValue) -> Option<[f32; 4]> {
 fn method_arg(args: &MultiValue, index: usize) -> Option<&Value> {
     let offset = usize::from(matches!(args.front(), Some(Value::Table(_))));
     args.get(offset + index)
+}
+
+#[inline(always)]
+fn read_u32_value(value: Value) -> Option<u32> {
+    match value {
+        Value::Integer(value) if value >= 0 => u32::try_from(value).ok(),
+        Value::Number(value) if value.is_finite() && value >= 0.0 && value.fract() == 0.0 => {
+            u32::try_from(value as u64).ok()
+        }
+        _ => None,
+    }
 }
 
 #[inline(always)]
@@ -9203,6 +9311,48 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "10:20");
+    }
+
+    #[test]
+    fn compile_song_lua_setstate_uses_sprite_sheet_cell_size() {
+        let song_dir = test_dir("sprite-setstate");
+        let image_path = song_dir.join("panel 4x3.png");
+        image::RgbaImage::new(40, 30).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel 4x3.png",
+        OnCommand=function(self)
+            self:setstate(5)
+            mod_actions = {
+                {1, string.format("%.0f:%.0f", self:GetWidth(), self:GetHeight()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Sprite SetState"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "10:10");
+        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(
+            compiled.overlays[0].initial_state.sprite_state_index,
+            Some(5)
+        );
+        assert_eq!(
+            compiled.overlays[0].initial_state.custom_texture_rect,
+            Some([0.25, 1.0 / 3.0, 0.5, 2.0 / 3.0])
+        );
     }
 
     #[test]

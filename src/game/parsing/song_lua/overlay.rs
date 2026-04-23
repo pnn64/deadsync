@@ -74,6 +74,7 @@ pub struct SongLuaOverlayState {
     pub effect_color2: [f32; 4],
     pub effect_period: f32,
     pub effect_offset: f32,
+    pub sprite_state_index: Option<u32>,
     pub custom_texture_rect: Option<[f32; 4]>,
     pub texcoord_velocity: Option<[f32; 2]>,
     pub size: Option<[f32; 2]>,
@@ -113,6 +114,7 @@ impl Default for SongLuaOverlayState {
             effect_color2: [1.0, 1.0, 1.0, 1.0],
             effect_period: 1.0,
             effect_offset: 0.0,
+            sprite_state_index: None,
             custom_texture_rect: None,
             texcoord_velocity: None,
             size: None,
@@ -153,6 +155,7 @@ pub struct SongLuaOverlayStateDelta {
     pub effect_color2: Option<[f32; 4]>,
     pub effect_period: Option<f32>,
     pub effect_offset: Option<f32>,
+    pub sprite_state_index: Option<u32>,
     pub custom_texture_rect: Option<[f32; 4]>,
     pub texcoord_velocity: Option<[f32; 2]>,
     pub size: Option<[f32; 2]>,
@@ -325,6 +328,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.effect_offset {
         state.effect_offset = value;
     }
+    if let Some(value) = delta.sprite_state_index {
+        state.sprite_state_index = Some(value);
+    }
     if let Some(value) = delta.custom_texture_rect {
         state.custom_texture_rect = Some(value);
     }
@@ -437,6 +443,9 @@ fn overlay_state_lerp(
     }
     if delta.effect_offset.is_some() {
         from.effect_offset = (to.effect_offset - from.effect_offset).mul_add(t, from.effect_offset);
+    }
+    if delta.sprite_state_index.is_some() && t >= 1.0 - f32::EPSILON {
+        from.sprite_state_index = to.sprite_state_index;
     }
     if delta.custom_texture_rect.is_some()
         && let (Some(from_rect), Some(to_rect)) = (from.custom_texture_rect, to.custom_texture_rect)
@@ -567,6 +576,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.effect_color2.is_none()
         && delta.effect_period.is_none()
         && delta.effect_offset.is_none()
+        && delta.sprite_state_index.is_none()
         && delta.custom_texture_rect.is_none()
         && delta.texcoord_velocity.is_none()
         && delta.size.is_none()
@@ -664,6 +674,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.effect_offset.is_some() {
         into.effect_offset = from.effect_offset;
     }
+    if from.sprite_state_index.is_some() {
+        into.sprite_state_index = from.sprite_state_index;
+    }
     if from.custom_texture_rect.is_some() {
         into.custom_texture_rect = from.custom_texture_rect;
     }
@@ -732,6 +745,7 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(effect_color2);
     copy_pair!(effect_period);
     copy_pair!(effect_offset);
+    copy_pair!(sprite_state_index);
     copy_pair!(custom_texture_rect);
     copy_pair!(texcoord_velocity);
     copy_pair!(size);
