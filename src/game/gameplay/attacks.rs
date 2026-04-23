@@ -138,6 +138,8 @@ pub(super) enum SongLuaEaseMaskTarget {
     ScrollSpeedC,
     ScrollSpeedM,
     MiniPercent,
+    PlayerX,
+    PlayerY,
     PlayerZ,
     PlayerRotationX,
     PlayerRotationZ,
@@ -1453,7 +1455,9 @@ fn append_song_lua_ease_targets(
 fn song_lua_persistent_player_transform_target(target: SongLuaEaseMaskTarget) -> bool {
     matches!(
         target,
-        SongLuaEaseMaskTarget::PlayerZ
+        SongLuaEaseMaskTarget::PlayerX
+            | SongLuaEaseMaskTarget::PlayerY
+            | SongLuaEaseMaskTarget::PlayerZ
             | SongLuaEaseMaskTarget::PlayerRotationX
             | SongLuaEaseMaskTarget::PlayerRotationZ
             | SongLuaEaseMaskTarget::PlayerRotationY
@@ -1559,6 +1563,28 @@ pub(super) fn build_song_lua_ease_windows_for_player(
                     );
                 }
             }
+            SongLuaEaseTarget::PlayerX => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerX,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
+            SongLuaEaseTarget::PlayerY => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerY,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
             SongLuaEaseTarget::PlayerZ => out.push(SongLuaEaseMaskWindow {
                 start_second,
                 end_second,
@@ -2820,6 +2846,8 @@ pub(super) fn song_lua_apply_eased_target(
     perspective: &mut PerspectiveOverrides,
     scroll_speed: &mut Option<ScrollSpeedSetting>,
     mini_percent: &mut Option<f32>,
+    player_x: &mut Option<f32>,
+    player_y: &mut Option<f32>,
     player_z: &mut Option<f32>,
     player_rotation_x: &mut Option<f32>,
     player_rotation_z: &mut Option<f32>,
@@ -2881,6 +2909,8 @@ pub(super) fn song_lua_apply_eased_target(
             }
         }
         SongLuaEaseMaskTarget::MiniPercent => *mini_percent = Some(value),
+        SongLuaEaseMaskTarget::PlayerX => *player_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerY => *player_y = Some(value),
         SongLuaEaseMaskTarget::PlayerZ => *player_z = Some(value),
         SongLuaEaseMaskTarget::PlayerRotationX => *player_rotation_x = Some(value),
         SongLuaEaseMaskTarget::PlayerRotationZ => *player_rotation_z = Some(value),
@@ -3233,6 +3263,8 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         let mut perspective = PerspectiveOverrides::default();
         let mut scroll_speed = None;
         let mut mini_percent = None;
+        let mut player_x = None;
+        let mut player_y = None;
         let mut player_z = None;
         let mut player_rotation_x = None;
         let mut player_rotation_z = None;
@@ -3372,6 +3404,8 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                     &mut perspective,
                     &mut scroll_speed,
                     &mut mini_percent,
+                    &mut player_x,
+                    &mut player_y,
                     &mut player_z,
                     &mut player_rotation_x,
                     &mut player_rotation_z,
@@ -3398,6 +3432,8 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         state.active_attack_perspective[player] = perspective;
         state.active_attack_scroll_speed[player] = scroll_speed;
         state.active_attack_mini_percent[player] = mini_percent;
+        state.song_lua_player_x[player] = player_x.filter(|v| v.is_finite());
+        state.song_lua_player_y[player] = player_y.filter(|v| v.is_finite());
         state.song_lua_player_z[player] = player_z.filter(|v| v.is_finite()).unwrap_or(0.0);
         state.song_lua_player_rotation_x[player] =
             player_rotation_x.filter(|v| v.is_finite()).unwrap_or(0.0);

@@ -3677,6 +3677,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let zoom_x = player_state.zoom_x * state.song_lua_player_zoom_x[player_idx];
         let zoom_y = player_state.zoom_y * state.song_lua_player_zoom_y[player_idx];
         let zoom_z = player_state.zoom_z * state.song_lua_player_zoom_z[player_idx];
+        let target_x = state.song_lua_player_x[player_idx].unwrap_or(player_state.x);
+        let target_y = state.song_lua_player_y[player_idx].unwrap_or(player_state.y);
         let z_shift = song_lua_player_layer_z(
             song_lua_active,
             player_actor,
@@ -3697,8 +3699,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     player_state.diffuse,
                     player_blend,
                     layout_center_x,
-                    player_state.x,
-                    player_state.y,
+                    target_x,
+                    target_y,
                     rotation_x,
                     rotation_z,
                     rotation_y,
