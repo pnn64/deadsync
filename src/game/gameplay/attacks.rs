@@ -1901,6 +1901,10 @@ fn song_lua_overlay_delta_overlaps(
     overlap!(cropright);
     overlap!(croptop);
     overlap!(cropbottom);
+    overlap!(fadeleft);
+    overlap!(faderight);
+    overlap!(fadetop);
+    overlap!(fadebottom);
     overlap!(zoom);
     overlap!(zoom_x);
     overlap!(zoom_y);

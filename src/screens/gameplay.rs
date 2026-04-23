@@ -970,6 +970,18 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.cropbottom {
         state.cropbottom = value;
     }
+    if let Some(value) = delta.fadeleft {
+        state.fadeleft = value;
+    }
+    if let Some(value) = delta.faderight {
+        state.faderight = value;
+    }
+    if let Some(value) = delta.fadetop {
+        state.fadetop = value;
+    }
+    if let Some(value) = delta.fadebottom {
+        state.fadebottom = value;
+    }
     if let Some(value) = delta.zoom {
         state.zoom = value;
     }
@@ -1114,6 +1126,18 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.cropbottom.is_some() {
         from.cropbottom = (to.cropbottom - from.cropbottom).mul_add(t, from.cropbottom);
+    }
+    if delta.fadeleft.is_some() {
+        from.fadeleft = (to.fadeleft - from.fadeleft).mul_add(t, from.fadeleft);
+    }
+    if delta.faderight.is_some() {
+        from.faderight = (to.faderight - from.faderight).mul_add(t, from.faderight);
+    }
+    if delta.fadetop.is_some() {
+        from.fadetop = (to.fadetop - from.fadetop).mul_add(t, from.fadetop);
+    }
+    if delta.fadebottom.is_some() {
+        from.fadebottom = (to.fadebottom - from.fadebottom).mul_add(t, from.fadebottom);
     }
     if delta.zoom.is_some() {
         from.zoom = (to.zoom - from.zoom).mul_add(t, from.zoom);
@@ -2906,6 +2930,10 @@ fn build_song_lua_overlay_actor(
                 cropright,
                 croptop,
                 cropbottom,
+                fadeleft,
+                faderight,
+                fadetop,
+                fadebottom,
                 blend,
                 rot_x_deg,
                 rot_y_deg,
@@ -2940,6 +2968,10 @@ fn build_song_lua_overlay_actor(
                 *cropright = state.cropright.clamp(0.0, 1.0);
                 *croptop = state.croptop.clamp(0.0, 1.0);
                 *cropbottom = state.cropbottom.clamp(0.0, 1.0);
+                *fadeleft = state.fadeleft.clamp(0.0, 1.0);
+                *faderight = state.faderight.clamp(0.0, 1.0);
+                *fadetop = state.fadetop.clamp(0.0, 1.0);
+                *fadebottom = state.fadebottom.clamp(0.0, 1.0);
                 *blend = overlay_blend;
                 *rot_x_deg = effect_rot[0];
                 *rot_y_deg = effect_rot[1];
@@ -3083,6 +3115,10 @@ fn build_song_lua_overlay_actor(
                 cropright,
                 croptop,
                 cropbottom,
+                fadeleft,
+                faderight,
+                fadetop,
+                fadebottom,
                 blend,
                 rot_x_deg,
                 rot_y_deg,
@@ -3114,6 +3150,10 @@ fn build_song_lua_overlay_actor(
                 *cropright = state.cropright.clamp(0.0, 1.0);
                 *croptop = state.croptop.clamp(0.0, 1.0);
                 *cropbottom = state.cropbottom.clamp(0.0, 1.0);
+                *fadeleft = state.fadeleft.clamp(0.0, 1.0);
+                *faderight = state.faderight.clamp(0.0, 1.0);
+                *fadetop = state.fadetop.clamp(0.0, 1.0);
+                *fadebottom = state.fadebottom.clamp(0.0, 1.0);
                 *blend = overlay_blend;
                 *rot_x_deg = effect_rot[0];
                 *rot_y_deg = effect_rot[1];
@@ -5671,6 +5711,61 @@ mod tests {
                 assert_eq!(uv_rect, Some([0.25, -0.5, 1.25, 0.5]));
             }
             other => panic!("expected translated sprite overlay, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_sprite_applies_fade_edges_at_runtime() {
+        let key = "song-lua-fade-edges.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: std::path::PathBuf::from(&key),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                fadeleft: 0.1,
+                faderight: 0.2,
+                fadetop: 0.3,
+                fadebottom: 0.4,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            782,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("faded sprite should render");
+
+        match actor {
+            Actor::Sprite {
+                fadeleft,
+                faderight,
+                fadetop,
+                fadebottom,
+                z,
+                ..
+            } => {
+                assert_eq!(z, 782);
+                assert!((fadeleft - 0.1).abs() <= 0.000_1);
+                assert!((faderight - 0.2).abs() <= 0.000_1);
+                assert!((fadetop - 0.3).abs() <= 0.000_1);
+                assert!((fadebottom - 0.4).abs() <= 0.000_1);
+            }
+            other => panic!("expected faded sprite overlay, got {other:?}"),
         }
     }
 

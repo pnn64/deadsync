@@ -55,6 +55,10 @@ pub struct SongLuaOverlayState {
     pub cropright: f32,
     pub croptop: f32,
     pub cropbottom: f32,
+    pub fadeleft: f32,
+    pub faderight: f32,
+    pub fadetop: f32,
+    pub fadebottom: f32,
     pub zoom: f32,
     pub zoom_x: f32,
     pub zoom_y: f32,
@@ -101,6 +105,10 @@ impl Default for SongLuaOverlayState {
             cropright: 0.0,
             croptop: 0.0,
             cropbottom: 0.0,
+            fadeleft: 0.0,
+            faderight: 0.0,
+            fadetop: 0.0,
+            fadebottom: 0.0,
             zoom: 1.0,
             zoom_x: 1.0,
             zoom_y: 1.0,
@@ -148,6 +156,10 @@ pub struct SongLuaOverlayStateDelta {
     pub cropright: Option<f32>,
     pub croptop: Option<f32>,
     pub cropbottom: Option<f32>,
+    pub fadeleft: Option<f32>,
+    pub faderight: Option<f32>,
+    pub fadetop: Option<f32>,
+    pub fadebottom: Option<f32>,
     pub zoom: Option<f32>,
     pub zoom_x: Option<f32>,
     pub zoom_y: Option<f32>,
@@ -289,6 +301,18 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.cropbottom {
         state.cropbottom = value;
     }
+    if let Some(value) = delta.fadeleft {
+        state.fadeleft = value;
+    }
+    if let Some(value) = delta.faderight {
+        state.faderight = value;
+    }
+    if let Some(value) = delta.fadetop {
+        state.fadetop = value;
+    }
+    if let Some(value) = delta.fadebottom {
+        state.fadebottom = value;
+    }
     if let Some(value) = delta.zoom {
         state.zoom = value;
     }
@@ -425,6 +449,18 @@ fn overlay_state_lerp(
     }
     if delta.cropbottom.is_some() {
         from.cropbottom = (to.cropbottom - from.cropbottom).mul_add(t, from.cropbottom);
+    }
+    if delta.fadeleft.is_some() {
+        from.fadeleft = (to.fadeleft - from.fadeleft).mul_add(t, from.fadeleft);
+    }
+    if delta.faderight.is_some() {
+        from.faderight = (to.faderight - from.faderight).mul_add(t, from.faderight);
+    }
+    if delta.fadetop.is_some() {
+        from.fadetop = (to.fadetop - from.fadetop).mul_add(t, from.fadetop);
+    }
+    if delta.fadebottom.is_some() {
+        from.fadebottom = (to.fadebottom - from.fadebottom).mul_add(t, from.fadebottom);
     }
     if delta.zoom.is_some() {
         from.zoom = (to.zoom - from.zoom).mul_add(t, from.zoom);
@@ -618,6 +654,10 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.cropright.is_none()
         && delta.croptop.is_none()
         && delta.cropbottom.is_none()
+        && delta.fadeleft.is_none()
+        && delta.faderight.is_none()
+        && delta.fadetop.is_none()
+        && delta.fadebottom.is_none()
         && delta.zoom.is_none()
         && delta.zoom_x.is_none()
         && delta.zoom_y.is_none()
@@ -683,6 +723,18 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.cropbottom.is_some() {
         into.cropbottom = from.cropbottom;
+    }
+    if from.fadeleft.is_some() {
+        into.fadeleft = from.fadeleft;
+    }
+    if from.faderight.is_some() {
+        into.faderight = from.faderight;
+    }
+    if from.fadetop.is_some() {
+        into.fadetop = from.fadetop;
+    }
+    if from.fadebottom.is_some() {
+        into.fadebottom = from.fadebottom;
     }
     if from.zoom.is_some() {
         into.zoom = from.zoom;
@@ -811,6 +863,10 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(cropright);
     copy_pair!(croptop);
     copy_pair!(cropbottom);
+    copy_pair!(fadeleft);
+    copy_pair!(faderight);
+    copy_pair!(fadetop);
+    copy_pair!(fadebottom);
     copy_pair!(zoom);
     copy_pair!(zoom_x);
     copy_pair!(zoom_y);

@@ -3329,6 +3329,30 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.cropbottom = value;
     }
     if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_fadeleft")
+        .map_err(|err| err.to_string())?
+    {
+        state.fadeleft = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_faderight")
+        .map_err(|err| err.to_string())?
+    {
+        state.faderight = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_fadetop")
+        .map_err(|err| err.to_string())?
+    {
+        state.fadetop = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_fadebottom")
+        .map_err(|err| err.to_string())?
+    {
+        state.fadebottom = value;
+    }
+    if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_zoom")
         .map_err(|err| err.to_string())?
     {
@@ -3952,6 +3976,18 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .map_err(|err| err.to_string())?,
                 cropbottom: block
                     .get::<Option<f32>>("cropbottom")
+                    .map_err(|err| err.to_string())?,
+                fadeleft: block
+                    .get::<Option<f32>>("fadeleft")
+                    .map_err(|err| err.to_string())?,
+                faderight: block
+                    .get::<Option<f32>>("faderight")
+                    .map_err(|err| err.to_string())?,
+                fadetop: block
+                    .get::<Option<f32>>("fadetop")
+                    .map_err(|err| err.to_string())?,
+                fadebottom: block
+                    .get::<Option<f32>>("fadebottom")
                     .map_err(|err| err.to_string())?,
                 zoom: block
                     .get::<Option<f32>>("zoom")
@@ -4729,6 +4765,22 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "croptop",
         make_actor_capture_f32_method(lua, actor, "croptop", None)?,
+    )?;
+    actor.set(
+        "fadeleft",
+        make_actor_capture_f32_method(lua, actor, "fadeleft", None)?,
+    )?;
+    actor.set(
+        "faderight",
+        make_actor_capture_f32_method(lua, actor, "faderight", None)?,
+    )?;
+    actor.set(
+        "fadetop",
+        make_actor_capture_f32_method(lua, actor, "fadetop", None)?,
+    )?;
+    actor.set(
+        "fadebottom",
+        make_actor_capture_f32_method(lua, actor, "fadebottom", None)?,
     )?;
     actor.set(
         "rotationx",
@@ -6924,6 +6976,10 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(cropright);
     copy_value_field!(croptop);
     copy_value_field!(cropbottom);
+    copy_value_field!(fadeleft);
+    copy_value_field!(faderight);
+    copy_value_field!(fadetop);
+    copy_value_field!(fadebottom);
     copy_value_field!(zoom);
     copy_value_field!(zoom_x);
     copy_value_field!(zoom_y);
@@ -10004,6 +10060,40 @@ return Def.ActorFrame{
         assert!(state.texture_wrapping);
         assert_eq!(state.texcoord_offset, Some([0.25, -0.5]));
         assert_eq!(state.custom_texture_rect, None);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_sprite_fade_edges() {
+        let song_dir = test_dir("actor-fade-edges");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(40, 30).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:fadeleft(0.1):faderight(0.2):fadetop(0.3):fadebottom(0.4)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Fade Edges"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        let state = compiled.overlays[0].initial_state;
+        assert_eq!(state.fadeleft, 0.1);
+        assert_eq!(state.faderight, 0.2);
+        assert_eq!(state.fadetop, 0.3);
+        assert_eq!(state.fadebottom, 0.4);
     }
 
     #[test]
