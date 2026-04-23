@@ -19,6 +19,8 @@ pub enum SongLuaProxyTarget {
 pub enum SongLuaOverlayBlendMode {
     Alpha,
     Add,
+    Multiply,
+    Subtract,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -737,6 +739,12 @@ fn overlay_state_lerp(
 pub(super) fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendMode> {
     if raw.eq_ignore_ascii_case("add") || raw.eq_ignore_ascii_case("blendmode_add") {
         Some(SongLuaOverlayBlendMode::Add)
+    } else if raw.eq_ignore_ascii_case("multiply") || raw.eq_ignore_ascii_case("blendmode_multiply")
+    {
+        Some(SongLuaOverlayBlendMode::Multiply)
+    } else if raw.eq_ignore_ascii_case("subtract") || raw.eq_ignore_ascii_case("blendmode_subtract")
+    {
+        Some(SongLuaOverlayBlendMode::Subtract)
     } else if raw.eq_ignore_ascii_case("alpha")
         || raw.eq_ignore_ascii_case("normal")
         || raw.eq_ignore_ascii_case("blendmode_normal")
@@ -1128,6 +1136,14 @@ mod tests {
         assert_eq!(
             parse_overlay_blend_mode("BlendMode_Add"),
             Some(SongLuaOverlayBlendMode::Add)
+        );
+        assert_eq!(
+            parse_overlay_blend_mode("BlendMode_Multiply"),
+            Some(SongLuaOverlayBlendMode::Multiply)
+        );
+        assert_eq!(
+            parse_overlay_blend_mode("BlendMode_Subtract"),
+            Some(SongLuaOverlayBlendMode::Subtract)
         );
     }
 

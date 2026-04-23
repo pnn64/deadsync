@@ -5335,6 +5335,8 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     let label = match blend {
                         SongLuaOverlayBlendMode::Alpha => "alpha",
                         SongLuaOverlayBlendMode::Add => "add",
+                        SongLuaOverlayBlendMode::Multiply => "multiply",
+                        SongLuaOverlayBlendMode::Subtract => "subtract",
                     };
                     block.set("blend", label)?;
                     block.set("__songlua_has_changes", true)?;
@@ -10689,6 +10691,48 @@ return Def.ActorFrame{
         let text = compiled.overlays[1].initial_state;
         assert_eq!(text.shadow_len, [3.0, -4.0]);
         assert_eq!(text.shadow_color, [0.0, 0.0, 0.0, 0.5]);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_overlay_multiply_and_subtract_blend() {
+        let song_dir = test_dir("overlay-extra-blends");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(40, 30).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:blend("multiply")
+        end,
+    },
+    Def.Quad{
+        OnCommand=function(self)
+            self:blend("subtract")
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Overlay Extra Blends"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+        assert_eq!(
+            compiled.overlays[0].initial_state.blend,
+            SongLuaOverlayBlendMode::Multiply
+        );
+        assert_eq!(
+            compiled.overlays[1].initial_state.blend,
+            SongLuaOverlayBlendMode::Subtract
+        );
     }
 
     #[test]

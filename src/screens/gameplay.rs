@@ -2530,6 +2530,8 @@ fn song_lua_build_capture_actor(
     let blend = match state.blend {
         SongLuaOverlayBlendMode::Alpha => None,
         SongLuaOverlayBlendMode::Add => Some(BlendMode::Add),
+        SongLuaOverlayBlendMode::Multiply => Some(BlendMode::Multiply),
+        SongLuaOverlayBlendMode::Subtract => Some(BlendMode::Subtract),
     };
     let children = source
         .into_iter()
@@ -2574,6 +2576,8 @@ fn song_lua_overlay_blend(blend: SongLuaOverlayBlendMode) -> BlendMode {
     match blend {
         SongLuaOverlayBlendMode::Alpha => BlendMode::Alpha,
         SongLuaOverlayBlendMode::Add => BlendMode::Add,
+        SongLuaOverlayBlendMode::Multiply => BlendMode::Multiply,
+        SongLuaOverlayBlendMode::Subtract => BlendMode::Subtract,
     }
 }
 
@@ -4166,6 +4170,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let player_blend = match player_state.blend {
             SongLuaOverlayBlendMode::Alpha => None,
             SongLuaOverlayBlendMode::Add => Some(BlendMode::Add),
+            SongLuaOverlayBlendMode::Multiply => Some(BlendMode::Multiply),
+            SongLuaOverlayBlendMode::Subtract => Some(BlendMode::Subtract),
         };
         let render_bundle = |bundle| {
             if !player_state.visible {
@@ -6165,6 +6171,84 @@ mod tests {
                 }
             }
             other => panic!("expected shadow wrapper, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_overlay_applies_extra_blend_modes_at_runtime() {
+        let sprite_key = "song-lua-multiply.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(sprite_key.clone(), image::RgbaImage::new(40, 30));
+
+        let sprite = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: std::path::PathBuf::from(&sprite_key),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let sprite_actor = build_song_lua_overlay_actor(
+            &sprite,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                blend: SongLuaOverlayBlendMode::Multiply,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            788,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("multiply sprite should render");
+
+        match sprite_actor {
+            Actor::Sprite { blend, z, .. } => {
+                assert_eq!(z, 788);
+                assert_eq!(blend, BlendMode::Multiply);
+            }
+            other => panic!("expected multiply sprite actor, got {other:?}"),
+        }
+
+        let quad = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let quad_actor = build_song_lua_overlay_actor(
+            &quad,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                size: Some([100.0, 50.0]),
+                blend: SongLuaOverlayBlendMode::Subtract,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            789,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("subtract quad should render");
+
+        match quad_actor {
+            Actor::Sprite { blend, z, .. } => {
+                assert_eq!(z, 789);
+                assert_eq!(blend, BlendMode::Subtract);
+            }
+            other => panic!("expected subtract quad actor, got {other:?}"),
         }
     }
 
