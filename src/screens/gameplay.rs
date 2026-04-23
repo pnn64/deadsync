@@ -1008,6 +1008,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.effect_magnitude {
         state.effect_magnitude = value;
     }
+    if let Some(value) = delta.effect_clock {
+        state.effect_clock = value;
+    }
     if let Some(value) = delta.effect_mode {
         state.effect_mode = value;
     }
@@ -1019,6 +1022,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     }
     if let Some(value) = delta.effect_period {
         state.effect_period = value;
+    }
+    if let Some(value) = delta.effect_offset {
+        state.effect_offset = value;
     }
     if let Some(value) = delta.custom_texture_rect {
         state.custom_texture_rect = Some(value);
@@ -1138,6 +1144,9 @@ fn song_lua_overlay_state_lerp(
     if delta.effect_period.is_some() {
         from.effect_period = (to.effect_period - from.effect_period).mul_add(t, from.effect_period);
     }
+    if delta.effect_offset.is_some() {
+        from.effect_offset = (to.effect_offset - from.effect_offset).mul_add(t, from.effect_offset);
+    }
     if delta.custom_texture_rect.is_some()
         && let (Some(from_rect), Some(to_rect)) = (from.custom_texture_rect, to.custom_texture_rect)
     {
@@ -1182,6 +1191,9 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.vibrate.is_some() && t >= 1.0 - f32::EPSILON {
         from.vibrate = to.vibrate;
+    }
+    if delta.effect_clock.is_some() && t >= 1.0 - f32::EPSILON {
+        from.effect_clock = to.effect_clock;
     }
     if delta.effect_mode.is_some() && t >= 1.0 - f32::EPSILON {
         from.effect_mode = to.effect_mode;
@@ -1781,6 +1793,8 @@ fn song_lua_capture_children(
                 overlay_space_width,
                 overlay_space_height,
                 0.0,
+                0.0,
+                0.0,
             ),
         };
         if let Some(actor) = actor {
@@ -2316,43 +2330,103 @@ fn song_lua_overlay_blend(blend: SongLuaOverlayBlendMode) -> BlendMode {
 
 #[inline(always)]
 fn song_lua_overlay_effect_state(state: SongLuaOverlayState) -> EffectState {
+    let period = state.effect_period.max(f32::EPSILON);
     EffectState {
+        clock: state.effect_clock,
         mode: state.effect_mode,
         color1: state.effect_color1,
         color2: state.effect_color2,
-        period: state.effect_period.max(f32::EPSILON),
+        period,
+        offset: state.effect_offset,
+        timing: [period * 0.5, 0.0, period * 0.5, 0.0, 0.0],
         magnitude: state.effect_magnitude,
         ..EffectState::default()
     }
 }
 
+#[inline(always)]
+fn song_lua_effect_lerp(a: f32, b: f32, t: f32) -> f32 {
+    (b - a).mul_add(t, a)
+}
+
 fn song_lua_apply_overlay_effect(
     effect: EffectState,
-    total_elapsed: f32,
+    effect_time: f32,
+    effect_beat: f32,
     tint: &mut [f32; 4],
+    offset: &mut [f32; 3],
+    scale: &mut [f32; 3],
     rot_deg: &mut [f32; 3],
 ) {
-    let beat = total_elapsed;
     if matches!(effect.mode, crate::engine::present::anim::EffectMode::Spin) {
-        let units = crate::engine::present::anim::effect_clock_units(effect, total_elapsed, beat);
+        let units =
+            crate::engine::present::anim::effect_clock_units(effect, effect_time, effect_beat);
         rot_deg[0] = (rot_deg[0] + effect.magnitude[0] * units).rem_euclid(360.0);
         rot_deg[1] = (rot_deg[1] + effect.magnitude[1] * units).rem_euclid(360.0);
         rot_deg[2] = (rot_deg[2] + effect.magnitude[2] * units).rem_euclid(360.0);
     }
-    if let Some(percent) = crate::engine::present::anim::effect_mix(effect, total_elapsed, beat)
-        && matches!(
-            effect.mode,
-            crate::engine::present::anim::EffectMode::DiffuseShift
-        )
+    if let Some(percent) =
+        crate::engine::present::anim::effect_mix(effect, effect_time, effect_beat)
     {
-        let between =
-            (((percent + 0.25) * 2.0 * std::f32::consts::PI).sin() * 0.5 + 0.5).clamp(0.0, 1.0);
-        for (idx, out) in tint.iter_mut().enumerate() {
-            let color = ((effect.color1[idx] - effect.color2[idx]) * between + effect.color2[idx])
-                .clamp(0.0, 1.0);
-            *out = (*out * color).clamp(0.0, 1.0);
+        match effect.mode {
+            crate::engine::present::anim::EffectMode::DiffuseRamp => {
+                for (idx, out) in tint.iter_mut().enumerate() {
+                    let color =
+                        song_lua_effect_lerp(effect.color2[idx], effect.color1[idx], percent)
+                            .clamp(0.0, 1.0);
+                    *out = (*out * color).clamp(0.0, 1.0);
+                }
+            }
+            crate::engine::present::anim::EffectMode::DiffuseShift => {
+                let between = crate::engine::present::anim::glowshift_mix(percent);
+                for (idx, out) in tint.iter_mut().enumerate() {
+                    let color =
+                        song_lua_effect_lerp(effect.color2[idx], effect.color1[idx], between)
+                            .clamp(0.0, 1.0);
+                    *out = (*out * color).clamp(0.0, 1.0);
+                }
+            }
+            crate::engine::present::anim::EffectMode::Pulse => {
+                let pulse = (percent * std::f32::consts::PI).sin().clamp(0.0, 1.0);
+                let zoom =
+                    song_lua_effect_lerp(effect.magnitude[0], effect.magnitude[1], pulse).max(0.0);
+                scale[0] *= zoom * song_lua_effect_lerp(effect.color1[0], effect.color2[0], pulse);
+                scale[1] *= zoom * song_lua_effect_lerp(effect.color1[1], effect.color2[1], pulse);
+                scale[2] *= zoom * song_lua_effect_lerp(effect.color1[2], effect.color2[2], pulse);
+            }
+            crate::engine::present::anim::EffectMode::Bob => {
+                let bob = (percent * 2.0 * std::f32::consts::PI).sin();
+                for i in 0..3 {
+                    offset[i] += effect.magnitude[i] * bob;
+                }
+            }
+            crate::engine::present::anim::EffectMode::Bounce => {
+                let bounce = (percent * std::f32::consts::PI).sin();
+                for i in 0..3 {
+                    offset[i] += effect.magnitude[i] * bounce;
+                }
+            }
+            crate::engine::present::anim::EffectMode::Wag => {
+                let wag = (percent * 2.0 * std::f32::consts::PI).sin();
+                for i in 0..3 {
+                    rot_deg[i] += effect.magnitude[i] * wag;
+                }
+            }
+            crate::engine::present::anim::EffectMode::GlowShift
+            | crate::engine::present::anim::EffectMode::Spin
+            | crate::engine::present::anim::EffectMode::None => {}
         }
     }
+    offset[0] = offset[0].max(-1_000_000.0).min(1_000_000.0);
+    offset[1] = offset[1].max(-1_000_000.0).min(1_000_000.0);
+    offset[2] = offset[2].max(-1_000_000.0).min(1_000_000.0);
+    tint[0] = tint[0].clamp(0.0, 1.0);
+    tint[1] = tint[1].clamp(0.0, 1.0);
+    tint[2] = tint[2].clamp(0.0, 1.0);
+    tint[3] = tint[3].clamp(0.0, 1.0);
+    scale[0] = scale[0].max(0.0);
+    scale[1] = scale[1].max(0.0);
+    scale[2] = scale[2].max(0.0);
 }
 
 fn song_lua_overlay_camera_state(
@@ -2537,7 +2611,7 @@ fn song_lua_projected_overlay_actor(
     tint: [f32; 4],
     blend: BlendMode,
     z: i16,
-    center: [f32; 2],
+    center: [f32; 3],
     size: [f32; 2],
     rot_deg: [f32; 3],
     uv: [[f32; 2]; 4],
@@ -2548,7 +2622,7 @@ fn song_lua_projected_overlay_actor(
     if half_w <= f32::EPSILON || half_h <= f32::EPSILON {
         return None;
     }
-    let model = Matrix4::from_translation(Vector3::new(center[0], center[1], 0.0))
+    let model = Matrix4::from_translation(Vector3::new(center[0], center[1], center[2]))
         * Matrix4::from_rotation_x(rot_deg[0].to_radians())
         * Matrix4::from_rotation_y(rot_deg[1].to_radians())
         * Matrix4::from_rotation_z(rot_deg[2].to_radians());
@@ -2603,6 +2677,8 @@ fn build_song_lua_overlay_actor(
     z: i16,
     overlay_space_width: f32,
     overlay_space_height: f32,
+    effect_time: f32,
+    effect_beat: f32,
     total_elapsed: f32,
 ) -> Option<Actor> {
     if !state.visible || state.diffuse[3] <= f32::EPSILON {
@@ -2648,15 +2724,29 @@ fn build_song_lua_overlay_actor(
                     size_scale_y,
                 )?;
                 let mut tint = state.diffuse;
+                let mut effect_offset = [0.0, 0.0, 0.0];
+                let mut effect_scale = [1.0, 1.0, 1.0];
                 let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
-                song_lua_apply_overlay_effect(effect, total_elapsed, &mut tint, &mut rot_deg);
+                song_lua_apply_overlay_effect(
+                    effect,
+                    effect_time,
+                    effect_beat,
+                    &mut tint,
+                    &mut effect_offset,
+                    &mut effect_scale,
+                    &mut rot_deg,
+                );
                 return song_lua_projected_overlay_actor(
                     key,
                     tint,
                     overlay_blend,
                     z,
-                    center,
-                    size,
+                    [
+                        center[0] + effect_offset[0] * x_scale,
+                        center[1] + effect_offset[1] * y_scale,
+                        effect_offset[2],
+                    ],
+                    [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
                     song_lua_overlay_uvs(state, flip_x, flip_y, total_elapsed),
                     view_proj,
@@ -2695,6 +2785,9 @@ fn build_song_lua_overlay_actor(
                 rot_x_deg,
                 rot_y_deg,
                 rot_z_deg,
+                offset,
+                world_z,
+                scale,
                 uv_rect,
                 texcoordvelocity,
                 effect: actor_effect,
@@ -2704,18 +2797,36 @@ fn build_song_lua_overlay_actor(
                 ..
             } = &mut actor
             {
-                *tint = state.diffuse;
+                let mut effect_tint = state.diffuse;
+                let mut effect_offset = [0.0, 0.0, 0.0];
+                let mut effect_scale = [1.0, 1.0, 1.0];
+                let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+                song_lua_apply_overlay_effect(
+                    effect,
+                    effect_time,
+                    effect_beat,
+                    &mut effect_tint,
+                    &mut effect_offset,
+                    &mut effect_scale,
+                    &mut effect_rot,
+                );
+                *tint = effect_tint;
                 *cropleft = state.cropleft.clamp(0.0, 1.0);
                 *cropright = state.cropright.clamp(0.0, 1.0);
                 *croptop = state.croptop.clamp(0.0, 1.0);
                 *cropbottom = state.cropbottom.clamp(0.0, 1.0);
                 *blend = overlay_blend;
-                *rot_x_deg = state.rot_x_deg;
-                *rot_y_deg = state.rot_y_deg;
-                *rot_z_deg = state.rot_z_deg;
+                *rot_x_deg = effect_rot[0];
+                *rot_y_deg = effect_rot[1];
+                *rot_z_deg = effect_rot[2];
+                offset[0] += effect_offset[0] * x_scale;
+                offset[1] += effect_offset[1] * y_scale;
+                *world_z += effect_offset[2];
+                scale[0] *= effect_scale[0];
+                scale[1] *= effect_scale[1];
                 *uv_rect = state.custom_texture_rect;
                 *texcoordvelocity = state.texcoord_velocity;
-                *actor_effect = effect;
+                *actor_effect = EffectState::default();
                 *actor_flip_x ^= flip_x;
                 *actor_flip_y ^= flip_y;
                 *visible = state.visible;
@@ -2733,10 +2844,27 @@ fn build_song_lua_overlay_actor(
             } else {
                 "miso"
             };
+            let mut color = state.diffuse;
+            let mut effect_offset = [0.0, 0.0, 0.0];
+            let mut effect_scale = [1.0, 1.0, 1.0];
+            let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+            song_lua_apply_overlay_effect(
+                effect,
+                effect_time,
+                effect_beat,
+                &mut color,
+                &mut effect_offset,
+                &mut effect_scale,
+                &mut effect_rot,
+            );
+            let _ = effect_rot;
             Some(Actor::Text {
                 align: [0.5, 0.5],
-                offset: [state.x * x_scale, state.y * y_scale],
-                color: state.diffuse,
+                offset: [
+                    state.x * x_scale + effect_offset[0] * x_scale,
+                    state.y * y_scale + effect_offset[1] * y_scale,
+                ],
+                color,
                 stroke_color: *stroke_color,
                 glow: [0.0, 0.0, 0.0, 0.0],
                 font,
@@ -2744,7 +2872,10 @@ fn build_song_lua_overlay_actor(
                 attributes: Vec::new(),
                 align_text: TextAlign::Center,
                 z,
-                scale: [size_scale_x * x_scale, size_scale_y * y_scale],
+                scale: [
+                    size_scale_x * x_scale * effect_scale[0],
+                    size_scale_y * y_scale * effect_scale[1],
+                ],
                 fit_width: None,
                 fit_height: None,
                 wrap_width_pixels: None,
@@ -2754,7 +2885,7 @@ fn build_song_lua_overlay_actor(
                 max_h_pre_zoom: false,
                 clip: None,
                 blend: overlay_blend,
-                effect,
+                effect: EffectState::default(),
             })
         }
         SongLuaOverlayKind::Quad => {
@@ -2768,15 +2899,29 @@ fn build_song_lua_overlay_actor(
                     size_scale_y,
                 )?;
                 let mut tint = state.diffuse;
+                let mut effect_offset = [0.0, 0.0, 0.0];
+                let mut effect_scale = [1.0, 1.0, 1.0];
                 let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
-                song_lua_apply_overlay_effect(effect, total_elapsed, &mut tint, &mut rot_deg);
+                song_lua_apply_overlay_effect(
+                    effect,
+                    effect_time,
+                    effect_beat,
+                    &mut tint,
+                    &mut effect_offset,
+                    &mut effect_scale,
+                    &mut rot_deg,
+                );
                 return song_lua_projected_overlay_actor(
                     Arc::from("__white"),
                     tint,
                     overlay_blend,
                     z,
-                    center,
-                    size,
+                    [
+                        center[0] + effect_offset[0] * x_scale,
+                        center[1] + effect_offset[1] * y_scale,
+                        effect_offset[2],
+                    ],
+                    [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
                     song_lua_overlay_uvs(state, flip_x, flip_y, total_elapsed),
                     view_proj,
@@ -2808,6 +2953,7 @@ fn build_song_lua_overlay_actor(
             };
             if let Actor::Sprite {
                 visible,
+                tint,
                 cropleft,
                 cropright,
                 croptop,
@@ -2816,21 +2962,43 @@ fn build_song_lua_overlay_actor(
                 rot_x_deg,
                 rot_y_deg,
                 rot_z_deg,
+                offset,
+                world_z,
+                scale,
                 effect: actor_effect,
                 flip_x: actor_flip_x,
                 flip_y: actor_flip_y,
                 ..
             } = &mut actor
             {
+                let mut effect_tint = state.diffuse;
+                let mut effect_offset = [0.0, 0.0, 0.0];
+                let mut effect_scale = [1.0, 1.0, 1.0];
+                let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+                song_lua_apply_overlay_effect(
+                    effect,
+                    effect_time,
+                    effect_beat,
+                    &mut effect_tint,
+                    &mut effect_offset,
+                    &mut effect_scale,
+                    &mut effect_rot,
+                );
+                *tint = effect_tint;
                 *cropleft = state.cropleft.clamp(0.0, 1.0);
                 *cropright = state.cropright.clamp(0.0, 1.0);
                 *croptop = state.croptop.clamp(0.0, 1.0);
                 *cropbottom = state.cropbottom.clamp(0.0, 1.0);
                 *blend = overlay_blend;
-                *rot_x_deg = state.rot_x_deg;
-                *rot_y_deg = state.rot_y_deg;
-                *rot_z_deg = state.rot_z_deg;
-                *actor_effect = effect;
+                *rot_x_deg = effect_rot[0];
+                *rot_y_deg = effect_rot[1];
+                *rot_z_deg = effect_rot[2];
+                offset[0] += effect_offset[0] * x_scale;
+                offset[1] += effect_offset[1] * y_scale;
+                *world_z += effect_offset[2];
+                scale[0] *= effect_scale[0];
+                scale[1] *= effect_scale[1];
+                *actor_effect = EffectState::default();
                 *actor_flip_x ^= flip_x;
                 *actor_flip_y ^= flip_y;
                 *visible = state.visible;
@@ -3296,6 +3464,8 @@ fn build_song_lua_layer_actors(
     asset_manager: &AssetManager,
     space_width: f32,
     space_height: f32,
+    effect_time: f32,
+    effect_beat: f32,
     total_elapsed: f32,
 ) -> Vec<Actor> {
     let song_lua_overlay_base_z = song_lua_add_z(
@@ -3354,6 +3524,8 @@ fn build_song_lua_layer_actors(
                 song_lua_add_z(song_lua_overlay_base_z, idx as i16),
                 space_width,
                 space_height,
+                effect_time,
+                effect_beat,
                 total_elapsed,
             ),
         };
@@ -3415,6 +3587,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             asset_manager,
             layer.screen_width.max(1.0),
             layer.screen_height.max(1.0),
+            state.current_music_time_display,
+            state.current_beat,
             state.total_elapsed_in_screen,
         ));
     }
@@ -4725,6 +4899,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             asset_manager,
             song_lua_space_width,
             song_lua_space_height,
+            state.current_music_time_display,
+            state.current_beat,
             state.total_elapsed_in_screen,
         )
     };
@@ -4768,6 +4944,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 asset_manager,
                 layer.screen_width.max(1.0),
                 layer.screen_height.max(1.0),
+                state.current_music_time_display,
+                state.current_beat,
                 state.total_elapsed_in_screen,
             )
         };
@@ -5017,7 +5195,6 @@ mod tests {
 
     #[test]
     fn song_lua_actor_proxy_keeps_overlay_z_layer() {
-        let overlay = test_proxy_overlay(0);
         let source = vec![test_source_actor()];
         let actor =
             song_lua_build_proxy_actor(SongLuaOverlayState::default(), 1234, &source, 640.0, 480.0)
@@ -5055,6 +5232,8 @@ mod tests {
             321,
             640.0,
             480.0,
+            0.0,
+            0.0,
             0.0,
         )
         .expect("quad overlay should render");
@@ -5114,6 +5293,8 @@ mod tests {
             640.0,
             480.0,
             0.0,
+            0.0,
+            0.0,
         )
         .expect("perspective song lua quad should render");
 
@@ -5123,6 +5304,60 @@ mod tests {
                 assert_eq!(vertices.len(), 6);
             }
             other => panic!("expected projected textured mesh, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_quad_applies_bounce_effect_offset_at_runtime() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                size: Some([100.0, 50.0]),
+                effect_mode: crate::engine::present::anim::EffectMode::Bounce,
+                effect_clock: crate::engine::present::anim::EffectClock::Beat,
+                effect_period: 2.0,
+                effect_offset: 1.0,
+                effect_magnitude: [10.0, 20.0, 5.0],
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            777,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("effect quad should render");
+
+        match actor {
+            Actor::Sprite {
+                offset,
+                world_z,
+                scale,
+                z,
+                ..
+            } => {
+                let x_scale = screen_width() / 640.0;
+                let y_scale = screen_height() / 480.0;
+                assert_eq!(z, 777);
+                assert!((offset[0] - (320.0 + 10.0) * x_scale).abs() <= 0.000_1);
+                assert!((offset[1] - (240.0 + 20.0) * y_scale).abs() <= 0.000_1);
+                assert!((world_z - 5.0).abs() <= 0.000_1);
+                assert!(scale[0] > 0.0);
+                assert!(scale[1] > 0.0);
+            }
+            other => panic!("expected sprite-backed quad, got {other:?}"),
         }
     }
 

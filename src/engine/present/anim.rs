@@ -224,6 +224,9 @@ pub enum EffectMode {
     DiffuseShift,
     GlowShift,
     Pulse,
+    Bob,
+    Bounce,
+    Wag,
     Spin,
 }
 
@@ -272,6 +275,9 @@ pub fn effect_mix(effect: EffectState, time: f32, beat: f32) -> Option<f32> {
             | EffectMode::DiffuseShift
             | EffectMode::GlowShift
             | EffectMode::Pulse
+            | EffectMode::Bob
+            | EffectMode::Bounce
+            | EffectMode::Wag
     ) {
         return None;
     }

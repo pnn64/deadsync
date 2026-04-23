@@ -9,6 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
+use crate::engine::present::anim::EffectClock;
 #[cfg(test)]
 use crate::engine::present::anim::EffectMode;
 
@@ -22,7 +23,7 @@ pub use self::overlay::{
 };
 use self::overlay::{
     overlay_delta_from_blocks, overlay_delta_intersection, overlay_state_after_blocks,
-    parse_overlay_blend_mode, parse_overlay_effect_mode,
+    parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
 };
 
 const LUA_PLAYERS: usize = 2;
@@ -3400,6 +3401,14 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.effect_magnitude = value;
     }
     if let Some(value) = actor
+        .get::<Option<String>>("__songlua_state_effect_clock")
+        .map_err(|err| err.to_string())?
+        .as_deref()
+        .and_then(parse_overlay_effect_clock)
+    {
+        state.effect_clock = value;
+    }
+    if let Some(value) = actor
         .get::<Option<Table>>("__songlua_state_effect_color1")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec4(&value))
@@ -3418,6 +3427,12 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         .map_err(|err| err.to_string())?
     {
         state.effect_period = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_effect_offset")
+        .map_err(|err| err.to_string())?
+    {
+        state.effect_offset = value;
     }
     if let Some(value) = actor
         .get::<Option<Table>>("__songlua_state_custom_texture_rect")
@@ -3717,6 +3732,68 @@ fn capture_block_set_zoom_axes(
     Ok(())
 }
 
+fn capture_block_set_vec3(
+    lua: &Lua,
+    actor: &Table,
+    key: &str,
+    value3: [f32; 3],
+) -> mlua::Result<()> {
+    let block = actor_current_capture_block(lua, actor)?;
+    let value = lua.create_table()?;
+    value.raw_set(1, value3[0])?;
+    value.raw_set(2, value3[1])?;
+    value.raw_set(3, value3[2])?;
+    block.set(key, value.clone())?;
+    block.set("__songlua_has_changes", true)?;
+    actor.set(format!("__songlua_state_{key}"), value)?;
+    Ok(())
+}
+
+fn capture_block_set_string(lua: &Lua, actor: &Table, key: &str, value: &str) -> mlua::Result<()> {
+    let block = actor_current_capture_block(lua, actor)?;
+    block.set(key, value)?;
+    block.set("__songlua_has_changes", true)?;
+    actor.set(format!("__songlua_state_{key}"), value)?;
+    Ok(())
+}
+
+#[inline(always)]
+fn effect_clock_label(clock: EffectClock) -> &'static str {
+    match clock {
+        EffectClock::Time => "time",
+        EffectClock::Beat => "beat",
+    }
+}
+
+fn set_actor_effect_mode(lua: &Lua, actor: &Table, mode: &str) -> mlua::Result<()> {
+    capture_block_set_string(lua, actor, "effect_mode", mode)
+}
+
+fn set_actor_effect_defaults(
+    lua: &Lua,
+    actor: &Table,
+    mode: &str,
+    period: Option<f32>,
+    magnitude: Option<[f32; 3]>,
+    color1: Option<[f32; 4]>,
+    color2: Option<[f32; 4]>,
+) -> mlua::Result<()> {
+    set_actor_effect_mode(lua, actor, mode)?;
+    if let Some(value) = period {
+        capture_block_set_f32(lua, actor, "effect_period", value)?;
+    }
+    if let Some(value) = magnitude {
+        capture_block_set_vec3(lua, actor, "effect_magnitude", value)?;
+    }
+    if let Some(value) = color1 {
+        capture_block_set_vec4(lua, actor, "effect_color1", value)?;
+    }
+    if let Some(value) = color2 {
+        capture_block_set_vec4(lua, actor, "effect_color2", value)?;
+    }
+    Ok(())
+}
+
 fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandBlock>, String> {
     let Some(blocks) = actor
         .get::<Option<Table>>("__songlua_capture_blocks")
@@ -3829,6 +3906,11 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .get::<Option<Table>>("effect_magnitude")
                     .map_err(|err| err.to_string())?
                     .and_then(|value| table_vec3(&value)),
+                effect_clock: block
+                    .get::<Option<String>>("effect_clock")
+                    .map_err(|err| err.to_string())?
+                    .as_deref()
+                    .and_then(parse_overlay_effect_clock),
                 effect_mode: block
                     .get::<Option<String>>("effect_mode")
                     .map_err(|err| err.to_string())?
@@ -3844,6 +3926,9 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .and_then(|value| table_vec4(&value)),
                 effect_period: block
                     .get::<Option<f32>>("effect_period")
+                    .map_err(|err| err.to_string())?,
+                effect_offset: block
+                    .get::<Option<f32>>("effect_offset")
                     .map_err(|err| err.to_string())?,
                 custom_texture_rect: block
                     .get::<Option<Table>>("custom_texture_rect")
@@ -4770,10 +4855,105 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
-                let block = actor_current_capture_block(lua, &actor)?;
-                block.set("effect_mode", "diffuseshift")?;
-                block.set("__songlua_has_changes", true)?;
-                actor.set("__songlua_state_effect_mode", "diffuseshift")?;
+                set_actor_effect_defaults(
+                    lua,
+                    &actor,
+                    "diffuseshift",
+                    Some(1.0),
+                    None,
+                    Some([0.0, 0.0, 0.0, 1.0]),
+                    Some([1.0, 1.0, 1.0, 1.0]),
+                )?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "diffuseramp",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                set_actor_effect_defaults(
+                    lua,
+                    &actor,
+                    "diffuseramp",
+                    Some(1.0),
+                    None,
+                    Some([0.0, 0.0, 0.0, 1.0]),
+                    Some([1.0, 1.0, 1.0, 1.0]),
+                )?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "pulse",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                set_actor_effect_defaults(
+                    lua,
+                    &actor,
+                    "pulse",
+                    Some(2.0),
+                    Some([0.5, 1.0, 1.0]),
+                    None,
+                    None,
+                )?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "bob",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                set_actor_effect_defaults(
+                    lua,
+                    &actor,
+                    "bob",
+                    Some(2.0),
+                    Some([0.0, 20.0, 0.0]),
+                    None,
+                    None,
+                )?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "bounce",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                set_actor_effect_defaults(
+                    lua,
+                    &actor,
+                    "bounce",
+                    Some(2.0),
+                    Some([0.0, 20.0, 0.0]),
+                    None,
+                    None,
+                )?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "wag",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                set_actor_effect_defaults(
+                    lua,
+                    &actor,
+                    "wag",
+                    Some(2.0),
+                    Some([0.0, 0.0, 20.0]),
+                    None,
+                    None,
+                )?;
                 Ok(actor.clone())
             }
         })?,
@@ -4783,10 +4963,15 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
-                let block = actor_current_capture_block(lua, &actor)?;
-                block.set("effect_mode", "spin")?;
-                block.set("__songlua_has_changes", true)?;
-                actor.set("__songlua_state_effect_mode", "spin")?;
+                set_actor_effect_defaults(
+                    lua,
+                    &actor,
+                    "spin",
+                    None,
+                    Some([0.0, 0.0, 180.0]),
+                    None,
+                    None,
+                )?;
                 Ok(actor.clone())
             }
         })?,
@@ -4826,11 +5011,40 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "effectoffset",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "effect_offset", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "effectclock",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(raw) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                    return Ok(actor.clone());
+                };
+                let Some(clock) = parse_overlay_effect_clock(raw.as_str()) else {
+                    return Ok(actor.clone());
+                };
+                capture_block_set_string(lua, &actor, "effect_clock", effect_clock_label(clock))?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "vibrate",
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
                 capture_block_set_bool(lua, &actor, "vibrate", true)?;
+                capture_block_set_vec3(lua, &actor, "effect_magnitude", [10.0, 10.0, 10.0])?;
                 Ok(actor.clone())
             }
         })?,
@@ -4841,17 +5055,8 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
                 capture_block_set_bool(lua, &actor, "vibrate", false)?;
-                let block = actor_current_capture_block(lua, &actor)?;
-                block.set("effect_mode", "none")?;
-                actor.set("__songlua_state_effect_mode", "none")?;
-                let block = actor_current_capture_block(lua, &actor)?;
-                let value = lua.create_table()?;
-                value.raw_set(1, 0.0_f32)?;
-                value.raw_set(2, 0.0_f32)?;
-                value.raw_set(3, 0.0_f32)?;
-                block.set("effect_magnitude", value.clone())?;
-                block.set("__songlua_has_changes", true)?;
-                actor.set("__songlua_state_effect_magnitude", value)?;
+                set_actor_effect_mode(lua, &actor, "none")?;
+                capture_block_set_vec3(lua, &actor, "effect_magnitude", [0.0, 0.0, 0.0])?;
                 Ok(actor.clone())
             }
         })?,
@@ -4859,9 +5064,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     for name in [
         "animate",
         "clearzbuffer",
-        "diffuseramp",
         "Draw",
-        "effectclock",
         "EnableAlphaBuffer",
         "EnableDepthBuffer",
         "EnableFloat",
@@ -4878,7 +5081,6 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "stop",
         "texturetranslate",
         "volume",
-        "wag",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
@@ -6448,10 +6650,12 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(blend);
     copy_value_field!(vibrate);
     copy_value_field!(effect_magnitude);
+    copy_value_field!(effect_clock);
     copy_value_field!(effect_mode);
     copy_value_field!(effect_color1);
     copy_value_field!(effect_color2);
     copy_value_field!(effect_period);
+    copy_value_field!(effect_offset);
     copy_option_field!(custom_texture_rect);
     copy_option_field!(texcoord_velocity);
     copy_option_field!(size);
@@ -7203,7 +7407,7 @@ fn message_event_cmp(
 #[cfg(test)]
 mod tests {
     use super::{
-        EffectMode, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
+        EffectClock, EffectMode, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
         SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaPlayerContext, SongLuaProxyTarget,
         SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua, file_path_string,
     };
@@ -10753,6 +10957,107 @@ return Def.ActorFrame{
             [70.0 / 255.0, 70.0 / 255.0, 70.0 / 255.0, 1.0]
         );
         assert_eq!(state.effect_period, 5.0);
+    }
+
+    #[test]
+    fn compile_song_lua_captures_effect_defaults_and_clocks_for_overlays() {
+        let song_dir = test_dir("overlay-effect-defaults");
+        let entry = song_dir.join("default.lua");
+        let overlay_dir = song_dir.join("gfx");
+        fs::create_dir_all(&overlay_dir).unwrap();
+        fs::write(
+            overlay_dir.join("grid.png"),
+            b"not-an-image-but-good-enough-for-parser",
+        )
+        .unwrap();
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="gfx/grid.png",
+        OnCommand=function(self)
+            self:diffuseramp()
+            self:effectclock("beat")
+            self:effectoffset(0.25)
+        end,
+    },
+    Def.Quad{
+        OnCommand=function(self)
+            self:bounce()
+        end,
+    },
+    Def.Quad{
+        OnCommand=function(self)
+            self:bob()
+        end,
+    },
+    Def.Quad{
+        OnCommand=function(self)
+            self:pulse()
+        end,
+    },
+    Def.Quad{
+        OnCommand=function(self)
+            self:wag()
+        end,
+    },
+    Def.Quad{
+        OnCommand=function(self)
+            self:spin()
+        end,
+    },
+    Def.Quad{
+        OnCommand=function(self)
+            self:vibrate()
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Overlay Effect Defaults"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 7);
+
+        let ramp = compiled.overlays[0].initial_state;
+        assert_eq!(ramp.effect_mode, EffectMode::DiffuseRamp);
+        assert_eq!(ramp.effect_clock, EffectClock::Beat);
+        assert_eq!(ramp.effect_color1, [0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(ramp.effect_color2, [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(ramp.effect_offset, 0.25);
+
+        let bounce = compiled.overlays[1].initial_state;
+        assert_eq!(bounce.effect_mode, EffectMode::Bounce);
+        assert_eq!(bounce.effect_period, 2.0);
+        assert_eq!(bounce.effect_magnitude, [0.0, 20.0, 0.0]);
+
+        let bob = compiled.overlays[2].initial_state;
+        assert_eq!(bob.effect_mode, EffectMode::Bob);
+        assert_eq!(bob.effect_period, 2.0);
+        assert_eq!(bob.effect_magnitude, [0.0, 20.0, 0.0]);
+
+        let pulse = compiled.overlays[3].initial_state;
+        assert_eq!(pulse.effect_mode, EffectMode::Pulse);
+        assert_eq!(pulse.effect_period, 2.0);
+        assert_eq!(pulse.effect_magnitude, [0.5, 1.0, 1.0]);
+
+        let wag = compiled.overlays[4].initial_state;
+        assert_eq!(wag.effect_mode, EffectMode::Wag);
+        assert_eq!(wag.effect_period, 2.0);
+        assert_eq!(wag.effect_magnitude, [0.0, 0.0, 20.0]);
+
+        let spin = compiled.overlays[5].initial_state;
+        assert_eq!(spin.effect_mode, EffectMode::Spin);
+        assert_eq!(spin.effect_magnitude, [0.0, 0.0, 180.0]);
+
+        let vibrate = compiled.overlays[6].initial_state;
+        assert!(vibrate.vibrate);
+        assert_eq!(vibrate.effect_magnitude, [10.0, 10.0, 10.0]);
     }
 
     #[test]

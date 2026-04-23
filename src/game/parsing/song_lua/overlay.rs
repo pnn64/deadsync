@@ -1,4 +1,4 @@
-use crate::engine::present::anim::EffectMode;
+use crate::engine::present::anim::{EffectClock, EffectMode};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -68,10 +68,12 @@ pub struct SongLuaOverlayState {
     pub blend: SongLuaOverlayBlendMode,
     pub vibrate: bool,
     pub effect_magnitude: [f32; 3],
+    pub effect_clock: EffectClock,
     pub effect_mode: EffectMode,
     pub effect_color1: [f32; 4],
     pub effect_color2: [f32; 4],
     pub effect_period: f32,
+    pub effect_offset: f32,
     pub custom_texture_rect: Option<[f32; 4]>,
     pub texcoord_velocity: Option<[f32; 2]>,
     pub size: Option<[f32; 2]>,
@@ -105,10 +107,12 @@ impl Default for SongLuaOverlayState {
             blend: SongLuaOverlayBlendMode::Alpha,
             vibrate: false,
             effect_magnitude: [0.0, 0.0, 0.0],
+            effect_clock: EffectClock::Time,
             effect_mode: EffectMode::None,
             effect_color1: [1.0, 1.0, 1.0, 1.0],
             effect_color2: [1.0, 1.0, 1.0, 1.0],
             effect_period: 1.0,
+            effect_offset: 0.0,
             custom_texture_rect: None,
             texcoord_velocity: None,
             size: None,
@@ -143,10 +147,12 @@ pub struct SongLuaOverlayStateDelta {
     pub blend: Option<SongLuaOverlayBlendMode>,
     pub vibrate: Option<bool>,
     pub effect_magnitude: Option<[f32; 3]>,
+    pub effect_clock: Option<EffectClock>,
     pub effect_mode: Option<EffectMode>,
     pub effect_color1: Option<[f32; 4]>,
     pub effect_color2: Option<[f32; 4]>,
     pub effect_period: Option<f32>,
+    pub effect_offset: Option<f32>,
     pub custom_texture_rect: Option<[f32; 4]>,
     pub texcoord_velocity: Option<[f32; 2]>,
     pub size: Option<[f32; 2]>,
@@ -301,6 +307,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.effect_magnitude {
         state.effect_magnitude = value;
     }
+    if let Some(value) = delta.effect_clock {
+        state.effect_clock = value;
+    }
     if let Some(value) = delta.effect_mode {
         state.effect_mode = value;
     }
@@ -312,6 +321,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     }
     if let Some(value) = delta.effect_period {
         state.effect_period = value;
+    }
+    if let Some(value) = delta.effect_offset {
+        state.effect_offset = value;
     }
     if let Some(value) = delta.custom_texture_rect {
         state.custom_texture_rect = Some(value);
@@ -423,6 +435,9 @@ fn overlay_state_lerp(
     if delta.effect_period.is_some() {
         from.effect_period = (to.effect_period - from.effect_period).mul_add(t, from.effect_period);
     }
+    if delta.effect_offset.is_some() {
+        from.effect_offset = (to.effect_offset - from.effect_offset).mul_add(t, from.effect_offset);
+    }
     if delta.custom_texture_rect.is_some()
         && let (Some(from_rect), Some(to_rect)) = (from.custom_texture_rect, to.custom_texture_rect)
     {
@@ -468,6 +483,9 @@ fn overlay_state_lerp(
     if delta.vibrate.is_some() && t >= 1.0 - f32::EPSILON {
         from.vibrate = to.vibrate;
     }
+    if delta.effect_clock.is_some() && t >= 1.0 - f32::EPSILON {
+        from.effect_clock = to.effect_clock;
+    }
     if delta.effect_mode.is_some() && t >= 1.0 - f32::EPSILON {
         from.effect_mode = to.effect_mode;
     }
@@ -488,10 +506,32 @@ pub(super) fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendM
 }
 
 pub(super) fn parse_overlay_effect_mode(raw: &str) -> Option<EffectMode> {
-    match raw {
+    match raw.trim().to_ascii_lowercase().as_str() {
         "none" => Some(EffectMode::None),
+        "diffuseramp" => Some(EffectMode::DiffuseRamp),
         "diffuseshift" => Some(EffectMode::DiffuseShift),
+        "pulse" => Some(EffectMode::Pulse),
+        "bob" => Some(EffectMode::Bob),
+        "bounce" => Some(EffectMode::Bounce),
+        "wag" => Some(EffectMode::Wag),
         "spin" => Some(EffectMode::Spin),
+        _ => None,
+    }
+}
+
+pub(super) fn parse_overlay_effect_clock(raw: &str) -> Option<EffectClock> {
+    let lower = raw
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_ascii_lowercase();
+    match lower.as_str() {
+        "beat" | "beatnooffset" | "bgm" => Some(EffectClock::Beat),
+        "timer" | "timerglobal" | "music" | "musicnooffset" | "time" | "seconds" => {
+            Some(EffectClock::Time)
+        }
+        _ if lower.contains("beat") => Some(EffectClock::Beat),
+        _ if !lower.is_empty() => Some(EffectClock::Time),
         _ => None,
     }
 }
@@ -521,10 +561,12 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.blend.is_none()
         && delta.vibrate.is_none()
         && delta.effect_magnitude.is_none()
+        && delta.effect_clock.is_none()
         && delta.effect_mode.is_none()
         && delta.effect_color1.is_none()
         && delta.effect_color2.is_none()
         && delta.effect_period.is_none()
+        && delta.effect_offset.is_none()
         && delta.custom_texture_rect.is_none()
         && delta.texcoord_velocity.is_none()
         && delta.size.is_none()
@@ -604,6 +646,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.effect_magnitude.is_some() {
         into.effect_magnitude = from.effect_magnitude;
     }
+    if from.effect_clock.is_some() {
+        into.effect_clock = from.effect_clock;
+    }
     if from.effect_mode.is_some() {
         into.effect_mode = from.effect_mode;
     }
@@ -615,6 +660,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.effect_period.is_some() {
         into.effect_period = from.effect_period;
+    }
+    if from.effect_offset.is_some() {
+        into.effect_offset = from.effect_offset;
     }
     if from.custom_texture_rect.is_some() {
         into.custom_texture_rect = from.custom_texture_rect;
@@ -678,10 +726,12 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(blend);
     copy_pair!(vibrate);
     copy_pair!(effect_magnitude);
+    copy_pair!(effect_clock);
     copy_pair!(effect_mode);
     copy_pair!(effect_color1);
     copy_pair!(effect_color2);
     copy_pair!(effect_period);
+    copy_pair!(effect_offset);
     copy_pair!(custom_texture_rect);
     copy_pair!(texcoord_velocity);
     copy_pair!(size);
@@ -691,7 +741,11 @@ pub(super) fn overlay_delta_intersection(
 
 #[cfg(test)]
 mod tests {
-    use super::{SongLuaOverlayBlendMode, parse_overlay_blend_mode};
+    use super::{
+        SongLuaOverlayBlendMode, parse_overlay_blend_mode, parse_overlay_effect_clock,
+        parse_overlay_effect_mode,
+    };
+    use crate::engine::present::anim::{EffectClock, EffectMode};
 
     #[test]
     fn parse_overlay_blend_mode_accepts_stepmania_add_name() {
@@ -699,5 +753,25 @@ mod tests {
             parse_overlay_blend_mode("BlendMode_Add"),
             Some(SongLuaOverlayBlendMode::Add)
         );
+    }
+
+    #[test]
+    fn parse_overlay_effect_mode_accepts_song_lua_effect_names() {
+        assert_eq!(
+            parse_overlay_effect_mode("DiffuseRamp"),
+            Some(EffectMode::DiffuseRamp)
+        );
+        assert_eq!(
+            parse_overlay_effect_mode("bounce"),
+            Some(EffectMode::Bounce)
+        );
+        assert_eq!(parse_overlay_effect_mode("wag"), Some(EffectMode::Wag));
+    }
+
+    #[test]
+    fn parse_overlay_effect_clock_accepts_music_and_bgm_aliases() {
+        assert_eq!(parse_overlay_effect_clock("beat"), Some(EffectClock::Beat));
+        assert_eq!(parse_overlay_effect_clock("bgm"), Some(EffectClock::Beat));
+        assert_eq!(parse_overlay_effect_clock("music"), Some(EffectClock::Time));
     }
 }

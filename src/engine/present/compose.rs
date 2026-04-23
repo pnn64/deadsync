@@ -1896,7 +1896,12 @@ fn apply_effect_to_sprite(
                 scale[0] *= zoom * sx;
                 scale[1] *= zoom * sy;
             }
-            anim::EffectMode::GlowShift | anim::EffectMode::Spin | anim::EffectMode::None => {}
+            anim::EffectMode::GlowShift
+            | anim::EffectMode::Bob
+            | anim::EffectMode::Bounce
+            | anim::EffectMode::Wag
+            | anim::EffectMode::Spin
+            | anim::EffectMode::None => {}
         }
     }
 
@@ -1941,7 +1946,12 @@ fn apply_effect_to_text(
                 scale[0] *= zoom * sx;
                 scale[1] *= zoom * sy;
             }
-            anim::EffectMode::GlowShift | anim::EffectMode::Spin | anim::EffectMode::None => {}
+            anim::EffectMode::GlowShift
+            | anim::EffectMode::Bob
+            | anim::EffectMode::Bounce
+            | anim::EffectMode::Wag
+            | anim::EffectMode::Spin
+            | anim::EffectMode::None => {}
         }
     }
 

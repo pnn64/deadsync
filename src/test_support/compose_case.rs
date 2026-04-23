@@ -250,6 +250,9 @@ pub enum EffectModeSnapshot {
     DiffuseShift,
     GlowShift,
     Pulse,
+    Bob,
+    Bounce,
+    Wag,
     Spin,
 }
 
@@ -1604,6 +1607,9 @@ impl From<EffectMode> for EffectModeSnapshot {
             EffectMode::DiffuseShift => Self::DiffuseShift,
             EffectMode::GlowShift => Self::GlowShift,
             EffectMode::Pulse => Self::Pulse,
+            EffectMode::Bob => Self::Bob,
+            EffectMode::Bounce => Self::Bounce,
+            EffectMode::Wag => Self::Wag,
             EffectMode::Spin => Self::Spin,
         }
     }
@@ -1617,6 +1623,9 @@ impl From<EffectModeSnapshot> for EffectMode {
             EffectModeSnapshot::DiffuseShift => Self::DiffuseShift,
             EffectModeSnapshot::GlowShift => Self::GlowShift,
             EffectModeSnapshot::Pulse => Self::Pulse,
+            EffectModeSnapshot::Bob => Self::Bob,
+            EffectModeSnapshot::Bounce => Self::Bounce,
+            EffectModeSnapshot::Wag => Self::Wag,
             EffectModeSnapshot::Spin => Self::Spin,
         }
     }

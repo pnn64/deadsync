@@ -472,6 +472,9 @@ impl SpriteSlot {
                 // ITG applies glowshift to the separate glow channel, not diffuse.
                 // The renderer samples this via `model_glow_at()`.
                 ModelEffectMode::GlowShift => {}
+                ModelEffectMode::Bob => {}
+                ModelEffectMode::Bounce => {}
+                ModelEffectMode::Wag => {}
                 ModelEffectMode::Spin => {}
                 ModelEffectMode::None => {}
             }
