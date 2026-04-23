@@ -3110,8 +3110,8 @@ fn build_song_lua_overlay_actor(
                     size_scale_x * x_scale * effect_scale[0],
                     size_scale_y * y_scale * effect_scale[1],
                 ],
-                fit_width: None,
-                fit_height: None,
+                fit_width: state.size.map(|size| size[0] * x_scale),
+                fit_height: state.size.map(|size| size[1] * y_scale),
                 wrap_width_pixels: state
                     .wrap_width_pixels
                     .map(|value| ((value as f32) * x_scale).round() as i32),
@@ -6079,6 +6079,54 @@ mod tests {
                 assert!(!max_h_pre_zoom);
             }
             other => panic!("expected bitmap text actor with layout settings, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_overlay_applies_bitmaptext_fit_size_at_runtime() {
+        let text = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("FIT"),
+                stroke_color: None,
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let text_actor = build_song_lua_overlay_actor(
+            &text,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                size: Some([120.0, 30.0]),
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            788,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("bitmap text fit size should render");
+
+        match text_actor {
+            Actor::Text {
+                fit_width,
+                fit_height,
+                z,
+                ..
+            } => {
+                assert_eq!(z, 788);
+                assert_eq!(fit_width, Some(120.0));
+                assert_eq!(fit_height, Some(30.0));
+            }
+            other => panic!("expected bitmap text actor with fit size, got {other:?}"),
         }
     }
 

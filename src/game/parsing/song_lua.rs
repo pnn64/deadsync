@@ -10530,6 +10530,35 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_supports_bitmaptext_fit_methods() {
+        let song_dir = test_dir("bitmaptext-fit-methods");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="FIT",
+        OnCommand=function(self)
+            self:zoomtowidth(120):zoomtoheight(30)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "BitmapText Fit Methods"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(compiled.overlays[0].initial_state.size, Some([120.0, 30.0]));
+    }
+
+    #[test]
     fn compile_song_lua_supports_actor_set_size_methods() {
         let song_dir = test_dir("actor-set-size");
         let entry = song_dir.join("default.lua");
