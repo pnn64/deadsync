@@ -216,11 +216,13 @@ pub enum SongLuaSpanMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SongLuaEaseTarget {
     Mod(String),
+    PlayerRotationX,
     PlayerRotationZ,
     PlayerRotationY,
     PlayerSkewX,
     PlayerZoomX,
     PlayerZoomY,
+    PlayerZoomZ,
     Function,
 }
 
@@ -266,10 +268,12 @@ pub struct SongLuaCompileInfo {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct SongLuaPerframePlayerState {
+    rotation_x: Option<f32>,
     rotation_z: Option<f32>,
     rotation_y: Option<f32>,
     zoom_x: Option<f32>,
     zoom_y: Option<f32>,
+    zoom_z: Option<f32>,
     skew_x: Option<f32>,
 }
 
@@ -5620,11 +5624,13 @@ fn probe_function_ease_target(
 }
 
 fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLuaEaseTarget>> {
+    let mut saw_rotation_x = false;
     let mut saw_rotation_z = false;
     let mut saw_rotation_y = false;
     let mut saw_skew_x = false;
     let mut saw_zoom_x = false;
     let mut saw_zoom_y = false;
+    let mut saw_zoom_z = false;
     for value in calls.sequence_values::<String>() {
         let value = value?;
         let (target_kind, method_name) =
@@ -5633,27 +5639,47 @@ fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLuaEas
             return Ok(None);
         }
         match method_name {
+            "rotationx" => saw_rotation_x = true,
             "rotationz" => saw_rotation_z = true,
             "rotationy" => saw_rotation_y = true,
             "skewx" => saw_skew_x = true,
             "zoomx" => saw_zoom_x = true,
             "zoomy" => saw_zoom_y = true,
+            "zoomz" => saw_zoom_z = true,
             _ => return Ok(None),
         }
     }
     Ok(
         match (
+            saw_rotation_x,
             saw_rotation_z,
             saw_rotation_y,
             saw_skew_x,
             saw_zoom_x,
             saw_zoom_y,
+            saw_zoom_z,
         ) {
-            (true, false, false, false, false) => Some(SongLuaEaseTarget::PlayerRotationZ),
-            (false, true, false, false, false) => Some(SongLuaEaseTarget::PlayerRotationY),
-            (false, false, true, false, false) => Some(SongLuaEaseTarget::PlayerSkewX),
-            (false, false, false, true, false) => Some(SongLuaEaseTarget::PlayerZoomX),
-            (false, false, false, false, true) => Some(SongLuaEaseTarget::PlayerZoomY),
+            (true, false, false, false, false, false, false) => {
+                Some(SongLuaEaseTarget::PlayerRotationX)
+            }
+            (false, true, false, false, false, false, false) => {
+                Some(SongLuaEaseTarget::PlayerRotationZ)
+            }
+            (false, false, true, false, false, false, false) => {
+                Some(SongLuaEaseTarget::PlayerRotationY)
+            }
+            (false, false, false, true, false, false, false) => {
+                Some(SongLuaEaseTarget::PlayerSkewX)
+            }
+            (false, false, false, false, true, false, false) => {
+                Some(SongLuaEaseTarget::PlayerZoomX)
+            }
+            (false, false, false, false, false, true, false) => {
+                Some(SongLuaEaseTarget::PlayerZoomY)
+            }
+            (false, false, false, false, false, false, true) => {
+                Some(SongLuaEaseTarget::PlayerZoomZ)
+            }
             _ => None,
         },
     )
@@ -5961,6 +5987,9 @@ fn actor_perframe_player_state(actor: &Table) -> Result<SongLuaPerframePlayerSta
         .get::<Option<f32>>("__songlua_state_zoom")
         .map_err(|err| err.to_string())?;
     Ok(SongLuaPerframePlayerState {
+        rotation_x: actor
+            .get::<Option<f32>>("__songlua_state_rot_x_deg")
+            .map_err(|err| err.to_string())?,
         rotation_z: actor
             .get::<Option<f32>>("__songlua_state_rot_z_deg")
             .map_err(|err| err.to_string())?,
@@ -5973,6 +6002,10 @@ fn actor_perframe_player_state(actor: &Table) -> Result<SongLuaPerframePlayerSta
             .or(zoom),
         zoom_y: actor
             .get::<Option<f32>>("__songlua_state_zoom_y")
+            .map_err(|err| err.to_string())?
+            .or(zoom),
+        zoom_z: actor
+            .get::<Option<f32>>("__songlua_state_zoom_z")
             .map_err(|err| err.to_string())?
             .or(zoom),
         skew_x: actor
@@ -6170,6 +6203,17 @@ fn compile_perframes(
                     &mut out_eases,
                     start,
                     end,
+                    current_players[player].rotation_x,
+                    current_players[player].rotation_x,
+                    baseline_players[player].rotation_x,
+                    0.0,
+                    SongLuaEaseTarget::PlayerRotationX,
+                    player,
+                );
+                push_perframe_player_target(
+                    &mut out_eases,
+                    start,
+                    end,
                     current_players[player].rotation_z,
                     current_players[player].rotation_z,
                     baseline_players[player].rotation_z,
@@ -6208,6 +6252,17 @@ fn compile_perframes(
                     baseline_players[player].zoom_y,
                     1.0,
                     SongLuaEaseTarget::PlayerZoomY,
+                    player,
+                );
+                push_perframe_player_target(
+                    &mut out_eases,
+                    start,
+                    end,
+                    current_players[player].zoom_z,
+                    current_players[player].zoom_z,
+                    baseline_players[player].zoom_z,
+                    1.0,
+                    SongLuaEaseTarget::PlayerZoomZ,
                     player,
                 );
                 push_perframe_player_target(
@@ -6299,6 +6354,17 @@ fn compile_perframes(
                     &mut out_eases,
                     seg_start,
                     seg_end,
+                    from_players[player].rotation_x,
+                    to_players[player].rotation_x,
+                    baseline_players[player].rotation_x,
+                    0.0,
+                    SongLuaEaseTarget::PlayerRotationX,
+                    player,
+                );
+                push_perframe_player_target(
+                    &mut out_eases,
+                    seg_start,
+                    seg_end,
                     from_players[player].rotation_z,
                     to_players[player].rotation_z,
                     baseline_players[player].rotation_z,
@@ -6337,6 +6403,17 @@ fn compile_perframes(
                     baseline_players[player].zoom_y,
                     1.0,
                     SongLuaEaseTarget::PlayerZoomY,
+                    player,
+                );
+                push_perframe_player_target(
+                    &mut out_eases,
+                    seg_start,
+                    seg_end,
+                    from_players[player].zoom_z,
+                    to_players[player].zoom_z,
+                    baseline_players[player].zoom_z,
+                    1.0,
+                    SongLuaEaseTarget::PlayerZoomZ,
                     player,
                 );
                 push_perframe_player_target(
@@ -6808,8 +6885,10 @@ mod_perframes = {
     {4, 5, function(beat)
         local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
         if p then
+            p:rotationx((beat - 4) * 45)
             p:rotationz((beat - 4) * 90)
             p:skewx((beat - 4) * 0.5)
+            p:zoomz(1 + (beat - 4) * 0.25)
         end
     end},
 }
@@ -6825,10 +6904,16 @@ return Def.ActorFrame{}
         .unwrap();
         assert_eq!(compiled.info.unsupported_perframes, 0);
         assert!(compiled.eases.iter().any(|window| {
+            matches!(window.target, SongLuaEaseTarget::PlayerRotationX) && window.player == Some(1)
+        }));
+        assert!(compiled.eases.iter().any(|window| {
             matches!(window.target, SongLuaEaseTarget::PlayerRotationZ) && window.player == Some(1)
         }));
         assert!(compiled.eases.iter().any(|window| {
             matches!(window.target, SongLuaEaseTarget::PlayerSkewX) && window.player == Some(1)
+        }));
+        assert!(compiled.eases.iter().any(|window| {
+            matches!(window.target, SongLuaEaseTarget::PlayerZoomZ) && window.player == Some(1)
         }));
     }
 
@@ -7560,8 +7645,10 @@ prefix_globals = {}
 return Def.ActorFrame{
     InitCommand=function(self)
         prefix_globals.ease = {
+            {6, 2, 0, 20, function(x) if target then target:rotationx(x) end end, "len", ease.outQuad},
             {8, 2, 0, 10, function(x) if target then target:rotationz(x) end end, "len", ease.inOutQuad},
             {12, 1, 0, 0.15, function(x) if target then target:skewx(x) end end, "len", ease.outQuad},
+            {14, 1, 1, 1.25, function(x) if target then target:zoomz(x) end end, "len", ease.outQuad},
         }
     end,
     Def.ActorFrame{
@@ -7582,15 +7669,23 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "Function Ease Song"),
         )
         .unwrap();
-        assert_eq!(compiled.eases.len(), 2);
+        assert_eq!(compiled.eases.len(), 4);
         assert_eq!(compiled.info.unsupported_function_eases, 0);
         assert!(matches!(
             compiled.eases[0].target,
-            SongLuaEaseTarget::PlayerRotationZ
+            SongLuaEaseTarget::PlayerRotationX
         ));
         assert!(matches!(
             compiled.eases[1].target,
+            SongLuaEaseTarget::PlayerRotationZ
+        ));
+        assert!(matches!(
+            compiled.eases[2].target,
             SongLuaEaseTarget::PlayerSkewX
+        ));
+        assert!(matches!(
+            compiled.eases[3].target,
+            SongLuaEaseTarget::PlayerZoomZ
         ));
     }
 

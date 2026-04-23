@@ -3547,11 +3547,13 @@ pub struct State {
     pub song_lua_hidden_players: [bool; MAX_PLAYERS],
     pub song_lua_screen_width: f32,
     pub song_lua_screen_height: f32,
+    pub song_lua_player_rotation_x: [f32; MAX_PLAYERS],
     pub song_lua_player_rotation_z: [f32; MAX_PLAYERS],
     pub song_lua_player_rotation_y: [f32; MAX_PLAYERS],
     pub song_lua_player_skew_x: [f32; MAX_PLAYERS],
     pub song_lua_player_zoom_x: [f32; MAX_PLAYERS],
     pub song_lua_player_zoom_y: [f32; MAX_PLAYERS],
+    pub song_lua_player_zoom_z: [f32; MAX_PLAYERS],
     pub song_lua_player_confusion_y_offset: [f32; MAX_PLAYERS],
     active_attack_clear_all: [bool; MAX_PLAYERS],
     active_attack_chart: [ChartAttackEffects; MAX_PLAYERS],
@@ -5940,11 +5942,13 @@ pub fn init(
         song_lua_hidden_players,
         song_lua_screen_width,
         song_lua_screen_height,
+        song_lua_player_rotation_x: [0.0; MAX_PLAYERS],
         song_lua_player_rotation_z: [0.0; MAX_PLAYERS],
         song_lua_player_rotation_y: [0.0; MAX_PLAYERS],
         song_lua_player_skew_x: [0.0; MAX_PLAYERS],
         song_lua_player_zoom_x: [1.0; MAX_PLAYERS],
         song_lua_player_zoom_y: [1.0; MAX_PLAYERS],
+        song_lua_player_zoom_z: [1.0; MAX_PLAYERS],
         song_lua_player_confusion_y_offset: [0.0; MAX_PLAYERS],
         active_attack_clear_all: [false; MAX_PLAYERS],
         active_attack_chart: [ChartAttackEffects::default(); MAX_PLAYERS],
@@ -10048,6 +10052,71 @@ mod tests {
         assert!(
             super::song_lua_ease_window_value(&windows[1], 20.0)
                 .is_some_and(|value| (value - 1.0).abs() <= 0.000_1)
+        );
+    }
+
+    #[test]
+    fn song_lua_builds_rotationx_and_zoomz_runtime_targets() {
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            eases: vec![
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 0.0,
+                    limit: 4.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerRotationX,
+                    from: 0.0,
+                    to: 20.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 4.0,
+                    limit: 2.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerZoomZ,
+                    from: 1.0,
+                    to: 1.25,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let (windows, unsupported) =
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0);
+
+        assert_eq!(unsupported, 0);
+        assert_eq!(windows.len(), 2);
+        assert!(matches!(
+            windows[0].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerRotationX
+        ));
+        assert!(matches!(
+            windows[1].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerZoomZ
+        ));
+        assert!(
+            super::song_lua_ease_window_value(&windows[0], 2.0)
+                .is_some_and(|value| (value - 10.0).abs() <= 0.000_1)
+        );
+        assert!(
+            super::song_lua_ease_window_value(&windows[1], 5.0)
+                .is_some_and(|value| (value - 1.125).abs() <= 0.000_1)
         );
     }
 

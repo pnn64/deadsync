@@ -3645,13 +3645,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let player_actor = &state.song_lua_player_actors[player_idx];
         let player_state = song_lua_player_render_state(state, player_idx);
         let song_lua_active = !state.song.foreground_lua_changes.is_empty();
-        let rotation_x = player_state.rot_x_deg;
+        let rotation_x = player_state.rot_x_deg + state.song_lua_player_rotation_x[player_idx];
         let rotation_z = player_state.rot_z_deg + state.song_lua_player_rotation_z[player_idx];
         let rotation_y = player_state.rot_y_deg + state.song_lua_player_rotation_y[player_idx];
         let skew_x = state.song_lua_player_skew_x[player_idx];
         let zoom_x = player_state.zoom_x * state.song_lua_player_zoom_x[player_idx];
         let zoom_y = player_state.zoom_y * state.song_lua_player_zoom_y[player_idx];
-        let zoom_z = player_state.zoom_z;
+        let zoom_z = player_state.zoom_z * state.song_lua_player_zoom_z[player_idx];
         let z_shift = song_lua_player_layer_z(song_lua_active, player_actor, player_state);
         let player_blend = match player_state.blend {
             SongLuaOverlayBlendMode::Alpha => None,
