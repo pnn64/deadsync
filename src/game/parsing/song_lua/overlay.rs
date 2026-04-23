@@ -51,6 +51,8 @@ pub struct SongLuaOverlayState {
     pub halign: f32,
     pub valign: f32,
     pub text_align: TextAlign,
+    pub shadow_len: [f32; 2],
+    pub shadow_color: [f32; 4],
     pub fov: Option<f32>,
     pub vanishpoint: Option<[f32; 2]>,
     pub diffuse: [f32; 4],
@@ -111,6 +113,8 @@ impl Default for SongLuaOverlayState {
             halign: 0.5,
             valign: 0.5,
             text_align: TextAlign::Center,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             fov: None,
             vanishpoint: None,
             diffuse: [1.0, 1.0, 1.0, 1.0],
@@ -172,6 +176,8 @@ pub struct SongLuaOverlayStateDelta {
     pub halign: Option<f32>,
     pub valign: Option<f32>,
     pub text_align: Option<TextAlign>,
+    pub shadow_len: Option<[f32; 2]>,
+    pub shadow_color: Option<[f32; 4]>,
     pub fov: Option<f32>,
     pub vanishpoint: Option<[f32; 2]>,
     pub diffuse: Option<[f32; 4]>,
@@ -316,6 +322,12 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     }
     if let Some(value) = delta.text_align {
         state.text_align = value;
+    }
+    if let Some(value) = delta.shadow_len {
+        state.shadow_len = value;
+    }
+    if let Some(value) = delta.shadow_color {
+        state.shadow_color = value;
     }
     if let Some(value) = delta.fov {
         state.fov = Some(value);
@@ -489,6 +501,18 @@ fn overlay_state_lerp(
     }
     if delta.text_align.is_some() && t >= 1.0 - f32::EPSILON {
         from.text_align = to.text_align;
+    }
+    if delta.shadow_len.is_some() {
+        from.shadow_len = [
+            (to.shadow_len[0] - from.shadow_len[0]).mul_add(t, from.shadow_len[0]),
+            (to.shadow_len[1] - from.shadow_len[1]).mul_add(t, from.shadow_len[1]),
+        ];
+    }
+    if delta.shadow_color.is_some() {
+        for i in 0..4 {
+            from.shadow_color[i] =
+                (to.shadow_color[i] - from.shadow_color[i]).mul_add(t, from.shadow_color[i]);
+        }
     }
     if delta.fov.is_some()
         && let (Some(from_fov), Some(to_fov)) = (from.fov, to.fov)
@@ -758,6 +782,8 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.halign.is_none()
         && delta.valign.is_none()
         && delta.text_align.is_none()
+        && delta.shadow_len.is_none()
+        && delta.shadow_color.is_none()
         && delta.fov.is_none()
         && delta.vanishpoint.is_none()
         && delta.diffuse.is_none()
@@ -869,6 +895,12 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.text_align.is_some() {
         into.text_align = from.text_align;
+    }
+    if from.shadow_len.is_some() {
+        into.shadow_len = from.shadow_len;
+    }
+    if from.shadow_color.is_some() {
+        into.shadow_color = from.shadow_color;
     }
     if from.zoom.is_some() {
         into.zoom = from.zoom;
@@ -1007,6 +1039,8 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(halign);
     copy_pair!(valign);
     copy_pair!(text_align);
+    copy_pair!(shadow_len);
+    copy_pair!(shadow_color);
     copy_pair!(fov);
     copy_pair!(vanishpoint);
     copy_pair!(diffuse);

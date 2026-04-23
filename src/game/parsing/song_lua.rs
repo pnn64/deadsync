@@ -3314,6 +3314,20 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.text_align = value;
     }
     if let Some(value) = actor
+        .get::<Option<Table>>("__songlua_state_shadow_len")
+        .map_err(|err| err.to_string())?
+        .and_then(|value| table_vec2(&value))
+    {
+        state.shadow_len = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<Table>>("__songlua_state_shadow_color")
+        .map_err(|err| err.to_string())?
+        .and_then(|value| table_vec4(&value))
+    {
+        state.shadow_color = value;
+    }
+    if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_fov")
         .map_err(|err| err.to_string())?
     {
@@ -3662,6 +3676,20 @@ fn read_actor_color_field(actor: &Table, key: &str) -> Result<Option<[f32; 4]>, 
         .get::<Option<Table>>(key)
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec4(&value)))
+}
+
+fn actor_shadow_len(lua: &Lua, actor: &Table) -> mlua::Result<[f32; 2]> {
+    let block = actor_current_capture_block(lua, actor)?;
+    if let Some(value) = block
+        .get::<Option<Table>>("shadow_len")?
+        .and_then(|value| table_vec2(&value))
+    {
+        return Ok(value);
+    }
+    Ok(actor
+        .get::<Option<Table>>("__songlua_state_shadow_len")?
+        .and_then(|value| table_vec2(&value))
+        .unwrap_or([0.0, 0.0]))
 }
 
 fn song_lua_font_name(font_path: &Path) -> &'static str {
@@ -4034,6 +4062,14 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .map_err(|err| err.to_string())?
                     .as_deref()
                     .and_then(parse_overlay_text_align),
+                shadow_len: block
+                    .get::<Option<Table>>("shadow_len")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec2(&value)),
+                shadow_color: block
+                    .get::<Option<Table>>("shadow_color")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec4(&value)),
                 fov: block
                     .get::<Option<f32>>("fov")
                     .map_err(|err| err.to_string())?,
@@ -4987,6 +5023,62 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "fadebottom",
         make_actor_capture_f32_method(lua, actor, "fadebottom", None)?,
+    )?;
+    actor.set(
+        "shadowlength",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                capture_block_set_vec2(lua, &actor, "shadow_len", [value, -value])?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "shadowlengthx",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let mut len = actor_shadow_len(lua, &actor)?;
+                len[0] = value;
+                capture_block_set_vec2(lua, &actor, "shadow_len", len)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "shadowlengthy",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let mut len = actor_shadow_len(lua, &actor)?;
+                len[1] = -value;
+                capture_block_set_vec2(lua, &actor, "shadow_len", len)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "shadowcolor",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(color) = read_color_args(&args) else {
+                    return Ok(actor.clone());
+                };
+                capture_block_set_vec4(lua, &actor, "shadow_color", color)?;
+                Ok(actor.clone())
+            }
+        })?,
     )?;
     actor.set(
         "MaskSource",
@@ -7263,6 +7355,8 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(halign);
     copy_value_field!(valign);
     copy_value_field!(text_align);
+    copy_value_field!(shadow_len);
+    copy_value_field!(shadow_color);
     copy_option_field!(fov);
     copy_option_field!(vanishpoint);
     copy_value_field!(diffuse);
@@ -10479,6 +10573,50 @@ return Def.ActorFrame{
         assert_eq!(text.halign, 1.0);
         assert_eq!(text.valign, 0.0);
         assert_eq!(text.text_align, TextAlign::Right);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_shadow_methods() {
+        let song_dir = test_dir("actor-shadow-methods");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(40, 30).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:shadowlength(5):shadowcolor(0.1, 0.2, 0.3, 0.4)
+        end,
+    },
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="SHADOW",
+        OnCommand=function(self)
+            self:shadowlengthx(3):shadowlengthy(4)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Shadow Methods"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+
+        let sprite = compiled.overlays[0].initial_state;
+        assert_eq!(sprite.shadow_len, [5.0, -5.0]);
+        assert_eq!(sprite.shadow_color, [0.1, 0.2, 0.3, 0.4]);
+
+        let text = compiled.overlays[1].initial_state;
+        assert_eq!(text.shadow_len, [3.0, -4.0]);
+        assert_eq!(text.shadow_color, [0.0, 0.0, 0.0, 0.5]);
     }
 
     #[test]

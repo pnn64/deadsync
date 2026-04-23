@@ -955,6 +955,12 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.text_align {
         state.text_align = value;
     }
+    if let Some(value) = delta.shadow_len {
+        state.shadow_len = value;
+    }
+    if let Some(value) = delta.shadow_color {
+        state.shadow_color = value;
+    }
     if let Some(value) = delta.fov {
         state.fov = Some(value);
     }
@@ -1135,6 +1141,18 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.text_align.is_some() && t >= 1.0 - f32::EPSILON {
         from.text_align = to.text_align;
+    }
+    if delta.shadow_len.is_some() {
+        from.shadow_len = [
+            (to.shadow_len[0] - from.shadow_len[0]).mul_add(t, from.shadow_len[0]),
+            (to.shadow_len[1] - from.shadow_len[1]).mul_add(t, from.shadow_len[1]),
+        ];
+    }
+    if delta.shadow_color.is_some() {
+        for i in 0..4 {
+            from.shadow_color[i] =
+                (to.shadow_color[i] - from.shadow_color[i]).mul_add(t, from.shadow_color[i]);
+        }
     }
     if delta.fov.is_some()
         && let (Some(from_fov), Some(to_fov)) = (from.fov, to.fov)
@@ -2926,6 +2944,7 @@ fn build_song_lua_overlay_actor(
     let perspective_view_proj = camera_state.and_then(|camera| {
         song_lua_overlay_view_proj(camera, overlay_space_width, overlay_space_height)
     });
+    let wrap_shadow = |actor| song_lua_wrap_overlay_shadow(state, actor, x_scale, y_scale);
     match &overlay.kind {
         SongLuaOverlayKind::ActorFrame => None,
         SongLuaOverlayKind::ActorFrameTexture => None,
@@ -2973,7 +2992,8 @@ fn build_song_lua_overlay_actor(
                     rot_deg,
                     song_lua_overlay_uvs(state, Some(key.as_ref()), flip_x, flip_y, total_elapsed),
                     view_proj,
-                );
+                )
+                .map(wrap_shadow);
             }
             let mut actor = if let Some([left, top, right, bottom]) = state.stretch_rect {
                 act!(sprite(key.clone()):
@@ -3065,7 +3085,7 @@ fn build_song_lua_overlay_actor(
                 *actor_flip_y ^= flip_y;
                 *visible = state.visible;
             }
-            Some(actor)
+            Some(wrap_shadow(actor))
         }
         SongLuaOverlayKind::BitmapText {
             font_name,
@@ -3092,7 +3112,7 @@ fn build_song_lua_overlay_actor(
                 &mut effect_rot,
             );
             let _ = effect_rot;
-            Some(Actor::Text {
+            Some(wrap_shadow(Actor::Text {
                 align: [state.halign, state.valign],
                 offset: [
                     state.x * x_scale + effect_offset[0] * x_scale,
@@ -3123,7 +3143,7 @@ fn build_song_lua_overlay_actor(
                 mask_dest: state.mask_dest,
                 blend: overlay_blend,
                 effect: EffectState::default(),
-            })
+            }))
         }
         SongLuaOverlayKind::Quad => {
             if let Some(view_proj) = perspective_view_proj {
@@ -3162,7 +3182,8 @@ fn build_song_lua_overlay_actor(
                     rot_deg,
                     song_lua_overlay_uvs(state, None, flip_x, flip_y, total_elapsed),
                     view_proj,
-                );
+                )
+                .map(wrap_shadow);
             }
             let mut actor = if let Some([left, top, right, bottom]) = state.stretch_rect {
                 act!(quad:
@@ -3252,8 +3273,24 @@ fn build_song_lua_overlay_actor(
                 *actor_flip_y ^= flip_y;
                 *visible = state.visible;
             }
-            Some(actor)
+            Some(wrap_shadow(actor))
         }
+    }
+}
+
+fn song_lua_wrap_overlay_shadow(
+    state: SongLuaOverlayState,
+    actor: Actor,
+    x_scale: f32,
+    y_scale: f32,
+) -> Actor {
+    if state.shadow_len[0].abs() <= f32::EPSILON && state.shadow_len[1].abs() <= f32::EPSILON {
+        return actor;
+    }
+    Actor::Shadow {
+        len: [state.shadow_len[0] * x_scale, state.shadow_len[1] * y_scale],
+        color: state.shadow_color,
+        child: Box::new(actor),
     }
 }
 
@@ -6021,6 +6058,49 @@ mod tests {
                 assert_eq!(align_text, TextAlign::Right);
             }
             other => panic!("expected aligned text actor, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_overlay_wraps_runtime_actors_with_shadow() {
+        let quad = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let quad_actor = build_song_lua_overlay_actor(
+            &quad,
+            SongLuaOverlayState {
+                x: 100.0,
+                y: 200.0,
+                size: Some([80.0, 40.0]),
+                shadow_len: [3.0, -4.0],
+                shadow_color: [0.1, 0.2, 0.3, 0.4],
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            787,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("shadowed quad should render");
+
+        match quad_actor {
+            Actor::Shadow { len, color, child } => {
+                assert_eq!(len, [3.0, -4.0]);
+                assert_eq!(color, [0.1, 0.2, 0.3, 0.4]);
+                match *child {
+                    Actor::Sprite { z, .. } => assert_eq!(z, 787),
+                    other => panic!("expected shadowed quad sprite child, got {other:?}"),
+                }
+            }
+            other => panic!("expected shadow wrapper, got {other:?}"),
         }
     }
 
