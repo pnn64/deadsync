@@ -1719,16 +1719,24 @@ fn prewarm_gameplay_assets(
         overlay: &crate::game::parsing::song_lua::SongLuaOverlayActor,
     ) -> bool {
         let uses_repeat_state = |state: &crate::game::parsing::song_lua::SongLuaOverlayState| {
-            state
-                .custom_texture_rect
-                .is_some_and(|[u0, v0, u1, v1]| u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0)
+            state.texture_wrapping
+                || state
+                    .texcoord_offset
+                    .is_some_and(|[u, v]| u.abs() > f32::EPSILON || v.abs() > f32::EPSILON)
+                || state
+                    .custom_texture_rect
+                    .is_some_and(|[u0, v0, u1, v1]| u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0)
                 || state.texcoord_velocity.is_some()
         };
         let uses_repeat_delta =
             |delta: &crate::game::parsing::song_lua::SongLuaOverlayStateDelta| {
-                delta
-                    .custom_texture_rect
-                    .is_some_and(|[u0, v0, u1, v1]| u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0)
+                delta.texture_wrapping == Some(true)
+                    || delta
+                        .texcoord_offset
+                        .is_some_and(|[u, v]| u.abs() > f32::EPSILON || v.abs() > f32::EPSILON)
+                    || delta.custom_texture_rect.is_some_and(|[u0, v0, u1, v1]| {
+                        u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0
+                    })
                     || delta.texcoord_velocity.is_some()
             };
         uses_repeat_state(&overlay.initial_state)

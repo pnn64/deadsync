@@ -1042,6 +1042,12 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.sprite_state_index {
         state.sprite_state_index = Some(value);
     }
+    if let Some(value) = delta.texture_wrapping {
+        state.texture_wrapping = value;
+    }
+    if let Some(value) = delta.texcoord_offset {
+        state.texcoord_offset = Some(value);
+    }
     if let Some(value) = delta.custom_texture_rect {
         state.custom_texture_rect = Some(value);
     }
@@ -1174,6 +1180,14 @@ fn song_lua_overlay_state_lerp(
     if delta.sprite_state_index.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_state_index = to.sprite_state_index;
     }
+    if delta.texcoord_offset.is_some()
+        && let (Some(from_offset), Some(to_offset)) = (from.texcoord_offset, to.texcoord_offset)
+    {
+        from.texcoord_offset = Some([
+            (to_offset[0] - from_offset[0]).mul_add(t, from_offset[0]),
+            (to_offset[1] - from_offset[1]).mul_add(t, from_offset[1]),
+        ]);
+    }
     if delta.custom_texture_rect.is_some()
         && let (Some(from_rect), Some(to_rect)) = (from.custom_texture_rect, to.custom_texture_rect)
     {
@@ -1230,6 +1244,9 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.sprite_loop.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_loop = to.sprite_loop;
+    }
+    if delta.texture_wrapping.is_some() && t >= 1.0 - f32::EPSILON {
+        from.texture_wrapping = to.texture_wrapping;
     }
     from
 }
@@ -1294,12 +1311,19 @@ fn song_lua_overlay_uv_rect(
     texture_key: Option<&str>,
     total_elapsed: f32,
 ) -> Option<[f32; 4]> {
-    state.custom_texture_rect.or_else(|| {
+    let mut rect = state.custom_texture_rect.or_else(|| {
         let texture_key = texture_key?;
         let state_index = song_lua_sprite_sheet_index(state, texture_key, total_elapsed)?;
         let (cols, rows) = sprite_sheet_dims(texture_key);
         Some(song_lua_sprite_sheet_rect(state_index, cols, rows))
-    })
+    });
+    if rect.is_none() && state.texcoord_offset.is_some() {
+        rect = Some([0.0, 0.0, 1.0, 1.0]);
+    }
+    if let (Some([u0, v0, u1, v1]), Some([dx, dy])) = (rect, state.texcoord_offset) {
+        rect = Some([u0 + dx, v0 + dy, u1 + dx, v1 + dy]);
+    }
+    rect
 }
 
 #[inline(always)]
@@ -5604,6 +5628,49 @@ mod tests {
                 assert_eq!(uv_rect, Some([0.75, 2.0 / 3.0, 1.0, 1.0]));
             }
             other => panic!("expected animated sprite overlay, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_sprite_applies_texture_translate_to_uv_rect() {
+        let key = "song-lua-translate.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: std::path::PathBuf::from(&key),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                texture_wrapping: true,
+                texcoord_offset: Some([0.25, -0.5]),
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            781,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("translated sprite should render");
+
+        match actor {
+            Actor::Sprite { uv_rect, z, .. } => {
+                assert_eq!(z, 781);
+                assert_eq!(uv_rect, Some([0.25, -0.5, 1.25, 0.5]));
+            }
+            other => panic!("expected translated sprite overlay, got {other:?}"),
         }
     }
 

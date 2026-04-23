@@ -79,6 +79,8 @@ pub struct SongLuaOverlayState {
     pub sprite_playback_rate: f32,
     pub sprite_state_delay: f32,
     pub sprite_state_index: Option<u32>,
+    pub texture_wrapping: bool,
+    pub texcoord_offset: Option<[f32; 2]>,
     pub custom_texture_rect: Option<[f32; 4]>,
     pub texcoord_velocity: Option<[f32; 2]>,
     pub size: Option<[f32; 2]>,
@@ -123,6 +125,8 @@ impl Default for SongLuaOverlayState {
             sprite_playback_rate: 1.0,
             sprite_state_delay: 0.1,
             sprite_state_index: None,
+            texture_wrapping: false,
+            texcoord_offset: None,
             custom_texture_rect: None,
             texcoord_velocity: None,
             size: None,
@@ -168,6 +172,8 @@ pub struct SongLuaOverlayStateDelta {
     pub sprite_playback_rate: Option<f32>,
     pub sprite_state_delay: Option<f32>,
     pub sprite_state_index: Option<u32>,
+    pub texture_wrapping: Option<bool>,
+    pub texcoord_offset: Option<[f32; 2]>,
     pub custom_texture_rect: Option<[f32; 4]>,
     pub texcoord_velocity: Option<[f32; 2]>,
     pub size: Option<[f32; 2]>,
@@ -355,6 +361,12 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.sprite_state_index {
         state.sprite_state_index = Some(value);
     }
+    if let Some(value) = delta.texture_wrapping {
+        state.texture_wrapping = value;
+    }
+    if let Some(value) = delta.texcoord_offset {
+        state.texcoord_offset = Some(value);
+    }
     if let Some(value) = delta.custom_texture_rect {
         state.custom_texture_rect = Some(value);
     }
@@ -479,6 +491,14 @@ fn overlay_state_lerp(
     if delta.sprite_state_index.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_state_index = to.sprite_state_index;
     }
+    if delta.texcoord_offset.is_some()
+        && let (Some(from_offset), Some(to_offset)) = (from.texcoord_offset, to.texcoord_offset)
+    {
+        from.texcoord_offset = Some([
+            (to_offset[0] - from_offset[0]).mul_add(t, from_offset[0]),
+            (to_offset[1] - from_offset[1]).mul_add(t, from_offset[1]),
+        ]);
+    }
     if delta.custom_texture_rect.is_some()
         && let (Some(from_rect), Some(to_rect)) = (from.custom_texture_rect, to.custom_texture_rect)
     {
@@ -535,6 +555,9 @@ fn overlay_state_lerp(
     }
     if delta.sprite_loop.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_loop = to.sprite_loop;
+    }
+    if delta.texture_wrapping.is_some() && t >= 1.0 - f32::EPSILON {
+        from.texture_wrapping = to.texture_wrapping;
     }
     from
 }
@@ -619,6 +642,8 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.sprite_playback_rate.is_none()
         && delta.sprite_state_delay.is_none()
         && delta.sprite_state_index.is_none()
+        && delta.texture_wrapping.is_none()
+        && delta.texcoord_offset.is_none()
         && delta.custom_texture_rect.is_none()
         && delta.texcoord_velocity.is_none()
         && delta.size.is_none()
@@ -731,6 +756,12 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.sprite_state_index.is_some() {
         into.sprite_state_index = from.sprite_state_index;
     }
+    if from.texture_wrapping.is_some() {
+        into.texture_wrapping = from.texture_wrapping;
+    }
+    if from.texcoord_offset.is_some() {
+        into.texcoord_offset = from.texcoord_offset;
+    }
     if from.custom_texture_rect.is_some() {
         into.custom_texture_rect = from.custom_texture_rect;
     }
@@ -804,6 +835,8 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(sprite_playback_rate);
     copy_pair!(sprite_state_delay);
     copy_pair!(sprite_state_index);
+    copy_pair!(texture_wrapping);
+    copy_pair!(texcoord_offset);
     copy_pair!(custom_texture_rect);
     copy_pair!(texcoord_velocity);
     copy_pair!(size);

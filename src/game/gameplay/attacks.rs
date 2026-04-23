@@ -1918,6 +1918,8 @@ fn song_lua_overlay_delta_overlaps(
     overlap!(effect_color1);
     overlap!(effect_color2);
     overlap!(effect_period);
+    overlap!(texture_wrapping);
+    overlap!(texcoord_offset);
     overlap!(custom_texture_rect);
     overlap!(texcoord_velocity);
     overlap!(size);

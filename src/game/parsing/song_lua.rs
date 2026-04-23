@@ -3466,6 +3466,19 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.sprite_state_index = Some(value);
     }
     if let Some(value) = actor
+        .get::<Option<bool>>("__songlua_state_texture_wrapping")
+        .map_err(|err| err.to_string())?
+    {
+        state.texture_wrapping = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<Table>>("__songlua_state_texcoord_offset")
+        .map_err(|err| err.to_string())?
+        .and_then(|value| table_vec2(&value))
+    {
+        state.texcoord_offset = Some(value);
+    }
+    if let Some(value) = actor
         .get::<Option<Table>>("__songlua_state_custom_texture_rect")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec4(&value))
@@ -4021,6 +4034,13 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                 sprite_state_index: block
                     .get::<Option<u32>>("sprite_state_index")
                     .map_err(|err| err.to_string())?,
+                texture_wrapping: block
+                    .get::<Option<bool>>("texture_wrapping")
+                    .map_err(|err| err.to_string())?,
+                texcoord_offset: block
+                    .get::<Option<Table>>("texcoord_offset")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec2(&value)),
                 custom_texture_rect: block
                     .get::<Option<Table>>("custom_texture_rect")
                     .map_err(|err| err.to_string())?
@@ -5036,6 +5056,34 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "texturetranslate",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let offset = [
+                    args.get(1).cloned().and_then(read_f32).unwrap_or(0.0),
+                    args.get(2).cloned().and_then(read_f32).unwrap_or(0.0),
+                ];
+                capture_block_set_vec2(lua, &actor, "texcoord_offset", offset)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "texturewrapping",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let value = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_boolish)
+                    .unwrap_or(true);
+                capture_block_set_bool(lua, &actor, "texture_wrapping", value)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "diffuseshift",
         lua.create_function({
             let actor = actor.clone();
@@ -5259,7 +5307,6 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "load",
         "StartTransitioningScreen",
         "stop",
-        "texturetranslate",
         "volume",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
@@ -6901,6 +6948,8 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(sprite_playback_rate);
     copy_value_field!(sprite_state_delay);
     copy_option_field!(sprite_state_index);
+    copy_value_field!(texture_wrapping);
+    copy_option_field!(texcoord_offset);
     copy_option_field!(custom_texture_rect);
     copy_option_field!(texcoord_velocity);
     copy_option_field!(size);
@@ -9917,6 +9966,44 @@ return Def.ActorFrame{
         assert!(!state.sprite_loop);
         assert_eq!(state.sprite_playback_rate, 1.5);
         assert_eq!(state.sprite_state_index, Some(2));
+    }
+
+    #[test]
+    fn compile_song_lua_supports_texture_translate_and_wrapping() {
+        let song_dir = test_dir("actor-texture-translate-wrap");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(40, 30).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:texturetranslate(0.25, -0.5):texturewrapping(true)
+            mod_actions = {
+                {1, string.format("%.0f:%.0f", self:GetWidth(), self:GetHeight()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Texture Translate Wrap"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "40:30");
+        assert_eq!(compiled.overlays.len(), 1);
+        let state = compiled.overlays[0].initial_state;
+        assert!(state.texture_wrapping);
+        assert_eq!(state.texcoord_offset, Some([0.25, -0.5]));
+        assert_eq!(state.custom_texture_rect, None);
     }
 
     #[test]
