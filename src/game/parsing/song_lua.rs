@@ -33,6 +33,11 @@ const SONG_LUA_PRODUCT_VERSION: &str = "1.2.0";
 const THEME_RECEPTOR_Y_STD: f32 = -125.0;
 const THEME_RECEPTOR_Y_REV: f32 = 145.0;
 const SONG_LUA_COLUMN_X: [f32; SONG_LUA_NOTE_COLUMNS] = [-96.0, -32.0, 32.0, 96.0];
+const SONG_LUA_RUNTIME_KEY: &str = "__songlua_compile_song_runtime";
+const SONG_LUA_RUNTIME_BEAT_KEY: &str = "__songlua_song_beat";
+const SONG_LUA_RUNTIME_SECONDS_KEY: &str = "__songlua_music_seconds";
+const SONG_LUA_RUNTIME_BPS_KEY: &str = "__songlua_song_bps";
+const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 const EASING_NAMES: &[&str] = &[
     "linear",
     "inQuad",
@@ -199,6 +204,25 @@ impl SongLuaCompileContext {
             amod_available: true,
         }
     }
+}
+
+#[inline(always)]
+fn song_display_bps(context: &SongLuaCompileContext) -> f32 {
+    (context.song_display_bpms[0].max(context.song_display_bpms[1]) / 60.0).max(f32::EPSILON)
+}
+
+#[inline(always)]
+fn song_music_rate(context: &SongLuaCompileContext) -> f32 {
+    if context.song_music_rate.is_finite() && context.song_music_rate > 0.0 {
+        context.song_music_rate
+    } else {
+        1.0
+    }
+}
+
+#[inline(always)]
+fn song_elapsed_seconds_for_beat(beat: f32, song_bps: f32, music_rate: f32) -> f32 {
+    beat / (song_bps.max(f32::EPSILON) * music_rate.max(f32::EPSILON))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1061,6 +1085,8 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("NOTESKIN", create_noteskin_table(lua, context)?)?;
     globals.set("ArrowEffects", create_arrow_effects_table(lua)?)?;
 
+    let song_runtime = create_song_runtime_table(lua, context)?;
+    globals.set(SONG_LUA_RUNTIME_KEY, song_runtime.clone())?;
     let song = create_song_table(lua, context)?;
     let players = create_player_tables(lua, context)?;
     let song_options = create_song_options_table(lua, context.song_music_rate)?;
@@ -1141,19 +1167,24 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     )?;
     gamestate.set(
         "GetSongBeat",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function({
+            let song_runtime = song_runtime.clone();
+            move |_, _args: MultiValue| Ok(song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?)
+        })?,
     )?;
-    let song_bps =
-        (context.song_display_bpms[1].max(context.song_display_bpms[0]) / 60.0).max(f32::EPSILON);
+    let song_bps = song_display_bps(context);
     gamestate.set(
         "GetSongBPS",
         lua.create_function(move |_, _args: MultiValue| Ok(song_bps))?,
     )?;
     gamestate.set(
         "GetCurMusicSeconds",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function({
+            let song_runtime = song_runtime.clone();
+            move |_, _args: MultiValue| Ok(song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?)
+        })?,
     )?;
-    let song_position = create_song_position_table(lua)?;
+    let song_position = create_song_position_table(lua, &song_runtime)?;
     gamestate.set(
         "GetSongPosition",
         lua.create_function(move |_, _args: MultiValue| Ok(song_position.clone()))?,
@@ -2309,13 +2340,59 @@ fn create_timing_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
-fn create_song_position_table(lua: &Lua) -> mlua::Result<Table> {
+fn create_song_runtime_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set(SONG_LUA_RUNTIME_BEAT_KEY, 0.0_f32)?;
+    table.set(SONG_LUA_RUNTIME_SECONDS_KEY, 0.0_f32)?;
+    table.set(SONG_LUA_RUNTIME_BPS_KEY, song_display_bps(context))?;
+    table.set(SONG_LUA_RUNTIME_RATE_KEY, song_music_rate(context))?;
+    Ok(table)
+}
+
+fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
         "GetSongBeat",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function({
+            let song_runtime = song_runtime.clone();
+            move |_, _args: MultiValue| Ok(song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?)
+        })?,
     )?;
     Ok(table)
+}
+
+fn compile_song_runtime_table(lua: &Lua) -> mlua::Result<Table> {
+    lua.globals().get(SONG_LUA_RUNTIME_KEY)
+}
+
+fn compile_song_runtime_values(lua: &Lua) -> mlua::Result<(f32, f32)> {
+    let runtime = compile_song_runtime_table(lua)?;
+    Ok((
+        runtime.get(SONG_LUA_RUNTIME_BEAT_KEY)?,
+        runtime.get(SONG_LUA_RUNTIME_SECONDS_KEY)?,
+    ))
+}
+
+fn set_compile_song_runtime_values(lua: &Lua, beat: f32, seconds: f32) -> mlua::Result<()> {
+    let runtime = compile_song_runtime_table(lua)?;
+    runtime.set(SONG_LUA_RUNTIME_BEAT_KEY, beat)?;
+    runtime.set(SONG_LUA_RUNTIME_SECONDS_KEY, seconds)?;
+    Ok(())
+}
+
+fn set_compile_song_runtime_beat(lua: &Lua, beat: f32) -> mlua::Result<()> {
+    let runtime = compile_song_runtime_table(lua)?;
+    let song_bps = runtime
+        .get::<Option<f32>>(SONG_LUA_RUNTIME_BPS_KEY)?
+        .unwrap_or(1.0);
+    let music_rate = runtime
+        .get::<Option<f32>>(SONG_LUA_RUNTIME_RATE_KEY)?
+        .unwrap_or(1.0);
+    set_compile_song_runtime_values(
+        lua,
+        beat,
+        song_elapsed_seconds_for_beat(beat, song_bps, music_rate),
+    )
 }
 
 fn create_style_table(lua: &Lua, style_name: &str) -> mlua::Result<Table> {
@@ -5612,6 +5689,8 @@ fn probe_function_ease_target(
     function: &Function,
 ) -> mlua::Result<(Option<SongLuaEaseTarget>, Vec<String>)> {
     let globals = lua.globals();
+    let previous_time = compile_song_runtime_values(lua)?;
+    set_compile_song_runtime_beat(lua, 0.0)?;
     let previous = globals.get::<Value>("__songlua_probe_methods")?;
     let calls = lua.create_table()?;
     globals.set("__songlua_probe_methods", calls.clone())?;
@@ -5619,6 +5698,7 @@ fn probe_function_ease_target(
     let methods = probe_call_names(&calls)?;
     let classify = classify_function_ease_probe(&calls);
     globals.set("__songlua_probe_methods", previous)?;
+    set_compile_song_runtime_values(lua, previous_time.0, previous_time.1)?;
     match result {
         Ok(_) => Ok((classify?, methods)),
         Err(_) => Ok((None, methods)),
@@ -5801,13 +5881,20 @@ fn capture_overlay_function_blocks(
     overlays: &[OverlayCompileActor],
     function: &Function,
     arg: Option<f32>,
+    song_beat: Option<f32>,
 ) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
+    let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
+    if let Some(song_beat) = song_beat {
+        set_compile_song_runtime_beat(lua, song_beat).map_err(|err| err.to_string())?;
+    }
     reset_overlay_capture_tables(lua, overlays)?;
     let result = match arg {
         Some(value) => function.call::<Value>(value),
         None => function.call::<Value>(()),
     };
-    let blocks = collect_overlay_capture_blocks(overlays)?;
+    let blocks = collect_overlay_capture_blocks(overlays);
+    set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
+    let blocks = blocks?;
     result.map_err(|err| err.to_string())?;
     Ok(blocks)
 }
@@ -5817,6 +5904,7 @@ fn capture_function_action_blocks(
     overlays: &[OverlayCompileActor],
     tracked_actors: &[TrackedCompileActor],
     function: &Function,
+    beat: f32,
 ) -> Result<
     (
         Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
@@ -5824,11 +5912,16 @@ fn capture_function_action_blocks(
     ),
     String,
 > {
+    let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
+    set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
     reset_overlay_capture_tables(lua, overlays)?;
     reset_tracked_capture_tables(lua, tracked_actors)?;
     let result = function.call::<Value>(());
-    let overlay_blocks = collect_overlay_capture_blocks(overlays)?;
-    let tracked_blocks = collect_tracked_capture_blocks(tracked_actors)?;
+    let overlay_blocks = collect_overlay_capture_blocks(overlays);
+    let tracked_blocks = collect_tracked_capture_blocks(tracked_actors);
+    set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
+    let overlay_blocks = overlay_blocks?;
+    let tracked_blocks = tracked_blocks?;
     result.map_err(|err| err.to_string())?;
     Ok((overlay_blocks, tracked_blocks))
 }
@@ -5844,7 +5937,7 @@ fn compile_function_action(
     messages: &mut Vec<SongLuaMessageEvent>,
 ) -> Result<bool, String> {
     let (overlay_captures, tracked_captures) =
-        capture_function_action_blocks(lua, overlays, tracked_actors, function)?;
+        capture_function_action_blocks(lua, overlays, tracked_actors, function, beat)?;
     if overlay_captures.is_empty() && tracked_captures.is_empty() {
         return Ok(false);
     }
@@ -5891,8 +5984,12 @@ fn compile_overlay_function_ease(
     opt1: Option<f32>,
     opt2: Option<f32>,
 ) -> Result<Vec<SongLuaOverlayEase>, String> {
-    let from_blocks = capture_overlay_function_blocks(lua, overlays, function, Some(from))?;
-    let to_blocks = capture_overlay_function_blocks(lua, overlays, function, Some(to))?;
+    let start_beat = start;
+    let end_beat = song_lua_span_end(start, limit, span_mode).max(start_beat);
+    let from_blocks =
+        capture_overlay_function_blocks(lua, overlays, function, Some(from), Some(start_beat))?;
+    let to_blocks =
+        capture_overlay_function_blocks(lua, overlays, function, Some(to), Some(end_beat))?;
     if from_blocks.is_empty() && to_blocks.is_empty() {
         return Ok(Vec::new());
     }
@@ -5936,6 +6033,14 @@ fn compile_overlay_function_ease(
     Ok(out)
 }
 
+#[inline(always)]
+fn song_lua_span_end(start: f32, limit: f32, span_mode: SongLuaSpanMode) -> f32 {
+    match span_mode {
+        SongLuaSpanMode::Len => start + limit.max(0.0),
+        SongLuaSpanMode::End => limit,
+    }
+}
+
 fn read_perframe_entries(table: Option<Table>) -> Result<Vec<SongLuaPerframeEntry>, String> {
     let Some(table) = table else {
         return Ok(Vec::new());
@@ -5975,9 +6080,11 @@ fn perframe_segment_step(len: f32) -> f32 {
 
 #[inline(always)]
 fn perframe_delta_seconds(context: &SongLuaCompileContext, delta_beats: f32) -> f32 {
-    let max_bps =
-        (context.song_display_bpms[0].max(context.song_display_bpms[1]) / 60.0).max(f32::EPSILON);
-    (delta_beats / max_bps).max(0.0)
+    song_elapsed_seconds_for_beat(
+        delta_beats,
+        song_display_bps(context),
+        song_music_rate(context),
+    )
 }
 
 fn tracked_player_tables(tracked_actors: &[TrackedCompileActor]) -> [Option<Table>; LUA_PLAYERS] {
@@ -6061,15 +6168,20 @@ fn active_perframe_entries<'a>(
 }
 
 fn call_perframe_entry(
+    lua: &Lua,
     entry: &SongLuaPerframeEntry,
     beat: f32,
     delta_seconds: f32,
 ) -> Result<(), String> {
-    entry
+    let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
+    set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
+    let result = entry
         .function
         .call::<Value>((beat, delta_seconds))
         .map(|_| ())
-        .map_err(|err| err.to_string())
+        .map_err(|err| err.to_string());
+    set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
+    result
 }
 
 fn push_perframe_player_target(
@@ -6345,7 +6457,7 @@ fn compile_perframes(
             reset_overlay_capture_tables(lua, overlays)?;
             reset_tracked_capture_tables(lua, tracked_actors)?;
             for entry in &active {
-                call_perframe_entry(entry, eval_beat, delta_seconds)?;
+                call_perframe_entry(lua, entry, eval_beat, delta_seconds)?;
             }
             sample_beats.push(beat);
             player_samples.push(current_perframe_player_states(&player_tables)?);
@@ -6952,6 +7064,50 @@ return Def.ActorFrame{}
         assert!(compiled.eases.iter().any(|window| {
             matches!(window.target, SongLuaEaseTarget::PlayerZoomZ) && window.player == Some(1)
         }));
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_song_time_to_perframes() {
+        let song_dir = test_dir("perframe-song-time");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_perframes = {
+    {4, 5, function()
+        local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        if p then
+            local beat = math.floor(GAMESTATE:GetSongBeat())
+            local seconds = math.floor(GAMESTATE:GetCurMusicSeconds())
+            local pos = math.floor(GAMESTATE:GetSongPosition():GetSongBeat())
+            p:rotationz(beat + seconds + pos)
+        end
+    end},
+}
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Perframe Song Time");
+        context.song_display_bpms = [120.0, 120.0];
+        context.song_music_rate = 2.0;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.info.unsupported_perframes, 0);
+        let windows = compiled
+            .eases
+            .iter()
+            .filter(|window| {
+                matches!(window.target, SongLuaEaseTarget::PlayerRotationZ)
+                    && window.player == Some(1)
+            })
+            .collect::<Vec<_>>();
+        assert!(!windows.is_empty());
+        assert!(
+            windows
+                .iter()
+                .all(|window| window.from == 9.0 && window.to == 9.0)
+        );
     }
 
     #[test]
@@ -9622,6 +9778,45 @@ return Def.ActorFrame{
         assert_eq!(block.duration, 0.5);
         assert_eq!(block.delta.x, Some(96.0));
         assert_eq!(block.delta.diffuse.unwrap()[3], 0.5);
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_song_time_to_function_actions() {
+        let song_dir = test_dir("function-action-song-time");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {4, function()
+        local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        local beat = GAMESTATE:GetSongBeat()
+        local seconds = GAMESTATE:GetCurMusicSeconds()
+        local pos = GAMESTATE:GetSongPosition():GetSongBeat()
+        if p then
+            p:x(beat)
+            p:y(seconds * 100)
+            p:rotationz(pos)
+        end
+    end, true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Function Action Song Time");
+        context.song_display_bpms = [120.0, 120.0];
+        context.song_music_rate = 2.0;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.player_actors[0].message_commands.len(), 1);
+        let block = &compiled.player_actors[0].message_commands[0].blocks[0];
+        assert_eq!(block.delta.x, Some(4.0));
+        assert_eq!(block.delta.y, Some(100.0));
+        assert_eq!(block.delta.rot_z_deg, Some(4.0));
     }
 
     #[test]
