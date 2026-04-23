@@ -5074,6 +5074,27 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "aux",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                    actor.set("__songlua_aux", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "getaux",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor.get::<Option<f32>>("__songlua_aux")?.unwrap_or(0.0))
+            }
+        })?,
+    )?;
+    actor.set(
         "SetDrawFunction",
         lua.create_function({
             let actor = actor.clone();
@@ -5849,12 +5870,16 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "EnableFloat",
         "EnablePreserveTexture",
         "Create",
+        "SetTextureFiltering",
         "fardistz",
         "hibernate",
         "load",
         "StartTransitioningScreen",
+        "draworder",
         "stop",
         "volume",
+        "ztest",
+        "zwrite",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
@@ -11532,6 +11557,40 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages[0].message, "true");
         assert_eq!(compiled.overlays.len(), 1);
         assert!(compiled.overlays[0].initial_state.visible);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_aux_and_actor_compat_shims() {
+        let song_dir = test_dir("actor-aux-compat-shims");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            local before = self:getaux()
+            self:aux(before + 0.25)
+            self:SetTextureFiltering(false):zwrite(true):ztest(true):draworder(100)
+            self:aux(self:getaux() + 0.75)
+            mod_actions = {
+                {1, string.format("%.2f", self:getaux()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Aux Compat Shims"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "1.00");
+        assert_eq!(compiled.overlays.len(), 1);
     }
 
     #[test]
