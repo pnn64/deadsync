@@ -1,4 +1,3 @@
-use crate::game::judgment::JudgeGrade;
 use crate::game::note::{HoldData, HoldResult, NoteType};
 use crate::game::timing::TimingData;
 
@@ -8,7 +7,7 @@ use super::{
     apply_life_change, autoplay_blocks_scoring, break_combo_state, capture_failed_ex_score_inputs,
     clear_full_combo_state, current_music_time_s, is_state_dead, player_for_col,
     song_time_ns_delta_seconds, song_time_ns_from_seconds, song_time_ns_invalid,
-    song_time_ns_to_seconds, sync_active_hold_pressed_state, trigger_tap_explosion,
+    song_time_ns_to_seconds, sync_active_hold_pressed_state, trigger_hold_explosion,
     update_itg_grade_totals,
 };
 
@@ -371,7 +370,7 @@ pub(super) fn handle_hold_success(state: &mut State, column: usize, note_index: 
     if !scoring_blocked {
         apply_hold_success_combo_state(&mut state.players[player]);
     }
-    trigger_tap_explosion(state, column, JudgeGrade::Excellent);
+    trigger_hold_explosion(state, column);
     state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
         result: HoldResult::Held,
         started_at_screen_s: state.total_elapsed_in_screen,

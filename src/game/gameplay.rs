@@ -6154,6 +6154,16 @@ fn trigger_tap_explosion(state: &mut State, column: usize, grade: JudgeGrade) {
     let Some(window_key) = grade_to_window(grade) else {
         return;
     };
+    spawn_tap_explosion(state, column, window_key);
+}
+
+pub(super) fn trigger_hold_explosion(state: &mut State, column: usize) {
+    // Hold success uses the noteskin's `HeldCommand` (matching ITGMania), which
+    // is plumbed through the parser as the "Held" pseudo-window.
+    spawn_tap_explosion(state, column, "Held");
+}
+
+fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &str) {
     let player = player_for_col(state, column);
     let spawn_window = tap_explosion_noteskin_for_player(state, player).and_then(|ns| {
         if ns.tap_explosions.contains_key(window_key) {

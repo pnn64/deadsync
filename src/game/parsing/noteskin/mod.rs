@@ -2656,7 +2656,7 @@ fn load_itg_sprite_noteskin_compiled(
                 .or_else(|| bright_sprites.first().copied())
         };
 
-        for window in ["W1", "W2", "W3", "W4", "W5"] {
+        for window in ["W1", "W2", "W3", "W4", "W5", "Held"] {
             let key = format!("{}command", window.to_ascii_lowercase());
             let source = select_tap_explosion_source(window);
             let command = source
@@ -2669,6 +2669,13 @@ fn load_itg_sprite_noteskin_compiled(
                         .or_else(|| data.metrics.get("GhostArrowBright", &metric_key))
                         .map(str::to_string)
                 });
+            // The "Held" pseudo-window is only populated when the noteskin
+            // actually defines a HeldCommand; otherwise hold-success explosions
+            // would silently fall back to a default 0.3s flash on every hold,
+            // which is not what unmodified ITGMania-style noteskins expect.
+            if window == "Held" && command.as_deref().map_or(true, |c| c.trim().is_empty()) {
+                continue;
+            }
             let command_with_init = command.and_then(|cmd| {
                 if cmd.trim().is_empty() {
                     return None;
