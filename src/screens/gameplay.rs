@@ -1978,12 +1978,16 @@ fn song_lua_player_layer_z(
     song_lua_active: bool,
     actor: &SongLuaCapturedActor,
     current: SongLuaOverlayState,
+    runtime_z: f32,
 ) -> i16 {
     if !song_lua_active {
         return 0;
     }
     let _ = actor;
-    song_lua_add_z(SONG_LUA_LAYER_Z_BASE, song_lua_rounded_z(current.z))
+    song_lua_add_z(
+        SONG_LUA_LAYER_Z_BASE,
+        song_lua_rounded_z(current.z + runtime_z),
+    )
 }
 
 fn song_lua_style_capture_actor(
@@ -3673,7 +3677,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let zoom_x = player_state.zoom_x * state.song_lua_player_zoom_x[player_idx];
         let zoom_y = player_state.zoom_y * state.song_lua_player_zoom_y[player_idx];
         let zoom_z = player_state.zoom_z * state.song_lua_player_zoom_z[player_idx];
-        let z_shift = song_lua_player_layer_z(song_lua_active, player_actor, player_state);
+        let z_shift = song_lua_player_layer_z(
+            song_lua_active,
+            player_actor,
+            player_state,
+            state.song_lua_player_z[player_idx],
+        );
         let player_blend = match player_state.blend {
             SongLuaOverlayBlendMode::Alpha => None,
             SongLuaOverlayBlendMode::Add => Some(BlendMode::Add),
