@@ -264,6 +264,21 @@ pub struct SongLuaCompileInfo {
     pub unsupported_function_actions: usize,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct SongLuaPerframePlayerState {
+    rotation_z: Option<f32>,
+    rotation_y: Option<f32>,
+    zoom_x: Option<f32>,
+    zoom_y: Option<f32>,
+    skew_x: Option<f32>,
+}
+
+struct SongLuaPerframeEntry {
+    start: f32,
+    end: f32,
+    function: Function,
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SongLuaCapturedActor {
     pub initial_state: SongLuaOverlayState,
@@ -407,6 +422,31 @@ pub fn compile_song_lua(
     let mut overlays = overlays?;
     let mut tracked_actors = read_tracked_compile_actors(&lua)?;
     let mut overlay_trigger_counter = 0usize;
+    let hidden_players = std::array::from_fn(|player| {
+        let key = if player == 0 {
+            "__songlua_top_screen_player_1"
+        } else {
+            "__songlua_top_screen_player_2"
+        };
+        globals
+            .get::<Option<Table>>(key)
+            .ok()
+            .flatten()
+            .and_then(|actor| {
+                actor
+                    .get::<Option<bool>>("__songlua_visible")
+                    .ok()
+                    .flatten()
+            })
+            .is_some_and(|visible| !visible)
+    });
+    let prefix_perframes = globals
+        .get::<Option<Table>>("prefix_globals")
+        .map_err(|err| err.to_string())?
+        .and_then(|table| table.get::<Option<Table>>("perframes").ok().flatten());
+    let global_perframes = globals
+        .get::<Option<Table>>("mod_perframes")
+        .map_err(|err| err.to_string())?;
 
     if let Some(prefix_globals) = globals
         .get::<Option<Table>>("prefix_globals")
@@ -430,11 +470,6 @@ pub fn compile_song_lua(
         out.eases.extend(eases);
         out.overlay_eases.extend(overlay_eases);
         out.info.unsupported_function_eases += info.unsupported_function_eases;
-        out.info.unsupported_perframes += table_len(
-            prefix_globals
-                .get::<Option<Table>>("perframes")
-                .map_err(|err| err.to_string())?,
-        )?;
         let fn_actions = read_actions(
             &lua,
             prefix_globals
@@ -472,11 +507,6 @@ pub fn compile_song_lua(
     out.eases.extend(global_eases);
     out.overlay_eases.extend(global_overlay_eases);
     out.info.unsupported_function_eases += global_info.unsupported_function_eases;
-    out.info.unsupported_perframes += table_len(
-        globals
-            .get::<Option<Table>>("mod_perframes")
-            .map_err(|err| err.to_string())?,
-    )?;
     let global_fn_actions = read_actions(
         &lua,
         globals
@@ -497,6 +527,17 @@ pub fn compile_song_lua(
         &mut overlay_trigger_counter,
     )?;
     out.info.unsupported_function_actions += update_fn_actions;
+    let (perframe_eases, perframe_overlay_eases, unsupported_perframes) = compile_perframes(
+        &lua,
+        prefix_perframes,
+        global_perframes,
+        context,
+        &mut overlays,
+        &tracked_actors,
+    )?;
+    out.eases.extend(perframe_eases);
+    out.overlay_eases.extend(perframe_overlay_eases);
+    out.info.unsupported_perframes += unsupported_perframes;
     out.overlays = overlays.into_iter().map(|overlay| overlay.actor).collect();
     for tracked in tracked_actors {
         match tracked.target {
@@ -504,24 +545,7 @@ pub fn compile_song_lua(
             TrackedCompileActorTarget::SongForeground => out.song_foreground = tracked.actor,
         }
     }
-    out.hidden_players = std::array::from_fn(|player| {
-        let key = if player == 0 {
-            "__songlua_top_screen_player_1"
-        } else {
-            "__songlua_top_screen_player_2"
-        };
-        globals
-            .get::<Option<Table>>(key)
-            .ok()
-            .flatten()
-            .and_then(|actor| {
-                actor
-                    .get::<Option<bool>>("__songlua_visible")
-                    .ok()
-                    .flatten()
-            })
-            .is_some_and(|visible| !visible)
-    });
+    out.hidden_players = hidden_players;
 
     out.beat_mods.sort_by(mod_window_cmp);
     out.time_mods.sort_by(mod_window_cmp);
@@ -1180,7 +1204,12 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     let messageman = lua.create_table()?;
     messageman.set(
         "Broadcast",
-        lua.create_function(|_, _args: MultiValue| Ok(()))?,
+        lua.create_function(|lua, args: MultiValue| {
+            if let Some(message) = method_arg(&args, 0).cloned().and_then(read_string) {
+                broadcast_song_lua_message(lua, &message)?;
+            }
+            Ok(())
+        })?,
     )?;
     globals.set("MESSAGEMAN", messageman)?;
     globals.set("SM", lua.create_function(|_, _args: MultiValue| Ok(()))?)?;
@@ -2379,6 +2408,7 @@ fn make_actor_ctor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Function
         install_actor_methods(lua, &table)?;
         install_actor_metatable(lua, &table)?;
         reset_actor_capture(lua, &table)?;
+        register_song_lua_actor(lua, &table)?;
         Ok(table)
     })
 }
@@ -3743,6 +3773,7 @@ fn create_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table
     install_actor_methods(lua, &actor)?;
     install_actor_metatable(lua, &actor)?;
     reset_actor_capture(lua, &actor)?;
+    register_song_lua_actor(lua, &actor)?;
     Ok(actor)
 }
 
@@ -3759,6 +3790,50 @@ fn create_media_actor(
         actor.set("Texture", file_path_string(resolved_path))?;
     }
     Ok(actor)
+}
+
+fn song_lua_actor_registry(lua: &Lua) -> mlua::Result<Table> {
+    let globals = lua.globals();
+    if let Some(registry) = globals.get::<Option<Table>>("__songlua_actor_registry")? {
+        return Ok(registry);
+    }
+    let registry = lua.create_table()?;
+    globals.set("__songlua_actor_registry", registry.clone())?;
+    Ok(registry)
+}
+
+fn register_song_lua_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let registry = song_lua_actor_registry(lua)?;
+    let actor_ptr = actor.to_pointer() as usize;
+    for value in registry.sequence_values::<Value>() {
+        let Value::Table(existing) = value? else {
+            continue;
+        };
+        if existing.to_pointer() as usize == actor_ptr {
+            return Ok(());
+        }
+    }
+    registry.raw_set(registry.raw_len() + 1, actor.clone())?;
+    Ok(())
+}
+
+fn broadcast_song_lua_message(lua: &Lua, message: &str) -> mlua::Result<()> {
+    if message.trim().is_empty() {
+        return Ok(());
+    }
+    let command = format!("{message}MessageCommand");
+    let registry = song_lua_actor_registry(lua)?;
+    let mut actors = Vec::with_capacity(registry.raw_len());
+    for value in registry.sequence_values::<Value>() {
+        let Value::Table(actor) = value? else {
+            continue;
+        };
+        actors.push(actor);
+    }
+    for actor in actors {
+        run_actor_named_command_with_drain(lua, &actor, &command, true)?;
+    }
+    Ok(())
 }
 
 fn inherit_actor_dirs(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -4395,14 +4470,21 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "addrotationz",
         make_actor_add_f32_method(lua, actor, "rot_z_deg")?,
     )?;
-    for name in ["skewx", "skewy"] {
+    for (name, state_key) in [
+        ("skewx", "__songlua_state_skew_x"),
+        ("skewy", "__songlua_state_skew_y"),
+    ] {
         actor.set(
             name,
             lua.create_function({
                 let actor = actor.clone();
                 let method_name = name.to_string();
-                move |lua, _args: MultiValue| {
+                let state_key = state_key.to_string();
+                move |lua, args: MultiValue| {
                     record_probe_method_call(lua, &actor, &method_name)?;
+                    if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                        actor.set(state_key.as_str(), value)?;
+                    }
                     Ok(actor.clone())
                 }
             })?,
@@ -5820,6 +5902,487 @@ fn compile_overlay_function_ease(
     Ok(out)
 }
 
+fn read_perframe_entries(table: Option<Table>) -> Result<Vec<SongLuaPerframeEntry>, String> {
+    let Some(table) = table else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    for value in table.sequence_values::<Value>() {
+        let Value::Table(entry) = value.map_err(|err| err.to_string())? else {
+            continue;
+        };
+        let Some(start) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?)
+        else {
+            continue;
+        };
+        let Some(end) = read_f32(entry.raw_get::<Value>(2).map_err(|err| err.to_string())?) else {
+            continue;
+        };
+        let Value::Function(function) = entry.raw_get::<Value>(3).map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        if !start.is_finite() || !end.is_finite() || end <= start {
+            continue;
+        }
+        out.push(SongLuaPerframeEntry {
+            start,
+            end,
+            function,
+        });
+    }
+    Ok(out)
+}
+
+#[inline(always)]
+fn perframe_segment_step(len: f32) -> f32 {
+    (len / 96.0).clamp(1.0 / 192.0, 0.125)
+}
+
+#[inline(always)]
+fn perframe_delta_seconds(context: &SongLuaCompileContext, delta_beats: f32) -> f32 {
+    let max_bps =
+        (context.song_display_bpms[0].max(context.song_display_bpms[1]) / 60.0).max(f32::EPSILON);
+    (delta_beats / max_bps).max(0.0)
+}
+
+fn tracked_player_tables(tracked_actors: &[TrackedCompileActor]) -> [Option<Table>; LUA_PLAYERS] {
+    let mut out = std::array::from_fn(|_| None);
+    for tracked in tracked_actors {
+        if let TrackedCompileActorTarget::Player(player) = tracked.target {
+            out[player] = Some(tracked.table.clone());
+        }
+    }
+    out
+}
+
+fn actor_perframe_player_state(actor: &Table) -> Result<SongLuaPerframePlayerState, String> {
+    let zoom = actor
+        .get::<Option<f32>>("__songlua_state_zoom")
+        .map_err(|err| err.to_string())?;
+    Ok(SongLuaPerframePlayerState {
+        rotation_z: actor
+            .get::<Option<f32>>("__songlua_state_rot_z_deg")
+            .map_err(|err| err.to_string())?,
+        rotation_y: actor
+            .get::<Option<f32>>("__songlua_state_rot_y_deg")
+            .map_err(|err| err.to_string())?,
+        zoom_x: actor
+            .get::<Option<f32>>("__songlua_state_zoom_x")
+            .map_err(|err| err.to_string())?
+            .or(zoom),
+        zoom_y: actor
+            .get::<Option<f32>>("__songlua_state_zoom_y")
+            .map_err(|err| err.to_string())?
+            .or(zoom),
+        skew_x: actor
+            .get::<Option<f32>>("__songlua_state_skew_x")
+            .map_err(|err| err.to_string())?,
+    })
+}
+
+fn current_perframe_player_states(
+    player_tables: &[Option<Table>; LUA_PLAYERS],
+) -> Result<[SongLuaPerframePlayerState; LUA_PLAYERS], String> {
+    let mut out = [SongLuaPerframePlayerState::default(); LUA_PLAYERS];
+    for player in 0..LUA_PLAYERS {
+        let Some(actor) = player_tables[player].as_ref() else {
+            continue;
+        };
+        out[player] = actor_perframe_player_state(actor)?;
+    }
+    Ok(out)
+}
+
+fn current_overlay_states(
+    overlays: &[OverlayCompileActor],
+) -> Result<Vec<SongLuaOverlayState>, String> {
+    let mut out = Vec::with_capacity(overlays.len());
+    for overlay in overlays {
+        out.push(actor_overlay_initial_state(&overlay.table)?);
+    }
+    Ok(out)
+}
+
+fn active_perframe_entries<'a>(
+    entries: &'a [SongLuaPerframeEntry],
+    start: f32,
+    end: f32,
+) -> Vec<&'a SongLuaPerframeEntry> {
+    let mid = start + 0.5 * (end - start);
+    entries
+        .iter()
+        .filter(|entry| mid > entry.start && mid < entry.end)
+        .collect()
+}
+
+fn call_perframe_entry(
+    entry: &SongLuaPerframeEntry,
+    beat: f32,
+    delta_seconds: f32,
+) -> Result<(), String> {
+    entry
+        .function
+        .call::<Value>((beat, delta_seconds))
+        .map(|_| ())
+        .map_err(|err| err.to_string())
+}
+
+fn push_perframe_player_target(
+    out: &mut Vec<SongLuaEaseWindow>,
+    start: f32,
+    end: f32,
+    from: Option<f32>,
+    to: Option<f32>,
+    baseline: Option<f32>,
+    neutral: f32,
+    target: SongLuaEaseTarget,
+    player: usize,
+) {
+    if end <= start {
+        return;
+    }
+    let baseline = baseline.unwrap_or(neutral);
+    let from = from.unwrap_or(baseline);
+    let to = to.unwrap_or(baseline);
+    if !from.is_finite() || !to.is_finite() {
+        return;
+    }
+    if (from - baseline).abs() <= f32::EPSILON && (to - baseline).abs() <= f32::EPSILON {
+        return;
+    }
+    out.push(SongLuaEaseWindow {
+        unit: SongLuaTimeUnit::Beat,
+        start,
+        limit: end - start,
+        span_mode: SongLuaSpanMode::Len,
+        from,
+        to,
+        target,
+        easing: Some("linear".to_string()),
+        player: Some((player + 1) as u8),
+        sustain: None,
+        opt1: None,
+        opt2: None,
+    });
+}
+
+fn overlay_delta_pair_from_states(
+    baseline: SongLuaOverlayState,
+    from: SongLuaOverlayState,
+    to: SongLuaOverlayState,
+) -> Option<(SongLuaOverlayStateDelta, SongLuaOverlayStateDelta)> {
+    let mut out_from = SongLuaOverlayStateDelta::default();
+    let mut out_to = SongLuaOverlayStateDelta::default();
+    macro_rules! copy_value_field {
+        ($field:ident) => {
+            if from.$field != baseline.$field || to.$field != baseline.$field {
+                out_from.$field = Some(from.$field);
+                out_to.$field = Some(to.$field);
+            }
+        };
+    }
+    macro_rules! copy_option_field {
+        ($field:ident) => {
+            if from.$field != baseline.$field || to.$field != baseline.$field {
+                out_from.$field = from.$field;
+                out_to.$field = to.$field;
+            }
+        };
+    }
+    copy_value_field!(x);
+    copy_value_field!(y);
+    copy_value_field!(z);
+    copy_option_field!(fov);
+    copy_option_field!(vanishpoint);
+    copy_value_field!(diffuse);
+    copy_value_field!(visible);
+    copy_value_field!(cropleft);
+    copy_value_field!(cropright);
+    copy_value_field!(croptop);
+    copy_value_field!(cropbottom);
+    copy_value_field!(zoom);
+    copy_value_field!(zoom_x);
+    copy_value_field!(zoom_y);
+    copy_value_field!(zoom_z);
+    copy_value_field!(basezoom);
+    copy_value_field!(basezoom_x);
+    copy_value_field!(basezoom_y);
+    copy_value_field!(rot_x_deg);
+    copy_value_field!(rot_y_deg);
+    copy_value_field!(rot_z_deg);
+    copy_value_field!(blend);
+    copy_value_field!(vibrate);
+    copy_value_field!(effect_magnitude);
+    copy_value_field!(effect_mode);
+    copy_value_field!(effect_color1);
+    copy_value_field!(effect_color2);
+    copy_value_field!(effect_period);
+    copy_option_field!(custom_texture_rect);
+    copy_option_field!(texcoord_velocity);
+    copy_option_field!(size);
+    copy_option_field!(stretch_rect);
+    overlay_delta_intersection(&out_from, &out_to)
+}
+
+fn compile_perframes(
+    lua: &Lua,
+    prefix_table: Option<Table>,
+    global_table: Option<Table>,
+    context: &SongLuaCompileContext,
+    overlays: &mut [OverlayCompileActor],
+    tracked_actors: &[TrackedCompileActor],
+) -> Result<(Vec<SongLuaEaseWindow>, Vec<SongLuaOverlayEase>, usize), String> {
+    let mut entries = read_perframe_entries(prefix_table)?;
+    entries.extend(read_perframe_entries(global_table)?);
+    if entries.is_empty() {
+        return Ok((Vec::new(), Vec::new(), 0));
+    }
+
+    let mut boundaries = entries
+        .iter()
+        .flat_map(|entry| [entry.start, entry.end])
+        .filter(|value| value.is_finite())
+        .collect::<Vec<_>>();
+    boundaries.sort_by(|left, right| left.total_cmp(right));
+    boundaries.dedup_by(|left, right| (*left - *right).abs() <= f32::EPSILON);
+    if boundaries.len() < 2 {
+        return Ok((Vec::new(), Vec::new(), 0));
+    }
+
+    let player_tables = tracked_player_tables(tracked_actors);
+    let baseline_players = current_perframe_player_states(&player_tables)?;
+    let baseline_overlays = current_overlay_states(overlays)?;
+    let mut out_eases = Vec::new();
+    let mut out_overlay_eases = Vec::new();
+
+    for window in boundaries.windows(2) {
+        let [start, end] = [window[0], window[1]];
+        if end <= start {
+            continue;
+        }
+        let active = active_perframe_entries(&entries, start, end);
+        if active.is_empty() {
+            let current_players = current_perframe_player_states(&player_tables)?;
+            let current_overlays = current_overlay_states(overlays)?;
+            for player in 0..LUA_PLAYERS {
+                push_perframe_player_target(
+                    &mut out_eases,
+                    start,
+                    end,
+                    current_players[player].rotation_z,
+                    current_players[player].rotation_z,
+                    baseline_players[player].rotation_z,
+                    0.0,
+                    SongLuaEaseTarget::PlayerRotationZ,
+                    player,
+                );
+                push_perframe_player_target(
+                    &mut out_eases,
+                    start,
+                    end,
+                    current_players[player].rotation_y,
+                    current_players[player].rotation_y,
+                    baseline_players[player].rotation_y,
+                    0.0,
+                    SongLuaEaseTarget::PlayerRotationY,
+                    player,
+                );
+                push_perframe_player_target(
+                    &mut out_eases,
+                    start,
+                    end,
+                    current_players[player].zoom_x,
+                    current_players[player].zoom_x,
+                    baseline_players[player].zoom_x,
+                    1.0,
+                    SongLuaEaseTarget::PlayerZoomX,
+                    player,
+                );
+                push_perframe_player_target(
+                    &mut out_eases,
+                    start,
+                    end,
+                    current_players[player].zoom_y,
+                    current_players[player].zoom_y,
+                    baseline_players[player].zoom_y,
+                    1.0,
+                    SongLuaEaseTarget::PlayerZoomY,
+                    player,
+                );
+                push_perframe_player_target(
+                    &mut out_eases,
+                    start,
+                    end,
+                    current_players[player].skew_x,
+                    current_players[player].skew_x,
+                    baseline_players[player].skew_x,
+                    0.0,
+                    SongLuaEaseTarget::PlayerSkewX,
+                    player,
+                );
+            }
+            for (overlay_index, current) in current_overlays.iter().copied().enumerate() {
+                let Some((from, to)) = overlay_delta_pair_from_states(
+                    baseline_overlays[overlay_index],
+                    current,
+                    current,
+                ) else {
+                    continue;
+                };
+                out_overlay_eases.push(SongLuaOverlayEase {
+                    overlay_index,
+                    unit: SongLuaTimeUnit::Beat,
+                    start,
+                    limit: end - start,
+                    span_mode: SongLuaSpanMode::Len,
+                    from,
+                    to,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                });
+            }
+            continue;
+        }
+
+        let step = perframe_segment_step(end - start);
+        let eps = (0.5 * step).min(0.25 * (end - start)).max(1.0e-4_f32);
+        let mut sample_beats = Vec::new();
+        let mut player_samples = Vec::new();
+        let mut overlay_samples = Vec::new();
+        let mut beat = start;
+        let mut prev_eval = None::<f32>;
+        loop {
+            let eval_beat = if beat <= start + f32::EPSILON {
+                (start + eps).min(end - eps)
+            } else if beat >= end - f32::EPSILON {
+                (end - eps).max(start + eps)
+            } else {
+                beat
+            };
+            let delta_seconds = prev_eval
+                .map(|prev| perframe_delta_seconds(context, (eval_beat - prev).abs()))
+                .unwrap_or(0.0);
+            reset_overlay_capture_tables(lua, overlays)?;
+            reset_tracked_capture_tables(lua, tracked_actors)?;
+            for entry in &active {
+                call_perframe_entry(entry, eval_beat, delta_seconds)?;
+            }
+            sample_beats.push(beat);
+            player_samples.push(current_perframe_player_states(&player_tables)?);
+            overlay_samples.push(current_overlay_states(overlays)?);
+            prev_eval = Some(eval_beat);
+            if beat >= end - f32::EPSILON {
+                break;
+            }
+            beat = (beat + step).min(end);
+            if beat > end {
+                beat = end;
+            }
+        }
+
+        for index in 0..sample_beats.len() {
+            let seg_start = sample_beats[index];
+            let seg_end = sample_beats.get(index + 1).copied().unwrap_or(end);
+            if seg_end <= seg_start {
+                continue;
+            }
+            let from_players = player_samples[index];
+            let to_players = player_samples
+                .get(index + 1)
+                .copied()
+                .unwrap_or(from_players);
+            for player in 0..LUA_PLAYERS {
+                push_perframe_player_target(
+                    &mut out_eases,
+                    seg_start,
+                    seg_end,
+                    from_players[player].rotation_z,
+                    to_players[player].rotation_z,
+                    baseline_players[player].rotation_z,
+                    0.0,
+                    SongLuaEaseTarget::PlayerRotationZ,
+                    player,
+                );
+                push_perframe_player_target(
+                    &mut out_eases,
+                    seg_start,
+                    seg_end,
+                    from_players[player].rotation_y,
+                    to_players[player].rotation_y,
+                    baseline_players[player].rotation_y,
+                    0.0,
+                    SongLuaEaseTarget::PlayerRotationY,
+                    player,
+                );
+                push_perframe_player_target(
+                    &mut out_eases,
+                    seg_start,
+                    seg_end,
+                    from_players[player].zoom_x,
+                    to_players[player].zoom_x,
+                    baseline_players[player].zoom_x,
+                    1.0,
+                    SongLuaEaseTarget::PlayerZoomX,
+                    player,
+                );
+                push_perframe_player_target(
+                    &mut out_eases,
+                    seg_start,
+                    seg_end,
+                    from_players[player].zoom_y,
+                    to_players[player].zoom_y,
+                    baseline_players[player].zoom_y,
+                    1.0,
+                    SongLuaEaseTarget::PlayerZoomY,
+                    player,
+                );
+                push_perframe_player_target(
+                    &mut out_eases,
+                    seg_start,
+                    seg_end,
+                    from_players[player].skew_x,
+                    to_players[player].skew_x,
+                    baseline_players[player].skew_x,
+                    0.0,
+                    SongLuaEaseTarget::PlayerSkewX,
+                    player,
+                );
+            }
+            let from_overlays = &overlay_samples[index];
+            let to_overlays = overlay_samples.get(index + 1).unwrap_or(from_overlays);
+            for overlay_index in 0..from_overlays.len().min(to_overlays.len()) {
+                let Some((from, to)) = overlay_delta_pair_from_states(
+                    baseline_overlays[overlay_index],
+                    from_overlays[overlay_index],
+                    to_overlays[overlay_index],
+                ) else {
+                    continue;
+                };
+                out_overlay_eases.push(SongLuaOverlayEase {
+                    overlay_index,
+                    unit: SongLuaTimeUnit::Beat,
+                    start: seg_start,
+                    limit: seg_end - seg_start,
+                    span_mode: SongLuaSpanMode::Len,
+                    from,
+                    to,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                });
+            }
+        }
+    }
+
+    let unsupported =
+        usize::from(out_eases.is_empty() && out_overlay_eases.is_empty()) * entries.len();
+    Ok((out_eases, out_overlay_eases, unsupported))
+}
+
 fn read_actions(
     lua: &Lua,
     table: Option<Table>,
@@ -5871,10 +6434,6 @@ fn read_actions(
         }
     }
     Ok(unsupported_function_actions)
-}
-
-fn table_len(table: Option<Table>) -> Result<usize, String> {
-    Ok(table.map(|table| table.raw_len()).unwrap_or(0))
 }
 
 #[inline(always)]
@@ -6236,6 +6795,83 @@ return Def.ActorFrame{}
         assert_eq!(compiled.messages[0].message, "ShowDDRFail");
         assert_eq!(compiled.info.unsupported_function_actions, 1);
         assert_eq!(compiled.info.unsupported_perframes, 1);
+    }
+
+    #[test]
+    fn compile_song_lua_samples_player_perframes_into_eases() {
+        let song_dir = test_dir("perframe-player");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_perframes = {
+    {4, 5, function(beat)
+        local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        if p then
+            p:rotationz((beat - 4) * 90)
+            p:skewx((beat - 4) * 0.5)
+        end
+    end},
+}
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Perframe Player"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_perframes, 0);
+        assert!(compiled.eases.iter().any(|window| {
+            matches!(window.target, SongLuaEaseTarget::PlayerRotationZ) && window.player == Some(1)
+        }));
+        assert!(compiled.eases.iter().any(|window| {
+            matches!(window.target, SongLuaEaseTarget::PlayerSkewX) && window.player == Some(1)
+        }));
+    }
+
+    #[test]
+    fn compile_song_lua_samples_overlay_perframes_into_overlay_eases() {
+        let song_dir = test_dir("perframe-overlay");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target
+mod_perframes = {
+    {8, 9, function(beat)
+        if target then
+            target:x((beat - 8) * 120)
+            target:diffusealpha(1 - (beat - 8))
+        end
+    end},
+}
+return Def.ActorFrame{
+    Def.Quad{
+        InitCommand=function(self)
+            target = self
+            self:zoomto(16, 16)
+        end
+    }
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Perframe Overlay"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_perframes, 0);
+        assert!(compiled.overlay_eases.iter().any(|ease| {
+            ease.overlay_index == 0 && ease.from.x.is_some() && ease.to.x.is_some()
+        }));
+        assert!(compiled.overlay_eases.iter().any(|ease| {
+            ease.overlay_index == 0 && ease.from.diffuse.is_some() && ease.to.diffuse.is_some()
+        }));
     }
 
     #[test]
@@ -7100,6 +7736,43 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.overlays.len(), 1);
         assert!(compiled.overlays[0].message_commands.is_empty());
+    }
+
+    #[test]
+    fn compile_song_lua_runs_messageman_broadcast_during_startup() {
+        let song_dir = test_dir("broadcast-startup");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        MESSAGEMAN:Broadcast("ProxyStart")
+    end,
+    Def.Quad{
+        InitCommand=function(self)
+            self:visible(false)
+            self:zoomto(12, 18)
+        end,
+        ProxyStartMessageCommand=function(self)
+            self:visible(true)
+            self:x(42)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Broadcast Startup"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(compiled.overlays[0].initial_state.x, 42.0);
+        assert!(compiled.overlays[0].initial_state.visible);
+        assert_eq!(compiled.overlays[0].initial_state.size, Some([12.0, 18.0]));
     }
 
     #[test]
@@ -8766,6 +9439,47 @@ return Def.ActorFrame{}
         assert_eq!(player_block.delta.rot_z_deg, Some(15.0));
         let fg_block = &compiled.song_foreground.message_commands[0].blocks[0];
         assert_eq!(fg_block.delta.z, Some(4.0));
+    }
+
+    #[test]
+    fn compile_song_lua_captures_function_actions_via_broadcast() {
+        let song_dir = test_dir("broadcast-function-action");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {2, function()
+        MESSAGEMAN:Broadcast("Flash")
+    end, true},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        FlashMessageCommand=function(self)
+            self:linear(0.5)
+            self:x(96)
+            self:diffusealpha(0.5)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Broadcast Function Action"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(compiled.overlays[0].message_commands.len(), 1);
+        let block = &compiled.overlays[0].message_commands[0].blocks[0];
+        assert_eq!(block.duration, 0.5);
+        assert_eq!(block.delta.x, Some(96.0));
+        assert_eq!(block.delta.diffuse.unwrap()[3], 0.5);
     }
 
     #[test]
