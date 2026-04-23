@@ -10064,7 +10064,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_builds_playerxy_playerz_rotationx_skewy_and_zoomz_runtime_targets() {
+    fn song_lua_builds_playerxy_playerz_rotationx_skewy_zoom_and_zoomz_runtime_targets() {
         let timing_segments = TimingSegments {
             bpms: vec![(0.0, 60.0)],
             ..TimingSegments::default()
@@ -10146,6 +10146,20 @@ mod tests {
                 crate::game::parsing::song_lua::SongLuaEaseWindow {
                     player: Some(1),
                     unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 6.0,
+                    limit: 2.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerZoom,
+                    from: 1.0,
+                    to: 0.75,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
                     start: 8.0,
                     limit: 2.0,
                     span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
@@ -10165,7 +10179,7 @@ mod tests {
             super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0);
 
         assert_eq!(unsupported, 0);
-        assert_eq!(windows.len(), 6);
+        assert_eq!(windows.len(), 7);
         assert!(matches!(
             windows[0].target,
             super::attacks::SongLuaEaseMaskTarget::PlayerX
@@ -10188,6 +10202,10 @@ mod tests {
         ));
         assert!(matches!(
             windows[5].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerZoom
+        ));
+        assert!(matches!(
+            windows[6].target,
             super::attacks::SongLuaEaseMaskTarget::PlayerZoomZ
         ));
         assert!(
@@ -10211,7 +10229,11 @@ mod tests {
                 .is_some_and(|value| (value - 0.125).abs() <= 0.000_1)
         );
         assert!(
-            super::song_lua_ease_window_value(&windows[5], 9.0)
+            super::song_lua_ease_window_value(&windows[5], 7.0)
+                .is_some_and(|value| (value - 0.875).abs() <= 0.000_1)
+        );
+        assert!(
+            super::song_lua_ease_window_value(&windows[6], 9.0)
                 .is_some_and(|value| (value - 1.125).abs() <= 0.000_1)
         );
     }

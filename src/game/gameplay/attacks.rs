@@ -146,6 +146,7 @@ pub(super) enum SongLuaEaseMaskTarget {
     PlayerRotationY,
     PlayerSkewX,
     PlayerSkewY,
+    PlayerZoom,
     PlayerZoomX,
     PlayerZoomY,
     PlayerZoomZ,
@@ -1463,6 +1464,7 @@ fn song_lua_persistent_player_transform_target(target: SongLuaEaseMaskTarget) ->
             | SongLuaEaseMaskTarget::PlayerRotationY
             | SongLuaEaseMaskTarget::PlayerSkewX
             | SongLuaEaseMaskTarget::PlayerSkewY
+            | SongLuaEaseMaskTarget::PlayerZoom
             | SongLuaEaseMaskTarget::PlayerZoomX
             | SongLuaEaseMaskTarget::PlayerZoomY
             | SongLuaEaseMaskTarget::PlayerZoomZ
@@ -1645,6 +1647,17 @@ pub(super) fn build_song_lua_ease_windows_for_player(
                 end_second,
                 sustain_end_second,
                 target: SongLuaEaseMaskTarget::PlayerSkewY,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
+            SongLuaEaseTarget::PlayerZoom => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerZoom,
                 from: window.from,
                 to: window.to,
                 easing: window.easing.clone(),
@@ -2917,6 +2930,11 @@ pub(super) fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::PlayerRotationY => *player_rotation_y = Some(value),
         SongLuaEaseMaskTarget::PlayerSkewX => *player_skew_x = Some(value),
         SongLuaEaseMaskTarget::PlayerSkewY => *player_skew_y = Some(value),
+        SongLuaEaseMaskTarget::PlayerZoom => {
+            *player_zoom_x = Some(value);
+            *player_zoom_y = Some(value);
+            *player_zoom_z = Some(value);
+        }
         SongLuaEaseMaskTarget::PlayerZoomX => *player_zoom_x = Some(value),
         SongLuaEaseMaskTarget::PlayerZoomY => *player_zoom_y = Some(value),
         SongLuaEaseMaskTarget::PlayerZoomZ => *player_zoom_z = Some(value),

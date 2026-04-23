@@ -249,6 +249,7 @@ pub enum SongLuaEaseTarget {
     PlayerRotationY,
     PlayerSkewX,
     PlayerSkewY,
+    PlayerZoom,
     PlayerZoomX,
     PlayerZoomY,
     PlayerZoomZ,
@@ -4478,6 +4479,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
+                record_probe_method_call(lua, &actor, "zoom")?;
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "zoom", value)?;
                     capture_block_set_zoom_axes(lua, &actor, value, "zoom_x", "zoom_y", "zoom_z")?;
@@ -5820,6 +5822,7 @@ fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLuaEas
     let mut saw_rotation_y = false;
     let mut saw_skew_x = false;
     let mut saw_skew_y = false;
+    let mut saw_zoom = false;
     let mut saw_zoom_x = false;
     let mut saw_zoom_y = false;
     let mut saw_zoom_z = false;
@@ -5839,6 +5842,7 @@ fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLuaEas
             "rotationy" => saw_rotation_y = true,
             "skewx" => saw_skew_x = true,
             "skewy" => saw_skew_y = true,
+            "zoom" => saw_zoom = true,
             "zoomx" => saw_zoom_x = true,
             "zoomy" => saw_zoom_y = true,
             "zoomz" => saw_zoom_z = true,
@@ -5855,41 +5859,45 @@ fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLuaEas
             saw_rotation_y,
             saw_skew_x,
             saw_skew_y,
+            saw_zoom,
             saw_zoom_x,
             saw_zoom_y,
             saw_zoom_z,
         ) {
-            (true, false, false, false, false, false, false, false, false, false, false) => {
+            (true, false, false, false, false, false, false, false, false, false, false, false) => {
                 Some(SongLuaEaseTarget::PlayerX)
             }
-            (false, true, false, false, false, false, false, false, false, false, false) => {
+            (false, true, false, false, false, false, false, false, false, false, false, false) => {
                 Some(SongLuaEaseTarget::PlayerY)
             }
-            (false, false, true, false, false, false, false, false, false, false, false) => {
+            (false, false, true, false, false, false, false, false, false, false, false, false) => {
                 Some(SongLuaEaseTarget::PlayerZ)
             }
-            (false, false, false, true, false, false, false, false, false, false, false) => {
+            (false, false, false, true, false, false, false, false, false, false, false, false) => {
                 Some(SongLuaEaseTarget::PlayerRotationX)
             }
-            (false, false, false, false, true, false, false, false, false, false, false) => {
+            (false, false, false, false, true, false, false, false, false, false, false, false) => {
                 Some(SongLuaEaseTarget::PlayerRotationZ)
             }
-            (false, false, false, false, false, true, false, false, false, false, false) => {
+            (false, false, false, false, false, true, false, false, false, false, false, false) => {
                 Some(SongLuaEaseTarget::PlayerRotationY)
             }
-            (false, false, false, false, false, false, true, false, false, false, false) => {
+            (false, false, false, false, false, false, true, false, false, false, false, false) => {
                 Some(SongLuaEaseTarget::PlayerSkewX)
             }
-            (false, false, false, false, false, false, false, true, false, false, false) => {
+            (false, false, false, false, false, false, false, true, false, false, false, false) => {
                 Some(SongLuaEaseTarget::PlayerSkewY)
             }
-            (false, false, false, false, false, false, false, false, true, false, false) => {
+            (false, false, false, false, false, false, false, false, true, false, false, false) => {
+                Some(SongLuaEaseTarget::PlayerZoom)
+            }
+            (false, false, false, false, false, false, false, false, false, true, false, false) => {
                 Some(SongLuaEaseTarget::PlayerZoomX)
             }
-            (false, false, false, false, false, false, false, false, false, true, false) => {
+            (false, false, false, false, false, false, false, false, false, false, true, false) => {
                 Some(SongLuaEaseTarget::PlayerZoomY)
             }
-            (false, false, false, false, false, false, false, false, false, false, true) => {
+            (false, false, false, false, false, false, false, false, false, false, false, true) => {
                 Some(SongLuaEaseTarget::PlayerZoomZ)
             }
             _ => None,
@@ -7252,7 +7260,7 @@ mod_perframes = {
             p:rotationz((beat - 4) * 90)
             p:skewx((beat - 4) * 0.5)
             p:skewy((beat - 4) * 0.25)
-            p:zoomz(1 + (beat - 4) * 0.25)
+            p:zoom(1 + (beat - 4) * 0.25)
         end
     end},
 }
@@ -7287,6 +7295,12 @@ return Def.ActorFrame{}
         }));
         assert!(compiled.eases.iter().any(|window| {
             matches!(window.target, SongLuaEaseTarget::PlayerSkewY) && window.player == Some(1)
+        }));
+        assert!(compiled.eases.iter().any(|window| {
+            matches!(window.target, SongLuaEaseTarget::PlayerZoomX) && window.player == Some(1)
+        }));
+        assert!(compiled.eases.iter().any(|window| {
+            matches!(window.target, SongLuaEaseTarget::PlayerZoomY) && window.player == Some(1)
         }));
         assert!(compiled.eases.iter().any(|window| {
             matches!(window.target, SongLuaEaseTarget::PlayerZoomZ) && window.player == Some(1)
@@ -8100,7 +8114,8 @@ return Def.ActorFrame{
             {8, 2, 0, 10, function(x) if target then target:rotationz(x) end end, "len", ease.inOutQuad},
             {12, 1, 0, 0.15, function(x) if target then target:skewx(x) end end, "len", ease.outQuad},
             {13, 1, 0, 0.2, function(x) if target then target:skewy(x) end end, "len", ease.outQuad},
-            {14, 1, 1, 1.25, function(x) if target then target:zoomz(x) end end, "len", ease.outQuad},
+            {14, 1, 1, 0.75, function(x) if target then target:zoom(x) end end, "len", ease.outQuad},
+            {15, 1, 1, 1.25, function(x) if target then target:zoomz(x) end end, "len", ease.outQuad},
         }
     end,
     Def.ActorFrame{
@@ -8121,7 +8136,7 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "Function Ease Song"),
         )
         .unwrap();
-        assert_eq!(compiled.eases.len(), 8);
+        assert_eq!(compiled.eases.len(), 9);
         assert_eq!(compiled.info.unsupported_function_eases, 0);
         assert!(matches!(
             compiled.eases[0].target,
@@ -8153,6 +8168,10 @@ return Def.ActorFrame{
         ));
         assert!(matches!(
             compiled.eases[7].target,
+            SongLuaEaseTarget::PlayerZoom
+        ));
+        assert!(matches!(
+            compiled.eases[8].target,
             SongLuaEaseTarget::PlayerZoomZ
         ));
     }
