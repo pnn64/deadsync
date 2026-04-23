@@ -3468,6 +3468,18 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.rot_z_deg = value;
     }
     if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_skew_x")
+        .map_err(|err| err.to_string())?
+    {
+        state.skew_x = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_skew_y")
+        .map_err(|err| err.to_string())?
+    {
+        state.skew_y = value;
+    }
+    if let Some(value) = actor
         .get::<Option<bool>>("__songlua_state_vibrate")
         .map_err(|err| err.to_string())?
     {
@@ -4180,6 +4192,12 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .map_err(|err| err.to_string())?,
                 rot_z_deg: block
                     .get::<Option<f32>>("rot_z_deg")
+                    .map_err(|err| err.to_string())?,
+                skew_x: block
+                    .get::<Option<f32>>("skew_x")
+                    .map_err(|err| err.to_string())?,
+                skew_y: block
+                    .get::<Option<f32>>("skew_y")
                     .map_err(|err| err.to_string())?,
                 blend: block
                     .get::<Option<String>>("blend")
@@ -5324,6 +5342,12 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     record_probe_method_call(lua, &actor, &method_name)?;
                     if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
                         actor.set(state_key.as_str(), value)?;
+                        let block_key = if method_name == "skewx" {
+                            "skew_x"
+                        } else {
+                            "skew_y"
+                        };
+                        capture_block_set_f32(lua, &actor, block_key, value)?;
                     }
                     Ok(actor.clone())
                 }
@@ -7497,6 +7521,8 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(rot_x_deg);
     copy_value_field!(rot_y_deg);
     copy_value_field!(rot_z_deg);
+    copy_value_field!(skew_x);
+    copy_value_field!(skew_y);
     copy_value_field!(blend);
     copy_value_field!(vibrate);
     copy_value_field!(effect_magnitude);
@@ -10608,6 +10634,38 @@ return Def.ActorFrame{
         assert_eq!(state.faderight, 0.2);
         assert_eq!(state.fadetop, 0.3);
         assert_eq!(state.fadebottom, 0.4);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_overlay_skew_methods() {
+        let song_dir = test_dir("actor-overlay-skew");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(40, 30).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:skewx(0.25):skewy(-0.5)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Overlay Skew"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        let state = compiled.overlays[0].initial_state;
+        assert!((state.skew_x - 0.25).abs() <= 0.000_1);
+        assert!((state.skew_y + 0.5).abs() <= 0.000_1);
     }
 
     #[test]

@@ -80,6 +80,8 @@ pub struct SongLuaOverlayState {
     pub rot_x_deg: f32,
     pub rot_y_deg: f32,
     pub rot_z_deg: f32,
+    pub skew_x: f32,
+    pub skew_y: f32,
     pub blend: SongLuaOverlayBlendMode,
     pub vibrate: bool,
     pub effect_magnitude: [f32; 3],
@@ -144,6 +146,8 @@ impl Default for SongLuaOverlayState {
             rot_x_deg: 0.0,
             rot_y_deg: 0.0,
             rot_z_deg: 0.0,
+            skew_x: 0.0,
+            skew_y: 0.0,
             blend: SongLuaOverlayBlendMode::Alpha,
             vibrate: false,
             effect_magnitude: [0.0, 0.0, 0.0],
@@ -209,6 +213,8 @@ pub struct SongLuaOverlayStateDelta {
     pub rot_x_deg: Option<f32>,
     pub rot_y_deg: Option<f32>,
     pub rot_z_deg: Option<f32>,
+    pub skew_x: Option<f32>,
+    pub skew_y: Option<f32>,
     pub blend: Option<SongLuaOverlayBlendMode>,
     pub vibrate: Option<bool>,
     pub effect_magnitude: Option<[f32; 3]>,
@@ -412,6 +418,12 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.rot_z_deg {
         state.rot_z_deg = value;
     }
+    if let Some(value) = delta.skew_x {
+        state.skew_x = value;
+    }
+    if let Some(value) = delta.skew_y {
+        state.skew_y = value;
+    }
     if let Some(value) = delta.blend {
         state.blend = value;
     }
@@ -610,6 +622,12 @@ fn overlay_state_lerp(
     }
     if delta.rot_z_deg.is_some() {
         from.rot_z_deg = (to.rot_z_deg - from.rot_z_deg).mul_add(t, from.rot_z_deg);
+    }
+    if delta.skew_x.is_some() {
+        from.skew_x = (to.skew_x - from.skew_x).mul_add(t, from.skew_x);
+    }
+    if delta.skew_y.is_some() {
+        from.skew_y = (to.skew_y - from.skew_y).mul_add(t, from.skew_y);
     }
     if delta.effect_magnitude.is_some() {
         for i in 0..3 {
@@ -846,6 +864,8 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.rot_x_deg.is_none()
         && delta.rot_y_deg.is_none()
         && delta.rot_z_deg.is_none()
+        && delta.skew_x.is_none()
+        && delta.skew_y.is_none()
         && delta.blend.is_none()
         && delta.vibrate.is_none()
         && delta.effect_magnitude.is_none()
@@ -973,6 +993,12 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.rot_z_deg.is_some() {
         into.rot_z_deg = from.rot_z_deg;
+    }
+    if from.skew_x.is_some() {
+        into.skew_x = from.skew_x;
+    }
+    if from.skew_y.is_some() {
+        into.skew_y = from.skew_y;
     }
     if from.blend.is_some() {
         into.blend = from.blend;
@@ -1111,6 +1137,8 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(rot_x_deg);
     copy_pair!(rot_y_deg);
     copy_pair!(rot_z_deg);
+    copy_pair!(skew_x);
+    copy_pair!(skew_y);
     copy_pair!(blend);
     copy_pair!(vibrate);
     copy_pair!(effect_magnitude);

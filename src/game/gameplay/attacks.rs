@@ -1923,6 +1923,8 @@ fn song_lua_overlay_delta_overlaps(
     overlap!(rot_x_deg);
     overlap!(rot_y_deg);
     overlap!(rot_z_deg);
+    overlap!(skew_x);
+    overlap!(skew_y);
     overlap!(blend);
     overlap!(vibrate);
     overlap!(effect_magnitude);

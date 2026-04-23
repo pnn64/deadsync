@@ -1036,6 +1036,12 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.rot_z_deg {
         state.rot_z_deg = value;
     }
+    if let Some(value) = delta.skew_x {
+        state.skew_x = value;
+    }
+    if let Some(value) = delta.skew_y {
+        state.skew_y = value;
+    }
     if let Some(value) = delta.blend {
         state.blend = value;
     }
@@ -1242,6 +1248,12 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.rot_z_deg.is_some() {
         from.rot_z_deg = (to.rot_z_deg - from.rot_z_deg).mul_add(t, from.rot_z_deg);
+    }
+    if delta.skew_x.is_some() {
+        from.skew_x = (to.skew_x - from.skew_x).mul_add(t, from.skew_x);
+    }
+    if delta.skew_y.is_some() {
+        from.skew_y = (to.skew_y - from.skew_y).mul_add(t, from.skew_y);
     }
     if delta.effect_magnitude.is_some() {
         for i in 0..3 {
@@ -2992,6 +3004,111 @@ fn song_lua_projected_overlay_uv_point(uv: [[f32; 2]; 4], x: f32, y: f32) -> [f3
     ]
 }
 
+#[inline(always)]
+fn song_lua_overlay_fold_xy_rot(
+    mut flip_x: bool,
+    mut flip_y: bool,
+    mut size_x: f32,
+    mut size_y: f32,
+    rot_x_deg: f32,
+    rot_y_deg: f32,
+) -> (bool, bool, f32, f32) {
+    let cos_y = rot_y_deg.to_radians().cos();
+    size_x *= cos_y.abs();
+    if cos_y.is_sign_negative() {
+        flip_x = !flip_x;
+    }
+
+    let cos_x = rot_x_deg.to_radians().cos();
+    size_y *= cos_x.abs();
+    if cos_x.is_sign_negative() {
+        flip_y = !flip_y;
+    }
+
+    (flip_x, flip_y, size_x, size_y)
+}
+
+fn song_lua_flat_skewed_overlay_actor(
+    texture: Arc<str>,
+    tint: [f32; 4],
+    blend: BlendMode,
+    z: i16,
+    center: [f32; 2],
+    size: [f32; 2],
+    rot_deg: [f32; 3],
+    uv: [[f32; 2]; 4],
+    state: SongLuaOverlayState,
+    flip_x: bool,
+    flip_y: bool,
+    world_z: f32,
+) -> Option<Actor> {
+    let (flip_x, flip_y, size_x, size_y) =
+        song_lua_overlay_fold_xy_rot(flip_x, flip_y, size[0], size[1], rot_deg[0], rot_deg[1]);
+    let half_w = 0.5 * size_x;
+    let half_h = 0.5 * size_y;
+    if half_w <= f32::EPSILON || half_h <= f32::EPSILON {
+        return None;
+    }
+    let edge_fade = song_lua_projected_overlay_edge_fade(state, flip_x, flip_y);
+    let xs = song_lua_projected_overlay_axis_slices(edge_fade[0], edge_fade[1]);
+    let ys = song_lua_projected_overlay_axis_slices(edge_fade[2], edge_fade[3]);
+    let transform = Matrix4::from_translation(Vector3::new(center[0], center[1], 0.0))
+        * Matrix4::from_rotation_z(rot_deg[2].to_radians())
+        * song_lua_player_skew_x_matrix(state.skew_x)
+        * song_lua_player_skew_y_matrix(state.skew_y);
+    let mut grid = Vec::with_capacity(xs.len() * ys.len());
+    for &y in &ys {
+        for &x in &xs {
+            let local_x = song_lua_effect_lerp(-half_w, half_w, x);
+            let local_y = song_lua_effect_lerp(-half_h, half_h, y);
+            let point = transform * Vector4::new(local_x, local_y, 0.0, 1.0);
+            let fade_x = song_lua_projected_edge_factor(x, edge_fade[0], edge_fade[1]);
+            let fade_y = song_lua_projected_edge_factor(y, edge_fade[2], edge_fade[3]);
+            grid.push(TexturedMeshVertex {
+                pos: [point.x, point.y, 0.0],
+                uv: song_lua_projected_overlay_uv_point(uv, x, y),
+                tex_matrix_scale: [1.0, 1.0],
+                color: [1.0, 1.0, 1.0, fade_x.min(fade_y)],
+            });
+        }
+    }
+    let width = xs.len();
+    let mut vertices = Vec::with_capacity((xs.len() - 1) * (ys.len() - 1) * 6);
+    for y in 0..ys.len().saturating_sub(1) {
+        for x in 0..xs.len().saturating_sub(1) {
+            let tl = y * width + x;
+            let tr = tl + 1;
+            let bl = (y + 1) * width + x;
+            let br = bl + 1;
+            vertices.push(grid[tl]);
+            vertices.push(grid[tr]);
+            vertices.push(grid[br]);
+            vertices.push(grid[tl]);
+            vertices.push(grid[br]);
+            vertices.push(grid[bl]);
+        }
+    }
+    Some(Actor::TexturedMesh {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        world_z,
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        local_transform: Matrix4::IDENTITY,
+        texture,
+        tint,
+        vertices: Arc::from(vertices.into_boxed_slice()),
+        geom_cache_key: INVALID_TMESH_CACHE_KEY,
+        mode: MeshMode::Triangles,
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        uv_tex_shift: [0.0, 0.0],
+        depth_test: false,
+        visible: state.visible,
+        blend,
+        z,
+    })
+}
+
 fn song_lua_projected_overlay_actor(
     texture: Arc<str>,
     tint: [f32; 4],
@@ -3017,7 +3134,9 @@ fn song_lua_projected_overlay_actor(
     let model = Matrix4::from_translation(Vector3::new(center[0], center[1], center[2]))
         * Matrix4::from_rotation_x(rot_deg[0].to_radians())
         * Matrix4::from_rotation_y(rot_deg[1].to_radians())
-        * Matrix4::from_rotation_z(rot_deg[2].to_radians());
+        * Matrix4::from_rotation_z(rot_deg[2].to_radians())
+        * song_lua_player_skew_x_matrix(state.skew_x)
+        * song_lua_player_skew_y_matrix(state.skew_y);
     let mut grid = Vec::with_capacity(xs.len() * ys.len());
     for &y in &ys {
         for &x in &xs {
@@ -3159,6 +3278,53 @@ fn build_song_lua_overlay_actor(
                     flip_x,
                     flip_y,
                     view_proj,
+                )?;
+                return Some(finalize_actor(actor, glow));
+            }
+            if (state.skew_x.abs() > f32::EPSILON || state.skew_y.abs() > f32::EPSILON)
+                && !state.mask_source
+                && !state.mask_dest
+            {
+                let size = song_lua_overlay_sprite_size(state, key.as_ref())?;
+                let (center, size) = song_lua_overlay_rect(
+                    state,
+                    size,
+                    x_scale,
+                    y_scale,
+                    size_scale_x,
+                    size_scale_y,
+                )?;
+                let mut tint = state.diffuse;
+                let mut glow = state.glow;
+                let mut effect_offset = [0.0, 0.0, 0.0];
+                let mut effect_scale = [1.0, 1.0, 1.0];
+                let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+                song_lua_apply_overlay_effect(
+                    effect,
+                    effect_time,
+                    effect_beat,
+                    &mut tint,
+                    &mut glow,
+                    &mut effect_offset,
+                    &mut effect_scale,
+                    &mut rot_deg,
+                );
+                let actor = song_lua_flat_skewed_overlay_actor(
+                    key.clone(),
+                    tint,
+                    overlay_blend,
+                    z,
+                    [
+                        center[0] + effect_offset[0] * x_scale,
+                        center[1] + effect_offset[1] * y_scale,
+                    ],
+                    [size[0] * effect_scale[0], size[1] * effect_scale[1]],
+                    rot_deg,
+                    song_lua_overlay_uvs(state, Some(key.as_ref()), flip_x, flip_y, total_elapsed),
+                    state,
+                    flip_x,
+                    flip_y,
+                    effect_offset[2],
                 )?;
                 return Some(finalize_actor(actor, glow));
             }
@@ -3368,6 +3534,52 @@ fn build_song_lua_overlay_actor(
                     flip_x,
                     flip_y,
                     view_proj,
+                )?;
+                return Some(finalize_actor(actor, glow));
+            }
+            if (state.skew_x.abs() > f32::EPSILON || state.skew_y.abs() > f32::EPSILON)
+                && !state.mask_source
+                && !state.mask_dest
+            {
+                let (center, size) = song_lua_overlay_rect(
+                    state,
+                    state.size.unwrap_or([1.0, 1.0]),
+                    x_scale,
+                    y_scale,
+                    size_scale_x,
+                    size_scale_y,
+                )?;
+                let mut tint = state.diffuse;
+                let mut glow = state.glow;
+                let mut effect_offset = [0.0, 0.0, 0.0];
+                let mut effect_scale = [1.0, 1.0, 1.0];
+                let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+                song_lua_apply_overlay_effect(
+                    effect,
+                    effect_time,
+                    effect_beat,
+                    &mut tint,
+                    &mut glow,
+                    &mut effect_offset,
+                    &mut effect_scale,
+                    &mut rot_deg,
+                );
+                let actor = song_lua_flat_skewed_overlay_actor(
+                    Arc::from("__white"),
+                    tint,
+                    overlay_blend,
+                    z,
+                    [
+                        center[0] + effect_offset[0] * x_scale,
+                        center[1] + effect_offset[1] * y_scale,
+                    ],
+                    [size[0] * effect_scale[0], size[1] * effect_scale[1]],
+                    rot_deg,
+                    song_lua_overlay_uvs(state, None, flip_x, flip_y, total_elapsed),
+                    state,
+                    flip_x,
+                    flip_y,
+                    effect_offset[2],
                 )?;
                 return Some(finalize_actor(actor, glow));
             }
@@ -6327,6 +6539,53 @@ mod tests {
                 assert!((fadebottom - 0.4).abs() <= 0.000_1);
             }
             other => panic!("expected faded sprite overlay, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_overlay_applies_skew_at_runtime() {
+        let key = "song-lua-skew.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: std::path::PathBuf::from(&key),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                skew_x: 0.5,
+                skew_y: 0.25,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            783,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("skewed sprite should render");
+
+        match actor {
+            Actor::TexturedMesh { vertices, z, .. } => {
+                assert_eq!(z, 783);
+                assert_eq!(vertices.len(), 6);
+                assert!((vertices[0].pos[0] - 251.25).abs() <= 0.001);
+                assert!((vertices[0].pos[1] - 202.5).abs() <= 0.001);
+                assert!((vertices[2].pos[0] - 388.75).abs() <= 0.001);
+                assert!((vertices[2].pos[1] - 277.5).abs() <= 0.001);
+            }
+            other => panic!("expected skewed textured mesh overlay, got {other:?}"),
         }
     }
 
