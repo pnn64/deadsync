@@ -38,6 +38,7 @@ const SONG_LUA_RUNTIME_BEAT_KEY: &str = "__songlua_song_beat";
 const SONG_LUA_RUNTIME_SECONDS_KEY: &str = "__songlua_music_seconds";
 const SONG_LUA_RUNTIME_BPS_KEY: &str = "__songlua_song_bps";
 const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
+const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 const EASING_NAMES: &[&str] = &[
     "linear",
     "inQuad",
@@ -1085,6 +1086,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("THEME", create_theme_table(lua)?)?;
     globals.set("NOTESKIN", create_noteskin_table(lua, context)?)?;
     globals.set("ArrowEffects", create_arrow_effects_table(lua)?)?;
+    globals.set(SONG_LUA_SIDE_EFFECT_COUNT_KEY, 0_i64)?;
 
     let song_runtime = create_song_runtime_table(lua, context)?;
     globals.set(SONG_LUA_RUNTIME_KEY, song_runtime.clone())?;
@@ -1231,11 +1233,17 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     )?;
     screenman.set(
         "SystemMessage",
-        lua.create_function(|_, _args: MultiValue| Ok(()))?,
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
     )?;
     screenman.set(
         "SetNewScreen",
-        lua.create_function(|_, _args: MultiValue| Ok(()))?,
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
     )?;
     globals.set("SCREENMAN", screenman)?;
 
@@ -1244,13 +1252,20 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         "Broadcast",
         lua.create_function(|lua, args: MultiValue| {
             if let Some(message) = method_arg(&args, 0).cloned().and_then(read_string) {
+                note_song_lua_side_effect(lua)?;
                 broadcast_song_lua_message(lua, &message)?;
             }
             Ok(())
         })?,
     )?;
     globals.set("MESSAGEMAN", messageman)?;
-    globals.set("SM", lua.create_function(|_, _args: MultiValue| Ok(()))?)?;
+    globals.set(
+        "SM",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
     Ok(())
 }
 
@@ -1730,6 +1745,16 @@ fn create_top_screen_table(
             let child = create_named_child_actor(lua, &top_screen_for_get_child, &name)?;
             children.set(name.as_str(), child.clone())?;
             Ok(Value::Table(child))
+        })?,
+    )?;
+    top_screen.set(
+        "StartTransitioningScreen",
+        lua.create_function({
+            let top_screen = top_screen.clone();
+            move |lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(top_screen.clone())
+            }
         })?,
     )?;
     Ok(TopScreenLuaTables {
@@ -2364,6 +2389,19 @@ fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Result<T
 
 fn compile_song_runtime_table(lua: &Lua) -> mlua::Result<Table> {
     lua.globals().get(SONG_LUA_RUNTIME_KEY)
+}
+
+fn song_lua_side_effect_count(lua: &Lua) -> mlua::Result<i64> {
+    Ok(lua
+        .globals()
+        .get::<Option<i64>>(SONG_LUA_SIDE_EFFECT_COUNT_KEY)?
+        .unwrap_or(0))
+}
+
+fn note_song_lua_side_effect(lua: &Lua) -> mlua::Result<()> {
+    let globals = lua.globals();
+    let count = song_lua_side_effect_count(lua)?;
+    globals.set(SONG_LUA_SIDE_EFFECT_COUNT_KEY, count.saturating_add(1))
 }
 
 fn compile_song_runtime_values(lua: &Lua) -> mlua::Result<(f32, f32)> {
@@ -5948,10 +5986,12 @@ fn capture_function_action_blocks(
     (
         Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
         Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
+        bool,
     ),
     String,
 > {
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
+    let side_effect_before = song_lua_side_effect_count(lua).map_err(|err| err.to_string())?;
     set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
     reset_overlay_capture_tables(lua, overlays)?;
     reset_tracked_capture_tables(lua, tracked_actors)?;
@@ -5961,8 +6001,10 @@ fn capture_function_action_blocks(
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     let overlay_blocks = overlay_blocks?;
     let tracked_blocks = tracked_blocks?;
+    let saw_side_effect =
+        song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
     result.map_err(|err| err.to_string())?;
-    Ok((overlay_blocks, tracked_blocks))
+    Ok((overlay_blocks, tracked_blocks, saw_side_effect))
 }
 
 fn compile_function_action(
@@ -5975,10 +6017,10 @@ fn compile_function_action(
     counter: &mut usize,
     messages: &mut Vec<SongLuaMessageEvent>,
 ) -> Result<bool, String> {
-    let (overlay_captures, tracked_captures) =
+    let (overlay_captures, tracked_captures, saw_side_effect) =
         capture_function_action_blocks(lua, overlays, tracked_actors, function, beat)?;
     if overlay_captures.is_empty() && tracked_captures.is_empty() {
-        return Ok(false);
+        return Ok(saw_side_effect);
     }
     let message = format!("__songlua_overlay_fn_action_{}", *counter);
     *counter += 1;
@@ -6211,8 +6253,9 @@ fn call_perframe_entry(
     entry: &SongLuaPerframeEntry,
     beat: f32,
     delta_seconds: f32,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
+    let side_effect_before = song_lua_side_effect_count(lua).map_err(|err| err.to_string())?;
     set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
     let result = entry
         .function
@@ -6220,7 +6263,10 @@ fn call_perframe_entry(
         .map(|_| ())
         .map_err(|err| err.to_string());
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
-    result
+    let saw_side_effect =
+        song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
+    result?;
+    Ok(saw_side_effect)
 }
 
 fn push_perframe_player_target(
@@ -6350,6 +6396,7 @@ fn compile_perframes(
     let baseline_overlays = current_overlay_states(overlays)?;
     let mut out_eases = Vec::new();
     let mut out_overlay_eases = Vec::new();
+    let mut saw_recognized_side_effect = false;
 
     for window in boundaries.windows(2) {
         let [start, end] = [window[0], window[1]];
@@ -6496,7 +6543,8 @@ fn compile_perframes(
             reset_overlay_capture_tables(lua, overlays)?;
             reset_tracked_capture_tables(lua, tracked_actors)?;
             for entry in &active {
-                call_perframe_entry(lua, entry, eval_beat, delta_seconds)?;
+                saw_recognized_side_effect |=
+                    call_perframe_entry(lua, entry, eval_beat, delta_seconds)?;
             }
             sample_beats.push(beat);
             player_samples.push(current_perframe_player_states(&player_tables)?);
@@ -6639,8 +6687,9 @@ fn compile_perframes(
         }
     }
 
-    let unsupported =
-        usize::from(out_eases.is_empty() && out_overlay_eases.is_empty()) * entries.len();
+    let unsupported = usize::from(
+        out_eases.is_empty() && out_overlay_eases.is_empty() && !saw_recognized_side_effect,
+    ) * entries.len();
     Ok((out_eases, out_overlay_eases, unsupported))
 }
 
@@ -7147,6 +7196,34 @@ return Def.ActorFrame{}
                 .iter()
                 .all(|window| window.from == 9.0 && window.to == 9.0)
         );
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_side_effect_only_perframes() {
+        let song_dir = test_dir("perframe-side-effects");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_perframes = {
+    {4, 5, function()
+        SCREENMAN:SystemMessage("perframe")
+        SCREENMAN:GetTopScreen():StartTransitioningScreen("SM_DoNextScreen")
+    end},
+}
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Perframe Side Effects"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_perframes, 0);
+        assert!(compiled.eases.is_empty());
+        assert!(compiled.overlay_eases.is_empty());
     }
 
     #[test]
@@ -9851,6 +9928,36 @@ return Def.ActorFrame{
         assert_eq!(block.duration, 0.5);
         assert_eq!(block.delta.x, Some(96.0));
         assert_eq!(block.delta.diffuse.unwrap()[3], 0.5);
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_side_effect_only_function_actions() {
+        let song_dir = test_dir("function-action-side-effects");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {1, function() SCREENMAN:SystemMessage("hello") end, true},
+    {2, function() SM("hello") end, true},
+    {3, function() SCREENMAN:SetNewScreen("ScreenGameplay") end, true},
+    {4, function() SCREENMAN:GetTopScreen():StartTransitioningScreen("SM_DoNextScreen") end, true},
+    {5, function() MESSAGEMAN:Broadcast("NoListeners") end, true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Function Action Side Effects"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert!(compiled.messages.is_empty());
+        assert!(compiled.overlays.is_empty());
     }
 
     #[test]
