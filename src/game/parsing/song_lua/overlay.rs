@@ -59,6 +59,8 @@ pub struct SongLuaOverlayState {
     pub faderight: f32,
     pub fadetop: f32,
     pub fadebottom: f32,
+    pub mask_source: bool,
+    pub mask_dest: bool,
     pub zoom: f32,
     pub zoom_x: f32,
     pub zoom_y: f32,
@@ -109,6 +111,8 @@ impl Default for SongLuaOverlayState {
             faderight: 0.0,
             fadetop: 0.0,
             fadebottom: 0.0,
+            mask_source: false,
+            mask_dest: false,
             zoom: 1.0,
             zoom_x: 1.0,
             zoom_y: 1.0,
@@ -160,6 +164,8 @@ pub struct SongLuaOverlayStateDelta {
     pub faderight: Option<f32>,
     pub fadetop: Option<f32>,
     pub fadebottom: Option<f32>,
+    pub mask_source: Option<bool>,
+    pub mask_dest: Option<bool>,
     pub zoom: Option<f32>,
     pub zoom_x: Option<f32>,
     pub zoom_y: Option<f32>,
@@ -313,6 +319,12 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.fadebottom {
         state.fadebottom = value;
     }
+    if let Some(value) = delta.mask_source {
+        state.mask_source = value;
+    }
+    if let Some(value) = delta.mask_dest {
+        state.mask_dest = value;
+    }
     if let Some(value) = delta.zoom {
         state.zoom = value;
     }
@@ -461,6 +473,12 @@ fn overlay_state_lerp(
     }
     if delta.fadebottom.is_some() {
         from.fadebottom = (to.fadebottom - from.fadebottom).mul_add(t, from.fadebottom);
+    }
+    if delta.mask_source.is_some() && t >= 1.0 - f32::EPSILON {
+        from.mask_source = to.mask_source;
+    }
+    if delta.mask_dest.is_some() && t >= 1.0 - f32::EPSILON {
+        from.mask_dest = to.mask_dest;
     }
     if delta.zoom.is_some() {
         from.zoom = (to.zoom - from.zoom).mul_add(t, from.zoom);
@@ -658,6 +676,8 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.faderight.is_none()
         && delta.fadetop.is_none()
         && delta.fadebottom.is_none()
+        && delta.mask_source.is_none()
+        && delta.mask_dest.is_none()
         && delta.zoom.is_none()
         && delta.zoom_x.is_none()
         && delta.zoom_y.is_none()
@@ -735,6 +755,12 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.fadebottom.is_some() {
         into.fadebottom = from.fadebottom;
+    }
+    if from.mask_source.is_some() {
+        into.mask_source = from.mask_source;
+    }
+    if from.mask_dest.is_some() {
+        into.mask_dest = from.mask_dest;
     }
     if from.zoom.is_some() {
         into.zoom = from.zoom;
@@ -867,6 +893,8 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(faderight);
     copy_pair!(fadetop);
     copy_pair!(fadebottom);
+    copy_pair!(mask_source);
+    copy_pair!(mask_dest);
     copy_pair!(zoom);
     copy_pair!(zoom_x);
     copy_pair!(zoom_y);

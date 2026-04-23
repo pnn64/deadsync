@@ -2371,10 +2371,14 @@ fn build_actor_recursive<'a>(
             max_w_pre_zoom,
             max_h_pre_zoom,
             clip,
+            mask_dest,
             blend,
             glow: _,
             effect,
         } => {
+            if *mask_dest && masks.is_empty() {
+                return;
+            }
             if let Some(fm) = fonts.get(font) {
                 let layout = text_cache.get_or_build(fm, fonts, content, *wrap_width_pixels);
                 if layout.lines.is_empty() {
@@ -2498,6 +2502,9 @@ fn build_actor_recursive<'a>(
                 } else {
                     before
                 };
+                if *mask_dest {
+                    clip_objects_range_to_world_masks(out, before, masks);
+                }
                 for obj in out.iter_mut().take(end).skip(before) {
                     obj.z = layer;
                     obj.order = {
@@ -4386,6 +4393,7 @@ mod tests {
             max_w_pre_zoom: false,
             max_h_pre_zoom: false,
             clip: None,
+            mask_dest: false,
             blend: BlendMode::Alpha,
             effect: Default::default(),
         }];
@@ -4436,6 +4444,7 @@ mod tests {
             max_w_pre_zoom: false,
             max_h_pre_zoom: false,
             clip: Some([10.0, 20.0, 4.0, 10.0]),
+            mask_dest: false,
             blend: BlendMode::Alpha,
             effect: Default::default(),
         }];
@@ -4484,6 +4493,7 @@ mod tests {
             max_w_pre_zoom: false,
             max_h_pre_zoom: false,
             clip: None,
+            mask_dest: false,
             blend: BlendMode::Alpha,
             effect: Default::default(),
         }];
@@ -4536,6 +4546,7 @@ mod tests {
             max_w_pre_zoom: false,
             max_h_pre_zoom: false,
             clip: None,
+            mask_dest: false,
             blend: BlendMode::Alpha,
             effect: Default::default(),
         }];
@@ -4590,6 +4601,7 @@ mod tests {
             max_w_pre_zoom: false,
             max_h_pre_zoom: false,
             clip: None,
+            mask_dest: false,
             blend: BlendMode::Alpha,
             effect: Default::default(),
         }];

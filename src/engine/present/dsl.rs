@@ -1245,6 +1245,7 @@ impl TextBuilder {
             max_w_pre_zoom: self.max_w_pre_zoom,
             max_h_pre_zoom: self.max_h_pre_zoom,
             clip: None,
+            mask_dest: false,
             blend: self.blend,
             effect: self.effect,
         };

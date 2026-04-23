@@ -116,6 +116,7 @@ pub enum Actor {
         max_h_pre_zoom: bool,
         /// Clip rect in parent TL space: [x, y, w, h].
         clip: Option<[f32; 4]>,
+        mask_dest: bool,
         blend: BlendMode,
         effect: anim::EffectState,
     },
@@ -317,6 +318,7 @@ mod tests {
             max_w_pre_zoom: false,
             max_h_pre_zoom: false,
             clip: None,
+            mask_dest: false,
             blend: BlendMode::Alpha,
             effect: anim::EffectState::default(),
         }

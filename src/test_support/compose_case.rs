@@ -926,6 +926,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             max_w_pre_zoom,
             max_h_pre_zoom,
             clip,
+            mask_dest: _,
             blend,
             effect,
         } => ActorSnapshot::Text {
@@ -1148,6 +1149,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             max_w_pre_zoom: *max_w_pre_zoom,
             max_h_pre_zoom: *max_h_pre_zoom,
             clip: *clip,
+            mask_dest: false,
             blend: BlendMode::from(*blend),
             effect: EffectState::from(*effect),
         },

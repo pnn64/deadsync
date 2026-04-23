@@ -982,6 +982,12 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.fadebottom {
         state.fadebottom = value;
     }
+    if let Some(value) = delta.mask_source {
+        state.mask_source = value;
+    }
+    if let Some(value) = delta.mask_dest {
+        state.mask_dest = value;
+    }
     if let Some(value) = delta.zoom {
         state.zoom = value;
     }
@@ -1138,6 +1144,12 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.fadebottom.is_some() {
         from.fadebottom = (to.fadebottom - from.fadebottom).mul_add(t, from.fadebottom);
+    }
+    if delta.mask_source.is_some() && t >= 1.0 - f32::EPSILON {
+        from.mask_source = to.mask_source;
+    }
+    if delta.mask_dest.is_some() && t >= 1.0 - f32::EPSILON {
+        from.mask_dest = to.mask_dest;
     }
     if delta.zoom.is_some() {
         from.zoom = (to.zoom - from.zoom).mul_add(t, from.zoom);
@@ -1412,6 +1424,8 @@ fn song_lua_overlay_compose_state(
         child.diffuse[i] *= parent.diffuse[i];
     }
     child.visible = parent.visible && child.visible;
+    child.mask_source |= parent.mask_source;
+    child.mask_dest |= parent.mask_dest;
     child.basezoom *= parent.basezoom * parent.zoom;
     child.basezoom_x *= parent.basezoom_x * parent.zoom_x;
     child.basezoom_y *= parent.basezoom_y * parent.zoom_y;
@@ -2253,6 +2267,7 @@ fn song_lua_style_capture_actor(
             max_w_pre_zoom,
             max_h_pre_zoom,
             clip,
+            mask_dest,
             blend: actor_blend,
             effect,
         } => Actor::Text {
@@ -2275,6 +2290,7 @@ fn song_lua_style_capture_actor(
             max_w_pre_zoom,
             max_h_pre_zoom,
             clip,
+            mask_dest,
             blend: blend.unwrap_or(actor_blend),
             effect,
         },
@@ -2935,6 +2951,8 @@ fn build_song_lua_overlay_actor(
                 fadetop,
                 fadebottom,
                 blend,
+                mask_source,
+                mask_dest,
                 rot_x_deg,
                 rot_y_deg,
                 rot_z_deg,
@@ -2973,6 +2991,8 @@ fn build_song_lua_overlay_actor(
                 *fadetop = state.fadetop.clamp(0.0, 1.0);
                 *fadebottom = state.fadebottom.clamp(0.0, 1.0);
                 *blend = overlay_blend;
+                *mask_source = state.mask_source;
+                *mask_dest = state.mask_dest;
                 *rot_x_deg = effect_rot[0];
                 *rot_y_deg = effect_rot[1];
                 *rot_z_deg = effect_rot[2];
@@ -3041,6 +3061,7 @@ fn build_song_lua_overlay_actor(
                 max_w_pre_zoom: false,
                 max_h_pre_zoom: false,
                 clip: None,
+                mask_dest: state.mask_dest,
                 blend: overlay_blend,
                 effect: EffectState::default(),
             })
@@ -3120,6 +3141,8 @@ fn build_song_lua_overlay_actor(
                 fadetop,
                 fadebottom,
                 blend,
+                mask_source,
+                mask_dest,
                 rot_x_deg,
                 rot_y_deg,
                 rot_z_deg,
@@ -3155,6 +3178,8 @@ fn build_song_lua_overlay_actor(
                 *fadetop = state.fadetop.clamp(0.0, 1.0);
                 *fadebottom = state.fadebottom.clamp(0.0, 1.0);
                 *blend = overlay_blend;
+                *mask_source = state.mask_source;
+                *mask_dest = state.mask_dest;
                 *rot_x_deg = effect_rot[0];
                 *rot_y_deg = effect_rot[1];
                 *rot_z_deg = effect_rot[2];
@@ -3298,6 +3323,7 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             max_w_pre_zoom,
             max_h_pre_zoom,
             clip,
+            mask_dest,
             blend,
             effect,
         } => {
@@ -3323,6 +3349,7 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 max_w_pre_zoom,
                 max_h_pre_zoom,
                 clip,
+                mask_dest,
                 blend,
                 effect,
             }
@@ -5766,6 +5793,89 @@ mod tests {
                 assert!((fadebottom - 0.4).abs() <= 0.000_1);
             }
             other => panic!("expected faded sprite overlay, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_overlay_applies_mask_flags_at_runtime() {
+        let quad = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let quad_actor = build_song_lua_overlay_actor(
+            &quad,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                size: Some([100.0, 50.0]),
+                mask_source: true,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            783,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("masked quad should render");
+
+        match quad_actor {
+            Actor::Sprite {
+                mask_source,
+                mask_dest,
+                z,
+                ..
+            } => {
+                assert_eq!(z, 783);
+                assert!(mask_source);
+                assert!(!mask_dest);
+            }
+            other => panic!("expected masked quad sprite, got {other:?}"),
+        }
+
+        let text = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("MASK"),
+                stroke_color: None,
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let text_actor = build_song_lua_overlay_actor(
+            &text,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                mask_dest: true,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            784,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("masked text should render");
+
+        match text_actor {
+            Actor::Text { mask_dest, z, .. } => {
+                assert_eq!(z, 784);
+                assert!(mask_dest);
+            }
+            other => panic!("expected masked text actor, got {other:?}"),
         }
     }
 

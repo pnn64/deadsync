@@ -3353,6 +3353,18 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.fadebottom = value;
     }
     if let Some(value) = actor
+        .get::<Option<bool>>("__songlua_state_mask_source")
+        .map_err(|err| err.to_string())?
+    {
+        state.mask_source = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<bool>>("__songlua_state_mask_dest")
+        .map_err(|err| err.to_string())?
+    {
+        state.mask_dest = value;
+    }
+    if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_zoom")
         .map_err(|err| err.to_string())?
     {
@@ -3988,6 +4000,12 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .map_err(|err| err.to_string())?,
                 fadebottom: block
                     .get::<Option<f32>>("fadebottom")
+                    .map_err(|err| err.to_string())?,
+                mask_source: block
+                    .get::<Option<bool>>("mask_source")
+                    .map_err(|err| err.to_string())?,
+                mask_dest: block
+                    .get::<Option<bool>>("mask_dest")
                     .map_err(|err| err.to_string())?,
                 zoom: block
                     .get::<Option<f32>>("zoom")
@@ -4781,6 +4799,26 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "fadebottom",
         make_actor_capture_f32_method(lua, actor, "fadebottom", None)?,
+    )?;
+    actor.set(
+        "MaskSource",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                capture_block_set_bool(lua, &actor, "mask_source", true)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "MaskDest",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                capture_block_set_bool(lua, &actor, "mask_dest", true)?;
+                Ok(actor.clone())
+            }
+        })?,
     )?;
     actor.set(
         "rotationx",
@@ -6980,6 +7018,8 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(faderight);
     copy_value_field!(fadetop);
     copy_value_field!(fadebottom);
+    copy_value_field!(mask_source);
+    copy_value_field!(mask_dest);
     copy_value_field!(zoom);
     copy_value_field!(zoom_x);
     copy_value_field!(zoom_y);
@@ -10094,6 +10134,44 @@ return Def.ActorFrame{
         assert_eq!(state.faderight, 0.2);
         assert_eq!(state.fadetop, 0.3);
         assert_eq!(state.fadebottom, 0.4);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_mask_methods() {
+        let song_dir = test_dir("actor-mask-methods");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(40, 30).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Source",
+        OnCommand=function(self)
+            self:zoomto(100, 100):MaskSource()
+        end,
+    },
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="MASK",
+        OnCommand=function(self)
+            self:MaskDest()
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Mask Methods"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+        assert!(compiled.overlays[0].initial_state.mask_source);
+        assert!(compiled.overlays[1].initial_state.mask_dest);
     }
 
     #[test]

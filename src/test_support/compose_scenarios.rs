@@ -629,6 +629,7 @@ fn stroked_text_actor(text: &'static str, x: f32, y: f32, row: usize) -> Actor {
         max_w_pre_zoom: row.is_multiple_of(2),
         max_h_pre_zoom: false,
         clip: Some([x, y, 210.0, 24.0]),
+        mask_dest: false,
         blend: BlendMode::Alpha,
         effect: EffectState {
             mode: EffectMode::Pulse,
@@ -964,6 +965,7 @@ fn text_actor(
         max_w_pre_zoom: false,
         max_h_pre_zoom: false,
         clip: None,
+        mask_dest: false,
         blend: BlendMode::Alpha,
         effect: EffectState::default(),
     }
