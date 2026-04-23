@@ -1909,10 +1909,7 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::MenuBackground,
         label: lookup_key("OptionsMachine", "MenuBackground"),
-        choices: &[
-            localized_choice("OptionsMachine", "MenuBackgroundHearts"),
-            localized_choice("OptionsMachine", "MenuBackgroundTechnique"),
-        ],
+        choices: &[literal_choice("❤"), literal_choice("🌀")],
         inline: true,
     },
     SubRow {
