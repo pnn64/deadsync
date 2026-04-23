@@ -2845,6 +2845,15 @@ fn song_lua_player_skew_x_matrix(amount: f32) -> Matrix4 {
     ])
 }
 
+fn song_lua_player_skew_y_matrix(amount: f32) -> Matrix4 {
+    Matrix4::from_cols_array(&[
+        1.0, amount, 0.0, 0.0, //
+        0.0, 1.0, 0.0, 0.0, //
+        0.0, 0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, 1.0,
+    ])
+}
+
 #[inline(always)]
 fn song_lua_fold_x_around_pivot(x: f32, pivot_x: f32, cos_y: f32) -> f32 {
     pivot_x + (x - pivot_x) * cos_y
@@ -3093,6 +3102,7 @@ fn song_lua_player_transform_matrix(
     rotation_x_deg: f32,
     rotation_z_deg: f32,
     skew_x: f32,
+    skew_y: f32,
     zoom_x: f32,
     zoom_y: f32,
     zoom_z: f32,
@@ -3103,6 +3113,7 @@ fn song_lua_player_transform_matrix(
         || !rotation_x_deg.is_finite()
         || !rotation_z_deg.is_finite()
         || !skew_x.is_finite()
+        || !skew_y.is_finite()
         || !zoom_x.is_finite()
         || !zoom_y.is_finite()
         || !zoom_z.is_finite()
@@ -3124,6 +3135,11 @@ fn song_lua_player_transform_matrix(
     } else {
         skew_x
     };
+    let skew_y = if skew_y.abs() <= f32::EPSILON {
+        0.0
+    } else {
+        skew_y
+    };
     let zoom_x = if (zoom_x - 1.0).abs() <= f32::EPSILON {
         1.0
     } else {
@@ -3144,6 +3160,7 @@ fn song_lua_player_transform_matrix(
     if rotation_x_deg.abs() <= f32::EPSILON
         && rotation_z_deg.abs() <= f32::EPSILON
         && skew_x.abs() <= f32::EPSILON
+        && skew_y.abs() <= f32::EPSILON
         && (zoom_x - 1.0).abs() <= f32::EPSILON
         && (zoom_y - 1.0).abs() <= f32::EPSILON
         && (zoom_z - 1.0).abs() <= f32::EPSILON
@@ -3161,6 +3178,7 @@ fn song_lua_player_transform_matrix(
             * Matrix4::from_rotation_x(rotation_x_deg.to_radians())
             * Matrix4::from_rotation_z(rotation_z_deg.to_radians())
             * song_lua_player_skew_x_matrix(skew_x)
+            * song_lua_player_skew_y_matrix(skew_y)
             * Matrix4::from_scale(Vector3::new(zoom_x, zoom_y, zoom_z))
             * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0)),
     )
@@ -3178,6 +3196,7 @@ fn apply_song_lua_player_transform(
     rotation_z_deg: f32,
     rotation_y_deg: f32,
     skew_x: f32,
+    skew_y: f32,
     zoom_x: f32,
     zoom_y: f32,
     zoom_z: f32,
@@ -3197,6 +3216,7 @@ fn apply_song_lua_player_transform(
         rotation_x_deg,
         rotation_z_deg,
         skew_x,
+        skew_y,
         zoom_x,
         zoom_y,
         zoom_z,
@@ -3649,6 +3669,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let rotation_z = player_state.rot_z_deg + state.song_lua_player_rotation_z[player_idx];
         let rotation_y = player_state.rot_y_deg + state.song_lua_player_rotation_y[player_idx];
         let skew_x = state.song_lua_player_skew_x[player_idx];
+        let skew_y = state.song_lua_player_skew_y[player_idx];
         let zoom_x = player_state.zoom_x * state.song_lua_player_zoom_x[player_idx];
         let zoom_y = player_state.zoom_y * state.song_lua_player_zoom_y[player_idx];
         let zoom_z = player_state.zoom_z * state.song_lua_player_zoom_z[player_idx];
@@ -3673,6 +3694,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     rotation_z,
                     rotation_y,
                     skew_x,
+                    skew_y,
                     zoom_x,
                     zoom_y,
                     zoom_z,

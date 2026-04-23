@@ -142,6 +142,7 @@ pub(super) enum SongLuaEaseMaskTarget {
     PlayerRotationZ,
     PlayerRotationY,
     PlayerSkewX,
+    PlayerSkewY,
     PlayerZoomX,
     PlayerZoomY,
     PlayerZoomZ,
@@ -1455,6 +1456,7 @@ fn song_lua_persistent_player_transform_target(target: SongLuaEaseMaskTarget) ->
             | SongLuaEaseMaskTarget::PlayerRotationZ
             | SongLuaEaseMaskTarget::PlayerRotationY
             | SongLuaEaseMaskTarget::PlayerSkewX
+            | SongLuaEaseMaskTarget::PlayerSkewY
             | SongLuaEaseMaskTarget::PlayerZoomX
             | SongLuaEaseMaskTarget::PlayerZoomY
             | SongLuaEaseMaskTarget::PlayerZoomZ
@@ -1593,6 +1595,17 @@ pub(super) fn build_song_lua_ease_windows_for_player(
                 end_second,
                 sustain_end_second,
                 target: SongLuaEaseMaskTarget::PlayerSkewX,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
+            SongLuaEaseTarget::PlayerSkewY => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerSkewY,
                 from: window.from,
                 to: window.to,
                 easing: window.easing.clone(),
@@ -2798,6 +2811,7 @@ pub(super) fn song_lua_apply_eased_target(
     player_rotation_z: &mut Option<f32>,
     player_rotation_y: &mut Option<f32>,
     player_skew_x: &mut Option<f32>,
+    player_skew_y: &mut Option<f32>,
     player_zoom_x: &mut Option<f32>,
     player_zoom_y: &mut Option<f32>,
     player_zoom_z: &mut Option<f32>,
@@ -2857,6 +2871,7 @@ pub(super) fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::PlayerRotationZ => *player_rotation_z = Some(value),
         SongLuaEaseMaskTarget::PlayerRotationY => *player_rotation_y = Some(value),
         SongLuaEaseMaskTarget::PlayerSkewX => *player_skew_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerSkewY => *player_skew_y = Some(value),
         SongLuaEaseMaskTarget::PlayerZoomX => *player_zoom_x = Some(value),
         SongLuaEaseMaskTarget::PlayerZoomY => *player_zoom_y = Some(value),
         SongLuaEaseMaskTarget::PlayerZoomZ => *player_zoom_z = Some(value),
@@ -3207,6 +3222,7 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         let mut player_rotation_z = None;
         let mut player_rotation_y = None;
         let mut player_skew_x = None;
+        let mut player_skew_y = None;
         let mut player_zoom_x = None;
         let mut player_zoom_y = None;
         let mut player_zoom_z = None;
@@ -3344,6 +3360,7 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                     &mut player_rotation_z,
                     &mut player_rotation_y,
                     &mut player_skew_x,
+                    &mut player_skew_y,
                     &mut player_zoom_x,
                     &mut player_zoom_y,
                     &mut player_zoom_z,
@@ -3372,6 +3389,8 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
             player_rotation_y.filter(|v| v.is_finite()).unwrap_or(0.0);
         state.song_lua_player_skew_x[player] =
             player_skew_x.filter(|v| v.is_finite()).unwrap_or(0.0);
+        state.song_lua_player_skew_y[player] =
+            player_skew_y.filter(|v| v.is_finite()).unwrap_or(0.0);
         state.song_lua_player_zoom_x[player] =
             player_zoom_x.filter(|v| v.is_finite()).unwrap_or(1.0);
         state.song_lua_player_zoom_y[player] =

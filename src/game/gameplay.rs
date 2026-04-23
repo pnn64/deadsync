@@ -3551,6 +3551,7 @@ pub struct State {
     pub song_lua_player_rotation_z: [f32; MAX_PLAYERS],
     pub song_lua_player_rotation_y: [f32; MAX_PLAYERS],
     pub song_lua_player_skew_x: [f32; MAX_PLAYERS],
+    pub song_lua_player_skew_y: [f32; MAX_PLAYERS],
     pub song_lua_player_zoom_x: [f32; MAX_PLAYERS],
     pub song_lua_player_zoom_y: [f32; MAX_PLAYERS],
     pub song_lua_player_zoom_z: [f32; MAX_PLAYERS],
@@ -5946,6 +5947,7 @@ pub fn init(
         song_lua_player_rotation_z: [0.0; MAX_PLAYERS],
         song_lua_player_rotation_y: [0.0; MAX_PLAYERS],
         song_lua_player_skew_x: [0.0; MAX_PLAYERS],
+        song_lua_player_skew_y: [0.0; MAX_PLAYERS],
         song_lua_player_zoom_x: [1.0; MAX_PLAYERS],
         song_lua_player_zoom_y: [1.0; MAX_PLAYERS],
         song_lua_player_zoom_z: [1.0; MAX_PLAYERS],
@@ -10056,7 +10058,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_builds_rotationx_and_zoomz_runtime_targets() {
+    fn song_lua_builds_rotationx_skewy_and_zoomz_runtime_targets() {
         let timing_segments = TimingSegments {
             bpms: vec![(0.0, 60.0)],
             ..TimingSegments::default()
@@ -10085,6 +10087,20 @@ mod tests {
                     start: 4.0,
                     limit: 2.0,
                     span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerSkewY,
+                    from: 0.0,
+                    to: 0.25,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 8.0,
+                    limit: 2.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
                     target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerZoomZ,
                     from: 1.0,
                     to: 1.25,
@@ -10101,13 +10117,17 @@ mod tests {
             super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0);
 
         assert_eq!(unsupported, 0);
-        assert_eq!(windows.len(), 2);
+        assert_eq!(windows.len(), 3);
         assert!(matches!(
             windows[0].target,
             super::attacks::SongLuaEaseMaskTarget::PlayerRotationX
         ));
         assert!(matches!(
             windows[1].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerSkewY
+        ));
+        assert!(matches!(
+            windows[2].target,
             super::attacks::SongLuaEaseMaskTarget::PlayerZoomZ
         ));
         assert!(
@@ -10116,6 +10136,10 @@ mod tests {
         );
         assert!(
             super::song_lua_ease_window_value(&windows[1], 5.0)
+                .is_some_and(|value| (value - 0.125).abs() <= 0.000_1)
+        );
+        assert!(
+            super::song_lua_ease_window_value(&windows[2], 9.0)
                 .is_some_and(|value| (value - 1.125).abs() <= 0.000_1)
         );
     }
