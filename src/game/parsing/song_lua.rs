@@ -4155,6 +4155,18 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         make_actor_tween_method(lua, actor, Some("inOutQuad"))?,
     )?;
     actor.set(
+        "spring",
+        make_actor_tween_method(lua, actor, Some("outElastic"))?,
+    )?;
+    actor.set(
+        "bouncebegin",
+        make_actor_tween_method(lua, actor, Some("inBounce"))?,
+    )?;
+    actor.set(
+        "bounceend",
+        make_actor_tween_method(lua, actor, Some("outBounce"))?,
+    )?;
+    actor.set(
         "queuecommand",
         lua.create_function({
             let actor = actor.clone();
@@ -4856,7 +4868,6 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "EnablePreserveTexture",
         "Create",
         "fardistz",
-        "finishtweening",
         "hibernate",
         "load",
         "loop",
@@ -4871,6 +4882,11 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
+    actor.set(
+        "finishtweening",
+        make_actor_stop_tweening_method(lua, actor)?,
+    )?;
+    actor.set("stoptweening", make_actor_stop_tweening_method(lua, actor)?)?;
     actor.set(
         "strokecolor",
         lua.create_function({
@@ -5482,6 +5498,14 @@ fn merge_actor_concat(_lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()
 fn make_actor_chain_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |_, _args: MultiValue| Ok(actor.clone()))
+}
+
+fn make_actor_stop_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
+    let actor = actor.clone();
+    lua.create_function(move |_, _args: MultiValue| {
+        flush_actor_capture(&actor)?;
+        Ok(actor.clone())
+    })
 }
 
 fn run_command_on_leaves(lua: &Lua, actor: &Table, command: &Function) -> mlua::Result<()> {
@@ -8240,6 +8264,74 @@ return Def.ActorFrame{
         );
         assert_eq!(overlay.message_commands[0].blocks[1].duration, 0.3);
         assert_eq!(overlay.message_commands[0].blocks[1].delta.x, Some(320.0));
+    }
+
+    #[test]
+    fn compile_song_lua_supports_spring_bounce_and_stoptweening_commands() {
+        let song_dir = test_dir("overlay-spring-bounce");
+        let entry = song_dir.join("default.lua");
+        let overlay_dir = song_dir.join("gfx");
+        fs::create_dir_all(&overlay_dir).unwrap();
+        fs::write(
+            overlay_dir.join("door.png"),
+            b"not-an-image-but-good-enough-for-parser",
+        )
+        .unwrap();
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Name="door",
+        Texture="gfx/door.png",
+        BounceDoorMessageCommand=function(self)
+            self:stoptweening()
+            self:bouncebegin(0.2):diffusealpha(0.5)
+            self:bounceend(0.25):diffusealpha(1)
+            self:spring(0.5):x(SCREEN_CENTER_X)
+        end,
+    }
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Overlay Spring Bounce"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        let overlay = &compiled.overlays[0];
+        assert_eq!(overlay.message_commands.len(), 1);
+        assert_eq!(overlay.message_commands[0].message, "BounceDoor");
+        assert_eq!(overlay.message_commands[0].blocks.len(), 3);
+        assert_eq!(
+            overlay.message_commands[0].blocks[0].easing.as_deref(),
+            Some("inBounce")
+        );
+        assert_eq!(overlay.message_commands[0].blocks[0].duration, 0.2);
+        assert_eq!(
+            overlay.message_commands[0].blocks[0].delta.diffuse.unwrap()[3],
+            0.5
+        );
+        assert_eq!(
+            overlay.message_commands[0].blocks[1].easing.as_deref(),
+            Some("outBounce")
+        );
+        assert_eq!(overlay.message_commands[0].blocks[1].start, 0.2);
+        assert_eq!(overlay.message_commands[0].blocks[1].duration, 0.25);
+        assert_eq!(
+            overlay.message_commands[0].blocks[1].delta.diffuse.unwrap()[3],
+            1.0
+        );
+        assert_eq!(
+            overlay.message_commands[0].blocks[2].easing.as_deref(),
+            Some("outElastic")
+        );
+        assert_eq!(overlay.message_commands[0].blocks[2].start, 0.45);
+        assert_eq!(overlay.message_commands[0].blocks[2].duration, 0.5);
+        assert_eq!(overlay.message_commands[0].blocks[2].delta.x, Some(320.0));
     }
 
     #[test]
