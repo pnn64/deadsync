@@ -1898,6 +1898,7 @@ fn song_lua_overlay_delta_overlaps(
     overlap!(halign);
     overlap!(valign);
     overlap!(text_align);
+    overlap!(uppercase);
     overlap!(shadow_len);
     overlap!(shadow_color);
     overlap!(glow);
@@ -1933,6 +1934,7 @@ fn song_lua_overlay_delta_overlaps(
     overlap!(effect_color2);
     overlap!(effect_period);
     overlap!(effect_timing);
+    overlap!(vert_spacing);
     overlap!(wrap_width_pixels);
     overlap!(max_width);
     overlap!(max_height);

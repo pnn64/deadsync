@@ -1241,6 +1241,7 @@ impl TextBuilder {
             scale: [self.sx, self.sy],
             fit_width: self.fit_w,
             fit_height: self.fit_h,
+            line_spacing: None,
             wrap_width_pixels: self.wrap_width_pixels,
             max_width: self.max_w,
             max_height: self.max_h,

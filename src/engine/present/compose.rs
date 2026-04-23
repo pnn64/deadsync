@@ -543,6 +543,7 @@ fn str_ptr(key: &str) -> *const str {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct TextLayoutKey {
     font_key: u64,
+    line_spacing: i32,
     wrap_width_pixels: i32,
 }
 
@@ -885,6 +886,7 @@ impl TextLayoutCache {
         };
         let key = TextLayoutKey {
             font_key: font_chain_key(font, fonts),
+            line_spacing: font.line_spacing,
             wrap_width_pixels: wrap_width_pixels.unwrap_or(-1),
         };
         let _ = self.get_or_build_owned(key, font, fonts, text);
@@ -896,9 +898,11 @@ impl TextLayoutCache {
         fonts: &HashMap<&'static str, font::Font>,
         content: &actors::TextContent,
         wrap_width_pixels: Option<i32>,
+        line_spacing: Option<i32>,
     ) -> &CachedTextLayout {
         let key = TextLayoutKey {
             font_key: font_chain_key(font, fonts),
+            line_spacing: line_spacing.unwrap_or(font.line_spacing),
             wrap_width_pixels: wrap_width_pixels.unwrap_or(-1),
         };
         match content {
@@ -926,6 +930,7 @@ impl TextLayoutCache {
             font,
             fonts,
             text,
+            key.line_spacing,
             key.wrap_width_pixels,
             text_layout_mesh_seed(key, text),
         ));
@@ -982,6 +987,7 @@ impl TextLayoutCache {
             font,
             fonts,
             text_ref,
+            key.line_spacing,
             key.wrap_width_pixels,
             text_layout_mesh_seed(key, text_ref),
         ));
@@ -1122,16 +1128,15 @@ fn start_x_logical(align: actors::TextAlign, block_w_logical: f32, line_w_logica
 }
 
 #[inline(always)]
-fn text_block_height_i(font: &font::Font, num_lines: usize) -> i32 {
+fn text_block_height_i(font_height: i32, line_spacing: i32, num_lines: usize) -> i32 {
     if num_lines > 1 {
-        font.height + ((num_lines - 1) as i32 * font.line_spacing)
+        font_height + ((num_lines - 1) as i32 * line_spacing)
     } else {
-        font.height
+        font_height
     }
 }
 
 fn resolve_text_layout_placement(
-    font: &font::Font,
     layout: &CachedTextLayout,
     scale: [f32; 2],
     fit_width: Option<f32>,
@@ -1150,12 +1155,12 @@ fn resolve_text_layout_placement(
     }
 
     let block_w_logical_even = quantize_up_even_i32(layout.max_logical_width_i) as f32;
-    let cap_height = if font.height > 0 {
-        font.height as f32
+    let cap_height = if layout.font_height > 0 {
+        layout.font_height as f32
     } else {
-        font.line_spacing as f32
+        layout.line_spacing as f32
     };
-    let block_h_logical_i = text_block_height_i(font, num_lines);
+    let block_h_logical_i = text_block_height_i(layout.font_height, layout.line_spacing, num_lines);
     let block_h_logical = if block_h_logical_i > 0 {
         block_h_logical_i as f32
     } else {
@@ -1646,6 +1651,7 @@ fn build_cached_text_layout(
     font: &font::Font,
     fonts: &HashMap<&'static str, font::Font>,
     text: &str,
+    line_spacing: i32,
     wrap_width_pixels: i32,
     layout_seed: u64,
 ) -> CachedTextLayout {
@@ -1780,7 +1786,7 @@ fn build_cached_text_layout(
     CachedTextLayout {
         layout_seed,
         font_height: font.height,
-        line_spacing: font.line_spacing,
+        line_spacing,
         max_logical_width_i,
         glyph_count: glyphs.len(),
         lines,
@@ -2365,6 +2371,7 @@ fn build_actor_recursive<'a>(
             scale,
             fit_width,
             fit_height,
+            line_spacing,
             wrap_width_pixels,
             max_width,
             max_height,
@@ -2381,7 +2388,8 @@ fn build_actor_recursive<'a>(
                 return;
             }
             if let Some(fm) = fonts.get(font) {
-                let layout = text_cache.get_or_build(fm, fonts, content, *wrap_width_pixels);
+                let layout =
+                    text_cache.get_or_build(fm, fonts, content, *wrap_width_pixels, *line_spacing);
                 if layout.lines.is_empty() {
                     return;
                 }
@@ -2405,7 +2413,6 @@ fn build_actor_recursive<'a>(
                 let before = out.len();
                 let layer = base_z.saturating_add(*z);
                 let end = if let Some(placement) = resolve_text_layout_placement(
-                    fm,
                     layout,
                     effect_scale,
                     *fit_width,
@@ -3830,7 +3837,7 @@ mod tests {
     fn text_layout_builds_only_requested_fill_align() {
         let fonts = HashMap::from([("test", test_font())]);
         let font = fonts.get("test").expect("test font");
-        let layout = build_cached_text_layout(font, &fonts, "AB", -1, 17);
+        let layout = build_cached_text_layout(font, &fonts, "AB", font.line_spacing, -1, 17);
 
         assert!(!layout.fill_batches.is_built(TextAlign::Left));
         assert!(!layout.fill_batches.is_built(TextAlign::Center));
@@ -3850,7 +3857,7 @@ mod tests {
     fn text_layout_builds_stroke_batches_only_on_demand() {
         let fonts = HashMap::from([("test", test_font_with_stroke())]);
         let font = fonts.get("test").expect("test font");
-        let layout = build_cached_text_layout(font, &fonts, "AB", -1, 23);
+        let layout = build_cached_text_layout(font, &fonts, "AB", font.line_spacing, -1, 23);
 
         assert!(!layout.stroke_batches.is_built(TextAlign::Left));
 
@@ -4204,6 +4211,7 @@ mod tests {
     fn lock_growth_saturates_future_inserts() {
         let key = TextLayoutKey {
             font_key: 7,
+            line_spacing: 10,
             wrap_width_pixels: -1,
         };
         let mut cache =
@@ -4397,6 +4405,7 @@ mod tests {
             scale: [1.0, 1.0],
             fit_width: None,
             fit_height: None,
+            line_spacing: None,
             wrap_width_pixels: None,
             max_width: None,
             max_height: None,
@@ -4449,6 +4458,7 @@ mod tests {
             scale: [1.0, 1.0],
             fit_width: None,
             fit_height: None,
+            line_spacing: None,
             wrap_width_pixels: None,
             max_width: None,
             max_height: None,
@@ -4499,6 +4509,7 @@ mod tests {
             scale: [1.0, 1.0],
             fit_width: None,
             fit_height: None,
+            line_spacing: None,
             wrap_width_pixels: None,
             max_width: None,
             max_height: None,
@@ -4553,6 +4564,7 @@ mod tests {
             scale: [1.0, 1.0],
             fit_width: None,
             fit_height: None,
+            line_spacing: None,
             wrap_width_pixels: None,
             max_width: None,
             max_height: None,
@@ -4609,6 +4621,7 @@ mod tests {
             scale: [1.0, 1.0],
             fit_width: None,
             fit_height: None,
+            line_spacing: None,
             wrap_width_pixels: None,
             max_width: None,
             max_height: None,

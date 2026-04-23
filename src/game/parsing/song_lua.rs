@@ -3314,6 +3314,12 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.text_align = value;
     }
     if let Some(value) = actor
+        .get::<Option<bool>>("__songlua_state_uppercase")
+        .map_err(|err| err.to_string())?
+    {
+        state.uppercase = value;
+    }
+    if let Some(value) = actor
         .get::<Option<Table>>("__songlua_state_shadow_len")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec2(&value))
@@ -3556,6 +3562,12 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         .map_err(|err| err.to_string())?
     {
         state.sprite_state_delay = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<i32>>("__songlua_state_vert_spacing")
+        .map_err(|err| err.to_string())?
+    {
+        state.vert_spacing = Some(value);
     }
     if let Some(value) = actor
         .get::<Option<i32>>("__songlua_state_wrap_width_pixels")
@@ -4107,6 +4119,9 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .map_err(|err| err.to_string())?
                     .as_deref()
                     .and_then(parse_overlay_text_align),
+                uppercase: block
+                    .get::<Option<bool>>("uppercase")
+                    .map_err(|err| err.to_string())?,
                 shadow_len: block
                     .get::<Option<Table>>("shadow_len")
                     .map_err(|err| err.to_string())?
@@ -4253,6 +4268,9 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .map_err(|err| err.to_string())?,
                 sprite_state_index: block
                     .get::<Option<u32>>("sprite_state_index")
+                    .map_err(|err| err.to_string())?,
+                vert_spacing: block
+                    .get::<Option<i32>>("vert_spacing")
                     .map_err(|err| err.to_string())?,
                 wrap_width_pixels: block
                     .get::<Option<i32>>("wrap_width_pixels")
@@ -5892,6 +5910,19 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "vertspacing",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                capture_block_set_i32(lua, &actor, "vert_spacing", value.round() as i32)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "maxwidth",
         lua.create_function({
             let actor = actor.clone();
@@ -5917,6 +5948,20 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 capture_block_set_f32(lua, &actor, "max_height", value)?;
                 capture_block_set_bool(lua, &actor, "max_h_pre_zoom", false)?;
                 actor.set("__songlua_text_saw_max_height", true)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "uppercase",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let value = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_boolish)
+                    .unwrap_or(true);
+                capture_block_set_bool(lua, &actor, "uppercase", value)?;
                 Ok(actor.clone())
             }
         })?,
@@ -7494,6 +7539,7 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(halign);
     copy_value_field!(valign);
     copy_value_field!(text_align);
+    copy_value_field!(uppercase);
     copy_value_field!(shadow_len);
     copy_value_field!(shadow_color);
     copy_value_field!(glow);
@@ -7538,6 +7584,7 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(sprite_playback_rate);
     copy_value_field!(sprite_state_delay);
     copy_option_field!(sprite_state_index);
+    copy_option_field!(vert_spacing);
     copy_option_field!(wrap_width_pixels);
     copy_option_field!(max_width);
     copy_option_field!(max_height);
@@ -10960,6 +11007,38 @@ return Def.ActorFrame{
         assert_eq!(post_zoom.max_height, Some(50.0));
         assert!(!post_zoom.max_w_pre_zoom);
         assert!(!post_zoom.max_h_pre_zoom);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_bitmaptext_uppercase_and_vertspacing() {
+        let song_dir = test_dir("bitmaptext-uppercase-vertspacing");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="Mixed Case",
+        OnCommand=function(self)
+            self:uppercase(true):vertspacing(18)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "BitmapText Uppercase VertSpacing"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+
+        let text = compiled.overlays[0].initial_state;
+        assert!(text.uppercase);
+        assert_eq!(text.vert_spacing, Some(18));
     }
 
     #[test]

@@ -53,6 +53,7 @@ pub struct SongLuaOverlayState {
     pub halign: f32,
     pub valign: f32,
     pub text_align: TextAlign,
+    pub uppercase: bool,
     pub shadow_len: [f32; 2],
     pub shadow_color: [f32; 4],
     pub glow: [f32; 4],
@@ -97,6 +98,7 @@ pub struct SongLuaOverlayState {
     pub sprite_playback_rate: f32,
     pub sprite_state_delay: f32,
     pub sprite_state_index: Option<u32>,
+    pub vert_spacing: Option<i32>,
     pub wrap_width_pixels: Option<i32>,
     pub max_width: Option<f32>,
     pub max_height: Option<f32>,
@@ -119,6 +121,7 @@ impl Default for SongLuaOverlayState {
             halign: 0.5,
             valign: 0.5,
             text_align: TextAlign::Center,
+            uppercase: false,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
             glow: [0.0, 0.0, 0.0, 0.0],
@@ -163,6 +166,7 @@ impl Default for SongLuaOverlayState {
             sprite_playback_rate: 1.0,
             sprite_state_delay: 0.1,
             sprite_state_index: None,
+            vert_spacing: None,
             wrap_width_pixels: None,
             max_width: None,
             max_height: None,
@@ -186,6 +190,7 @@ pub struct SongLuaOverlayStateDelta {
     pub halign: Option<f32>,
     pub valign: Option<f32>,
     pub text_align: Option<TextAlign>,
+    pub uppercase: Option<bool>,
     pub shadow_len: Option<[f32; 2]>,
     pub shadow_color: Option<[f32; 4]>,
     pub glow: Option<[f32; 4]>,
@@ -230,6 +235,7 @@ pub struct SongLuaOverlayStateDelta {
     pub sprite_playback_rate: Option<f32>,
     pub sprite_state_delay: Option<f32>,
     pub sprite_state_index: Option<u32>,
+    pub vert_spacing: Option<i32>,
     pub wrap_width_pixels: Option<i32>,
     pub max_width: Option<f32>,
     pub max_height: Option<f32>,
@@ -336,6 +342,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     }
     if let Some(value) = delta.text_align {
         state.text_align = value;
+    }
+    if let Some(value) = delta.uppercase {
+        state.uppercase = value;
     }
     if let Some(value) = delta.shadow_len {
         state.shadow_len = value;
@@ -469,6 +478,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.sprite_state_index {
         state.sprite_state_index = Some(value);
     }
+    if let Some(value) = delta.vert_spacing {
+        state.vert_spacing = Some(value);
+    }
     if let Some(value) = delta.wrap_width_pixels {
         state.wrap_width_pixels = Some(value);
     }
@@ -527,6 +539,9 @@ fn overlay_state_lerp(
     }
     if delta.text_align.is_some() && t >= 1.0 - f32::EPSILON {
         from.text_align = to.text_align;
+    }
+    if delta.uppercase.is_some() && t >= 1.0 - f32::EPSILON {
+        from.uppercase = to.uppercase;
     }
     if delta.shadow_len.is_some() {
         from.shadow_len = [
@@ -674,6 +689,9 @@ fn overlay_state_lerp(
     }
     if delta.sprite_state_index.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_state_index = to.sprite_state_index;
+    }
+    if delta.vert_spacing.is_some() && t >= 1.0 - f32::EPSILON {
+        from.vert_spacing = to.vert_spacing;
     }
     if delta.wrap_width_pixels.is_some() && t >= 1.0 - f32::EPSILON {
         from.wrap_width_pixels = to.wrap_width_pixels;
@@ -837,6 +855,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.halign.is_none()
         && delta.valign.is_none()
         && delta.text_align.is_none()
+        && delta.uppercase.is_none()
         && delta.shadow_len.is_none()
         && delta.shadow_color.is_none()
         && delta.glow.is_none()
@@ -881,6 +900,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.sprite_playback_rate.is_none()
         && delta.sprite_state_delay.is_none()
         && delta.sprite_state_index.is_none()
+        && delta.vert_spacing.is_none()
         && delta.wrap_width_pixels.is_none()
         && delta.max_width.is_none()
         && delta.max_height.is_none()
@@ -903,6 +923,27 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.z.is_some() {
         into.z = from.z;
+    }
+    if from.halign.is_some() {
+        into.halign = from.halign;
+    }
+    if from.valign.is_some() {
+        into.valign = from.valign;
+    }
+    if from.text_align.is_some() {
+        into.text_align = from.text_align;
+    }
+    if from.uppercase.is_some() {
+        into.uppercase = from.uppercase;
+    }
+    if from.shadow_len.is_some() {
+        into.shadow_len = from.shadow_len;
+    }
+    if from.shadow_color.is_some() {
+        into.shadow_color = from.shadow_color;
+    }
+    if from.glow.is_some() {
+        into.glow = from.glow;
     }
     if from.fov.is_some() {
         into.fov = from.fov;
@@ -1045,6 +1086,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.sprite_state_index.is_some() {
         into.sprite_state_index = from.sprite_state_index;
     }
+    if from.vert_spacing.is_some() {
+        into.vert_spacing = from.vert_spacing;
+    }
     if from.wrap_width_pixels.is_some() {
         into.wrap_width_pixels = from.wrap_width_pixels;
     }
@@ -1110,6 +1154,7 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(halign);
     copy_pair!(valign);
     copy_pair!(text_align);
+    copy_pair!(uppercase);
     copy_pair!(shadow_len);
     copy_pair!(shadow_color);
     copy_pair!(glow);
@@ -1154,6 +1199,7 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(sprite_playback_rate);
     copy_pair!(sprite_state_delay);
     copy_pair!(sprite_state_index);
+    copy_pair!(vert_spacing);
     copy_pair!(wrap_width_pixels);
     copy_pair!(max_width);
     copy_pair!(max_height);

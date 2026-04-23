@@ -955,6 +955,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.text_align {
         state.text_align = value;
     }
+    if let Some(value) = delta.uppercase {
+        state.uppercase = value;
+    }
     if let Some(value) = delta.shadow_len {
         state.shadow_len = value;
     }
@@ -1087,6 +1090,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.sprite_state_index {
         state.sprite_state_index = Some(value);
     }
+    if let Some(value) = delta.vert_spacing {
+        state.vert_spacing = Some(value);
+    }
     if let Some(value) = delta.wrap_width_pixels {
         state.wrap_width_pixels = Some(value);
     }
@@ -1153,6 +1159,9 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.text_align.is_some() && t >= 1.0 - f32::EPSILON {
         from.text_align = to.text_align;
+    }
+    if delta.uppercase.is_some() && t >= 1.0 - f32::EPSILON {
+        from.uppercase = to.uppercase;
     }
     if delta.shadow_len.is_some() {
         from.shadow_len = [
@@ -1300,6 +1309,9 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.sprite_state_index.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_state_index = to.sprite_state_index;
+    }
+    if delta.vert_spacing.is_some() && t >= 1.0 - f32::EPSILON {
+        from.vert_spacing = to.vert_spacing;
     }
     if delta.wrap_width_pixels.is_some() && t >= 1.0 - f32::EPSILON {
         from.wrap_width_pixels = to.wrap_width_pixels;
@@ -2366,6 +2378,7 @@ fn song_lua_style_capture_actor(
             scale,
             fit_width,
             fit_height,
+            line_spacing,
             wrap_width_pixels,
             max_width,
             max_height,
@@ -2390,6 +2403,7 @@ fn song_lua_style_capture_actor(
             scale,
             fit_width,
             fit_height,
+            line_spacing,
             wrap_width_pixels,
             max_width,
             max_height,
@@ -3440,6 +3454,11 @@ fn build_song_lua_overlay_actor(
             stroke_color,
             ..
         } => {
+            let content = if state.uppercase {
+                TextContent::from(text.to_uppercase())
+            } else {
+                TextContent::from(text)
+            };
             let font = if asset_manager.with_font(*font_name, |_| ()).is_some() {
                 *font_name
             } else {
@@ -3476,7 +3495,7 @@ fn build_song_lua_overlay_actor(
                     stroke_color: *stroke_color,
                     glow,
                     font,
-                    content: TextContent::from(text),
+                    content,
                     attributes: Vec::new(),
                     align_text: state.text_align,
                     z,
@@ -3486,6 +3505,9 @@ fn build_song_lua_overlay_actor(
                     ],
                     fit_width: state.size.map(|size| size[0] * x_scale),
                     fit_height: state.size.map(|size| size[1] * y_scale),
+                    line_spacing: state
+                        .vert_spacing
+                        .map(|value| ((value as f32) * y_scale).round() as i32),
                     wrap_width_pixels: state
                         .wrap_width_pixels
                         .map(|value| ((value as f32) * x_scale).round() as i32),
@@ -3803,6 +3825,7 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
             scale,
             fit_width,
             fit_height,
+            line_spacing,
             wrap_width_pixels,
             max_width,
             max_height,
@@ -3827,6 +3850,7 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
             scale: *scale,
             fit_width: *fit_width,
             fit_height: *fit_height,
+            line_spacing: *line_spacing,
             wrap_width_pixels: *wrap_width_pixels,
             max_width: *max_width,
             max_height: *max_height,
@@ -4025,6 +4049,7 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             mut scale,
             fit_width,
             fit_height,
+            line_spacing,
             wrap_width_pixels,
             max_width,
             max_height,
@@ -4052,6 +4077,7 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 scale,
                 fit_width,
                 fit_height,
+                line_spacing,
                 wrap_width_pixels,
                 max_width,
                 max_height,
@@ -7112,6 +7138,57 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_overlay_applies_bitmaptext_uppercase_and_vertspacing_at_runtime() {
+        let text = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("Mixed Case"),
+                stroke_color: None,
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let text_actor = build_song_lua_overlay_actor(
+            &text,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                uppercase: true,
+                vert_spacing: Some(18),
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            788,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("bitmap text uppercase and vertspacing should render");
+
+        match text_actor {
+            Actor::Text {
+                content,
+                line_spacing,
+                z,
+                ..
+            } => {
+                assert_eq!(z, 788);
+                assert_eq!(content.as_str(), "MIXED CASE");
+                assert_eq!(line_spacing, Some(18));
+            }
+            other => {
+                panic!("expected bitmap text actor with uppercase and vertspacing, got {other:?}")
+            }
+        }
+    }
+
+    #[test]
     fn song_lua_overlay_applies_bitmaptext_skew_at_runtime() {
         let text = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::BitmapText {
@@ -7136,7 +7213,7 @@ mod tests {
             },
             None,
             &AssetManager::new(),
-            788,
+            789,
             screen_width(),
             screen_height(),
             0.0,
@@ -7152,7 +7229,7 @@ mod tests {
                 let actual = local_transform.to_cols_array();
                 let expected =
                     song_lua_overlay_local_transform([0.0, 0.0, 0.0], 0.15, -0.35).to_cols_array();
-                assert_eq!(z, 788);
+                assert_eq!(z, 789);
                 assert!(
                     actual
                         .iter()
@@ -7188,7 +7265,7 @@ mod tests {
             },
             None,
             &AssetManager::new(),
-            789,
+            790,
             screen_width(),
             screen_height(),
             0.0,
@@ -7204,7 +7281,7 @@ mod tests {
                 z,
                 ..
             } => {
-                assert_eq!(z, 789);
+                assert_eq!(z, 790);
                 assert_eq!(fit_width, Some(120.0));
                 assert_eq!(fit_height, Some(30.0));
             }
