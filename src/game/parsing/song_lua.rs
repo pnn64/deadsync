@@ -3328,6 +3328,13 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.shadow_color = value;
     }
     if let Some(value) = actor
+        .get::<Option<Table>>("__songlua_state_glow")
+        .map_err(|err| err.to_string())?
+        .and_then(|value| table_vec4(&value))
+    {
+        state.glow = value;
+    }
+    if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_fov")
         .map_err(|err| err.to_string())?
     {
@@ -4094,6 +4101,10 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .and_then(|value| table_vec2(&value)),
                 shadow_color: block
                     .get::<Option<Table>>("shadow_color")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec4(&value)),
+                glow: block
+                    .get::<Option<Table>>("glow")
                     .map_err(|err| err.to_string())?
                     .and_then(|value| table_vec4(&value)),
                 fov: block
@@ -5347,6 +5358,19 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "glow",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(color) = read_color_args(&args) else {
+                    return Ok(actor.clone());
+                };
+                capture_block_set_vec4(lua, &actor, "glow", color)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "effectmagnitude",
         lua.create_function({
             let actor = actor.clone();
@@ -5511,6 +5535,24 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     .and_then(read_boolish)
                     .unwrap_or(true);
                 capture_block_set_bool(lua, &actor, "texture_wrapping", value)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "glowshift",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                set_actor_effect_defaults(
+                    lua,
+                    &actor,
+                    "glowshift",
+                    Some(1.0),
+                    None,
+                    Some([1.0, 1.0, 1.0, 0.2]),
+                    Some([1.0, 1.0, 1.0, 0.8]),
+                )?;
                 Ok(actor.clone())
             }
         })?,
@@ -7430,6 +7472,7 @@ fn overlay_delta_pair_from_states(
     copy_value_field!(text_align);
     copy_value_field!(shadow_len);
     copy_value_field!(shadow_color);
+    copy_value_field!(glow);
     copy_option_field!(fov);
     copy_option_field!(vanishpoint);
     copy_value_field!(diffuse);
@@ -10691,6 +10734,53 @@ return Def.ActorFrame{
         let text = compiled.overlays[1].initial_state;
         assert_eq!(text.shadow_len, [3.0, -4.0]);
         assert_eq!(text.shadow_color, [0.0, 0.0, 0.0, 0.5]);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_glow_and_glowshift_methods() {
+        let song_dir = test_dir("actor-glow-methods");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(40, 30).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:glow(0.1, 0.2, 0.3, 0.4)
+        end,
+    },
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="GLOW",
+        OnCommand=function(self)
+            self:glowshift()
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Glow Methods"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+
+        let sprite = compiled.overlays[0].initial_state;
+        assert_eq!(sprite.glow, [0.1, 0.2, 0.3, 0.4]);
+
+        let text = compiled.overlays[1].initial_state;
+        assert_eq!(
+            text.effect_mode,
+            crate::engine::present::anim::EffectMode::GlowShift
+        );
+        assert_eq!(text.effect_color1, [1.0, 1.0, 1.0, 0.2]);
+        assert_eq!(text.effect_color2, [1.0, 1.0, 1.0, 0.8]);
     }
 
     #[test]

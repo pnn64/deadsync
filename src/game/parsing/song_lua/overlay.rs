@@ -55,6 +55,7 @@ pub struct SongLuaOverlayState {
     pub text_align: TextAlign,
     pub shadow_len: [f32; 2],
     pub shadow_color: [f32; 4],
+    pub glow: [f32; 4],
     pub fov: Option<f32>,
     pub vanishpoint: Option<[f32; 2]>,
     pub diffuse: [f32; 4],
@@ -118,6 +119,7 @@ impl Default for SongLuaOverlayState {
             text_align: TextAlign::Center,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
+            glow: [0.0, 0.0, 0.0, 0.0],
             fov: None,
             vanishpoint: None,
             diffuse: [1.0, 1.0, 1.0, 1.0],
@@ -182,6 +184,7 @@ pub struct SongLuaOverlayStateDelta {
     pub text_align: Option<TextAlign>,
     pub shadow_len: Option<[f32; 2]>,
     pub shadow_color: Option<[f32; 4]>,
+    pub glow: Option<[f32; 4]>,
     pub fov: Option<f32>,
     pub vanishpoint: Option<[f32; 2]>,
     pub diffuse: Option<[f32; 4]>,
@@ -333,6 +336,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     }
     if let Some(value) = delta.shadow_color {
         state.shadow_color = value;
+    }
+    if let Some(value) = delta.glow {
+        state.glow = value;
     }
     if let Some(value) = delta.fov {
         state.fov = Some(value);
@@ -520,6 +526,11 @@ fn overlay_state_lerp(
         for i in 0..4 {
             from.shadow_color[i] =
                 (to.shadow_color[i] - from.shadow_color[i]).mul_add(t, from.shadow_color[i]);
+        }
+    }
+    if delta.glow.is_some() {
+        for i in 0..4 {
+            from.glow[i] = (to.glow[i] - from.glow[i]).mul_add(t, from.glow[i]);
         }
     }
     if delta.fov.is_some()
@@ -760,6 +771,7 @@ pub(super) fn parse_overlay_effect_mode(raw: &str) -> Option<EffectMode> {
         "none" => Some(EffectMode::None),
         "diffuseramp" => Some(EffectMode::DiffuseRamp),
         "diffuseshift" => Some(EffectMode::DiffuseShift),
+        "glowshift" => Some(EffectMode::GlowShift),
         "pulse" => Some(EffectMode::Pulse),
         "bob" => Some(EffectMode::Bob),
         "bounce" => Some(EffectMode::Bounce),
@@ -809,6 +821,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.text_align.is_none()
         && delta.shadow_len.is_none()
         && delta.shadow_color.is_none()
+        && delta.glow.is_none()
         && delta.fov.is_none()
         && delta.vanishpoint.is_none()
         && delta.diffuse.is_none()
@@ -927,6 +940,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.shadow_color.is_some() {
         into.shadow_color = from.shadow_color;
+    }
+    if from.glow.is_some() {
+        into.glow = from.glow;
     }
     if from.zoom.is_some() {
         into.zoom = from.zoom;
@@ -1070,6 +1086,7 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(text_align);
     copy_pair!(shadow_len);
     copy_pair!(shadow_color);
+    copy_pair!(glow);
     copy_pair!(fov);
     copy_pair!(vanishpoint);
     copy_pair!(diffuse);
@@ -1152,6 +1169,10 @@ mod tests {
         assert_eq!(
             parse_overlay_effect_mode("DiffuseRamp"),
             Some(EffectMode::DiffuseRamp)
+        );
+        assert_eq!(
+            parse_overlay_effect_mode("glowshift"),
+            Some(EffectMode::GlowShift)
         );
         assert_eq!(
             parse_overlay_effect_mode("bounce"),
