@@ -2,6 +2,7 @@ use crate::assets;
 use crate::engine::gfx::BlendMode;
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::engine::present::{anim, font, runtime};
+use glam::Mat4 as Matrix4;
 use smallvec::SmallVec;
 use std::sync::Arc;
 
@@ -1228,6 +1229,7 @@ impl TextBuilder {
         let base = Actor::Text {
             align: [self.hx, self.vy],
             offset: [self.x, self.y],
+            local_transform: Matrix4::IDENTITY,
             color: self.color,
             stroke_color: self.stroke_color,
             glow: self.glow,

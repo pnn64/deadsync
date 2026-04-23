@@ -97,6 +97,7 @@ pub enum Actor {
     Text {
         align: [f32; 2],  // halign/valign pivot inside line box
         offset: [f32; 2], // parent top-left space
+        local_transform: Matrix4,
         color: [f32; 4],
         stroke_color: Option<[f32; 4]>,
         #[allow(dead_code)]
@@ -301,6 +302,7 @@ mod tests {
         Actor::Text {
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
+            local_transform: Matrix4::IDENTITY,
             color,
             stroke_color: None,
             glow: [0.0, 0.0, 0.0, 0.0],

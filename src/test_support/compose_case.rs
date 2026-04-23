@@ -909,6 +909,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
         Actor::Text {
             align,
             offset,
+            local_transform: _,
             color,
             stroke_color,
             glow,
@@ -1130,6 +1131,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
         } => Actor::Text {
             align: *align,
             offset: *offset,
+            local_transform: glam::Mat4::IDENTITY,
             color: *color,
             stroke_color: *stroke_color,
             glow: *glow,

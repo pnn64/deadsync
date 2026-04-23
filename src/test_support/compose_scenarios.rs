@@ -608,6 +608,7 @@ fn stroked_text_actor(text: &'static str, x: f32, y: f32, row: usize) -> Actor {
     Actor::Text {
         align: [0.0, 0.0],
         offset: [x, y],
+        local_transform: glam::Mat4::IDENTITY,
         color: [0.92, 0.94, 0.98, 0.96],
         stroke_color: Some([0.05, 0.08, 0.12, 0.9]),
         glow: [0.0; 4],
@@ -948,6 +949,7 @@ fn text_actor(
     Actor::Text {
         align,
         offset,
+        local_transform: glam::Mat4::IDENTITY,
         color,
         stroke_color: None,
         glow: [0.0; 4],

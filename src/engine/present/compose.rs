@@ -2354,6 +2354,7 @@ fn build_actor_recursive<'a>(
         actors::Actor::Text {
             align,
             offset,
+            local_transform,
             color,
             stroke_color,
             font,
@@ -2423,6 +2424,7 @@ fn build_actor_recursive<'a>(
                             layout.fill_batches(*align_text),
                             &placement,
                             [1.0; 4],
+                            *local_transform,
                             m,
                             texture_cache,
                         );
@@ -2436,6 +2438,7 @@ fn build_actor_recursive<'a>(
                                 layout.stroke_batches(*align_text),
                                 &placement,
                                 stroke_rgba,
+                                *local_transform,
                                 m,
                                 texture_cache,
                             );
@@ -2467,6 +2470,7 @@ fn build_actor_recursive<'a>(
                             builders,
                             &placement,
                             [1.0; 4],
+                            *local_transform,
                             m,
                             texture_cache,
                         );
@@ -2480,6 +2484,7 @@ fn build_actor_recursive<'a>(
                                 layout.stroke_batches(*align_text),
                                 &placement,
                                 stroke_rgba,
+                                *local_transform,
                                 m,
                                 texture_cache,
                             );
@@ -3029,6 +3034,7 @@ fn push_text_mesh_batches(
     batches: &[CachedTextMeshBatch],
     placement: &TextLayoutPlacement,
     tint: [f32; 4],
+    local_transform: Matrix4,
     m: &Metrics,
     texture_cache: &mut TextureLookupCache,
 ) {
@@ -3040,7 +3046,8 @@ fn push_text_mesh_batches(
         m.left + placement.block_center_x,
         m.top - placement.block_center_y,
         0.0,
-    )) * Matrix4::from_scale(Vector3::new(placement.sx, -placement.sy, 1.0));
+    )) * Matrix4::from_scale(Vector3::new(placement.sx, -placement.sy, 1.0))
+        * local_transform;
 
     out.reserve(batches.len());
     for batch in batches {
@@ -3073,6 +3080,7 @@ fn push_transient_text_mesh_builders(
     builders: &mut Vec<TextMeshBatchBuilder>,
     placement: &TextLayoutPlacement,
     tint: [f32; 4],
+    local_transform: Matrix4,
     m: &Metrics,
     texture_cache: &mut TextureLookupCache,
 ) {
@@ -3084,7 +3092,8 @@ fn push_transient_text_mesh_builders(
         m.left + placement.block_center_x,
         m.top - placement.block_center_y,
         0.0,
-    )) * Matrix4::from_scale(Vector3::new(placement.sx, -placement.sy, 1.0));
+    )) * Matrix4::from_scale(Vector3::new(placement.sx, -placement.sy, 1.0))
+        * local_transform;
 
     out.reserve(builders.len());
     for builder in builders.drain(..) {
@@ -4376,6 +4385,7 @@ mod tests {
         let actors = [Actor::Text {
             align: [0.0, 0.0],
             offset: [10.0, 20.0],
+            local_transform: Matrix4::IDENTITY,
             color: [0.5, 0.75, 1.0, 1.0],
             stroke_color: None,
             glow: [0.0; 4],
@@ -4427,6 +4437,7 @@ mod tests {
         let actors = [Actor::Text {
             align: [0.0, 0.0],
             offset: [10.0, 20.0],
+            local_transform: Matrix4::IDENTITY,
             color: [1.0; 4],
             stroke_color: None,
             glow: [0.0; 4],
@@ -4476,6 +4487,7 @@ mod tests {
         let actors = [Actor::Text {
             align: [0.0, 0.0],
             offset: [10.0, 20.0],
+            local_transform: Matrix4::IDENTITY,
             color: [1.0; 4],
             stroke_color: None,
             glow: [0.0; 4],
@@ -4525,6 +4537,7 @@ mod tests {
         let actors = [Actor::Text {
             align: [0.0, 0.0],
             offset: [10.0, 20.0],
+            local_transform: Matrix4::IDENTITY,
             color: [1.0; 4],
             stroke_color: None,
             glow: [0.0; 4],
@@ -4580,6 +4593,7 @@ mod tests {
         let actors = [Actor::Text {
             align: [0.0, 0.0],
             offset: [10.0, 20.0],
+            local_transform: Matrix4::IDENTITY,
             color: [1.0; 4],
             stroke_color: None,
             glow: [0.0; 4],

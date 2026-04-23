@@ -10669,6 +10669,37 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_supports_bitmaptext_skew_methods() {
+        let song_dir = test_dir("bitmaptext-overlay-skew");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="SKEW",
+        OnCommand=function(self)
+            self:skewx(0.15):skewy(-0.35)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "BitmapText Overlay Skew"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        let state = compiled.overlays[0].initial_state;
+        assert!((state.skew_x - 0.15).abs() <= 0.000_1);
+        assert!((state.skew_y + 0.35).abs() <= 0.000_1);
+    }
+
+    #[test]
     fn compile_song_lua_supports_mask_methods() {
         let song_dir = test_dir("actor-mask-methods");
         let image_path = song_dir.join("panel.png");

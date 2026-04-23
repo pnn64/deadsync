@@ -2354,6 +2354,7 @@ fn song_lua_style_capture_actor(
         Actor::Text {
             align,
             offset,
+            local_transform,
             color,
             stroke_color,
             glow,
@@ -2377,6 +2378,7 @@ fn song_lua_style_capture_actor(
         } => Actor::Text {
             align,
             offset,
+            local_transform,
             color: song_lua_capture_tint(color, tint),
             stroke_color: stroke_color.map(|color| song_lua_capture_tint(color, tint)),
             glow,
@@ -3028,6 +3030,15 @@ fn song_lua_overlay_fold_xy_rot(
     (flip_x, flip_y, size_x, size_y)
 }
 
+#[inline(always)]
+fn song_lua_overlay_local_transform(rot_deg: [f32; 3], skew_x: f32, skew_y: f32) -> Matrix4 {
+    Matrix4::from_rotation_x(rot_deg[0].to_radians())
+        * Matrix4::from_rotation_y(rot_deg[1].to_radians())
+        * Matrix4::from_rotation_z(rot_deg[2].to_radians())
+        * song_lua_player_skew_x_matrix(skew_x)
+        * song_lua_player_skew_y_matrix(skew_y)
+}
+
 fn song_lua_flat_skewed_overlay_actor(
     texture: Arc<str>,
     tint: [f32; 4],
@@ -3053,9 +3064,7 @@ fn song_lua_flat_skewed_overlay_actor(
     let xs = song_lua_projected_overlay_axis_slices(edge_fade[0], edge_fade[1]);
     let ys = song_lua_projected_overlay_axis_slices(edge_fade[2], edge_fade[3]);
     let transform = Matrix4::from_translation(Vector3::new(center[0], center[1], 0.0))
-        * Matrix4::from_rotation_z(rot_deg[2].to_radians())
-        * song_lua_player_skew_x_matrix(state.skew_x)
-        * song_lua_player_skew_y_matrix(state.skew_y);
+        * song_lua_overlay_local_transform(rot_deg, state.skew_x, state.skew_y);
     let mut grid = Vec::with_capacity(xs.len() * ys.len());
     for &y in &ys {
         for &x in &xs {
@@ -3132,11 +3141,7 @@ fn song_lua_projected_overlay_actor(
     let xs = song_lua_projected_overlay_axis_slices(edge_fade[0], edge_fade[1]);
     let ys = song_lua_projected_overlay_axis_slices(edge_fade[2], edge_fade[3]);
     let model = Matrix4::from_translation(Vector3::new(center[0], center[1], center[2]))
-        * Matrix4::from_rotation_x(rot_deg[0].to_radians())
-        * Matrix4::from_rotation_y(rot_deg[1].to_radians())
-        * Matrix4::from_rotation_z(rot_deg[2].to_radians())
-        * song_lua_player_skew_x_matrix(state.skew_x)
-        * song_lua_player_skew_y_matrix(state.skew_y);
+        * song_lua_overlay_local_transform(rot_deg, state.skew_x, state.skew_y);
     let mut grid = Vec::with_capacity(xs.len() * ys.len());
     for &y in &ys {
         for &x in &xs {
@@ -3455,7 +3460,6 @@ fn build_song_lua_overlay_actor(
                 &mut effect_scale,
                 &mut effect_rot,
             );
-            let _ = effect_rot;
             Some(finalize_actor(
                 Actor::Text {
                     align: [state.halign, state.valign],
@@ -3463,6 +3467,11 @@ fn build_song_lua_overlay_actor(
                         state.x * x_scale + effect_offset[0] * x_scale,
                         state.y * y_scale + effect_offset[1] * y_scale,
                     ],
+                    local_transform: song_lua_overlay_local_transform(
+                        effect_rot,
+                        state.skew_x,
+                        state.skew_y,
+                    ),
                     color,
                     stroke_color: *stroke_color,
                     glow,
@@ -3785,6 +3794,7 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
         Actor::Text {
             align,
             offset,
+            local_transform,
             font,
             content,
             attributes,
@@ -3805,6 +3815,7 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
         } => Some(Actor::Text {
             align: *align,
             offset: *offset,
+            local_transform: *local_transform,
             color: glow,
             stroke_color: None,
             glow: [0.0, 0.0, 0.0, 0.0],
@@ -4002,6 +4013,7 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
         Actor::Text {
             align,
             mut offset,
+            local_transform,
             color,
             stroke_color,
             glow,
@@ -4028,6 +4040,7 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             Actor::Text {
                 align,
                 offset,
+                local_transform,
                 color,
                 stroke_color,
                 glow,
@@ -7099,6 +7112,59 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_overlay_applies_bitmaptext_skew_at_runtime() {
+        let text = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("SKEW"),
+                stroke_color: None,
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let text_actor = build_song_lua_overlay_actor(
+            &text,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                skew_x: 0.15,
+                skew_y: -0.35,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            788,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("bitmap text skew should render");
+
+        match text_actor {
+            Actor::Text {
+                local_transform, z, ..
+            } => {
+                let actual = local_transform.to_cols_array();
+                let expected =
+                    song_lua_overlay_local_transform([0.0, 0.0, 0.0], 0.15, -0.35).to_cols_array();
+                assert_eq!(z, 788);
+                assert!(
+                    actual
+                        .iter()
+                        .zip(expected.iter())
+                        .all(|(a, b)| (a - b).abs() <= 0.000_1)
+                );
+            }
+            other => panic!("expected skewed bitmap text actor, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn song_lua_overlay_applies_bitmaptext_fit_size_at_runtime() {
         let text = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::BitmapText {
@@ -7122,7 +7188,7 @@ mod tests {
             },
             None,
             &AssetManager::new(),
-            788,
+            789,
             screen_width(),
             screen_height(),
             0.0,
@@ -7138,7 +7204,7 @@ mod tests {
                 z,
                 ..
             } => {
-                assert_eq!(z, 788);
+                assert_eq!(z, 789);
                 assert_eq!(fit_width, Some(120.0));
                 assert_eq!(fit_height, Some(30.0));
             }
