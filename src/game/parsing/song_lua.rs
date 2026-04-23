@@ -5974,16 +5974,22 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         lua.create_function({
             let actor = actor.clone();
             move |_, args: MultiValue| {
-                let text = match args.get(1).cloned() {
-                    Some(Value::String(text)) => text.to_str()?.to_string(),
-                    Some(Value::Integer(value)) => value.to_string(),
-                    Some(Value::Number(value)) => value.to_string(),
-                    Some(Value::Boolean(value)) => value.to_string(),
-                    _ => String::new(),
-                };
+                let text = args
+                    .get(1)
+                    .cloned()
+                    .map(lua_text_value)
+                    .transpose()?
+                    .unwrap_or_default();
                 actor.set("Text", text)?;
                 Ok(actor.clone())
             }
+        })?,
+    )?;
+    actor.set(
+        "GetText",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| lua_text_value(actor.get::<Value>("Text")?)
         })?,
     )?;
     actor.set(
@@ -6314,6 +6320,21 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "GetZoomedWidth",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                let width = actor_base_size(&actor)?.0;
+                Ok(width
+                    * actor_zoom_axis(
+                        &actor,
+                        "__songlua_state_zoom_x",
+                        "__songlua_state_basezoom_x",
+                    )?)
+            }
+        })?,
+    )?;
+    actor.set(
         "GetNumStates",
         lua.create_function({
             let actor = actor.clone();
@@ -6325,6 +6346,21 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         lua.create_function({
             let actor = actor.clone();
             move |_, _args: MultiValue| Ok(actor_base_size(&actor)?.1)
+        })?,
+    )?;
+    actor.set(
+        "GetZoomedHeight",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                let height = actor_base_size(&actor)?.1;
+                Ok(height
+                    * actor_zoom_axis(
+                        &actor,
+                        "__songlua_state_zoom_y",
+                        "__songlua_state_basezoom_y",
+                    )?)
+            }
         })?,
     )?;
     actor.set(
@@ -6468,6 +6504,18 @@ fn actor_base_size(actor: &Table) -> mlua::Result<(f32, f32)> {
         return Ok((width, height));
     }
     Ok((1.0, 1.0))
+}
+
+fn actor_zoom_axis(actor: &Table, zoom_key: &str, basezoom_key: &str) -> mlua::Result<f32> {
+    let zoom = actor
+        .get::<Option<f32>>(zoom_key)?
+        .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
+        .unwrap_or(1.0);
+    let basezoom = actor
+        .get::<Option<f32>>(basezoom_key)?
+        .or(actor.get::<Option<f32>>("__songlua_state_basezoom")?)
+        .unwrap_or(1.0);
+    Ok(basezoom * zoom)
 }
 
 fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
@@ -8185,6 +8233,16 @@ fn read_string(value: Value) -> Option<String> {
     }
 }
 
+fn lua_text_value(value: Value) -> mlua::Result<String> {
+    match value {
+        Value::String(text) => Ok(text.to_str()?.to_string()),
+        Value::Integer(value) => Ok(value.to_string()),
+        Value::Number(value) => Ok(value.to_string()),
+        Value::Boolean(value) => Ok(value.to_string()),
+        _ => Ok(String::new()),
+    }
+}
+
 #[inline(always)]
 fn make_color_table(lua: &Lua, rgba: [f32; 4]) -> mlua::Result<Table> {
     let table = lua.create_table()?;
@@ -9059,6 +9117,43 @@ return Def.ActorFrame{
                 stroke_color: Some([0.0, 0.0, 0.0, 1.0]),
                 ..
             } if font_path.ends_with("_komika axis 42px.ini") && text.as_ref() == "3"
+        ));
+    }
+
+    #[test]
+    fn compile_song_lua_supports_bitmap_text_get_text() {
+        let song_dir = test_dir("bitmap-text-get-text");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="Alpha",
+        OnCommand=function(self)
+            local before = self:GetText()
+            self:settext(3)
+            mod_actions = {
+                {1, before .. ":" .. self:GetText(), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "BitmapText GetText"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "Alpha:3");
+        assert!(matches!(
+            compiled.overlays[0].kind,
+            SongLuaOverlayKind::BitmapText { ref text, .. } if text.as_ref() == "3"
         ));
     }
 
@@ -11285,6 +11380,40 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays[0].initial_state.basezoom, 2.0);
         assert_eq!(compiled.overlays[0].initial_state.basezoom_x, 3.0);
         assert_eq!(compiled.overlays[0].initial_state.basezoom_y, 4.0);
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_zoomed_actor_size() {
+        let song_dir = test_dir("zoomed-actor-size");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:SetSize(40, 20)
+            self:zoomx(2)
+            self:zoomy(3)
+            self:basezoomx(0.5)
+            self:basezoomy(2)
+            mod_actions = {
+                {1, string.format("%.0f:%.0f", self:GetZoomedWidth(), self:GetZoomedHeight()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Zoomed Actor Size"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "40:120");
     }
 
     #[test]
