@@ -256,13 +256,15 @@ pub fn resolve_texture_choice<'a>(
     requested: Option<&str>,
     choices: &'a [TextureChoice],
 ) -> Option<&'a str> {
-    requested
-        .and_then(|key| {
-            choices
-                .iter()
-                .find(|choice| choice.key.eq_ignore_ascii_case(key))
-                .map(|choice| choice.key.as_str())
-        })
+    // When the caller explicitly opts out of a texture (e.g. user selected "None"),
+    // honor that and render nothing. Only fall back to the first available choice
+    // when a texture was requested but could not be located in the discovered set
+    // (e.g. the user-customized file was removed).
+    let key = requested?;
+    choices
+        .iter()
+        .find(|choice| choice.key.eq_ignore_ascii_case(key))
+        .map(|choice| choice.key.as_str())
         .or_else(|| {
             choices
                 .iter()
