@@ -5991,6 +5991,16 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "settextf",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                actor.set("Text", lua_format_text(lua, &args)?)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "GetText",
         lua.create_function({
             let actor = actor.clone();
@@ -8265,6 +8275,22 @@ fn lua_text_value(value: Value) -> mlua::Result<String> {
     }
 }
 
+fn lua_format_text(lua: &Lua, args: &MultiValue) -> mlua::Result<String> {
+    let offset = method_arg_offset(args);
+    if args.get(offset).is_none() {
+        return Ok(String::new());
+    }
+    let mut call_args = MultiValue::new();
+    for index in offset..args.len() {
+        if let Some(value) = args.get(index) {
+            call_args.push_back(value.clone());
+        }
+    }
+    let string_table = lua.globals().get::<Table>("string")?;
+    let format = string_table.get::<Function>("format")?;
+    lua_text_value(format.call::<Value>(call_args)?)
+}
+
 #[inline(always)]
 fn make_color_table(lua: &Lua, rgba: [f32; 4]) -> mlua::Result<Table> {
     let table = lua.create_table()?;
@@ -8365,8 +8391,13 @@ fn read_color_call(args: &MultiValue) -> Option<[f32; 4]> {
 
 #[inline(always)]
 fn method_arg(args: &MultiValue, index: usize) -> Option<&Value> {
-    let offset = usize::from(matches!(args.front(), Some(Value::Table(_))));
+    let offset = method_arg_offset(args);
     args.get(offset + index)
+}
+
+#[inline(always)]
+fn method_arg_offset(args: &MultiValue) -> usize {
+    usize::from(matches!(args.front(), Some(Value::Table(_))))
 }
 
 #[inline(always)]
@@ -9176,6 +9207,42 @@ return Def.ActorFrame{
         assert!(matches!(
             compiled.overlays[0].kind,
             SongLuaOverlayKind::BitmapText { ref text, .. } if text.as_ref() == "3"
+        ));
+    }
+
+    #[test]
+    fn compile_song_lua_supports_bitmap_text_settextf() {
+        let song_dir = test_dir("bitmap-text-settextf");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="",
+        OnCommand=function(self)
+            self:settextf("Stage %02d - %s", 4, "Final")
+            mod_actions = {
+                {1, self:GetText(), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "BitmapText SetTextF"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "Stage 04 - Final");
+        assert!(matches!(
+            compiled.overlays[0].kind,
+            SongLuaOverlayKind::BitmapText { ref text, .. } if text.as_ref() == "Stage 04 - Final"
         ));
     }
 
