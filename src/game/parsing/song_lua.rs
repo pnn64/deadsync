@@ -43,6 +43,7 @@ const SONG_LUA_RUNTIME_BPS_KEY: &str = "__songlua_song_bps";
 const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 const SONG_LUA_THEME_PATH_PREFIX: &str = "__songlua_theme_path/";
+const SONG_LUA_THEME_NAME: &str = "Simply Love";
 const SONG_LUA_SPRITE_STATE_CLEAR: u32 = u32::MAX;
 const SONG_LUA_ACTIVE_COLOR_INDEX: i64 = 1;
 const SL_COLORS: &[&str] = &[
@@ -1195,6 +1196,15 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         lua.create_function(move |_, _args: MultiValue| Ok(day_of_month))?,
     )?;
     globals.set(
+        "GetTimeSinceStart",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    let holiday_cheer = month_of_year == 11;
+    globals.set(
+        "HolidayCheer",
+        lua.create_function(move |_, _args: MultiValue| Ok(holiday_cheer))?,
+    )?;
+    globals.set(
         "ASPECT_SCALE_FACTOR",
         screen_width / (640.0 * (screen_height / 480.0)),
     )?;
@@ -1242,9 +1252,23 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
                 Ok(Value::String(lua.create_string(&video_renderers)?))
             } else if key.eq_ignore_ascii_case("BGBrightness") {
                 Ok(Value::Number(bg_brightness as f64))
+            } else if key.eq_ignore_ascii_case("Theme") {
+                Ok(Value::String(lua.create_string(SONG_LUA_THEME_NAME)?))
+            } else if key
+                .to_ascii_lowercase()
+                .starts_with("defaultlocalprofileid")
+            {
+                Ok(Value::String(lua.create_string("")?))
             } else {
                 Ok(Value::Nil)
             }
+        })?,
+    )?;
+    prefsmgr.set(
+        "SetPreference",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
         })?,
     )?;
     globals.set("PREFSMAN", prefsmgr)?;
@@ -1272,9 +1296,15 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     let song_runtime = create_song_runtime_table(lua, context)?;
     globals.set(SONG_LUA_RUNTIME_KEY, song_runtime.clone())?;
     let song = create_song_table(lua, context)?;
+    globals.set("SONGMAN", create_songman_table(lua, song.clone(), context)?)?;
     let players = create_player_tables(lua, context)?;
     let song_options = create_song_options_table(lua, context.song_music_rate)?;
     let gamestate = lua.create_table()?;
+    let game_env = lua.create_table()?;
+    gamestate.set(
+        "Env",
+        lua.create_function(move |_, _args: MultiValue| Ok(game_env.clone()))?,
+    )?;
     let enabled_players = create_enabled_players_table(lua, context.players.clone())?;
     let human_players = enabled_players.clone();
     let song_clone = song.clone();
@@ -1439,6 +1469,10 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         lua.create_function(move |_, _args: MultiValue| Ok(joined_sides))?,
     )?;
     gamestate.set(
+        "GetNumPlayersEnabled",
+        lua.create_function(move |_, _args: MultiValue| Ok(joined_sides))?,
+    )?;
+    gamestate.set(
         "IsCourseMode",
         lua.create_function(|_, _args: MultiValue| Ok(false))?,
     )?;
@@ -1497,6 +1531,13 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
             Ok(())
         })?,
     )?;
+    gamestate.set(
+        "SaveProfiles",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
     globals.set("GAMESTATE", gamestate)?;
 
     let screenman = lua.create_table()?;
@@ -1524,6 +1565,32 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     )?;
     screenman.set(
         "SetNewScreen",
+        lua.create_function({
+            let top_screen = top_screen.top_screen.clone();
+            move |lua, args: MultiValue| {
+                if let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) {
+                    top_screen.set("Name", name)?;
+                }
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            }
+        })?,
+    )?;
+    screenman.set(
+        "AddNewScreenToTop",
+        lua.create_function({
+            let top_screen = top_screen.top_screen.clone();
+            move |lua, args: MultiValue| {
+                if let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) {
+                    top_screen.set("Name", name)?;
+                }
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            }
+        })?,
+    )?;
+    screenman.set(
+        "set_input_redirected",
         lua.create_function(|lua, _args: MultiValue| {
             note_song_lua_side_effect(lua)?;
             Ok(())
@@ -1544,6 +1611,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         })?,
     )?;
     globals.set("MESSAGEMAN", messageman)?;
+    globals.set("STATSMAN", create_statsman_table(lua)?)?;
     globals.set(
         "SM",
         lua.create_function(|lua, _args: MultiValue| {
@@ -2774,6 +2842,12 @@ fn create_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Resu
         && let Some(player_index) = player_index
     {
         create_note_field_actor(lua, player_index as usize)?
+    } else if parent_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("TopScreen"))
+        && name.eq_ignore_ascii_case("Timer")
+    {
+        create_screen_timer_actor(lua)?
     } else {
         create_dummy_actor(lua, "ChildActor")?
     };
@@ -2791,6 +2865,15 @@ fn create_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Resu
         child.set("__songlua_top_screen_child_name", name)?;
     }
     Ok(child)
+}
+
+fn create_screen_timer_actor(lua: &Lua) -> mlua::Result<Table> {
+    let actor = create_dummy_actor(lua, "Timer")?;
+    actor.set(
+        "GetSeconds",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    Ok(actor)
 }
 
 fn create_note_field_actor(lua: &Lua, player_index: usize) -> mlua::Result<Table> {
@@ -3044,6 +3127,21 @@ fn create_top_screen_table(
         })?,
     )?;
     top_screen.set(
+        "SetPrevScreenName",
+        lua.create_function({
+            let top_screen = top_screen.clone();
+            move |lua, args: MultiValue| {
+                let prev_screen = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_string)
+                    .unwrap_or_default();
+                top_screen.set("__songlua_prev_screen_name", prev_screen)?;
+                note_song_lua_side_effect(lua)?;
+                Ok(top_screen.clone())
+            }
+        })?,
+    )?;
+    top_screen.set(
         "GetNextScreenName",
         lua.create_function({
             let top_screen = top_screen.clone();
@@ -3059,6 +3157,21 @@ fn create_top_screen_table(
         })?,
     )?;
     top_screen.set(
+        "GetPrevScreenName",
+        lua.create_function({
+            let top_screen = top_screen.clone();
+            move |lua, _args: MultiValue| {
+                Ok(Value::String(
+                    lua.create_string(
+                        top_screen
+                            .get::<Option<String>>("__songlua_prev_screen_name")?
+                            .unwrap_or_default(),
+                    )?,
+                ))
+            }
+        })?,
+    )?;
+    top_screen.set(
         "GetGoToOptions",
         lua.create_function(|_, _args: MultiValue| Ok(false))?,
     )?;
@@ -3066,7 +3179,51 @@ fn create_top_screen_table(
         "GetCurrentRowIndex",
         lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
     )?;
-    for name in ["AddInputCallback", "RemoveInputCallback", "PauseGame"] {
+    top_screen.set(
+        "IsPaused",
+        lua.create_function({
+            let top_screen = top_screen.clone();
+            move |_, _args: MultiValue| {
+                Ok(top_screen
+                    .get::<Option<bool>>("__songlua_paused")?
+                    .unwrap_or(false))
+            }
+        })?,
+    )?;
+    top_screen.set(
+        "PauseGame",
+        lua.create_function({
+            let top_screen = top_screen.clone();
+            move |lua, args: MultiValue| {
+                top_screen.set("__songlua_paused", method_arg(&args, 0).is_some_and(truthy))?;
+                note_song_lua_side_effect(lua)?;
+                Ok(top_screen.clone())
+            }
+        })?,
+    )?;
+    top_screen.set(
+        "AllAreOnLastRow",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    let music_wheel = create_music_wheel_table(lua)?;
+    top_screen.set(
+        "GetMusicWheel",
+        lua.create_function(move |_, _args: MultiValue| Ok(music_wheel.clone()))?,
+    )?;
+    top_screen.set(
+        "GetNextCourseSong",
+        lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+    )?;
+    for name in [
+        "AddInputCallback",
+        "RemoveInputCallback",
+        "PostScreenMessage",
+        "SetProfileIndex",
+        "Cancel",
+        "Finish",
+        "Load",
+        "begin_backing_out",
+    ] {
         top_screen.set(
             name,
             lua.create_function({
@@ -3082,6 +3239,35 @@ fn create_top_screen_table(
         top_screen,
         players: player_actors,
     })
+}
+
+fn create_music_wheel_table(lua: &Lua) -> mlua::Result<Table> {
+    let wheel = lua.create_table()?;
+    wheel.set(
+        "IsLocked",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    wheel.set(
+        "GetSelectedSection",
+        lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
+    )?;
+    wheel.set(
+        "GetSelectedSong",
+        lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+    )?;
+    for name in ["ChangeSort", "SetOpenSection"] {
+        wheel.set(
+            name,
+            lua.create_function({
+                let wheel = wheel.clone();
+                move |lua, _args: MultiValue| {
+                    note_song_lua_side_effect(lua)?;
+                    Ok(wheel.clone())
+                }
+            })?,
+        )?;
+    }
+    Ok(wheel)
 }
 
 fn create_top_screen_player_actor(
@@ -3151,6 +3337,8 @@ fn create_enabled_players_table(
 
 fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
     let theme = lua.create_table()?;
+    set_string_method(lua, &theme, "GetCurThemeName", SONG_LUA_THEME_NAME)?;
+    set_string_method(lua, &theme, "GetThemeDisplayName", SONG_LUA_THEME_NAME)?;
     theme.set(
         "GetMetric",
         lua.create_function(|lua, args: MultiValue| {
@@ -3389,6 +3577,7 @@ fn create_theme_prefs_table(lua: &Lua) -> mlua::Result<Table> {
 
 fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
     let profileman = lua.create_table()?;
+    profileman.set("__songlua_stats_prefix", "")?;
     let machine_profile = create_profile_table(lua, "Machine")?;
     profileman.set(
         "GetMachineProfile",
@@ -3409,8 +3598,68 @@ fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
         lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
     )?;
     profileman.set(
+        "GetPlayerName",
+        lua.create_function(|lua, args: MultiValue| {
+            let name = method_arg(&args, 0)
+                .and_then(player_index_from_value)
+                .map(|index| format!("Player {}", index + 1))
+                .unwrap_or_default();
+            Ok(Value::String(lua.create_string(&name)?))
+        })?,
+    )?;
+    profileman.set(
         "IsPersistentProfile",
         lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    profileman.set(
+        "GetNumLocalProfiles",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    profileman.set(
+        "LocalProfileIDToDir",
+        lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
+    )?;
+    profileman.set(
+        "GetLocalProfileIDFromIndex",
+        lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
+    )?;
+    profileman.set(
+        "GetLocalProfileFromIndex",
+        lua.create_function(|lua, _args: MultiValue| create_profile_table(lua, "Local Profile"))?,
+    )?;
+    profileman.set(
+        "SaveMachineProfile",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
+    profileman.set(
+        "GetStatsPrefix",
+        lua.create_function({
+            let profileman = profileman.clone();
+            move |lua, _args: MultiValue| {
+                let prefix = profileman
+                    .get::<Option<String>>("__songlua_stats_prefix")?
+                    .unwrap_or_default();
+                Ok(Value::String(lua.create_string(&prefix)?))
+            }
+        })?,
+    )?;
+    profileman.set(
+        "SetStatsPrefix",
+        lua.create_function({
+            let profileman = profileman.clone();
+            move |lua, args: MultiValue| {
+                let prefix = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_string)
+                    .unwrap_or_default();
+                profileman.set("__songlua_stats_prefix", prefix)?;
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            }
+        })?,
     )?;
     Ok(profileman)
 }
@@ -3421,7 +3670,158 @@ fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     set_string_method(lua, &profile, "GetLastUsedHighScoreName", name)?;
     set_string_method(lua, &profile, "GetGUID", "")?;
     set_string_method(lua, &profile, "GetProfileDir", "")?;
+    profile.set(
+        "GetHighScoreList",
+        lua.create_function(|lua, _args: MultiValue| create_high_score_list_table(lua))?,
+    )?;
+    profile.set(
+        "GetHighScoreListIfExists",
+        lua.create_function(|lua, _args: MultiValue| create_high_score_list_table(lua))?,
+    )?;
     Ok(profile)
+}
+
+fn create_statsman_table(lua: &Lua) -> mlua::Result<Table> {
+    let statsman = lua.create_table()?;
+    let stage_stats = create_stage_stats_table(lua)?;
+    statsman.set(
+        "GetCurStageStats",
+        lua.create_function({
+            let stage_stats = stage_stats.clone();
+            move |_, _args: MultiValue| Ok(stage_stats.clone())
+        })?,
+    )?;
+    statsman.set(
+        "GetPlayedStageStats",
+        lua.create_function(move |_, _args: MultiValue| Ok(stage_stats.clone()))?,
+    )?;
+    Ok(statsman)
+}
+
+fn create_stage_stats_table(lua: &Lua) -> mlua::Result<Table> {
+    let stage_stats = lua.create_table()?;
+    let player_stats = [
+        create_player_stage_stats_table(lua, "Player")?,
+        create_player_stage_stats_table(lua, "Player")?,
+    ];
+    stage_stats.set(
+        "GetPlayerStageStats",
+        lua.create_function(move |_, args: MultiValue| {
+            let index = method_arg(&args, 0)
+                .and_then(player_index_from_value)
+                .unwrap_or(0);
+            Ok(player_stats[index].clone())
+        })?,
+    )?;
+    stage_stats.set(
+        "AllFailed",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    Ok(stage_stats)
+}
+
+fn create_player_stage_stats_table(lua: &Lua, high_score_name: &str) -> mlua::Result<Table> {
+    let stats = lua.create_table()?;
+    let high_score = create_high_score_table(lua, high_score_name)?;
+    set_string_method(lua, &stats, "GetGrade", "Grade_Tier07")?;
+    stats.set(
+        "GetFailed",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    stats.set(
+        "GetScore",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    stats.set(
+        "GetPercentDancePoints",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    stats.set(
+        "GetActualDancePoints",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    stats.set(
+        "GetPossibleDancePoints",
+        lua.create_function(|_, _args: MultiValue| Ok(1_i64))?,
+    )?;
+    stats.set(
+        "GetCurrentLife",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    stats.set(
+        "GetLifeRemainingSeconds",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    stats.set(
+        "GetLifeRecord",
+        lua.create_function(|lua, _args: MultiValue| lua.create_table())?,
+    )?;
+    stats.set(
+        "GetTapNoteScores",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    stats.set(
+        "GetRadarActual",
+        lua.create_function(|lua, _args: MultiValue| create_stage_radar_values_table(lua, 0.0))?,
+    )?;
+    stats.set(
+        "GetRadarPossible",
+        lua.create_function(|lua, _args: MultiValue| create_stage_radar_values_table(lua, 1.0))?,
+    )?;
+    stats.set(
+        "GetRadarValues",
+        lua.create_function(|lua, _args: MultiValue| create_stage_radar_values_table(lua, 0.0))?,
+    )?;
+    stats.set(
+        "GetHighScore",
+        lua.create_function(move |_, _args: MultiValue| Ok(high_score.clone()))?,
+    )?;
+    Ok(stats)
+}
+
+fn create_stage_radar_values_table(lua: &Lua, fallback: f32) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set(
+        "GetValue",
+        lua.create_function(move |_, _args: MultiValue| Ok(fallback))?,
+    )?;
+    Ok(table)
+}
+
+fn create_high_score_list_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let high_scores = lua.create_table()?;
+    high_scores.raw_set(1, create_high_score_table(lua, "Machine")?)?;
+    table.set(
+        "GetHighScores",
+        lua.create_function(move |_, _args: MultiValue| Ok(high_scores.clone()))?,
+    )?;
+    Ok(table)
+}
+
+fn create_high_score_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
+    let score = lua.create_table()?;
+    set_string_method(lua, &score, "GetName", name)?;
+    set_string_method(lua, &score, "GetGrade", "Grade_Tier07")?;
+    set_string_method(lua, &score, "GetDate", "")?;
+    set_string_method(lua, &score, "GetModifiers", "")?;
+    score.set(
+        "GetScore",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    score.set(
+        "GetPercentDP",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    score.set(
+        "GetPercentDancePoints",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    score.set(
+        "GetTapNoteScore",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    Ok(score)
 }
 
 fn create_display_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
@@ -4094,6 +4494,149 @@ fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
         lua.create_function(move |_, _args: MultiValue| Ok(steps_by_type.clone()))?,
     )?;
     Ok(table)
+}
+
+fn create_songman_table(
+    lua: &Lua,
+    current_song: Table,
+    context: &SongLuaCompileContext,
+) -> mlua::Result<Table> {
+    let songman = lua.create_table()?;
+    songman.set("__songlua_preferred_sort_songs", false)?;
+    let current_group = song_group_name(&context.song_dir);
+    let current_title = context.main_title.clone();
+    let current_dir = song_dir_string(context.song_dir.as_path());
+    let all_songs = create_single_value_array(lua, current_song.clone())?;
+    let groups = create_string_array(lua, &[current_group.as_str()])?;
+    let group_songs = create_single_value_array(lua, current_song.clone())?;
+    let group = create_song_group_table(lua)?;
+
+    songman.set(
+        "GetSongFromSteps",
+        lua.create_function({
+            let current_song = current_song.clone();
+            move |_, _args: MultiValue| Ok(current_song.clone())
+        })?,
+    )?;
+    songman.set(
+        "FindSong",
+        lua.create_function({
+            let current_song = current_song.clone();
+            let current_dir = current_dir.clone();
+            let current_group = current_group.clone();
+            let current_title = current_title.clone();
+            move |_, args: MultiValue| {
+                let Some(query) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                    return Ok(Value::Nil);
+                };
+                if song_lookup_matches(&query, &current_dir, &current_group, &current_title) {
+                    Ok(Value::Table(current_song.clone()))
+                } else {
+                    Ok(Value::Nil)
+                }
+            }
+        })?,
+    )?;
+    songman.set(
+        "GetAllSongs",
+        lua.create_function(move |_, _args: MultiValue| Ok(all_songs.clone()))?,
+    )?;
+    songman.set(
+        "GetSongGroupNames",
+        lua.create_function(move |_, _args: MultiValue| Ok(groups.clone()))?,
+    )?;
+    songman.set(
+        "GetSongsInGroup",
+        lua.create_function({
+            let current_group = current_group.clone();
+            move |lua, args: MultiValue| {
+                let group = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_string)
+                    .unwrap_or_default();
+                if group == current_group {
+                    Ok(group_songs.clone())
+                } else {
+                    lua.create_table()
+                }
+            }
+        })?,
+    )?;
+    songman.set(
+        "DoesSongGroupExist",
+        lua.create_function({
+            let current_group = current_group.clone();
+            move |_, args: MultiValue| {
+                Ok(method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_string)
+                    .is_some_and(|group| group == current_group))
+            }
+        })?,
+    )?;
+    songman.set(
+        "GetGroup",
+        lua.create_function(move |_, _args: MultiValue| Ok(group.clone()))?,
+    )?;
+    songman.set(
+        "GetNumSongGroups",
+        lua.create_function(|_, _args: MultiValue| Ok(1_i64))?,
+    )?;
+    songman.set(
+        "GetNumSongs",
+        lua.create_function(|_, _args: MultiValue| Ok(1_i64))?,
+    )?;
+    songman.set(
+        "GetAllCourses",
+        lua.create_function(|lua, _args: MultiValue| lua.create_table())?,
+    )?;
+    songman.set(
+        "SetPreferredSongs",
+        lua.create_function({
+            let songman = songman.clone();
+            move |lua, _args: MultiValue| {
+                songman.set("__songlua_preferred_sort_songs", true)?;
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            }
+        })?,
+    )?;
+    songman.set(
+        "GetPreferredSortSongs",
+        lua.create_function({
+            let songman = songman.clone();
+            move |_, _args: MultiValue| {
+                Ok(songman
+                    .get::<Option<bool>>("__songlua_preferred_sort_songs")?
+                    .unwrap_or(false))
+            }
+        })?,
+    )?;
+    Ok(songman)
+}
+
+fn create_song_group_table(lua: &Lua) -> mlua::Result<Table> {
+    let group = lua.create_table()?;
+    group.set(
+        "GetSyncOffset",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    Ok(group)
+}
+
+fn create_single_value_array(lua: &Lua, value: Table) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.raw_set(1, value)?;
+    Ok(table)
+}
+
+fn song_lookup_matches(query: &str, song_dir: &str, group: &str, title: &str) -> bool {
+    let query = query.trim().replace('\\', "/");
+    !query.is_empty()
+        && (query == song_dir
+            || song_dir.contains(query.as_str())
+            || query.eq_ignore_ascii_case(group)
+            || query.eq_ignore_ascii_case(title))
 }
 
 fn create_steps_by_steps_type_table(
@@ -8289,6 +8832,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "hurrytweening",
         "jitter",
         "load",
+        "LoadFromSongBackground",
         "AddAttribute",
         "backfacecull",
         "ClearAttributes",
@@ -12498,6 +13042,77 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn compile_song_lua_exposes_theme_manager_compat() {
+        let song_dir = test_dir("theme-manager-compat");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local env = GAMESTATE:Env()
+env.P1PeakNPS = 123
+
+PREFSMAN:SetPreference("Theme", "Ignored")
+PROFILEMAN:SetStatsPrefix("Stats")
+PROFILEMAN:SaveMachineProfile()
+GAMESTATE:SaveProfiles()
+SONGMAN:SetPreferredSongs("Favorites.txt", true)
+
+local song = GAMESTATE:GetCurrentSong()
+local steps = GAMESTATE:GetCurrentSteps(PLAYER_1)
+local all = SONGMAN:GetAllSongs()
+local groups = SONGMAN:GetSongGroupNames()
+local found = SONGMAN:FindSong(song:GetSongDir())
+local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+local played = STATSMAN:GetPlayedStageStats(1):GetPlayerStageStats(PLAYER_2)
+local highscore = pss:GetHighScore()
+local machine_scores = PROFILEMAN:GetMachineProfile():GetHighScoreList(song, steps):GetHighScores()
+
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%d:%s:%s:%.0f:%s:%s:%d:%d:%s:%s:%.0f:%d:%d:%s:%s:%d",
+            GAMESTATE:GetNumPlayersEnabled(),
+            THEME:GetCurThemeName(),
+            THEME:GetThemeDisplayName(),
+            GetTimeSinceStart(),
+            tostring(HolidayCheer()),
+            tostring(SONGMAN:GetPreferredSortSongs()),
+            #all,
+            #groups,
+            found:GetDisplayMainTitle(),
+            tostring(SONGMAN:DoesSongGroupExist(groups[1])),
+            SONGMAN:GetGroup(song):GetSyncOffset(),
+            pss:GetPossibleDancePoints(),
+            played:GetActualDancePoints(),
+            pss:GetGrade(),
+            highscore:GetName(),
+            #machine_scores
+        ),
+        true,
+    },
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Theme Manager Compat"),
+        )
+        .unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "2:Simply Love:Simply Love:0:false:true:1:1:Theme Manager Compat:true:0:1:0:Grade_Tier07:Player:1"
+        );
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+    }
+
+    #[test]
     fn compile_song_lua_exposes_theme_enum_and_songutil_helpers() {
         let song_dir = test_dir("theme-enum-songutil");
         let entry = song_dir.join("default.lua");
@@ -12658,6 +13273,65 @@ return Def.ActorFrame{}
             "ScreenGameplay:ScreenEvaluationStage:ScreenGameplay:default:true:false:15:300:Cancel:__songlua_theme_path:0"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_screen_process_shims() {
+        let song_dir = test_dir("screen-process-shims");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+SCREENMAN:set_input_redirected(PLAYER_1, true)
+SCREENMAN:AddNewScreenToTop("ScreenTextEntry")
+
+local top = SCREENMAN:GetTopScreen()
+top:Load({ Question="Search" })
+    :SetPrevScreenName("ScreenSelectMusic")
+    :SetNextScreenName("ScreenGameplay")
+    :PostScreenMessage("SM_BeginFailed", 0)
+    :SetProfileIndex(PLAYER_1, -1)
+    :PauseGame(true)
+
+local wheel = top:GetMusicWheel()
+wheel:SetOpenSection(""):ChangeSort("SortOrder_Preferred")
+
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%s:%s:%s:%s:%s:%s:%.0f:%s",
+            top:GetName(),
+            top:GetPrevScreenName(),
+            top:GetNextScreenName(),
+            tostring(top:IsPaused()),
+            tostring(top:AllAreOnLastRow()),
+            tostring(wheel:IsLocked()),
+            top:GetChild("Timer"):GetSeconds(),
+            tostring(top:GetNextCourseSong() == nil)
+        ),
+        true,
+    },
+}
+
+top:Cancel():Finish():begin_backing_out()
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Screen Process Shims"),
+        )
+        .unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "ScreenTextEntry:ScreenSelectMusic:ScreenGameplay:true:false:false:0:true"
+        );
     }
 
     #[test]
