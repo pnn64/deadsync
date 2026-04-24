@@ -4092,6 +4092,50 @@ fn offset_texture_rect(lua: &Lua, actor: &Table, dx: f32, dy: f32) -> mlua::Resu
     capture_texture_rect(lua, actor, [u0 + dx, v0 + dy, u1 + dx, v1 + dy])
 }
 
+fn actor_halign(actor: &Table) -> mlua::Result<f32> {
+    Ok(actor
+        .get::<Option<f32>>("__songlua_state_halign")?
+        .unwrap_or(0.5))
+}
+
+fn actor_valign(actor: &Table) -> mlua::Result<f32> {
+    Ok(actor
+        .get::<Option<f32>>("__songlua_state_valign")?
+        .unwrap_or(0.5))
+}
+
+fn scale_actor_to_rect(lua: &Lua, actor: &Table, rect: [f32; 4], cover: bool) -> mlua::Result<()> {
+    let width = rect[2] - rect[0];
+    let height = rect[3] - rect[1];
+    let (base_width, base_height) = actor_base_size(actor)?;
+    if base_width.abs() <= f32::EPSILON || base_height.abs() <= f32::EPSILON {
+        return Ok(());
+    }
+    let zoom_x = (width / base_width).abs();
+    let zoom_y = (height / base_height).abs();
+    let zoom = if cover {
+        zoom_x.max(zoom_y)
+    } else {
+        zoom_x.min(zoom_y)
+    };
+    if !zoom.is_finite() {
+        return Ok(());
+    }
+
+    capture_block_set_f32(lua, actor, "x", rect[0] + width * actor_halign(actor)?)?;
+    capture_block_set_f32(lua, actor, "y", rect[1] + height * actor_valign(actor)?)?;
+    capture_block_set_f32(lua, actor, "zoom", zoom)?;
+    capture_block_set_zoom_axes(lua, actor, zoom, "zoom_x", "zoom_y", "zoom_z")?;
+    actor_update_text_pre_zoom_flags(lua, actor, true, true)?;
+    if width < 0.0 {
+        capture_block_set_f32(lua, actor, "rot_y_deg", 180.0)?;
+    }
+    if height < 0.0 {
+        capture_block_set_f32(lua, actor, "rot_x_deg", 180.0)?;
+    }
+    Ok(())
+}
+
 fn set_actor_sprite_state(lua: &Lua, actor: &Table, state_index: u32) -> mlua::Result<()> {
     capture_block_set_u32(lua, actor, "sprite_state_index", state_index)?;
     let block = actor_current_capture_block(lua, actor)?;
@@ -5408,6 +5452,30 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     actor.set("scaletoclipped", make_actor_set_size_method(lua, actor)?)?;
     actor.set("ScaleToClipped", make_actor_set_size_method(lua, actor)?)?;
+    for (name, cover) in [("scaletofit", false), ("scaletocover", true)] {
+        actor.set(
+            name,
+            lua.create_function({
+                let actor = actor.clone();
+                move |lua, args: MultiValue| {
+                    let Some(left) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+                        return Ok(actor.clone());
+                    };
+                    let Some(top) = method_arg(&args, 1).cloned().and_then(read_f32) else {
+                        return Ok(actor.clone());
+                    };
+                    let Some(right) = method_arg(&args, 2).cloned().and_then(read_f32) else {
+                        return Ok(actor.clone());
+                    };
+                    let Some(bottom) = method_arg(&args, 3).cloned().and_then(read_f32) else {
+                        return Ok(actor.clone());
+                    };
+                    scale_actor_to_rect(lua, &actor, [left, top, right, bottom], cover)?;
+                    Ok(actor.clone())
+                }
+            })?,
+        )?;
+    }
     actor.set(
         "CropTo",
         lua.create_function({
@@ -12072,6 +12140,66 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 2);
         assert_eq!(compiled.overlays[0].initial_state.size, Some([90.0, 36.0]));
         assert_eq!(compiled.overlays[1].initial_state.size, Some([10.0, 20.0]));
+    }
+
+    #[test]
+    fn compile_song_lua_supports_scale_to_fit_and_cover() {
+        let song_dir = test_dir("scale-to-fit-cover");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(200, 100).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:scaletofit(100, 100, 300, 220)
+        end,
+    },
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:scaletocover(100, 100, 300, 220)
+        end,
+    },
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:halign(0):valign(1):scaletofit(100, 100, 300, 220)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Scale To Fit Cover"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 3);
+
+        let fit = compiled.overlays[0].initial_state;
+        assert_eq!(fit.x, 200.0);
+        assert_eq!(fit.y, 160.0);
+        assert_eq!(fit.zoom, 1.0);
+        assert_eq!(fit.zoom_x, 1.0);
+        assert_eq!(fit.zoom_y, 1.0);
+
+        let cover = compiled.overlays[1].initial_state;
+        assert_eq!(cover.x, 200.0);
+        assert_eq!(cover.y, 160.0);
+        assert!((cover.zoom - 1.2).abs() <= 0.000_1);
+        assert!((cover.zoom_x - 1.2).abs() <= 0.000_1);
+        assert!((cover.zoom_y - 1.2).abs() <= 0.000_1);
+
+        let aligned = compiled.overlays[2].initial_state;
+        assert_eq!(aligned.x, 100.0);
+        assert_eq!(aligned.y, 220.0);
+        assert_eq!(aligned.zoom, 1.0);
     }
 
     #[test]
