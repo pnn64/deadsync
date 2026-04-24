@@ -5354,6 +5354,22 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set("scaletoclipped", make_actor_set_size_method(lua, actor)?)?;
     actor.set("ScaleToClipped", make_actor_set_size_method(lua, actor)?)?;
     actor.set(
+        "CropTo",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(width) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let Some(height) = method_arg(&args, 1).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                crop_actor_to(lua, &actor, width, height)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "zoomtowidth",
         lua.create_function({
             let actor = actor.clone();
@@ -6548,7 +6564,15 @@ fn actor_base_size(actor: &Table) -> mlua::Result<(f32, f32)> {
     {
         return Ok(((rect[2] - rect[0]).abs(), (rect[3] - rect[1]).abs()));
     }
+    if let Some(size) = actor_image_frame_size(actor)? {
+        return Ok(size);
+    }
+    Ok((1.0, 1.0))
+}
+
+fn actor_image_frame_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
     if let Some(path) = actor_texture_path(actor)?
+        && is_song_lua_image_path(&path)
         && let Ok((width, height)) = image_dimensions(&path)
     {
         let (mut width, mut height) = (width as f32, height as f32);
@@ -6565,9 +6589,63 @@ fn actor_base_size(actor: &Table) -> mlua::Result<(f32, f32)> {
             width /= cols.max(1) as f32;
             height /= rows.max(1) as f32;
         }
-        return Ok((width, height));
+        return Ok(Some((width, height)));
     }
-    Ok((1.0, 1.0))
+    Ok(None)
+}
+
+fn actor_crop_source_size(lua: &Lua, actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
+    if let Some(size) = actor_image_frame_size(actor)? {
+        return Ok(Some(size));
+    }
+    let Some(path) = actor_texture_path(actor)? else {
+        return Ok(None);
+    };
+    if is_song_lua_video_path(&path) {
+        return song_lua_screen_size(lua).map(Some);
+    }
+    Ok(None)
+}
+
+fn crop_actor_to(lua: &Lua, actor: &Table, width: f32, height: f32) -> mlua::Result<()> {
+    let target = [width, height];
+    if !target.iter().all(|value| value.is_finite() && *value > 0.0) {
+        return Ok(());
+    }
+    let Some((source_width, source_height)) = actor_crop_source_size(lua, actor)? else {
+        return Ok(());
+    };
+    let Some(rect) = crop_texture_rect([source_width, source_height], target) else {
+        return Ok(());
+    };
+    capture_block_set_size(lua, actor, target)?;
+    capture_block_set_u32(
+        lua,
+        actor,
+        "sprite_state_index",
+        SONG_LUA_SPRITE_STATE_CLEAR,
+    )?;
+    capture_block_set_vec4(lua, actor, "custom_texture_rect", rect)?;
+    capture_block_set_f32(lua, actor, "zoom", 1.0)?;
+    capture_block_set_zoom_axes(lua, actor, 1.0, "zoom_x", "zoom_y", "zoom_z")?;
+    Ok(())
+}
+
+fn crop_texture_rect(source: [f32; 2], target: [f32; 2]) -> Option<[f32; 4]> {
+    if !source.iter().all(|value| value.is_finite() && *value > 0.0) {
+        return None;
+    }
+    let scale = (target[0] / source[0]).max(target[1] / source[1]);
+    if !scale.is_finite() || scale <= f32::EPSILON {
+        return None;
+    }
+    let zoomed = [source[0] * scale, source[1] * scale];
+    if zoomed[0] > target[0] + 0.01 {
+        let cut = ((zoomed[0] - target[0]) / zoomed[0]).max(0.0) * 0.5;
+        return Some([cut, 0.0, 1.0 - cut, 1.0]);
+    }
+    let cut = ((zoomed[1] - target[1]) / zoomed[1]).max(0.0) * 0.5;
+    Some([0.0, cut, 1.0, 1.0 - cut])
 }
 
 fn actor_zoom_axis(actor: &Table, zoom_key: &str, basezoom_key: &str) -> mlua::Result<f32> {
@@ -11705,6 +11783,62 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 2);
         assert_eq!(compiled.overlays[0].initial_state.size, Some([90.0, 36.0]));
         assert_eq!(compiled.overlays[1].initial_state.size, Some([10.0, 20.0]));
+    }
+
+    #[test]
+    fn compile_song_lua_supports_sprite_crop_to() {
+        let song_dir = test_dir("sprite-crop-to");
+        image::RgbaImage::new(200, 100)
+            .save(song_dir.join("wide.png"))
+            .unwrap();
+        image::RgbaImage::new(100, 200)
+            .save(song_dir.join("tall.png"))
+            .unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="wide.png",
+        OnCommand=function(self)
+            self:zoom(2):CropTo(100, 100)
+            mod_actions = {
+                {1, string.format("%.0f:%.0f:%.0f", self:GetWidth(), self:GetHeight(), self:GetZoomedWidth()), true},
+            }
+        end,
+    },
+    Def.Sprite{
+        Texture="tall.png",
+        OnCommand=function(self)
+            self:CropTo(100, 100)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Sprite CropTo"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "100:100:100");
+        assert_eq!(compiled.overlays.len(), 2);
+
+        let wide = compiled.overlays[0].initial_state;
+        assert_eq!(wide.size, Some([100.0, 100.0]));
+        assert_eq!(wide.zoom, 1.0);
+        assert_eq!(wide.zoom_x, 1.0);
+        assert_eq!(wide.zoom_y, 1.0);
+        assert_eq!(wide.sprite_state_index, Some(u32::MAX));
+        assert_eq!(wide.custom_texture_rect, Some([0.25, 0.0, 0.75, 1.0]));
+
+        let tall = compiled.overlays[1].initial_state;
+        assert_eq!(tall.size, Some([100.0, 100.0]));
+        assert_eq!(tall.custom_texture_rect, Some([0.0, 0.25, 1.0, 0.75]));
     }
 
     #[test]
