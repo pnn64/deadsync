@@ -458,7 +458,7 @@ pub(super) mod tests {
         state.pane_mut().selected_row[P1] = row_index;
 
         // delta=0 should still apply the current choice
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 0);
+        super::change_choice_for_player(&mut state, &asset_manager, P1, 0, super::NavWrap::Wrap);
 
         assert_eq!(
             state.player_profiles[P1].background_filter,
@@ -488,7 +488,7 @@ pub(super) mod tests {
             .unwrap()
             .selected_choice_index[P1];
 
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
+        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
 
         let row = state.pane().row_map.get(RowId::WhatComesNext).unwrap();
         let n = row.choices.len();
@@ -599,7 +599,7 @@ pub(super) mod tests {
         );
 
         // Advance to index 1 (enabled) — apply returns persisted_with_visibility → syncs
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
+        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
 
         assert!(
             judgment_tilt_intensity_visible(&state.pane().row_map, active),
@@ -631,7 +631,7 @@ pub(super) mod tests {
         assert!(n >= 2, "BackgroundFilter should have at least 2 choices");
         state.pane_mut().selected_row[P1] = row_index;
 
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
+        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
 
         let row = state.pane().row_map.get(RowId::BackgroundFilter).unwrap();
         assert_eq!(row.selected_choice_index[0], 1, "P1 should have advanced");
@@ -671,7 +671,7 @@ pub(super) mod tests {
             .get_mut(RowId::BackgroundFilter)
             .unwrap()
             .selected_choice_index[P1] = n - 1;
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
+        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
         assert_eq!(
             state
                 .pane()
@@ -690,7 +690,7 @@ pub(super) mod tests {
             .get_mut(RowId::BackgroundFilter)
             .unwrap()
             .selected_choice_index[P1] = 0;
-        super::change_choice_for_player(&mut state, &asset_manager, P1, -1);
+        super::change_choice_for_player(&mut state, &asset_manager, P1, -1, super::NavWrap::Wrap);
         assert_eq!(
             state
                 .pane()
@@ -726,8 +726,8 @@ pub(super) mod tests {
 
         // RowBehavior::Exit returns Outcome::NONE so the dispatcher must not panic,
         // mutate the row, or play SFX (which would panic — audio uninit in tests).
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
-        super::change_choice_for_player(&mut state, &asset_manager, P1, -3);
+        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, &asset_manager, P1, -3, super::NavWrap::Wrap);
 
         let after = state
             .pane()
@@ -827,8 +827,8 @@ pub(super) mod tests {
 
         // L/R on a bitmask row returns Outcome::NONE — mask must not change,
         // and no SFX should be played (audio uninit in tests would panic).
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
-        super::change_choice_for_player(&mut state, &asset_manager, P1, -1);
+        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
+        super::change_choice_for_player(&mut state, &asset_manager, P1, -1, super::NavWrap::Wrap);
 
         assert_eq!(
             [state.option_masks[P1].scroll, state.option_masks[P2].scroll],
@@ -952,7 +952,7 @@ pub(super) mod tests {
         );
         let p2_before = row.selected_choice_index[1];
 
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
+        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
 
         let row = state.pane().row_map.get(RowId::BackgroundFilter).unwrap();
         assert_eq!(
@@ -970,7 +970,7 @@ pub(super) mod tests {
         // even though mirror_across_players is true. The dispatcher must NOT
         // overwrite P2 in that case.
         let custom = super::CustomBinding {
-            apply: |_state, _player_idx, _id, _delta| super::Outcome::NONE,
+            apply: |_state, _player_idx, _id, _delta, _wrap| super::Outcome::NONE,
         };
         let mirror_row = Row {
             id: RowId::Hide,
@@ -995,7 +995,7 @@ pub(super) mod tests {
             .unwrap()
             .selected_choice_index[1] = 2;
 
-        super::change_choice_for_player(&mut state, &asset_manager, P1, 1);
+        super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
 
         let row = state.pane().row_map.get(RowId::Hide).unwrap();
         assert_eq!(

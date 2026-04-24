@@ -354,6 +354,7 @@ pub(super) fn next_visible_row(
     current_row: usize,
     dir: NavDirection,
     visibility: RowVisibility,
+    wrap: NavWrap,
 ) -> Option<usize> {
     if row_map.display_order().is_empty() {
         return None;
@@ -365,8 +366,26 @@ pub(super) fn next_visible_row(
     }
     for _ in 0..len {
         idx = match dir {
-            NavDirection::Up => (idx + len - 1) % len,
-            NavDirection::Down => (idx + 1) % len,
+            NavDirection::Up => {
+                if idx == 0 {
+                    match wrap {
+                        NavWrap::Wrap => len - 1,
+                        NavWrap::Clamp => return None,
+                    }
+                } else {
+                    idx - 1
+                }
+            }
+            NavDirection::Down => {
+                if idx + 1 >= len {
+                    match wrap {
+                        NavWrap::Wrap => 0,
+                        NavWrap::Clamp => return None,
+                    }
+                } else {
+                    idx + 1
+                }
+            }
             NavDirection::Left | NavDirection::Right => return Some(idx),
         };
         if is_row_visible(row_map, idx, visibility) {

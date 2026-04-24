@@ -627,6 +627,12 @@ pub enum NavDirection {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NavWrap {
+    Wrap,
+    Clamp,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SubmenuKind {
     System,
     Graphics,
@@ -5046,24 +5052,38 @@ fn move_submenu_selection_vertical(
     asset_manager: &AssetManager,
     kind: SubmenuKind,
     dir: NavDirection,
+    wrap: NavWrap,
 ) {
     let total = submenu_total_rows(state, kind);
     if total == 0 {
         return;
     }
     let current_row = state.sub_selected.min(total.saturating_sub(1));
+    let last = total - 1;
     if !state.sub_inline_x.is_finite() {
         sync_submenu_inline_x_from_row(state, asset_manager, kind, current_row);
     }
     state.sub_selected = match dir {
         NavDirection::Up => {
             if current_row == 0 {
-                total - 1
+                match wrap {
+                    NavWrap::Wrap => last,
+                    NavWrap::Clamp => 0,
+                }
             } else {
                 current_row - 1
             }
         }
-        NavDirection::Down => (current_row + 1) % total,
+        NavDirection::Down => {
+            if current_row >= last {
+                match wrap {
+                    NavWrap::Wrap => 0,
+                    NavWrap::Clamp => last,
+                }
+            } else {
+                current_row + 1
+            }
+        }
     };
     apply_submenu_inline_x_to_row(state, asset_manager, kind, state.sub_selected);
 }
@@ -7614,23 +7634,24 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 OptionsView::Main => {
                     let total = ITEMS.len();
                     if total > 0 {
+                        let last = total - 1;
                         match direction {
                             NavDirection::Up => {
-                                state.selected = if state.selected == 0 {
-                                    total - 1
-                                } else {
-                                    state.selected - 1
-                                };
+                                if state.selected > 0 {
+                                    state.selected -= 1;
+                                }
                             }
                             NavDirection::Down => {
-                                state.selected = (state.selected + 1) % total;
+                                if state.selected < last {
+                                    state.selected += 1;
+                                }
                             }
                         }
                         state.nav_key_last_scrolled_at = Some(now);
                     }
                 }
                 OptionsView::Submenu(kind) => {
-                    move_submenu_selection_vertical(state, asset_manager, kind, direction);
+                    move_submenu_selection_vertical(state, asset_manager, kind, direction, NavWrap::Clamp);
                     state.nav_key_last_scrolled_at = Some(now);
                 }
             }
@@ -7648,9 +7669,9 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             && matches!(state.view, OptionsView::Submenu(_))
         {
             if pending_action.is_none() {
-                pending_action = apply_submenu_choice_delta(state, asset_manager, delta_lr);
+                pending_action = apply_submenu_choice_delta(state, asset_manager, delta_lr, NavWrap::Clamp);
             } else {
-                apply_submenu_choice_delta(state, asset_manager, delta_lr);
+                apply_submenu_choice_delta(state, asset_manager, delta_lr, NavWrap::Clamp);
             }
             state.nav_lr_last_adjusted_at = Some(now);
         }
@@ -7807,6 +7828,7 @@ fn apply_submenu_choice_delta(
     state: &mut State,
     asset_manager: &AssetManager,
     delta: isize,
+    wrap: NavWrap,
 ) -> Option<ScreenAction> {
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
         return None;
@@ -8007,7 +8029,11 @@ fn apply_submenu_choice_delta(
         submenu_cursor_indices(state, kind)[row_index].min(num_choices.saturating_sub(1));
     let cur = choice_index as isize;
     let n = num_choices as isize;
-    let mut new_index = ((cur + delta).rem_euclid(n)) as usize;
+    let raw = cur + delta;
+    let mut new_index = match wrap {
+        NavWrap::Wrap => raw.rem_euclid(n) as usize,
+        NavWrap::Clamp => raw.clamp(0, n - 1) as usize,
+    };
     if new_index >= num_choices {
         new_index = num_choices.saturating_sub(1);
     }
@@ -8379,7 +8405,7 @@ fn undo_three_key_selection(state: &mut State, asset_manager: &AssetManager) {
                 }
             }
             OptionsView::Submenu(kind) => {
-                move_submenu_selection_vertical(state, asset_manager, kind, NavDirection::Down);
+                move_submenu_selection_vertical(state, asset_manager, kind, NavDirection::Down, NavWrap::Wrap);
             }
         },
         -1 => match state.view {
@@ -8394,7 +8420,7 @@ fn undo_three_key_selection(state: &mut State, asset_manager: &AssetManager) {
                 }
             }
             OptionsView::Submenu(kind) => {
-                move_submenu_selection_vertical(state, asset_manager, kind, NavDirection::Up);
+                move_submenu_selection_vertical(state, asset_manager, kind, NavDirection::Up, NavWrap::Wrap);
             }
         },
         _ => {}
@@ -8692,7 +8718,7 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                 }
             }
             if screen_input::dedicated_three_key_nav_enabled()
-                && let Some(action) = apply_submenu_choice_delta(state, asset_manager, 1)
+                && let Some(action) = apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap)
             {
                 return action;
             }
@@ -8936,6 +8962,7 @@ pub fn handle_input(
                             asset_manager,
                             kind,
                             NavDirection::Up,
+                            NavWrap::Wrap,
                         );
                     }
                 }
@@ -8957,6 +8984,7 @@ pub fn handle_input(
                             asset_manager,
                             kind,
                             NavDirection::Down,
+                            NavWrap::Wrap,
                         );
                     }
                 }
@@ -9004,6 +9032,7 @@ pub fn handle_input(
                             asset_manager,
                             kind,
                             NavDirection::Up,
+                            NavWrap::Wrap,
                         );
                     }
                 }
@@ -9030,6 +9059,7 @@ pub fn handle_input(
                             asset_manager,
                             kind,
                             NavDirection::Down,
+                            NavWrap::Wrap,
                         );
                     }
                 }
@@ -9043,7 +9073,7 @@ pub fn handle_input(
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
             if ev.pressed {
-                if let Some(action) = apply_submenu_choice_delta(state, asset_manager, -1) {
+                if let Some(action) = apply_submenu_choice_delta(state, asset_manager, -1, NavWrap::Wrap) {
                     on_lr_press(state, -1);
                     return action;
                 }
@@ -9057,7 +9087,7 @@ pub fn handle_input(
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
             if ev.pressed {
-                if let Some(action) = apply_submenu_choice_delta(state, asset_manager, 1) {
+                if let Some(action) = apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap) {
                     on_lr_press(state, 1);
                     return action;
                 }

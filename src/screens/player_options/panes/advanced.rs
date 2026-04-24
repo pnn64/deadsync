@@ -182,8 +182,10 @@ const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding {
 };
 
 const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
-        if super::super::choice::cycle_choice_index(state, player_idx, row_id, delta).is_none() {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        if super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+            .is_none()
+        {
             return Outcome::NONE;
         }
         Outcome::persisted()
@@ -191,9 +193,9 @@ const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {
 };
 
 const MINI_INDICATOR: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -223,9 +225,9 @@ const MINI_INDICATOR: CustomBinding = CustomBinding {
 };
 
 const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -253,9 +255,9 @@ const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
 };
 
 const MEASURE_COUNTER_LOOKAHEAD: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -270,9 +272,9 @@ const MEASURE_COUNTER_LOOKAHEAD: CustomBinding = CustomBinding {
 };
 
 const CUSTOM_BLUE_FANTASTIC_WINDOW_MS: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };

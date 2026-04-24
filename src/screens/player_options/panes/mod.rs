@@ -18,8 +18,9 @@ fn apply_what_comes_next_cycle(
     player_idx: usize,
     id: RowId,
     delta: isize,
+    wrap: NavWrap,
 ) -> Outcome {
-    match super::choice::cycle_choice_index(state, player_idx, id, delta) {
+    match super::choice::cycle_choice_index(state, player_idx, id, delta, wrap) {
         Some(_) => Outcome::persisted(),
         None => Outcome::NONE,
     }

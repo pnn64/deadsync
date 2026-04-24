@@ -155,7 +155,7 @@ pub struct BitmaskBinding {
 
 #[derive(Clone, Copy, Debug)]
 pub struct CustomBinding {
-    pub apply: fn(&mut State, usize, RowId, isize) -> Outcome,
+    pub apply: fn(&mut State, usize, RowId, isize, NavWrap) -> Outcome,
 }
 
 /// What kind of row this is, and any state owned by the row's behaviour.

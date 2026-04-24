@@ -7,6 +7,12 @@ pub enum NavDirection {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NavWrap {
+    Wrap,
+    Clamp,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OptionsPane {
     Main,
     Advanced,
