@@ -42,6 +42,7 @@ const SONG_LUA_RUNTIME_SECONDS_KEY: &str = "__songlua_music_seconds";
 const SONG_LUA_RUNTIME_BPS_KEY: &str = "__songlua_song_bps";
 const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
+const SONG_LUA_THEME_PATH_PREFIX: &str = "__songlua_theme_path/";
 const SONG_LUA_SPRITE_STATE_CLEAR: u32 = u32::MAX;
 const EASING_NAMES: &[&str] = &[
     "linear",
@@ -1185,6 +1186,16 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         create_screen_system_layer_helpers_table(lua)?,
     )?;
     globals.set("ArrowEffects", create_arrow_effects_table(lua)?)?;
+    globals.set(
+        "ScreenString",
+        lua.create_function(|lua, args: MultiValue| {
+            let name = method_arg(&args, 0)
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            Ok(Value::String(lua.create_string(theme_string("", &name))?))
+        })?,
+    )?;
     globals.set(SONG_LUA_SIDE_EFFECT_COUNT_KEY, 0_i64)?;
 
     let song_runtime = create_song_runtime_table(lua, context)?;
@@ -1448,6 +1459,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         })?,
     )?;
     globals.set("SCREENMAN", screenman)?;
+    globals.set("SOUND", create_sound_table(lua)?)?;
 
     let messageman = lua.create_table()?;
     messageman.set(
@@ -2117,6 +2129,7 @@ fn create_top_screen_table(
     players: [SongLuaPlayerContext; LUA_PLAYERS],
 ) -> mlua::Result<TopScreenLuaTables> {
     let top_screen = create_dummy_actor(lua, "TopScreen")?;
+    top_screen.set("Name", "ScreenGameplay")?;
     let top_screen_for_get_child = top_screen.clone();
     let player_actors = [
         create_top_screen_player_actor(lua, players[0].clone(), 0)?,
@@ -2160,6 +2173,56 @@ fn create_top_screen_table(
             }
         })?,
     )?;
+    top_screen.set(
+        "SetNextScreenName",
+        lua.create_function({
+            let top_screen = top_screen.clone();
+            move |lua, args: MultiValue| {
+                let next_screen = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_string)
+                    .unwrap_or_default();
+                top_screen.set("__songlua_next_screen_name", next_screen)?;
+                note_song_lua_side_effect(lua)?;
+                Ok(top_screen.clone())
+            }
+        })?,
+    )?;
+    top_screen.set(
+        "GetNextScreenName",
+        lua.create_function({
+            let top_screen = top_screen.clone();
+            move |lua, _args: MultiValue| {
+                Ok(Value::String(
+                    lua.create_string(
+                        top_screen
+                            .get::<Option<String>>("__songlua_next_screen_name")?
+                            .unwrap_or_default(),
+                    )?,
+                ))
+            }
+        })?,
+    )?;
+    top_screen.set(
+        "GetGoToOptions",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    top_screen.set(
+        "GetCurrentRowIndex",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    for name in ["AddInputCallback", "RemoveInputCallback", "PauseGame"] {
+        top_screen.set(
+            name,
+            lua.create_function({
+                let top_screen = top_screen.clone();
+                move |lua, _args: MultiValue| {
+                    note_song_lua_side_effect(lua)?;
+                    Ok(top_screen.clone())
+                }
+            })?,
+        )?;
+    }
     Ok(TopScreenLuaTables {
         top_screen,
         players: player_actors,
@@ -2233,17 +2296,110 @@ fn create_enabled_players_table(
 
 fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
     let theme = lua.create_table()?;
-    let get_metric = lua.create_function(|_, args: MultiValue| {
-        let Some(group) = method_arg(&args, 0).cloned().and_then(read_string) else {
-            return Ok(Value::Nil);
-        };
-        let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
-            return Ok(Value::Nil);
-        };
-        Ok(theme_metric(&group, &name).map_or(Value::Nil, |value| Value::Number(value as f64)))
-    })?;
-    theme.set("GetMetric", get_metric.clone())?;
-    theme.set("GetMetricF", get_metric)?;
+    theme.set(
+        "GetMetric",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(group) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(Value::Nil);
+            };
+            let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
+                return Ok(Value::Nil);
+            };
+            theme_metric_value(lua, &group, &name)
+        })?,
+    )?;
+    theme.set(
+        "GetMetricF",
+        lua.create_function(|_, args: MultiValue| {
+            let Some(group) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(Value::Nil);
+            };
+            let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
+                return Ok(Value::Nil);
+            };
+            Ok(theme_metric_number(&group, &name)
+                .map_or(Value::Nil, |value| Value::Number(value as f64)))
+        })?,
+    )?;
+    theme.set(
+        "GetMetricI",
+        lua.create_function(|_, args: MultiValue| {
+            let Some(group) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(Value::Nil);
+            };
+            let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
+                return Ok(Value::Nil);
+            };
+            Ok(theme_metric_number(&group, &name)
+                .map_or(Value::Nil, |value| Value::Integer(value.round() as i64)))
+        })?,
+    )?;
+    theme.set(
+        "GetMetricB",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(group) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(false);
+            };
+            let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
+                return Ok(false);
+            };
+            Ok(theme_metric_bool(theme_metric_value(lua, &group, &name)?))
+        })?,
+    )?;
+    theme.set(
+        "HasMetric",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(group) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(false);
+            };
+            let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
+                return Ok(false);
+            };
+            Ok(!matches!(
+                theme_metric_value(lua, &group, &name)?,
+                Value::Nil
+            ))
+        })?,
+    )?;
+    for (method_name, kind) in [
+        ("GetPathB", "B"),
+        ("GetPathF", "F"),
+        ("GetPathG", "G"),
+        ("GetPathO", "O"),
+        ("GetPathS", "S"),
+    ] {
+        theme.set(
+            method_name,
+            lua.create_function({
+                let kind = kind.to_string();
+                move |lua, args: MultiValue| {
+                    let group = method_arg(&args, 0)
+                        .cloned()
+                        .and_then(read_string)
+                        .unwrap_or_default();
+                    let name = method_arg(&args, 1)
+                        .cloned()
+                        .and_then(read_string)
+                        .unwrap_or_default();
+                    Ok(Value::String(
+                        lua.create_string(theme_path(&kind, &group, &name))?,
+                    ))
+                }
+            })?,
+        )?;
+    }
+    theme.set(
+        "HasString",
+        lua.create_function(|_, args: MultiValue| {
+            let Some(section) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(false);
+            };
+            let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
+                return Ok(false);
+            };
+            Ok(theme_has_string(&section, &name))
+        })?,
+    )?;
     theme.set(
         "GetString",
         lua.create_function(|lua, args: MultiValue| {
@@ -2258,19 +2414,94 @@ fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
             ))
         })?,
     )?;
-    theme.set(
-        "HasString",
-        lua.create_function(|_, args: MultiValue| {
-            let Some(section) = method_arg(&args, 0).cloned().and_then(read_string) else {
-                return Ok(false);
-            };
-            let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
-                return Ok(false);
-            };
-            Ok(theme_has_string(&section, &name))
-        })?,
-    )?;
     Ok(theme)
+}
+
+fn create_sound_table(lua: &Lua) -> mlua::Result<Table> {
+    let sound = lua.create_table()?;
+    for name in ["DimMusic", "PlayMusicPart", "PlayOnce"] {
+        sound.set(
+            name,
+            lua.create_function(|lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            })?,
+        )?;
+    }
+    Ok(sound)
+}
+
+fn theme_metric_value(lua: &Lua, group: &str, name: &str) -> mlua::Result<Value> {
+    if let Some(value) = theme_metric_number(group, name) {
+        return Ok(Value::Number(value as f64));
+    }
+    if group.eq_ignore_ascii_case("Common") && name.eq_ignore_ascii_case("DefaultNoteSkinName") {
+        return Ok(Value::String(lua.create_string("default")?));
+    }
+    if name.eq_ignore_ascii_case("Class") {
+        return Ok(Value::String(lua.create_string(group)?));
+    }
+    if group.eq_ignore_ascii_case("Common") && name.eq_ignore_ascii_case("AutoSetStyle")
+        || group.eq_ignore_ascii_case("ScreenHeartEntry")
+            && name.eq_ignore_ascii_case("HeartEntryEnabled")
+    {
+        return Ok(Value::Boolean(false));
+    }
+    Ok(Value::Nil)
+}
+
+fn theme_metric_number(group: &str, name: &str) -> Option<f32> {
+    if group.eq_ignore_ascii_case("Player") {
+        if name.eq_ignore_ascii_case("ReceptorArrowsYStandard") {
+            return Some(THEME_RECEPTOR_Y_STD);
+        }
+        if name.eq_ignore_ascii_case("ReceptorArrowsYReverse") {
+            return Some(THEME_RECEPTOR_Y_REV);
+        }
+    }
+    if group.eq_ignore_ascii_case("Combo") && name.eq_ignore_ascii_case("ShowComboAt") {
+        return Some(4.0);
+    }
+    if group.eq_ignore_ascii_case("GraphDisplay") {
+        if name.eq_ignore_ascii_case("BodyWidth") {
+            return Some(300.0);
+        }
+        if name.eq_ignore_ascii_case("BodyHeight") {
+            return Some(120.0);
+        }
+    }
+    if group.eq_ignore_ascii_case("LifeMeterBar") && name.eq_ignore_ascii_case("InitialValue") {
+        return Some(0.5);
+    }
+    if group.eq_ignore_ascii_case("MusicWheel") && name.eq_ignore_ascii_case("NumWheelItems") {
+        return Some(15.0);
+    }
+    if group.eq_ignore_ascii_case("PlayerStageStats")
+        && name.eq_ignore_ascii_case("NumGradeTiersUsed")
+    {
+        return Some(7.0);
+    }
+    None
+}
+
+fn theme_metric_bool(value: Value) -> bool {
+    match value {
+        Value::Boolean(value) => value,
+        Value::Integer(value) => value != 0,
+        Value::Number(value) => value != 0.0,
+        Value::String(value) => !value.to_str().is_ok_and(|text| text.is_empty()),
+        _ => false,
+    }
+}
+
+fn theme_path(kind: &str, group: &str, name: &str) -> String {
+    let group = group.trim_matches('/');
+    let name = name.trim_start_matches('/');
+    if group.is_empty() {
+        format!("{SONG_LUA_THEME_PATH_PREFIX}{kind}/{name}")
+    } else {
+        format!("{SONG_LUA_THEME_PATH_PREFIX}{kind}/{group}/{name}")
+    }
 }
 
 fn create_theme_prefs_table(lua: &Lua) -> mlua::Result<Table> {
@@ -2565,20 +2796,6 @@ fn song_lua_noteskin_actor(
         actor.set("Texture", file_path_string(path.as_path()))?;
     }
     Ok(actor)
-}
-
-#[inline(always)]
-fn theme_metric(group: &str, name: &str) -> Option<f32> {
-    if !group.eq_ignore_ascii_case("Player") {
-        return None;
-    }
-    if name.eq_ignore_ascii_case("ReceptorArrowsYStandard") {
-        Some(THEME_RECEPTOR_Y_STD)
-    } else if name.eq_ignore_ascii_case("ReceptorArrowsYReverse") {
-        Some(THEME_RECEPTOR_Y_REV)
-    } else {
-        None
-    }
 }
 
 fn theme_string(section: &str, name: &str) -> String {
@@ -3343,6 +3560,9 @@ fn install_file_loaders(lua: &Lua, song_dir: PathBuf) -> mlua::Result<()> {
 }
 
 fn load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<Value> {
+    if let Some(actor) = create_theme_path_actor(lua, path)? {
+        return Ok(Value::Table(actor));
+    }
     let resolved = resolve_load_actor_path(lua, song_dir, path)?;
     if is_song_lua_media_path(&resolved) {
         let actor_type = if is_song_lua_audio_path(&resolved) {
@@ -3358,6 +3578,27 @@ fn load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<Value
         )?));
     }
     load_script_file(lua, &resolved, song_dir)?.call::<Value>(())
+}
+
+fn create_theme_path_actor(lua: &Lua, path: &str) -> mlua::Result<Option<Table>> {
+    if !path.starts_with(SONG_LUA_THEME_PATH_PREFIX) {
+        return Ok(None);
+    }
+    let path_ref = Path::new(path);
+    let actor_type = if is_song_lua_audio_path(path_ref) {
+        "Sound"
+    } else if is_song_lua_image_path(path_ref) || is_song_lua_video_path(path_ref) {
+        "Sprite"
+    } else {
+        "Actor"
+    };
+    let actor = create_dummy_actor(lua, actor_type)?;
+    if actor_type.eq_ignore_ascii_case("Sound") {
+        actor.set("File", path)?;
+    } else if actor_type.eq_ignore_ascii_case("Sprite") {
+        actor.set("Texture", path)?;
+    }
+    Ok(Some(actor))
 }
 
 fn resolve_load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
@@ -11317,6 +11558,64 @@ return Def.ActorFrame{
             compiled.messages[0].message,
             "1.779:200.0:3:2:05|01:05|1:05.50|01:05.50|01:01:01|1st|2nd|3rd|11th|113th"
         );
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_theme_process_compat_helpers() {
+        let song_dir = test_dir("theme-process-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local top = SCREENMAN:GetTopScreen()
+local sound = LoadActor(THEME:GetPathS("", "Common invalid.ogg"))
+sound:play():stop()
+
+SOUND:PlayOnce(THEME:GetPathS("", "_unlock.ogg"))
+SOUND:DimMusic(0.5, 1.0)
+SOUND:PlayMusicPart("sample.ogg", 0, 5)
+top:SetNextScreenName("ScreenEvaluationStage")
+top:AddInputCallback(function() end):PauseGame(true):RemoveInputCallback(function() end)
+top:StartTransitioningScreen("SM_GoToNextScreen")
+
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%s:%s:%s:%s:%s:%s:%d:%.0f:%s:%s:%d",
+            top:GetName(),
+            top:GetNextScreenName(),
+            THEME:GetMetric(top:GetName(), "Class"),
+            THEME:GetMetric("Common", "DefaultNoteSkinName"),
+            tostring(THEME:HasMetric("Player", "ReceptorArrowsYStandard")),
+            tostring(THEME:GetMetricB("ScreenHeartEntry", "HeartEntryEnabled")),
+            THEME:GetMetricI("MusicWheel", "NumWheelItems"),
+            THEME:GetMetricF("GraphDisplay", "BodyWidth"),
+            ScreenString("Cancel"),
+            string.sub(THEME:GetPathG("Combo", "100Milestone"), 1, 20),
+            top:GetCurrentRowIndex(PLAYER_1)
+        ),
+        true,
+    },
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Theme Process Helpers"),
+        )
+        .unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "ScreenGameplay:ScreenEvaluationStage:ScreenGameplay:default:true:false:15:300:Cancel:__songlua_theme_path:0"
+        );
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
     }
 
     #[test]
