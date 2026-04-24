@@ -659,6 +659,22 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
         let gmatch = string.get::<Value>("gmatch")?;
         string.set("gfind", gmatch)?;
     }
+    string.set(
+        "split",
+        lua.create_function(|lua, args: MultiValue| {
+            let text = args
+                .front()
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            let separator = args
+                .get(1)
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            create_split_table(lua, &text, &separator)
+        })?,
+    )?;
     let math: Table = globals.get("math")?;
     if matches!(math.get::<Value>("round")?, Value::Nil) {
         math.set(
@@ -687,6 +703,30 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
         )?;
     }
     globals.set("unpack", table.get::<Value>("unpack")?)?;
+    globals.set(
+        "split",
+        lua.create_function(|lua, args: MultiValue| {
+            let separator = args
+                .front()
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            let text = args
+                .get(1)
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            create_split_table(lua, &text, &separator)
+        })?,
+    )?;
+    globals.set(
+        "Basename",
+        lua.create_function(|lua, value: Value| {
+            Ok(Value::String(lua.create_string(path_basename(
+                &read_string(value).unwrap_or_default(),
+            ))?))
+        })?,
+    )?;
     globals.set(
         "ivalues",
         lua.create_function(|lua, table: Table| {
@@ -962,6 +1002,32 @@ fn create_network_table(lua: &Lua) -> mlua::Result<Table> {
         })?,
     )?;
     Ok(network)
+}
+
+fn create_split_table(lua: &Lua, text: &str, separator: &str) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    if separator.is_empty() {
+        if text.is_empty() {
+            table.raw_set(1, "")?;
+        } else {
+            for (idx, value) in text.chars().enumerate() {
+                table.raw_set(idx + 1, value.to_string())?;
+            }
+        }
+        return Ok(table);
+    }
+    for (idx, value) in text.split(separator).enumerate() {
+        table.raw_set(idx + 1, value)?;
+    }
+    Ok(table)
+}
+
+fn path_basename(text: &str) -> &str {
+    let trimmed = text.trim_end_matches(|c| c == '/' || c == '\\');
+    trimmed
+        .rsplit(|c| c == '/' || c == '\\')
+        .next()
+        .unwrap_or_default()
 }
 
 fn create_network_response_table(lua: &Lua) -> mlua::Result<Table> {
@@ -1515,6 +1581,21 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("OtherPlayer", create_other_player_table(lua)?)?;
     globals.set("Difficulty", create_difficulty_table(lua)?)?;
     globals.set(
+        "ProfileSlot",
+        create_string_enum_table(
+            lua,
+            &[
+                "ProfileSlot_Player1",
+                "ProfileSlot_Player2",
+                "ProfileSlot_Machine",
+            ],
+        )?,
+    )?;
+    globals.set(
+        "GameController",
+        create_string_enum_table(lua, &["GameController_1", "GameController_2"])?,
+    )?;
+    globals.set(
         "StepsType",
         create_string_enum_table(lua, &["StepsType_Dance_Single", "StepsType_Dance_Double"])?,
     )?;
@@ -1964,6 +2045,44 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
             Ok(global_human_players_enabled[player].enabled)
         })?,
     )?;
+    globals.set(
+        "IsAutoplay",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    globals.set(
+        "IsW0Judgment",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    globals.set(
+        "IsW010Judgment",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    globals.set(
+        "GetDefaultFailType",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string("FailType_Immediate")?))
+        })?,
+    )?;
+    globals.set(
+        "GetComboThreshold",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string("TapNoteScore_W3")?))
+        })?,
+    )?;
+    let notefield_players = context.players.clone();
+    globals.set(
+        "GetNotefieldX",
+        lua.create_function(move |_, args: MultiValue| {
+            let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
+                return Ok(Value::Nil);
+            };
+            Ok(Value::Number(notefield_players[player].screen_x.into()))
+        })?,
+    )?;
+    globals.set(
+        "GetNotefieldWidth",
+        lua.create_function(|_, _args: MultiValue| Ok(256.0_f32))?,
+    )?;
     gamestate.set(
         "GetEnabledPlayers",
         lua.create_function(move |_, _args: MultiValue| Ok(enabled_players.clone()))?,
@@ -2276,6 +2395,21 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         top_screen.players[1].clone(),
     )?;
     globals.set("__songlua_top_screen", top_screen.top_screen.clone())?;
+    let player_1_actor = top_screen.players[0].clone();
+    let player_2_actor = top_screen.players[1].clone();
+    globals.set(
+        "GetPlayerAF",
+        lua.create_function(move |_, args: MultiValue| {
+            let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
+                return Ok(Value::Nil);
+            };
+            Ok(Value::Table(match player {
+                0 => player_1_actor.clone(),
+                1 => player_2_actor.clone(),
+                _ => return Ok(Value::Nil),
+            }))
+        })?,
+    )?;
     let top_screen_table = top_screen.top_screen.clone();
     screenman.set(
         "GetTopScreen",
@@ -2346,6 +2480,13 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     )?;
     globals.set("ThemePrefs", create_theme_prefs_table(lua)?)?;
     globals.set("SL", create_sl_table(lua, context)?)?;
+    globals.set("Branch", create_branch_table(lua)?)?;
+    globals.set(
+        "SelectMusicOrCourse",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string("ScreenSelectMusic")?))
+        })?,
+    )?;
     globals.set("PROFILEMAN", create_profileman_table(lua)?)?;
     Ok(())
 }
@@ -2478,6 +2619,40 @@ fn create_screen_system_layer_helpers_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     set_string_method(lua, &table, "GetCreditsMessage", "Free Play")?;
     Ok(table)
+}
+
+fn create_branch_table(lua: &Lua) -> mlua::Result<Table> {
+    let branch = lua.create_table()?;
+    for (name, screen) in [
+        ("AfterScreenRankingDouble", "ScreenRainbow"),
+        ("TitleMenu", "ScreenTitleMenu"),
+        ("AfterInit", "ScreenTitleMenu"),
+        ("AllowScreenSelectProfile", "ScreenSelectProfile"),
+        ("AfterSelectProfile", "ScreenSelectColor"),
+        ("AllowScreenSelectColor", "ScreenSelectColor"),
+        ("AfterScreenSelectColor", "ScreenSelectStyle"),
+        ("AllowScreenSelectPlayMode", "ScreenSelectPlayMode"),
+        ("AllowScreenSelectPlayMode2", "ScreenProfileLoad"),
+        ("AfterSelectPlayMode", "ScreenSelectMusic"),
+        ("AfterEvaluationStage", "ScreenProfileSave"),
+        ("AfterGameplay", "ScreenEvaluationStage"),
+        ("AfterHeartEntry", "ScreenEvaluationStage"),
+        ("AfterSelectMusic", "ScreenGameplay"),
+        ("SSMCancel", "ScreenTitleMenu"),
+        ("AllowScreenNameEntry", "ScreenNameEntryTraditional"),
+        ("AllowScreenEvalSummary", "ScreenEvaluationSummary"),
+        ("AfterProfileSave", "ScreenSelectMusic"),
+        ("AfterProfileSaveSummary", "ScreenGameOver"),
+        ("GameplayScreen", "ScreenGameplay"),
+    ] {
+        branch.set(
+            name,
+            lua.create_function(move |lua, _args: MultiValue| {
+                Ok(Value::String(lua.create_string(screen)?))
+            })?,
+        )?;
+    }
+    Ok(branch)
 }
 
 fn create_sl_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
@@ -12837,6 +13012,8 @@ fn player_index_from_value(value: &Value) -> Option<usize> {
             }
         }
         Value::String(text) => match text.to_str().ok()?.as_ref() {
+            "P1" => Some(0),
+            "P2" => Some(1),
             "PlayerNumber_P1" => Some(0),
             "PlayerNumber_P2" => Some(1),
             _ => None,
@@ -18998,6 +19175,56 @@ return Def.ActorFrame{
         assert_eq!(
             compiled.overlay_eases[0].to.diffuse,
             Some([0.0, 0.0, 0.0, 1.0])
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_theme_branch_and_path_helpers() {
+        let song_dir = test_dir("theme-branch-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local path = "/Songs/Group/Song/"
+local parts = split("/", path)
+local method_parts = "Group/Song":split("/")
+local player_af = GetPlayerAF(ToEnumShortString(PLAYER_1))
+
+mod_actions = {
+    {1, table.concat({
+        parts[1],
+        parts[3],
+        parts[4],
+        method_parts[2],
+        Basename(path),
+        ProfileSlot[PlayerNumber:Reverse()[PLAYER_1] + 1],
+        GameController:Reverse()["GameController_2"],
+        GetDefaultFailType(),
+        GetComboThreshold("Maintain"),
+        tostring(IsAutoplay(PLAYER_1)),
+        tostring(IsW0Judgment({Player=PLAYER_1}, PLAYER_1)),
+        tostring(IsW010Judgment({Player=PLAYER_1}, PLAYER_1)),
+        string.format("%.0f", GetNotefieldWidth()),
+        string.format("%.0f", GetNotefieldX(PLAYER_1)),
+        tostring(player_af ~= nil),
+        Branch.AfterSelectMusic(),
+        Branch.GameplayScreen(),
+        SelectMusicOrCourse(),
+    }, "|"), true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Theme Helpers");
+        context.players[0].screen_x = 123.0;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "|Group|Song|Song|Song|ProfileSlot_Player1|1|FailType_Immediate|TapNoteScore_W3|false|false|false|256|123|true|ScreenGameplay|ScreenGameplay|ScreenSelectMusic"
         );
     }
 
