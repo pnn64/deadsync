@@ -1565,6 +1565,32 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     )?;
     screenman.set(
         "SetNewScreen",
+        lua.create_function({
+            let top_screen = top_screen.top_screen.clone();
+            move |lua, args: MultiValue| {
+                if let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) {
+                    top_screen.set("Name", name)?;
+                }
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            }
+        })?,
+    )?;
+    screenman.set(
+        "AddNewScreenToTop",
+        lua.create_function({
+            let top_screen = top_screen.top_screen.clone();
+            move |lua, args: MultiValue| {
+                if let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) {
+                    top_screen.set("Name", name)?;
+                }
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            }
+        })?,
+    )?;
+    screenman.set(
+        "set_input_redirected",
         lua.create_function(|lua, _args: MultiValue| {
             note_song_lua_side_effect(lua)?;
             Ok(())
@@ -2816,6 +2842,12 @@ fn create_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Resu
         && let Some(player_index) = player_index
     {
         create_note_field_actor(lua, player_index as usize)?
+    } else if parent_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("TopScreen"))
+        && name.eq_ignore_ascii_case("Timer")
+    {
+        create_screen_timer_actor(lua)?
     } else {
         create_dummy_actor(lua, "ChildActor")?
     };
@@ -2833,6 +2865,15 @@ fn create_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Resu
         child.set("__songlua_top_screen_child_name", name)?;
     }
     Ok(child)
+}
+
+fn create_screen_timer_actor(lua: &Lua) -> mlua::Result<Table> {
+    let actor = create_dummy_actor(lua, "Timer")?;
+    actor.set(
+        "GetSeconds",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    Ok(actor)
 }
 
 fn create_note_field_actor(lua: &Lua, player_index: usize) -> mlua::Result<Table> {
@@ -3086,6 +3127,21 @@ fn create_top_screen_table(
         })?,
     )?;
     top_screen.set(
+        "SetPrevScreenName",
+        lua.create_function({
+            let top_screen = top_screen.clone();
+            move |lua, args: MultiValue| {
+                let prev_screen = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_string)
+                    .unwrap_or_default();
+                top_screen.set("__songlua_prev_screen_name", prev_screen)?;
+                note_song_lua_side_effect(lua)?;
+                Ok(top_screen.clone())
+            }
+        })?,
+    )?;
+    top_screen.set(
         "GetNextScreenName",
         lua.create_function({
             let top_screen = top_screen.clone();
@@ -3101,6 +3157,21 @@ fn create_top_screen_table(
         })?,
     )?;
     top_screen.set(
+        "GetPrevScreenName",
+        lua.create_function({
+            let top_screen = top_screen.clone();
+            move |lua, _args: MultiValue| {
+                Ok(Value::String(
+                    lua.create_string(
+                        top_screen
+                            .get::<Option<String>>("__songlua_prev_screen_name")?
+                            .unwrap_or_default(),
+                    )?,
+                ))
+            }
+        })?,
+    )?;
+    top_screen.set(
         "GetGoToOptions",
         lua.create_function(|_, _args: MultiValue| Ok(false))?,
     )?;
@@ -3108,7 +3179,51 @@ fn create_top_screen_table(
         "GetCurrentRowIndex",
         lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
     )?;
-    for name in ["AddInputCallback", "RemoveInputCallback", "PauseGame"] {
+    top_screen.set(
+        "IsPaused",
+        lua.create_function({
+            let top_screen = top_screen.clone();
+            move |_, _args: MultiValue| {
+                Ok(top_screen
+                    .get::<Option<bool>>("__songlua_paused")?
+                    .unwrap_or(false))
+            }
+        })?,
+    )?;
+    top_screen.set(
+        "PauseGame",
+        lua.create_function({
+            let top_screen = top_screen.clone();
+            move |lua, args: MultiValue| {
+                top_screen.set("__songlua_paused", method_arg(&args, 0).is_some_and(truthy))?;
+                note_song_lua_side_effect(lua)?;
+                Ok(top_screen.clone())
+            }
+        })?,
+    )?;
+    top_screen.set(
+        "AllAreOnLastRow",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    let music_wheel = create_music_wheel_table(lua)?;
+    top_screen.set(
+        "GetMusicWheel",
+        lua.create_function(move |_, _args: MultiValue| Ok(music_wheel.clone()))?,
+    )?;
+    top_screen.set(
+        "GetNextCourseSong",
+        lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+    )?;
+    for name in [
+        "AddInputCallback",
+        "RemoveInputCallback",
+        "PostScreenMessage",
+        "SetProfileIndex",
+        "Cancel",
+        "Finish",
+        "Load",
+        "begin_backing_out",
+    ] {
         top_screen.set(
             name,
             lua.create_function({
@@ -3124,6 +3239,35 @@ fn create_top_screen_table(
         top_screen,
         players: player_actors,
     })
+}
+
+fn create_music_wheel_table(lua: &Lua) -> mlua::Result<Table> {
+    let wheel = lua.create_table()?;
+    wheel.set(
+        "IsLocked",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    wheel.set(
+        "GetSelectedSection",
+        lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
+    )?;
+    wheel.set(
+        "GetSelectedSong",
+        lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+    )?;
+    for name in ["ChangeSort", "SetOpenSection"] {
+        wheel.set(
+            name,
+            lua.create_function({
+                let wheel = wheel.clone();
+                move |lua, _args: MultiValue| {
+                    note_song_lua_side_effect(lua)?;
+                    Ok(wheel.clone())
+                }
+            })?,
+        )?;
+    }
+    Ok(wheel)
 }
 
 fn create_top_screen_player_actor(
@@ -8688,6 +8832,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "hurrytweening",
         "jitter",
         "load",
+        "LoadFromSongBackground",
         "AddAttribute",
         "backfacecull",
         "ClearAttributes",
@@ -13128,6 +13273,65 @@ return Def.ActorFrame{}
             "ScreenGameplay:ScreenEvaluationStage:ScreenGameplay:default:true:false:15:300:Cancel:__songlua_theme_path:0"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_screen_process_shims() {
+        let song_dir = test_dir("screen-process-shims");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+SCREENMAN:set_input_redirected(PLAYER_1, true)
+SCREENMAN:AddNewScreenToTop("ScreenTextEntry")
+
+local top = SCREENMAN:GetTopScreen()
+top:Load({ Question="Search" })
+    :SetPrevScreenName("ScreenSelectMusic")
+    :SetNextScreenName("ScreenGameplay")
+    :PostScreenMessage("SM_BeginFailed", 0)
+    :SetProfileIndex(PLAYER_1, -1)
+    :PauseGame(true)
+
+local wheel = top:GetMusicWheel()
+wheel:SetOpenSection(""):ChangeSort("SortOrder_Preferred")
+
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%s:%s:%s:%s:%s:%s:%.0f:%s",
+            top:GetName(),
+            top:GetPrevScreenName(),
+            top:GetNextScreenName(),
+            tostring(top:IsPaused()),
+            tostring(top:AllAreOnLastRow()),
+            tostring(wheel:IsLocked()),
+            top:GetChild("Timer"):GetSeconds(),
+            tostring(top:GetNextCourseSong() == nil)
+        ),
+        true,
+    },
+}
+
+top:Cancel():Finish():begin_backing_out()
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Screen Process Shims"),
+        )
+        .unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "ScreenTextEntry:ScreenSelectMusic:ScreenGameplay:true:false:false:0:true"
+        );
     }
 
     #[test]
