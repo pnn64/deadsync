@@ -182,6 +182,7 @@ pub struct SongLuaCompileContext {
     pub main_title: String,
     pub song_display_bpms: [f32; 2],
     pub song_music_rate: f32,
+    pub music_length_seconds: f32,
     pub style_name: String,
     pub global_offset_seconds: f32,
     pub screen_width: f32,
@@ -199,6 +200,7 @@ impl SongLuaCompileContext {
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
             song_music_rate: 1.0,
+            music_length_seconds: 0.0,
             style_name: "single".to_string(),
             global_offset_seconds: 0.0,
             screen_width: 640.0,
@@ -1886,11 +1888,13 @@ fn create_player_tables(
             lua,
             context.players[0].difficulty,
             context.players[0].display_bpms,
+            context.song_dir.as_path(),
         )?,
         create_steps_table(
             lua,
             context.players[1].difficulty,
             context.players[1].display_bpms,
+            context.song_dir.as_path(),
         )?,
     ];
     Ok(PlayerLuaTables {
@@ -2220,20 +2224,52 @@ fn create_steps_table(
     lua: &Lua,
     difficulty: SongLuaDifficulty,
     display_bpms: [f32; 2],
+    song_dir: &Path,
 ) -> mlua::Result<Table> {
     let table = lua.create_table()?;
-    let difficulty = difficulty.sm_name().to_string();
-    table.set(
-        "GetDifficulty",
-        lua.create_function(move |lua, _args: MultiValue| {
-            Ok(Value::String(lua.create_string(&difficulty)?))
-        })?,
+    set_string_method(lua, &table, "GetDifficulty", difficulty.sm_name())?;
+    set_string_method(lua, &table, "GetStepsType", "StepsType_Dance_Single")?;
+    set_string_method(lua, &table, "GetDescription", "")?;
+    set_string_method(lua, &table, "GetChartName", "")?;
+    set_string_method(lua, &table, "GetAuthorCredit", "")?;
+    set_string_method(lua, &table, "GetCredit", "")?;
+    set_string_method(
+        lua,
+        &table,
+        "GetFilename",
+        &song_simfile_path(song_dir)
+            .map(|path| file_path_string(path.as_path()))
+            .unwrap_or_default(),
     )?;
+    set_string_method(
+        lua,
+        &table,
+        "GetMusicPath",
+        &song_music_path(song_dir)
+            .map(|path| file_path_string(path.as_path()))
+            .unwrap_or_default(),
+    )?;
+    let meter = difficulty_meter(difficulty);
+    table.set(
+        "GetMeter",
+        lua.create_function(move |_, _args: MultiValue| Ok(meter))?,
+    )?;
+    let timing = create_timing_table(lua, display_bpms)?;
     let display_bpms = create_display_bpms_table(lua, display_bpms)?;
     table.set(
         "GetDisplayBpms",
         lua.create_function(move |_, _args: MultiValue| Ok(display_bpms.clone()))?,
     )?;
+    table.set(
+        "GetTimingData",
+        lua.create_function(move |_, _args: MultiValue| Ok(timing.clone()))?,
+    )?;
+    let radar = create_radar_values_table(lua)?;
+    table.set(
+        "GetRadarValues",
+        lua.create_function(move |_, _args: MultiValue| Ok(radar.clone()))?,
+    )?;
+    set_string_method(lua, &table, "GetDisplayBPMType", "DISPLAY_BPM_ACTUAL")?;
     Ok(table)
 }
 
@@ -2242,6 +2278,54 @@ fn create_display_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
     table.raw_set(1, bpms[0])?;
     table.raw_set(2, bpms[1])?;
     Ok(table)
+}
+
+fn create_radar_values_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set(
+        "GetValue",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    Ok(table)
+}
+
+fn set_string_method(lua: &Lua, table: &Table, name: &str, value: &str) -> mlua::Result<()> {
+    let value = value.to_string();
+    table.set(
+        name,
+        lua.create_function(move |lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string(&value)?))
+        })?,
+    )
+}
+
+fn set_path_methods(
+    lua: &Lua,
+    table: &Table,
+    path_name: &str,
+    has_name: &str,
+    path: Option<&Path>,
+) -> mlua::Result<()> {
+    let path = path.map(file_path_string).unwrap_or_default();
+    set_string_method(lua, table, path_name, &path)?;
+    let has_file = !path.is_empty();
+    table.set(
+        has_name,
+        lua.create_function(move |_, _args: MultiValue| Ok(has_file))?,
+    )?;
+    Ok(())
+}
+
+#[inline(always)]
+fn difficulty_meter(difficulty: SongLuaDifficulty) -> i32 {
+    match difficulty {
+        SongLuaDifficulty::Beginner => 1,
+        SongLuaDifficulty::Easy => 4,
+        SongLuaDifficulty::Medium => 7,
+        SongLuaDifficulty::Hard => 10,
+        SongLuaDifficulty::Challenge => 12,
+        SongLuaDifficulty::Edit => 0,
+    }
 }
 
 fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::Result<Table> {
@@ -2376,36 +2460,90 @@ fn speedmod_value(speedmod: SongLuaSpeedMod, ctor: fn(f32) -> SongLuaSpeedMod) -
 fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let song_dir = song_dir_string(context.song_dir.as_path());
-    let steps_by_type = create_steps_by_steps_type_table(lua, context.song_display_bpms)?;
-    table.set(
-        "GetSongDir",
-        lua.create_function(move |lua, _args: MultiValue| {
-            Ok(Value::String(lua.create_string(&song_dir)?))
-        })?,
+    let steps_by_type = create_steps_by_steps_type_table(
+        lua,
+        context.song_display_bpms,
+        context.song_dir.as_path(),
     )?;
-    let title = context.main_title.clone();
-    table.set(
-        "GetMainTitle",
-        lua.create_function(move |lua, _args: MultiValue| {
-            Ok(Value::String(lua.create_string(&title)?))
-        })?,
+    set_string_method(lua, &table, "GetSongDir", &song_dir)?;
+    set_string_method(lua, &table, "GetMainTitle", &context.main_title)?;
+    set_string_method(lua, &table, "GetDisplayMainTitle", &context.main_title)?;
+    set_string_method(lua, &table, "GetTranslitMainTitle", &context.main_title)?;
+    set_string_method(lua, &table, "GetDisplayFullTitle", &context.main_title)?;
+    set_string_method(lua, &table, "GetTranslitFullTitle", &context.main_title)?;
+    set_string_method(lua, &table, "GetDisplaySubTitle", "")?;
+    set_string_method(lua, &table, "GetTranslitSubTitle", "")?;
+    set_string_method(lua, &table, "GetDisplayArtist", "")?;
+    set_string_method(lua, &table, "GetTranslitArtist", "")?;
+    set_string_method(
+        lua,
+        &table,
+        "GetGroupName",
+        &song_group_name(&context.song_dir),
     )?;
-    let display_title = context.main_title.clone();
+    let music_path = song_music_path(&context.song_dir);
+    let banner_path = song_named_image_path(&context.song_dir, &["banner", "bn"]);
+    let background_path = song_named_image_path(&context.song_dir, &["background", "bg"]);
+    let jacket_path = song_named_image_path(&context.song_dir, &["jacket", "cover"]);
+    let cd_image_path = song_named_image_path(&context.song_dir, &["cdtitle", "cdimage", "disc"]);
+    set_path_methods(
+        lua,
+        &table,
+        "GetMusicPath",
+        "HasMusic",
+        music_path.as_deref(),
+    )?;
+    set_path_methods(
+        lua,
+        &table,
+        "GetBannerPath",
+        "HasBanner",
+        banner_path.as_deref(),
+    )?;
+    set_path_methods(
+        lua,
+        &table,
+        "GetBackgroundPath",
+        "HasBackground",
+        background_path.as_deref(),
+    )?;
+    set_path_methods(
+        lua,
+        &table,
+        "GetJacketPath",
+        "HasJacket",
+        jacket_path.as_deref(),
+    )?;
+    set_path_methods(
+        lua,
+        &table,
+        "GetCDImagePath",
+        "HasCDImage",
+        cd_image_path.as_deref(),
+    )?;
+    let music_length_seconds = context.music_length_seconds.max(0.0);
     table.set(
-        "GetDisplayMainTitle",
-        lua.create_function(move |lua, _args: MultiValue| {
-            Ok(Value::String(lua.create_string(&display_title)?))
-        })?,
+        "MusicLengthSeconds",
+        lua.create_function(move |_, _args: MultiValue| Ok(music_length_seconds))?,
+    )?;
+    table.set(
+        "GetStageCost",
+        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
     )?;
     let display_bpms = create_display_bpms_table(lua, context.song_display_bpms)?;
     table.set(
         "GetDisplayBpms",
         lua.create_function(move |_, _args: MultiValue| Ok(display_bpms.clone()))?,
     )?;
-    let timing = create_timing_table(lua)?;
+    let timing = create_timing_table(lua, context.song_display_bpms)?;
     table.set(
         "GetTimingData",
         lua.create_function(move |_, _args: MultiValue| Ok(timing.clone()))?,
+    )?;
+    let all_steps = steps_by_type.clone();
+    table.set(
+        "GetAllSteps",
+        lua.create_function(move |_, _args: MultiValue| Ok(all_steps.clone()))?,
     )?;
     table.set(
         "GetStepsByStepsType",
@@ -2414,7 +2552,11 @@ fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
     Ok(table)
 }
 
-fn create_steps_by_steps_type_table(lua: &Lua, display_bpms: [f32; 2]) -> mlua::Result<Table> {
+fn create_steps_by_steps_type_table(
+    lua: &Lua,
+    display_bpms: [f32; 2],
+    song_dir: &Path,
+) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for (idx, difficulty) in [
         SongLuaDifficulty::Beginner,
@@ -2427,13 +2569,26 @@ fn create_steps_by_steps_type_table(lua: &Lua, display_bpms: [f32; 2]) -> mlua::
     .into_iter()
     .enumerate()
     {
-        table.raw_set(idx + 1, create_steps_table(lua, difficulty, display_bpms)?)?;
+        table.raw_set(
+            idx + 1,
+            create_steps_table(lua, difficulty, display_bpms, song_dir)?,
+        )?;
     }
     Ok(table)
 }
 
-fn create_timing_table(lua: &Lua) -> mlua::Result<Table> {
+fn create_timing_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
     let table = lua.create_table()?;
+    let actual_bpms = create_display_bpms_table(lua, bpms)?;
+    table.set(
+        "GetActualBPM",
+        lua.create_function(move |_, _args: MultiValue| Ok(actual_bpms.clone()))?,
+    )?;
+    let bpm_at_beat = bpms[0].max(0.0);
+    table.set(
+        "GetBPMAtBeat",
+        lua.create_function(move |_, _args: MultiValue| Ok(bpm_at_beat))?,
+    )?;
     table.set(
         "GetElapsedTimeFromBeat",
         lua.create_function(|_, args: MultiValue| {
@@ -9390,6 +9545,84 @@ fn method_arg_offset(args: &MultiValue) -> usize {
     usize::from(matches!(args.front(), Some(Value::Table(_))))
 }
 
+fn song_group_name(song_dir: &Path) -> String {
+    song_dir
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn song_music_path(song_dir: &Path) -> Option<PathBuf> {
+    song_named_file_path(
+        song_dir,
+        &["music", "song", "audio"],
+        is_song_lua_audio_path,
+    )
+    .or_else(|| song_first_file_path(song_dir, is_song_lua_audio_path))
+}
+
+fn song_named_image_path(song_dir: &Path, stems: &[&str]) -> Option<PathBuf> {
+    song_named_file_path(song_dir, stems, is_song_lua_image_path)
+}
+
+fn song_simfile_path(song_dir: &Path) -> Option<PathBuf> {
+    song_first_file_path(song_dir, is_song_lua_simfile_path)
+}
+
+fn song_named_file_path(
+    song_dir: &Path,
+    stems: &[&str],
+    predicate: fn(&Path) -> bool,
+) -> Option<PathBuf> {
+    let files = song_dir_files(song_dir);
+    for stem in stems {
+        if let Some(path) = files
+            .iter()
+            .find(|path| predicate(path) && path_stem_eq(path, stem))
+        {
+            return Some(path.clone());
+        }
+    }
+    for stem in stems {
+        if let Some(path) = files.iter().find(|path| {
+            predicate(path)
+                && path
+                    .file_stem()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.to_ascii_lowercase().contains(stem))
+        }) {
+            return Some(path.clone());
+        }
+    }
+    None
+}
+
+fn song_first_file_path(song_dir: &Path, predicate: fn(&Path) -> bool) -> Option<PathBuf> {
+    song_dir_files(song_dir)
+        .into_iter()
+        .find(|path| predicate(path))
+}
+
+fn song_dir_files(song_dir: &Path) -> Vec<PathBuf> {
+    let mut files = fs::read_dir(song_dir)
+        .ok()
+        .into_iter()
+        .flat_map(|entries| entries.filter_map(Result::ok))
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file())
+        .collect::<Vec<_>>();
+    files.sort_by_key(|path| file_path_string(path));
+    files
+}
+
+fn path_stem_eq(path: &Path, stem: &str) -> bool {
+    path.file_stem()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case(stem))
+}
+
 #[inline(always)]
 fn read_u32_value(value: Value) -> Option<u32> {
     match value {
@@ -9533,6 +9766,13 @@ fn is_song_lua_audio_path(path: &Path) -> bool {
                 "ogg" | "mp3" | "wav" | "flac" | "opus" | "m4a" | "aac"
             )
         })
+}
+
+#[inline(always)]
+fn is_song_lua_simfile_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "sm" | "ssc"))
 }
 
 #[inline(always)]
@@ -11075,6 +11315,83 @@ return Def.ActorFrame{}
 
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "Display BPMs:120:180:150:200");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_song_and_steps_metadata() {
+        let root_dir = test_dir("song-steps-metadata");
+        let song_dir = root_dir.join("Pack A").join("Song A");
+        fs::create_dir_all(&song_dir).unwrap();
+        fs::write(song_dir.join("chart.ssc"), "").unwrap();
+        fs::write(song_dir.join("music.ogg"), "").unwrap();
+        image::RgbaImage::new(100, 40)
+            .save(song_dir.join("banner.png"))
+            .unwrap();
+        image::RgbaImage::new(320, 240)
+            .save(song_dir.join("background.jpg"))
+            .unwrap();
+        image::RgbaImage::new(120, 120)
+            .save(song_dir.join("jacket.png"))
+            .unwrap();
+        image::RgbaImage::new(80, 80)
+            .save(song_dir.join("cdtitle.png"))
+            .unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local song = GAMESTATE:GetCurrentSong()
+local steps = GAMESTATE:GetCurrentSteps(PLAYER_1)
+local song_bpms = song:GetTimingData():GetActualBPM()
+local steps_timing = steps:GetTimingData()
+local radar = steps:GetRadarValues(PLAYER_1)
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%s|%s|%s|%s|%s|%s|%s|%s|%s|%.0f|%s|%s|%s|%d|%d|%.1f|%.0f|%.0f|%.0f|%.0f",
+            song:GetDisplayFullTitle(),
+            song:GetTranslitMainTitle(),
+            song:GetDisplaySubTitle(),
+            song:GetGroupName(),
+            tostring(song:HasMusic()),
+            tostring(song:HasBanner()),
+            tostring(song:HasBackground()),
+            tostring(song:HasJacket()),
+            tostring(song:HasCDImage()),
+            song:GetStageCost(),
+            tostring(song:GetMusicPath():match("music%.ogg$") ~= nil),
+            tostring(song:GetBannerPath():match("banner%.png$") ~= nil),
+            tostring(steps:GetFilename():match("chart%.ssc$") ~= nil),
+            #song:GetAllSteps(),
+            steps:GetMeter(),
+            song:MusicLengthSeconds(),
+            radar:GetValue("RadarCategory_Notes"),
+            song_bpms[1],
+            song_bpms[2],
+            steps_timing:GetBPMAtBeat(0)
+        ),
+        true,
+    },
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Song Metadata");
+        context.song_display_bpms = [90.0, 180.0];
+        context.players[0].difficulty = SongLuaDifficulty::Hard;
+        context.players[0].display_bpms = [150.0, 210.0];
+        context.music_length_seconds = 123.4;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "Song Metadata|Song Metadata||Pack A|true|true|true|true|true|1|true|true|true|6|10|123.4|0|90|180|150"
+        );
     }
 
     #[test]
