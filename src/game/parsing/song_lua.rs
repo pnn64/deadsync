@@ -4786,6 +4786,24 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "GetCommand",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                    return Ok(Value::Nil);
+                };
+                Ok(actor
+                    .get::<Option<Function>>(format!("{name}Command"))?
+                    .map_or(Value::Nil, Value::Function))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetTweenTimeLeft",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    actor.set(
         "sleep",
         lua.create_function({
             let actor = actor.clone();
@@ -6243,8 +6261,11 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "EnablePreserveTexture",
         "Create",
         "SetTextureFiltering",
+        "distort",
         "fardistz",
         "hibernate",
+        "hurrytweening",
+        "jitter",
         "load",
         "AddAttribute",
         "backfacecull",
@@ -6257,9 +6278,11 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "diffusetopedge",
         "diffuseupperleft",
         "diffuseupperright",
+        "rainbow",
         "rainbowscroll",
         "StartTransitioningScreen",
         "stop",
+        "undistort",
         "volume",
         "cullmode",
         "zbias",
@@ -12944,6 +12967,43 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages[0].message, "true");
         assert_eq!(compiled.overlays.len(), 1);
         assert!(compiled.overlays[0].initial_state.visible);
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_theme_actor_compat_methods() {
+        let song_dir = test_dir("theme-actor-compat-methods");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        ExpandForDoubleCommand=function(self)
+            self:aux(2)
+        end,
+        OnCommand=function(self)
+            local command = self:GetCommand("ExpandForDouble")
+            local missing = self:GetCommand("MissingCommand")
+            if command then command(self) end
+            self:rainbow():jitter(true):distort(0.5):undistort():hurrytweening(2)
+            mod_actions = {
+                {1, string.format("%s:%s:%.0f:%.0f", tostring(command ~= nil), tostring(missing == nil), self:getaux(), self:GetTweenTimeLeft()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Theme Actor Compat Methods"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "true:true:2:0");
+        assert_eq!(compiled.overlays.len(), 1);
     }
 
     #[test]
