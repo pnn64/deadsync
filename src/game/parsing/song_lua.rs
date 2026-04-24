@@ -4048,6 +4048,50 @@ fn actor_sprite_sheet_dims(actor: &Table) -> mlua::Result<Option<(u32, u32)>> {
     Ok(Some(crate::assets::parse_sprite_sheet_dims(texture)))
 }
 
+#[inline(always)]
+fn sprite_sheet_rect(index: u32, cols: u32, rows: u32) -> [f32; 4] {
+    let cols = cols.max(1);
+    let rows = rows.max(1);
+    let col = index % cols;
+    let row = (index / cols).min(rows.saturating_sub(1));
+    let width = 1.0 / cols as f32;
+    let height = 1.0 / rows as f32;
+    let left = col as f32 * width;
+    let top = row as f32 * height;
+    [left, top, left + width, top + height]
+}
+
+fn actor_texture_rect(actor: &Table) -> mlua::Result<[f32; 4]> {
+    if let Some(rect) = actor
+        .get::<Option<Table>>("__songlua_state_custom_texture_rect")?
+        .and_then(|value| table_vec4(&value))
+    {
+        return Ok(rect);
+    }
+    if let Some(state_index) = song_lua_valid_sprite_state_index(
+        actor.get::<Option<u32>>("__songlua_state_sprite_state_index")?,
+    ) && let Some((cols, rows)) = actor_sprite_sheet_dims(actor)?
+    {
+        return Ok(sprite_sheet_rect(state_index, cols, rows));
+    }
+    Ok([0.0, 0.0, 1.0, 1.0])
+}
+
+fn capture_texture_rect(lua: &Lua, actor: &Table, rect: [f32; 4]) -> mlua::Result<()> {
+    capture_block_set_u32(
+        lua,
+        actor,
+        "sprite_state_index",
+        SONG_LUA_SPRITE_STATE_CLEAR,
+    )?;
+    capture_block_set_vec4(lua, actor, "custom_texture_rect", rect)
+}
+
+fn offset_texture_rect(lua: &Lua, actor: &Table, dx: f32, dy: f32) -> mlua::Result<()> {
+    let [u0, v0, u1, v1] = actor_texture_rect(actor)?;
+    capture_texture_rect(lua, actor, [u0 + dx, v0 + dy, u1 + dx, v1 + dy])
+}
+
 fn set_actor_sprite_state(lua: &Lua, actor: &Table, state_index: u32) -> mlua::Result<()> {
     capture_block_set_u32(lua, actor, "sprite_state_index", state_index)?;
     let block = actor_current_capture_block(lua, actor)?;
@@ -5569,18 +5613,94 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 let rect = [
-                    args.get(1).cloned().and_then(read_f32).unwrap_or(0.0),
-                    args.get(2).cloned().and_then(read_f32).unwrap_or(0.0),
-                    args.get(3).cloned().and_then(read_f32).unwrap_or(0.0),
-                    args.get(4).cloned().and_then(read_f32).unwrap_or(0.0),
+                    method_arg(&args, 0)
+                        .cloned()
+                        .and_then(read_f32)
+                        .unwrap_or(0.0),
+                    method_arg(&args, 1)
+                        .cloned()
+                        .and_then(read_f32)
+                        .unwrap_or(0.0),
+                    method_arg(&args, 2)
+                        .cloned()
+                        .and_then(read_f32)
+                        .unwrap_or(0.0),
+                    method_arg(&args, 3)
+                        .cloned()
+                        .and_then(read_f32)
+                        .unwrap_or(0.0),
                 ];
-                capture_block_set_u32(
-                    lua,
-                    &actor,
-                    "sprite_state_index",
-                    SONG_LUA_SPRITE_STATE_CLEAR,
-                )?;
-                capture_block_set_vec4(lua, &actor, "custom_texture_rect", rect)?;
+                capture_texture_rect(lua, &actor, rect)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "SetCustomImageRect",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let rect = [
+                    method_arg(&args, 0)
+                        .cloned()
+                        .and_then(read_f32)
+                        .unwrap_or(0.0),
+                    method_arg(&args, 1)
+                        .cloned()
+                        .and_then(read_f32)
+                        .unwrap_or(0.0),
+                    method_arg(&args, 2)
+                        .cloned()
+                        .and_then(read_f32)
+                        .unwrap_or(0.0),
+                    method_arg(&args, 3)
+                        .cloned()
+                        .and_then(read_f32)
+                        .unwrap_or(0.0),
+                ];
+                capture_texture_rect(lua, &actor, rect)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "stretchtexcoords",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let dx = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_f32)
+                    .unwrap_or(0.0);
+                let dy = method_arg(&args, 1)
+                    .cloned()
+                    .and_then(read_f32)
+                    .unwrap_or(0.0);
+                offset_texture_rect(lua, &actor, dx, dy)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "addimagecoords",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some((width, height)) = actor_image_texture_size(&actor)? else {
+                    return Ok(actor.clone());
+                };
+                if width <= f32::EPSILON || height <= f32::EPSILON {
+                    return Ok(actor.clone());
+                }
+                let dx = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_f32)
+                    .unwrap_or(0.0);
+                let dy = method_arg(&args, 1)
+                    .cloned()
+                    .and_then(read_f32)
+                    .unwrap_or(0.0);
+                offset_texture_rect(lua, &actor, dx / width, dy / height)?;
                 Ok(actor.clone())
             }
         })?,
@@ -6045,6 +6165,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "hibernate",
         "load",
         "AddAttribute",
+        "backfacecull",
         "ClearAttributes",
         "diffusebottomedge",
         "diffuseleftedge",
@@ -6058,6 +6179,9 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "StartTransitioningScreen",
         "stop",
         "volume",
+        "cullmode",
+        "zbias",
+        "zbuffer",
         "ztest",
         "ztestmode",
         "zwrite",
@@ -6602,12 +6726,18 @@ fn actor_base_size(actor: &Table) -> mlua::Result<(f32, f32)> {
     Ok((1.0, 1.0))
 }
 
-fn actor_image_frame_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
+fn actor_image_texture_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
     if let Some(path) = actor_texture_path(actor)?
         && is_song_lua_image_path(&path)
         && let Ok((width, height)) = image_dimensions(&path)
     {
-        let (mut width, mut height) = (width as f32, height as f32);
+        return Ok(Some((width as f32, height as f32)));
+    }
+    Ok(None)
+}
+
+fn actor_image_frame_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
+    if let Some((mut width, mut height)) = actor_image_texture_size(actor)? {
         if actor
             .get::<Option<bool>>("__songlua_state_sprite_animate")?
             .unwrap_or(false)
@@ -6616,10 +6746,12 @@ fn actor_image_frame_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
             )
             .is_some()
         {
-            let (cols, rows) =
-                crate::assets::parse_sprite_sheet_dims(path.to_string_lossy().as_ref());
-            width /= cols.max(1) as f32;
-            height /= rows.max(1) as f32;
+            if let Some(path) = actor_texture_path(actor)? {
+                let (cols, rows) =
+                    crate::assets::parse_sprite_sheet_dims(path.to_string_lossy().as_ref());
+                width /= cols.max(1) as f32;
+                height /= rows.max(1) as f32;
+            }
         }
         return Ok(Some((width, height)));
     }
@@ -11208,6 +11340,75 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_supports_sprite_texture_coord_helpers() {
+        let song_dir = test_dir("sprite-texture-coord-helpers");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(100, 80).save(&image_path).unwrap();
+        let sheet_path = song_dir.join("panel 2x2.png");
+        image::RgbaImage::new(100, 80).save(&sheet_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:setstate(1):SetCustomImageRect(0.25, 0.5, 0.75, 1)
+        end,
+    },
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:customtexturerect(0, 0, 1, 1):stretchtexcoords(0.25, -0.5)
+        end,
+    },
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:addimagecoords(25, 20)
+        end,
+    },
+    Def.Sprite{
+        Texture="panel 2x2.png",
+        OnCommand=function(self)
+            self:setstate(1):addimagecoords(25, 20)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Sprite Texture Coord Helpers"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 4);
+        assert_eq!(
+            compiled.overlays[0].initial_state.sprite_state_index,
+            Some(u32::MAX)
+        );
+        assert_eq!(
+            compiled.overlays[0].initial_state.custom_texture_rect,
+            Some([0.25, 0.5, 0.75, 1.0])
+        );
+        assert_eq!(
+            compiled.overlays[1].initial_state.custom_texture_rect,
+            Some([0.25, -0.5, 1.25, 0.5])
+        );
+        assert_eq!(
+            compiled.overlays[2].initial_state.custom_texture_rect,
+            Some([0.25, 0.25, 1.25, 1.25])
+        );
+        assert_eq!(
+            compiled.overlays[3].initial_state.custom_texture_rect,
+            Some([0.75, 0.25, 1.25, 0.75])
+        );
+    }
+
+    #[test]
     fn compile_song_lua_supports_sprite_fade_edges() {
         let song_dir = test_dir("actor-fade-edges");
         let image_path = song_dir.join("panel.png");
@@ -12408,6 +12609,7 @@ return Def.ActorFrame{
             local before = self:getaux()
             self:aux(before + 0.25)
             self:SetTextureFiltering(false):zwrite(true):ztest(true):ztestmode("WriteOnFail"):draworder(100)
+            self:zbuffer(true):zbias(2):backfacecull(true):cullmode("CullMode_Back")
             self:aux(self:getaux() + 0.75)
             mod_actions = {
                 {1, string.format("%.2f", self:getaux()), true},
