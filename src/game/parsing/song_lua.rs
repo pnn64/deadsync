@@ -5962,6 +5962,14 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "load",
         "AddAttribute",
         "ClearAttributes",
+        "diffusebottomedge",
+        "diffuseleftedge",
+        "diffuselowerleft",
+        "diffuselowerright",
+        "diffuserightedge",
+        "diffusetopedge",
+        "diffuseupperleft",
+        "diffuseupperright",
         "rainbowscroll",
         "StartTransitioningScreen",
         "stop",
@@ -11306,6 +11314,44 @@ return Def.ActorFrame{
         );
         assert_eq!(text.effect_color1, [1.0, 1.0, 1.0, 0.2]);
         assert_eq!(text.effect_color2, [1.0, 1.0, 1.0, 0.8]);
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_vertex_diffuse_style_shims() {
+        let song_dir = test_dir("actor-vertex-diffuse-shims");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r##"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:diffuseleftedge(0, 0, 0, 0.25)
+                :diffuserightedge({1, 1, 1, 0.5})
+                :diffusetopedge(color("#11223344"))
+                :diffusebottomedge(0.8, 0.7, 0.6, 1)
+                :diffuseupperleft(1, 0, 0, 1)
+                :diffuseupperright(0, 1, 0, 1)
+                :diffuselowerleft(0, 0, 1, 1)
+                :diffuselowerright(1, 1, 0, 1)
+            mod_actions = {
+                {1, "ok", true},
+            }
+        end,
+    },
+}
+"##,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Vertex Diffuse Shims"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "ok");
+        assert_eq!(compiled.overlays.len(), 1);
     }
 
     #[test]
