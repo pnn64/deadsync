@@ -1487,6 +1487,45 @@ fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     Ok(children)
 }
 
+fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table>> {
+    let mut out = Vec::new();
+    let mut seen = Vec::new();
+    for value in actor.sequence_values::<Value>() {
+        let Value::Table(child) = value? else {
+            continue;
+        };
+        push_unique_actor_child(&mut out, &mut seen, child);
+    }
+    for pair in actor_children(lua, actor)?.pairs::<Value, Value>() {
+        let (_, value) = pair?;
+        let Value::Table(child) = value else {
+            continue;
+        };
+        if child
+            .get::<Option<bool>>("__songlua_child_group")?
+            .unwrap_or(false)
+        {
+            for group_value in child.sequence_values::<Value>() {
+                if let Value::Table(group_child) = group_value? {
+                    push_unique_actor_child(&mut out, &mut seen, group_child);
+                }
+            }
+        } else {
+            push_unique_actor_child(&mut out, &mut seen, child);
+        }
+    }
+    Ok(out)
+}
+
+fn push_unique_actor_child(out: &mut Vec<Table>, seen: &mut Vec<usize>, child: Table) {
+    let ptr = child.to_pointer() as usize;
+    if seen.contains(&ptr) {
+        return;
+    }
+    seen.push(ptr);
+    out.push(child);
+}
+
 fn merge_actor_sequence_children(lua: &Lua, actor: &Table, children: &Table) -> mlua::Result<()> {
     for value in actor.sequence_values::<Value>() {
         let Value::Table(child) = value? else {
@@ -4887,6 +4926,58 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "playcommandonchildren",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                    return Ok(actor.clone());
+                };
+                let command = format!("{name}Command");
+                for child in actor_direct_children(lua, &actor)? {
+                    run_actor_named_command(lua, &child, &command)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "playcommandonleaves",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                    return Ok(actor.clone());
+                };
+                run_named_command_on_leaves(lua, &actor, &format!("{name}Command"))?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "RemoveChild",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                    return Ok(actor.clone());
+                };
+                remove_actor_child(lua, &actor, &name)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "RemoveAllChildren",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                remove_all_actor_children(lua, &actor)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "SetTexture",
         lua.create_function({
             let actor = actor.clone();
@@ -4981,6 +5072,41 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     capture_block_set_f32(lua, &actor, "fov", value)?;
                 }
                 Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "SetFOV",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "fov", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "SetUpdateRate",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                    actor.set("__songlua_update_rate", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetUpdateRate",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_update_rate")?
+                    .unwrap_or(1.0))
             }
         })?,
     )?;
@@ -5319,6 +5445,17 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     actor.set("__songlua_draw_function", Value::Nil)?;
                 }
                 Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetDrawFunction",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<Function>>("__songlua_draw_function")?
+                    .map_or(Value::Nil, Value::Function))
             }
         })?,
     )?;
@@ -6259,8 +6396,15 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "EnableDepthBuffer",
         "EnableFloat",
         "EnablePreserveTexture",
+        "AddChildFromPath",
         "Create",
         "SetTextureFiltering",
+        "SetAmbientLightColor",
+        "SetDiffuseLightColor",
+        "SetDrawByZPosition",
+        "SetLightDirection",
+        "SetSpecularLightColor",
+        "SortByDrawOrder",
         "distort",
         "fardistz",
         "hibernate",
@@ -6281,6 +6425,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "rainbow",
         "rainbowscroll",
         "StartTransitioningScreen",
+        "propagate",
         "stop",
         "undistort",
         "volume",
@@ -7350,23 +7495,65 @@ fn make_actor_set_size_method(lua: &Lua, actor: &Table) -> mlua::Result<Function
 
 fn run_command_on_leaves(lua: &Lua, actor: &Table, command: &Function) -> mlua::Result<()> {
     let mut saw_child = false;
-    for index in 1..=actor.raw_len() {
-        let Some(Value::Table(child)) = actor.raw_get::<Option<Value>>(index)? else {
-            continue;
-        };
-        saw_child = true;
-        run_command_on_leaves(lua, &child, command)?;
-    }
-    for pair in actor_children(lua, actor)?.pairs::<Value, Value>() {
-        let (_, value) = pair?;
-        let Value::Table(child) = value else {
-            continue;
-        };
+    for child in actor_direct_children(lua, actor)? {
         saw_child = true;
         run_command_on_leaves(lua, &child, command)?;
     }
     if !saw_child {
         let _ = command.call::<Value>(actor.clone())?;
+    }
+    Ok(())
+}
+
+fn run_named_command_on_leaves(lua: &Lua, actor: &Table, command: &str) -> mlua::Result<()> {
+    let mut saw_child = false;
+    for child in actor_direct_children(lua, actor)? {
+        saw_child = true;
+        run_named_command_on_leaves(lua, &child, command)?;
+    }
+    if !saw_child {
+        run_actor_named_command(lua, actor, command)?;
+    }
+    Ok(())
+}
+
+fn remove_actor_child(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<()> {
+    actor_children(lua, actor)?.set(name, Value::Nil)?;
+    let mut write = 1;
+    for read in 1..=actor.raw_len() {
+        let value = actor.raw_get::<Value>(read)?;
+        let remove = match &value {
+            Value::Table(child) => child
+                .get::<Option<String>>("Name")?
+                .is_some_and(|child_name| child_name == name),
+            _ => false,
+        };
+        if remove {
+            continue;
+        }
+        if write != read {
+            actor.raw_set(write, value)?;
+        }
+        write += 1;
+    }
+    for index in write..=actor.raw_len() {
+        actor.raw_set(index, Value::Nil)?;
+    }
+    Ok(())
+}
+
+fn remove_all_actor_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    for index in 1..=actor.raw_len() {
+        actor.raw_set(index, Value::Nil)?;
+    }
+    let children = actor_children(lua, actor)?;
+    let mut keys = Vec::new();
+    for pair in children.pairs::<Value, Value>() {
+        let (key, _) = pair?;
+        keys.push(key);
+    }
+    for key in keys {
+        children.set(key, Value::Nil)?;
     }
     Ok(())
 }
@@ -12889,6 +13076,87 @@ return root
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "true:nil");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_actorframe_child_methods() {
+        let song_dir = test_dir("actorframe-child-methods");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local function draw_fn(self)
+    self:aux(7)
+end
+
+return Def.ActorFrame{
+    Name="Root",
+    Def.Quad{
+        Name="Keep",
+        PingCommand=function(self) self:aux(self:getaux() + 1) end,
+    },
+    Def.Quad{
+        Name="RemoveMe",
+        PingCommand=function(self) self:aux(99) end,
+    },
+    Def.ActorFrame{
+        Name="Branch",
+        Def.Quad{
+            Name="Leaf",
+            PingCommand=function(self) self:aux(self:getaux() + 3) end,
+        },
+    },
+    OnCommand=function(self)
+        self:SetFOV(75):SetUpdateRate(2):SetDrawFunction(draw_fn)
+        self:SetDrawByZPosition(true):SortByDrawOrder():propagate(false)
+        self:SetAmbientLightColor(color("1,1,1,1")):SetDiffuseLightColor(color("1,1,1,1"))
+        self:SetSpecularLightColor(color("1,1,1,1")):SetLightDirection({0, 0, 1})
+        self:playcommandonchildren("Ping")
+        self:playcommandonleaves("Ping")
+        local children = self:GetChildren()
+        local keep = children["Keep"]
+        local branch = children["Branch"]
+        local leaf = branch:GetChild("Leaf")
+        local before_remove = children["RemoveMe"] ~= nil
+        self:RemoveChild("RemoveMe")
+        local after_remove = self:GetChildren()["RemoveMe"] == nil
+        mod_actions = {
+            {1, string.format(
+                "%.0f:%.0f:%.0f:%.0f:%s:%s:%s",
+                keep:getaux(),
+                branch:getaux(),
+                leaf:getaux(),
+                self:GetUpdateRate(),
+                tostring(before_remove),
+                tostring(after_remove),
+                tostring(self:GetDrawFunction() ~= nil)
+            ), true},
+        }
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "ActorFrame Child Methods"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "2:0:3:2:true:true:true");
+        assert!(
+            compiled
+                .overlays
+                .iter()
+                .all(|overlay| overlay.name.as_deref() != Some("RemoveMe"))
+        );
+        let root = compiled
+            .overlays
+            .iter()
+            .find(|overlay| overlay.name.as_deref() == Some("Root"))
+            .unwrap();
+        assert_eq!(root.initial_state.fov, Some(75.0));
     }
 
     #[test]
