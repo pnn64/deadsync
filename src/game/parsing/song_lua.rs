@@ -2577,6 +2577,7 @@ fn make_actor_ctor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Function
         if let Some(song_dir) = lua.globals().get::<Option<String>>("__songlua_song_dir")? {
             table.set("__songlua_song_dir", song_dir)?;
         }
+        set_actor_decode_movie_for_texture(&table)?;
         install_actor_methods(lua, &table)?;
         install_actor_metatable(lua, &table)?;
         reset_actor_capture(lua, &table)?;
@@ -3628,6 +3629,12 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.sprite_state_index = Some(value);
     }
     if let Some(value) = actor
+        .get::<Option<bool>>("__songlua_state_decode_movie")
+        .map_err(|err| err.to_string())?
+    {
+        state.decode_movie = value;
+    }
+    if let Some(value) = actor
         .get::<Option<bool>>("__songlua_state_texture_wrapping")
         .map_err(|err| err.to_string())?
     {
@@ -4535,6 +4542,7 @@ fn create_media_actor(
         actor.set("File", path)?;
     } else {
         actor.set("Texture", file_path_string(resolved_path))?;
+        set_actor_decode_movie_for_texture(&actor)?;
     }
     Ok(actor)
 }
@@ -4767,6 +4775,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     Some(Value::String(texture)) => {
                         actor.set("Texture", texture.to_str()?.to_string())?;
                         actor.set("__songlua_aft_capture_name", Value::Nil)?;
+                        set_actor_decode_movie_for_texture(&actor)?;
                     }
                     Some(Value::Table(texture)) => {
                         if let Some(capture_name) =
@@ -4774,12 +4783,14 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                         {
                             actor.set("__songlua_aft_capture_name", capture_name)?;
                             actor.set("Texture", Value::Nil)?;
+                            set_actor_decode_movie_for_texture(&actor)?;
                         } else if let Some(texture_path) = texture
                             .get::<Option<String>>("__songlua_texture_path")?
                             .filter(|path| !path.is_empty())
                         {
                             actor.set("Texture", texture_path)?;
                             actor.set("__songlua_aft_capture_name", Value::Nil)?;
+                            set_actor_decode_movie_for_texture(&actor)?;
                         }
                     }
                     _ => {}
@@ -5702,6 +5713,27 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 capture_block_set_bool(lua, &actor, "texture_wrapping", value)?;
                 Ok(actor.clone())
             }
+        })?,
+    )?;
+    actor.set(
+        "SetDecodeMovie",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                let value = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_boolish)
+                    .unwrap_or(true);
+                actor.set("__songlua_state_decode_movie", value)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetDecodeMovie",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| actor_decode_movie(&actor)
         })?,
     )?;
     actor.set(
@@ -6658,6 +6690,28 @@ fn actor_zoom_axis(actor: &Table, zoom_key: &str, basezoom_key: &str) -> mlua::R
         .or(actor.get::<Option<f32>>("__songlua_state_basezoom")?)
         .unwrap_or(1.0);
     Ok(basezoom * zoom)
+}
+
+fn actor_texture_is_video(actor: &Table) -> mlua::Result<bool> {
+    if let Some(path) = actor_texture_path(actor)? {
+        return Ok(is_song_lua_video_path(&path));
+    }
+    Ok(actor
+        .get::<Option<String>>("Texture")?
+        .is_some_and(|texture| is_song_lua_video_path(Path::new(texture.trim()))))
+}
+
+fn set_actor_decode_movie_for_texture(actor: &Table) -> mlua::Result<()> {
+    actor.set(
+        "__songlua_state_decode_movie",
+        actor_texture_is_video(actor)?,
+    )
+}
+
+fn actor_decode_movie(actor: &Table) -> mlua::Result<bool> {
+    Ok(actor
+        .get::<Option<bool>>("__songlua_state_decode_movie")?
+        .unwrap_or(actor_texture_is_video(actor)?))
 }
 
 fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
@@ -10869,6 +10923,40 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "true:true");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_sprite_decode_movie_methods() {
+        let song_dir = test_dir("sprite-decode-movie");
+        fs::write(song_dir.join("clip.mp4"), [0xff_u8, 0xd8, 0x00, 0x81]).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    LoadActor("clip.mp4")..{
+        OnCommand=function(self)
+            local before = self:GetDecodeMovie()
+            self:SetDecodeMovie(false)
+            mod_actions = {
+                {1, string.format("%s:%s", tostring(before), tostring(self:GetDecodeMovie())), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Sprite Decode Movie"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "true:false");
+        assert_eq!(compiled.overlays.len(), 1);
+        assert!(!compiled.overlays[0].initial_state.decode_movie);
     }
 
     #[test]

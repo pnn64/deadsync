@@ -1669,6 +1669,9 @@ fn push_song_lua_video_paths(
         if !crate::assets::dynamic::is_dynamic_video_path(texture_path) {
             continue;
         }
+        if !overlay.initial_state.decode_movie {
+            continue;
+        }
         let key = texture_path.to_string_lossy().into_owned();
         if seen.insert(key) {
             paths.push(texture_path.clone());
@@ -7283,7 +7286,7 @@ mod tests {
     use super::*;
     use crate::game::{
         chart::{ChartData, StaminaCounts},
-        parsing::song_lua::{SongLuaOverlayActor, SongLuaOverlayKind},
+        parsing::song_lua::{SongLuaOverlayActor, SongLuaOverlayKind, SongLuaOverlayState},
         song::SongData,
     };
 
@@ -7368,7 +7371,10 @@ mod tests {
                 },
                 name: None,
                 parent_index: None,
-                initial_state: Default::default(),
+                initial_state: SongLuaOverlayState {
+                    decode_movie: true,
+                    ..Default::default()
+                },
                 message_commands: Vec::new(),
             },
             SongLuaOverlayActor {
@@ -7377,7 +7383,10 @@ mod tests {
                 },
                 name: None,
                 parent_index: None,
-                initial_state: Default::default(),
+                initial_state: SongLuaOverlayState {
+                    decode_movie: true,
+                    ..Default::default()
+                },
                 message_commands: Vec::new(),
             },
             SongLuaOverlayActor {
@@ -7399,6 +7408,25 @@ mod tests {
         ];
 
         assert_eq!(song_lua_video_paths(&overlays), vec![movie]);
+    }
+
+    #[test]
+    fn song_lua_video_paths_skip_disabled_video_decode() {
+        let movie = PathBuf::from("badapple.AVI");
+        let overlays = vec![SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: movie.clone(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState {
+                decode_movie: false,
+                ..Default::default()
+            },
+            message_commands: Vec::new(),
+        }];
+
+        assert!(song_lua_video_paths(&overlays).is_empty());
     }
 
     fn test_score_info(
