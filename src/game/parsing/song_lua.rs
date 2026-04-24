@@ -3887,6 +3887,20 @@ fn actor_diffuse(actor: &Table) -> mlua::Result<[f32; 4]> {
         .unwrap_or([1.0, 1.0, 1.0, 1.0]))
 }
 
+fn actor_glow(actor: &Table) -> mlua::Result<[f32; 4]> {
+    Ok(actor
+        .get::<Option<Table>>("__songlua_state_glow")?
+        .and_then(|value| table_vec4(&value))
+        .unwrap_or([0.0, 0.0, 0.0, 0.0]))
+}
+
+fn actor_effect_magnitude(actor: &Table) -> mlua::Result<[f32; 3]> {
+    Ok(actor
+        .get::<Option<Table>>("__songlua_state_effect_magnitude")?
+        .and_then(|value| table_vec3(&value))
+        .unwrap_or([0.0, 0.0, 0.0]))
+}
+
 fn capture_block_set_vec4(
     lua: &Lua,
     actor: &Table,
@@ -6595,6 +6609,39 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "GetDestX",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_x")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetDestY",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_y")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetDestZ",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_z")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
         "GetVisible",
         lua.create_function({
             let actor = actor.clone();
@@ -6748,10 +6795,60 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "GetBaseZoomX",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_basezoom_x")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_basezoom")?)
+                    .unwrap_or(1.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetBaseZoomY",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_basezoom_y")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_basezoom")?)
+                    .unwrap_or(1.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetBaseZoomZ",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_basezoom_z")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_basezoom")?)
+                    .unwrap_or(1.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
         "GetAlpha",
         lua.create_function({
             let actor = actor.clone();
             move |_, _args: MultiValue| Ok(actor_diffuse(&actor)?[3])
+        })?,
+    )?;
+    actor.set(
+        "GetDiffuse",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| make_color_table(lua, actor_diffuse(&actor)?)
+        })?,
+    )?;
+    actor.set(
+        "GetGlow",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| make_color_table(lua, actor_glow(&actor)?)
         })?,
     )?;
     actor.set(
@@ -6760,6 +6857,52 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             let actor = actor.clone();
             move |_, _args: MultiValue| Ok(actor_diffuse(&actor)?[3])
         })?,
+    )?;
+    actor.set(
+        "GetHAlign",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| actor_halign(&actor)
+        })?,
+    )?;
+    actor.set(
+        "GetVAlign",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| actor_valign(&actor)
+        })?,
+    )?;
+    actor.set(
+        "geteffectmagnitude",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                let [x, y, z] = actor_effect_magnitude(&actor)?;
+                Ok((x, y, z))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetSecsIntoEffect",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let (beat, seconds) = compile_song_runtime_values(lua)?;
+                let clock = actor
+                    .get::<Option<String>>("__songlua_state_effect_clock")?
+                    .as_deref()
+                    .and_then(parse_overlay_effect_clock)
+                    .unwrap_or(EffectClock::Time);
+                Ok(match clock {
+                    EffectClock::Time => seconds,
+                    EffectClock::Beat => beat,
+                })
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetEffectDelta",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
     )?;
     actor.set(
         "GetParent",
@@ -12321,6 +12464,85 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "40:120");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_actor_state_getters() {
+        let song_dir = test_dir("actor-state-getters");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target
+
+mod_actions = {
+    {4, function()
+        if target then
+            target:x(target:GetSecsIntoEffect())
+            target:y(target:GetEffectDelta())
+        end
+    end, true},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            target = self
+            self:xy(10, 20):z(3):basezoom(2):basezoomx(3):basezoomy(4):basezoomz(5)
+            self:diffuse(0.2, 0.4, 0.6, 0.8):glow(0.1, 0.2, 0.3, 0.4)
+            self:halign(0):valign(1):effectmagnitude(8, 4, 2):effectclock("beat"):visible(false)
+            local d = self:GetDiffuse()
+            local g = self:GetGlow()
+            local mx, my, mz = self:geteffectmagnitude()
+            mod_actions[#mod_actions + 1] = {
+                1,
+                string.format(
+                    "%.0f:%.0f:%.0f:%.0f:%.0f:%.0f:%.0f:%.0f:%.0f:%.1f:%.1f:%.1f:%.1f:%s:%.0f:%.0f:%.0f:%.0f:%.0f",
+                    self:GetDestX(),
+                    self:GetDestY(),
+                    self:GetDestZ(),
+                    self:GetBaseZoomX(),
+                    self:GetBaseZoomY(),
+                    self:GetBaseZoomZ(),
+                    self:GetHAlign(),
+                    self:GetVAlign(),
+                    self:GetAlpha() * 10,
+                    d[1],
+                    d[3],
+                    g[1],
+                    g[4],
+                    tostring(self:GetVisible()),
+                    mx,
+                    my,
+                    mz,
+                    self:GetSecsIntoEffect(),
+                    self:GetEffectDelta()
+                ),
+                true
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor State Getters"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "10:20:3:3:4:5:0:1:8:0.2:0.6:0.1:0.4:false:8:4:2:0:0"
+        );
+        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(compiled.overlays[0].message_commands.len(), 1);
+        let block = &compiled.overlays[0].message_commands[0].blocks[0];
+        assert_eq!(block.delta.x, Some(4.0));
+        assert_eq!(block.delta.y, Some(0.0));
     }
 
     #[test]
