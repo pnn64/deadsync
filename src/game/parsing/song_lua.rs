@@ -2133,7 +2133,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         })?,
     )?;
     globals.set("MESSAGEMAN", messageman)?;
-    globals.set("STATSMAN", create_statsman_table(lua)?)?;
+    globals.set("STATSMAN", create_statsman_table(lua, context)?)?;
     globals.set(
         "SM",
         lua.create_function(|lua, _args: MultiValue| {
@@ -4255,9 +4255,9 @@ fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     Ok(profile)
 }
 
-fn create_statsman_table(lua: &Lua) -> mlua::Result<Table> {
+fn create_statsman_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let statsman = lua.create_table()?;
-    let stage_stats = create_stage_stats_table(lua)?;
+    let stage_stats = create_stage_stats_table(lua, context)?;
     statsman.set(
         "GetCurStageStats",
         lua.create_function({
@@ -4272,11 +4272,21 @@ fn create_statsman_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(statsman)
 }
 
-fn create_stage_stats_table(lua: &Lua) -> mlua::Result<Table> {
+fn create_stage_stats_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let stage_stats = lua.create_table()?;
     let player_stats = [
-        create_player_stage_stats_table(lua, "Player")?,
-        create_player_stage_stats_table(lua, "Player")?,
+        create_player_stage_stats_table(
+            lua,
+            "Player",
+            context.players[0].clone(),
+            context.song_dir.as_path(),
+        )?,
+        create_player_stage_stats_table(
+            lua,
+            "Player",
+            context.players[1].clone(),
+            context.song_dir.as_path(),
+        )?,
     ];
     stage_stats.set(
         "GetPlayerStageStats",
@@ -4291,20 +4301,60 @@ fn create_stage_stats_table(lua: &Lua) -> mlua::Result<Table> {
         "AllFailed",
         lua.create_function(|_, _args: MultiValue| Ok(false))?,
     )?;
+    stage_stats.set(
+        "GaveUp",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
     Ok(stage_stats)
 }
 
-fn create_player_stage_stats_table(lua: &Lua, high_score_name: &str) -> mlua::Result<Table> {
+fn create_player_stage_stats_table(
+    lua: &Lua,
+    high_score_name: &str,
+    player: SongLuaPlayerContext,
+    song_dir: &Path,
+) -> mlua::Result<Table> {
     let stats = lua.create_table()?;
+    stats.set("__songlua_failed", false)?;
     let high_score = create_high_score_table(lua, high_score_name)?;
+    let played_steps = lua.create_table()?;
+    played_steps.raw_set(
+        1,
+        create_steps_table(lua, player.difficulty, player.display_bpms, song_dir)?,
+    )?;
     set_string_method(lua, &stats, "GetGrade", "Grade_Tier07")?;
     stats.set(
         "GetFailed",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function({
+            let stats = stats.clone();
+            move |_, _args: MultiValue| {
+                Ok(stats
+                    .get::<Option<bool>>("__songlua_failed")?
+                    .unwrap_or(false))
+            }
+        })?,
+    )?;
+    stats.set(
+        "FailPlayer",
+        lua.create_function({
+            let stats = stats.clone();
+            move |lua, _args: MultiValue| {
+                stats.set("__songlua_failed", true)?;
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            }
+        })?,
     )?;
     stats.set(
         "GetScore",
         lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    stats.set(
+        "SetScore",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
     )?;
     stats.set(
         "GetPercentDancePoints",
@@ -4319,8 +4369,20 @@ fn create_player_stage_stats_table(lua: &Lua, high_score_name: &str) -> mlua::Re
         lua.create_function(|_, _args: MultiValue| Ok(1_i64))?,
     )?;
     stats.set(
+        "GetCurrentPossibleDancePoints",
+        lua.create_function(|_, _args: MultiValue| Ok(1_i64))?,
+    )?;
+    stats.set(
         "GetCurrentLife",
         lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    stats.set(
+        "GetCurrentCombo",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    stats.set(
+        "GetCurrentMissCombo",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
     )?;
     stats.set(
         "GetLifeRemainingSeconds",
@@ -4333,6 +4395,10 @@ fn create_player_stage_stats_table(lua: &Lua, high_score_name: &str) -> mlua::Re
     stats.set(
         "GetTapNoteScores",
         lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    stats.set(
+        "GetPlayedSteps",
+        lua.create_function(move |_, _args: MultiValue| Ok(played_steps.clone()))?,
     )?;
     stats.set(
         "GetRadarActual",
@@ -4349,6 +4415,22 @@ fn create_player_stage_stats_table(lua: &Lua, high_score_name: &str) -> mlua::Re
     stats.set(
         "GetHighScore",
         lua.create_function(move |_, _args: MultiValue| Ok(high_score.clone()))?,
+    )?;
+    stats.set(
+        "GetMachineHighScoreIndex",
+        lua.create_function(|_, _args: MultiValue| Ok(-1_i64))?,
+    )?;
+    stats.set(
+        "GetPersonalHighScoreIndex",
+        lua.create_function(|_, _args: MultiValue| Ok(-1_i64))?,
+    )?;
+    stats.set(
+        "IsDisqualified",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    stats.set(
+        "FullComboOfScore",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
     )?;
     Ok(stats)
 }
@@ -4395,6 +4477,19 @@ fn create_high_score_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
         "GetTapNoteScore",
         lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
     )?;
+    score.set(
+        "GetHoldNoteScore",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    score.set(
+        "GetMaxCombo",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    score.set(
+        "GetSurvivalSeconds",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    set_string_method(lua, &score, "GetStageAward", "StageAward_None")?;
     Ok(score)
 }
 
@@ -17786,6 +17881,56 @@ return Def.ActorFrame{}
         let compiled = compile_song_lua(
             &entry,
             &SongLuaCompileContext::new(&song_dir, "Lua File Profile Helpers"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert!(compiled.messages.is_empty());
+        assert!(compiled.overlays.is_empty());
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_stage_stat_and_high_score_helpers() {
+        let song_dir = test_dir("stage-stat-high-score-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+local steps = pss:GetPlayedSteps()[1]
+assert(steps:GetMeter() >= 0)
+assert(steps:GetDifficulty() ~= nil)
+assert(pss:GetMachineHighScoreIndex() == -1)
+assert(pss:GetPersonalHighScoreIndex() == -1)
+assert(pss:IsDisqualified() == false)
+assert(pss:FullComboOfScore(0) == false)
+assert(pss:GetCurrentPossibleDancePoints() == 1)
+assert(pss:GetCurrentCombo() == 0)
+assert(pss:GetCurrentMissCombo() == 0)
+
+local highscore = pss:GetHighScore()
+assert(highscore:GetHoldNoteScore("HoldNoteScore_Held") == 0)
+assert(highscore:GetMaxCombo() == 0)
+assert(highscore:GetSurvivalSeconds() == 0)
+assert(highscore:GetStageAward() == "StageAward_None")
+assert(STATSMAN:GetCurStageStats():GaveUp() == false)
+
+mod_actions = {
+    {1, function()
+        local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+        stats:SetScore(12)
+        stats:FailPlayer()
+        assert(stats:GetFailed() == true)
+    end, true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Stage Stat High Score Helpers"),
         )
         .unwrap();
         assert_eq!(compiled.info.unsupported_function_actions, 0);
