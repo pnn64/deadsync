@@ -7126,7 +7126,9 @@ pub fn build_bundles(
                 let columns = frame_cols.max(1) as usize;
                 let col_index = if columns > 1 { frame_offset } else { 0 };
                 let linear_index = (frame_row * columns + col_index) as u32;
-                let rot_deg = if profile.judgment_tilt && judgment.grade != JudgeGrade::Miss {
+                let rot_deg = if profile.judgment_tilt
+                    && judgment.grade != JudgeGrade::Miss
+                    && offset_sec.abs() >= (profile.tilt_cutoff_ms as f32 / 1000.0) {
                     let abs_sec = offset_sec.abs().min(0.050);
                     let dir = if offset_sec < 0.0 { 1.0 } else { -1.0 };
                     dir * abs_sec * 300.0 * profile.tilt_multiplier

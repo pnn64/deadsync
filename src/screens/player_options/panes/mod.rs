@@ -354,6 +354,20 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
+    if let Some(row) = row_map.get_mut(RowId::JudgmentTiltCutoff) {
+        let cutoff = profile
+            .tilt_cutoff_ms
+            .clamp(TILT_CUTOFF_MIN, TILT_CUTOFF_MAX);
+
+        let needle = format!("{} ms", cutoff);
+
+        row.selected_choice_index[player_idx] = row
+            .choices
+            .iter()
+            .position(|c| c == &needle)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
+    }
     if let Some(row) = row_map.get_mut(RowId::JudgmentBehindArrows) {
         row.selected_choice_index[player_idx] = if profile.judgment_back { 1 } else { 0 };
     }
