@@ -1514,6 +1514,21 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("PlayerNumber", create_player_number_table(lua)?)?;
     globals.set("OtherPlayer", create_other_player_table(lua)?)?;
     globals.set("Difficulty", create_difficulty_table(lua)?)?;
+    globals.set(
+        "StepsType",
+        create_string_enum_table(lua, &["StepsType_Dance_Single", "StepsType_Dance_Double"])?,
+    )?;
+    globals.set(
+        "StyleType",
+        create_string_enum_table(
+            lua,
+            &[
+                "StyleType_OnePlayerOneSide",
+                "StyleType_OnePlayerTwoSides",
+                "StyleType_TwoPlayersTwoSides",
+            ],
+        )?,
+    )?;
     globals.set("SCREEN_WIDTH", screen_width.round() as i32)?;
     globals.set("SCREEN_HEIGHT", screen_height.round() as i32)?;
     globals.set("SCREEN_CENTER_X", screen_center_x)?;
@@ -1747,6 +1762,68 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
                 Ok(Value::Number(bg_brightness as f64))
             } else if key.eq_ignore_ascii_case("TimingWindowScale") {
                 Ok(Value::Number(1.0))
+            } else if key.eq_ignore_ascii_case("TimingWindowAdd") {
+                Ok(Value::Number(0.0015))
+            } else if key.starts_with("TimingWindowSeconds") {
+                Ok(Value::Number(0.0))
+            } else if matches!(
+                key.as_str(),
+                "AutogenGroupCourses"
+                    | "Center1Player"
+                    | "EasterEggs"
+                    | "EventMode"
+                    | "HarshHotLifePenalty"
+                    | "MemoryCards"
+                    | "MenuTimer"
+                    | "OnlyDedicatedMenuButtons"
+                    | "ShowBanners"
+                    | "ShowNativeLanguage"
+                    | "ThreeKeyNavigation"
+            ) {
+                Ok(Value::Boolean(false))
+            } else if matches!(
+                key.as_str(),
+                "CoinsPerCredit"
+                    | "CustomSongsLoadTimeout"
+                    | "CustomSongsMaxMegabytes"
+                    | "CustomSongsMaxSeconds"
+                    | "LifeDifficultyScale"
+                    | "LongVerSongSeconds"
+                    | "MarathonVerSongSeconds"
+                    | "MaxHighScoresPerListFor"
+                    | "MaxHighScoresPerListForMachine"
+                    | "MaxRegenComboAfterMiss"
+                    | "MinTNSToScoreNotes"
+                    | "MusicWheelSwitchSpeed"
+                    | "RegenComboAfterMiss"
+                    | "SongsPerPlay"
+                    | "SoundVolume"
+            ) {
+                let value = match key.as_str() {
+                    "LongVerSongSeconds" => 150,
+                    "MarathonVerSongSeconds" => 300,
+                    "MaxHighScoresPerListFor" | "MaxHighScoresPerListForMachine" => 10,
+                    "SongsPerPlay" => 1,
+                    "SoundVolume" => 1,
+                    _ => 0,
+                };
+                Ok(Value::Integer(value))
+            } else if matches!(
+                key.as_str(),
+                "CoinMode"
+                    | "DefaultModifiers"
+                    | "EditorNoteSkinP1"
+                    | "EditorNoteSkinP2"
+                    | "HttpAllowHosts"
+                    | "Premium"
+            ) {
+                let value = match key.as_str() {
+                    "CoinMode" => "CoinMode_Free",
+                    "EditorNoteSkinP1" | "EditorNoteSkinP2" => "default",
+                    "Premium" => "Premium_Off",
+                    _ => "",
+                };
+                Ok(Value::String(lua.create_string(value)?))
             } else if key.eq_ignore_ascii_case("Theme") {
                 Ok(Value::String(lua.create_string(SONG_LUA_THEME_NAME)?))
             } else if key
@@ -1766,9 +1843,28 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
             Ok(())
         })?,
     )?;
+    prefsmgr.set(
+        "PreferenceExists",
+        lua.create_function(|_, args: MultiValue| {
+            Ok(method_arg(&args, 0)
+                .cloned()
+                .and_then(read_string)
+                .is_some_and(|key| !key.is_empty()))
+        })?,
+    )?;
+    for name in ["SavePreferences", "SetPreferenceToDefault"] {
+        prefsmgr.set(
+            name,
+            lua.create_function(|lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            })?,
+        )?;
+    }
     globals.set("PREFSMAN", prefsmgr)?;
     globals.set("DISPLAY", create_display_table(lua, context)?)?;
     globals.set("THEME", create_theme_table(lua)?)?;
+    globals.set("GAMEMAN", create_gameman_table(lua)?)?;
     globals.set("NOTESKIN", create_noteskin_table(lua, context)?)?;
     globals.set("SongUtil", create_song_util_table(lua)?)?;
     globals.set(
@@ -1802,15 +1898,31 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     )?;
     let enabled_players = create_enabled_players_table(lua, context.players.clone())?;
     let human_players = enabled_players.clone();
-    let song_clone = song.clone();
+    let current_song = lua.create_table()?;
+    current_song.raw_set(1, song.clone())?;
     gamestate.set(
         "GetCurrentSong",
-        lua.create_function(move |_, _args: MultiValue| Ok(song_clone.clone()))?,
+        lua.create_function({
+            let current_song = current_song.clone();
+            move |_, _args: MultiValue| {
+                Ok(current_song
+                    .raw_get::<Option<Table>>(1)?
+                    .map_or(Value::Nil, Value::Table))
+            }
+        })?,
     )?;
-    let style = create_style_table(lua, &context.style_name)?;
+    let current_style = lua.create_table()?;
+    current_style.raw_set(1, create_style_table(lua, &context.style_name)?)?;
     gamestate.set(
         "GetCurrentStyle",
-        lua.create_function(move |_, _args: MultiValue| Ok(style.clone()))?,
+        lua.create_function({
+            let current_style = current_style.clone();
+            move |_, _args: MultiValue| {
+                Ok(current_style
+                    .raw_get::<Option<Table>>(1)?
+                    .map_or(Value::Nil, Value::Table))
+            }
+        })?,
     )?;
     let players_enabled = context.players.clone();
     gamestate.set(
@@ -1874,6 +1986,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     for (player_index, steps) in players.steps.iter().enumerate() {
         current_steps.raw_set(player_index + 1, steps.clone())?;
     }
+    let current_trail = lua.create_table()?;
     gamestate.set(
         "GetCurrentSteps",
         lua.create_function({
@@ -1902,7 +2015,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         "SetCurrentSteps",
         lua.create_function({
             let current_steps = current_steps.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
                 let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
                     return Ok(());
                 };
@@ -1913,6 +2026,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
                     return Ok(());
                 };
                 current_steps.raw_set(player + 1, steps)?;
+                note_song_lua_side_effect(lua)?;
                 Ok(())
             }
         })?,
@@ -1997,7 +2111,17 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     )?;
     gamestate.set(
         "GetCurrentTrail",
-        lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+        lua.create_function({
+            let current_trail = current_trail.clone();
+            move |_, args: MultiValue| {
+                let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
+                    return Ok(Value::Nil);
+                };
+                Ok(current_trail
+                    .raw_get::<Option<Table>>(player + 1)?
+                    .map_or(Value::Nil, Value::Table))
+            }
+        })?,
     )?;
     gamestate.set(
         "GetCurrentCourse",
@@ -2033,12 +2157,91 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         lua.create_function(|_, _args: MultiValue| Ok(1))?,
     )?;
     gamestate.set(
+        "GetCurrentStageIndex",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    gamestate.set(
+        "GetCourseSongIndex",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    gamestate.set(
+        "GetPlayMode",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string("PlayMode_Regular")?))
+        })?,
+    )?;
+    gamestate.set(
+        "GetPlayerFailType",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string("FailType_Immediate")?))
+        })?,
+    )?;
+    gamestate.set(
+        "SetCurrentSong",
+        lua.create_function({
+            let current_song = current_song.clone();
+            move |lua, args: MultiValue| {
+                if let Some(Value::Table(song)) = method_arg(&args, 0) {
+                    current_song.raw_set(1, song.clone())?;
+                }
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            }
+        })?,
+    )?;
+    gamestate.set(
+        "SetCurrentStyle",
+        lua.create_function({
+            let current_style = current_style.clone();
+            move |lua, args: MultiValue| {
+                let style_name = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_string)
+                    .unwrap_or_else(|| "single".to_string());
+                current_style.raw_set(1, create_style_table(lua, &style_name)?)?;
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            }
+        })?,
+    )?;
+    gamestate.set(
+        "SetCurrentTrail",
+        lua.create_function({
+            let current_trail = current_trail.clone();
+            move |lua, args: MultiValue| {
+                let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
+                    note_song_lua_side_effect(lua)?;
+                    return Ok(());
+                };
+                if let Some(Value::Table(trail)) = method_arg(&args, 1) {
+                    current_trail.raw_set(player + 1, trail.clone())?;
+                }
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            }
+        })?,
+    )?;
+    gamestate.set(
         "InsertCoin",
         lua.create_function(|lua, _args: MultiValue| {
             note_song_lua_side_effect(lua)?;
             Ok(())
         })?,
     )?;
+    for name in [
+        "AddStageToPlayer",
+        "ResetPlayerOptions",
+        "SetPreferredDifficulty",
+        "UnjoinPlayer",
+    ] {
+        gamestate.set(
+            name,
+            lua.create_function(|lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(true)
+            })?,
+        )?;
+    }
     gamestate.set(
         "JoinPlayer",
         lua.create_function(|lua, _args: MultiValue| {
@@ -2163,6 +2366,20 @@ fn create_difficulty_table(lua: &Lua) -> mlua::Result<Table> {
     {
         table.raw_set(idx + 1, difficulty.sm_name())?;
         reverse.raw_set(difficulty.sm_name(), idx)?;
+    }
+    table.set(
+        "Reverse",
+        lua.create_function(move |_, _args: MultiValue| Ok(reverse.clone()))?,
+    )?;
+    Ok(table)
+}
+
+fn create_string_enum_table(lua: &Lua, names: &[&str]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let reverse = lua.create_table()?;
+    for (idx, name) in names.iter().enumerate() {
+        table.raw_set(idx + 1, *name)?;
+        reverse.raw_set(*name, idx)?;
     }
     table.set(
         "Reverse",
@@ -3861,6 +4078,7 @@ fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
     let theme = lua.create_table()?;
     set_string_method(lua, &theme, "GetCurThemeName", SONG_LUA_THEME_NAME)?;
     set_string_method(lua, &theme, "GetThemeDisplayName", SONG_LUA_THEME_NAME)?;
+    set_string_method(lua, &theme, "GetCurLanguage", "en")?;
     set_string_method(
         lua,
         &theme,
@@ -3985,7 +4203,37 @@ fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
             ))
         })?,
     )?;
+    theme.set(
+        "GetSelectableThemeNames",
+        lua.create_function(|lua, _args: MultiValue| {
+            let names = lua.create_table()?;
+            names.raw_set(1, SONG_LUA_THEME_NAME)?;
+            Ok(names)
+        })?,
+    )?;
+    for name in ["ReloadMetrics", "SetTheme"] {
+        theme.set(
+            name,
+            lua.create_function(|lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            })?,
+        )?;
+    }
     Ok(theme)
+}
+
+fn create_gameman_table(lua: &Lua) -> mlua::Result<Table> {
+    let gameman = lua.create_table()?;
+    gameman.set(
+        "GetStylesForGame",
+        lua.create_function(|lua, _args: MultiValue| {
+            let styles = lua.create_table()?;
+            styles.raw_set(1, create_style_table(lua, "single")?)?;
+            Ok(styles)
+        })?,
+    )?;
+    Ok(gameman)
 }
 
 fn create_sound_table(lua: &Lua) -> mlua::Result<Table> {
@@ -4777,6 +5025,10 @@ fn theme_pref_default(lua: &Lua, name: &str) -> mlua::Result<Value> {
             | "resultsbg"
             | "scoringsystem"
             | "stepstats"
+            | "editmodelastseensong"
+            | "editmodelastseendifficulty"
+            | "editmodelastseenstepstype"
+            | "editmodelastseenstyletype"
     ) {
         let value = match lower.as_str() {
             "themefont" => "Common",
@@ -5437,10 +5689,38 @@ fn set_compile_song_runtime_beat(lua: &Lua, beat: f32) -> mlua::Result<()> {
 fn create_style_table(lua: &Lua, style_name: &str) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let style_name = style_name.to_string();
+    let style_name_for_get = style_name.clone();
     table.set(
         "GetName",
         lua.create_function(move |lua, _args: MultiValue| {
-            Ok(Value::String(lua.create_string(&style_name)?))
+            Ok(Value::String(lua.create_string(&style_name_for_get)?))
+        })?,
+    )?;
+    set_string_method(lua, &table, "GetStepsType", "StepsType_Dance_Single")?;
+    set_string_method(lua, &table, "GetStyleType", "StyleType_OnePlayerOneSide")?;
+    table.set(
+        "ColumnsPerPlayer",
+        lua.create_function(|_, _args: MultiValue| Ok(SONG_LUA_NOTE_COLUMNS as i64))?,
+    )?;
+    table.set(
+        "GetWidth",
+        lua.create_function(|_, _args: MultiValue| Ok(256.0_f32))?,
+    )?;
+    table.set(
+        "GetColumnInfo",
+        lua.create_function(|lua, args: MultiValue| {
+            let index = method_arg(&args, 1)
+                .cloned()
+                .and_then(read_i32_value)
+                .unwrap_or(1)
+                .clamp(1, SONG_LUA_NOTE_COLUMNS as i32) as usize
+                - 1;
+            let names = ["Left", "Down", "Up", "Right"];
+            let info = lua.create_table()?;
+            info.set("Name", names[index])?;
+            info.set("Track", index as i64)?;
+            info.set("XOffset", SONG_LUA_COLUMN_X[index])?;
+            Ok(info)
         })?,
     )?;
     Ok(table)
@@ -17931,6 +18211,73 @@ return Def.ActorFrame{}
         let compiled = compile_song_lua(
             &entry,
             &SongLuaCompileContext::new(&song_dir, "Stage Stat High Score Helpers"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert!(compiled.messages.is_empty());
+        assert!(compiled.overlays.is_empty());
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_theme_pref_and_gamestate_control_helpers() {
+        let song_dir = test_dir("theme-pref-gamestate-control-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+assert(PREFSMAN:PreferenceExists("EventMode"))
+assert(PREFSMAN:GetPreference("EventMode") == false)
+assert(PREFSMAN:GetPreference("MaxHighScoresPerListForMachine") == 10)
+assert(PREFSMAN:GetPreference("LongVerSongSeconds") == 150)
+assert(PREFSMAN:GetPreference("EditorNoteSkinP1") == "default")
+assert(ThemePrefs.Get("EditModeLastSeenSong") == "")
+
+assert(THEME:GetCurLanguage() == "en")
+assert(THEME:GetSelectableThemeNames()[1] == "Simply Love")
+assert(GAMESTATE:GetPlayMode() == "PlayMode_Regular")
+assert(GAMESTATE:GetCurrentStageIndex() == 0)
+assert(GAMESTATE:GetCourseSongIndex() == 0)
+assert(GAMESTATE:GetPlayerFailType(PLAYER_1) == "FailType_Immediate")
+
+local style = GAMESTATE:GetCurrentStyle()
+assert(style:ColumnsPerPlayer() == 4)
+assert(style:GetStepsType() == "StepsType_Dance_Single")
+assert(style:GetStyleType() == "StyleType_OnePlayerOneSide")
+assert(style:GetWidth() == 256)
+assert(style:GetColumnInfo(PLAYER_1, 1).Name == "Left")
+assert(StepsType:Reverse()["StepsType_Dance_Single"] ~= nil)
+assert(StyleType:Reverse()["StyleType_OnePlayerOneSide"] ~= nil)
+assert(GAMEMAN:GetStylesForGame(GAMESTATE:GetCurrentGame():GetName())[1]:GetName() == "single")
+
+local song = GAMESTATE:GetCurrentSong()
+GAMESTATE:SetCurrentSong(song)
+assert(GAMESTATE:GetCurrentSong() == song)
+GAMESTATE:SetCurrentStyle("single")
+assert(GAMESTATE:GetCurrentStyle():GetName() == "single")
+
+mod_actions = {
+    {1, function()
+        PREFSMAN:SetPreferenceToDefault("EventMode")
+        PREFSMAN:SavePreferences()
+        THEME:ReloadMetrics()
+        THEME:SetTheme("Simply Love")
+        GAMESTATE:AddStageToPlayer(PLAYER_1)
+        GAMESTATE:ResetPlayerOptions(PLAYER_1)
+        GAMESTATE:SetPreferredDifficulty(PLAYER_1, "Difficulty_Hard")
+        GAMESTATE:UnjoinPlayer(PLAYER_2)
+        GAMESTATE:SetCurrentTrail(PLAYER_1, nil)
+        GAMESTATE:SetCurrentSteps(PLAYER_1, GAMESTATE:GetCurrentSteps(PLAYER_1))
+    end, true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Theme Pref GameState Control Helpers"),
         )
         .unwrap();
         assert_eq!(compiled.info.unsupported_function_actions, 0);
