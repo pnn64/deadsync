@@ -2553,7 +2553,40 @@ fn install_def(lua: &Lua) -> mlua::Result<()> {
     }
     globals.set("Def", def)?;
     globals.set("ActorFrame", create_actorframe_class_table(lua)?)?;
+    globals.set("Sprite", create_sprite_class_table(lua)?)?;
     Ok(())
+}
+
+fn create_sprite_class_table(lua: &Lua) -> mlua::Result<Table> {
+    let class = lua.create_table()?;
+    for method_name in [
+        "Load",
+        "LoadBanner",
+        "LoadBackground",
+        "LoadFromCached",
+        "GetState",
+        "SetStateProperties",
+        "GetAnimationLengthSeconds",
+        "SetSecondsIntoAnimation",
+        "SetEffectMode",
+    ] {
+        class.set(
+            method_name,
+            lua.create_function({
+                let method_name = method_name.to_string();
+                move |_, args: MultiValue| {
+                    let Some(Value::Table(actor)) = args.front() else {
+                        return Ok(Value::Nil);
+                    };
+                    match actor.get::<Value>(method_name.as_str())? {
+                        Value::Function(method) => method.call::<Value>(args),
+                        _ => Ok(Value::Nil),
+                    }
+                }
+            })?,
+        )?;
+    }
+    Ok(class)
 }
 
 fn create_actorframe_class_table(lua: &Lua) -> mlua::Result<Table> {
@@ -4982,30 +5015,32 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         lua.create_function({
             let actor = actor.clone();
             move |_, args: MultiValue| {
-                match args.get(1) {
-                    Some(Value::String(texture)) => {
-                        actor.set("Texture", texture.to_str()?.to_string())?;
-                        actor.set("__songlua_aft_capture_name", Value::Nil)?;
-                        set_actor_decode_movie_for_texture(&actor)?;
-                    }
-                    Some(Value::Table(texture)) => {
-                        if let Some(capture_name) =
-                            texture.get::<Option<String>>("__songlua_aft_capture_name")?
-                        {
-                            actor.set("__songlua_aft_capture_name", capture_name)?;
-                            actor.set("Texture", Value::Nil)?;
-                            set_actor_decode_movie_for_texture(&actor)?;
-                        } else if let Some(texture_path) = texture
-                            .get::<Option<String>>("__songlua_texture_path")?
-                            .filter(|path| !path.is_empty())
-                        {
-                            actor.set("Texture", texture_path)?;
-                            actor.set("__songlua_aft_capture_name", Value::Nil)?;
-                            set_actor_decode_movie_for_texture(&actor)?;
-                        }
-                    }
-                    _ => {}
+                set_actor_texture_from_value(&actor, method_arg(&args, 0), false)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    for name in ["Load", "LoadBanner", "LoadBackground"] {
+        actor.set(
+            name,
+            lua.create_function({
+                let actor = actor.clone();
+                move |_, args: MultiValue| {
+                    set_actor_texture_from_value(&actor, method_arg(&args, 0), true)?;
+                    Ok(actor.clone())
                 }
+            })?,
+        )?;
+    }
+    actor.set(
+        "LoadFromCached",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                let path = method_arg(&args, 1)
+                    .or_else(|| method_arg(&args, 0))
+                    .filter(|value| !matches!(value, Value::Nil));
+                set_actor_texture_from_value(&actor, path, true)?;
                 Ok(actor.clone())
             }
         })?,
@@ -5957,6 +5992,113 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "GetState",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(i64::from(
+                    song_lua_valid_sprite_state_index(
+                        actor.get::<Option<u32>>("__songlua_state_sprite_state_index")?,
+                    )
+                    .unwrap_or(0),
+                ))
+            }
+        })?,
+    )?;
+    actor.set(
+        "SetStateProperties",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(Value::Table(states)) = method_arg(&args, 0) else {
+                    return Ok(actor.clone());
+                };
+                let state_count = states.raw_len();
+                if state_count == 0 {
+                    return Ok(actor.clone());
+                }
+
+                let mut animation_length = 0.0_f32;
+                let mut first_frame = None;
+                let mut first_delay = None;
+                for state in states.sequence_values::<Table>() {
+                    let state = state?;
+                    if first_frame.is_none() {
+                        first_frame = state.get::<Option<u32>>("Frame")?;
+                    }
+                    let delay = state.get::<Option<f32>>("Delay")?.unwrap_or(0.0).max(0.0);
+                    if first_delay.is_none() {
+                        first_delay = Some(delay);
+                    }
+                    animation_length += delay;
+                }
+
+                actor.set(
+                    "__songlua_sprite_animation_length_seconds",
+                    animation_length,
+                )?;
+                if let Some(delay) = first_delay {
+                    capture_block_set_f32(lua, &actor, "sprite_state_delay", delay)?;
+                }
+                set_actor_sprite_state(lua, &actor, first_frame.unwrap_or(0))?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetAnimationLengthSeconds",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                if let Some(value) =
+                    actor.get::<Option<f32>>("__songlua_sprite_animation_length_seconds")?
+                {
+                    return Ok(value);
+                }
+                let delay = actor
+                    .get::<Option<f32>>("__songlua_state_sprite_state_delay")?
+                    .unwrap_or(0.1)
+                    .max(0.0);
+                Ok(actor_sprite_frame_count(&actor)? as f32 * delay)
+            }
+        })?,
+    )?;
+    actor.set(
+        "SetSecondsIntoAnimation",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(seconds) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let delay = actor
+                    .get::<Option<f32>>("__songlua_state_sprite_state_delay")?
+                    .unwrap_or(0.1)
+                    .max(0.0);
+                let frame_count = actor_sprite_frame_count(&actor)?.max(1);
+                let state = if delay <= f32::EPSILON {
+                    0
+                } else {
+                    ((seconds.max(0.0) / delay).floor() as u32) % frame_count
+                };
+                set_actor_sprite_state(lua, &actor, state)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "SetEffectMode",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                if let Some(mode) = method_arg(&args, 0).cloned().and_then(read_string) {
+                    actor.set("__songlua_sprite_effect_mode", mode)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "animate",
         lua.create_function({
             let actor = actor.clone();
@@ -6457,6 +6599,58 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "getstrokecolor",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let color = read_actor_color_field(&actor, "__songlua_stroke_color")
+                    .map_err(mlua::Error::external)?
+                    .or_else(|| read_actor_color_field(&actor, "StrokeColor").ok().flatten())
+                    .unwrap_or([0.0, 0.0, 0.0, 0.0]);
+                make_color_table(lua, color)
+            }
+        })?,
+    )?;
+    for name in ["set_mult_attrs_with_diffuse", "mult_attrs_with_diffuse"] {
+        actor.set(
+            name,
+            lua.create_function({
+                let actor = actor.clone();
+                move |_, args: MultiValue| {
+                    let value = method_arg(&args, 0)
+                        .cloned()
+                        .and_then(read_boolish)
+                        .unwrap_or(true);
+                    actor.set("__songlua_mult_attrs_with_diffuse", value)?;
+                    Ok(actor.clone())
+                }
+            })?,
+        )?;
+    }
+    actor.set(
+        "get_mult_attrs_with_diffuse",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<bool>>("__songlua_mult_attrs_with_diffuse")?
+                    .unwrap_or(false))
+            }
+        })?,
+    )?;
+    actor.set(
+        "textglowmode",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                if let Some(mode) = method_arg(&args, 0).cloned().and_then(read_string) {
+                    actor.set("__songlua_text_glow_mode", mode)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "settext",
         lua.create_function({
             let actor = actor.clone();
@@ -6533,6 +6727,20 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 capture_block_set_f32(lua, &actor, "max_height", value)?;
                 capture_block_set_bool(lua, &actor, "max_h_pre_zoom", false)?;
                 actor.set("__songlua_text_saw_max_height", true)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "max_dimension_use_zoom",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                let value = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_boolish)
+                    .unwrap_or(true);
+                actor.set("__songlua_max_dimension_uses_zoom", value)?;
                 Ok(actor.clone())
             }
         })?,
@@ -7217,6 +7425,43 @@ fn set_actor_decode_movie_for_texture(actor: &Table) -> mlua::Result<()> {
         "__songlua_state_decode_movie",
         actor_texture_is_video(actor)?,
     )
+}
+
+fn set_actor_texture_from_value(
+    actor: &Table,
+    value: Option<&Value>,
+    clear_on_nil: bool,
+) -> mlua::Result<()> {
+    match value {
+        Some(Value::String(texture)) => {
+            actor.set("Texture", texture.to_str()?.to_string())?;
+            actor.set("__songlua_aft_capture_name", Value::Nil)?;
+            set_actor_decode_movie_for_texture(actor)?;
+        }
+        Some(Value::Table(texture)) => {
+            if let Some(capture_name) =
+                texture.get::<Option<String>>("__songlua_aft_capture_name")?
+            {
+                actor.set("__songlua_aft_capture_name", capture_name)?;
+                actor.set("Texture", Value::Nil)?;
+                set_actor_decode_movie_for_texture(actor)?;
+            } else if let Some(texture_path) = texture
+                .get::<Option<String>>("__songlua_texture_path")?
+                .filter(|path| !path.is_empty())
+            {
+                actor.set("Texture", texture_path)?;
+                actor.set("__songlua_aft_capture_name", Value::Nil)?;
+                set_actor_decode_movie_for_texture(actor)?;
+            }
+        }
+        Some(Value::Nil) | None if clear_on_nil => {
+            actor.set("Texture", Value::Nil)?;
+            actor.set("__songlua_aft_capture_name", Value::Nil)?;
+            actor.set("__songlua_state_decode_movie", false)?;
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 fn actor_decode_movie(actor: &Table) -> mlua::Result<bool> {
@@ -11720,6 +11965,107 @@ return Def.ActorFrame{
         assert!(!state.sprite_loop);
         assert_eq!(state.sprite_playback_rate, 1.5);
         assert_eq!(state.sprite_state_index, Some(2));
+    }
+
+    #[test]
+    fn compile_song_lua_supports_sprite_load_and_text_compat_methods() {
+        let song_dir = test_dir("sprite-load-text-compat");
+        image::RgbaImage::new(10, 20)
+            .save(song_dir.join("first.png"))
+            .unwrap();
+        image::RgbaImage::new(30, 40)
+            .save(song_dir.join("second.png"))
+            .unwrap();
+        image::RgbaImage::new(50, 10)
+            .save(song_dir.join("banner.png"))
+            .unwrap();
+        image::RgbaImage::new(40, 40)
+            .save(song_dir.join("sheet 2x2.png"))
+            .unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {}
+
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="first.png",
+        OnCommand=function(self)
+            self:Load("second.png")
+            self:LoadBanner("banner.png")
+            self:LoadBackground("second.png")
+            self:LoadFromCached("Banner", "sheet 2x2.png")
+            self:SetAllStateDelays(0.25):SetSecondsIntoAnimation(0.6):SetEffectMode("Normal")
+            local texture = self:GetTexture()
+            mod_actions[#mod_actions + 1] = {
+                1,
+                string.format(
+                    "%s:%s:%d:%.2f:%.0f:%.0f",
+                    tostring(Sprite.LoadFromCached ~= nil),
+                    tostring(texture:GetPath():match("sheet 2x2%.png$") ~= nil),
+                    self:GetState(),
+                    self:GetAnimationLengthSeconds(),
+                    self:GetWidth(),
+                    self:GetHeight()
+                ),
+                true,
+            }
+        end,
+    },
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="TEXT",
+        OnCommand=function(self)
+            self:strokecolor(color("0.2,0.3,0.4,0.5"))
+                :max_dimension_use_zoom(true)
+                :textglowmode("Both")
+                :set_mult_attrs_with_diffuse(true)
+            local stroke = self:getstrokecolor()
+            mod_actions[#mod_actions + 1] = {
+                1,
+                string.format(
+                    "%.1f:%.1f:%.1f:%.1f:%s",
+                    stroke[1],
+                    stroke[2],
+                    stroke[3],
+                    stroke[4],
+                    tostring(self:get_mult_attrs_with_diffuse())
+                ),
+                true,
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Sprite Load Text Compat"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 2);
+        assert_eq!(compiled.messages[0].message, "true:true:2:1.00:20:20");
+        assert_eq!(compiled.messages[1].message, "0.2:0.3:0.4:0.5:true");
+        assert_eq!(compiled.overlays.len(), 2);
+        assert!(matches!(
+            compiled.overlays[0].kind,
+            SongLuaOverlayKind::Sprite { ref texture_path }
+                if texture_path.ends_with("sheet 2x2.png")
+        ));
+        assert_eq!(
+            compiled.overlays[0].initial_state.sprite_state_index,
+            Some(2)
+        );
+        assert!(matches!(
+            compiled.overlays[1].kind,
+            SongLuaOverlayKind::BitmapText {
+                stroke_color: Some([0.2, 0.3, 0.4, 0.5]),
+                ..
+            }
+        ));
     }
 
     #[test]
