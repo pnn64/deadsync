@@ -821,8 +821,255 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
             Ok(resolve_compat_path(&file_song_dir, raw_path.as_str()).is_file())
         })?,
     )?;
+    for (name, value) in [("CreateDir", true), ("Remove", true), ("Unzip", false)] {
+        fileman.set(
+            name,
+            lua.create_function(move |lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(value)
+            })?,
+        )?;
+    }
+    fileman.set(
+        "FlushDirCache",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
     globals.set("FILEMAN", fileman)?;
+    globals.set("CRYPTMAN", create_cryptman_table(lua)?)?;
+    globals.set("NETWORK", create_network_table(lua)?)?;
+    globals.set("IniFile", create_ini_file_table(lua)?)?;
+    globals.set("RageFileUtil", create_rage_file_util_table(lua)?)?;
+    globals.set(
+        "JsonDecode",
+        lua.create_function(|lua, value: Value| match value {
+            Value::String(text) => {
+                let bytes = text.as_bytes();
+                serde_json::from_slice::<serde_json::Value>(&bytes)
+                    .ok()
+                    .map(|value| json_to_lua_value(lua, value))
+                    .transpose()?
+                    .map_or_else(|| Ok(Value::Table(lua.create_table()?)), Ok)
+            }
+            _ => Ok(Value::Table(lua.create_table()?)),
+        })?,
+    )?;
+    globals.set(
+        "JsonEncode",
+        lua.create_function(|_, args: MultiValue| {
+            let value = args.front().cloned().unwrap_or(Value::Nil);
+            Ok(serde_json::to_string(&lua_to_json_value(value, 0)).unwrap_or_default())
+        })?,
+    )?;
+    globals.set(
+        "BinaryToHex",
+        lua.create_function(|lua, value: Value| {
+            Ok(Value::String(
+                lua.create_string(lua_binary_to_hex(value).as_str())?,
+            ))
+        })?,
+    )?;
+    globals.set(
+        "CalculateExScore",
+        lua.create_function(|_, _args: MultiValue| Ok((0.0_f32, 0_i64, 0_i64)))?,
+    )?;
+    globals.set(
+        "GetTimingWindow",
+        lua.create_function(|_, args: MultiValue| {
+            let index = args
+                .front()
+                .cloned()
+                .and_then(timing_window_arg_index)
+                .unwrap_or(1);
+            let mode = args
+                .get(1)
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            let tenms = args.get(2).is_some_and(truthy);
+            Ok(timing_window_seconds(index, &mode, tenms))
+        })?,
+    )?;
+    globals.set(
+        "GetWorstJudgment",
+        lua.create_function(|_, value: Value| Ok(worst_judgment_from_offsets(value)))?,
+    )?;
     Ok(())
+}
+
+fn create_cryptman_table(lua: &Lua) -> mlua::Result<Table> {
+    let cryptman = lua.create_table()?;
+    for name in ["SHA1File", "SHA1String"] {
+        cryptman.set(
+            name,
+            lua.create_function(|lua, _args: MultiValue| {
+                Ok(Value::String(lua.create_string(&[0_u8; 20])?))
+            })?,
+        )?;
+    }
+    cryptman.set(
+        "GenerateRandomUUID",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(
+                lua.create_string("00000000-0000-4000-8000-000000000000")?,
+            ))
+        })?,
+    )?;
+    cryptman.set(
+        "SignFileToFile",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(false)
+        })?,
+    )?;
+    Ok(cryptman)
+}
+
+fn create_network_table(lua: &Lua) -> mlua::Result<Table> {
+    let network = lua.create_table()?;
+    network.set(
+        "IsUrlAllowed",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    network.set(
+        "HttpRequest",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            create_network_response_table(lua)
+        })?,
+    )?;
+    network.set(
+        "WebSocket",
+        lua.create_function(|lua, _args: MultiValue| create_websocket_table(lua))?,
+    )?;
+    network.set(
+        "EncodeQueryParameters",
+        lua.create_function(|_, args: MultiValue| {
+            let Some(Value::Table(query)) = method_arg(&args, 0).cloned() else {
+                return Ok(String::new());
+            };
+            encode_query_params(query)
+        })?,
+    )?;
+    Ok(network)
+}
+
+fn create_network_response_table(lua: &Lua) -> mlua::Result<Table> {
+    let response = lua.create_table()?;
+    response.set("status", 0)?;
+    response.set("code", 0)?;
+    response.set("body", "")?;
+    response.set("error", "offline")?;
+    response.set("headers", lua.create_table()?)?;
+    response.set(
+        "IsFinished",
+        lua.create_function(|_, _args: MultiValue| Ok(true))?,
+    )?;
+    let response_for_get = response.clone();
+    response.set(
+        "GetResponse",
+        lua.create_function(move |_, _args: MultiValue| Ok(response_for_get.clone()))?,
+    )?;
+    response.set(
+        "Cancel",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
+    Ok(response)
+}
+
+fn create_websocket_table(lua: &Lua) -> mlua::Result<Table> {
+    let websocket = lua.create_table()?;
+    websocket.set("is_open", false)?;
+    websocket.set(
+        "IsOpen",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    for name in ["Send", "Close"] {
+        websocket.set(
+            name,
+            lua.create_function(|lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            })?,
+        )?;
+    }
+    Ok(websocket)
+}
+
+fn create_ini_file_table(lua: &Lua) -> mlua::Result<Table> {
+    let ini = lua.create_table()?;
+    ini.set(
+        "ReadFile",
+        lua.create_function(|lua, args: MultiValue| {
+            let path = method_arg(&args, 0)
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            let table = lua.create_table()?;
+            if path.ends_with("ThemeInfo.ini") {
+                let info = lua.create_table()?;
+                info.set("DisplayName", SONG_LUA_THEME_NAME)?;
+                info.set("Version", SONG_LUA_PRODUCT_VERSION)?;
+                info.set("Author", "DeadSync song-Lua compat")?;
+                table.set("ThemeInfo", info)?;
+            }
+            Ok(table)
+        })?,
+    )?;
+    ini.set(
+        "WriteFile",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(true)
+        })?,
+    )?;
+    Ok(ini)
+}
+
+fn create_rage_file_util_table(lua: &Lua) -> mlua::Result<Table> {
+    let util = lua.create_table()?;
+    util.set(
+        "CreateRageFile",
+        lua.create_function(|lua, _args: MultiValue| create_rage_file_table(lua))?,
+    )?;
+    Ok(util)
+}
+
+fn create_rage_file_table(lua: &Lua) -> mlua::Result<Table> {
+    let file = lua.create_table()?;
+    file.set(
+        "Open",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(true)
+        })?,
+    )?;
+    file.set(
+        "Write",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(true)
+        })?,
+    )?;
+    file.set(
+        "Read",
+        lua.create_function(|_, _args: MultiValue| Ok(String::new()))?,
+    )?;
+    for name in ["Close", "destroy"] {
+        file.set(
+            name,
+            lua.create_function(|lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            })?,
+        )?;
+    }
+    Ok(file)
 }
 
 fn create_debug_table(lua: &Lua) -> mlua::Result<Table> {
@@ -906,6 +1153,211 @@ fn resolve_compat_path(song_dir: &Path, raw_path: &str) -> PathBuf {
     } else {
         song_dir.join(path)
     }
+}
+
+fn json_to_lua_value(lua: &Lua, value: serde_json::Value) -> mlua::Result<Value> {
+    Ok(match value {
+        serde_json::Value::Null => Value::Nil,
+        serde_json::Value::Bool(value) => Value::Boolean(value),
+        serde_json::Value::Number(value) => value
+            .as_i64()
+            .map(Value::Integer)
+            .or_else(|| value.as_f64().map(Value::Number))
+            .unwrap_or(Value::Nil),
+        serde_json::Value::String(value) => Value::String(lua.create_string(value)?),
+        serde_json::Value::Array(values) => {
+            let table = lua.create_table()?;
+            for (index, value) in values.into_iter().enumerate() {
+                table.raw_set(index + 1, json_to_lua_value(lua, value)?)?;
+            }
+            Value::Table(table)
+        }
+        serde_json::Value::Object(values) => {
+            let table = lua.create_table()?;
+            for (key, value) in values {
+                table.set(key, json_to_lua_value(lua, value)?)?;
+            }
+            Value::Table(table)
+        }
+    })
+}
+
+fn lua_to_json_value(value: Value, depth: usize) -> serde_json::Value {
+    if depth >= 16 {
+        return serde_json::Value::Null;
+    }
+    match value {
+        Value::Nil => serde_json::Value::Null,
+        Value::Boolean(value) => serde_json::Value::Bool(value),
+        Value::Integer(value) => serde_json::Value::Number(value.into()),
+        Value::Number(value) => serde_json::Number::from_f64(value)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        Value::String(value) => serde_json::Value::String(value.to_string_lossy()),
+        Value::Table(table) => lua_table_to_json_value(table, depth + 1),
+        _ => serde_json::Value::Null,
+    }
+}
+
+fn lua_table_to_json_value(table: Table, depth: usize) -> serde_json::Value {
+    let len = table.raw_len();
+    let mut array = vec![serde_json::Value::Null; len];
+    let mut object = serde_json::Map::new();
+    let mut is_array = len > 0;
+    for pair in table.pairs::<Value, Value>() {
+        let Ok((key, value)) = pair else {
+            continue;
+        };
+        let json_value = lua_to_json_value(value, depth);
+        match key {
+            Value::Integer(index) if is_array && index >= 1 && index as usize <= len => {
+                array[index as usize - 1] = json_value;
+            }
+            Value::String(key) => {
+                is_array = false;
+                object.insert(key.to_string_lossy(), json_value);
+            }
+            Value::Integer(index) => {
+                is_array = false;
+                object.insert(index.to_string(), json_value);
+            }
+            Value::Number(index) => {
+                is_array = false;
+                object.insert(index.to_string(), json_value);
+            }
+            Value::Boolean(key) => {
+                is_array = false;
+                object.insert(key.to_string(), json_value);
+            }
+            _ => {}
+        }
+    }
+    if is_array {
+        serde_json::Value::Array(array)
+    } else {
+        serde_json::Value::Object(object)
+    }
+}
+
+fn lua_binary_to_hex(value: Value) -> String {
+    let Value::String(text) = value else {
+        return String::new();
+    };
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes.iter().copied() {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
+}
+
+fn encode_query_params(query: Table) -> mlua::Result<String> {
+    let mut parts = Vec::new();
+    for pair in query.pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        let Some(key) = query_value_text(key) else {
+            continue;
+        };
+        let value = query_value_text(value).unwrap_or_default();
+        parts.push(format!(
+            "{}={}",
+            url_encode_component(&key),
+            url_encode_component(&value)
+        ));
+    }
+    parts.sort_unstable();
+    Ok(parts.join("&"))
+}
+
+fn query_value_text(value: Value) -> Option<String> {
+    match value {
+        Value::String(value) => Some(value.to_string_lossy()),
+        Value::Integer(value) => Some(value.to_string()),
+        Value::Number(value) => Some(value.to_string()),
+        Value::Boolean(value) => Some(value.to_string()),
+        _ => None,
+    }
+}
+
+fn url_encode_component(text: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut out = String::new();
+    for byte in text.as_bytes().iter().copied() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            out.push(byte as char);
+        } else {
+            out.push('%');
+            out.push(HEX[(byte >> 4) as usize] as char);
+            out.push(HEX[(byte & 0x0f) as usize] as char);
+        }
+    }
+    out
+}
+
+fn timing_window_arg_index(value: Value) -> Option<i32> {
+    read_i32_value(value.clone()).or_else(|| {
+        let text = read_string(value)?;
+        let (_, suffix) = text.rsplit_once('W')?;
+        suffix.parse::<i32>().ok()
+    })
+}
+
+fn timing_window_seconds(index: i32, mode: &str, tenms: bool) -> f32 {
+    if mode.eq_ignore_ascii_case("FA+") && tenms && index == 1 {
+        return 0.0085 + 0.0015;
+    }
+    let windows = if mode.eq_ignore_ascii_case("FA+") {
+        [0.0135, 0.0215, 0.043, 0.135, 0.18]
+    } else {
+        [0.0215, 0.043, 0.102, 0.135, 0.18]
+    };
+    let index = index.clamp(1, windows.len() as i32) as usize - 1;
+    windows[index] + 0.0015
+}
+
+fn worst_judgment_from_offsets(value: Value) -> i32 {
+    let Value::Table(offsets) = value else {
+        return 1;
+    };
+    let mut worst = 1;
+    for pair in offsets.sequence_values::<Value>() {
+        let Ok(value) = pair else {
+            continue;
+        };
+        for offset in timing_offsets_from_value(value) {
+            let abs = offset.abs();
+            let judgment = (1..=5)
+                .find(|window| abs <= timing_window_seconds(*window, "", false))
+                .unwrap_or(5);
+            worst = worst.max(judgment);
+        }
+    }
+    worst
+}
+
+fn timing_offsets_from_value(value: Value) -> Vec<f32> {
+    if let Some(offset) = read_f32(value.clone()) {
+        return vec![offset];
+    }
+    let Value::Table(table) = value else {
+        return Vec::new();
+    };
+    let mut offsets = Vec::new();
+    if let Ok(value) = table.raw_get::<Value>(2) {
+        if let Some(offset) = read_f32(value) {
+            offsets.push(offset);
+        }
+    }
+    if matches!(table.raw_get::<Value>(6), Ok(value) if truthy(&value)) {
+        if let Ok(value) = table.raw_get::<Value>(7) {
+            if let Some(offset) = read_f32(value) {
+                offsets.push(offset);
+            }
+        }
+    }
+    offsets
 }
 
 fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
@@ -1252,6 +1704,8 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
                 Ok(Value::String(lua.create_string(&video_renderers)?))
             } else if key.eq_ignore_ascii_case("BGBrightness") {
                 Ok(Value::Number(bg_brightness as f64))
+            } else if key.eq_ignore_ascii_case("TimingWindowScale") {
+                Ok(Value::Number(1.0))
             } else if key.eq_ignore_ascii_case("Theme") {
                 Ok(Value::String(lua.create_string(SONG_LUA_THEME_NAME)?))
             } else if key
@@ -1335,6 +1789,26 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
                 return Ok(false);
             };
             Ok(human_players_enabled[player].enabled)
+        })?,
+    )?;
+    let sides_joined = context.players.clone();
+    gamestate.set(
+        "IsSideJoined",
+        lua.create_function(move |_, args: MultiValue| {
+            let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
+                return Ok(false);
+            };
+            Ok(sides_joined[player].enabled)
+        })?,
+    )?;
+    let global_human_players_enabled = context.players.clone();
+    globals.set(
+        "IsHumanPlayer",
+        lua.create_function(move |_, args: MultiValue| {
+            let Some(player) = args.front().and_then(player_index_from_value) else {
+                return Ok(false);
+            };
+            Ok(global_human_players_enabled[player].enabled)
         })?,
     )?;
     gamestate.set(
@@ -1522,6 +1996,13 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         lua.create_function(|lua, _args: MultiValue| {
             note_song_lua_side_effect(lua)?;
             Ok(())
+        })?,
+    )?;
+    gamestate.set(
+        "JoinPlayer",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(true)
         })?,
     )?;
     gamestate.set(
@@ -3339,6 +3820,12 @@ fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
     let theme = lua.create_table()?;
     set_string_method(lua, &theme, "GetCurThemeName", SONG_LUA_THEME_NAME)?;
     set_string_method(lua, &theme, "GetThemeDisplayName", SONG_LUA_THEME_NAME)?;
+    set_string_method(
+        lua,
+        &theme,
+        "GetCurrentThemeDirectory",
+        SONG_LUA_THEME_PATH_PREFIX,
+    )?;
     theme.set(
         "GetMetric",
         lua.create_function(|lua, args: MultiValue| {
@@ -4979,10 +5466,11 @@ fn load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<Value
 }
 
 fn create_theme_path_actor(lua: &Lua, path: &str) -> mlua::Result<Option<Table>> {
-    if !path.starts_with(SONG_LUA_THEME_PATH_PREFIX) {
+    let theme_path = path.trim_start_matches('/');
+    if !theme_path.starts_with(SONG_LUA_THEME_PATH_PREFIX) {
         return Ok(None);
     }
-    let path_ref = Path::new(path);
+    let path_ref = Path::new(theme_path);
     let actor_type = if is_song_lua_audio_path(path_ref) {
         "Sound"
     } else if is_song_lua_image_path(path_ref) || is_song_lua_video_path(path_ref) {
@@ -17106,6 +17594,62 @@ return Def.ActorFrame{}
         let compiled = compile_song_lua(
             &entry,
             &SongLuaCompileContext::new(&song_dir, "Function Action Side Effects"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert!(compiled.messages.is_empty());
+        assert!(compiled.overlays.is_empty());
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_offline_theme_io_network_helpers() {
+        let song_dir = test_dir("offline-theme-io-network");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local theme_info = IniFile.ReadFile(THEME:GetCurrentThemeDirectory() .. "ThemeInfo.ini").ThemeInfo
+assert(theme_info.DisplayName == "Simply Love")
+local encoded = JsonEncode({a=1, b="two words", nested={true,false}})
+local decoded = JsonDecode(encoded)
+assert(decoded.a == 1)
+assert(BinaryToHex(CRYPTMAN:SHA1String("chart")) == string.rep("0", 40))
+assert(NETWORK:EncodeQueryParameters({b="two words", a=1}) == "a=1&b=two%20words")
+assert(NETWORK:HttpRequest{url="https://example.invalid"}.body == "")
+local ws = NETWORK:WebSocket{url="wss://example.invalid"}
+ws:Send(JsonEncode({uuid=CRYPTMAN:GenerateRandomUUID()}))
+ws:Close()
+local file = RageFileUtil:CreateRageFile()
+assert(file:Open("Save/Offline.json", 2))
+assert(file:Write(encoded))
+assert(file:Read() == "")
+file:Close()
+file:destroy()
+assert(FILEMAN:Unzip("archive.zip", "Songs/Pack") == false)
+assert(GetTimingWindow(2) > GetTimingWindow(1))
+assert(GetWorstJudgment({{0, GetTimingWindow(3)}}) == 3)
+local ex, points, possible = CalculateExScore(PLAYER_1)
+assert(ex == 0 and points == 0 and possible == 0)
+
+mod_actions = {
+    {1, function()
+        NETWORK:HttpRequest{url="https://example.invalid", body=JsonEncode(decoded)}
+        GAMESTATE:JoinPlayer(PLAYER_1)
+        FILEMAN:CreateDir("Save")
+        FILEMAN:Remove("Save/Offline.json")
+        FILEMAN:FlushDirCache()
+        assert(IsHumanPlayer(PLAYER_1) == GAMESTATE:IsSideJoined(PLAYER_1))
+    end, true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Offline Theme Helpers"),
         )
         .unwrap();
         assert_eq!(compiled.info.unsupported_function_actions, 0);
