@@ -1048,6 +1048,64 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
             ))
         })?,
     )?;
+    globals.set(
+        "clamp",
+        lua.create_function(|_, (value, min, max): (f64, f64, f64)| Ok(value.clamp(min, max)))?,
+    )?;
+    globals.set(
+        "GetScreenAspectRatio",
+        lua.create_function(move |_, _args: MultiValue| Ok(screen_width / screen_height.max(1.0)))?,
+    )?;
+    globals.set(
+        "WideScale",
+        lua.create_function(move |_, (ar4_3, ar16_9): (f32, f32)| {
+            Ok(scale_value(screen_width, 640.0, 854.0, ar4_3, ar16_9))
+        })?,
+    )?;
+    globals.set(
+        "SecondsToHHMMSS",
+        lua.create_function(|lua, seconds: f64| {
+            Ok(Value::String(
+                lua.create_string(seconds_to_hhmmss(seconds))?,
+            ))
+        })?,
+    )?;
+    globals.set(
+        "SecondsToMSS",
+        lua.create_function(|lua, seconds: f64| {
+            Ok(Value::String(lua.create_string(seconds_to_mss(seconds))?))
+        })?,
+    )?;
+    globals.set(
+        "SecondsToMMSS",
+        lua.create_function(|lua, seconds: f64| {
+            Ok(Value::String(lua.create_string(seconds_to_mmss(seconds))?))
+        })?,
+    )?;
+    globals.set(
+        "SecondsToMSSMsMs",
+        lua.create_function(|lua, seconds: f64| {
+            Ok(Value::String(
+                lua.create_string(seconds_to_mss_ms_ms(seconds))?,
+            ))
+        })?,
+    )?;
+    globals.set(
+        "SecondsToMMSSMsMs",
+        lua.create_function(|lua, seconds: f64| {
+            Ok(Value::String(
+                lua.create_string(seconds_to_mmss_ms_ms(seconds))?,
+            ))
+        })?,
+    )?;
+    globals.set(
+        "FormatNumberAndSuffix",
+        lua.create_function(|lua, value: i64| {
+            Ok(Value::String(
+                lua.create_string(format_number_and_suffix(value))?,
+            ))
+        })?,
+    )?;
     let now = Local::now();
     let year = now.year();
     let month_of_year = now.month0() as i32;
@@ -1072,11 +1130,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         "scale",
         lua.create_function(
             |_, (value, from_low, from_high, to_low, to_high): (f32, f32, f32, f32, f32)| {
-                let span = from_high - from_low;
-                if span.abs() <= f32::EPSILON {
-                    return Ok(to_low);
-                }
-                Ok((value - from_low) / span * (to_high - to_low) + to_low)
+                Ok(scale_value(value, from_low, from_high, to_low, to_high))
             },
         )?,
     )?;
@@ -1533,6 +1587,62 @@ fn create_screen_system_layer_helpers_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     set_string_method(lua, &table, "GetCreditsMessage", "Free Play")?;
     Ok(table)
+}
+
+fn scale_value(value: f32, from_low: f32, from_high: f32, to_low: f32, to_high: f32) -> f32 {
+    let span = from_high - from_low;
+    if span.abs() <= f32::EPSILON {
+        to_low
+    } else {
+        (value - from_low) / span * (to_high - to_low) + to_low
+    }
+}
+
+fn seconds_to_time_parts(seconds: f64) -> (i64, i64, i64) {
+    let minutes = (seconds / 60.0).trunc() as i64;
+    let secs = (seconds % 60.0).trunc() as i64;
+    let centis = ((seconds - (minutes * 60 + secs) as f64) * 100.0).trunc() as i64;
+    let centis = centis.clamp(0, 99);
+    (minutes, secs, centis)
+}
+
+fn seconds_to_hhmmss(seconds: f64) -> String {
+    let (minutes, seconds, _) = seconds_to_time_parts(seconds);
+    format!("{:02}:{:02}:{seconds:02}", minutes / 60, minutes % 60)
+}
+
+fn seconds_to_mss(seconds: f64) -> String {
+    let (minutes, seconds, _) = seconds_to_time_parts(seconds);
+    format!("{minutes:01}:{seconds:02}")
+}
+
+fn seconds_to_mmss(seconds: f64) -> String {
+    let (minutes, seconds, _) = seconds_to_time_parts(seconds);
+    format!("{minutes:02}:{seconds:02}")
+}
+
+fn seconds_to_mss_ms_ms(seconds: f64) -> String {
+    let (minutes, seconds, centis) = seconds_to_time_parts(seconds);
+    format!("{minutes:01}:{seconds:02}.{centis:02}")
+}
+
+fn seconds_to_mmss_ms_ms(seconds: f64) -> String {
+    let (minutes, seconds, centis) = seconds_to_time_parts(seconds);
+    format!("{minutes:02}:{seconds:02}.{centis:02}")
+}
+
+fn format_number_and_suffix(value: i64) -> String {
+    let suffix = if (value % 100) / 10 == 1 {
+        "th"
+    } else {
+        match value % 10 {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th",
+        }
+    };
+    format!("{value}{suffix}")
 }
 
 fn create_game_table(lua: &Lua) -> mlua::Result<Table> {
@@ -3071,6 +3181,19 @@ fn install_def(lua: &Lua) -> mlua::Result<()> {
     globals.set("Def", def)?;
     globals.set("ActorFrame", create_actorframe_class_table(lua)?)?;
     globals.set("Sprite", create_sprite_class_table(lua)?)?;
+    globals.set(
+        "LoadFont",
+        lua.create_function(|lua, args: MultiValue| {
+            let font = args
+                .front()
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            let actor = create_dummy_actor(lua, "BitmapText")?;
+            actor.set("Font", font)?;
+            Ok(actor)
+        })?,
+    )?;
     Ok(())
 }
 
@@ -11139,6 +11262,60 @@ return Def.ActorFrame{}
         assert_eq!(
             compiled.messages[0].message,
             "1:3:PlayerNumber_P2:6:6:93.46%:Free Play"
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_fallback_theme_utility_helpers() {
+        let song_dir = test_dir("theme-utility-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    LoadFont("Common Normal")..{
+        Text=table.concat({
+            SecondsToMSS(125),
+            SecondsToMMSS(65),
+            SecondsToMSSMsMs(65.5),
+            SecondsToMMSSMsMs(65.5),
+            SecondsToHHMMSS(3661),
+            FormatNumberAndSuffix(1),
+            FormatNumberAndSuffix(2),
+            FormatNumberAndSuffix(3),
+            FormatNumberAndSuffix(11),
+            FormatNumberAndSuffix(113),
+        }, "|"),
+        OnCommand=function(self)
+            mod_actions = {
+                {
+                    1,
+                    string.format(
+                        "%.3f:%.1f:%.0f:%s",
+                        GetScreenAspectRatio(),
+                        WideScale(100, 200),
+                        clamp(5, 0, 3),
+                        self:GetText()
+                    ),
+                    true,
+                },
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Theme Utility Helpers");
+        context.screen_width = 854.0;
+        context.screen_height = 480.0;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "1.779:200.0:3:2:05|01:05|1:05.50|01:05.50|01:01:01|1st|2nd|3rd|11th|113th"
         );
     }
 
