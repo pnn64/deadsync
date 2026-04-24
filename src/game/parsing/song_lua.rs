@@ -994,6 +994,8 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     let screen_center_y = 0.5 * screen_height;
     globals.set("PLAYER_1", player_number_name(0))?;
     globals.set("PLAYER_2", player_number_name(1))?;
+    globals.set("PlayerNumber", create_player_number_table(lua)?)?;
+    globals.set("OtherPlayer", create_other_player_table(lua)?)?;
     globals.set("Difficulty", create_difficulty_table(lua)?)?;
     globals.set("SCREEN_WIDTH", screen_width.round() as i32)?;
     globals.set("SCREEN_HEIGHT", screen_height.round() as i32)?;
@@ -1035,6 +1037,15 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
                 .map(|(_, short)| short)
                 .unwrap_or(value.as_str());
             Ok(Value::String(lua.create_string(short)?))
+        })?,
+    )?;
+    globals.set(
+        "FormatPercentScore",
+        lua.create_function(|lua, args: MultiValue| {
+            let value = args.front().cloned().and_then(read_f32).unwrap_or(0.0);
+            Ok(Value::String(
+                lua.create_string(format!("{:.2}%", value * 100.0))?,
+            ))
         })?,
     )?;
     let now = Local::now();
@@ -1114,6 +1125,11 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("DISPLAY", create_display_table(lua, context)?)?;
     globals.set("THEME", create_theme_table(lua)?)?;
     globals.set("NOTESKIN", create_noteskin_table(lua, context)?)?;
+    globals.set("SongUtil", create_song_util_table(lua)?)?;
+    globals.set(
+        "ScreenSystemLayerHelpers",
+        create_screen_system_layer_helpers_table(lua)?,
+    )?;
     globals.set("ArrowEffects", create_arrow_effects_table(lua)?)?;
     globals.set(SONG_LUA_SIDE_EFFECT_COUNT_KEY, 0_i64)?;
 
@@ -1338,6 +1354,13 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
             Ok(())
         })?,
     )?;
+    gamestate.set(
+        "ApplyGameCommand",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
     globals.set("GAMESTATE", gamestate)?;
 
     let screenman = lua.create_table()?;
@@ -1398,6 +1421,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
 
 fn create_difficulty_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
+    let reverse = lua.create_table()?;
     for (idx, difficulty) in [
         SongLuaDifficulty::Beginner,
         SongLuaDifficulty::Easy,
@@ -1410,7 +1434,104 @@ fn create_difficulty_table(lua: &Lua) -> mlua::Result<Table> {
     .enumerate()
     {
         table.raw_set(idx + 1, difficulty.sm_name())?;
+        reverse.raw_set(difficulty.sm_name(), idx)?;
     }
+    table.set(
+        "Reverse",
+        lua.create_function(move |_, _args: MultiValue| Ok(reverse.clone()))?,
+    )?;
+    Ok(table)
+}
+
+fn create_player_number_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let reverse = lua.create_table()?;
+    for player in 0..LUA_PLAYERS {
+        let name = player_number_name(player);
+        table.raw_set(player + 1, name)?;
+        table.raw_set(name, name)?;
+        reverse.raw_set(name, player)?;
+    }
+    table.set(
+        "Reverse",
+        lua.create_function(move |_, _args: MultiValue| Ok(reverse.clone()))?,
+    )?;
+    Ok(table)
+}
+
+fn create_other_player_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.raw_set(player_number_name(0), player_number_name(1))?;
+    table.raw_set(player_number_name(1), player_number_name(0))?;
+    Ok(table)
+}
+
+fn create_song_util_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set(
+        "GetPlayableSteps",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(song) = song_util_song_arg(&args)? else {
+                return Ok(Value::Table(lua.create_table()?));
+            };
+            call_song_steps_method(lua, &song, "GetAllSteps", Value::Nil)
+        })?,
+    )?;
+    table.set(
+        "GetPlayableStepsByStepsType",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(song) = song_util_song_arg(&args)? else {
+                return Ok(Value::Table(lua.create_table()?));
+            };
+            let steps_type = match args
+                .iter()
+                .skip_while(|value| {
+                    !matches!(value, Value::Table(table) if table.to_pointer() == song.to_pointer())
+                })
+                .nth(1)
+                .cloned()
+            {
+                Some(value) => value,
+                None => Value::String(lua.create_string("StepsType_Dance_Single")?),
+            };
+            call_song_steps_method(lua, &song, "GetStepsByStepsType", steps_type)
+        })?,
+    )?;
+    Ok(table)
+}
+
+fn song_util_song_arg(args: &MultiValue) -> mlua::Result<Option<Table>> {
+    for value in args {
+        let Value::Table(table) = value else {
+            continue;
+        };
+        if matches!(table.get::<Value>("GetAllSteps")?, Value::Function(_)) {
+            return Ok(Some(table.clone()));
+        }
+    }
+    Ok(None)
+}
+
+fn call_song_steps_method(
+    lua: &Lua,
+    song: &Table,
+    method_name: &str,
+    argument: Value,
+) -> mlua::Result<Value> {
+    let Value::Function(method) = song.get::<Value>(method_name)? else {
+        return Ok(Value::Table(lua.create_table()?));
+    };
+    let mut args = MultiValue::new();
+    args.push_back(Value::Table(song.clone()));
+    if !matches!(argument, Value::Nil) {
+        args.push_back(argument);
+    }
+    method.call::<Value>(args)
+}
+
+fn create_screen_system_layer_helpers_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    set_string_method(lua, &table, "GetCreditsMessage", "Free Play")?;
     Ok(table)
 }
 
@@ -10967,6 +11088,57 @@ return Def.ActorFrame{}
         assert_eq!(
             compiled.messages[0].message,
             "false:false:PlayerNumber_P1:dance:1:1:CoinMode_Free:Premium_Off:Challenge:true:Common:true:Player 1:0"
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_theme_enum_and_songutil_helpers() {
+        let song_dir = test_dir("theme-enum-songutil");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local song = GAMESTATE:GetCurrentSong()
+local playable = SongUtil.GetPlayableSteps(song)
+local typed = SongUtil:GetPlayableStepsByStepsType(song, "StepsType_Dance_Single")
+local player = PlayerNumber:Reverse()[PLAYER_2]
+local difficulty = Difficulty:Reverse()["Difficulty_Hard"]
+local other = OtherPlayer[PLAYER_1]
+
+GAMESTATE:ApplyGameCommand("mod,1.0xmusic")
+
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%d:%d:%s:%d:%d:%s:%s",
+            player,
+            difficulty,
+            other,
+            #playable,
+            #typed,
+            FormatPercentScore(0.93456),
+            ScreenSystemLayerHelpers.GetCreditsMessage(PLAYER_1)
+        ),
+        true,
+    },
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Theme Enum SongUtil"),
+        )
+        .unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "1:3:PlayerNumber_P2:6:6:93.46%:Free Play"
         );
     }
 
