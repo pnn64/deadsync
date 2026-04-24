@@ -4909,6 +4909,21 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "align",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = method_arg(&args, 0).and_then(song_lua_halign_value) {
+                    capture_block_set_f32(lua, &actor, "halign", value)?;
+                }
+                if let Some(value) = method_arg(&args, 1).and_then(song_lua_valign_value) {
+                    capture_block_set_f32(lua, &actor, "valign", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "vertalign",
         lua.create_function({
             let actor = actor.clone();
@@ -5382,6 +5397,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             }
         })?,
     )?;
+    actor.set("setsize", make_actor_set_size_method(lua, actor)?)?;
     actor.set(
         "SetWidth",
         lua.create_function({
@@ -11473,6 +11489,53 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "30:40");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_align_and_setsize_aliases() {
+        let song_dir = test_dir("actor-align-setsize");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:setsize(12, 34):align(0, 1)
+            mod_actions = {
+                {1, string.format("%.0f:%.0f", self:GetWidth(), self:GetHeight()), true},
+            }
+        end,
+    },
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="ALIGN",
+        OnCommand=function(self)
+            self:align(1, 0.5)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Align SetSize"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "12:34");
+        assert_eq!(compiled.overlays.len(), 2);
+
+        let quad = compiled.overlays[0].initial_state;
+        assert_eq!(quad.size, Some([12.0, 34.0]));
+        assert_eq!(quad.halign, 0.0);
+        assert_eq!(quad.valign, 1.0);
+
+        let text = compiled.overlays[1].initial_state;
+        assert_eq!(text.halign, 1.0);
+        assert_eq!(text.valign, 0.5);
     }
 
     #[test]
