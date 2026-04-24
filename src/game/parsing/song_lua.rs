@@ -5336,6 +5336,8 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             }
         })?,
     )?;
+    actor.set("scaletoclipped", make_actor_set_size_method(lua, actor)?)?;
+    actor.set("ScaleToClipped", make_actor_set_size_method(lua, actor)?)?;
     actor.set(
         "zoomtowidth",
         lua.create_function({
@@ -6760,6 +6762,20 @@ fn make_actor_wrap_width_method(lua: &Lua, actor: &Table) -> mlua::Result<Functi
         if wrap >= 0 {
             capture_block_set_i32(lua, &actor, "wrap_width_pixels", wrap)?;
         }
+        Ok(actor.clone())
+    })
+}
+
+fn make_actor_set_size_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
+    let actor = actor.clone();
+    lua.create_function(move |lua, args: MultiValue| {
+        let Some(width) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+            return Ok(actor.clone());
+        };
+        let Some(height) = method_arg(&args, 1).cloned().and_then(read_f32) else {
+            return Ok(actor.clone());
+        };
+        capture_block_set_size(lua, &actor, [width, height])?;
         Ok(actor.clone())
     })
 }
@@ -11390,6 +11406,47 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "30:40");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_scale_to_clipped_size() {
+        let song_dir = test_dir("scale-to-clipped-size");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(120, 60).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:scaletoclipped(90, 36)
+            mod_actions = {
+                {1, string.format("%.0f:%.0f", self:GetWidth(), self:GetHeight()), true},
+            }
+        end,
+    },
+    Def.Quad{
+        OnCommand=function(self)
+            self:ScaleToClipped(10, 20)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Scale To Clipped Size"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "90:36");
+        assert_eq!(compiled.overlays.len(), 2);
+        assert_eq!(compiled.overlays[0].initial_state.size, Some([90.0, 36.0]));
+        assert_eq!(compiled.overlays[1].initial_state.size, Some([10.0, 20.0]));
     }
 
     #[test]
