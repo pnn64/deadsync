@@ -728,6 +728,24 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
         })?,
     )?;
     globals.set(
+        "range",
+        lua.create_function(|lua, args: MultiValue| create_range_table(lua, &args))?,
+    )?;
+    globals.set(
+        "stringify",
+        lua.create_function(|lua, args: MultiValue| stringify_lua_table(lua, &args))?,
+    )?;
+    globals.set(
+        "map",
+        lua.create_function(|lua, (function, table): (Function, Table)| {
+            map_lua_table(lua, &function, &table)
+        })?,
+    )?;
+    globals.set(
+        "deduplicate",
+        lua.create_function(|lua, table: Table| deduplicate_lua_table(lua, &table))?,
+    )?;
+    globals.set(
         "ivalues",
         lua.create_function(|lua, table: Table| {
             let mut index = 0_i64;
@@ -1028,6 +1046,103 @@ fn path_basename(text: &str) -> &str {
         .rsplit(|c| c == '/' || c == '\\')
         .next()
         .unwrap_or_default()
+}
+
+fn create_range_table(lua: &Lua, args: &MultiValue) -> mlua::Result<Value> {
+    let Some(mut start) = args.front().cloned().and_then(read_f32) else {
+        return Ok(Value::Nil);
+    };
+    let stop = if let Some(stop) = args.get(1).cloned().and_then(read_f32) {
+        stop
+    } else {
+        let stop = start;
+        start = 1.0;
+        stop
+    };
+    let mut step = args.get(2).cloned().and_then(read_f32).unwrap_or(1.0);
+    if step.abs() <= f32::EPSILON {
+        return Ok(Value::Table(lua.create_table()?));
+    }
+    if step > 0.0 && start > stop {
+        step = -step;
+    }
+    if step < 0.0 && start < stop {
+        return Ok(Value::Table(lua.create_table()?));
+    }
+
+    let table = lua.create_table()?;
+    let mut index = 1;
+    let mut value = start;
+    while (step > 0.0 && value <= stop + f32::EPSILON)
+        || (step < 0.0 && value >= stop - f32::EPSILON)
+    {
+        table.raw_set(index, lua_number_value(value))?;
+        index += 1;
+        value += step;
+        if index > 10_000 {
+            break;
+        }
+    }
+    Ok(Value::Table(table))
+}
+
+fn lua_number_value(value: f32) -> Value {
+    if value.is_finite() && value.fract().abs() <= f32::EPSILON {
+        Value::Integer(value as i64)
+    } else {
+        Value::Number(value.into())
+    }
+}
+
+fn stringify_lua_table(lua: &Lua, args: &MultiValue) -> mlua::Result<Value> {
+    let Some(Value::Table(table)) = args.front().cloned() else {
+        return Ok(Value::Nil);
+    };
+    let form = args.get(1).cloned().and_then(read_string);
+    let format = lua
+        .globals()
+        .get::<Table>("string")?
+        .get::<Function>("format")?;
+    let out = lua.create_table()?;
+    for (idx, value) in table.sequence_values::<Value>().enumerate() {
+        let value = value?;
+        let text = if let Some(form) = form.as_deref()
+            && matches!(value, Value::Integer(_) | Value::Number(_))
+        {
+            let mut call_args = MultiValue::new();
+            call_args.push_back(Value::String(lua.create_string(form)?));
+            call_args.push_back(value);
+            lua_text_value(format.call::<Value>(call_args)?)?
+        } else {
+            lua_text_value(value)?
+        };
+        out.raw_set(idx + 1, text)?;
+    }
+    Ok(Value::Table(out))
+}
+
+fn map_lua_table(lua: &Lua, function: &Function, table: &Table) -> mlua::Result<Table> {
+    let out = lua.create_table()?;
+    for (idx, value) in table.sequence_values::<Value>().enumerate() {
+        out.raw_set(idx + 1, function.call::<Value>(value?)?)?;
+    }
+    Ok(out)
+}
+
+fn deduplicate_lua_table(lua: &Lua, table: &Table) -> mlua::Result<Table> {
+    let out = lua.create_table()?;
+    let mut seen = Vec::new();
+    let mut out_index = 1;
+    for value in table.sequence_values::<Value>() {
+        let value = value?;
+        if seen.iter().any(|seen| lua_values_equal(seen, &value)) {
+            continue;
+        }
+        seen.push(value.clone());
+        out.raw_set(out_index, value)?;
+        out_index += 1;
+    }
+    Ok(out)
 }
 
 fn create_network_response_table(lua: &Lua) -> mlua::Result<Table> {
@@ -1596,6 +1711,52 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         create_string_enum_table(lua, &["GameController_1", "GameController_2"])?,
     )?;
     globals.set(
+        "SortOrder",
+        create_string_enum_table(
+            lua,
+            &[
+                "SortOrder_Group",
+                "SortOrder_Title",
+                "SortOrder_Artist",
+                "SortOrder_BPM",
+                "SortOrder_Popularity",
+                "SortOrder_Preferred",
+                "SortOrder_Recent",
+            ],
+        )?,
+    )?;
+    globals.set(
+        "TapNoteScore",
+        create_string_enum_table(
+            lua,
+            &[
+                "TapNoteScore_W1",
+                "TapNoteScore_W2",
+                "TapNoteScore_W3",
+                "TapNoteScore_W4",
+                "TapNoteScore_W5",
+                "TapNoteScore_Miss",
+                "TapNoteScore_HitMine",
+                "TapNoteScore_AvoidMine",
+                "TapNoteScore_CheckpointMiss",
+                "TapNoteScore_CheckpointHit",
+                "TapNoteScore_None",
+            ],
+        )?,
+    )?;
+    globals.set(
+        "HoldNoteScore",
+        create_string_enum_table(
+            lua,
+            &[
+                "HoldNoteScore_Held",
+                "HoldNoteScore_LetGo",
+                "HoldNoteScore_MissedHold",
+                "HoldNoteScore_None",
+            ],
+        )?,
+    )?;
+    globals.set(
         "StepsType",
         create_string_enum_table(lua, &["StepsType_Dance_Single", "StepsType_Dance_Double"])?,
     )?;
@@ -1971,6 +2132,8 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("SONGMAN", create_songman_table(lua, song.clone(), context)?)?;
     let players = create_player_tables(lua, context)?;
     let song_options = create_song_options_table(lua, context.song_music_rate)?;
+    let current_sort_order = lua.create_table()?;
+    current_sort_order.raw_set(1, "SortOrder_Group")?;
     let gamestate = lua.create_table()?;
     let game_env = lua.create_table()?;
     gamestate.set(
@@ -2290,6 +2453,18 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         })?,
     )?;
     gamestate.set(
+        "GetSortOrder",
+        lua.create_function({
+            let current_sort_order = current_sort_order.clone();
+            move |lua, _args: MultiValue| {
+                let sort = current_sort_order
+                    .raw_get::<Option<String>>(1)?
+                    .unwrap_or_else(|| "SortOrder_Group".to_string());
+                Ok(Value::String(lua.create_string(&sort)?))
+            }
+        })?,
+    )?;
+    gamestate.set(
         "GetPlayerFailType",
         lua.create_function(|lua, _args: MultiValue| {
             Ok(Value::String(lua.create_string("FailType_Immediate")?))
@@ -2385,7 +2560,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("GAMESTATE", gamestate)?;
 
     let screenman = lua.create_table()?;
-    let top_screen = create_top_screen_table(lua, context.players.clone())?;
+    let top_screen = create_top_screen_table(lua, context.players.clone(), current_sort_order)?;
     globals.set(
         "__songlua_top_screen_player_1",
         top_screen.players[0].clone(),
@@ -3979,6 +4154,7 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
 fn create_top_screen_table(
     lua: &Lua,
     players: [SongLuaPlayerContext; LUA_PLAYERS],
+    current_sort_order: Table,
 ) -> mlua::Result<TopScreenLuaTables> {
     let top_screen = create_dummy_actor(lua, "TopScreen")?;
     top_screen.set("Name", "ScreenGameplay")?;
@@ -4119,7 +4295,7 @@ fn create_top_screen_table(
         "AllAreOnLastRow",
         lua.create_function(|_, _args: MultiValue| Ok(false))?,
     )?;
-    let music_wheel = create_music_wheel_table(lua)?;
+    let music_wheel = create_music_wheel_table(lua, current_sort_order)?;
     top_screen.set(
         "GetMusicWheel",
         lua.create_function(move |_, _args: MultiValue| Ok(music_wheel.clone()))?,
@@ -4155,7 +4331,7 @@ fn create_top_screen_table(
     })
 }
 
-fn create_music_wheel_table(lua: &Lua) -> mlua::Result<Table> {
+fn create_music_wheel_table(lua: &Lua, current_sort_order: Table) -> mlua::Result<Table> {
     let wheel = lua.create_table()?;
     wheel.set(
         "IsLocked",
@@ -4169,18 +4345,42 @@ fn create_music_wheel_table(lua: &Lua) -> mlua::Result<Table> {
         "GetSelectedSong",
         lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
     )?;
-    for name in ["ChangeSort", "SetOpenSection"] {
-        wheel.set(
-            name,
-            lua.create_function({
-                let wheel = wheel.clone();
-                move |lua, _args: MultiValue| {
-                    note_song_lua_side_effect(lua)?;
-                    Ok(wheel.clone())
+    wheel.set(
+        "GetSortOrder",
+        lua.create_function({
+            let current_sort_order = current_sort_order.clone();
+            move |lua, _args: MultiValue| {
+                let sort = current_sort_order
+                    .raw_get::<Option<String>>(1)?
+                    .unwrap_or_else(|| "SortOrder_Group".to_string());
+                Ok(Value::String(lua.create_string(&sort)?))
+            }
+        })?,
+    )?;
+    wheel.set(
+        "ChangeSort",
+        lua.create_function({
+            let wheel = wheel.clone();
+            let current_sort_order = current_sort_order.clone();
+            move |lua, args: MultiValue| {
+                if let Some(sort) = method_arg(&args, 0).cloned().and_then(read_string) {
+                    current_sort_order.raw_set(1, sort)?;
                 }
-            })?,
-        )?;
-    }
+                note_song_lua_side_effect(lua)?;
+                Ok(wheel.clone())
+            }
+        })?,
+    )?;
+    wheel.set(
+        "SetOpenSection",
+        lua.create_function({
+            let wheel = wheel.clone();
+            move |lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(wheel.clone())
+            }
+        })?,
+    )?;
     Ok(wheel)
 }
 
@@ -19226,6 +19426,55 @@ return Def.ActorFrame{}
             compiled.messages[0].message,
             "|Group|Song|Song|Song|ProfileSlot_Player1|1|FailType_Immediate|TapNoteScore_W3|false|false|false|256|123|true|ScreenGameplay|ScreenGameplay|ScreenSelectMusic"
         );
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_theme_utility_and_sort_helpers() {
+        let song_dir = test_dir("theme-utility-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local values = range(1, 5, 2)
+local doubled = map(function(value) return value * 2 end, values)
+local labels = stringify(doubled, "%g")
+local unique = deduplicate({"a", "a", "b"})
+local wheel = SCREENMAN:GetTopScreen():GetMusicWheel()
+local before = GAMESTATE:GetSortOrder()
+wheel:ChangeSort("SortOrder_Preferred")
+local after = GAMESTATE:GetSortOrder()
+
+mod_actions = {
+    {1, table.concat({
+        tostring(#values),
+        labels[2],
+        tostring(#unique),
+        ToEnumShortString(before),
+        ToEnumShortString(after),
+        tostring(SortOrder:Reverse()[after] ~= nil),
+        tostring(TapNoteScore:Reverse()["TapNoteScore_W3"] ~= nil),
+        tostring(HoldNoteScore:Reverse()["HoldNoteScore_Held"] ~= nil),
+        THEME:GetString("TapNoteScore", "W1"),
+        THEME:GetString("ScreenEvaluation", "Hands"),
+    }, "|"), true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Theme Utilities"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "3|6|2|Group|Preferred|true|true|true|W1|Hands"
+        );
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
     }
 
     #[test]
