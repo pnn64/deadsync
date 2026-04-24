@@ -746,6 +746,95 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
         lua.create_function(|lua, table: Table| deduplicate_lua_table(lua, &table))?,
     )?;
     globals.set(
+        "BackgroundFilterValues",
+        lua.create_function(|lua, _args: MultiValue| create_background_filter_values(lua))?,
+    )?;
+    globals.set(
+        "NumJudgmentsAvailable",
+        lua.create_function(|_, _args: MultiValue| Ok(5_i64))?,
+    )?;
+    globals.set(
+        "DetermineTimingWindow",
+        lua.create_function(|_, args: MultiValue| {
+            let offset = args
+                .front()
+                .cloned()
+                .and_then(read_f32)
+                .unwrap_or(0.0)
+                .abs();
+            for index in 1..=5 {
+                if offset <= timing_window_seconds(index, "", false) {
+                    return Ok(index);
+                }
+            }
+            Ok(5)
+        })?,
+    )?;
+    globals.set(
+        "GetCredits",
+        lua.create_function(|lua, _args: MultiValue| create_credits_table(lua))?,
+    )?;
+    globals.set(
+        "GetStepsCredit",
+        lua.create_function(|lua, _args: MultiValue| lua.create_table())?,
+    )?;
+    globals.set(
+        "IsSpooky",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    globals.set(
+        "StripSpriteHints",
+        lua.create_function(|_, filename: String| Ok(strip_sprite_hints(&filename)))?,
+    )?;
+    globals.set(
+        "GetJudgmentGraphics",
+        lua.create_function(|lua, _args: MultiValue| create_string_array(lua, &["None"]))?,
+    )?;
+    globals.set(
+        "GetHoldJudgments",
+        lua.create_function(|lua, _args: MultiValue| create_string_array(lua, &["None"]))?,
+    )?;
+    globals.set(
+        "GetHeldMissGraphics",
+        lua.create_function(|lua, _args: MultiValue| create_string_array(lua, &["None"]))?,
+    )?;
+    globals.set(
+        "GetComboFonts",
+        lua.create_function(|lua, _args: MultiValue| create_string_array(lua, &["None"]))?,
+    )?;
+    globals.set(
+        "GetColumnMapping",
+        lua.create_function(|lua, _args: MultiValue| {
+            create_index_array(lua, SONG_LUA_NOTE_COLUMNS)
+        })?,
+    )?;
+    globals.set(
+        "GetPlayerOptionsString",
+        lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
+    )?;
+    globals.set(
+        "GetFallbackBanner",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string(theme_path(
+                "G",
+                "_FallbackBanners/Arrows",
+                "banner1 (doubleres).png",
+            ))?))
+        })?,
+    )?;
+    globals.set(
+        "TotalCourseLength",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    globals.set(
+        "TotalCourseLengthPlayed",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    globals.set(
+        "IsGameAndMenuButton",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    globals.set(
         "ivalues",
         lua.create_function(|lua, table: Table| {
             let mut index = 0_i64;
@@ -1143,6 +1232,58 @@ fn deduplicate_lua_table(lua: &Lua, table: &Table) -> mlua::Result<Table> {
         out_index += 1;
     }
     Ok(out)
+}
+
+fn create_background_filter_values(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set("Off", 0)?;
+    table.set("Dark", 50)?;
+    table.set("Darker", 75)?;
+    table.set("Darkest", 95)?;
+    Ok(table)
+}
+
+fn create_credits_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set("Credits", 0)?;
+    table.set("Remainder", 0)?;
+    table.set("CoinsPerCredit", 1)?;
+    Ok(table)
+}
+
+fn create_index_array(lua: &Lua, len: usize) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    for index in 1..=len {
+        table.raw_set(index, index)?;
+    }
+    Ok(table)
+}
+
+fn strip_sprite_hints(filename: &str) -> String {
+    let mut text = filename.replace(" (doubleres)", "");
+    if text
+        .as_bytes()
+        .get(text.len().saturating_sub(4)..)
+        .is_some_and(|suffix| suffix.eq_ignore_ascii_case(b".png"))
+    {
+        text.truncate(text.len() - 4);
+    }
+    if let Some(space) = text.rfind(' ')
+        && frame_hint(&text[space + 1..])
+    {
+        text.truncate(space);
+    }
+    text
+}
+
+fn frame_hint(text: &str) -> bool {
+    let Some((wide, tall)) = text.split_once('x') else {
+        return false;
+    };
+    !wide.is_empty()
+        && !tall.is_empty()
+        && wide.bytes().all(|byte| byte.is_ascii_digit())
+        && tall.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 fn create_network_response_table(lua: &Lua) -> mlua::Result<Table> {
@@ -19473,6 +19614,60 @@ return Def.ActorFrame{}
         assert_eq!(
             compiled.messages[0].message,
             "3|6|2|Group|Preferred|true|true|true|W1|Hands"
+        );
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_theme_asset_option_helpers() {
+        let song_dir = test_dir("theme-asset-option-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local filters = BackgroundFilterValues()
+local columns = GetColumnMapping(PLAYER_1)
+local credits = GetCredits()
+local fallback = GetFallbackBanner()
+
+mod_actions = {
+    {1, table.concat({
+        tostring(filters.Dark),
+        tostring(NumJudgmentsAvailable()),
+        tostring(DetermineTimingWindow(0.03)),
+        tostring(credits.Credits),
+        tostring(credits.CoinsPerCredit),
+        StripSpriteHints("Love 2x6 (doubleres).png"),
+        GetJudgmentGraphics()[1],
+        GetHoldJudgments()[1],
+        GetHeldMissGraphics()[1],
+        GetComboFonts()[1],
+        tostring(#columns),
+        tostring(columns[4]),
+        tostring(#GetStepsCredit(PLAYER_1)),
+        tostring(IsSpooky()),
+        tostring(IsGameAndMenuButton("Left")),
+        GetPlayerOptionsString(PLAYER_1),
+        tostring(TotalCourseLength(PLAYER_1)),
+        tostring(TotalCourseLengthPlayed(PLAYER_1)),
+        fallback:sub(1, 21),
+    }, "|"), true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Theme Asset Helpers"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "50|5|2|0|1|Love|None|None|None|None|4|4|0|false|false||0|0|__songlua_theme_path"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }
