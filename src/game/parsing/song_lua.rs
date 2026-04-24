@@ -5942,6 +5942,9 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "fardistz",
         "hibernate",
         "load",
+        "AddAttribute",
+        "ClearAttributes",
+        "rainbowscroll",
         "StartTransitioningScreen",
         "stop",
         "volume",
@@ -5992,21 +5995,10 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             move |_, _args: MultiValue| lua_text_value(actor.get::<Value>("Text")?)
         })?,
     )?;
+    actor.set("wrapwidthpixels", make_actor_wrap_width_method(lua, actor)?)?;
     actor.set(
-        "wrapwidthpixels",
-        lua.create_function({
-            let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) else {
-                    return Ok(actor.clone());
-                };
-                let wrap = value as i32;
-                if wrap >= 0 {
-                    capture_block_set_i32(lua, &actor, "wrap_width_pixels", wrap)?;
-                }
-                Ok(actor.clone())
-            }
-        })?,
+        "_wrapwidthpixels",
+        make_actor_wrap_width_method(lua, actor)?,
     )?;
     actor.set(
         "vertspacing",
@@ -6754,6 +6746,20 @@ fn make_actor_stop_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result<Fun
     let actor = actor.clone();
     lua.create_function(move |_, _args: MultiValue| {
         flush_actor_capture(&actor)?;
+        Ok(actor.clone())
+    })
+}
+
+fn make_actor_wrap_width_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
+    let actor = actor.clone();
+    lua.create_function(move |lua, args: MultiValue| {
+        let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+            return Ok(actor.clone());
+        };
+        let wrap = value as i32;
+        if wrap >= 0 {
+            capture_block_set_i32(lua, &actor, "wrap_width_pixels", wrap)?;
+        }
         Ok(actor.clone())
     })
 }
@@ -9155,6 +9161,41 @@ return Def.ActorFrame{
             compiled.overlays[0].kind,
             SongLuaOverlayKind::BitmapText { ref text, .. } if text.as_ref() == "3"
         ));
+    }
+
+    #[test]
+    fn compile_song_lua_supports_bitmap_text_style_shims() {
+        let song_dir = test_dir("bitmap-text-style-shims");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="STYLE",
+        OnCommand=function(self)
+            self:_wrapwidthpixels(88)
+                :AddAttribute(0, { Length=1, Diffuse=Color.White })
+                :ClearAttributes()
+                :rainbowscroll(true)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "BitmapText Style Shims"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(
+            compiled.overlays[0].initial_state.wrap_width_pixels,
+            Some(88)
+        );
     }
 
     #[test]
