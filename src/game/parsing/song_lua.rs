@@ -5707,6 +5707,24 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "glowblink",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                set_actor_effect_defaults(
+                    lua,
+                    &actor,
+                    "glowshift",
+                    Some(1.0),
+                    None,
+                    Some([1.0, 1.0, 1.0, 0.2]),
+                    Some([1.0, 1.0, 1.0, 0.8]),
+                )?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "diffuseshift",
         lua.create_function({
             let actor = actor.clone();
@@ -5718,6 +5736,24 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     Some(1.0),
                     None,
                     Some([0.0, 0.0, 0.0, 1.0]),
+                    Some([1.0, 1.0, 1.0, 1.0]),
+                )?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "diffuseblink",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                set_actor_effect_defaults(
+                    lua,
+                    &actor,
+                    "diffuseshift",
+                    Some(1.0),
+                    None,
+                    Some([0.5, 0.5, 0.5, 0.5]),
                     Some([1.0, 1.0, 1.0, 1.0]),
                 )?;
                 Ok(actor.clone())
@@ -11352,6 +11388,52 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "ok");
         assert_eq!(compiled.overlays.len(), 1);
+    }
+
+    #[test]
+    fn compile_song_lua_supports_diffuse_and_glow_blink_methods() {
+        let song_dir = test_dir("actor-blink-effects");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(40, 30).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:diffuseblink():effectperiod(0.25):effectcolor1(0,0,0,1):effectcolor2(1,1,1,1)
+        end,
+    },
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            self:glowblink():effectclock("beatnooffset")
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Blink Effects"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+
+        let diffuse = compiled.overlays[0].initial_state;
+        assert_eq!(diffuse.effect_mode, EffectMode::DiffuseShift);
+        assert_eq!(diffuse.effect_period, 0.25);
+        assert_eq!(diffuse.effect_color1, [0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(diffuse.effect_color2, [1.0, 1.0, 1.0, 1.0]);
+
+        let glow = compiled.overlays[1].initial_state;
+        assert_eq!(glow.effect_mode, EffectMode::GlowShift);
+        assert_eq!(glow.effect_clock, EffectClock::Beat);
+        assert_eq!(glow.effect_color1, [1.0, 1.0, 1.0, 0.2]);
+        assert_eq!(glow.effect_color2, [1.0, 1.0, 1.0, 0.8]);
     }
 
     #[test]
