@@ -1265,6 +1265,79 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
             }
         })?,
     )?;
+    let master_player = context
+        .players
+        .iter()
+        .position(|player| player.enabled)
+        .unwrap_or(0);
+    let master_player_name = player_number_name(master_player).to_string();
+    gamestate.set(
+        "GetMasterPlayerNumber",
+        lua.create_function(move |lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string(&master_player_name)?))
+        })?,
+    )?;
+    let joined_sides = context
+        .players
+        .iter()
+        .filter(|player| player.enabled)
+        .count() as i32;
+    gamestate.set(
+        "GetNumSidesJoined",
+        lua.create_function(move |_, _args: MultiValue| Ok(joined_sides))?,
+    )?;
+    gamestate.set(
+        "IsCourseMode",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    gamestate.set(
+        "IsEventMode",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    gamestate.set(
+        "GetCurrentTrail",
+        lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+    )?;
+    gamestate.set(
+        "GetCurrentCourse",
+        lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+    )?;
+    let current_game = create_game_table(lua)?;
+    gamestate.set(
+        "GetCurrentGame",
+        lua.create_function(move |_, _args: MultiValue| Ok(current_game.clone()))?,
+    )?;
+    gamestate.set(
+        "GetCoinMode",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string("CoinMode_Free")?))
+        })?,
+    )?;
+    gamestate.set(
+        "GetPremium",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string("Premium_Off")?))
+        })?,
+    )?;
+    gamestate.set(
+        "GetCoins",
+        lua.create_function(|_, _args: MultiValue| Ok(0))?,
+    )?;
+    gamestate.set(
+        "GetCoinsNeededToJoin",
+        lua.create_function(|_, _args: MultiValue| Ok(0))?,
+    )?;
+    gamestate.set(
+        "GetNumStagesLeft",
+        lua.create_function(|_, _args: MultiValue| Ok(1))?,
+    )?;
+    gamestate.set(
+        "InsertCoin",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
     globals.set("GAMESTATE", gamestate)?;
 
     let screenman = lua.create_table()?;
@@ -1318,6 +1391,8 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
             Ok(())
         })?,
     )?;
+    globals.set("ThemePrefs", create_theme_prefs_table(lua)?)?;
+    globals.set("PROFILEMAN", create_profileman_table(lua)?)?;
     Ok(())
 }
 
@@ -1336,6 +1411,12 @@ fn create_difficulty_table(lua: &Lua) -> mlua::Result<Table> {
     {
         table.raw_set(idx + 1, difficulty.sm_name())?;
     }
+    Ok(table)
+}
+
+fn create_game_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    set_string_method(lua, &table, "GetName", "dance")?;
     Ok(table)
 }
 
@@ -1932,7 +2013,98 @@ fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
     })?;
     theme.set("GetMetric", get_metric.clone())?;
     theme.set("GetMetricF", get_metric)?;
+    theme.set(
+        "GetString",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(section) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(Value::String(lua.create_string("")?));
+            };
+            let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
+                return Ok(Value::String(lua.create_string("")?));
+            };
+            Ok(Value::String(
+                lua.create_string(theme_string(&section, &name))?,
+            ))
+        })?,
+    )?;
+    theme.set(
+        "HasString",
+        lua.create_function(|_, args: MultiValue| {
+            let Some(section) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(false);
+            };
+            let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
+                return Ok(false);
+            };
+            Ok(theme_has_string(&section, &name))
+        })?,
+    )?;
     Ok(theme)
+}
+
+fn create_theme_prefs_table(lua: &Lua) -> mlua::Result<Table> {
+    let prefs = lua.create_table()?;
+    prefs.set(
+        "Get",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(Value::Nil);
+            };
+            theme_pref_default(lua, &name)
+        })?,
+    )?;
+    prefs.set(
+        "Set",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
+    prefs.set(
+        "Save",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
+    Ok(prefs)
+}
+
+fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
+    let profileman = lua.create_table()?;
+    let machine_profile = create_profile_table(lua, "Machine")?;
+    profileman.set(
+        "GetMachineProfile",
+        lua.create_function(move |_, _args: MultiValue| Ok(machine_profile.clone()))?,
+    )?;
+    profileman.set(
+        "GetProfile",
+        lua.create_function(|lua, args: MultiValue| {
+            let player_name = method_arg(&args, 0)
+                .and_then(player_index_from_value)
+                .map(|index| format!("Player {}", index + 1))
+                .unwrap_or_else(|| "Player".to_string());
+            create_profile_table(lua, &player_name)
+        })?,
+    )?;
+    profileman.set(
+        "GetProfileDir",
+        lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
+    )?;
+    profileman.set(
+        "IsPersistentProfile",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    Ok(profileman)
+}
+
+fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
+    let profile = lua.create_table()?;
+    set_string_method(lua, &profile, "GetDisplayName", name)?;
+    set_string_method(lua, &profile, "GetLastUsedHighScoreName", name)?;
+    set_string_method(lua, &profile, "GetGUID", "")?;
+    set_string_method(lua, &profile, "GetProfileDir", "")?;
+    Ok(profile)
 }
 
 fn create_display_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
@@ -2176,6 +2348,75 @@ fn theme_metric(group: &str, name: &str) -> Option<f32> {
     } else {
         None
     }
+}
+
+fn theme_string(section: &str, name: &str) -> String {
+    if section.eq_ignore_ascii_case("Difficulty")
+        || section.eq_ignore_ascii_case("CustomDifficulty")
+    {
+        return name.trim_start_matches("Difficulty_").to_string();
+    }
+    match name {
+        "Yes" => "Yes".to_string(),
+        "No" => "No".to_string(),
+        "Cancel" => "Cancel".to_string(),
+        _ => name.to_string(),
+    }
+}
+
+fn theme_has_string(section: &str, name: &str) -> bool {
+    section.eq_ignore_ascii_case("Difficulty")
+        || section.eq_ignore_ascii_case("CustomDifficulty")
+        || matches!(name, "Yes" | "No" | "Cancel")
+}
+
+fn theme_pref_default(lua: &Lua, name: &str) -> mlua::Result<Value> {
+    let lower = name.to_ascii_lowercase();
+    if matches!(
+        lower.as_str(),
+        "casualmaxmeter"
+            | "numberofcontinuesallowed"
+            | "screenselectmusicmenutimer"
+            | "screenselectmusiccasualmenutimer"
+            | "screenplayeroptionsmenutimer"
+            | "screenevaluationmenutimer"
+            | "screenevaluationnonstopmenutimer"
+            | "screenevaluationsummarymenutimer"
+            | "screennameentrymenutimer"
+            | "screengroovestatsloginmenutimer"
+            | "simplylovecolor"
+            | "nice"
+    ) {
+        return Ok(Value::Integer(match lower.as_str() {
+            "casualmaxmeter" => 12,
+            "simplylovecolor" => 1,
+            _ => 0,
+        }));
+    }
+    if matches!(
+        lower.as_str(),
+        "visualstyle"
+            | "lastactiveevent"
+            | "musicwheelstyle"
+            | "themefont"
+            | "defaultgamemode"
+            | "autostyle"
+            | "songselectbg"
+            | "resultsbg"
+            | "scoringsystem"
+            | "stepstats"
+    ) {
+        let value = match lower.as_str() {
+            "themefont" => "Common",
+            "defaultgamemode" => "Dance",
+            "songselectbg" | "resultsbg" => "Off",
+            "musicwheelstyle" => "Default",
+            "autostyle" => "Default",
+            _ => "",
+        };
+        return Ok(Value::String(lua.create_string(value)?));
+    }
+    Ok(Value::Boolean(matches!(lower.as_str(), "useimagecache")))
 }
 
 fn create_player_state_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::Result<Table> {
@@ -10675,6 +10916,58 @@ return Def.ActorFrame{}
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "theme-metrics-ok");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_theme_singleton_compat() {
+        let song_dir = test_dir("theme-singletons");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local profile = PROFILEMAN:GetProfile(PLAYER_1)
+ThemePrefs.Set("RainbowMode", true)
+ThemePrefs.Save()
+GAMESTATE:InsertCoin(-GAMESTATE:GetCoinsNeededToJoin())
+
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%s:%s:%s:%s:%d:%d:%s:%s:%s:%s:%s:%s:%s:%d",
+            tostring(GAMESTATE:IsCourseMode()),
+            tostring(GAMESTATE:IsEventMode()),
+            GAMESTATE:GetMasterPlayerNumber(),
+            GAMESTATE:GetCurrentGame():GetName(),
+            GAMESTATE:GetNumSidesJoined(),
+            GAMESTATE:GetNumStagesLeft(),
+            GAMESTATE:GetCoinMode(),
+            GAMESTATE:GetPremium(),
+            THEME:GetString("Difficulty", "Difficulty_Challenge"),
+            tostring(THEME:HasString("OptionTitles", "Yes")),
+            ThemePrefs.Get("ThemeFont"),
+            tostring(ThemePrefs.Get("UseImageCache")),
+            profile:GetDisplayName(),
+            PROFILEMAN:IsPersistentProfile(PLAYER_1) and 1 or 0
+        ),
+        true,
+    },
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Theme Singletons");
+        context.players[1].enabled = false;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "false:false:PlayerNumber_P1:dance:1:1:CoinMode_Free:Premium_Off:Challenge:true:Common:true:Player 1:0"
+        );
     }
 
     #[test]
