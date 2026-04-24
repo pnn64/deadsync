@@ -699,6 +699,14 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     )?;
     globals.set("Trace", lua.create_function(|_, _msg: String| Ok(()))?)?;
     globals.set("debug", create_debug_table(lua)?)?;
+    globals.set("lua", create_lua_compat_table(lua, song_dir)?)?;
+    globals.set(
+        "Warn",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
     globals.set(
         "color",
         lua.create_function(|lua, args: MultiValue| {
@@ -1153,6 +1161,39 @@ fn resolve_compat_path(song_dir: &Path, raw_path: &str) -> PathBuf {
     } else {
         song_dir.join(path)
     }
+}
+
+fn create_lua_compat_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let read_song_dir = song_dir.to_path_buf();
+    table.set(
+        "ReadFile",
+        lua.create_function(move |lua, args: MultiValue| {
+            let Some(raw_path) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(Value::Nil);
+            };
+            let path = resolve_compat_path(&read_song_dir, &raw_path);
+            match fs::read_to_string(path) {
+                Ok(text) => Ok(Value::String(lua.create_string(&text)?)),
+                Err(_) => Ok(Value::Nil),
+            }
+        })?,
+    )?;
+    table.set(
+        "WriteFile",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(true)
+        })?,
+    )?;
+    table.set(
+        "ReportScriptError",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
+    Ok(table)
 }
 
 fn json_to_lua_value(lua: &Lua, value: serde_json::Value) -> mlua::Result<Value> {
@@ -4153,10 +4194,56 @@ fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
 
 fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     let profile = lua.create_table()?;
+    profile.set("__songlua_last_score_name", name)?;
     set_string_method(lua, &profile, "GetDisplayName", name)?;
-    set_string_method(lua, &profile, "GetLastUsedHighScoreName", name)?;
     set_string_method(lua, &profile, "GetGUID", "")?;
     set_string_method(lua, &profile, "GetProfileDir", "")?;
+    profile.set(
+        "GetLastUsedHighScoreName",
+        lua.create_function({
+            let profile = profile.clone();
+            move |lua, _args: MultiValue| {
+                let name = profile
+                    .get::<Option<String>>("__songlua_last_score_name")?
+                    .unwrap_or_default();
+                Ok(Value::String(lua.create_string(&name)?))
+            }
+        })?,
+    )?;
+    profile.set(
+        "SetLastUsedHighScoreName",
+        lua.create_function({
+            let profile = profile.clone();
+            move |lua, args: MultiValue| {
+                let name = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_string)
+                    .unwrap_or_default();
+                profile.set("__songlua_last_score_name", name)?;
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            }
+        })?,
+    )?;
+    for name in [
+        "GetCaloriesBurnedToday",
+        "GetNumTotalSongsPlayed",
+        "GetTotalSessions",
+        "CalculateCaloriesFromHeartRate",
+    ] {
+        profile.set(name, lua.create_function(|_, _args: MultiValue| Ok(0_i64))?)?;
+    }
+    profile.set(
+        "GetIgnoreStepCountCalories",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    profile.set(
+        "AddCaloriesToDailyTotal",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
     profile.set(
         "GetHighScoreList",
         lua.create_function(|lua, _args: MultiValue| create_high_score_list_table(lua))?,
@@ -17650,6 +17737,55 @@ return Def.ActorFrame{}
         let compiled = compile_song_lua(
             &entry,
             &SongLuaCompileContext::new(&song_dir, "Offline Theme Helpers"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert!(compiled.messages.is_empty());
+        assert!(compiled.overlays.is_empty());
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_lua_file_and_profile_helpers() {
+        let song_dir = test_dir("lua-file-profile-helpers");
+        fs::write(song_dir.join("favorites.txt"), "Group/Song\n").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+assert(lua.ReadFile("favorites.txt") == "Group/Song\n")
+assert(lua.ReadFile("missing.txt") == nil)
+Warn("compile warning")
+lua.ReportScriptError("compile error report")
+
+local profile = PROFILEMAN:GetProfile(PLAYER_1)
+assert(profile:GetCaloriesBurnedToday() == 0)
+assert(profile:GetNumTotalSongsPlayed() == 0)
+assert(profile:GetTotalSessions() == 0)
+assert(profile:GetIgnoreStepCountCalories() == false)
+assert(profile:CalculateCaloriesFromHeartRate(120, 60) == 0)
+profile:AddCaloriesToDailyTotal(0)
+profile:SetLastUsedHighScoreName("AAA")
+assert(profile:GetLastUsedHighScoreName() == "AAA")
+
+mod_actions = {
+    {1, function()
+        lua.WriteFile("favorites.txt", "Group/Song\n")
+        lua.ReportScriptError("action report")
+        Warn("action warning")
+        local p = PROFILEMAN:GetProfile(PLAYER_1)
+        p:SetLastUsedHighScoreName("BBB")
+        p:AddCaloriesToDailyTotal(p:CalculateCaloriesFromHeartRate(90, 30))
+    end, true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Lua File Profile Helpers"),
         )
         .unwrap();
         assert_eq!(compiled.info.unsupported_function_actions, 0);
