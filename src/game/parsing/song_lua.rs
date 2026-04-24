@@ -44,6 +44,21 @@ const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 const SONG_LUA_THEME_PATH_PREFIX: &str = "__songlua_theme_path/";
 const SONG_LUA_SPRITE_STATE_CLEAR: u32 = u32::MAX;
+const SONG_LUA_ACTIVE_COLOR_INDEX: i64 = 1;
+const SL_COLORS: &[&str] = &[
+    "#FF5D47", "#FF577E", "#FF47B3", "#DD57FF", "#8885ff", "#3D94FF", "#00B8CC", "#5CE087",
+    "#AEFA44", "#FFFF00", "#FFBE00", "#FF7D00",
+];
+const SL_DECORATIVE_COLORS: &[&str] = &[
+    "#FF3C23", "#FF003C", "#C1006F", "#8200A1", "#413AD0", "#0073FF", "#00ADC0", "#5CE087",
+    "#AEFA44", "#FFFF00", "#FFBE00", "#FF7D00",
+];
+const ITG_DIFF_COLORS: &[&str] = &[
+    "#a355b8", "#1ec51d", "#d6db41", "#ba3049", "#2691c5", "#F7F7F7",
+];
+const DDR_DIFF_COLORS: &[&str] = &[
+    "#2dccef", "#eaa910", "#ff344d", "#30d81e", "#e900ff", "#F7F7F7",
+];
 const EASING_NAMES: &[&str] = &[
     "linear",
     "inQuad",
@@ -710,6 +725,7 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
         })?,
     )?;
     globals.set("Color", create_color_constants_table(lua)?)?;
+    install_theme_color_helpers(lua, &globals)?;
     for (name, value) in [
         ("left", "left"),
         ("center", "center"),
@@ -1599,6 +1615,415 @@ fn create_screen_system_layer_helpers_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     set_string_method(lua, &table, "GetCreditsMessage", "Free Play")?;
     Ok(table)
+}
+
+fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<()> {
+    globals.set(
+        "GetHexColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(index) = args
+                .get(0)
+                .cloned()
+                .and_then(read_f32)
+                .map(|value| value.trunc() as i64)
+            else {
+                return Ok(make_color_table(lua, [1.0, 1.0, 1.0, 1.0])?);
+            };
+            let decorative = args.get(1).cloned().and_then(read_boolish).unwrap_or(false);
+            let diff_palette = args.get(2).cloned().and_then(read_string);
+            let itg_diff = diff_palette
+                .as_deref()
+                .is_some_and(|value| value.eq_ignore_ascii_case("ITG"));
+            let palette = match diff_palette.as_deref() {
+                Some(value) if value.eq_ignore_ascii_case("ITG") => ITG_DIFF_COLORS,
+                Some(value) if value.eq_ignore_ascii_case("DDR") => DDR_DIFF_COLORS,
+                _ if decorative => SL_DECORATIVE_COLORS,
+                _ => SL_COLORS,
+            };
+            let color = palette_color(index, palette);
+            make_color_table(
+                lua,
+                if itg_diff && !decorative {
+                    tone_color(color, 1.25)
+                } else {
+                    color
+                },
+            )
+        })?,
+    )?;
+    globals.set(
+        "GetCurrentColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let decorative = args.get(0).cloned().and_then(read_boolish).unwrap_or(false);
+            make_color_table(
+                lua,
+                palette_color(
+                    SONG_LUA_ACTIVE_COLOR_INDEX,
+                    if decorative {
+                        SL_DECORATIVE_COLORS
+                    } else {
+                        SL_COLORS
+                    },
+                ),
+            )
+        })?,
+    )?;
+    globals.set(
+        "PlayerColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let player = args.get(0).and_then(player_index_from_value);
+            let decorative = args.get(1).cloned().and_then(read_boolish).unwrap_or(false);
+            let index = match player {
+                Some(0) => SONG_LUA_ACTIVE_COLOR_INDEX,
+                Some(1) => SONG_LUA_ACTIVE_COLOR_INDEX - 2,
+                _ => return make_color_table(lua, [1.0, 1.0, 1.0, 1.0]),
+            };
+            make_color_table(
+                lua,
+                palette_color(
+                    index,
+                    if decorative {
+                        SL_DECORATIVE_COLORS
+                    } else {
+                        SL_COLORS
+                    },
+                ),
+            )
+        })?,
+    )?;
+    globals.set(
+        "PlayerScoreColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let player = args.get(0).and_then(player_index_from_value);
+            let index = match player {
+                Some(0) => SONG_LUA_ACTIVE_COLOR_INDEX,
+                Some(1) => SONG_LUA_ACTIVE_COLOR_INDEX - 2,
+                _ => return make_color_table(lua, [1.0, 1.0, 1.0, 1.0]),
+            };
+            make_color_table(lua, palette_color(index, SL_COLORS))
+        })?,
+    )?;
+    globals.set(
+        "PlayerDarkColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let color = match args.get(0).and_then(player_index_from_value) {
+                Some(0) => parse_color_text("#da4453").unwrap_or([1.0, 1.0, 1.0, 1.0]),
+                Some(1) => parse_color_text("#4a89dc").unwrap_or([1.0, 1.0, 1.0, 1.0]),
+                _ => [1.0, 1.0, 1.0, 1.0],
+            };
+            make_color_table(lua, color)
+        })?,
+    )?;
+    globals.set(
+        "DifficultyColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(difficulty) = args.get(0).cloned().and_then(difficulty_index_from_value)
+            else {
+                return make_color_table(lua, parse_color_text("#B4B7BA").unwrap_or([1.0; 4]));
+            };
+            if difficulty == 5 {
+                return make_color_table(lua, parse_color_text("#B4B7BA").unwrap_or([1.0; 4]));
+            }
+            let decorative = args.get(1).cloned().and_then(read_boolish).unwrap_or(false);
+            make_color_table(
+                lua,
+                palette_color(
+                    SONG_LUA_ACTIVE_COLOR_INDEX + difficulty - 4,
+                    if decorative {
+                        SL_DECORATIVE_COLORS
+                    } else {
+                        SL_COLORS
+                    },
+                ),
+            )
+        })?,
+    )?;
+    globals.set(
+        "CustomDifficultyToColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let color = args
+                .get(0)
+                .cloned()
+                .and_then(custom_difficulty_color)
+                .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+            make_color_table(lua, color)
+        })?,
+    )?;
+    globals.set(
+        "CustomDifficultyToDarkColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let color = args
+                .get(0)
+                .cloned()
+                .and_then(custom_difficulty_color)
+                .map(|color| tone_color(color, 0.5))
+                .unwrap_or([0.5, 0.5, 0.5, 1.0]);
+            make_color_table(lua, color)
+        })?,
+    )?;
+    globals.set(
+        "CustomDifficultyToLightColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let color = args
+                .get(0)
+                .cloned()
+                .and_then(custom_difficulty_color)
+                .map(|color| {
+                    [
+                        scale_value(color[0], 0.0, 1.0, 0.5, 1.0),
+                        scale_value(color[1], 0.0, 1.0, 0.5, 1.0),
+                        scale_value(color[2], 0.0, 1.0, 0.5, 1.0),
+                        color[3],
+                    ]
+                })
+                .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+            make_color_table(lua, color)
+        })?,
+    )?;
+    globals.set(
+        "StepsOrTrailToColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let color = args
+                .get(0)
+                .cloned()
+                .and_then(steps_or_trail_color)
+                .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+            make_color_table(lua, color)
+        })?,
+    )?;
+    globals.set(
+        "StageToColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let color = args
+                .get(0)
+                .cloned()
+                .and_then(stage_color)
+                .unwrap_or([0.0, 0.0, 0.0, 1.0]);
+            make_color_table(lua, color)
+        })?,
+    )?;
+    globals.set(
+        "StageToStrokeColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let color = args
+                .get(0)
+                .cloned()
+                .and_then(stage_color)
+                .map(|color| tone_color(color, 0.5))
+                .unwrap_or([0.0, 0.0, 0.0, 1.0]);
+            make_color_table(lua, color)
+        })?,
+    )?;
+    globals.set(
+        "JudgmentLineToStrokeColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let color = args
+                .get(0)
+                .cloned()
+                .and_then(judgment_line_color)
+                .map(|color| tone_color(color, 0.5))
+                .unwrap_or([0.0, 0.0, 0.0, 1.0]);
+            make_color_table(lua, color)
+        })?,
+    )?;
+    globals.set(
+        "JudgmentLineToColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let color = args
+                .get(0)
+                .cloned()
+                .and_then(judgment_line_color)
+                .unwrap_or([0.0, 0.0, 0.0, 1.0]);
+            make_color_table(lua, color)
+        })?,
+    )?;
+    for (name, factor) in [
+        ("LightenColor", 1.25_f32),
+        ("ColorLightTone", 1.5_f32),
+        ("ColorMidTone", 1.0_f32 / 1.5_f32),
+        ("ColorDarkTone", 0.5_f32),
+    ] {
+        globals.set(
+            name,
+            lua.create_function(move |lua, args: MultiValue| {
+                let color = args
+                    .get(0)
+                    .cloned()
+                    .and_then(read_color_value)
+                    .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+                make_color_table(lua, tone_color(color, factor))
+            })?,
+        )?;
+    }
+    globals.set(
+        "HasAlpha",
+        lua.create_function(|_, args: MultiValue| {
+            Ok(args
+                .get(0)
+                .cloned()
+                .and_then(read_color_value)
+                .map(|color| color[3])
+                .unwrap_or(1.0))
+        })?,
+    )?;
+    globals.set(
+        "ColorToHex",
+        lua.create_function(|_, args: MultiValue| {
+            let color = args
+                .get(0)
+                .cloned()
+                .and_then(read_color_value)
+                .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+            Ok(color_to_hex(color))
+        })?,
+    )?;
+    globals.set(
+        "BoostColor",
+        lua.create_function(|lua, args: MultiValue| {
+            let color = args
+                .get(0)
+                .cloned()
+                .and_then(read_color_value)
+                .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+            let boost = args.get(1).cloned().and_then(read_f32).unwrap_or(1.0);
+            make_color_table(lua, tone_color(color, boost))
+        })?,
+    )?;
+    globals.set(
+        "BlendColors",
+        lua.create_function(|lua, args: MultiValue| {
+            let first = args
+                .get(0)
+                .cloned()
+                .and_then(read_color_value)
+                .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+            let second = args
+                .get(1)
+                .cloned()
+                .and_then(read_color_value)
+                .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+            make_color_table(lua, blend_color(first, second))
+        })?,
+    )?;
+    Ok(())
+}
+
+fn palette_color(index: i64, palette: &[&str]) -> [f32; 4] {
+    if palette.is_empty() {
+        return [1.0, 1.0, 1.0, 1.0];
+    }
+    let wrapped = (index - 1).rem_euclid(palette.len() as i64) as usize;
+    parse_color_text(palette[wrapped]).unwrap_or([1.0, 1.0, 1.0, 1.0])
+}
+
+fn difficulty_index_from_value(value: Value) -> Option<i64> {
+    match value {
+        Value::Integer(value) => Some(value),
+        Value::Number(value) if value.is_finite() => Some(value.trunc() as i64),
+        Value::String(text) => match text.to_str().ok()?.as_ref() {
+            "Beginner" | "Difficulty_Beginner" => Some(0),
+            "Easy" | "Difficulty_Easy" => Some(1),
+            "Medium" | "Difficulty_Medium" => Some(2),
+            "Hard" | "Difficulty_Hard" => Some(3),
+            "Challenge" | "Difficulty_Challenge" => Some(4),
+            "Edit" | "Difficulty_Edit" => Some(5),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn custom_difficulty_color(value: Value) -> Option<[f32; 4]> {
+    let name = read_string(value)?;
+    let hex = match name.as_str() {
+        "Beginner" | "Difficulty_Beginner" => "#ff32f8",
+        "Easy" | "Difficulty_Easy" | "Freestyle" => "#2cff00",
+        "Medium" | "Difficulty_Medium" | "HalfDouble" => "#fee600",
+        "Hard" | "Difficulty_Hard" | "Crazy" => "#ff2f39",
+        "Challenge" | "Difficulty_Challenge" | "Nightmare" => "#1cd8ff",
+        "Edit" | "Difficulty_Edit" => "#cccccc",
+        "Couple" | "Difficulty_Couple" => "#ed0972",
+        "Routine" | "Difficulty_Routine" => "#ff9a00",
+        _ => return None,
+    };
+    parse_color_text(hex)
+}
+
+fn steps_or_trail_color(value: Value) -> Option<[f32; 4]> {
+    if let Some(color) = custom_difficulty_color(value.clone()) {
+        return Some(color);
+    }
+    let table = match value {
+        Value::Table(table) => table,
+        _ => return None,
+    };
+    let Value::Function(get_difficulty) = table.get::<Value>("GetDifficulty").ok()? else {
+        return None;
+    };
+    custom_difficulty_color(get_difficulty.call::<Value>(table).ok()?)
+}
+
+fn stage_color(value: Value) -> Option<[f32; 4]> {
+    let name = read_string(value)?;
+    let hex = match name.as_str() {
+        "Stage_1st" => "#00ffc7",
+        "Stage_2nd" => "#58ff00",
+        "Stage_3rd" => "#f400ff",
+        "Stage_4th" => "#00ffda",
+        "Stage_5th" => "#ed00ff",
+        "Stage_6th" => "#73ff00",
+        "Stage_Next" => "#73ff00",
+        "Stage_Final" | "Stage_Extra2" => "#ff0707",
+        "Stage_Extra1" => "#fafa00",
+        "Stage_Nonstop" | "Stage_Oni" | "Stage_Endless" | "Stage_Event" | "Stage_Demo" => "#ffffff",
+        _ => return None,
+    };
+    parse_color_text(hex)
+}
+
+fn judgment_line_color(value: Value) -> Option<[f32; 4]> {
+    let name = read_string(value)?;
+    let hex = match name.as_str() {
+        "JudgmentLine_W1" => "#bfeaff",
+        "JudgmentLine_W2" => "#fff568",
+        "JudgmentLine_W3" => "#a4ff00",
+        "JudgmentLine_W4" => "#34bfff",
+        "JudgmentLine_W5" => "#e44dff",
+        "JudgmentLine_Held" => "#ffffff",
+        "JudgmentLine_Miss" => "#ff3c3c",
+        "JudgmentLine_MaxCombo" => "#ffc600",
+        _ => return None,
+    };
+    parse_color_text(hex)
+}
+
+fn tone_color(color: [f32; 4], factor: f32) -> [f32; 4] {
+    [
+        color[0] * factor,
+        color[1] * factor,
+        color[2] * factor,
+        color[3],
+    ]
+}
+
+fn blend_color(first: [f32; 4], second: [f32; 4]) -> [f32; 4] {
+    [
+        0.5 * (first[0] + second[0]),
+        0.5 * (first[1] + second[1]),
+        0.5 * (first[2] + second[2]),
+        0.5 * (first[3] + second[3]),
+    ]
+}
+
+fn color_to_hex(color: [f32; 4]) -> String {
+    let component = |value: f32| (value.clamp(0.0, 1.0) * 255.0) as u8;
+    format!(
+        "{:02X}{:02X}{:02X}{:02X}",
+        component(color[0]),
+        component(color[1]),
+        component(color[2]),
+        component(color[3])
+    )
 }
 
 fn scale_value(value: f32, from_low: f32, from_high: f32, to_low: f32, to_high: f32) -> f32 {
@@ -10174,19 +10599,62 @@ fn make_color_table(lua: &Lua, rgba: [f32; 4]) -> mlua::Result<Table> {
 
 fn create_color_constants_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
-    for (name, rgba) in [
-        ("Black", [0.0, 0.0, 0.0, 1.0]),
-        ("Blue", [0.0, 0.0, 1.0, 1.0]),
-        ("Green", [0.0, 1.0, 0.0, 1.0]),
-        ("Orange", [1.0, 0.5, 0.0, 1.0]),
-        ("Pink", [1.0, 0.75, 0.8, 1.0]),
-        ("Purple", [0.5, 0.0, 0.5, 1.0]),
-        ("Red", [1.0, 0.0, 0.0, 1.0]),
-        ("White", [1.0, 1.0, 1.0, 1.0]),
-        ("Yellow", [1.0, 1.0, 0.0, 1.0]),
+    for (name, text) in [
+        ("Black", "0,0,0,1"),
+        ("Blue", "#00aeef"),
+        ("Green", "#39b54a"),
+        ("HoloBlue", "#33B5E5"),
+        ("HoloDarkBlue", "#0099CC"),
+        ("HoloDarkGreen", "#669900"),
+        ("HoloDarkOrange", "#FF8800"),
+        ("HoloDarkPurple", "#9933CC"),
+        ("HoloDarkRed", "#CC0000"),
+        ("HoloGreen", "#99CC00"),
+        ("HoloOrange", "#FFBB33"),
+        ("HoloPurple", "#AA66CC"),
+        ("HoloRed", "#FF4444"),
+        ("Invisible", "1,1,1,0"),
+        ("Orange", "#f7941d"),
+        ("Outline", "0,0,0,0.5"),
+        ("Pink", "1,0.75,0.8,1"),
+        ("Purple", "#92278f"),
+        ("Red", "#ed1c24"),
+        ("Stealth", "0,0,0,0"),
+        ("White", "1,1,1,1"),
+        ("Yellow", "#fff200"),
     ] {
-        table.set(name, make_color_table(lua, rgba)?)?;
+        table.set(
+            name,
+            make_color_table(lua, parse_color_text(text).unwrap_or([1.0, 1.0, 1.0, 1.0]))?,
+        )?;
     }
+    table.set(
+        "Alpha",
+        lua.create_function(|lua, (color, alpha): (Value, f32)| {
+            let mut color = read_color_value(color).unwrap_or([1.0, 1.0, 1.0, 1.0]);
+            color[3] = alpha;
+            make_color_table(lua, color)
+        })?,
+    )?;
+    let table_for_call = table.clone();
+    let mt = lua.create_table()?;
+    mt.set(
+        "__call",
+        lua.create_function(move |lua, (_self, value): (Table, Value)| {
+            let Some(name) = read_string(value) else {
+                return Ok(Value::Nil);
+            };
+            let existing = table_for_call.get::<Value>(name.as_str())?;
+            if !matches!(existing, Value::Nil) {
+                return Ok(existing);
+            }
+            Ok(parse_color_text(&name)
+                .map(|color| make_color_table(lua, color).map(Value::Table))
+                .transpose()?
+                .unwrap_or(Value::Nil))
+        })?,
+    )?;
+    let _ = table.set_metatable(Some(mt));
     Ok(table)
 }
 
@@ -11265,7 +11733,7 @@ end
 if Color.White[1] ~= 1 or Color.White[2] ~= 1 or Color.White[3] ~= 1 or Color.White[4] ~= 1 then
     error("unexpected Color.White")
 end
-if Color.Blue[3] ~= 1 or Color.Blue[1] ~= 0 then
+if not approx(Color.Blue[3], 239 / 255) or Color.Blue[1] ~= 0 then
     error("unexpected Color.Blue")
 end
 
@@ -11280,6 +11748,77 @@ return Def.ActorFrame{}
         )
         .unwrap();
         assert!(compiled.overlays.is_empty());
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_theme_color_helpers() {
+        let song_dir = test_dir("theme-color-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r##"
+local wrap = GetHexColor(13)
+local itg = GetHexColor(1, false, "ITG")
+local p2 = PlayerColor(PLAYER_2)
+local hard = DifficultyColor("Difficulty_Hard")
+local edit = DifficultyColor("Difficulty_Edit")
+local dark = PlayerDarkColor(PLAYER_2)
+local custom = CustomDifficultyToColor("Difficulty_Medium")
+local stage = StageToColor("Stage_Final")
+local judge = JudgmentLineToColor("JudgmentLine_W1")
+local light = LightenColor(color("#202020"))
+local blend = BlendColors(Color.Red, Color.Blue)
+local alpha = Color.Alpha(Color.White, 0.25)
+local named = Color("Black")
+local stroke = JudgmentLineToStrokeColor("JudgmentLine_W1")
+local step = StepsOrTrailToColor({ GetDifficulty=function() return "Difficulty_Hard" end })
+local hex = ColorToHex(color("#00000080"))
+local has_alpha = HasAlpha(color("#00000080"))
+
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%.3f:%.3f:%.3f:%.3f:%.3f:%.3f:%.3f:%.3f:%.3f:%.3f:%.3f:%.3f:%.3f:%.3f:%.3f:%.3f:%s:%.3f",
+            wrap[1],
+            wrap[2],
+            itg[1],
+            p2[3],
+            hard[2],
+            edit[1],
+            dark[1],
+            custom[1],
+            stage[2],
+            judge[1],
+            light[1],
+            blend[1],
+            alpha[4],
+            named[1],
+            stroke[1],
+            step[1],
+            hex,
+            has_alpha
+        ),
+        true,
+    },
+}
+
+return Def.ActorFrame{}
+"##,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Theme Color Helpers"),
+        )
+        .unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "1.000:0.365:0.799:0.000:0.490:0.706:0.290:0.996:0.027:0.749:0.157:0.465:0.250:0.000:0.375:1.000:00000080:0.502"
+        );
     }
 
     #[test]
