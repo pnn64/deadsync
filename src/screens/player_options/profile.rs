@@ -126,6 +126,12 @@ pub(super) fn tilt_intensity_choices() -> Vec<String> {
     out
 }
 
+pub(super) fn tilt_cutoff_choices() -> Vec<String> {
+    (TILT_CUTOFF_MIN..=TILT_CUTOFF_MAX)
+        .map(|i| format!("{} ms", i))
+        .collect()
+}
+
 pub(super) fn custom_fantastic_window_choices() -> Vec<String> {
     let lo = crate::game::profile::CUSTOM_FANTASTIC_WINDOW_MIN_MS;
     let hi = crate::game::profile::CUSTOM_FANTASTIC_WINDOW_MAX_MS;

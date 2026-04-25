@@ -510,6 +510,41 @@ const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
     },
 };
 
+const JUDGMENT_TILT_CUTOFF: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta| {
+        let Some(new_index) =
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+        else {
+            return Outcome::NONE;
+        };
+
+        let Some(choice) = state
+            .pane()
+            .row_map
+            .get(row_id)
+            .and_then(|r| r.choices.get(new_index))
+            .cloned()
+        else {
+            return Outcome::NONE;
+        };
+
+        let ms = choice
+            .split_whitespace()
+            .next()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+
+        state.player_profiles[player_idx].tilt_cutoff_ms = ms;
+
+        let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_tilt_cutoff_for_side(side, ms);
+        }
+
+        Outcome::persisted()
+    },
+};
+
 const MEASURE_COUNTER_LOOKAHEAD: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta| {
         let Some(new_index) =
@@ -820,6 +855,16 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         choices: tilt_intensity_choices(),
         selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![tr("PlayerOptionsHelp", "JudgmentTiltIntensityHelp").to_string()],
+        choice_difficulty_indices: None,
+        mirror_across_players: false,
+    });
+    b.push(Row {
+        id: RowId::JudgmentTiltCutoff,
+        behavior: RowBehavior::Custom(JUDGMENT_TILT_CUTOFF),
+        name: lookup_key("PlayerOptions", "JudgmentTiltCutoff"),
+        choices: tilt_cutoff_choices(),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: vec![tr("PlayerOptionsHelp", "JudgmentTiltCutoffHelp").to_string()],
         choice_difficulty_indices: None,
         mirror_across_players: false,
     });

@@ -897,6 +897,21 @@ pub fn update_tilt_multiplier_for_side(side: PlayerSide, multiplier: f32) {
     save_profile_ini_for_side(side);
 }
 
+pub fn update_tilt_cutoff_for_side(side: PlayerSide, cutoff_ms: u32) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+
+        if profile.tilt_cutoff_ms == cutoff_ms {
+            return;
+        }
+
+        profile.tilt_cutoff_ms = cutoff_ms;
+    }
+
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_error_bar_mask_for_side(side: PlayerSide, mask: ErrorBarMask) {
     let style = error_bar_style_from_mask(mask);
     let text = error_bar_text_from_mask(mask);

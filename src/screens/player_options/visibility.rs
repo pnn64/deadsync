@@ -5,6 +5,7 @@ pub(super) struct RowVisibility {
     pub(super) show_measure_counter_children: bool,
     pub(super) show_judgment_offsets: bool,
     pub(super) show_judgment_tilt_intensity: bool,
+    pub(super) show_judgment_tilt_cutoff: bool,
     pub(super) show_combo_offsets: bool,
     pub(super) show_error_bar_children: bool,
     pub(super) show_custom_fantastic_window_ms: bool,
@@ -25,6 +26,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     }
     if id == RowId::JudgmentTiltIntensity {
         return visibility.show_judgment_tilt_intensity;
+    }
+    if id == RowId::JudgmentTiltCutoff {
+        return visibility.show_judgment_tilt_cutoff;
     }
     if id == RowId::ComboOffsetX || id == RowId::ComboOffsetY {
         return visibility.show_combo_offsets;
@@ -66,6 +70,9 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
         return Some(RowId::JudgmentFont);
     }
     if id == RowId::JudgmentTiltIntensity {
+        return Some(RowId::JudgmentTilt);
+    }
+    if id == RowId::JudgmentTiltCutoff {
         return Some(RowId::JudgmentTilt);
     }
     if id == RowId::ComboOffsetX || id == RowId::ComboOffsetY {
@@ -151,6 +158,29 @@ pub(super) fn judgment_tilt_intensity_visible(
             return true;
         }
     }
+    !any_active
+}
+
+pub(super) fn judgment_tilt_cutoff_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+) -> bool {
+    let Some(row) = row_map.get(RowId::JudgmentTilt) else {
+        return true;
+    };
+
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+
+        if choice_idx != 0 {
+            return true;
+        }
+    }
+
     !any_active
 }
 
@@ -281,6 +311,7 @@ pub(super) fn row_visibility(
         show_measure_counter_children: measure_counter_children_visible(row_map, active),
         show_judgment_offsets: judgment_offsets_visible(row_map, active),
         show_judgment_tilt_intensity: judgment_tilt_intensity_visible(row_map, active),
+        show_judgment_tilt_cutoff: judgment_tilt_cutoff_visible(row_map, active),
         show_combo_offsets: combo_offsets_visible(row_map, active),
         show_error_bar_children: error_bar_children_visible(active, option_masks),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(row_map, active),
