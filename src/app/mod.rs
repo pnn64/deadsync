@@ -1930,6 +1930,12 @@ fn prewarm_gameplay_assets(
     for layer in &state.song_lua_foreground_visual_layers {
         prewarm_song_lua_overlays(&layer.overlays);
     }
+    for sound_path in &state.song_lua_sound_paths {
+        let key = sound_path.to_string_lossy().into_owned();
+        if seen.insert(key.clone()) {
+            crate::engine::audio::preload_sfx(&key);
+        }
+    }
     crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");
     crate::engine::audio::preload_sfx("assets/sounds/assist_tick.ogg");
 }

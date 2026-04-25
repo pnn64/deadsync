@@ -43,6 +43,7 @@ const SONG_LUA_RUNTIME_SECONDS_KEY: &str = "__songlua_music_seconds";
 const SONG_LUA_RUNTIME_BPS_KEY: &str = "__songlua_song_bps";
 const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
+const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
 const SONG_LUA_THEME_PATH_PREFIX: &str = "__songlua_theme_path/";
 const SONG_LUA_THEME_NAME: &str = "Simply Love";
 const SONG_LUA_INITIAL_LIFE: f32 = 0.5;
@@ -411,6 +412,7 @@ pub struct CompiledSongLua {
     pub time_mods: Vec<SongLuaModWindow>,
     pub eases: Vec<SongLuaEaseWindow>,
     pub messages: Vec<SongLuaMessageEvent>,
+    pub sound_paths: Vec<PathBuf>,
     pub overlays: Vec<SongLuaOverlayActor>,
     pub overlay_eases: Vec<SongLuaOverlayEase>,
     pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
@@ -699,6 +701,7 @@ pub fn compile_song_lua(
             .then_with(|| left.overlay_index.cmp(&right.overlay_index))
     });
     out.messages.sort_by(message_event_cmp);
+    out.sound_paths = read_song_lua_sound_paths(&lua)?;
     Ok(out)
 }
 
@@ -3501,7 +3504,11 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         })?,
     )?;
     globals.set("SCREENMAN", screenman)?;
-    globals.set("SOUND", create_sound_table(lua)?)?;
+    globals.set(SONG_LUA_SOUND_PATHS_KEY, lua.create_table()?)?;
+    globals.set(
+        "SOUND",
+        create_sound_table(lua, context.song_dir.as_path())?,
+    )?;
 
     let messageman = lua.create_table()?;
     messageman.set(
@@ -6018,14 +6025,59 @@ fn create_charman_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(charman)
 }
 
-fn create_sound_table(lua: &Lua) -> mlua::Result<Table> {
+fn song_lua_sound_paths_table(lua: &Lua) -> mlua::Result<Table> {
+    let globals = lua.globals();
+    if let Some(paths) = globals.get::<Option<Table>>(SONG_LUA_SOUND_PATHS_KEY)? {
+        return Ok(paths);
+    }
+    let paths = lua.create_table()?;
+    globals.set(SONG_LUA_SOUND_PATHS_KEY, paths.clone())?;
+    Ok(paths)
+}
+
+fn record_song_lua_sound_path(lua: &Lua, song_dir: &Path, args: &MultiValue) -> mlua::Result<()> {
+    let Some(raw_path) = method_arg(args, 0).cloned().and_then(read_string) else {
+        return Ok(());
+    };
+    let Ok(path) = resolve_script_path(lua, song_dir, &raw_path) else {
+        return Ok(());
+    };
+    if !path.is_file() || !is_song_lua_audio_path(path.as_path()) {
+        return Ok(());
+    }
+
+    let key = file_path_string(path.as_path());
+    let paths = song_lua_sound_paths_table(lua)?;
+    for existing in paths.sequence_values::<String>() {
+        if existing? == key {
+            return Ok(());
+        }
+    }
+    paths.raw_set(paths.raw_len() + 1, key)?;
+    Ok(())
+}
+
+fn create_sound_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     let sound = lua.create_table()?;
-    for name in ["DimMusic", "PlayMusicPart", "PlayOnce"] {
+    for name in ["DimMusic"] {
         sound.set(
             name,
             lua.create_function(|lua, _args: MultiValue| {
                 note_song_lua_side_effect(lua)?;
                 Ok(())
+            })?,
+        )?;
+    }
+    for name in ["PlayMusicPart", "PlayOnce"] {
+        sound.set(
+            name,
+            lua.create_function({
+                let song_dir = song_dir.to_path_buf();
+                move |lua, args: MultiValue| {
+                    note_song_lua_side_effect(lua)?;
+                    record_song_lua_sound_path(lua, song_dir.as_path(), &args)?;
+                    Ok(())
+                }
             })?,
         )?;
     }
@@ -17996,6 +18048,21 @@ fn read_string(value: Value) -> Option<String> {
     }
 }
 
+fn read_song_lua_sound_paths(lua: &Lua) -> Result<Vec<PathBuf>, String> {
+    let globals = lua.globals();
+    let Some(paths) = globals
+        .get::<Option<Table>>(SONG_LUA_SOUND_PATHS_KEY)
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::with_capacity(paths.raw_len());
+    for path in paths.sequence_values::<String>() {
+        out.push(PathBuf::from(path.map_err(|err| err.to_string())?));
+    }
+    Ok(out)
+}
+
 fn lua_text_value(value: Value) -> mlua::Result<String> {
     match value {
         Value::String(text) => Ok(text.to_str()?.to_string()),
@@ -21703,6 +21770,35 @@ return Def.ActorFrame{
             panic!("expected upper sound overlay");
         };
         assert_eq!(sound_path, &song_dir.join("upper.ogg"));
+    }
+
+    #[test]
+    fn compile_song_lua_extracts_sound_singleton_assets() {
+        let song_dir = test_dir("sound-singleton-assets");
+        fs::write(song_dir.join("effect.ogg"), b"not decoded during compile").unwrap();
+        fs::write(song_dir.join("music.wav"), b"not decoded during compile").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+SOUND:PlayOnce("effect.ogg")
+SOUND:PlayOnce("missing.ogg")
+SOUND:PlayMusicPart("music.wav", 0, 1, 0, 0)
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Sound Singleton Assets"),
+        )
+        .unwrap();
+        assert_eq!(
+            compiled.sound_paths,
+            vec![song_dir.join("effect.ogg"), song_dir.join("music.wav")]
+        );
     }
 
     #[test]

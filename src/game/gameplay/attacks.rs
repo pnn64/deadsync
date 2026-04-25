@@ -13,6 +13,7 @@ use crate::game::song::SongData;
 use crate::game::timing::{ROWS_PER_BEAT, TimingData};
 use log::{debug, info, trace, warn};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -100,6 +101,14 @@ pub struct SongLuaVisualLayerRuntime {
     pub overlay_events: Vec<Vec<SongLuaOverlayMessageRuntime>>,
     pub song_foreground: SongLuaCapturedActor,
     pub song_foreground_events: Vec<SongLuaOverlayMessageRuntime>,
+}
+
+fn extend_song_lua_sound_paths(out: &mut Vec<PathBuf>, paths: &[PathBuf]) {
+    for path in paths {
+        if !out.contains(path) {
+            out.push(path.clone());
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2231,6 +2240,7 @@ pub(super) fn build_song_lua_runtime_windows(
     SongLuaCapturedActor,
     Vec<SongLuaOverlayMessageRuntime>,
     [bool; MAX_PLAYERS],
+    Vec<PathBuf>,
     f32,
     f32,
 ) {
@@ -2278,6 +2288,7 @@ pub(super) fn build_song_lua_runtime_windows(
     let mut song_foreground = SongLuaCapturedActor::default();
     let mut song_foreground_events = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
+    let mut sound_paths = Vec::new();
     let screen_width = screen_width();
     let screen_height = screen_height();
 
@@ -2304,6 +2315,7 @@ pub(super) fn build_song_lua_runtime_windows(
             song_foreground,
             song_foreground_events,
             hidden_players,
+            sound_paths,
             screen_width,
             screen_height,
         );
@@ -2346,11 +2358,13 @@ pub(super) fn build_song_lua_runtime_windows(
                     song_foreground,
                     song_foreground_events,
                     hidden_players,
+                    sound_paths,
                     screen_width,
                     screen_height,
                 );
             }
         };
+        extend_song_lua_sound_paths(&mut sound_paths, &compiled.sound_paths);
         overlays = compiled.overlays.clone();
         let overlay_runtime_eases = build_song_lua_overlay_ease_windows(
             &compiled,
@@ -2460,6 +2474,7 @@ pub(super) fn build_song_lua_runtime_windows(
                 continue;
             }
         };
+        extend_song_lua_sound_paths(&mut sound_paths, &compiled.sound_paths);
         if let Some(layer) = build_song_lua_visual_layer_runtime(
             song,
             change.start_beat,
@@ -2490,6 +2505,7 @@ pub(super) fn build_song_lua_runtime_windows(
                 continue;
             }
         };
+        extend_song_lua_sound_paths(&mut sound_paths, &compiled.sound_paths);
         if let Some(layer) = build_song_lua_visual_layer_runtime(
             song,
             change.start_beat,
@@ -2515,6 +2531,7 @@ pub(super) fn build_song_lua_runtime_windows(
         song_foreground,
         song_foreground_events,
         hidden_players,
+        sound_paths,
         out_screen_width,
         out_screen_height,
     )
