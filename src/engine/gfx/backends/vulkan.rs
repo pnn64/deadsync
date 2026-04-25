@@ -2028,13 +2028,10 @@ pub fn draw(
         if present_suboptimal {
             recreate_swapchain_and_dependents(state)?;
         }
-        if apply_present_back_pressure
-            && screenshot_staging.is_none()
-            && state.swapchain_resources.present_mode != vk::PresentModeKHR::MAILBOX
-        {
-            // MAILBOX already bounds the queue and drops stale frames, so an
-            // extra post-present fence wait mostly adds jitter instead of
-            // helping pacing.
+        if apply_present_back_pressure && screenshot_staging.is_none() {
+            // Match the wgpu Vulkan pacing path: when the app is running
+            // uncapped, wait for this frame's GPU work to retire so the CPU
+            // cannot build a long queue of stale Mailbox presents.
             let wait_started = Instant::now();
             device.wait_for_fences(&[fence], true, u64::MAX)?;
             let wait_us = elapsed_us_since(wait_started);
