@@ -2075,6 +2075,7 @@ fn build_song_lua_compile_context(
     } else {
         1.0
     };
+    context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
     context.style_name = match play_style {
         profile::PlayStyle::Single => "single",
         profile::PlayStyle::Versus => "versus",
@@ -2413,10 +2414,11 @@ pub(super) fn build_song_lua_runtime_windows(
             || compiled.info.unsupported_perframes > 0
             || compiled.info.unsupported_function_eases > 0
             || compiled.info.unsupported_function_actions > 0
+            || !compiled.info.skipped_message_command_captures.is_empty()
             || unsupported_targets > 0
         {
             info!(
-                "Compiled gameplay lua for '{}' (constants={}, eases={}, overlay_eases={}, overlays={}, messages={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}).",
+                "Compiled gameplay lua for '{}' (constants={}, eases={}, overlay_eases={}, overlays={}, messages={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}, skipped_message_commands={}).",
                 song.title,
                 total_constant,
                 total_eases,
@@ -2427,6 +2429,7 @@ pub(super) fn build_song_lua_runtime_windows(
                 compiled.info.unsupported_function_eases,
                 compiled.info.unsupported_function_actions,
                 compiled.info.unsupported_perframes,
+                compiled.info.skipped_message_command_captures.len(),
             );
             log_song_lua_runtime_debug(
                 song.title.as_str(),
@@ -2528,7 +2531,7 @@ fn log_song_lua_runtime_debug(
     unsupported_targets: usize,
 ) {
     debug!(
-        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} constants={} eases={} overlay_eases={} overlays={} messages={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={}",
+        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} constants={} eases={} overlay_eases={} overlays={} messages={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={} skipped_message_commands={}",
         song_title,
         compiled.entry_path.display(),
         compiled.screen_width,
@@ -2543,6 +2546,7 @@ fn log_song_lua_runtime_debug(
         compiled.info.unsupported_function_eases,
         compiled.info.unsupported_function_actions,
         compiled.info.unsupported_perframes,
+        compiled.info.skipped_message_command_captures.len(),
     );
 
     let mut message_counts = BTreeMap::<&str, usize>::new();
@@ -2558,6 +2562,41 @@ fn log_song_lua_runtime_debug(
                 .map(|(message, count)| format!("{message}x{count}"))
                 .collect::<Vec<_>>()
                 .join(", ")
+        );
+    }
+    if !compiled.info.skipped_message_command_captures.is_empty() {
+        debug!(
+            "Song lua skipped message command captures for '{}': {}",
+            song_title,
+            compiled.info.skipped_message_command_captures.join(" | ")
+        );
+    }
+    if !compiled
+        .info
+        .unsupported_function_action_captures
+        .is_empty()
+    {
+        debug!(
+            "Song lua unsupported function action captures for '{}': {}",
+            song_title,
+            compiled
+                .info
+                .unsupported_function_action_captures
+                .join(" | ")
+        );
+    }
+    if !compiled.info.unsupported_function_ease_captures.is_empty() {
+        debug!(
+            "Song lua unsupported function ease captures for '{}': {}",
+            song_title,
+            compiled.info.unsupported_function_ease_captures.join(" | ")
+        );
+    }
+    if !compiled.info.unsupported_perframe_captures.is_empty() {
+        debug!(
+            "Song lua unsupported perframe captures for '{}': {}",
+            song_title,
+            compiled.info.unsupported_perframe_captures.join(" | ")
         );
     }
 

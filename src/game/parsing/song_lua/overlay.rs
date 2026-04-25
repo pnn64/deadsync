@@ -1,4 +1,5 @@
-use crate::engine::present::actors::TextAlign;
+use crate::engine::gfx::TexturedMeshVertex;
+use crate::engine::present::actors::{TextAlign, TextAttribute};
 use crate::engine::present::anim::{EffectClock, EffectMode};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -23,7 +24,7 @@ pub enum SongLuaOverlayBlendMode {
     Subtract,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum SongLuaOverlayKind {
     ActorFrame,
     ActorFrameTexture,
@@ -41,8 +42,56 @@ pub enum SongLuaOverlayKind {
         font_path: PathBuf,
         text: Arc<str>,
         stroke_color: Option<[f32; 4]>,
+        attributes: Arc<[TextAttribute]>,
+    },
+    ActorMultiVertex {
+        vertices: Arc<[SongLuaOverlayMeshVertex]>,
+        texture_path: Option<PathBuf>,
+    },
+    Model {
+        layers: Arc<[SongLuaOverlayModelLayer]>,
+    },
+    SongMeterDisplay {
+        stream_width: f32,
+        stream_state: SongLuaOverlayState,
+        music_length_seconds: f32,
+    },
+    GraphDisplay {
+        size: [f32; 2],
+        body_values: Arc<[f32]>,
+        body_state: SongLuaOverlayState,
+        line_state: SongLuaOverlayState,
     },
     Quad,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SongLuaOverlayMeshVertex {
+    pub pos: [f32; 2],
+    pub color: [f32; 4],
+    pub uv: [f32; 2],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SongLuaOverlayModelDraw {
+    pub pos: [f32; 3],
+    pub rot: [f32; 3],
+    pub zoom: [f32; 3],
+    pub tint: [f32; 4],
+    pub vert_align: f32,
+    pub blend_add: bool,
+    pub visible: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct SongLuaOverlayModelLayer {
+    pub texture_key: Arc<str>,
+    pub vertices: Arc<[TexturedMeshVertex]>,
+    pub model_size: [f32; 2],
+    pub uv_scale: [f32; 2],
+    pub uv_offset: [f32; 2],
+    pub uv_tex_shift: [f32; 2],
+    pub draw: SongLuaOverlayModelDraw,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -61,6 +110,7 @@ pub struct SongLuaOverlayState {
     pub fov: Option<f32>,
     pub vanishpoint: Option<[f32; 2]>,
     pub diffuse: [f32; 4],
+    pub vertex_colors: Option<[[f32; 4]; 4]>,
     pub visible: bool,
     pub cropleft: f32,
     pub cropright: f32,
@@ -72,6 +122,7 @@ pub struct SongLuaOverlayState {
     pub fadebottom: f32,
     pub mask_source: bool,
     pub mask_dest: bool,
+    pub depth_test: bool,
     pub zoom: f32,
     pub zoom_x: f32,
     pub zoom_y: f32,
@@ -94,6 +145,8 @@ pub struct SongLuaOverlayState {
     pub effect_period: f32,
     pub effect_offset: f32,
     pub effect_timing: Option<[f32; 5]>,
+    pub rainbow: bool,
+    pub rainbow_scroll: bool,
     pub sprite_animate: bool,
     pub sprite_loop: bool,
     pub sprite_playback_rate: f32,
@@ -106,6 +159,7 @@ pub struct SongLuaOverlayState {
     pub max_height: Option<f32>,
     pub max_w_pre_zoom: bool,
     pub max_h_pre_zoom: bool,
+    pub texture_filtering: bool,
     pub texture_wrapping: bool,
     pub texcoord_offset: Option<[f32; 2]>,
     pub custom_texture_rect: Option<[f32; 4]>,
@@ -131,6 +185,7 @@ impl Default for SongLuaOverlayState {
             fov: None,
             vanishpoint: None,
             diffuse: [1.0, 1.0, 1.0, 1.0],
+            vertex_colors: None,
             visible: true,
             cropleft: 0.0,
             cropright: 0.0,
@@ -142,6 +197,7 @@ impl Default for SongLuaOverlayState {
             fadebottom: 0.0,
             mask_source: false,
             mask_dest: false,
+            depth_test: false,
             zoom: 1.0,
             zoom_x: 1.0,
             zoom_y: 1.0,
@@ -164,6 +220,8 @@ impl Default for SongLuaOverlayState {
             effect_period: 1.0,
             effect_offset: 0.0,
             effect_timing: None,
+            rainbow: false,
+            rainbow_scroll: false,
             sprite_animate: false,
             sprite_loop: true,
             sprite_playback_rate: 1.0,
@@ -176,6 +234,7 @@ impl Default for SongLuaOverlayState {
             max_height: None,
             max_w_pre_zoom: false,
             max_h_pre_zoom: false,
+            texture_filtering: true,
             texture_wrapping: false,
             texcoord_offset: None,
             custom_texture_rect: None,
@@ -202,6 +261,7 @@ pub struct SongLuaOverlayStateDelta {
     pub fov: Option<f32>,
     pub vanishpoint: Option<[f32; 2]>,
     pub diffuse: Option<[f32; 4]>,
+    pub vertex_colors: Option<[[f32; 4]; 4]>,
     pub visible: Option<bool>,
     pub cropleft: Option<f32>,
     pub cropright: Option<f32>,
@@ -213,6 +273,7 @@ pub struct SongLuaOverlayStateDelta {
     pub fadebottom: Option<f32>,
     pub mask_source: Option<bool>,
     pub mask_dest: Option<bool>,
+    pub depth_test: Option<bool>,
     pub zoom: Option<f32>,
     pub zoom_x: Option<f32>,
     pub zoom_y: Option<f32>,
@@ -235,6 +296,8 @@ pub struct SongLuaOverlayStateDelta {
     pub effect_period: Option<f32>,
     pub effect_offset: Option<f32>,
     pub effect_timing: Option<[f32; 5]>,
+    pub rainbow: Option<bool>,
+    pub rainbow_scroll: Option<bool>,
     pub sprite_animate: Option<bool>,
     pub sprite_loop: Option<bool>,
     pub sprite_playback_rate: Option<f32>,
@@ -246,6 +309,7 @@ pub struct SongLuaOverlayStateDelta {
     pub max_height: Option<f32>,
     pub max_w_pre_zoom: Option<bool>,
     pub max_h_pre_zoom: Option<bool>,
+    pub texture_filtering: Option<bool>,
     pub texture_wrapping: Option<bool>,
     pub texcoord_offset: Option<[f32; 2]>,
     pub custom_texture_rect: Option<[f32; 4]>,
@@ -270,7 +334,7 @@ pub struct SongLuaOverlayMessageCommand {
     pub blocks: Vec<SongLuaOverlayCommandBlock>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct SongLuaOverlayActor {
     pub kind: SongLuaOverlayKind,
     pub name: Option<String>,
@@ -372,6 +436,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.diffuse {
         state.diffuse = value;
     }
+    if let Some(value) = delta.vertex_colors {
+        state.vertex_colors = Some(value);
+    }
     if let Some(value) = delta.visible {
         state.visible = value;
     }
@@ -404,6 +471,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     }
     if let Some(value) = delta.mask_dest {
         state.mask_dest = value;
+    }
+    if let Some(value) = delta.depth_test {
+        state.depth_test = value;
     }
     if let Some(value) = delta.zoom {
         state.zoom = value;
@@ -471,6 +541,12 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.effect_timing {
         state.effect_timing = Some(value);
     }
+    if let Some(value) = delta.rainbow {
+        state.rainbow = value;
+    }
+    if let Some(value) = delta.rainbow_scroll {
+        state.rainbow_scroll = value;
+    }
     if let Some(value) = delta.sprite_animate {
         state.sprite_animate = value;
     }
@@ -503,6 +579,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     }
     if let Some(value) = delta.max_h_pre_zoom {
         state.max_h_pre_zoom = value;
+    }
+    if let Some(value) = delta.texture_filtering {
+        state.texture_filtering = value;
     }
     if let Some(value) = delta.texture_wrapping {
         state.texture_wrapping = value;
@@ -588,6 +667,18 @@ fn overlay_state_lerp(
         for i in 0..4 {
             from.diffuse[i] = (to.diffuse[i] - from.diffuse[i]).mul_add(t, from.diffuse[i]);
         }
+    }
+    if delta.vertex_colors.is_some() {
+        let mut from_colors = from.vertex_colors.unwrap_or([[1.0, 1.0, 1.0, 1.0]; 4]);
+        let to_colors = to.vertex_colors.unwrap_or([[1.0, 1.0, 1.0, 1.0]; 4]);
+        for corner in 0..4 {
+            for channel in 0..4 {
+                from_colors[corner][channel] =
+                    (to_colors[corner][channel] - from_colors[corner][channel])
+                        .mul_add(t, from_colors[corner][channel]);
+            }
+        }
+        from.vertex_colors = Some(from_colors);
     }
     if delta.cropleft.is_some() {
         from.cropleft = (to.cropleft - from.cropleft).mul_add(t, from.cropleft);
@@ -782,6 +873,12 @@ fn overlay_state_lerp(
     if delta.effect_mode.is_some() && t >= 1.0 - f32::EPSILON {
         from.effect_mode = to.effect_mode;
     }
+    if delta.rainbow.is_some() && t >= 1.0 - f32::EPSILON {
+        from.rainbow = to.rainbow;
+    }
+    if delta.rainbow_scroll.is_some() && t >= 1.0 - f32::EPSILON {
+        from.rainbow_scroll = to.rainbow_scroll;
+    }
     if delta.sprite_animate.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_animate = to.sprite_animate;
     }
@@ -790,6 +887,12 @@ fn overlay_state_lerp(
     }
     if delta.texture_wrapping.is_some() && t >= 1.0 - f32::EPSILON {
         from.texture_wrapping = to.texture_wrapping;
+    }
+    if delta.texture_filtering.is_some() && t >= 1.0 - f32::EPSILON {
+        from.texture_filtering = to.texture_filtering;
+    }
+    if delta.depth_test.is_some() && t >= 1.0 - f32::EPSILON {
+        from.depth_test = to.depth_test;
     }
     from
 }
@@ -874,6 +977,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.fov.is_none()
         && delta.vanishpoint.is_none()
         && delta.diffuse.is_none()
+        && delta.vertex_colors.is_none()
         && delta.visible.is_none()
         && delta.cropleft.is_none()
         && delta.cropright.is_none()
@@ -885,6 +989,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.fadebottom.is_none()
         && delta.mask_source.is_none()
         && delta.mask_dest.is_none()
+        && delta.depth_test.is_none()
         && delta.zoom.is_none()
         && delta.zoom_x.is_none()
         && delta.zoom_y.is_none()
@@ -907,6 +1012,8 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.effect_period.is_none()
         && delta.effect_offset.is_none()
         && delta.effect_timing.is_none()
+        && delta.rainbow.is_none()
+        && delta.rainbow_scroll.is_none()
         && delta.sprite_animate.is_none()
         && delta.sprite_loop.is_none()
         && delta.sprite_playback_rate.is_none()
@@ -918,6 +1025,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.max_height.is_none()
         && delta.max_w_pre_zoom.is_none()
         && delta.max_h_pre_zoom.is_none()
+        && delta.texture_filtering.is_none()
         && delta.texture_wrapping.is_none()
         && delta.texcoord_offset.is_none()
         && delta.custom_texture_rect.is_none()
@@ -1002,6 +1110,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.mask_dest.is_some() {
         into.mask_dest = from.mask_dest;
     }
+    if from.depth_test.is_some() {
+        into.depth_test = from.depth_test;
+    }
     if from.halign.is_some() {
         into.halign = from.halign;
     }
@@ -1019,6 +1130,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.glow.is_some() {
         into.glow = from.glow;
+    }
+    if from.vertex_colors.is_some() {
+        into.vertex_colors = from.vertex_colors;
     }
     if from.zoom.is_some() {
         into.zoom = from.zoom;
@@ -1086,6 +1200,12 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.effect_timing.is_some() {
         into.effect_timing = from.effect_timing;
     }
+    if from.rainbow.is_some() {
+        into.rainbow = from.rainbow;
+    }
+    if from.rainbow_scroll.is_some() {
+        into.rainbow_scroll = from.rainbow_scroll;
+    }
     if from.sprite_animate.is_some() {
         into.sprite_animate = from.sprite_animate;
     }
@@ -1118,6 +1238,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.max_h_pre_zoom.is_some() {
         into.max_h_pre_zoom = from.max_h_pre_zoom;
+    }
+    if from.texture_filtering.is_some() {
+        into.texture_filtering = from.texture_filtering;
     }
     if from.texture_wrapping.is_some() {
         into.texture_wrapping = from.texture_wrapping;
@@ -1177,6 +1300,7 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(fov);
     copy_pair!(vanishpoint);
     copy_pair!(diffuse);
+    copy_pair!(vertex_colors);
     copy_pair!(visible);
     copy_pair!(cropleft);
     copy_pair!(cropright);
@@ -1188,6 +1312,7 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(fadebottom);
     copy_pair!(mask_source);
     copy_pair!(mask_dest);
+    copy_pair!(depth_test);
     copy_pair!(zoom);
     copy_pair!(zoom_x);
     copy_pair!(zoom_y);
@@ -1210,6 +1335,8 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(effect_period);
     copy_pair!(effect_offset);
     copy_pair!(effect_timing);
+    copy_pair!(rainbow);
+    copy_pair!(rainbow_scroll);
     copy_pair!(sprite_animate);
     copy_pair!(sprite_loop);
     copy_pair!(sprite_playback_rate);
@@ -1221,6 +1348,7 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(max_height);
     copy_pair!(max_w_pre_zoom);
     copy_pair!(max_h_pre_zoom);
+    copy_pair!(texture_filtering);
     copy_pair!(texture_wrapping);
     copy_pair!(texcoord_offset);
     copy_pair!(custom_texture_rect);
