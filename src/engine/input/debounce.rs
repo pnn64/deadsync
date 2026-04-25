@@ -72,6 +72,11 @@ impl DebounceStore {
         if needed > 0 {
             self.slots.reserve(needed);
         }
+        let due_cap = cap.saturating_mul(2);
+        let needed = due_cap.saturating_sub(self.due_slots.capacity());
+        if needed > 0 {
+            self.due_slots.reserve(needed);
+        }
     }
 
     #[inline(always)]
@@ -396,6 +401,14 @@ mod tests {
         assert_eq!(edge.timestamp_host_nanos, timestamp_host_nanos);
         assert_eq!(edge.stored_at, stored_at);
         assert_eq!(edge.emitted_at, emitted_at);
+    }
+
+    #[test]
+    fn clear_and_reserve_presizes_due_queue_with_stale_slack() {
+        let mut store = DebounceStore::new();
+        store.clear_and_reserve(8);
+        assert!(store.slots.capacity() >= 8);
+        assert!(store.due_slots.capacity() >= 16);
     }
 
     #[test]

@@ -7691,7 +7691,13 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     }
                 }
                 OptionsView::Submenu(kind) => {
-                    move_submenu_selection_vertical(state, asset_manager, kind, direction, NavWrap::Clamp);
+                    move_submenu_selection_vertical(
+                        state,
+                        asset_manager,
+                        kind,
+                        direction,
+                        NavWrap::Clamp,
+                    );
                     state.nav_key_last_scrolled_at = Some(now);
                 }
             }
@@ -7709,7 +7715,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             && matches!(state.view, OptionsView::Submenu(_))
         {
             if pending_action.is_none() {
-                pending_action = apply_submenu_choice_delta(state, asset_manager, delta_lr, NavWrap::Clamp);
+                pending_action =
+                    apply_submenu_choice_delta(state, asset_manager, delta_lr, NavWrap::Clamp);
             } else {
                 apply_submenu_choice_delta(state, asset_manager, delta_lr, NavWrap::Clamp);
             }
@@ -8446,7 +8453,13 @@ fn undo_three_key_selection(state: &mut State, asset_manager: &AssetManager) {
                 }
             }
             OptionsView::Submenu(kind) => {
-                move_submenu_selection_vertical(state, asset_manager, kind, NavDirection::Down, NavWrap::Wrap);
+                move_submenu_selection_vertical(
+                    state,
+                    asset_manager,
+                    kind,
+                    NavDirection::Down,
+                    NavWrap::Wrap,
+                );
             }
         },
         -1 => match state.view {
@@ -8461,7 +8474,13 @@ fn undo_three_key_selection(state: &mut State, asset_manager: &AssetManager) {
                 }
             }
             OptionsView::Submenu(kind) => {
-                move_submenu_selection_vertical(state, asset_manager, kind, NavDirection::Up, NavWrap::Wrap);
+                move_submenu_selection_vertical(
+                    state,
+                    asset_manager,
+                    kind,
+                    NavDirection::Up,
+                    NavWrap::Wrap,
+                );
             }
         },
         _ => {}
@@ -8759,7 +8778,8 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                 }
             }
             if screen_input::dedicated_three_key_nav_enabled()
-                && let Some(action) = apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap)
+                && let Some(action) =
+                    apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap)
             {
                 return action;
             }
@@ -9114,7 +9134,9 @@ pub fn handle_input(
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
             if ev.pressed {
-                if let Some(action) = apply_submenu_choice_delta(state, asset_manager, -1, NavWrap::Wrap) {
+                if let Some(action) =
+                    apply_submenu_choice_delta(state, asset_manager, -1, NavWrap::Wrap)
+                {
                     on_lr_press(state, -1);
                     return action;
                 }
@@ -9128,7 +9150,9 @@ pub fn handle_input(
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
             if ev.pressed {
-                if let Some(action) = apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap) {
+                if let Some(action) =
+                    apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap)
+                {
                     on_lr_press(state, 1);
                     return action;
                 }

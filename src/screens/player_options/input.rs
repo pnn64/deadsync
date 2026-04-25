@@ -541,7 +541,13 @@ pub(super) fn move_arcade_horizontal_focus(
         if current_choice == 0 {
             audio::play_sfx("assets/sounds/change_value.ogg");
         } else {
-            change_choice_for_player(state, asset_manager, idx, -(current_choice as isize), NavWrap::Wrap);
+            change_choice_for_player(
+                state,
+                asset_manager,
+                idx,
+                -(current_choice as isize),
+                NavWrap::Wrap,
+            );
         }
         return true;
     }
@@ -573,7 +579,14 @@ pub(super) fn handle_arcade_prev_event(
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let prev_row = state.pane().selected_row[idx];
     clear_nav_hold(state, player_idx);
-    move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up, NavWrap::Wrap);
+    move_selection_vertical(
+        state,
+        asset_manager,
+        active,
+        player_idx,
+        NavDirection::Up,
+        NavWrap::Wrap,
+    );
     if state.pane().selected_row[idx] != prev_row {
         audio::play_sfx("assets/sounds/prev_row.ogg");
         state.help_anim_time[idx] = 0.0;
@@ -606,7 +619,14 @@ pub(super) fn handle_arcade_start_event(
         state.pane_mut().arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
         return action;
     }
-    move_selection_vertical(state, asset_manager, active, idx, NavDirection::Down, NavWrap::Wrap);
+    move_selection_vertical(
+        state,
+        asset_manager,
+        active,
+        idx,
+        NavDirection::Down,
+        NavWrap::Wrap,
+    );
     state.pane_mut().arcade_row_focus[idx] =
         row_allows_arcade_next_row(state, state.pane().selected_row[idx]);
     None
