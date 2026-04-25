@@ -68,15 +68,9 @@ impl DebounceStore {
         self.slots.clear();
         self.due_slots.clear();
         self.active_len = 0;
-        let needed = cap.saturating_sub(self.slots.capacity());
-        if needed > 0 {
-            self.slots.reserve(needed);
-        }
+        self.slots.reserve(cap);
         let due_cap = cap.saturating_mul(2);
-        let needed = due_cap.saturating_sub(self.due_slots.capacity());
-        if needed > 0 {
-            self.due_slots.reserve(needed);
-        }
+        self.due_slots.reserve(due_cap);
     }
 
     #[inline(always)]
@@ -409,6 +403,10 @@ mod tests {
         store.clear_and_reserve(8);
         assert!(store.slots.capacity() >= 8);
         assert!(store.due_slots.capacity() >= 16);
+
+        store.clear_and_reserve(16);
+        assert!(store.slots.capacity() >= 16);
+        assert!(store.due_slots.capacity() >= 32);
     }
 
     #[test]
