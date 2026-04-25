@@ -735,6 +735,21 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
             ))?))
         })?,
     )?;
+    globals.set(
+        "Var",
+        lua.create_function(|lua, args: MultiValue| {
+            let name = args
+                .front()
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            if name == "GameCommand" {
+                return Ok(Value::Table(create_game_command_table(lua)?));
+            }
+            Ok(Value::String(lua.create_string(&name)?))
+        })?,
+    )?;
+    globals.set("ActorUtil", create_actor_util_table(lua, song_dir)?)?;
     let find_files_song_dir = song_dir.to_path_buf();
     globals.set(
         "findFiles",
@@ -1442,6 +1457,85 @@ fn find_compat_files(lua: &Lua, song_dir: &Path, args: &MultiValue) -> mlua::Res
     for (index, file) in files.into_iter().enumerate() {
         table.raw_set(index + 1, file)?;
     }
+    Ok(table)
+}
+
+fn create_actor_util_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let resolve_song_dir = song_dir.to_path_buf();
+    table.set(
+        "ResolvePath",
+        lua.create_function(move |lua, args: MultiValue| {
+            let Some(path) = args.front().cloned().and_then(read_string) else {
+                return Ok(Value::Nil);
+            };
+            let resolved = resolve_compat_path(&resolve_song_dir, &path);
+            let out = if resolved.exists() {
+                file_path_string(resolved.as_path())
+            } else {
+                path
+            };
+            Ok(Value::String(lua.create_string(&out)?))
+        })?,
+    )?;
+    table.set(
+        "GetFileType",
+        lua.create_function(|lua, args: MultiValue| {
+            let file_type = args
+                .front()
+                .cloned()
+                .and_then(read_string)
+                .map(|path| actor_util_file_type(&path))
+                .unwrap_or("FileType_Unknown");
+            Ok(Value::String(lua.create_string(file_type)?))
+        })?,
+    )?;
+    table.set(
+        "LoadAllCommandsAndSetXY",
+        lua.create_function(|lua, args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(args.front().cloned().unwrap_or(Value::Nil))
+        })?,
+    )?;
+    Ok(table)
+}
+
+fn actor_util_file_type(path: &str) -> &'static str {
+    let path = Path::new(path);
+    if path.is_dir() {
+        return "FileType_Directory";
+    }
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp") => "FileType_Bitmap",
+        Some("mp4" | "avi" | "mov" | "mkv" | "webm" | "mpeg" | "mpg") => "FileType_Movie",
+        Some("ogg" | "oga" | "mp3" | "wav" | "flac" | "opus") => "FileType_Sound",
+        Some("lua") => "FileType_Lua",
+        Some("xml" | "ini" | "txt" | "json" | "ssc" | "sm") => "FileType_Text",
+        _ => "FileType_Unknown",
+    }
+}
+
+fn create_game_command_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set(
+        "GetIndex",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    for name in ["GetText", "GetName", "GetScreen", "GetIcon"] {
+        set_string_method(lua, &table, name, "")?;
+    }
+    table.set(
+        "ApplyToStyle",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
     Ok(table)
 }
 
@@ -2602,6 +2696,8 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("DISPLAY", create_display_table(lua, context)?)?;
     globals.set("THEME", create_theme_table(lua)?)?;
     globals.set("GAMEMAN", create_gameman_table(lua)?)?;
+    globals.set("MEMCARDMAN", create_memcardman_table(lua)?)?;
+    globals.set("UNLOCKMAN", create_unlockman_table(lua)?)?;
     globals.set("NOTESKIN", create_noteskin_table(lua, context)?)?;
     globals.set("SongUtil", create_song_util_table(lua)?)?;
     globals.set(
@@ -2789,6 +2885,18 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
                 return Ok(Value::Nil);
             };
             Ok(Value::Table(player_states[player].clone()))
+        })?,
+    )?;
+    let global_player_states = players.player_states.clone();
+    globals.set(
+        "GetPlayerOptionsString",
+        lua.create_function(move |_, args: MultiValue| {
+            let Some(player) = args.front().and_then(player_index_from_value) else {
+                return Ok(String::new());
+            };
+            Ok(global_player_states[player]
+                .get::<Option<String>>("__songlua_player_options_string")?
+                .unwrap_or_default())
         })?,
     )?;
     let current_steps = lua.create_table()?;
@@ -4844,6 +4952,14 @@ fn create_top_screen_table(
         lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
     )?;
     top_screen.set(
+        "GetNumRows",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    top_screen.set(
+        "GetOptionRow",
+        lua.create_function(|lua, _args: MultiValue| create_option_row_table(lua))?,
+    )?;
+    top_screen.set(
         "IsPaused",
         lua.create_function({
             let top_screen = top_screen.clone();
@@ -4884,6 +5000,7 @@ fn create_top_screen_table(
         "PostScreenMessage",
         "SetProfileIndex",
         "Cancel",
+        "Continue",
         "Finish",
         "Load",
         "begin_backing_out",
@@ -4918,6 +5035,12 @@ fn create_music_wheel_table(lua: &Lua, current_sort_order: Table) -> mlua::Resul
     wheel.set(
         "GetSelectedSong",
         lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+    )?;
+    wheel.set(
+        "GetSelectedType",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string("WheelItemDataType_Song")?))
+        })?,
     )?;
     wheel.set(
         "GetSortOrder",
@@ -4955,7 +5078,27 @@ fn create_music_wheel_table(lua: &Lua, current_sort_order: Table) -> mlua::Resul
             }
         })?,
     )?;
+    wheel.set(
+        "Move",
+        lua.create_function({
+            let wheel = wheel.clone();
+            move |lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(wheel.clone())
+            }
+        })?,
+    )?;
     Ok(wheel)
+}
+
+fn create_option_row_table(lua: &Lua) -> mlua::Result<Table> {
+    let row = create_dummy_actor(lua, "OptionRow")?;
+    set_string_method(lua, &row, "GetName", "")?;
+    row.set(
+        "GetChoiceInRowWithFocus",
+        lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
+    )?;
+    Ok(row)
 }
 
 fn create_top_screen_player_actor(
@@ -5728,6 +5871,43 @@ fn create_display_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Res
     Ok(display)
 }
 
+fn create_memcardman_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set(
+        "GetCardState",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string("MemoryCardState_none")?))
+        })?,
+    )?;
+    table.set(
+        "GetName",
+        lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
+    )?;
+    for name in ["MountCard", "UnmountCard"] {
+        table.set(
+            name,
+            lua.create_function(|lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(false)
+            })?,
+        )?;
+    }
+    Ok(table)
+}
+
+fn create_unlockman_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set(
+        "IsSongLocked",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    table.set(
+        "IsCourseLocked",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    Ok(table)
+}
+
 fn create_noteskin_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let noteskin = lua.create_table()?;
     let default_noteskin = song_lua_default_noteskin_name(context);
@@ -6015,8 +6195,20 @@ fn create_player_state_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::R
         })?,
     )?;
     table.set(
+        "GetPlayerOptionsArray",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(owner) = args.front().and_then(|value| match value {
+                Value::Table(table) => Some(table.clone()),
+                _ => None,
+            }) else {
+                return lua.create_table();
+            };
+            create_player_options_array(lua, &owner)
+        })?,
+    )?;
+    table.set(
         "SetPlayerOptions",
-        lua.create_function(|_, args: MultiValue| {
+        lua.create_function(|lua, args: MultiValue| {
             let Some(owner) = args.front().and_then(|value| match value {
                 Value::Table(table) => Some(table.clone()),
                 _ => None,
@@ -6028,9 +6220,26 @@ fn create_player_state_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::R
                 .and_then(read_string)
                 .unwrap_or_default();
             owner.set("__songlua_player_options_string", options)?;
+            note_song_lua_side_effect(lua)?;
             Ok(())
         })?,
     )?;
+    Ok(table)
+}
+
+fn create_player_options_array(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
+    let text = owner
+        .get::<Option<String>>("__songlua_player_options_string")?
+        .unwrap_or_default();
+    let table = lua.create_table()?;
+    for (index, option) in text
+        .split(',')
+        .map(str::trim)
+        .filter(|option| !option.is_empty())
+        .enumerate()
+    {
+        table.raw_set(index + 1, option)?;
+    }
     Ok(table)
 }
 
@@ -6430,6 +6639,24 @@ fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
         "MusicLengthSeconds",
         lua.create_function(move |_, _args: MultiValue| Ok(music_length_seconds))?,
     )?;
+    table.set(
+        "GetFirstSecond",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "GetLastSecond",
+        lua.create_function(move |_, _args: MultiValue| Ok(music_length_seconds))?,
+    )?;
+    table.set(
+        "GetFirstBeat",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    let last_beat = music_length_seconds * context.song_display_bpms[1].max(0.0) / 60.0;
+    table.set(
+        "GetLastBeat",
+        lua.create_function(move |_, _args: MultiValue| Ok(last_beat))?,
+    )?;
+    set_string_method(lua, &table, "GetOrTryAtLeastToGetSimfileAuthor", "")?;
     table.set(
         "GetStageCost",
         lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
@@ -19393,6 +19620,71 @@ return Def.ActorFrame{}
             SongLuaCompileContext::new(&song_dir, "Theme Support BPM Profile Helpers");
         context.song_display_bpms = [120.0, 180.0];
         context.music_length_seconds = 123.0;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert!(compiled.messages.is_empty());
+        assert!(compiled.overlays.is_empty());
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_theme_menu_manager_helpers() {
+        let song_dir = test_dir("theme-menu-manager-helpers");
+        fs::write(song_dir.join("logo.png"), "").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local top = SCREENMAN:GetTopScreen()
+local wheel = top:GetMusicWheel()
+assert(wheel:GetSelectedType() == "WheelItemDataType_Song")
+assert(wheel:Move(1) == wheel)
+assert(wheel:Move(-1) == wheel)
+assert(MEMCARDMAN:GetCardState(PLAYER_1) == "MemoryCardState_none")
+assert(MEMCARDMAN:GetName(PLAYER_1) == "")
+assert(UNLOCKMAN:IsSongLocked(GAMESTATE:GetCurrentSong()) == 0)
+assert(UNLOCKMAN:IsCourseLocked(GAMESTATE:GetCurrentCourse()) == 0)
+
+local song = GAMESTATE:GetCurrentSong()
+assert(song:GetFirstSecond() == 0)
+assert(song:GetLastSecond() == 90)
+assert(song:GetFirstBeat() == 0)
+assert(song:GetLastBeat() == 180)
+assert(song:GetOrTryAtLeastToGetSimfileAuthor() == "")
+
+local resolved = ActorUtil.ResolvePath("logo.png", 1, true)
+assert(ActorUtil.GetFileType(resolved) == "FileType_Bitmap")
+assert(ActorUtil.GetFileType("sound.ogg") == "FileType_Sound")
+assert(ActorUtil.GetFileType("clip.mp4") == "FileType_Movie")
+assert(ActorUtil.GetFileType("notes.ssc") == "FileType_Text")
+local gamecommand = Var("GameCommand")
+assert(gamecommand:GetIndex() == 0 and gamecommand:GetText() == "")
+assert(Var("LoadingScreen") == "LoadingScreen")
+
+local ps = GAMESTATE:GetPlayerState(PLAYER_1)
+ps:SetPlayerOptions("ModsLevel_Preferred", "1x, Overhead, 50% Mini")
+local options = ps:GetPlayerOptionsArray("ModsLevel_Preferred")
+assert(#options == 3 and options[2] == "Overhead")
+assert(GetPlayerOptionsString(PLAYER_1) == "1x, Overhead, 50% Mini")
+
+mod_actions = {
+    {1, function()
+        top:Continue()
+        top:GetOptionRow(1):GetChoiceInRowWithFocus(PLAYER_1)
+        ActorUtil.LoadAllCommandsAndSetXY(Def.Actor{}, Var("LoadingScreen"))
+        MEMCARDMAN:MountCard(PLAYER_1)
+        MEMCARDMAN:UnmountCard(PLAYER_1)
+        wheel:Move(0)
+    end, true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Theme Menu Manager Helpers");
+        context.song_display_bpms = [120.0, 120.0];
+        context.music_length_seconds = 90.0;
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.info.unsupported_function_actions, 0);
         assert!(compiled.messages.is_empty());
