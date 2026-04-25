@@ -3,10 +3,11 @@ use super::*;
 #[cfg(test)]
 pub(super) mod tests {
     use super::{
-        ErrorBarMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask,
-        NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, P1, P2, PlayerOptionMasks, Row, RowId,
-        RowMap, ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event,
-        hud_offset_choices, is_row_visible, judgment_tilt_intensity_visible,
+        BitmaskBinding, BitmaskInit, CursorInit, ErrorBarMask, FaPlusMask, GameplayExtrasMask,
+        GameplayExtrasMoreMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask,
+        NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, P1, P2, PlayerOptionMasks, Row,
+        RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event,
+        handle_start_event, hud_offset_choices, is_row_visible, judgment_tilt_intensity_visible,
         repeat_held_arcade_start, row_visibility, session_active_players,
         sync_profile_scroll_speed,
     };
@@ -38,6 +39,24 @@ pub(super) mod tests {
             name,
             choices: choices.iter().map(ToString::to_string).collect(),
             selected_choice_index,
+            help: Vec::new(),
+            choice_difficulty_indices: None,
+            mirror_across_players: false,
+        }
+    }
+
+    fn test_bitmask_row(
+        id: RowId,
+        name: LookupKey,
+        choices: &[&str],
+        binding: BitmaskBinding,
+    ) -> Row {
+        Row {
+            id,
+            behavior: RowBehavior::Bitmask(binding),
+            name,
+            choices: choices.iter().map(ToString::to_string).collect(),
+            selected_choice_index: [0, 0],
             help: Vec::new(),
             choice_difficulty_indices: None,
             mirror_across_players: false,
@@ -300,11 +319,41 @@ pub(super) mod tests {
             &["Exit"],
             [0, 0],
         )]);
-        let mut advanced_rows = test_row_map(vec![test_row(
+        let scroll_binding = BitmaskBinding {
+            toggle: super::super::choice::toggle_scroll_row,
+            init: Some(BitmaskInit {
+                from_profile: |p| {
+                    use crate::game::profile::ScrollOption;
+                    let mut bits = ScrollMask::empty();
+                    if p.scroll_option.contains(ScrollOption::Reverse) {
+                        bits.insert(ScrollMask::from_bits_retain(1 << 0));
+                    }
+                    if p.scroll_option.contains(ScrollOption::Split) {
+                        bits.insert(ScrollMask::from_bits_retain(1 << 1));
+                    }
+                    if p.scroll_option.contains(ScrollOption::Alternate) {
+                        bits.insert(ScrollMask::from_bits_retain(1 << 2));
+                    }
+                    if p.scroll_option.contains(ScrollOption::Cross) {
+                        bits.insert(ScrollMask::from_bits_retain(1 << 3));
+                    }
+                    if p.scroll_option.contains(ScrollOption::Centered) {
+                        bits.insert(ScrollMask::from_bits_retain(1 << 4));
+                    }
+                    bits.bits() as u32
+                },
+                get_active: |m| m.scroll.bits() as u32,
+                set_active: |m, b| {
+                    m.scroll = ScrollMask::from_bits_retain(b as u8);
+                },
+                cursor: CursorInit::FirstActiveBit,
+            }),
+        };
+        let mut advanced_rows = test_row_map(vec![test_bitmask_row(
             RowId::Scroll,
             lookup_key("PlayerOptions", "Scroll"),
             &["Reverse", "Split", "Alternate", "Cross", "Centered"],
-            [0, 0],
+            scroll_binding,
         )]);
         let mut uncommon_rows = test_row_map(vec![test_row(
             RowId::Exit,
@@ -313,21 +362,213 @@ pub(super) mod tests {
             [0, 0],
         )]);
 
-        let main = super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1);
-        let adv = super::super::panes::apply_profile_defaults(&mut advanced_rows, &profile, P1);
-        let unc = super::super::panes::apply_profile_defaults(&mut uncommon_rows, &profile, P1);
-
+        let mut main = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut main);
         // Main alone: Scroll row absent, mask comes back empty (the bug source).
         assert_eq!(main.scroll, ScrollMask::empty());
+
         // Accumulated across all three panes (the fix): Reverse + Cross preserved.
-        let combined = main.merge(adv).merge(unc);
+        let mut combined = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut combined);
+        super::super::panes::apply_profile_defaults(&mut advanced_rows, &profile, P1, &mut combined);
+        super::super::panes::apply_profile_defaults(&mut uncommon_rows, &profile, P1, &mut combined);
         assert!(
             combined.scroll.contains(ScrollMask::REVERSE),
-            "Reverse bit preserved after OR-accumulation"
+            "Reverse bit preserved after in-place accumulation"
         );
         assert!(
             combined.scroll.contains(ScrollMask::CROSS),
-            "Cross bit preserved after OR-accumulation"
+            "Cross bit preserved after in-place accumulation"
+        );
+    }
+
+    /// Regression guard: bitmask rows initialise their cursor to the
+    /// position of the first active bit. If a future refactor moves mask
+    /// init out of `apply_profile_defaults` (e.g. into a
+    /// `BitmaskBinding`-driven table), this behaviour must be preserved.
+    #[test]
+    fn init_bitmask_row_cursor_starts_at_first_active_bit() {
+        ensure_i18n();
+        let mut profile = Profile::default();
+        // Only the second Hide bit (BACKGROUND, 1 << 1) — cursor must land on
+        // choice index 1, not 0.
+        profile.hide_targets = false;
+        profile.hide_song_bg = true;
+
+        let hide_binding = BitmaskBinding {
+            toggle: super::super::choice::toggle_hide_row,
+            init: Some(BitmaskInit {
+                from_profile: |p| {
+                    let mut bits = HideMask::empty();
+                    if p.hide_targets { bits.insert(HideMask::TARGETS); }
+                    if p.hide_song_bg { bits.insert(HideMask::BACKGROUND); }
+                    if p.hide_combo { bits.insert(HideMask::COMBO); }
+                    if p.hide_lifebar { bits.insert(HideMask::LIFE); }
+                    if p.hide_score { bits.insert(HideMask::SCORE); }
+                    if p.hide_danger { bits.insert(HideMask::DANGER); }
+                    if p.hide_combo_explosions { bits.insert(HideMask::COMBO_EXPLOSIONS); }
+                    bits.bits() as u32
+                },
+                get_active: |m| m.hide.bits() as u32,
+                set_active: |m, b| {
+                    m.hide = HideMask::from_bits_retain(b as u8);
+                },
+                cursor: CursorInit::FirstActiveBit,
+            }),
+        };
+        let mut hide_rows = test_row_map(vec![test_bitmask_row(
+            RowId::Hide,
+            lookup_key("PlayerOptions", "Hide"),
+            &["Targets", "BG", "Combo", "Life", "Score", "Danger", "ComboExp"],
+            hide_binding,
+        )]);
+
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut hide_rows, &profile, P1, &mut masks);
+
+        assert_eq!(
+            masks.hide,
+            HideMask::BACKGROUND,
+            "only BACKGROUND bit should be active",
+        );
+        let row = hide_rows.get(RowId::Hide).expect("Hide row present");
+        assert_eq!(
+            row.selected_choice_index[P1], 1,
+            "cursor must start at the first active bit (BACKGROUND = index 1)",
+        );
+    }
+
+    /// Regression guard: `FAPlusOptions` is the lone bitmask row whose
+    /// cursor always starts at 0, regardless of which bits are active. Any
+    /// data-driven mask-init scheme must preserve this Fixed(0) policy.
+    #[test]
+    fn init_fa_plus_options_cursor_always_zero() {
+        ensure_i18n();
+        let mut profile = Profile::default();
+        // Activate only the second FA+ bit (EX_SCORE = 1 << 1). Under the
+        // generic FirstActiveBit policy the cursor would land on 1; FAPlus
+        // pins it to 0.
+        profile.show_fa_plus_window = false;
+        profile.show_ex_score = true;
+
+        let fa_plus_binding = BitmaskBinding {
+            toggle: super::super::choice::toggle_fa_plus_row,
+            init: Some(BitmaskInit {
+                from_profile: |p| {
+                    let mut bits = FaPlusMask::empty();
+                    if p.show_fa_plus_window { bits.insert(FaPlusMask::WINDOW); }
+                    if p.show_ex_score { bits.insert(FaPlusMask::EX_SCORE); }
+                    if p.show_hard_ex_score { bits.insert(FaPlusMask::HARD_EX_SCORE); }
+                    if p.show_fa_plus_pane { bits.insert(FaPlusMask::PANE); }
+                    if p.fa_plus_10ms_blue_window { bits.insert(FaPlusMask::BLUE_WINDOW_10MS); }
+                    if p.split_15_10ms { bits.insert(FaPlusMask::SPLIT_15_10MS); }
+                    bits.bits() as u32
+                },
+                get_active: |m| m.fa_plus.bits() as u32,
+                set_active: |m, b| {
+                    m.fa_plus = FaPlusMask::from_bits_retain(b as u8);
+                },
+                cursor: CursorInit::Fixed(0),
+            }),
+        };
+        let mut fa_plus_rows = test_row_map(vec![test_bitmask_row(
+            RowId::FAPlusOptions,
+            lookup_key("PlayerOptions", "FAPlusOptions"),
+            &["Window", "EX", "HardEX", "Pane", "Blue10", "Split"],
+            fa_plus_binding,
+        )]);
+
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut fa_plus_rows, &profile, P1, &mut masks);
+
+        assert_eq!(
+            masks.fa_plus,
+            FaPlusMask::EX_SCORE,
+            "only EX_SCORE bit should be active",
+        );
+        let row = fa_plus_rows
+            .get(RowId::FAPlusOptions)
+            .expect("FAPlusOptions row present");
+        assert_eq!(
+            row.selected_choice_index[P1], 0,
+            "FAPlusOptions cursor must be pinned to 0 even when a non-first bit is active",
+        );
+    }
+
+    /// Regression guard: `GameplayExtrasMore` is a derived mask with no
+    /// constructed Row. Its bits are populated as a side effect of the
+    /// `GameplayExtras` profile processing (`column_cues` and
+    /// `display_scorebox` toggles contribute to BOTH masks). A row-driven
+    /// mask registry must explicitly handle this derivation.
+    #[test]
+    fn init_gameplay_extras_more_derived_from_sibling_profile_fields() {
+        ensure_i18n();
+        let mut profile = Profile::default();
+        profile.column_cues = true;
+        profile.display_scorebox = true;
+
+        // No GameplayExtrasMore row exists (orphan; see the
+        // `every_row_id_is_constructed_by_some_pane` test) — we still expect
+        // the derived mask bits to be populated.
+        let gameplay_extras_binding = BitmaskBinding {
+            toggle: super::super::choice::toggle_gameplay_extras_row,
+            init: Some(BitmaskInit {
+                from_profile: |p| {
+                    let mut bits = GameplayExtrasMask::empty();
+                    if p.column_flash_on_miss {
+                        bits.insert(GameplayExtrasMask::FLASH_COLUMN_FOR_MISS);
+                    }
+                    if p.nps_graph_at_top {
+                        bits.insert(GameplayExtrasMask::DENSITY_GRAPH_AT_TOP);
+                    }
+                    if p.column_cues {
+                        bits.insert(GameplayExtrasMask::COLUMN_CUES);
+                    }
+                    if p.display_scorebox {
+                        bits.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
+                    }
+                    bits.bits() as u32
+                },
+                get_active: |m| m.gameplay_extras.bits() as u32,
+                set_active: |m, b| {
+                    m.gameplay_extras = GameplayExtrasMask::from_bits_retain(b as u8);
+                },
+                cursor: CursorInit::FirstActiveBit,
+            }),
+        };
+        let mut rows = test_row_map(vec![test_bitmask_row(
+            RowId::GameplayExtras,
+            lookup_key("PlayerOptions", "GameplayExtras"),
+            &["FlashMiss", "DensityTop", "ColumnCues", "Scorebox"],
+            gameplay_extras_binding,
+        )]);
+
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut rows, &profile, P1, &mut masks);
+
+        assert!(
+            masks
+                .gameplay_extras
+                .contains(GameplayExtrasMask::COLUMN_CUES),
+            "GameplayExtras COLUMN_CUES bit set from profile",
+        );
+        assert!(
+            masks
+                .gameplay_extras
+                .contains(GameplayExtrasMask::DISPLAY_SCOREBOX),
+            "GameplayExtras DISPLAY_SCOREBOX bit set from profile",
+        );
+        assert!(
+            masks
+                .gameplay_extras_more
+                .contains(GameplayExtrasMoreMask::COLUMN_CUES),
+            "derived GameplayExtrasMore COLUMN_CUES bit set from sibling profile field",
+        );
+        assert!(
+            masks
+                .gameplay_extras_more
+                .contains(GameplayExtrasMoreMask::DISPLAY_SCOREBOX),
+            "derived GameplayExtrasMore DISPLAY_SCOREBOX bit set from sibling profile field",
         );
     }
 
@@ -513,6 +754,7 @@ pub(super) mod tests {
             id: RowId::Scroll,
             behavior: super::RowBehavior::Bitmask(super::BitmaskBinding {
                 toggle: super::choice::toggle_scroll_row,
+                init: None,
             }),
             name: lookup_key("PlayerOptions", "Scroll"),
             choices: ["Reverse", "Split", "Alternate", "Cross", "Centered"]
@@ -807,6 +1049,7 @@ pub(super) mod tests {
             id: RowId::Scroll,
             behavior: super::RowBehavior::Bitmask(super::BitmaskBinding {
                 toggle: super::choice::toggle_scroll_row,
+                init: None,
             }),
             name: lookup_key("PlayerOptions", "Scroll"),
             choices: ["Reverse", "Split", "Alternate", "Cross", "Centered"]
