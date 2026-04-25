@@ -2959,6 +2959,10 @@ fn fold_sprite_xy_rot(
     // Sprite instances only preserve 2D rotation in the fast path. Fold SM's
     // X/Y rotations into foreshortening plus texture flips so Y=180 mirrors
     // horizontally instead of becoming an accidental in-plane 180-degree turn.
+    if rot_x_deg == 0.0 && rot_y_deg == 0.0 {
+        return (flip_x, flip_y, size_x, size_y);
+    }
+
     let cos_y = rot_y_deg.to_radians().cos();
     size_x *= cos_y.abs();
     if cos_y.is_sign_negative() {
@@ -3054,7 +3058,11 @@ fn push_sprite<'a>(
 
     let (flip_x, flip_y, size_x, size_y) =
         fold_sprite_xy_rot(flip_x, flip_y, size_x, size_y, rot_x_deg, rot_y_deg);
-    let (sin_z, cos_z) = rot_z_deg.to_radians().sin_cos();
+    let (sin_z, cos_z) = if rot_z_deg == 0.0 {
+        (0.0, 1.0)
+    } else {
+        rot_z_deg.to_radians().sin_cos()
+    };
 
     let fl = fadeleft.clamp(0.0, 1.0);
     let fr = faderight.clamp(0.0, 1.0);
