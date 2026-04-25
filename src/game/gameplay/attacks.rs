@@ -2425,6 +2425,7 @@ pub(super) fn build_song_lua_runtime_windows(
             || !overlays.is_empty()
             || !overlay_eases.is_empty()
             || !compiled.messages.is_empty()
+            || !compiled.sound_paths.is_empty()
             || compiled.info.unsupported_perframes > 0
             || compiled.info.unsupported_function_eases > 0
             || compiled.info.unsupported_function_actions > 0
@@ -2432,13 +2433,14 @@ pub(super) fn build_song_lua_runtime_windows(
             || unsupported_targets > 0
         {
             info!(
-                "Compiled gameplay lua for '{}' (constants={}, eases={}, overlay_eases={}, overlays={}, messages={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}, skipped_message_commands={}).",
+                "Compiled gameplay lua for '{}' (constants={}, eases={}, overlay_eases={}, overlays={}, messages={}, sound_assets={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}, skipped_message_commands={}).",
                 song.title,
                 total_constant,
                 total_eases,
                 overlay_eases.len(),
                 overlays.len(),
                 compiled.messages.len(),
+                compiled.sound_paths.len(),
                 unsupported_targets,
                 compiled.info.unsupported_function_eases,
                 compiled.info.unsupported_function_actions,
@@ -2548,7 +2550,7 @@ fn log_song_lua_runtime_debug(
     unsupported_targets: usize,
 ) {
     debug!(
-        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} constants={} eases={} overlay_eases={} overlays={} messages={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={} skipped_message_commands={}",
+        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} constants={} eases={} overlay_eases={} overlays={} messages={} sound_assets={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={} skipped_message_commands={}",
         song_title,
         compiled.entry_path.display(),
         compiled.screen_width,
@@ -2559,6 +2561,7 @@ fn log_song_lua_runtime_debug(
         overlay_eases.len(),
         compiled.overlays.len(),
         messages.len(),
+        compiled.sound_paths.len(),
         unsupported_targets,
         compiled.info.unsupported_function_eases,
         compiled.info.unsupported_function_actions,
@@ -2579,6 +2582,18 @@ fn log_song_lua_runtime_debug(
                 .map(|(message, count)| format!("{message}x{count}"))
                 .collect::<Vec<_>>()
                 .join(", ")
+        );
+    }
+    if !compiled.sound_paths.is_empty() {
+        debug!(
+            "Song lua sound assets for '{}': {}",
+            song_title,
+            compiled
+                .sound_paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(" | ")
         );
     }
     if !compiled.info.skipped_message_command_captures.is_empty() {

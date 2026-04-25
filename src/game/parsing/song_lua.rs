@@ -6059,7 +6059,7 @@ fn record_song_lua_sound_path(lua: &Lua, song_dir: &Path, args: &MultiValue) -> 
 
 fn create_sound_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     let sound = lua.create_table()?;
-    for name in ["DimMusic"] {
+    for name in ["DimMusic", "StopMusic"] {
         sound.set(
             name,
             lua.create_function(|lua, _args: MultiValue| {
@@ -15078,6 +15078,8 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "LoadFromSong",
         "LoadFromSongBackground",
         "backfacecull",
+        "playforplayer",
+        "position",
         "StartTransitioningScreen",
         "propagate",
         "stop",
@@ -20419,6 +20421,7 @@ sound:play():stop()
 SOUND:PlayOnce(THEME:GetPathS("", "_unlock.ogg"))
 SOUND:DimMusic(0.5, 1.0)
 SOUND:PlayMusicPart("sample.ogg", 0, 5)
+SOUND:StopMusic()
 top:SetNextScreenName("ScreenEvaluationStage")
 top:AddInputCallback(function() end):PauseGame(true):RemoveInputCallback(function() end)
 top:StartTransitioningScreen("SM_GoToNextScreen")
@@ -21676,7 +21679,7 @@ return Def.ActorFrame{
     Def.Sound{
         File="thunder.ogg",
         OnCommand=function(self)
-            self:play():pause():stop():load("rain.ogg"):volume(0.5)
+            self:play():pause():stop():playforplayer(PLAYER_1):load("rain.ogg"):volume(0.5)
         end,
     },
 }
@@ -22584,7 +22587,7 @@ return Def.ActorFrame{
         OnCommand=function(self)
             local texture = self:GetTexture()
             texture:loop(false):rate(1.5)
-            self:setstate(2):play():pause():play():diffusealpha(0.2)
+            self:setstate(2):position(0):play():pause():play():diffusealpha(0.2)
             mod_actions = {
                 {1, string.format("%.2f:%d:%d", self:GetDiffuseAlpha(), self:GetNumStates(), texture:GetNumFrames()), true},
             }
