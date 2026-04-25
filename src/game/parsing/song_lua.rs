@@ -654,6 +654,14 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
             })
         })?,
     )?;
+    table.set(
+        "rotate_right",
+        lua.create_function(|lua, args: MultiValue| rotate_lua_table(lua, &args, false))?,
+    )?;
+    table.set(
+        "rotate_left",
+        lua.create_function(|lua, args: MultiValue| rotate_lua_table(lua, &args, true))?,
+    )?;
     let string: Table = globals.get("string")?;
     if matches!(string.get::<Value>("gfind")?, Value::Nil) {
         let gmatch = string.get::<Value>("gmatch")?;
@@ -727,6 +735,36 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
             ))?))
         })?,
     )?;
+    let find_files_song_dir = song_dir.to_path_buf();
+    globals.set(
+        "findFiles",
+        lua.create_function(move |lua, args: MultiValue| {
+            find_compat_files(lua, &find_files_song_dir, &args)
+        })?,
+    )?;
+    globals.set(
+        "cleanGSub",
+        lua.create_function(|lua, args: MultiValue| {
+            let text = args
+                .front()
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            let needle = args
+                .get(1)
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            let replacement = args
+                .get(2)
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            Ok(Value::String(
+                lua.create_string(text.replace(&needle, &replacement))?,
+            ))
+        })?,
+    )?;
     globals.set(
         "range",
         lua.create_function(|lua, args: MultiValue| create_range_table(lua, &args))?,
@@ -744,6 +782,85 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     globals.set(
         "deduplicate",
         lua.create_function(|lua, table: Table| deduplicate_lua_table(lua, &table))?,
+    )?;
+    globals.set(
+        "TableToString",
+        lua.create_function(|_, args: MultiValue| Ok(lua_table_to_string(&args)))?,
+    )?;
+    globals.set(
+        "force_to_range",
+        lua.create_function(|_, (min, number, max): (f64, f64, f64)| Ok(number.clamp(min, max)))?,
+    )?;
+    globals.set(
+        "wrapped_index",
+        lua.create_function(|_, (start, offset, set_size): (i64, i64, i64)| {
+            Ok(if set_size <= 0 {
+                0
+            } else {
+                (start + offset - 1).rem_euclid(set_size) + 1
+            })
+        })?,
+    )?;
+    globals.set(
+        "GetVersionParts",
+        lua.create_function(|lua, args: MultiValue| {
+            let version = args
+                .front()
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_else(|| SONG_LUA_PRODUCT_VERSION.to_string());
+            create_version_parts_table(lua, &version)
+        })?,
+    )?;
+    globals.set(
+        "GetProductVersion",
+        lua.create_function(|lua, _args: MultiValue| {
+            create_version_parts_table(lua, SONG_LUA_PRODUCT_VERSION)
+        })?,
+    )?;
+    globals.set(
+        "IsProductVersion",
+        lua.create_function(|_, args: MultiValue| Ok(is_product_version(&args)))?,
+    )?;
+    globals.set(
+        "IsMinimumProductVersion",
+        lua.create_function(|_, args: MultiValue| Ok(is_minimum_product_version(&args)))?,
+    )?;
+    globals.set(
+        "IsITGmania",
+        lua.create_function(|_, _args: MultiValue| Ok(true))?,
+    )?;
+    globals.set(
+        "StepManiaVersionIsSupported",
+        lua.create_function(|_, _args: MultiValue| Ok(true))?,
+    )?;
+    globals.set(
+        "MinimumVersionString",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string("1.2.0")?))
+        })?,
+    )?;
+    globals.set(
+        "CurrentGameIsSupported",
+        lua.create_function(|_, _args: MultiValue| Ok(true))?,
+    )?;
+    globals.set(
+        "GetThemeVersion",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string(SONG_LUA_PRODUCT_VERSION)?))
+        })?,
+    )?;
+    globals.set(
+        "GetAuthor",
+        lua.create_function(|lua, _args: MultiValue| {
+            Ok(Value::String(
+                lua.create_string("DeadSync song-Lua compat")?,
+            ))
+        })?,
+    )?;
+    globals.set(
+        "SupportsRenderToTexture",
+        lua.create_function(|_, _args: MultiValue| Ok(true))?,
     )?;
     globals.set(
         "BackgroundFilterValues",
@@ -833,6 +950,41 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     globals.set(
         "IsGameAndMenuButton",
         lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    for name in ["LoadGuest", "LoadProfileCustom", "SaveProfileCustom"] {
+        globals.set(
+            name,
+            lua.create_function(|lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(true)
+            })?,
+        )?;
+    }
+    for name in ["GetAvatarPath", "GetPlayerAvatarPath"] {
+        globals.set(
+            name,
+            lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+        )?;
+    }
+    globals.set(
+        "getAuthorTable",
+        lua.create_function(|lua, args: MultiValue| create_author_table(lua, args.front()))?,
+    )?;
+    globals.set(
+        "courseLengthBySong",
+        lua.create_function(|lua, _args: MultiValue| lua.create_table())?,
+    )?;
+    globals.set(
+        "SecondsToHMMSS",
+        lua.create_function(|lua, seconds: f64| {
+            Ok(Value::String(
+                lua.create_string(seconds_to_hhmmss(seconds))?,
+            ))
+        })?,
+    )?;
+    globals.set(
+        "ParseChartInfo",
+        lua.create_function(|lua, args: MultiValue| parse_chart_info(lua, &args))?,
     )?;
     globals.set(
         "ivalues",
@@ -1232,6 +1384,208 @@ fn deduplicate_lua_table(lua: &Lua, table: &Table) -> mlua::Result<Table> {
         out_index += 1;
     }
     Ok(out)
+}
+
+fn rotate_lua_table(lua: &Lua, args: &MultiValue, left: bool) -> mlua::Result<Table> {
+    let Some(Value::Table(input)) = args.front() else {
+        return lua.create_table();
+    };
+    let len = input.raw_len();
+    if len == 0 {
+        return lua.create_table();
+    }
+    let shift = args.get(1).cloned().and_then(read_i32_value).unwrap_or(1) as i64;
+    let len_i64 = len as i64;
+    let out = lua.create_table()?;
+    for index in 1..=len_i64 {
+        let source = if left {
+            (index + shift - 1).rem_euclid(len_i64) + 1
+        } else {
+            (index - shift - 1).rem_euclid(len_i64) + 1
+        };
+        out.raw_set(index, input.raw_get::<Value>(source)?)?;
+    }
+    Ok(out)
+}
+
+fn find_compat_files(lua: &Lua, song_dir: &Path, args: &MultiValue) -> mlua::Result<Table> {
+    let dir = args
+        .front()
+        .cloned()
+        .and_then(read_string)
+        .unwrap_or_default();
+    let extension = args
+        .get(1)
+        .cloned()
+        .and_then(read_string)
+        .unwrap_or_else(|| "ogg".to_string())
+        .trim_start_matches('.')
+        .to_ascii_lowercase();
+    let path = resolve_compat_path(song_dir, &dir);
+    let mut files = if path.is_dir() {
+        fs::read_dir(path)
+            .map_err(mlua::Error::external)?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.extension()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.eq_ignore_ascii_case(&extension))
+            })
+            .map(|path| file_path_string(path.as_path()))
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    files.sort_unstable();
+    let table = lua.create_table()?;
+    for (index, file) in files.into_iter().enumerate() {
+        table.raw_set(index + 1, file)?;
+    }
+    Ok(table)
+}
+
+fn lua_table_to_string(args: &MultiValue) -> String {
+    let name = args
+        .get(1)
+        .cloned()
+        .and_then(read_string)
+        .unwrap_or_else(|| "Value".to_string());
+    match args.front() {
+        Some(Value::Table(table)) if table.raw_len() == 0 => format!("{name} = {{}}"),
+        Some(Value::Table(table)) => format!("{name} = {{...{} item(s)}}", table.raw_len()),
+        Some(value) => format!(
+            "{name} = {}",
+            lua_text_value(value.clone()).unwrap_or_default()
+        ),
+        None => format!("{name} = nil"),
+    }
+}
+
+fn create_version_parts_table(lua: &Lua, version: &str) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    for (index, part) in version_parts(version).into_iter().enumerate() {
+        table.raw_set(index + 1, part)?;
+    }
+    Ok(table)
+}
+
+fn version_parts(version: &str) -> [i64; 3] {
+    let mut parts = [0_i64; 3];
+    for (index, part) in version.trim().split('.').take(3).enumerate() {
+        let digits = part
+            .bytes()
+            .take_while(|byte| byte.is_ascii_digit())
+            .collect::<Vec<_>>();
+        parts[index] = std::str::from_utf8(&digits)
+            .ok()
+            .and_then(|digits| digits.parse::<i64>().ok())
+            .unwrap_or(0);
+    }
+    parts
+}
+
+fn version_args(args: &MultiValue) -> Vec<i64> {
+    if let Some(Value::String(version)) = args.front() {
+        if let Ok(version) = version.to_str() {
+            return version_parts(version.as_ref()).into_iter().collect();
+        }
+    }
+    args.iter()
+        .filter_map(|value| read_f32(value.clone()))
+        .map(|value| value.round() as i64)
+        .collect()
+}
+
+fn is_product_version(args: &MultiValue) -> bool {
+    let expected = version_args(args);
+    if expected.is_empty() {
+        return false;
+    }
+    let product = version_parts(SONG_LUA_PRODUCT_VERSION);
+    expected
+        .into_iter()
+        .enumerate()
+        .all(|(index, value)| product.get(index).is_some_and(|part| *part == value))
+}
+
+fn is_minimum_product_version(args: &MultiValue) -> bool {
+    let expected = version_args(args);
+    if expected.is_empty() {
+        return true;
+    }
+    let product = version_parts(SONG_LUA_PRODUCT_VERSION);
+    for (index, expected) in expected.into_iter().enumerate() {
+        let product = product.get(index).copied().unwrap_or(0);
+        if product != expected {
+            return product > expected;
+        }
+    }
+    true
+}
+
+fn create_author_table(lua: &Lua, steps: Option<&Value>) -> mlua::Result<Table> {
+    let out = lua.create_table()?;
+    let Some(Value::Table(steps)) = steps else {
+        return Ok(out);
+    };
+    let mut values = Vec::new();
+    for method in ["GetDescription", "GetAuthorCredit", "GetChartName"] {
+        if let Some(text) = call_string_method(steps, method)? {
+            if !text.is_empty() && !values.iter().any(|value| value == &text) {
+                values.push(text);
+            }
+        }
+    }
+    for (index, value) in values.into_iter().enumerate() {
+        out.raw_set(index + 1, value)?;
+    }
+    Ok(out)
+}
+
+fn call_string_method(table: &Table, name: &str) -> mlua::Result<Option<String>> {
+    let Some(function) = table.get::<Option<Function>>(name)? else {
+        return Ok(None);
+    };
+    let mut args = MultiValue::new();
+    args.push_back(Value::Table(table.clone()));
+    Ok(Some(lua_text_value(function.call::<Value>(args)?)?))
+}
+
+fn parse_chart_info(lua: &Lua, args: &MultiValue) -> mlua::Result<Table> {
+    let player = args
+        .get(1)
+        .and_then(player_index_from_value)
+        .map(player_short_name)
+        .unwrap_or("P1");
+    let globals = lua.globals();
+    let sl = match globals.get::<Option<Table>>("SL")? {
+        Some(table) => table,
+        None => {
+            let table = lua.create_table()?;
+            globals.set("SL", table.clone())?;
+            table
+        }
+    };
+    let player_table = match sl.get::<Option<Table>>(player)? {
+        Some(table) => table,
+        None => {
+            let table = lua.create_table()?;
+            sl.set(player, table.clone())?;
+            table
+        }
+    };
+    let streams = match player_table.get::<Option<Table>>("Streams")? {
+        Some(table) => table,
+        None => {
+            let table = create_sl_streams(lua)?;
+            player_table.set("Streams", table.clone())?;
+            table
+        }
+    };
+    init_sl_streams(lua, &streams)?;
+    note_song_lua_side_effect(lua)?;
+    Ok(streams)
 }
 
 fn create_background_filter_values(lua: &Lua) -> mlua::Result<Table> {
@@ -2273,6 +2627,38 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("SONGMAN", create_songman_table(lua, song.clone(), context)?)?;
     let players = create_player_tables(lua, context)?;
     let song_options = create_song_options_table(lua, context.song_music_rate)?;
+    let display_bpms = context.song_display_bpms;
+    let default_music_rate = song_music_rate(context);
+    globals.set(
+        "GetDisplayBPMs",
+        lua.create_function(move |lua, args: MultiValue| {
+            let (bpms, _) = display_bpms_for_args(&args, display_bpms, default_music_rate)?;
+            create_display_bpms_table(lua, bpms)
+        })?,
+    )?;
+    globals.set(
+        "StringifyDisplayBPMs",
+        lua.create_function(move |lua, args: MultiValue| {
+            let (bpms, rate) = display_bpms_for_args(&args, display_bpms, default_music_rate)?;
+            Ok(Value::String(
+                lua.create_string(display_bpms_text(bpms, rate))?,
+            ))
+        })?,
+    )?;
+    let total_song_seconds = context.music_length_seconds.max(0.0);
+    globals.set(
+        "totalLengthSongOrCourse",
+        lua.create_function(move |_, _args: MultiValue| {
+            Ok(total_song_seconds / default_music_rate.max(f32::EPSILON))
+        })?,
+    )?;
+    globals.set(
+        "currentTimeSongOrCourse",
+        lua.create_function({
+            let song_runtime = song_runtime.clone();
+            move |_, _args: MultiValue| Ok(song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?)
+        })?,
+    )?;
     let current_sort_order = lua.create_table()?;
     current_sort_order.raw_set(1, "SortOrder_Group")?;
     let gamestate = lua.create_table()?;
@@ -2421,6 +2807,23 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
                 Ok(current_steps
                     .raw_get::<Option<Table>>(player + 1)?
                     .map_or(Value::Nil, Value::Table))
+            }
+        })?,
+    )?;
+    globals.set(
+        "GetSongAndSteps",
+        lua.create_function({
+            let current_song = current_song.clone();
+            let current_steps = current_steps.clone();
+            move |_, args: MultiValue| {
+                let player = args.front().and_then(player_index_from_value).unwrap_or(0);
+                let song = current_song
+                    .raw_get::<Option<Table>>(1)?
+                    .map_or(Value::Nil, Value::Table);
+                let steps = current_steps
+                    .raw_get::<Option<Table>>(player + 1)?
+                    .map_or(Value::Nil, Value::Table);
+                Ok((song, steps))
             }
         })?,
     )?;
@@ -3117,9 +3520,39 @@ fn create_sl_ex_counts(lua: &Lua) -> mlua::Result<Table> {
 
 fn create_sl_streams(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
-    table.set("PeakNPS", 0.0)?;
-    table.set("Hash", "")?;
+    init_sl_streams(lua, &table)?;
     Ok(table)
+}
+
+fn init_sl_streams(lua: &Lua, table: &Table) -> mlua::Result<()> {
+    for name in [
+        "NotesPerMeasure",
+        "EquallySpacedPerMeasure",
+        "NPSperMeasure",
+        "ColumnCues",
+    ] {
+        if !matches!(table.get::<Value>(name)?, Value::Table(_)) {
+            table.set(name, lua.create_table()?)?;
+        }
+    }
+    for name in [
+        "PeakNPS",
+        "Crossovers",
+        "Footswitches",
+        "Sideswitches",
+        "Jacks",
+        "Brackets",
+    ] {
+        if matches!(table.get::<Value>(name)?, Value::Nil) {
+            table.set(name, 0.0)?;
+        }
+    }
+    for name in ["Hash", "Filename", "StepsType", "Difficulty", "Description"] {
+        if matches!(table.get::<Value>(name)?, Value::Nil) {
+            table.set(name, "")?;
+        }
+    }
+    Ok(())
 }
 
 fn create_sl_high_scores(lua: &Lua) -> mlua::Result<Table> {
@@ -5659,6 +6092,96 @@ fn create_display_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
     table.raw_set(1, bpms[0])?;
     table.raw_set(2, bpms[1])?;
     Ok(table)
+}
+
+fn display_bpms_for_args(
+    args: &MultiValue,
+    fallback: [f32; 2],
+    default_rate: f32,
+) -> mlua::Result<([f32; 2], f32)> {
+    let rate = args
+        .get(2)
+        .cloned()
+        .and_then(read_f32)
+        .unwrap_or(default_rate)
+        .max(f32::EPSILON);
+    let bpms = args
+        .get(1)
+        .and_then(display_bpms_from_value)
+        .transpose()?
+        .unwrap_or(fallback);
+    Ok(([bpms[0] * rate, bpms[1] * rate], rate))
+}
+
+fn display_bpms_from_value(value: &Value) -> Option<mlua::Result<[f32; 2]>> {
+    let Value::Table(table) = value else {
+        return None;
+    };
+    Some(display_bpms_from_table(table))
+}
+
+fn display_bpms_from_table(table: &Table) -> mlua::Result<[f32; 2]> {
+    if let Some(bpms) = table
+        .get::<Option<Function>>("GetDisplayBpms")?
+        .map(|function| call_table_function(table, &function))
+        .transpose()?
+        .and_then(read_bpms_table)
+    {
+        if bpms[0] > 0.0 && bpms[1] > 0.0 {
+            return Ok(bpms);
+        }
+    }
+    let Some(timing) = table
+        .get::<Option<Function>>("GetTimingData")?
+        .map(|function| call_table_function(table, &function))
+        .transpose()?
+        .and_then(|value| match value {
+            Value::Table(table) => Some(table),
+            _ => None,
+        })
+    else {
+        return Ok([0.0, 0.0]);
+    };
+    Ok(timing
+        .get::<Option<Function>>("GetActualBPM")?
+        .map(|function| call_table_function(&timing, &function))
+        .transpose()?
+        .and_then(read_bpms_table)
+        .unwrap_or([0.0, 0.0]))
+}
+
+fn call_table_function(table: &Table, function: &Function) -> mlua::Result<Value> {
+    let mut args = MultiValue::new();
+    args.push_back(Value::Table(table.clone()));
+    function.call(args)
+}
+
+fn read_bpms_table(value: Value) -> Option<[f32; 2]> {
+    let Value::Table(table) = value else {
+        return None;
+    };
+    Some([
+        table.raw_get::<Value>(1).ok().and_then(read_f32)?,
+        table.raw_get::<Value>(2).ok().and_then(read_f32)?,
+    ])
+}
+
+fn display_bpms_text(bpms: [f32; 2], rate: f32) -> String {
+    let lower = format_display_bpm(bpms[0], rate);
+    if (bpms[0] - bpms[1]).abs() <= f32::EPSILON {
+        lower
+    } else {
+        format!("{lower} - {}", format_display_bpm(bpms[1], rate))
+    }
+}
+
+fn format_display_bpm(value: f32, rate: f32) -> String {
+    let text = if (rate - 1.0).abs() <= f32::EPSILON {
+        format!("{value:.0}")
+    } else {
+        format!("{value:.1}")
+    };
+    text.strip_suffix(".0").unwrap_or(&text).to_string()
 }
 
 fn create_radar_values_table(lua: &Lua) -> mlua::Result<Table> {
@@ -18798,6 +19321,79 @@ return Def.ActorFrame{}
             &SongLuaCompileContext::new(&song_dir, "Theme Pref GameState Control Helpers"),
         )
         .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert!(compiled.messages.is_empty());
+        assert!(compiled.overlays.is_empty());
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_theme_support_bpm_profile_helpers() {
+        let song_dir = test_dir("theme-support-bpm-profile-helpers");
+        fs::create_dir_all(song_dir.join("audio")).unwrap();
+        fs::write(song_dir.join("audio/pass.ogg"), "").unwrap();
+        fs::write(song_dir.join("audio/skip.wav"), "").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local parts = GetVersionParts("1.2.0-git")
+assert(parts[1] == 1 and parts[2] == 2 and parts[3] == 0)
+local product = GetProductVersion()
+assert(product[1] == 1 and product[2] == 2 and product[3] == 0)
+assert(IsProductVersion(1, 2))
+assert(IsMinimumProductVersion(1, 2, 0))
+assert(IsITGmania())
+assert(StepManiaVersionIsSupported())
+assert(MinimumVersionString() == "1.2.0")
+assert(CurrentGameIsSupported())
+assert(GetThemeVersion() == ProductVersion())
+assert(GetAuthor() ~= "")
+assert(SupportsRenderToTexture())
+
+local bpms = GetDisplayBPMs(PLAYER_1)
+assert(bpms[1] == 120 and bpms[2] == 180)
+assert(StringifyDisplayBPMs(PLAYER_1) == "120 - 180")
+
+local song, steps = GetSongAndSteps(PLAYER_1)
+assert(song == GAMESTATE:GetCurrentSong())
+assert(steps == GAMESTATE:GetCurrentSteps(PLAYER_1))
+assert(#getAuthorTable(steps) == 0)
+assert(totalLengthSongOrCourse(PLAYER_1) == 123)
+assert(currentTimeSongOrCourse(PLAYER_1) == 0)
+assert(SecondsToHMMSS(3661) == "01:01:01")
+assert(GetPlayerAvatarPath(PLAYER_1) == nil)
+assert(GetAvatarPath("", "") == nil)
+
+local files = findFiles("audio", "ogg")
+assert(#files == 1 and files[1]:match("pass%.ogg$"))
+assert(cleanGSub("a.b", ".", "-") == "a-b")
+assert(force_to_range(1, 10, 5) == 5)
+assert(wrapped_index(3, 2, 4) == 1)
+assert(table.concat(table.rotate_left({1,2,3}, 1), ",") == "2,3,1")
+assert(table.concat(table.rotate_right({1,2,3}, 1), ",") == "3,1,2")
+assert(TableToString({1, 2}, "Demo"):match("^Demo = "))
+
+mod_actions = {
+    {1, function()
+        LoadGuest(PLAYER_1)
+        LoadProfileCustom(PROFILEMAN:GetProfile(PLAYER_1), PROFILEMAN:GetProfileDir(PLAYER_1))
+        SaveProfileCustom(PROFILEMAN:GetProfile(PLAYER_1), PROFILEMAN:GetProfileDir(PLAYER_1))
+        local parsed = ParseChartInfo(steps, "P1")
+        assert(parsed.PeakNPS == 0)
+        assert(#parsed.NotesPerMeasure == 0)
+    end, true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context =
+            SongLuaCompileContext::new(&song_dir, "Theme Support BPM Profile Helpers");
+        context.song_display_bpms = [120.0, 180.0];
+        context.music_length_seconds = 123.0;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.info.unsupported_function_actions, 0);
         assert!(compiled.messages.is_empty());
         assert!(compiled.overlays.is_empty());
