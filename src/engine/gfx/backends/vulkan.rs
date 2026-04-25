@@ -32,6 +32,7 @@ const MAX_FRAMES_IN_FLIGHT: usize = 3;
 const DESCRIPTOR_POOL_SET_CAPACITY: u32 = 1024;
 const VULKAN_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
+const VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY: bool = false;
 const VULKAN_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 #[cfg(windows)]
 static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
@@ -3305,6 +3306,10 @@ fn init_present_telemetry(
     exts: DeviceExts,
 ) -> PresentTelemetryState {
     let mut telemetry = PresentTelemetryState::default();
+    if !VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY {
+        info!("Vulkan present telemetry: CPU-only (display timing disabled)");
+        return telemetry;
+    }
     if !exts.display_timing {
         info!("Vulkan present telemetry: CPU-only (VK_GOOGLE_display_timing unavailable)");
         return telemetry;
@@ -3651,12 +3656,12 @@ fn create_logical_device(
     let queue_create_info = vk::DeviceQueueCreateInfo::default()
         .queue_family_index(queue_family_index)
         .queue_priorities(&queue_priorities);
-    let mut device_extensions = Vec::with_capacity(2);
+    let mut device_extensions = Vec::with_capacity(3);
     device_extensions.push(swapchain::NAME.as_ptr());
-    if device_exts.display_timing {
+    if VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY && device_exts.display_timing {
         device_extensions.push(display_timing::NAME.as_ptr());
     }
-    if device_exts.calibrated_timestamps {
+    if VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY && device_exts.calibrated_timestamps {
         device_extensions.push(calibrated_timestamps::NAME.as_ptr());
     }
     let features = vk::PhysicalDeviceFeatures::default();
