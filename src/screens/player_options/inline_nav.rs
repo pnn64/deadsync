@@ -76,6 +76,7 @@ pub(super) fn move_inline_focus(
     asset_manager: &AssetManager,
     player_idx: usize,
     delta: isize,
+    wrap: NavWrap,
 ) -> bool {
     if state.pane().row_map.is_empty() || delta == 0 {
         return false;
@@ -117,7 +118,14 @@ pub(super) fn move_inline_focus(
         return false;
     };
     let n = centers.len() as isize;
-    let next_idx = ((current_idx as isize + delta).rem_euclid(n)) as usize;
+    let raw = current_idx as isize + delta;
+    let next_idx = match wrap {
+        NavWrap::Wrap => raw.rem_euclid(n) as usize,
+        NavWrap::Clamp => raw.clamp(0, n - 1) as usize,
+    };
+    if next_idx == current_idx {
+        return false;
+    }
     state.pane_mut().inline_choice_x[idx] = centers[next_idx];
     true
 }
@@ -209,6 +217,7 @@ pub(super) fn move_selection_vertical(
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
     dir: NavDirection,
+    wrap: NavWrap,
 ) {
     if !matches!(dir, NavDirection::Up | NavDirection::Down) || state.pane().row_map.is_empty() {
         return;
@@ -230,7 +239,9 @@ pub(super) fn move_selection_vertical(
             sync_inline_intent_from_row(state, asset_manager, idx, current_row);
         }
     }
-    if let Some(next_row) = next_visible_row(&state.pane().row_map, current_row, dir, visibility) {
+    if let Some(next_row) =
+        next_visible_row(&state.pane().row_map, current_row, dir, visibility, wrap)
+    {
         state.pane_mut().selected_row[idx] = next_row;
         state.pane_mut().arcade_row_focus[idx] = row_allows_arcade_next_row(state, next_row);
         apply_inline_intent_to_row(state, asset_manager, idx, next_row);

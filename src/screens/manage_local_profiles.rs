@@ -80,6 +80,12 @@ enum NavDirection {
     Down,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NavWrap {
+    Wrap,
+    Clamp,
+}
+
 #[derive(Clone, Debug)]
 struct NameEntryState {
     mode: NameEntryMode,
@@ -198,22 +204,35 @@ fn refresh_rows(state: &mut State) {
     state.prev_selected = state.prev_selected.min(state.rows.len() - 1);
 }
 
-fn move_selected(state: &mut State, dir: NavDirection) {
+fn move_selected(state: &mut State, dir: NavDirection, wrap: NavWrap) {
     let total = state.rows.len();
     if total == 0 {
         state.selected = 0;
         return;
     }
+    let last = total - 1;
     state.prev_selected = state.selected;
     state.selected = match dir {
         NavDirection::Up => {
             if state.selected == 0 {
-                total - 1
+                match wrap {
+                    NavWrap::Wrap => last,
+                    NavWrap::Clamp => 0,
+                }
             } else {
                 state.selected - 1
             }
         }
-        NavDirection::Down => (state.selected + 1) % total,
+        NavDirection::Down => {
+            if state.selected >= last {
+                match wrap {
+                    NavWrap::Wrap => 0,
+                    NavWrap::Clamp => last,
+                }
+            } else {
+                state.selected + 1
+            }
+        }
     };
 }
 
@@ -271,7 +290,7 @@ fn update_hold_scroll(state: &mut State) {
         return;
     }
 
-    move_selected(state, dir);
+    move_selected(state, dir, NavWrap::Clamp);
     state.nav_key_last_scrolled_at = Some(now);
 }
 
@@ -559,8 +578,8 @@ fn activate_selected_row(state: &mut State) -> ScreenAction {
 #[inline(always)]
 fn undo_nav_move(state: &mut State, undo: i8) {
     match undo {
-        1 => move_selected(state, NavDirection::Down),
-        -1 => move_selected(state, NavDirection::Up),
+        1 => move_selected(state, NavDirection::Down, NavWrap::Wrap),
+        -1 => move_selected(state, NavDirection::Up, NavWrap::Wrap),
         _ => {}
     }
 }
@@ -641,13 +660,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             return match nav {
                 screen_input::ThreeKeyMenuAction::Prev => {
-                    move_selected(state, NavDirection::Up);
+                    move_selected(state, NavDirection::Up, NavWrap::Wrap);
                     on_nav_press(state, NavDirection::Up);
                     state.menu_lr_undo = 1;
                     ScreenAction::None
                 }
                 screen_input::ThreeKeyMenuAction::Next => {
-                    move_selected(state, NavDirection::Down);
+                    move_selected(state, NavDirection::Down, NavWrap::Wrap);
                     on_nav_press(state, NavDirection::Down);
                     state.menu_lr_undo = -1;
                     ScreenAction::None
@@ -703,7 +722,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::Options),
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
             if ev.pressed {
-                move_selected(state, NavDirection::Up);
+                move_selected(state, NavDirection::Up, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Up);
             } else {
                 on_nav_release(state, NavDirection::Up);
@@ -711,7 +730,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
             if ev.pressed {
-                move_selected(state, NavDirection::Down);
+                move_selected(state, NavDirection::Down, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Down);
             } else {
                 on_nav_release(state, NavDirection::Down);
