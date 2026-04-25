@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::i18n::tr;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
@@ -400,7 +401,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             z(1):
             shadowlength(1.0):
             diffuse(1.0, 1.0, 1.0, alpha):
-            font("wendy"): settext(choice_label(choice)): horizalign(center)
+            font(current_machine_font_key(FontRole::Header)): settext(choice_label(choice)): horizalign(center)
         ));
     }
 

@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::AssetManager;
 use crate::engine::audio;
 use crate::engine::input::{
@@ -1161,7 +1162,7 @@ pub fn get_actors(
         xy(p1_center_x, header_main_y):
         zoom(header_main_zoom):
         diffuse(1.0, 1.0, 1.0, 1.0):
-        font("wendy"): settext("Player 1"):
+        font(current_machine_font_key(FontRole::Header)): settext("Player 1"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
@@ -1169,7 +1170,7 @@ pub fn get_actors(
         xy(p2_center_x, header_main_y):
         zoom(header_main_zoom):
         diffuse(1.0, 1.0, 1.0, 1.0):
-        font("wendy"): settext("Player 2"):
+        font(current_machine_font_key(FontRole::Header)): settext("Player 2"):
         horizalign(center)
     ));
 
@@ -1183,7 +1184,7 @@ pub fn get_actors(
         xy(p1_primary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font("wendy"): settext("Primary"):
+        font(current_machine_font_key(FontRole::Header)): settext("Primary"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
@@ -1191,7 +1192,7 @@ pub fn get_actors(
         xy(p1_secondary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font("wendy"): settext("Secondary"):
+        font(current_machine_font_key(FontRole::Header)): settext("Secondary"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
@@ -1199,7 +1200,7 @@ pub fn get_actors(
         xy(p1_default_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font("wendy"): settext("Default"):
+        font(current_machine_font_key(FontRole::Header)): settext("Default"):
         horizalign(center)
     ));
 
@@ -1209,7 +1210,7 @@ pub fn get_actors(
         xy(p2_primary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font("wendy"): settext("Primary"):
+        font(current_machine_font_key(FontRole::Header)): settext("Primary"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
@@ -1217,7 +1218,7 @@ pub fn get_actors(
         xy(p2_secondary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font("wendy"): settext("Secondary"):
+        font(current_machine_font_key(FontRole::Header)): settext("Secondary"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
@@ -1225,7 +1226,7 @@ pub fn get_actors(
         xy(p2_default_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font("wendy"): settext("Default"):
+        font(current_machine_font_key(FontRole::Header)): settext("Default"):
         horizalign(center)
     ));
 

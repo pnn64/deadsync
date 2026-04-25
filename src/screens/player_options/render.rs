@@ -1,3 +1,4 @@
+use crate::assets::{FontRole, current_machine_font_key};
 use super::*;
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
@@ -83,7 +84,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let main_draw_w = measure_wendy_text_width(asset_manager, &speed_text);
             let speed_x = speed_x_for(player_idx);
 
-            actors.push(act!(text: font("wendy"): settext(speed_text):
+            actors.push(act!(text: font(current_machine_font_key(FontRole::Header)): settext(speed_text):
                 align(0.5, 0.5): xy(speed_x, speed_mod_y): zoom(speed_mod_zoom):
                 diffuse(speed_color[0], speed_color[1], speed_color[2], pane_alpha):
                 z(Z_SPEED_MOD_TEXT)
@@ -99,7 +100,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if scaled_scroll != main_scroll {
                 let scaled_text = format!("{speed_prefix}{scaled_scroll}");
                 let scaled_x = speed_x + main_draw_w * 0.4;
-                actors.push(act!(text: font("wendy"): settext(scaled_text):
+                actors.push(act!(text: font(current_machine_font_key(FontRole::Header)): settext(scaled_text):
                     align(0.5, 0.5): xy(scaled_x, speed_mod_scaled_y): zoom(speed_mod_scaled_zoom):
                     diffuse(speed_color[0], speed_color[1], speed_color[2], 0.8 * pane_alpha):
                     z(Z_SPEED_MOD_TEXT)

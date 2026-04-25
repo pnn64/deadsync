@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::{self, AssetManager};
 use crate::engine::display::{self, MonitorSpec};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
@@ -6,9 +7,9 @@ use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, MenuBackgroundStyle, NewPackMode,
-    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SimpleIni, SyncGraphMode, dirs,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
+    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SelectMusicWheelStyle, SimpleIni, SyncGraphMode, MachineFont, dirs,
 };
 use crate::engine::audio;
 #[cfg(target_os = "windows")]
@@ -274,6 +275,7 @@ pub enum ItemId {
     MchPreferredStyle,
     MchSelectPlayMode,
     MchPreferredMode,
+    MchFont,
     MchEvalSummary,
     MchNameEntry,
     MchGameoverScreen,
@@ -896,6 +898,7 @@ pub enum SubRowId {
     PreferredStyle,
     SelectPlayMode,
     PreferredMode,
+    Font,
     EvalSummary,
     NameEntry,
     GameoverScreen,
@@ -1862,6 +1865,15 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::Font,
+        label: lookup_key("OptionsMachine", "MachineFont"),
+        choices: &[
+            localized_choice("OptionsMachine", "MachineFontCommon"),
+            localized_choice("OptionsMachine", "MachineFontMega"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::EvalSummary,
         label: lookup_key("OptionsMachine", "EvalSummary"),
         choices: &[
@@ -1997,6 +2009,14 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "PreferredModeHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::MchFont,
+        name: lookup_key("OptionsMachine", "MachineFont"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "MachineFontHelp",
         ))],
     },
     Item {
@@ -5756,17 +5776,17 @@ const fn machine_preferred_mode_from_choice(idx: usize) -> MachinePreferredPlayM
     }
 }
 
-const fn menu_background_style_choice_index(style: MenuBackgroundStyle) -> usize {
-    match style {
-        MenuBackgroundStyle::Hearts => 0,
-        MenuBackgroundStyle::Technique => 1,
+const fn machine_font_choice_index(font: MachineFont) -> usize {
+    match font {
+        MachineFont::Common => 0,
+        MachineFont::Mega => 1,
     }
 }
 
-const fn menu_background_style_from_choice(idx: usize) -> MenuBackgroundStyle {
+const fn machine_font_from_choice(idx: usize) -> MachineFont {
     match idx {
-        1 => MenuBackgroundStyle::Technique,
-        _ => MenuBackgroundStyle::Hearts,
+        1 => MachineFont::Mega,
+        _ => MachineFont::Common,
     }
 }
 
@@ -6223,6 +6243,12 @@ pub fn init() -> State {
         MACHINE_OPTIONS_ROWS,
         SubRowId::PreferredMode,
         machine_preferred_mode_choice_index(cfg.machine_preferred_play_mode),
+    );
+    set_choice_by_id(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::Font,
+        machine_font_choice_index(cfg.machine_font),
     );
     set_choice_by_id(
         &mut state.sub_choice_indices_machine,
@@ -8114,6 +8140,9 @@ fn apply_submenu_choice_delta(
             SubRowId::PreferredMode => config::update_machine_preferred_play_mode(
                 machine_preferred_mode_from_choice(new_index),
             ),
+            SubRowId::Font => {
+                config::update_machine_font(machine_font_from_choice(new_index))
+            }
             SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
             SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),
@@ -9800,7 +9829,7 @@ fn build_yes_no_confirm_overlay(
         act!(text:
             align(0.5, 0.5):
             xy(yes_x, answer_y):
-            font("wendy"):
+            font(current_machine_font_key(FontRole::Header)):
             zoom(0.72):
             settext(tr("Common", "Yes")):
             diffuse(1.0, 1.0, 1.0, 1.0):
@@ -9810,7 +9839,7 @@ fn build_yes_no_confirm_overlay(
         act!(text:
             align(0.5, 0.5):
             xy(no_x, answer_y):
-            font("wendy"):
+            font(current_machine_font_key(FontRole::Header)):
             zoom(0.72):
             settext(tr("Common", "No")):
             diffuse(1.0, 1.0, 1.0, 1.0):

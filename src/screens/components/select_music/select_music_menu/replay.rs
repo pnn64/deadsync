@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
@@ -237,7 +238,7 @@ pub fn build_replay_overlay(
         z(GS_LEADERBOARD_Z + 5)
     ));
     actors.push(act!(text:
-        font("wendy"):
+        font(current_machine_font_key(FontRole::Header)):
         settext("Play Replay"):
         align(0.5, 0.5):
         xy(pane_cx, header_y):

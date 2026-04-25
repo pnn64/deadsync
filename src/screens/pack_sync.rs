@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::config;
 use crate::engine::audio;
@@ -250,7 +251,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
         z(OVERLAY_Z + 2)
     ));
     actors.push(act!(text:
-        font("wendy"):
+        font(current_machine_font_key(FontRole::Header)):
         settext(title):
         align(0.5, 0.5):
         xy(pane_cx, pane_top + 28.0):
@@ -450,7 +451,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
                 ));
                 let yes_label = tr("PackSync", "YesOption");
                 actors.push(act!(text:
-                    font("wendy"):
+                    font(current_machine_font_key(FontRole::Header)):
                     settext(yes_label):
                     align(0.5, 0.5):
                     xy(choice_yes_x, answer_y):
@@ -461,7 +462,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
                 ));
                 let no_label = tr("PackSync", "NoOption");
                 actors.push(act!(text:
-                    font("wendy"):
+                    font(current_machine_font_key(FontRole::Header)):
                     settext(no_label):
                     align(0.5, 0.5):
                     xy(choice_no_x, answer_y):

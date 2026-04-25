@@ -455,6 +455,47 @@ impl FromStr for MachinePreferredPlayMode {
     }
 }
 
+/// Machine-wide font preference, ported from Simply Love's `ThemeFont` pref.
+///
+/// Controls which font is used for the Bold / Header / Footer / numbers /
+/// ScreenEval roles in static UI text. The Normal (body) role stays Miso
+/// regardless of this pref -- matches SL's `Mega Normal.redir ->
+/// Miso/_miso light`.
+///
+/// Gameplay-side fonts (combo, judgment, hold judgment) are not affected;
+/// those follow each player's `ComboFont` profile pref.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum MachineFont {
+    /// Default; Bold/Header/Footer = Wendy, numbers = Wendy monospace.
+    #[default]
+    Common,
+    /// Bold/Header/Footer = Mega alphanumeric, numbers = Mega monospace.
+    Mega,
+}
+
+impl MachineFont {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Common => "Common",
+            Self::Mega => "Mega",
+        }
+    }
+}
+
+impl FromStr for MachineFont {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "common" | "wendy" => Ok(Self::Common),
+            "mega" => Ok(Self::Mega),
+            _ => Err(()),
+        }
+    }
+}
+
+pub const MACHINE_FONT_VARIANTS: [MachineFont; 2] = [MachineFont::Common, MachineFont::Mega];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameFlag {
     Dance,
@@ -634,5 +675,50 @@ impl FromStr for LogLevel {
             "trace" => Ok(Self::Trace),
             _ => Err(()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn machine_font_default_is_common() {
+        assert_eq!(MachineFont::default(), MachineFont::Common);
+    }
+
+    #[test]
+    fn machine_font_round_trips_through_from_str_display() {
+        for &v in &MACHINE_FONT_VARIANTS {
+            assert_eq!(MachineFont::from_str(v.as_str()), Ok(v));
+        }
+    }
+
+    #[test]
+    fn machine_font_from_str_is_case_insensitive_and_accepts_wendy_alias() {
+        assert_eq!(MachineFont::from_str("common"), Ok(MachineFont::Common));
+        assert_eq!(MachineFont::from_str("COMMON"), Ok(MachineFont::Common));
+        assert_eq!(MachineFont::from_str("Mega"), Ok(MachineFont::Mega));
+        assert_eq!(MachineFont::from_str("mega"), Ok(MachineFont::Mega));
+        // SL labels Common as "Wendy" in its UI; accept that token too so a
+        // user editing the ini by hand isn't surprised.
+        assert_eq!(MachineFont::from_str("Wendy"), Ok(MachineFont::Common));
+    }
+
+    #[test]
+    fn machine_font_from_str_rejects_unknown() {
+        assert_eq!(MachineFont::from_str(""), Err(()));
+        assert_eq!(MachineFont::from_str("Unprofessional"), Err(()));
+        assert_eq!(MachineFont::from_str("miso"), Err(()));
+    }
+
+    #[test]
+    fn machine_font_variants_table_is_exhaustive() {
+        // Sanity: every enum variant is in MACHINE_FONT_VARIANTS so the
+        // operator UI cycles through everything the type can represent.
+        // Update this if a new variant is added.
+        assert_eq!(MACHINE_FONT_VARIANTS.len(), 2);
+        assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Common));
+        assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Mega));
     }
 }

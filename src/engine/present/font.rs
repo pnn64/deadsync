@@ -2078,6 +2078,43 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
                 return Some(c.clone());
             }
         }
+
+        // SM5-style stem-prefix fallback: filenames in StepMania may carry a
+        // ` <W>x<H>` frame-layout suffix and an optional ` (hint)` qualifier
+        // (e.g. `_game chars 36px 4x1 (doubleres).ini`), but font `import=`
+        // lines often omit them. Scan the candidate directories for a `.ini`
+        // whose stem begins with the requested stem followed by a separator
+        // we recognise (end-of-stem, a space + digit/`(`).
+        let target_stem = rel.file_stem()?.to_string_lossy().to_string();
+        let target_stem_lower = target_stem.to_ascii_lowercase();
+        for dir in candidates.iter().flatten().filter_map(|p| p.parent()) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase)
+                    != Some("ini".to_string())
+                {
+                    continue;
+                }
+                let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                    continue;
+                };
+                let stem_lower = stem.to_ascii_lowercase();
+                if !stem_lower.starts_with(&target_stem_lower) {
+                    continue;
+                }
+                let rest = &stem_lower[target_stem_lower.len()..];
+                let accept = rest.is_empty()
+                    || rest
+                        .strip_prefix(' ')
+                        .is_some_and(|r| r.starts_with(|c: char| c.is_ascii_digit() || c == '('));
+                if accept {
+                    return Some(path);
+                }
+            }
+        }
         None
     }
 

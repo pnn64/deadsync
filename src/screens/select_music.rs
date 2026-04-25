@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager};
 use crate::config::{
@@ -4842,7 +4843,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
         z(SYNC_OVERLAY_Z + 2)
     ));
     actors.push(act!(text:
-        font("wendy"):
+        font(current_machine_font_key(FontRole::Header)):
         settext(title):
         align(0.5, 0.5):
         xy(pane_cx, pane_top + 34.0):
@@ -5068,7 +5069,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
                 horizalign(center)
             ));
             actors.push(act!(text:
-                font("wendy"):
+                font(current_machine_font_key(FontRole::Header)):
                 settext(tr("Common", "Yes")):
                 align(0.5, 0.5):
                 xy(choice_yes_x, answer_y):
@@ -5078,7 +5079,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
                 horizalign(center)
             ));
             actors.push(act!(text:
-                font("wendy"):
+                font(current_machine_font_key(FontRole::Header)):
                 settext(tr("Common", "No")):
                 align(0.5, 0.5):
                 xy(choice_no_x, answer_y):
@@ -9339,7 +9340,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
         if let Some(chart) = steps_charts[idx] {
             let c = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
-            actors.push(act!(text: font("wendy"): settext(chart.meter.to_string()): align(0.5, 0.5): xy(lst_cx, lst_cy + y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
+            actors.push(act!(text: font(current_machine_font_key(FontRole::Header)): settext(chart.meter.to_string()): align(0.5, 0.5): xy(lst_cx, lst_cy + y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
         }
     }
 
@@ -9707,7 +9708,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         match state.out_prompt {
             OutPromptState::PressStartForOptions { .. } => {
                 actors.push(act!(text:
-                    font("wendy"):
+                    font(current_machine_font_key(FontRole::Header)):
                     settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -9719,7 +9720,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             OutPromptState::EnteringOptions { .. } => {
                 // Fade out "Press Start for options"
                 actors.push(act!(text:
-                    font("wendy"):
+                    font(current_machine_font_key(FontRole::Header)):
                     settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -9731,7 +9732,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                 // Fade in "Entering Options..." after 0.1s hibernate
                 actors.push(act!(text:
-                    font("wendy"):
+                    font(current_machine_font_key(FontRole::Header)):
                     settext(tr("SelectMusic", "EnteringOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -9873,7 +9874,7 @@ fn push_exit_prompt_choice(
     out.push(act!(text:
         align(0.5, 0.5):
         xy(cx, cy):
-        font("wendy"):
+        font(current_machine_font_key(FontRole::Header)):
         zoom(SL_EXIT_PROMPT_LABEL_ZOOM * choice_zoom):
         settext(label):
         diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):

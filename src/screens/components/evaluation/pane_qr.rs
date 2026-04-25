@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
 use crate::game::{profile, scores};
@@ -62,7 +63,7 @@ pub fn build_gs_qr_pane(score_info: &ScoreInfo, controller: profile::PlayerSide)
         diffuse(score_bg[0], score_bg[1], score_bg[2], 1.0)
     ));
     children.push(act!(text:
-        font("wendy_white"):
+        font(current_machine_font_key(FontRole::Header)):
         settext(score_text):
         align(1.0, 0.5):
         xy(left_col_x + 60.0, score_y + 12.0):

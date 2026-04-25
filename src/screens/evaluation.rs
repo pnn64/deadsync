@@ -18,6 +18,7 @@ use crate::screens::components::{
 
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
+use crate::assets::{FontRole, current_machine_font_key, current_machine_font_key_for_text};
 use crate::engine::present::font;
 use crate::game::chart::ChartData;
 use crate::game::gameplay::MAX_PLAYERS;
@@ -2876,9 +2877,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let player_side = profile::get_session_player_side();
 
     let Some(score_info) = state.score_info.iter().find_map(|s| s.as_ref()) else {
+        let no_data_text = tr("Evaluation", "NoScoreDataAvailable");
+        let no_data_font = current_machine_font_key_for_text(FontRole::Header, &no_data_text);
         actors.push(act!(text:
-            font("wendy"):
-            settext(tr("Evaluation", "NoScoreDataAvailable")):
+            font(no_data_font):
+            settext(no_data_text):
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             zoom(0.8): horizalign(center):
             z(100)
@@ -3062,8 +3065,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 let record_x = record_frame_x - 110.0 * record_frame_zoom;
 
                 if let Some(rank) = machine_record_rank {
-                    actors.push(act!(text: font("wendy"):
-                        settext(cached_record_text(true, rank)):
+                    let mr_text = cached_record_text(true, rank);
+                    let mr_font = current_machine_font_key_for_text(FontRole::Header, &mr_text);
+                    actors.push(act!(text: font(mr_font):
+                        settext(mr_text):
                         align(0.5, 0.5):
                         xy(record_x, record_frame_y - 18.0 * record_frame_zoom):
                         zoom(record_frame_zoom): z(101):
@@ -3072,8 +3077,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
 
                 if let Some(rank) = personal_record_rank {
-                    actors.push(act!(text: font("wendy"):
-                        settext(cached_record_text(false, rank)):
+                    let pr_text = cached_record_text(false, rank);
+                    let pr_font = current_machine_font_key_for_text(FontRole::Header, &pr_text);
+                    actors.push(act!(text: font(pr_font):
+                        settext(pr_text):
                         align(0.5, 0.5):
                         xy(record_x, record_frame_y + 24.0 * record_frame_zoom):
                         zoom(record_frame_zoom): z(101):
@@ -3113,7 +3120,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
                     ));
                     actors.push(act!(text:
-                        font("wendy"):
+                        font(current_machine_font_key(FontRole::Numbers)):
                         settext(si.chart.meter.to_string()):
                         align(0.5, 0.5):
                         xy(box_x, cy - 76.0):
@@ -3172,7 +3179,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
                     ));
                     actors.push(act!(text:
-                        font("wendy"):
+                        font(current_machine_font_key(FontRole::Numbers)):
                         settext(si.chart.meter.to_string()):
                         align(0.5, 0.5):
                         xy(box_x, cy - 71.0):
@@ -3936,9 +3943,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 continue;
             }
 
+            let dq_text = tr("Evaluation", "DisqualifiedFromRanking");
+            let dq_font = current_machine_font_key_for_text(FontRole::Header, &dq_text);
             actors.push(act!(text:
-                font("wendy"):
-                settext(tr("Evaluation", "DisqualifiedFromRanking")):
+                font(dq_font):
+                settext(dq_text):
                 align(0.5, 0.5):
                 xy(center_x, label_y):
                 zoom(label_zoom):
@@ -3950,7 +3959,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Auto-submit UI text (SL/zmod parity with AutoSubmitScore.lua):
     // top PB/WR banner plus bottom submit-status actors.
-    // Common Normal/ThemeFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
+    // Common Normal/MachineFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
     // In SL/zmod, Common Normal.redir points to Miso/_miso light.
     // When both GrooveStats/BoogieStats and ArrowCloud resolve to submitted/failed,
     // collapse them into one summary line; keep stacked lines for pending/timeouts.
@@ -3980,9 +3989,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 } else {
                     screen_center_x() + 225.0
                 };
+                let banner_text = submit_record_text(banner);
+                let banner_font = current_machine_font_key_for_text(FontRole::Header, &banner_text);
                 actors.push(act!(text:
-                    font("wendy"):
-                    settext(submit_record_text(banner)):
+                    font(banner_font):
+                    settext(banner_text):
                     align(0.5, 0.5):
                     xy(x, AUTO_SUBMIT_RECORD_TEXT_Y):
                     zoom(AUTO_SUBMIT_RECORD_TEXT_ZOOM):
@@ -4146,7 +4157,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // --- "ITG" text and Pads (top right) ---
     {
         let itg_text_x = screen_width() - widescale(55.0, 62.0);
-        actors.push(act!(text: font("wendy"): settext(tr("Evaluation", "ITGLabel")): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
+        let itg_text = tr("Evaluation", "ITGLabel");
+        let itg_font = current_machine_font_key_for_text(FontRole::Header, &itg_text);
+        actors.push(act!(text: font(itg_font): settext(itg_text): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
         actors.extend(mode_pads::build());
     }
 
