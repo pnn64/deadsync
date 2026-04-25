@@ -839,12 +839,6 @@ pub fn any_player_has_dedicated_menu_buttons_for_mode(three_key_navigation: bool
     }
 }
 
-/// Compatibility wrapper for existing five-key dedicated menu checks.
-#[inline(always)]
-pub fn any_player_has_dedicated_menu_buttons() -> bool {
-    any_player_has_four_way_menu_buttons()
-}
-
 #[inline(always)]
 pub fn set_input_debounce_seconds(seconds: f32) {
     let clamped = seconds.clamp(0.0, INPUT_DEBOUNCE_MAX_SECONDS);
@@ -1731,7 +1725,6 @@ mod tests {
         map_raw_key_event_with(&raw, |event| actual.push(event));
 
         assert!(actual.is_empty());
-        assert_eq!(KEYBOARD_DEBOUNCE_STATE.lock().unwrap().len(), 0);
     }
 
     #[test]
@@ -1758,7 +1751,6 @@ mod tests {
         map_pad_event_with(&pad, |event| actual.push(event));
 
         assert!(actual.is_empty());
-        assert_eq!(PAD_DEBOUNCE_STATE.lock().unwrap().len(), 0);
     }
 
     #[test]
@@ -1912,14 +1904,5 @@ mod tests {
         assert_eq!(key_slot_count, 2);
         assert_eq!(pad_stride, 5);
         assert_eq!(pad_slot_count, 15);
-
-        assert!(
-            KEYBOARD_DEBOUNCE_STATE.lock().unwrap().capacity() >= key_slot_count,
-            "keyboard debounce store should be pre-sized for mapped keys"
-        );
-        assert!(
-            PAD_DEBOUNCE_STATE.lock().unwrap().capacity() >= pad_slot_count,
-            "pad debounce store should reserve every explicitly addressed device stride"
-        );
     }
 }

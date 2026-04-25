@@ -81,18 +81,6 @@ impl DebounceStore {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
-    #[inline(always)]
-    pub(super) fn capacity(&self) -> usize {
-        self.slots.capacity()
-    }
-
-    #[cfg_attr(not(test), allow(dead_code))]
-    #[inline(always)]
-    pub(super) fn len(&self) -> usize {
-        self.active_len
-    }
-
     #[inline(always)]
     fn ensure_slot(&mut self, slot: usize) {
         if slot >= self.slots.len() {
@@ -147,7 +135,6 @@ pub(super) struct DebounceWindows {
 }
 
 impl DebounceWindows {
-    #[cfg_attr(not(test), allow(dead_code))]
     #[inline(always)]
     pub(super) const fn uniform(window: Duration) -> Self {
         // ITGmania InputFilter parity: one global debounce window gates both
@@ -670,7 +657,7 @@ mod tests {
         assert_eq!(emitted.len(), 1);
         assert_eq!(emitted[0].action_mask, TEST_MASK);
         assert!(!emitted[0].pressed);
-        assert_eq!(states.lock().unwrap().len(), 2);
+        assert_eq!(states.lock().unwrap().active_len, 2);
 
         emitted.clear();
         assert!(emit_due_debounce_edges_from(
@@ -682,7 +669,7 @@ mod tests {
         assert_eq!(emitted.len(), 1);
         assert_eq!(emitted[0].action_mask, TEST_MASK << 1);
         assert!(!emitted[0].pressed);
-        assert_eq!(states.lock().unwrap().len(), 2);
+        assert_eq!(states.lock().unwrap().active_len, 2);
 
         emitted.clear();
         assert!(!emit_due_debounce_edges_from(
@@ -692,7 +679,7 @@ mod tests {
             |edge| emitted.push(edge)
         ));
         assert!(emitted.is_empty());
-        assert_eq!(states.lock().unwrap().len(), 1);
+        assert_eq!(states.lock().unwrap().active_len, 1);
 
         emitted.clear();
         assert!(!emit_due_debounce_edges_from(
@@ -702,7 +689,7 @@ mod tests {
             |edge| emitted.push(edge)
         ));
         assert!(emitted.is_empty());
-        assert_eq!(states.lock().unwrap().len(), 0);
+        assert_eq!(states.lock().unwrap().active_len, 0);
     }
 
     #[test]
