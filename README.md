@@ -55,7 +55,6 @@ Follow these steps to get the game running:
     ```sh
     git clone https://github.com/pnn64/deadsync.git
     cd deadsync
-    git submodule update --init
     ```
 
 2.  **Add Songs:**
