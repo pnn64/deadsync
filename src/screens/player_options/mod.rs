@@ -202,6 +202,10 @@ pub fn init(
             ),
         }
     });
+    let noteskin = NoteskinState {
+        cache: noteskin_cache,
+        previews: noteskin_previews,
+    };
     let active = session_active_players();
     let main_row_tweens = init_row_tweens(
         &main_row_map,
@@ -234,8 +238,7 @@ pub fn init(
         start_input: [PlayerStartInput::default(); PLAYER_SLOTS],
         allow_per_player_global_offsets,
         player_profiles,
-        noteskin_cache,
-        noteskin_previews,
+        noteskin,
         preview_time: 0.0,
         preview_beat: 0.0,
         help_anim_time: [0.0; PLAYER_SLOTS],
