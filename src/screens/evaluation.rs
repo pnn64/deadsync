@@ -3795,8 +3795,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let arrow_start_y = anchor_y - 10.0;
                             let arrow_mid_y = anchor_y + 5.0;
                             let arrow_end_y = anchor_y + 20.0;
+                            let salt = u64::from(x.to_bits());
 
                             life_children.push(act!(text:
+                                tweensalt(salt):
                                 font("miso"): settext(tr("Evaluation", "Barely")):
                                 align(0.5, 0.5): xy(x, text_start_y):
                                 zoom(0.75):
@@ -3808,6 +3810,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 z(8)
                             ));
                             life_children.push(act!(sprite("meter_arrow.png"):
+                                tweensalt(salt):
                                 align(0.5, 0.5): xy(x, arrow_start_y):
                                 // SL uses rotationz(90); deadsync's current z-rotation sign
                                 // is opposite in screen space, so -90 is the visual parity.

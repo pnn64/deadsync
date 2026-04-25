@@ -8292,6 +8292,7 @@ fn sl_select_music_wheel_cascade_mask() -> Vec<Actor> {
 
         // upper half mask
         actors.push(act!(quad:
+            tweensalt(i):
             align(0.5, 0.5):
             xy(x, SL_WHEEL_CASCADE_ROW_Y_UPPER + y_base):
             zoomto(w, item_half_h):
@@ -8305,6 +8306,7 @@ fn sl_select_music_wheel_cascade_mask() -> Vec<Actor> {
 
         // lower half mask
         actors.push(act!(quad:
+            tweensalt(i):
             align(0.5, 0.5):
             xy(x, SL_WHEEL_CASCADE_ROW_Y_LOWER + y_base):
             zoomto(w, item_half_h):

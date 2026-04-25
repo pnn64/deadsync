@@ -807,6 +807,7 @@ fn get_actors_with_elapsed_overrides(
         let tint = color::decorative_rgba(state.active_color_index - i as i32 - 4);
 
         actors.push(act!(sprite("init_arrow.png"):
+            tweensalt(i):
             align(0.5, 0.5):
             xy(cx + x, cy):
             z(110.0):
