@@ -116,6 +116,8 @@ pub enum Actor {
         max_height: Option<f32>,
         max_w_pre_zoom: bool,
         max_h_pre_zoom: bool,
+        jitter: bool,
+        distortion: f32,
         /// Clip rect in parent TL space: [x, y, w, h].
         clip: Option<[f32; 4]>,
         mask_dest: bool,
@@ -230,6 +232,15 @@ pub struct TextAttribute {
     pub start: usize,
     pub length: usize,
     pub color: [f32; 4],
+    pub vertex_colors: Option<[[f32; 4]; 4]>,
+    pub glow: Option<[f32; 4]>,
+}
+
+impl TextAttribute {
+    #[inline(always)]
+    pub fn colors(self) -> [[f32; 4]; 4] {
+        self.vertex_colors.unwrap_or([self.color; 4])
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -321,6 +332,8 @@ mod tests {
             max_height: None,
             max_w_pre_zoom: false,
             max_h_pre_zoom: false,
+            jitter: false,
+            distortion: 0.0,
             clip: None,
             mask_dest: false,
             blend: BlendMode::Alpha,

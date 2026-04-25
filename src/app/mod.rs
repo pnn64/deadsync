@@ -1878,6 +1878,12 @@ fn prewarm_gameplay_assets(
                             media_cache::ensure_banner_texture(assets, backend, texture_path);
                         }
                     }
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::Sound { sound_path } => {
+                        let key = sound_path.to_string_lossy().into_owned();
+                        if seen.insert(key.clone()) {
+                            crate::engine::audio::preload_sfx(&key);
+                        }
+                    }
                     crate::game::parsing::song_lua::SongLuaOverlayKind::ActorMultiVertex {
                         texture_path: Some(texture_path),
                         ..

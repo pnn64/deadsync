@@ -20,7 +20,7 @@ use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock,
     SongLuaOverlayKind, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
     SongLuaOverlayModelDraw, SongLuaOverlayModelLayer, SongLuaOverlayState,
-    SongLuaOverlayStateDelta, SongLuaProxyTarget,
+    SongLuaOverlayStateDelta, SongLuaProxyTarget, SongLuaTextGlowMode,
 };
 use crate::game::{profile, scroll::ScrollSpeedSetting, song::SongData};
 use crate::screens::components::gameplay::{gameplay_stats, notefield};
@@ -1088,6 +1088,18 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.rainbow_scroll {
         state.rainbow_scroll = value;
     }
+    if let Some(value) = delta.text_jitter {
+        state.text_jitter = value;
+    }
+    if let Some(value) = delta.text_distortion {
+        state.text_distortion = value;
+    }
+    if let Some(value) = delta.text_glow_mode {
+        state.text_glow_mode = value;
+    }
+    if let Some(value) = delta.mult_attrs_with_diffuse {
+        state.mult_attrs_with_diffuse = value;
+    }
     if let Some(value) = delta.sprite_animate {
         state.sprite_animate = value;
     }
@@ -1120,6 +1132,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     }
     if let Some(value) = delta.max_h_pre_zoom {
         state.max_h_pre_zoom = value;
+    }
+    if let Some(value) = delta.max_dimension_uses_zoom {
+        state.max_dimension_uses_zoom = value;
     }
     if let Some(value) = delta.texture_wrapping {
         state.texture_wrapping = value;
@@ -1219,9 +1234,9 @@ fn song_lua_overlay_state_lerp(
         let to_colors = to.vertex_colors.unwrap_or([[1.0, 1.0, 1.0, 1.0]; 4]);
         for corner in 0..4 {
             for channel in 0..4 {
-                from_colors[corner][channel] =
-                    (to_colors[corner][channel] - from_colors[corner][channel])
-                        .mul_add(t, from_colors[corner][channel]);
+                from_colors[corner][channel] = (to_colors[corner][channel]
+                    - from_colors[corner][channel])
+                    .mul_add(t, from_colors[corner][channel]);
             }
         }
         from.vertex_colors = Some(from_colors);
@@ -1360,6 +1375,9 @@ fn song_lua_overlay_state_lerp(
     if delta.max_h_pre_zoom.is_some() && t >= 1.0 - f32::EPSILON {
         from.max_h_pre_zoom = to.max_h_pre_zoom;
     }
+    if delta.max_dimension_uses_zoom.is_some() && t >= 1.0 - f32::EPSILON {
+        from.max_dimension_uses_zoom = to.max_dimension_uses_zoom;
+    }
     if delta.texcoord_offset.is_some()
         && let (Some(from_offset), Some(to_offset)) = (from.texcoord_offset, to.texcoord_offset)
     {
@@ -1424,6 +1442,19 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.rainbow_scroll.is_some() && t >= 1.0 - f32::EPSILON {
         from.rainbow_scroll = to.rainbow_scroll;
+    }
+    if delta.text_jitter.is_some() && t >= 1.0 - f32::EPSILON {
+        from.text_jitter = to.text_jitter;
+    }
+    if delta.text_distortion.is_some() {
+        from.text_distortion =
+            (to.text_distortion - from.text_distortion).mul_add(t, from.text_distortion);
+    }
+    if delta.text_glow_mode.is_some() && t >= 1.0 - f32::EPSILON {
+        from.text_glow_mode = to.text_glow_mode;
+    }
+    if delta.mult_attrs_with_diffuse.is_some() && t >= 1.0 - f32::EPSILON {
+        from.mult_attrs_with_diffuse = to.mult_attrs_with_diffuse;
     }
     if delta.sprite_animate.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_animate = to.sprite_animate;
@@ -2462,6 +2493,8 @@ fn song_lua_style_capture_actor(
             max_height,
             max_w_pre_zoom,
             max_h_pre_zoom,
+            jitter,
+            distortion,
             clip,
             mask_dest,
             blend: actor_blend,
@@ -2487,6 +2520,8 @@ fn song_lua_style_capture_actor(
             max_height,
             max_w_pre_zoom,
             max_h_pre_zoom,
+            jitter,
+            distortion,
             clip,
             mask_dest,
             blend: blend.unwrap_or(actor_blend),
@@ -2862,17 +2897,106 @@ fn song_lua_rainbow_scroll_attributes(text: &str, total_elapsed: f32) -> Vec<Tex
     if char_count == 0 {
         return out;
     }
-    let first_color =
-        ((total_elapsed / 0.2).floor() as usize) % SONG_LUA_TEXT_RAINBOW_COLORS.len();
+    let first_color = ((total_elapsed / 0.2).floor() as usize) % SONG_LUA_TEXT_RAINBOW_COLORS.len();
     for index in 0..char_count {
         out.push(TextAttribute {
             start: index,
             length: 1,
             color: SONG_LUA_TEXT_RAINBOW_COLORS
                 [(first_color + index) % SONG_LUA_TEXT_RAINBOW_COLORS.len()],
+            vertex_colors: None,
+            glow: None,
         });
     }
     out
+}
+
+fn song_lua_transparent_text_attributes(text: &str) -> Vec<TextAttribute> {
+    let char_count = text.chars().count();
+    if char_count == 0 {
+        return Vec::new();
+    }
+    vec![TextAttribute {
+        start: 0,
+        length: char_count,
+        color: [1.0, 1.0, 1.0, 0.0],
+        vertex_colors: None,
+        glow: None,
+    }]
+}
+
+fn song_lua_text_attributes_have_glow(attributes: &[TextAttribute]) -> bool {
+    attributes
+        .iter()
+        .any(|attr| attr.glow.is_some_and(|glow| glow[3] > f32::EPSILON))
+}
+
+fn song_lua_text_glow_attributes(
+    text: &str,
+    attributes: &[TextAttribute],
+    glow: [f32; 4],
+) -> Vec<TextAttribute> {
+    let char_count = text.chars().count();
+    if char_count == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(attributes.len() + usize::from(glow[3] > f32::EPSILON));
+    if glow[3] > f32::EPSILON {
+        out.push(TextAttribute {
+            start: 0,
+            length: char_count,
+            color: glow,
+            vertex_colors: None,
+            glow: None,
+        });
+    }
+    for attr in attributes {
+        let Some(glow) = attr.glow else {
+            continue;
+        };
+        if glow[3] <= f32::EPSILON {
+            continue;
+        }
+        out.push(TextAttribute {
+            start: attr.start,
+            length: attr.length,
+            color: glow,
+            vertex_colors: None,
+            glow: None,
+        });
+    }
+    out
+}
+
+fn song_lua_text_attributes_for_diffuse_mode(
+    attributes: &[TextAttribute],
+    color: [f32; 4],
+    text: &str,
+    mult_attrs_with_diffuse: bool,
+) -> (Vec<TextAttribute>, [f32; 4]) {
+    if attributes.is_empty() || mult_attrs_with_diffuse {
+        return (attributes.to_vec(), color);
+    }
+    let char_count = text.chars().count();
+    if char_count == 0 {
+        return (attributes.to_vec(), color);
+    }
+    if color
+        .iter()
+        .all(|component| (*component - 1.0).abs() <= f32::EPSILON)
+    {
+        return (attributes.to_vec(), [1.0, 1.0, 1.0, 1.0]);
+    }
+    let mut out = Vec::with_capacity(attributes.len() + 1);
+    out.push(TextAttribute {
+        start: 0,
+        length: char_count,
+        color,
+        vertex_colors: None,
+        glow: None,
+    });
+    out.extend_from_slice(attributes);
+    (out, [1.0, 1.0, 1.0, 1.0])
 }
 
 fn song_lua_overlay_camera_state(
@@ -3076,7 +3200,7 @@ fn song_lua_model_actor(
             },
             z: song_lua_add_z(z, idx.min(i16::MAX as usize) as i16),
         };
-        let glow_actor = song_lua_overlay_glow_actor(&actor, glow);
+        let glow_actor = song_lua_overlay_glow_actor(&actor, glow, state.text_glow_mode);
         children.push(actor);
         if let Some(glow_actor) = glow_actor {
             children.push(glow_actor);
@@ -3877,6 +4001,7 @@ fn build_song_lua_overlay_actor(
         SongLuaOverlayKind::ActorFrameTexture => None,
         SongLuaOverlayKind::ActorProxy { .. } => None,
         SongLuaOverlayKind::AftSprite { .. } => None,
+        SongLuaOverlayKind::Sound { .. } => None,
         SongLuaOverlayKind::Sprite { texture_path } => {
             let key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
             if !asset_manager.has_texture_key(key.as_ref()) {
@@ -4092,11 +4217,6 @@ fn build_song_lua_overlay_actor(
             } else {
                 TextContent::from(text)
             };
-            let text_attributes = if state.rainbow_scroll {
-                song_lua_rainbow_scroll_attributes(content.as_str(), total_elapsed)
-            } else {
-                attributes.to_vec()
-            };
             let font = if asset_manager.with_font(*font_name, |_| ()).is_some() {
                 *font_name
             } else {
@@ -4118,6 +4238,19 @@ fn build_song_lua_overlay_actor(
                 &mut effect_scale,
                 &mut effect_rot,
             );
+            let (text_attributes, color) = if state.rainbow_scroll {
+                (
+                    song_lua_rainbow_scroll_attributes(content.as_str(), total_elapsed),
+                    color,
+                )
+            } else {
+                song_lua_text_attributes_for_diffuse_mode(
+                    attributes,
+                    color,
+                    content.as_str(),
+                    state.mult_attrs_with_diffuse,
+                )
+            };
             Some(finalize_actor(
                 Actor::Text {
                     align: [state.halign, state.valign],
@@ -4152,8 +4285,10 @@ fn build_song_lua_overlay_actor(
                         .map(|value| ((value as f32) * x_scale).round() as i32),
                     max_width: state.max_width.map(|value| value * x_scale),
                     max_height: state.max_height.map(|value| value * y_scale),
-                    max_w_pre_zoom: state.max_w_pre_zoom,
-                    max_h_pre_zoom: state.max_h_pre_zoom,
+                    max_w_pre_zoom: state.max_w_pre_zoom && !state.max_dimension_uses_zoom,
+                    max_h_pre_zoom: state.max_h_pre_zoom && !state.max_dimension_uses_zoom,
+                    jitter: state.text_jitter,
+                    distortion: state.text_distortion,
                     clip: None,
                     mask_dest: state.mask_dest,
                     blend: overlay_blend,
@@ -4543,10 +4678,11 @@ fn song_lua_wrap_overlay_shadow(
     }
 }
 
-fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
-    if glow[3] <= f32::EPSILON {
-        return None;
-    }
+fn song_lua_overlay_glow_actor(
+    actor: &Actor,
+    glow: [f32; 4],
+    text_glow_mode: SongLuaTextGlowMode,
+) -> Option<Actor> {
     match actor {
         Actor::Sprite {
             align,
@@ -4583,6 +4719,9 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
             effect,
             ..
         } => {
+            if glow[3] <= f32::EPSILON {
+                return None;
+            }
             if *mask_source && !*mask_dest {
                 return None;
             }
@@ -4630,7 +4769,7 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
             local_transform,
             font,
             content,
-            attributes,
+            attributes: base_attributes,
             align_text,
             z,
             scale,
@@ -4642,36 +4781,68 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
             max_height,
             max_w_pre_zoom,
             max_h_pre_zoom,
+            jitter: _,
+            distortion,
             clip,
             mask_dest,
             effect,
             ..
-        } => Some(Actor::Text {
-            align: *align,
-            offset: *offset,
-            local_transform: *local_transform,
-            color: glow,
-            stroke_color: None,
-            glow: [0.0, 0.0, 0.0, 0.0],
-            font: *font,
-            content: content.clone(),
-            attributes: attributes.clone(),
-            align_text: *align_text,
-            z: *z,
-            scale: *scale,
-            fit_width: *fit_width,
-            fit_height: *fit_height,
-            line_spacing: *line_spacing,
-            wrap_width_pixels: *wrap_width_pixels,
-            max_width: *max_width,
-            max_height: *max_height,
-            max_w_pre_zoom: *max_w_pre_zoom,
-            max_h_pre_zoom: *max_h_pre_zoom,
-            clip: *clip,
-            mask_dest: *mask_dest,
-            blend: BlendMode::Add,
-            effect: *effect,
-        }),
+        } => {
+            let has_attr_glow = song_lua_text_attributes_have_glow(base_attributes);
+            if glow[3] <= f32::EPSILON && !has_attr_glow {
+                return None;
+            }
+            let (attributes, color, stroke_color) = if has_attr_glow {
+                let attributes =
+                    song_lua_text_glow_attributes(content.as_str(), base_attributes, glow);
+                let stroke_color = (glow[3] > f32::EPSILON
+                    && matches!(
+                        text_glow_mode,
+                        SongLuaTextGlowMode::Stroke | SongLuaTextGlowMode::Both
+                    ))
+                .then_some(glow);
+                (attributes, [1.0, 1.0, 1.0, 1.0], stroke_color)
+            } else {
+                let mut attributes = base_attributes.clone();
+                let (color, stroke_color) = match text_glow_mode {
+                    SongLuaTextGlowMode::Inner => (glow, None),
+                    SongLuaTextGlowMode::Both => (glow, Some(glow)),
+                    SongLuaTextGlowMode::Stroke => {
+                        attributes = song_lua_transparent_text_attributes(content.as_str());
+                        ([1.0, 1.0, 1.0, 1.0], Some(glow))
+                    }
+                };
+                (attributes, color, stroke_color)
+            };
+            Some(Actor::Text {
+                align: *align,
+                offset: *offset,
+                local_transform: *local_transform,
+                color,
+                stroke_color,
+                glow: [0.0, 0.0, 0.0, 0.0],
+                font: *font,
+                content: content.clone(),
+                attributes,
+                align_text: *align_text,
+                z: *z,
+                scale: *scale,
+                fit_width: *fit_width,
+                fit_height: *fit_height,
+                line_spacing: *line_spacing,
+                wrap_width_pixels: *wrap_width_pixels,
+                max_width: *max_width,
+                max_height: *max_height,
+                max_w_pre_zoom: *max_w_pre_zoom,
+                max_h_pre_zoom: *max_h_pre_zoom,
+                jitter: false,
+                distortion: *distortion,
+                clip: *clip,
+                mask_dest: *mask_dest,
+                blend: BlendMode::Add,
+                effect: *effect,
+            })
+        }
         Actor::TexturedMesh {
             align,
             offset,
@@ -4689,6 +4860,9 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
             z,
             ..
         } => {
+            if glow[3] <= f32::EPSILON {
+                return None;
+            }
             let mut glow_vertices = vertices.as_ref().to_vec();
             for vertex in &mut glow_vertices {
                 vertex.color = [1.0, 1.0, 1.0, vertex.color[3]];
@@ -4724,7 +4898,7 @@ fn song_lua_finalize_overlay_actor(
     x_scale: f32,
     y_scale: f32,
 ) -> Actor {
-    let glow_actor = song_lua_overlay_glow_actor(&actor, glow);
+    let glow_actor = song_lua_overlay_glow_actor(&actor, glow, state.text_glow_mode);
     let actor = song_lua_wrap_overlay_shadow(state, actor, x_scale, y_scale);
     if let Some(glow_actor) = glow_actor {
         Actor::Frame {
@@ -4866,6 +5040,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             max_height,
             max_w_pre_zoom,
             max_h_pre_zoom,
+            jitter,
+            distortion,
             clip,
             mask_dest,
             blend,
@@ -4894,6 +5070,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 max_height,
                 max_w_pre_zoom,
                 max_h_pre_zoom,
+                jitter,
+                distortion,
                 clip,
                 mask_dest,
                 blend,
@@ -7685,6 +7863,124 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_bitmaptext_respects_text_glow_mode_at_runtime() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("GLOW"),
+                stroke_color: Some([0.0, 0.0, 0.0, 0.5]),
+                attributes: empty_text_attributes(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                glow: [0.2, 0.3, 0.4, 0.5],
+                text_glow_mode: SongLuaTextGlowMode::Stroke,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            781,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("text glow bitmap text should render");
+
+        match actor {
+            Actor::Frame { children, .. } => match &children[1] {
+                Actor::Text {
+                    color,
+                    stroke_color,
+                    attributes,
+                    blend,
+                    ..
+                } => {
+                    assert_eq!(*color, [1.0, 1.0, 1.0, 1.0]);
+                    assert_eq!(*stroke_color, Some([0.2, 0.3, 0.4, 0.5]));
+                    assert_eq!(*blend, BlendMode::Add);
+                    assert_eq!(attributes.len(), 1);
+                    assert_eq!(attributes[0].color, [1.0, 1.0, 1.0, 0.0]);
+                }
+                other => panic!("expected stroke-only text glow child, got {other:?}"),
+            },
+            other => panic!("expected text glow wrapper frame, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_bitmaptext_attribute_glow_adds_runtime_glow_pass() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("GLOW"),
+                stroke_color: None,
+                attributes: Arc::from([TextAttribute {
+                    start: 1,
+                    length: 2,
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    vertex_colors: None,
+                    glow: Some([0.7, 0.3, 0.9, 0.5]),
+                }]),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            783,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("attribute glow bitmap text should render");
+
+        match actor {
+            Actor::Frame { children, .. } => match &children[1] {
+                Actor::Text {
+                    color,
+                    stroke_color,
+                    attributes,
+                    blend,
+                    ..
+                } => {
+                    assert_eq!(*color, [1.0, 1.0, 1.0, 1.0]);
+                    assert_eq!(*stroke_color, None);
+                    assert_eq!(*blend, BlendMode::Add);
+                    assert_eq!(attributes.len(), 1);
+                    assert_eq!(attributes[0].start, 1);
+                    assert_eq!(attributes[0].length, 2);
+                    assert_eq!(attributes[0].color, [0.7, 0.3, 0.9, 0.5]);
+                }
+                other => panic!("expected text attribute glow child, got {other:?}"),
+            },
+            other => panic!("expected text attribute glow wrapper frame, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn song_lua_sprite_setstate_uses_sheet_cell_size_at_runtime() {
         let key = "song-lua-test 4x3.png".to_string();
         let mut asset_manager = AssetManager::new();
@@ -8503,6 +8799,8 @@ mod tests {
                 max_height: Some(40.0),
                 max_w_pre_zoom: true,
                 max_h_pre_zoom: false,
+                text_jitter: true,
+                text_distortion: 0.5,
                 ..SongLuaOverlayState::default()
             },
             None,
@@ -8523,6 +8821,8 @@ mod tests {
                 max_height,
                 max_w_pre_zoom,
                 max_h_pre_zoom,
+                jitter,
+                distortion,
                 z,
                 ..
             } => {
@@ -8532,8 +8832,59 @@ mod tests {
                 assert_eq!(max_height, Some(40.0));
                 assert!(max_w_pre_zoom);
                 assert!(!max_h_pre_zoom);
+                assert!(jitter);
+                assert_eq!(distortion, 0.5);
             }
             other => panic!("expected bitmap text actor with layout settings, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_bitmaptext_max_dimension_use_zoom_reaches_runtime() {
+        let text = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("USEZOOM"),
+                stroke_color: None,
+                attributes: empty_text_attributes(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let text_actor = build_song_lua_overlay_actor(
+            &text,
+            SongLuaOverlayState {
+                max_width: Some(80.0),
+                max_height: Some(40.0),
+                max_w_pre_zoom: true,
+                max_h_pre_zoom: true,
+                max_dimension_uses_zoom: true,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            0,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("bitmap text max dimension zoom should render");
+
+        match text_actor {
+            Actor::Text {
+                max_w_pre_zoom,
+                max_h_pre_zoom,
+                ..
+            } => {
+                assert!(!max_w_pre_zoom);
+                assert!(!max_h_pre_zoom);
+            }
+            other => panic!("expected bitmap text actor with max-dimension zoom, got {other:?}"),
         }
     }
 
@@ -8549,6 +8900,8 @@ mod tests {
                     start: 1,
                     length: 2,
                     color: [0.2, 0.4, 0.6, 0.8],
+                    vertex_colors: None,
+                    glow: None,
                 }]),
             },
             name: None,
@@ -8583,6 +8936,69 @@ mod tests {
                 assert_eq!(attributes[0].color, [0.2, 0.4, 0.6, 0.8]);
             }
             other => panic!("expected bitmap text actor with attributes, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_bitmaptext_attributes_can_ignore_actor_diffuse_at_runtime() {
+        let text = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("ATTR"),
+                stroke_color: None,
+                attributes: Arc::from([TextAttribute {
+                    start: 1,
+                    length: 2,
+                    color: [0.2, 0.4, 0.6, 0.8],
+                    vertex_colors: None,
+                    glow: None,
+                }]),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let text_actor = build_song_lua_overlay_actor(
+            &text,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                diffuse: [0.5, 0.6, 0.7, 0.9],
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            792,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("bitmap text with non-multiplied attributes should render");
+
+        match text_actor {
+            Actor::Text {
+                color,
+                attributes,
+                z,
+                ..
+            } => {
+                assert_eq!(z, 792);
+                assert_eq!(color, [1.0, 1.0, 1.0, 1.0]);
+                assert_eq!(attributes.len(), 2);
+                assert_eq!(attributes[0].start, 0);
+                assert_eq!(attributes[0].length, 4);
+                assert_eq!(attributes[0].color, [0.5, 0.6, 0.7, 0.9]);
+                assert_eq!(attributes[1].start, 1);
+                assert_eq!(attributes[1].length, 2);
+                assert_eq!(attributes[1].color, [0.2, 0.4, 0.6, 0.8]);
+            }
+            other => {
+                panic!("expected bitmap text actor with non-multiplied attributes, got {other:?}")
+            }
         }
     }
 

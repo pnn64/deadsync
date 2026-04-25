@@ -295,6 +295,8 @@ fn push_attr(
             start: char_start,
             length: char_len,
             color,
+            vertex_colors: None,
+            glow: None,
         });
     }
 }

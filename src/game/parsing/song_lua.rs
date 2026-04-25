@@ -21,12 +21,12 @@ pub use self::overlay::{
     SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayEase,
     SongLuaOverlayKind, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
     SongLuaOverlayModelDraw, SongLuaOverlayModelLayer, SongLuaOverlayState,
-    SongLuaOverlayStateDelta, SongLuaProxyTarget,
+    SongLuaOverlayStateDelta, SongLuaProxyTarget, SongLuaTextGlowMode,
 };
 use self::overlay::{
     overlay_delta_from_blocks, overlay_delta_intersection, overlay_state_after_blocks,
     parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
-    parse_overlay_text_align,
+    parse_overlay_text_align, parse_overlay_text_glow_mode,
 };
 
 const LUA_PLAYERS: usize = 2;
@@ -10150,6 +10150,17 @@ fn read_overlay_actor(
                 SongLuaOverlayKind::Sprite { texture_path }
             }
         }
+    } else if actor_type.eq_ignore_ascii_case("Sound") {
+        let Some(file) = actor
+            .get::<Option<String>>("File")
+            .map_err(|err| err.to_string())?
+        else {
+            return Ok(None);
+        };
+        let Ok(sound_path) = resolve_actor_asset_path(actor, &file) else {
+            return Ok(None);
+        };
+        SongLuaOverlayKind::Sound { sound_path }
     } else if actor_type.eq_ignore_ascii_case("BitmapText")
         || actor_type.eq_ignore_ascii_case("RollingNumbers")
     {
@@ -11104,6 +11115,32 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         state.rainbow_scroll = value;
     }
     if let Some(value) = actor
+        .get::<Option<bool>>("__songlua_state_text_jitter")
+        .map_err(|err| err.to_string())?
+    {
+        state.text_jitter = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<f32>>("__songlua_state_text_distortion")
+        .map_err(|err| err.to_string())?
+    {
+        state.text_distortion = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<String>>("__songlua_state_text_glow_mode")
+        .map_err(|err| err.to_string())?
+        .as_deref()
+        .and_then(parse_overlay_text_glow_mode)
+    {
+        state.text_glow_mode = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<bool>>("__songlua_state_mult_attrs_with_diffuse")
+        .map_err(|err| err.to_string())?
+    {
+        state.mult_attrs_with_diffuse = value;
+    }
+    if let Some(value) = actor
         .get::<Option<bool>>("__songlua_state_sprite_animate")
         .map_err(|err| err.to_string())?
     {
@@ -11162,6 +11199,12 @@ fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, Str
         .map_err(|err| err.to_string())?
     {
         state.max_h_pre_zoom = value;
+    }
+    if let Some(value) = actor
+        .get::<Option<bool>>("__songlua_state_max_dimension_uses_zoom")
+        .map_err(|err| err.to_string())?
+    {
+        state.max_dimension_uses_zoom = value;
     }
     if let Some(value) = actor
         .get::<Option<u32>>("__songlua_state_sprite_state_index")
@@ -11321,19 +11364,34 @@ fn read_bitmap_text_attributes(actor: &Table) -> Result<Arc<[TextAttribute]>, St
         let length_value = entry
             .raw_get::<Value>("length")
             .map_err(|err| err.to_string())?;
-        let length = read_i32_value(length_value).unwrap_or(1).max(0) as usize;
-        if length == 0 {
+        let length_raw = read_i32_value(length_value).unwrap_or(1);
+        if length_raw == 0 {
             continue;
         }
+        let length = if length_raw < 0 {
+            usize::MAX
+        } else {
+            length_raw as usize
+        };
         let color = entry
             .raw_get::<Table>("color")
             .ok()
             .and_then(|color| table_vec4(&color))
             .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+        let vertex_colors = entry
+            .raw_get::<Table>("vertex_colors")
+            .ok()
+            .and_then(|colors| table_vertex_colors(&colors));
+        let glow = entry
+            .raw_get::<Table>("glow")
+            .ok()
+            .and_then(|color| table_vec4(&color));
         out.push(TextAttribute {
             start,
             length,
             color,
+            vertex_colors,
+            glow,
         });
     }
     Ok(Arc::from(out.into_boxed_slice()))
@@ -11543,22 +11601,44 @@ fn capture_actor_text_attribute(lua: &Lua, actor: &Table, args: &MultiValue) -> 
     };
     let length = text_attribute_value(&params, &["Length", "length"])?
         .and_then(read_i32_value)
-        .unwrap_or(1)
-        .max(0);
+        .unwrap_or(1);
     if length == 0 {
         return Ok(());
     }
-    let color = text_attribute_value(
+    let mut vertex_colors = text_attribute_value(&params, &["Diffuses", "diffuses"])?
+        .and_then(read_vertex_colors_value)
+        .unwrap_or([[1.0, 1.0, 1.0, 1.0]; 4]);
+    if let Some(color) = text_attribute_value(
         &params,
-        &["Diffuse", "diffuse", "DiffuseColor", "diffusecolor", "Color", "color"],
+        &[
+            "Diffuse",
+            "diffuse",
+            "DiffuseColor",
+            "diffusecolor",
+            "Color",
+            "color",
+        ],
     )?
     .and_then(read_color_value)
-    .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+    {
+        vertex_colors = [color; 4];
+    }
+    let color = vertex_colors[0];
+    let glow = text_attribute_value(&params, &["Glow", "glow"])?.and_then(read_color_value);
 
     let attr = lua.create_table()?;
     attr.raw_set("start", start.max(0))?;
     attr.raw_set("length", length)?;
     attr.raw_set("color", make_color_table(lua, color)?)?;
+    if vertex_colors != [color; 4] {
+        attr.raw_set(
+            "vertex_colors",
+            make_vertex_color_table(lua, vertex_colors)?,
+        )?;
+    }
+    if let Some(glow) = glow {
+        attr.raw_set("glow", make_color_table(lua, glow)?)?;
+    }
     let attributes = actor_text_attributes_table(lua, actor)?;
     attributes.raw_set(attributes.raw_len() + 1, attr)?;
     Ok(())
@@ -11738,6 +11818,15 @@ fn effect_clock_label(clock: EffectClock) -> &'static str {
     match clock {
         EffectClock::Time => "time",
         EffectClock::Beat => "beat",
+    }
+}
+
+#[inline(always)]
+fn text_glow_mode_label(mode: SongLuaTextGlowMode) -> &'static str {
+    match mode {
+        SongLuaTextGlowMode::Inner => "inner",
+        SongLuaTextGlowMode::Stroke => "stroke",
+        SongLuaTextGlowMode::Both => "both",
     }
 }
 
@@ -12101,6 +12190,20 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                 rainbow_scroll: block
                     .get::<Option<bool>>("rainbow_scroll")
                     .map_err(|err| err.to_string())?,
+                text_jitter: block
+                    .get::<Option<bool>>("text_jitter")
+                    .map_err(|err| err.to_string())?,
+                text_distortion: block
+                    .get::<Option<f32>>("text_distortion")
+                    .map_err(|err| err.to_string())?,
+                text_glow_mode: block
+                    .get::<Option<String>>("text_glow_mode")
+                    .map_err(|err| err.to_string())?
+                    .as_deref()
+                    .and_then(parse_overlay_text_glow_mode),
+                mult_attrs_with_diffuse: block
+                    .get::<Option<bool>>("mult_attrs_with_diffuse")
+                    .map_err(|err| err.to_string())?,
                 sprite_animate: block
                     .get::<Option<bool>>("sprite_animate")
                     .map_err(|err| err.to_string())?,
@@ -12133,6 +12236,9 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .map_err(|err| err.to_string())?,
                 max_h_pre_zoom: block
                     .get::<Option<bool>>("max_h_pre_zoom")
+                    .map_err(|err| err.to_string())?,
+                max_dimension_uses_zoom: block
+                    .get::<Option<bool>>("max_dimension_uses_zoom")
                     .map_err(|err| err.to_string())?,
                 texture_filtering: block
                     .get::<Option<bool>>("texture_filtering")
@@ -13053,6 +13159,10 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                         if let Some(metric) = method_arg(&args, 0).cloned().and_then(read_string) {
                             actor.set("__songlua_graph_display_metric", metric)?;
                         }
+                        return Ok(actor.clone());
+                    }
+                    if method_name == "Load" && actor_type_is(&actor, "Sound")? {
+                        set_actor_sound_file_from_value(&actor, method_arg(&args, 0), true)?;
                         return Ok(actor.clone());
                     }
                     set_actor_texture_from_value(&actor, method_arg(&args, 0), true)?;
@@ -14909,12 +15019,9 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "SetLightDirection",
         "SetSpecularLightColor",
         "SortByDrawOrder",
-        "distort",
         "fardistz",
         "hibernate",
         "hurrytweening",
-        "jitter",
-        "load",
         "LoadFromCourse",
         "LoadFromSong",
         "LoadFromSongBackground",
@@ -14922,14 +15029,24 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "StartTransitioningScreen",
         "propagate",
         "stop",
-        "undistort",
         "volume",
         "cullmode",
         "zbias",
-        "ztestmode",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
+    actor.set(
+        "load",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                if actor_type_is(&actor, "Sound")? {
+                    set_actor_sound_file_from_value(&actor, method_arg(&args, 0), true)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
     actor.set(
         "rainbow",
         lua.create_function({
@@ -14954,6 +15071,45 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     .and_then(read_boolish)
                     .unwrap_or(true);
                 capture_block_set_bool(lua, &actor, "rainbow_scroll", enabled)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "jitter",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let enabled = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_boolish)
+                    .unwrap_or(true);
+                capture_block_set_bool(lua, &actor, "text_jitter", enabled)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "distort",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let amount = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_f32)
+                    .unwrap_or(0.0)
+                    .max(0.0);
+                capture_block_set_f32(lua, &actor, "text_distortion", amount)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "undistort",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                capture_block_set_f32(lua, &actor, "text_distortion", 0.0)?;
                 Ok(actor.clone())
             }
         })?,
@@ -15024,6 +15180,26 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         )?;
     }
     actor.set(
+        "ztestmode",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let enabled = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_string)
+                    .is_none_or(|mode| {
+                        let normalized = mode
+                            .trim()
+                            .trim_start_matches("ZTestMode_")
+                            .to_ascii_lowercase();
+                        !matches!(normalized.as_str(), "off" | "none" | "false")
+                    });
+                capture_block_set_bool(lua, &actor, "depth_test", enabled)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "finishtweening",
         make_actor_stop_tweening_method(lua, actor)?,
     )?;
@@ -15059,12 +15235,12 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             name,
             lua.create_function({
                 let actor = actor.clone();
-                move |_, args: MultiValue| {
+                move |lua, args: MultiValue| {
                     let value = method_arg(&args, 0)
                         .cloned()
                         .and_then(read_boolish)
                         .unwrap_or(true);
-                    actor.set("__songlua_mult_attrs_with_diffuse", value)?;
+                    capture_block_set_bool(lua, &actor, "mult_attrs_with_diffuse", value)?;
                     Ok(actor.clone())
                 }
             })?,
@@ -15076,7 +15252,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             let actor = actor.clone();
             move |_, _args: MultiValue| {
                 Ok(actor
-                    .get::<Option<bool>>("__songlua_mult_attrs_with_diffuse")?
+                    .get::<Option<bool>>("__songlua_state_mult_attrs_with_diffuse")?
                     .unwrap_or(false))
             }
         })?,
@@ -15085,9 +15261,18 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "textglowmode",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
-                if let Some(mode) = method_arg(&args, 0).cloned().and_then(read_string) {
-                    actor.set("__songlua_text_glow_mode", mode)?;
+            move |lua, args: MultiValue| {
+                if let Some(mode) = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_string)
+                    .and_then(|mode| parse_overlay_text_glow_mode(mode.as_str()))
+                {
+                    capture_block_set_string(
+                        lua,
+                        &actor,
+                        "text_glow_mode",
+                        text_glow_mode_label(mode),
+                    )?;
                 }
                 Ok(actor.clone())
             }
@@ -15204,12 +15389,12 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "max_dimension_use_zoom",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
                 let value = method_arg(&args, 0)
                     .cloned()
                     .and_then(read_boolish)
                     .unwrap_or(true);
-                actor.set("__songlua_max_dimension_uses_zoom", value)?;
+                capture_block_set_bool(lua, &actor, "max_dimension_uses_zoom", value)?;
                 Ok(actor.clone())
             }
         })?,
@@ -15964,6 +16149,19 @@ fn set_actor_texture_from_value(
             actor.set("__songlua_aft_capture_name", Value::Nil)?;
             actor.set("__songlua_state_decode_movie", false)?;
         }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn set_actor_sound_file_from_value(
+    actor: &Table,
+    value: Option<&Value>,
+    clear_on_nil: bool,
+) -> mlua::Result<()> {
+    match value {
+        Some(Value::String(file)) => actor.set("File", file.to_str()?.to_string())?,
+        Some(Value::Nil) | None if clear_on_nil => actor.set("File", Value::Nil)?,
         _ => {}
     }
     Ok(())
@@ -17261,6 +17459,10 @@ fn overlay_delta_pair_from_states(
     copy_option_field!(effect_timing);
     copy_value_field!(rainbow);
     copy_value_field!(rainbow_scroll);
+    copy_value_field!(text_jitter);
+    copy_value_field!(text_distortion);
+    copy_value_field!(text_glow_mode);
+    copy_value_field!(mult_attrs_with_diffuse);
     copy_value_field!(sprite_animate);
     copy_value_field!(sprite_loop);
     copy_value_field!(sprite_playback_rate);
@@ -17272,6 +17474,7 @@ fn overlay_delta_pair_from_states(
     copy_option_field!(max_height);
     copy_value_field!(max_w_pre_zoom);
     copy_value_field!(max_h_pre_zoom);
+    copy_value_field!(max_dimension_uses_zoom);
     copy_value_field!(depth_test);
     copy_value_field!(texture_filtering);
     copy_value_field!(texture_wrapping);
@@ -17991,6 +18194,25 @@ fn read_color_value(value: Value) -> Option<[f32; 4]> {
     }
 }
 
+fn read_vertex_colors_value(value: Value) -> Option<[[f32; 4]; 4]> {
+    let Value::Table(table) = value else {
+        return None;
+    };
+    let mut saw_color = false;
+    let mut colors = [[1.0, 1.0, 1.0, 1.0]; 4];
+    for (index, color) in colors.iter_mut().enumerate() {
+        if let Some(value) = table
+            .raw_get::<Value>(index + 1)
+            .ok()
+            .and_then(read_color_value)
+        {
+            *color = value;
+            saw_color = true;
+        }
+    }
+    saw_color.then_some(colors)
+}
+
 fn read_color_call(args: &MultiValue) -> Option<[f32; 4]> {
     if let Some(color) = args.front().cloned().and_then(read_color_value) {
         return Some(color);
@@ -18299,7 +18521,7 @@ mod tests {
         EffectClock, EffectMode, GRAPH_DISPLAY_VALUE_RESOLUTION, SONG_LUA_INITIAL_LIFE,
         SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaOverlayBlendMode,
         SongLuaOverlayKind, SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode,
-        SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua, file_path_string,
+        SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit, compile_song_lua, file_path_string,
     };
     use crate::engine::present::actors::TextAlign;
     use chrono::{Datelike, Local};
@@ -19501,6 +19723,8 @@ return Def.ActorFrame{
                 :AddAttribute(0, { Length=1, Diffuse=Color.White })
                 :ClearAttributes()
                 :rainbowscroll(true)
+                :jitter(true)
+                :distort(0.5)
         end,
     },
 }
@@ -19519,6 +19743,8 @@ return Def.ActorFrame{
             Some(88)
         );
         assert!(compiled.overlays[0].initial_state.rainbow_scroll);
+        assert!(compiled.overlays[0].initial_state.text_jitter);
+        assert_eq!(compiled.overlays[0].initial_state.text_distortion, 0.5);
     }
 
     #[test]
@@ -19533,7 +19759,26 @@ return Def.ActorFrame{
         Font="Common Normal",
         Text="ATTR",
         OnCommand=function(self)
-            self:AddAttribute(1, { Length=2, Diffuse={0.2, 0.4, 0.6, 0.8} })
+            self:AddAttribute(1, {
+                Length=2,
+                Diffuse={0.2, 0.4, 0.6, 0.8},
+                Glow={0.7, 0.3, 0.9, 0.5},
+            })
+        end,
+    },
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="GRAD",
+        OnCommand=function(self)
+            self:AddAttribute(0, {
+                Length=-1,
+                Diffuses={
+                    {1, 0, 0, 1},
+                    {0, 1, 0, 1},
+                    {0, 0, 1, 1},
+                    {1, 1, 0, 1},
+                },
+            })
         end,
     },
 }
@@ -19546,7 +19791,7 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "BitmapText Attributes"),
         )
         .unwrap();
-        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(compiled.overlays.len(), 2);
         let SongLuaOverlayKind::BitmapText { attributes, .. } = &compiled.overlays[0].kind else {
             panic!("expected BitmapText overlay");
         };
@@ -19554,6 +19799,23 @@ return Def.ActorFrame{
         assert_eq!(attributes[0].start, 1);
         assert_eq!(attributes[0].length, 2);
         assert_eq!(attributes[0].color, [0.2, 0.4, 0.6, 0.8]);
+        assert_eq!(attributes[0].glow, Some([0.7, 0.3, 0.9, 0.5]));
+        let SongLuaOverlayKind::BitmapText { attributes, .. } = &compiled.overlays[1].kind else {
+            panic!("expected BitmapText overlay");
+        };
+        assert_eq!(attributes.len(), 1);
+        assert_eq!(attributes[0].start, 0);
+        assert_eq!(attributes[0].length, usize::MAX);
+        assert_eq!(attributes[0].color, [1.0, 0.0, 0.0, 1.0]);
+        assert_eq!(
+            attributes[0].vertex_colors,
+            Some([
+                [1.0, 0.0, 0.0, 1.0],
+                [0.0, 1.0, 0.0, 1.0],
+                [0.0, 0.0, 1.0, 1.0],
+                [1.0, 1.0, 0.0, 1.0],
+            ])
+        );
     }
 
     #[test]
@@ -21365,6 +21627,85 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_extracts_sound_actor_assets() {
+        let song_dir = test_dir("sound-actor-assets");
+        fs::write(song_dir.join("hit.ogg"), b"not decoded during compile").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sound{
+        Name="HitSound",
+        File="hit.ogg",
+        OnCommand=function(self)
+            self:play()
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Sound Actor Assets"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        let SongLuaOverlayKind::Sound { sound_path } = &compiled.overlays[0].kind else {
+            panic!("expected sound overlay");
+        };
+        assert_eq!(sound_path, &song_dir.join("hit.ogg"));
+        assert!(compiled.overlays[0].initial_state.sprite_animate);
+    }
+
+    #[test]
+    fn compile_song_lua_extracts_sound_load_assets() {
+        let song_dir = test_dir("sound-load-assets");
+        for name in ["initial.ogg", "lower.ogg", "upper.ogg"] {
+            fs::write(song_dir.join(name), b"not decoded during compile").unwrap();
+        }
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sound{
+        Name="LowerLoad",
+        File="initial.ogg",
+        OnCommand=function(self)
+            self:load("lower.ogg")
+        end,
+    },
+    Def.Sound{
+        Name="UpperLoad",
+        OnCommand=function(self)
+            self:Load("upper.ogg")
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Sound Load Assets"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+        let SongLuaOverlayKind::Sound { sound_path } = &compiled.overlays[0].kind else {
+            panic!("expected lower sound overlay");
+        };
+        assert_eq!(sound_path, &song_dir.join("lower.ogg"));
+        let SongLuaOverlayKind::Sound { sound_path } = &compiled.overlays[1].kind else {
+            panic!("expected upper sound overlay");
+        };
+        assert_eq!(sound_path, &song_dir.join("upper.ogg"));
+    }
+
+    #[test]
     fn compile_song_lua_set_current_steps_updates_selected_steps() {
         let song_dir = test_dir("set-current-steps");
         let entry = song_dir.join("default.lua");
@@ -21962,6 +22303,7 @@ return Def.ActorFrame{
         let song_dir = test_dir("loadactor-audio-media");
         let audio_path = song_dir.join("clip.ogg");
         fs::write(&audio_path, [0xff_u8, 0xd8, 0x00, 0x81]).unwrap();
+        fs::write(song_dir.join("other.ogg"), b"not decoded during compile").unwrap();
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
@@ -21973,7 +22315,7 @@ return Def.ActorFrame{
             mod_actions = {
                 {1, string.format(
                     "%s:%s",
-                    tostring(self.File == "clip.ogg"),
+                    tostring(self.File == "other.ogg"),
                     tostring(self:GetTexture() == nil)
                 ), true},
             }
@@ -21991,6 +22333,11 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "true:true");
+        assert_eq!(compiled.overlays.len(), 1);
+        let SongLuaOverlayKind::Sound { sound_path } = &compiled.overlays[0].kind else {
+            panic!("expected sound overlay");
+        };
+        assert_eq!(sound_path, &song_dir.join("other.ogg"));
     }
 
     #[test]
@@ -22239,7 +22586,7 @@ return Def.ActorFrame{
         OnCommand=function(self)
             self:strokecolor(color("0.2,0.3,0.4,0.5"))
                 :max_dimension_use_zoom(true)
-                :textglowmode("Both")
+                :textglowmode("Stroke")
                 :set_mult_attrs_with_diffuse(true)
             local stroke = self:getstrokecolor()
             mod_actions[#mod_actions + 1] = {
@@ -22292,6 +22639,11 @@ return Def.ActorFrame{
                 ..
             }
         ));
+        assert_eq!(
+            compiled.overlays[2].initial_state.text_glow_mode,
+            SongLuaTextGlowMode::Stroke
+        );
+        assert!(compiled.overlays[2].initial_state.mult_attrs_with_diffuse);
     }
 
     #[test]
@@ -23078,6 +23430,13 @@ return Def.ActorFrame{
             self:zoom(2):maxwidth(90):maxheight(50)
         end,
     },
+    Def.BitmapText{
+        Font="Common Normal",
+        Text="USEZOOM",
+        OnCommand=function(self)
+            self:maxwidth(70):maxheight(30):zoom(2):max_dimension_use_zoom(true)
+        end,
+    },
 }
 "#,
         )
@@ -23088,7 +23447,7 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "BitmapText Layout Methods"),
         )
         .unwrap();
-        assert_eq!(compiled.overlays.len(), 2);
+        assert_eq!(compiled.overlays.len(), 3);
 
         let pre_zoom = compiled.overlays[0].initial_state;
         assert_eq!(pre_zoom.wrap_width_pixels, Some(64));
@@ -23102,6 +23461,13 @@ return Def.ActorFrame{
         assert_eq!(post_zoom.max_height, Some(50.0));
         assert!(!post_zoom.max_w_pre_zoom);
         assert!(!post_zoom.max_h_pre_zoom);
+
+        let use_zoom = compiled.overlays[2].initial_state;
+        assert_eq!(use_zoom.max_width, Some(70.0));
+        assert_eq!(use_zoom.max_height, Some(30.0));
+        assert!(use_zoom.max_w_pre_zoom);
+        assert!(use_zoom.max_h_pre_zoom);
+        assert!(use_zoom.max_dimension_uses_zoom);
     }
 
     #[test]
@@ -24140,6 +24506,11 @@ return Def.ActorFrame{
             }
         end,
     },
+    Def.Quad{
+        OnCommand=function(self)
+            self:ztest(false):ztestmode("WriteOnFail")
+        end,
+    },
 }
 "#,
         )
@@ -24152,10 +24523,11 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "1.00");
-        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(compiled.overlays.len(), 2);
         assert_eq!(compiled.overlays[0].initial_state.draw_order, 100);
         assert!(compiled.overlays[0].initial_state.depth_test);
         assert!(!compiled.overlays[0].initial_state.texture_filtering);
+        assert!(compiled.overlays[1].initial_state.depth_test);
     }
 
     #[test]

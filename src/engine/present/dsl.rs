@@ -1247,6 +1247,8 @@ impl TextBuilder {
             max_height: self.max_h,
             max_w_pre_zoom: self.max_w_pre_zoom,
             max_h_pre_zoom: self.max_h_pre_zoom,
+            jitter: false,
+            distortion: 0.0,
             clip: None,
             mask_dest: false,
             blend: self.blend,

@@ -24,6 +24,13 @@ pub enum SongLuaOverlayBlendMode {
     Subtract,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SongLuaTextGlowMode {
+    Inner,
+    Stroke,
+    Both,
+}
+
 #[derive(Debug, Clone)]
 pub enum SongLuaOverlayKind {
     ActorFrame,
@@ -36,6 +43,9 @@ pub enum SongLuaOverlayKind {
     },
     Sprite {
         texture_path: PathBuf,
+    },
+    Sound {
+        sound_path: PathBuf,
     },
     BitmapText {
         font_name: &'static str,
@@ -147,6 +157,10 @@ pub struct SongLuaOverlayState {
     pub effect_timing: Option<[f32; 5]>,
     pub rainbow: bool,
     pub rainbow_scroll: bool,
+    pub text_jitter: bool,
+    pub text_distortion: f32,
+    pub text_glow_mode: SongLuaTextGlowMode,
+    pub mult_attrs_with_diffuse: bool,
     pub sprite_animate: bool,
     pub sprite_loop: bool,
     pub sprite_playback_rate: f32,
@@ -159,6 +173,7 @@ pub struct SongLuaOverlayState {
     pub max_height: Option<f32>,
     pub max_w_pre_zoom: bool,
     pub max_h_pre_zoom: bool,
+    pub max_dimension_uses_zoom: bool,
     pub texture_filtering: bool,
     pub texture_wrapping: bool,
     pub texcoord_offset: Option<[f32; 2]>,
@@ -222,6 +237,10 @@ impl Default for SongLuaOverlayState {
             effect_timing: None,
             rainbow: false,
             rainbow_scroll: false,
+            text_jitter: false,
+            text_distortion: 0.0,
+            text_glow_mode: SongLuaTextGlowMode::Both,
+            mult_attrs_with_diffuse: false,
             sprite_animate: false,
             sprite_loop: true,
             sprite_playback_rate: 1.0,
@@ -234,6 +253,7 @@ impl Default for SongLuaOverlayState {
             max_height: None,
             max_w_pre_zoom: false,
             max_h_pre_zoom: false,
+            max_dimension_uses_zoom: false,
             texture_filtering: true,
             texture_wrapping: false,
             texcoord_offset: None,
@@ -298,6 +318,10 @@ pub struct SongLuaOverlayStateDelta {
     pub effect_timing: Option<[f32; 5]>,
     pub rainbow: Option<bool>,
     pub rainbow_scroll: Option<bool>,
+    pub text_jitter: Option<bool>,
+    pub text_distortion: Option<f32>,
+    pub text_glow_mode: Option<SongLuaTextGlowMode>,
+    pub mult_attrs_with_diffuse: Option<bool>,
     pub sprite_animate: Option<bool>,
     pub sprite_loop: Option<bool>,
     pub sprite_playback_rate: Option<f32>,
@@ -309,6 +333,7 @@ pub struct SongLuaOverlayStateDelta {
     pub max_height: Option<f32>,
     pub max_w_pre_zoom: Option<bool>,
     pub max_h_pre_zoom: Option<bool>,
+    pub max_dimension_uses_zoom: Option<bool>,
     pub texture_filtering: Option<bool>,
     pub texture_wrapping: Option<bool>,
     pub texcoord_offset: Option<[f32; 2]>,
@@ -547,6 +572,18 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.rainbow_scroll {
         state.rainbow_scroll = value;
     }
+    if let Some(value) = delta.text_jitter {
+        state.text_jitter = value;
+    }
+    if let Some(value) = delta.text_distortion {
+        state.text_distortion = value;
+    }
+    if let Some(value) = delta.text_glow_mode {
+        state.text_glow_mode = value;
+    }
+    if let Some(value) = delta.mult_attrs_with_diffuse {
+        state.mult_attrs_with_diffuse = value;
+    }
     if let Some(value) = delta.sprite_animate {
         state.sprite_animate = value;
     }
@@ -579,6 +616,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     }
     if let Some(value) = delta.max_h_pre_zoom {
         state.max_h_pre_zoom = value;
+    }
+    if let Some(value) = delta.max_dimension_uses_zoom {
+        state.max_dimension_uses_zoom = value;
     }
     if let Some(value) = delta.texture_filtering {
         state.texture_filtering = value;
@@ -673,9 +713,9 @@ fn overlay_state_lerp(
         let to_colors = to.vertex_colors.unwrap_or([[1.0, 1.0, 1.0, 1.0]; 4]);
         for corner in 0..4 {
             for channel in 0..4 {
-                from_colors[corner][channel] =
-                    (to_colors[corner][channel] - from_colors[corner][channel])
-                        .mul_add(t, from_colors[corner][channel]);
+                from_colors[corner][channel] = (to_colors[corner][channel]
+                    - from_colors[corner][channel])
+                    .mul_add(t, from_colors[corner][channel]);
             }
         }
         from.vertex_colors = Some(from_colors);
@@ -814,6 +854,9 @@ fn overlay_state_lerp(
     if delta.max_h_pre_zoom.is_some() && t >= 1.0 - f32::EPSILON {
         from.max_h_pre_zoom = to.max_h_pre_zoom;
     }
+    if delta.max_dimension_uses_zoom.is_some() && t >= 1.0 - f32::EPSILON {
+        from.max_dimension_uses_zoom = to.max_dimension_uses_zoom;
+    }
     if delta.texcoord_offset.is_some()
         && let (Some(from_offset), Some(to_offset)) = (from.texcoord_offset, to.texcoord_offset)
     {
@@ -878,6 +921,19 @@ fn overlay_state_lerp(
     }
     if delta.rainbow_scroll.is_some() && t >= 1.0 - f32::EPSILON {
         from.rainbow_scroll = to.rainbow_scroll;
+    }
+    if delta.text_jitter.is_some() && t >= 1.0 - f32::EPSILON {
+        from.text_jitter = to.text_jitter;
+    }
+    if delta.text_distortion.is_some() {
+        from.text_distortion =
+            (to.text_distortion - from.text_distortion).mul_add(t, from.text_distortion);
+    }
+    if delta.text_glow_mode.is_some() && t >= 1.0 - f32::EPSILON {
+        from.text_glow_mode = to.text_glow_mode;
+    }
+    if delta.mult_attrs_with_diffuse.is_some() && t >= 1.0 - f32::EPSILON {
+        from.mult_attrs_with_diffuse = to.mult_attrs_with_diffuse;
     }
     if delta.sprite_animate.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_animate = to.sprite_animate;
@@ -962,6 +1018,20 @@ pub(super) fn parse_overlay_text_align(raw: &str) -> Option<TextAlign> {
     }
 }
 
+pub(super) fn parse_overlay_text_glow_mode(raw: &str) -> Option<SongLuaTextGlowMode> {
+    let lower = raw
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_ascii_lowercase();
+    match lower.as_str() {
+        "inner" | "textglowmode_inner" => Some(SongLuaTextGlowMode::Inner),
+        "stroke" | "textglowmode_stroke" => Some(SongLuaTextGlowMode::Stroke),
+        "both" | "textglowmode_both" => Some(SongLuaTextGlowMode::Both),
+        _ => None,
+    }
+}
+
 fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
     delta.x.is_none()
         && delta.y.is_none()
@@ -1014,6 +1084,10 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.effect_timing.is_none()
         && delta.rainbow.is_none()
         && delta.rainbow_scroll.is_none()
+        && delta.text_jitter.is_none()
+        && delta.text_distortion.is_none()
+        && delta.text_glow_mode.is_none()
+        && delta.mult_attrs_with_diffuse.is_none()
         && delta.sprite_animate.is_none()
         && delta.sprite_loop.is_none()
         && delta.sprite_playback_rate.is_none()
@@ -1025,6 +1099,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.max_height.is_none()
         && delta.max_w_pre_zoom.is_none()
         && delta.max_h_pre_zoom.is_none()
+        && delta.max_dimension_uses_zoom.is_none()
         && delta.texture_filtering.is_none()
         && delta.texture_wrapping.is_none()
         && delta.texcoord_offset.is_none()
@@ -1206,6 +1281,18 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.rainbow_scroll.is_some() {
         into.rainbow_scroll = from.rainbow_scroll;
     }
+    if from.text_jitter.is_some() {
+        into.text_jitter = from.text_jitter;
+    }
+    if from.text_distortion.is_some() {
+        into.text_distortion = from.text_distortion;
+    }
+    if from.text_glow_mode.is_some() {
+        into.text_glow_mode = from.text_glow_mode;
+    }
+    if from.mult_attrs_with_diffuse.is_some() {
+        into.mult_attrs_with_diffuse = from.mult_attrs_with_diffuse;
+    }
     if from.sprite_animate.is_some() {
         into.sprite_animate = from.sprite_animate;
     }
@@ -1238,6 +1325,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.max_h_pre_zoom.is_some() {
         into.max_h_pre_zoom = from.max_h_pre_zoom;
+    }
+    if from.max_dimension_uses_zoom.is_some() {
+        into.max_dimension_uses_zoom = from.max_dimension_uses_zoom;
     }
     if from.texture_filtering.is_some() {
         into.texture_filtering = from.texture_filtering;
@@ -1337,6 +1427,10 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(effect_timing);
     copy_pair!(rainbow);
     copy_pair!(rainbow_scroll);
+    copy_pair!(text_jitter);
+    copy_pair!(text_distortion);
+    copy_pair!(text_glow_mode);
+    copy_pair!(mult_attrs_with_diffuse);
     copy_pair!(sprite_animate);
     copy_pair!(sprite_loop);
     copy_pair!(sprite_playback_rate);
@@ -1348,6 +1442,7 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(max_height);
     copy_pair!(max_w_pre_zoom);
     copy_pair!(max_h_pre_zoom);
+    copy_pair!(max_dimension_uses_zoom);
     copy_pair!(texture_filtering);
     copy_pair!(texture_wrapping);
     copy_pair!(texcoord_offset);
