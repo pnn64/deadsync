@@ -1,6 +1,6 @@
-use super::super::row::{BitmaskInit, CursorInit};
 use super::super::constants::MINI_INDICATOR_VARIANTS;
 use super::super::row::index_binding;
+use super::super::row::{BitmaskInit, CursorInit};
 use super::*;
 use crate::game::profile as gp;
 
@@ -182,7 +182,11 @@ const SCROLL: BitmaskBinding = BitmaskBinding {
         },
         get_active: |m| m.scroll.bits() as u32,
         set_active: |m, b| {
-            debug_assert_eq!(b & !(u8::MAX as u32), 0, "ScrollMask init bits exceed u8 width");
+            debug_assert_eq!(
+                b & !(u8::MAX as u32),
+                0,
+                "ScrollMask init bits exceed u8 width"
+            );
             m.scroll = super::super::state::ScrollMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
@@ -218,7 +222,11 @@ const HIDE: BitmaskBinding = BitmaskBinding {
         },
         get_active: |m| m.hide.bits() as u32,
         set_active: |m, b| {
-            debug_assert_eq!(b & !(u8::MAX as u32), 0, "HideMask init bits exceed u8 width");
+            debug_assert_eq!(
+                b & !(u8::MAX as u32),
+                0,
+                "HideMask init bits exceed u8 width"
+            );
             m.hide = super::super::state::HideMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
@@ -243,7 +251,8 @@ const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding {
         get_active: |m| m.life_bar_options.bits() as u32,
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32), 0,
+                b & !(u8::MAX as u32),
+                0,
                 "LifeBarOptionsMask init bits exceed u8 width",
             );
             m.life_bar_options = super::super::state::LifeBarOptionsMask::from_bits_retain(b as u8);
@@ -273,11 +282,11 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding {
         get_active: |m| m.gameplay_extras.bits() as u32,
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32), 0,
+                b & !(u8::MAX as u32),
+                0,
                 "GameplayExtrasMask init bits exceed u8 width",
             );
-            m.gameplay_extras =
-                super::super::state::GameplayExtrasMask::from_bits_retain(b as u8);
+            m.gameplay_extras = super::super::state::GameplayExtrasMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     }),
@@ -298,7 +307,11 @@ const ERROR_BAR: BitmaskBinding = BitmaskBinding {
         },
         get_active: |m| m.error_bar.bits() as u32,
         set_active: |m, b| {
-            debug_assert_eq!(b & !(u8::MAX as u32), 0, "ErrorBarMask init bits exceed u8 width");
+            debug_assert_eq!(
+                b & !(u8::MAX as u32),
+                0,
+                "ErrorBarMask init bits exceed u8 width"
+            );
             m.error_bar = crate::game::profile::ErrorBarMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
@@ -320,7 +333,8 @@ const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding {
         get_active: |m| m.error_bar_options.bits() as u32,
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32), 0,
+                b & !(u8::MAX as u32),
+                0,
                 "ErrorBarOptionsMask init bits exceed u8 width",
             );
             m.error_bar_options =
@@ -354,7 +368,8 @@ const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding {
         get_active: |m| m.measure_counter_options.bits() as u32,
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32), 0,
+                b & !(u8::MAX as u32),
+                0,
                 "MeasureCounterOptionsMask init bits exceed u8 width",
             );
             m.measure_counter_options =
@@ -390,7 +405,11 @@ const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding {
         },
         get_active: |m| m.fa_plus.bits() as u32,
         set_active: |m, b| {
-            debug_assert_eq!(b & !(u8::MAX as u32), 0, "FaPlusMask init bits exceed u8 width");
+            debug_assert_eq!(
+                b & !(u8::MAX as u32),
+                0,
+                "FaPlusMask init bits exceed u8 width"
+            );
             m.fa_plus = super::super::state::FaPlusMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::Fixed(0),
@@ -411,7 +430,11 @@ const EARLY_DW_OPTIONS: BitmaskBinding = BitmaskBinding {
         },
         get_active: |m| m.early_dw.bits() as u32,
         set_active: |m, b| {
-            debug_assert_eq!(b & !(u8::MAX as u32), 0, "EarlyDwMask init bits exceed u8 width");
+            debug_assert_eq!(
+                b & !(u8::MAX as u32),
+                0,
+                "EarlyDwMask init bits exceed u8 width"
+            );
             m.early_dw = super::super::state::EarlyDwMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
@@ -430,7 +453,8 @@ const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding {
         get_active: |m| m.results_extras.bits() as u32,
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32), 0,
+                b & !(u8::MAX as u32),
+                0,
                 "ResultsExtrasMask init bits exceed u8 width",
             );
             m.results_extras = super::super::state::ResultsExtrasMask::from_bits_retain(b as u8);
@@ -1097,10 +1121,10 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
 
 #[cfg(test)]
 mod bitmask_binding_init_tests {
-    use super::*;
-    use super::super::super::row::{init_bitmask_row_from_binding, Row, RowBehavior, RowId};
+    use super::super::super::row::{Row, RowBehavior, RowId, init_bitmask_row_from_binding};
     use super::super::super::state::{FaPlusMask, HideMask, PlayerOptionMasks};
-    use crate::assets::i18n::{lookup_key, LookupKey};
+    use super::*;
+    use crate::assets::i18n::{LookupKey, lookup_key};
     use crate::game::profile::Profile;
 
     fn ensure_i18n() {
@@ -1141,7 +1165,9 @@ mod bitmask_binding_init_tests {
         let mut row = make_bitmask_row(
             RowId::Hide,
             lookup_key("PlayerOptions", "Hide"),
-            &["Targets", "BG", "Combo", "Life", "Score", "Danger", "ComboExp"],
+            &[
+                "Targets", "BG", "Combo", "Life", "Score", "Danger", "ComboExp",
+            ],
         );
         let mut masks = PlayerOptionMasks::default();
         let applied = init_bitmask_row_from_binding(&mut row, &HIDE, &profile, &mut masks, 0);
@@ -1173,7 +1199,8 @@ mod bitmask_binding_init_tests {
             &["Window", "EX", "HardEX", "Pane", "Blue10", "Split"],
         );
         let mut masks = PlayerOptionMasks::default();
-        let applied = init_bitmask_row_from_binding(&mut row, &FA_PLUS_OPTIONS, &profile, &mut masks, 0);
+        let applied =
+            init_bitmask_row_from_binding(&mut row, &FA_PLUS_OPTIONS, &profile, &mut masks, 0);
         assert!(applied, "FA_PLUS_OPTIONS binding has init contract");
         assert_eq!(
             masks.fa_plus,
@@ -1205,8 +1232,7 @@ mod bitmask_binding_init_tests {
             toggle: |_, _| {},
             init: None,
         };
-        let applied =
-            init_bitmask_row_from_binding(&mut row, &init_less, &profile, &mut masks, 0);
+        let applied = init_bitmask_row_from_binding(&mut row, &init_less, &profile, &mut masks, 0);
         assert!(!applied, "init-less binding must short-circuit");
         assert_eq!(row.selected_choice_index, [3, 4], "row untouched");
         assert_eq!(masks, PlayerOptionMasks::default(), "masks untouched");

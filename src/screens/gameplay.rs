@@ -1,8 +1,8 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::gfx::{
     BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, TexturedMeshVertex,
 };
@@ -696,7 +696,12 @@ pub fn prewarm_text_layout(
     let cfg = crate::config::get();
     for centi in 0..=10_000 {
         let text = cached_score_2dp(centi as f64 / 100.0);
-        cache.prewarm_text(fonts, current_machine_font_key(FontRole::Numbers), text.as_ref(), None);
+        cache.prewarm_text(
+            fonts,
+            current_machine_font_key(FontRole::Numbers),
+            text.as_ref(),
+            None,
+        );
     }
     for tenths in 0..=1_000 {
         let text = cached_life_percent_text(tenths as f32 / 10.0);
@@ -705,7 +710,12 @@ pub fn prewarm_text_layout(
     for player in 0..state.num_players {
         let chart = &state.charts[player];
         let meter_text = cached_meter_text(chart.meter);
-        cache.prewarm_text(fonts, current_machine_font_key(FontRole::Header), meter_text.as_ref(), None);
+        cache.prewarm_text(
+            fonts,
+            current_machine_font_key(FontRole::Header),
+            meter_text.as_ref(),
+            None,
+        );
         let detail = color::difficulty_display_name_for_song(
             &chart.difficulty,
             &state.song.title,

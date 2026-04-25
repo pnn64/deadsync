@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::i18n::{LookupKey, lookup_key};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;

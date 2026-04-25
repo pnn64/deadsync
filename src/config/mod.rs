@@ -26,11 +26,11 @@ pub use self::runtime::{
 pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
     AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, GameFlag, LanguageFlag,
-    LogLevel, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
-    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SyncGraphMode, MACHINE_FONT_VARIANTS,
-    ThemeFlag, MachineFont,
-    auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
+    LogLevel, MACHINE_FONT_VARIANTS, MachineFont, MachinePreferredPlayMode,
+    MachinePreferredPlayStyle, MenuBackgroundStyle, NewPackMode, SelectMusicItlRankMode,
+    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, auto_screenshot_bit,
+    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 

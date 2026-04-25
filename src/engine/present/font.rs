@@ -2093,7 +2093,10 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
             };
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase)
+                if path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(str::to_ascii_lowercase)
                     != Some("ini".to_string())
                 {
                     continue;

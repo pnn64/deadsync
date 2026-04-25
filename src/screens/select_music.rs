@@ -1,7 +1,7 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::{
     self, BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
     SyncGraphMode, dirs,

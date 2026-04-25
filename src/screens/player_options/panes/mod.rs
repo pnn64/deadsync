@@ -486,9 +486,7 @@ fn init_opted_in_bitmask_rows(
             continue;
         }
         let row = row_map.get_mut(id).expect("row was just observed");
-        super::row::init_bitmask_row_from_binding(
-            row, &binding, profile, masks, player_idx,
-        );
+        super::row::init_bitmask_row_from_binding(row, &binding, profile, masks, player_idx);
     }
 }
 
@@ -523,10 +521,7 @@ const DERIVED_MASKS: &[DerivedMaskRule] = &[DerivedMaskRule {
     },
 }];
 
-fn apply_derived_masks(
-    profile: &crate::game::profile::Profile,
-    masks: &mut PlayerOptionMasks,
-) {
+fn apply_derived_masks(profile: &crate::game::profile::Profile, masks: &mut PlayerOptionMasks) {
     for rule in DERIVED_MASKS {
         (rule.apply)(profile, masks);
     }

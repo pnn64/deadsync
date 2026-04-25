@@ -1,5 +1,5 @@
-use crate::assets::{FontRole, current_machine_font_key};
 use super::*;
+use crate::assets::{FontRole, current_machine_font_key};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpeedModType {

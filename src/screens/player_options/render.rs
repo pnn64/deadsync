@@ -1,5 +1,5 @@
-use crate::assets::{FontRole, current_machine_font_key};
 use super::*;
+use crate::assets::{FontRole, current_machine_font_key};
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
@@ -84,11 +84,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let main_draw_w = measure_wendy_text_width(asset_manager, &speed_text);
             let speed_x = speed_x_for(player_idx);
 
-            actors.push(act!(text: font(current_machine_font_key(FontRole::Header)): settext(speed_text):
-                align(0.5, 0.5): xy(speed_x, speed_mod_y): zoom(speed_mod_zoom):
-                diffuse(speed_color[0], speed_color[1], speed_color[2], pane_alpha):
-                z(Z_SPEED_MOD_TEXT)
-            ));
+            actors.push(
+                act!(text: font(current_machine_font_key(FontRole::Header)): settext(speed_text):
+                    align(0.5, 0.5): xy(speed_x, speed_mod_y): zoom(speed_mod_zoom):
+                    diffuse(speed_color[0], speed_color[1], speed_color[2], pane_alpha):
+                    z(Z_SPEED_MOD_TEXT)
+                ),
+            );
 
             let scaled_scroll = speed_mod_helper_scaled_text(
                 &state.song,
@@ -1645,10 +1647,14 @@ fn draw_tap_explosion_preview(
 }
 
 fn draw_noteskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if let Some(ns) = rc.fc.state.noteskin.previews[primary_player_idx].base.as_ref() {
+    if let Some(ns) = rc.fc.state.noteskin.previews[primary_player_idx]
+        .base
+        .as_ref()
+    {
         draw_noteskin_preview(actors, rc, ns, rc.fc.preview_x[primary_player_idx]);
     }
-    if rc.fc.show_p2 && primary_player_idx != P2
+    if rc.fc.show_p2
+        && primary_player_idx != P2
         && let Some(ns) = rc.fc.state.noteskin.previews[P2].base.as_ref()
     {
         draw_noteskin_preview(actors, rc, ns, rc.fc.preview_x[P2]);
@@ -1656,14 +1662,21 @@ fn draw_noteskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_playe
 }
 
 fn draw_mineskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if let Some(mine_ns) = rc.fc.state.noteskin.previews[primary_player_idx].mine
+    if let Some(mine_ns) = rc.fc.state.noteskin.previews[primary_player_idx]
+        .mine
         .as_deref()
-        .or_else(|| rc.fc.state.noteskin.previews[primary_player_idx].base.as_deref())
+        .or_else(|| {
+            rc.fc.state.noteskin.previews[primary_player_idx]
+                .base
+                .as_deref()
+        })
     {
         draw_mine_preview(actors, rc, mine_ns, rc.fc.preview_x[primary_player_idx]);
     }
-    if rc.fc.show_p2 && primary_player_idx != P2
-        && let Some(mine_ns) = rc.fc.state.noteskin.previews[P2].mine
+    if rc.fc.show_p2
+        && primary_player_idx != P2
+        && let Some(mine_ns) = rc.fc.state.noteskin.previews[P2]
+            .mine
             .as_deref()
             .or_else(|| rc.fc.state.noteskin.previews[P2].base.as_deref())
     {
@@ -1672,15 +1685,21 @@ fn draw_mineskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_playe
 }
 
 fn draw_receptorskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if let Some(receptor_ns) = rc.fc.state.noteskin.previews[primary_player_idx].receptor
+    if let Some(receptor_ns) = rc.fc.state.noteskin.previews[primary_player_idx]
+        .receptor
         .as_deref()
-        .or_else(|| rc.fc.state.noteskin.previews[primary_player_idx].base.as_deref())
+        .or_else(|| {
+            rc.fc.state.noteskin.previews[primary_player_idx]
+                .base
+                .as_deref()
+        })
     {
         draw_receptor_preview(actors, rc, receptor_ns, rc.fc.preview_x[primary_player_idx]);
     }
     if rc.fc.show_p2
         && primary_player_idx != P2
-        && let Some(receptor_ns) = rc.fc.state.noteskin.previews[P2].receptor
+        && let Some(receptor_ns) = rc.fc.state.noteskin.previews[P2]
+            .receptor
             .as_deref()
             .or_else(|| rc.fc.state.noteskin.previews[P2].base.as_deref())
     {
@@ -1689,15 +1708,24 @@ fn draw_receptorskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_p
 }
 
 fn draw_tap_explosion_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if !rc.fc.state.player_profiles[primary_player_idx]
-        .tap_explosion_noteskin_hidden()
-        && let Some(explosion_ns) = rc.fc.state.noteskin.previews[primary_player_idx].tap_explosion
+    if !rc.fc.state.player_profiles[primary_player_idx].tap_explosion_noteskin_hidden()
+        && let Some(explosion_ns) = rc.fc.state.noteskin.previews[primary_player_idx]
+            .tap_explosion
             .as_deref()
-            .or_else(|| rc.fc.state.noteskin.previews[primary_player_idx].base.as_deref())
+            .or_else(|| {
+                rc.fc.state.noteskin.previews[primary_player_idx]
+                    .base
+                    .as_deref()
+            })
     {
-        let receptor_ns = rc.fc.state.noteskin.previews[primary_player_idx].receptor
+        let receptor_ns = rc.fc.state.noteskin.previews[primary_player_idx]
+            .receptor
             .as_deref()
-            .or_else(|| rc.fc.state.noteskin.previews[primary_player_idx].base.as_deref())
+            .or_else(|| {
+                rc.fc.state.noteskin.previews[primary_player_idx]
+                    .base
+                    .as_deref()
+            })
             .unwrap_or(explosion_ns);
         draw_tap_explosion_preview(
             actors,
@@ -1710,11 +1738,13 @@ fn draw_tap_explosion_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_
     if rc.fc.show_p2
         && primary_player_idx != P2
         && !rc.fc.state.player_profiles[P2].tap_explosion_noteskin_hidden()
-        && let Some(explosion_ns) = rc.fc.state.noteskin.previews[P2].tap_explosion
+        && let Some(explosion_ns) = rc.fc.state.noteskin.previews[P2]
+            .tap_explosion
             .as_deref()
             .or_else(|| rc.fc.state.noteskin.previews[P2].base.as_deref())
     {
-        let receptor_ns = rc.fc.state.noteskin.previews[P2].receptor
+        let receptor_ns = rc.fc.state.noteskin.previews[P2]
+            .receptor
             .as_deref()
             .or_else(|| rc.fc.state.noteskin.previews[P2].base.as_deref())
             .unwrap_or(explosion_ns);

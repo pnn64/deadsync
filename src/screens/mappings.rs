@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::AssetManager;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
 use crate::engine::input::{
     GamepadCodeBinding, InputBinding, InputEvent, InputSource, PadEvent, RawKeyboardEvent,

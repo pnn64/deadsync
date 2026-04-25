@@ -1,15 +1,15 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::{self, AssetManager};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::display::{self, MonitorSpec};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
 use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app via the dispatcher
 use crate::config::{
-    self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
-    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicWheelStyle, SimpleIni, SyncGraphMode, MachineFont, dirs,
+    self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel, MachineFont,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, MenuBackgroundStyle, NewPackMode,
+    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SimpleIni, SyncGraphMode, dirs,
 };
 use crate::engine::audio;
 #[cfg(target_os = "windows")]
@@ -5790,6 +5790,20 @@ const fn machine_font_from_choice(idx: usize) -> MachineFont {
     }
 }
 
+const fn menu_background_style_choice_index(style: MenuBackgroundStyle) -> usize {
+    match style {
+        MenuBackgroundStyle::Hearts => 0,
+        MenuBackgroundStyle::Technique => 1,
+    }
+}
+
+const fn menu_background_style_from_choice(idx: usize) -> MenuBackgroundStyle {
+    match idx {
+        1 => MenuBackgroundStyle::Technique,
+        _ => MenuBackgroundStyle::Hearts,
+    }
+}
+
 const fn log_level_choice_index(level: LogLevel) -> usize {
     match level {
         LogLevel::Error => 0,
@@ -8140,9 +8154,7 @@ fn apply_submenu_choice_delta(
             SubRowId::PreferredMode => config::update_machine_preferred_play_mode(
                 machine_preferred_mode_from_choice(new_index),
             ),
-            SubRowId::Font => {
-                config::update_machine_font(machine_font_from_choice(new_index))
-            }
+            SubRowId::Font => config::update_machine_font(machine_font_from_choice(new_index)),
             SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
             SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),

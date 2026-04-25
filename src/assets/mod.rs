@@ -708,15 +708,30 @@ mod tests {
     fn machine_font_key_normal_is_always_miso() {
         // Mirrors SL's `Mega Normal.redir -> Miso/_miso light`: body text
         // never swaps to Mega even when the machine font is Mega.
-        assert_eq!(machine_font_key(MachineFont::Common, FontRole::Normal), "miso");
-        assert_eq!(machine_font_key(MachineFont::Mega, FontRole::Normal), "miso");
+        assert_eq!(
+            machine_font_key(MachineFont::Common, FontRole::Normal),
+            "miso"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Mega, FontRole::Normal),
+            "miso"
+        );
     }
 
     #[test]
     fn machine_font_key_common_routes_to_wendy_family() {
-        assert_eq!(machine_font_key(MachineFont::Common, FontRole::Bold), "wendy");
-        assert_eq!(machine_font_key(MachineFont::Common, FontRole::Header), "wendy");
-        assert_eq!(machine_font_key(MachineFont::Common, FontRole::Footer), "wendy");
+        assert_eq!(
+            machine_font_key(MachineFont::Common, FontRole::Bold),
+            "wendy"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Common, FontRole::Header),
+            "wendy"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Common, FontRole::Footer),
+            "wendy"
+        );
         assert_eq!(
             machine_font_key(MachineFont::Common, FontRole::Numbers),
             "wendy_monospace_numbers"
@@ -729,9 +744,18 @@ mod tests {
 
     #[test]
     fn machine_font_key_mega_routes_to_mega_family() {
-        assert_eq!(machine_font_key(MachineFont::Mega, FontRole::Bold), "mega_alpha");
-        assert_eq!(machine_font_key(MachineFont::Mega, FontRole::Header), "mega_alpha");
-        assert_eq!(machine_font_key(MachineFont::Mega, FontRole::Footer), "mega_alpha");
+        assert_eq!(
+            machine_font_key(MachineFont::Mega, FontRole::Bold),
+            "mega_alpha"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Mega, FontRole::Header),
+            "mega_alpha"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Mega, FontRole::Footer),
+            "mega_alpha"
+        );
         assert_eq!(
             machine_font_key(MachineFont::Mega, FontRole::Numbers),
             "mega_monospace_numbers"

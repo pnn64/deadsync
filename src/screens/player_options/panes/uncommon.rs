@@ -1,5 +1,5 @@
-use super::super::row::{BitmaskInit, CursorInit};
 use super::super::row::index_binding;
+use super::super::row::{BitmaskInit, CursorInit};
 use super::*;
 use crate::game::profile as gp;
 use crate::game::profile::{
@@ -27,7 +27,11 @@ const INSERT: BitmaskBinding = BitmaskBinding {
         from_profile: |p| p.insert_active_mask.bits() as u32,
         get_active: |m| m.insert.bits() as u32,
         set_active: |m, b| {
-            debug_assert_eq!(b & !(u8::MAX as u32), 0, "InsertMask init bits exceed u8 width");
+            debug_assert_eq!(
+                b & !(u8::MAX as u32),
+                0,
+                "InsertMask init bits exceed u8 width"
+            );
             m.insert = InsertMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
@@ -39,7 +43,11 @@ const REMOVE: BitmaskBinding = BitmaskBinding {
         from_profile: |p| p.remove_active_mask.bits() as u32,
         get_active: |m| m.remove.bits() as u32,
         set_active: |m, b| {
-            debug_assert_eq!(b & !(u8::MAX as u32), 0, "RemoveMask init bits exceed u8 width");
+            debug_assert_eq!(
+                b & !(u8::MAX as u32),
+                0,
+                "RemoveMask init bits exceed u8 width"
+            );
             m.remove = RemoveMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
@@ -51,7 +59,11 @@ const HOLDS: BitmaskBinding = BitmaskBinding {
         from_profile: |p| p.holds_active_mask.bits() as u32,
         get_active: |m| m.holds.bits() as u32,
         set_active: |m, b| {
-            debug_assert_eq!(b & !(u8::MAX as u32), 0, "HoldsMask init bits exceed u8 width");
+            debug_assert_eq!(
+                b & !(u8::MAX as u32),
+                0,
+                "HoldsMask init bits exceed u8 width"
+            );
             m.holds = HoldsMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
@@ -64,7 +76,8 @@ const ACCEL: BitmaskBinding = BitmaskBinding {
         get_active: |m| m.accel_effects.bits() as u32,
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32), 0,
+                b & !(u8::MAX as u32),
+                0,
                 "AccelEffectsMask init bits exceed u8 width",
             );
             m.accel_effects = AccelEffectsMask::from_bits_retain(b as u8);
@@ -79,7 +92,8 @@ const EFFECT: BitmaskBinding = BitmaskBinding {
         get_active: |m| m.visual_effects.bits() as u32,
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u16::MAX as u32), 0,
+                b & !(u16::MAX as u32),
+                0,
                 "VisualEffectsMask init bits exceed u16 width",
             );
             m.visual_effects = VisualEffectsMask::from_bits_retain(b as u16);
@@ -94,7 +108,8 @@ const APPEARANCE: BitmaskBinding = BitmaskBinding {
         get_active: |m| m.appearance_effects.bits() as u32,
         set_active: |m, b| {
             debug_assert_eq!(
-                b & !(u8::MAX as u32), 0,
+                b & !(u8::MAX as u32),
+                0,
                 "AppearanceEffectsMask init bits exceed u8 width",
             );
             m.appearance_effects = AppearanceEffectsMask::from_bits_retain(b as u8);

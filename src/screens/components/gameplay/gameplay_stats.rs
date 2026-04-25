@@ -1,7 +1,7 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key, tr};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::gfx::{BlendMode, MeshMode};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
@@ -467,12 +467,32 @@ pub fn prewarm_text_layout(
     };
     for count in 0..=max_count.min(COUNT_PREWARM_CAP) {
         let (dim, bright) = cached_padded_runs(count, digits);
-        cache.prewarm_text(fonts, current_machine_font_key(FontRole::ScreenEval), dim.as_ref(), None);
-        cache.prewarm_text(fonts, current_machine_font_key(FontRole::ScreenEval), bright.as_ref(), None);
+        cache.prewarm_text(
+            fonts,
+            current_machine_font_key(FontRole::ScreenEval),
+            dim.as_ref(),
+            None,
+        );
+        cache.prewarm_text(
+            fonts,
+            current_machine_font_key(FontRole::ScreenEval),
+            bright.as_ref(),
+            None,
+        );
     }
     let (dim, bright) = cached_padded_runs(max_count, digits);
-    cache.prewarm_text(fonts, current_machine_font_key(FontRole::ScreenEval), dim.as_ref(), None);
-    cache.prewarm_text(fonts, current_machine_font_key(FontRole::ScreenEval), bright.as_ref(), None);
+    cache.prewarm_text(
+        fonts,
+        current_machine_font_key(FontRole::ScreenEval),
+        dim.as_ref(),
+        None,
+    );
+    cache.prewarm_text(
+        fonts,
+        current_machine_font_key(FontRole::ScreenEval),
+        bright.as_ref(),
+        None,
+    );
     for player in 0..state.num_players {
         for count in [
             state.total_steps[player],
@@ -481,8 +501,18 @@ pub fn prewarm_text_layout(
             state.mines_total[player],
         ] {
             let (dim, bright) = cached_padded_runs(count, digits);
-            cache.prewarm_text(fonts, current_machine_font_key(FontRole::ScreenEval), dim.as_ref(), None);
-            cache.prewarm_text(fonts, current_machine_font_key(FontRole::ScreenEval), bright.as_ref(), None);
+            cache.prewarm_text(
+                fonts,
+                current_machine_font_key(FontRole::ScreenEval),
+                dim.as_ref(),
+                None,
+            );
+            cache.prewarm_text(
+                fonts,
+                current_machine_font_key(FontRole::ScreenEval),
+                bright.as_ref(),
+                None,
+            );
         }
     }
     let end_seconds = crate::game::gameplay::song_time_ns_to_seconds(

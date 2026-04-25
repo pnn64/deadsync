@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::i18n::{tr, tr_fmt};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::config;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};

@@ -370,8 +370,18 @@ pub(super) mod tests {
         // Accumulated across all three panes (the fix): Reverse + Cross preserved.
         let mut combined = PlayerOptionMasks::default();
         super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut combined);
-        super::super::panes::apply_profile_defaults(&mut advanced_rows, &profile, P1, &mut combined);
-        super::super::panes::apply_profile_defaults(&mut uncommon_rows, &profile, P1, &mut combined);
+        super::super::panes::apply_profile_defaults(
+            &mut advanced_rows,
+            &profile,
+            P1,
+            &mut combined,
+        );
+        super::super::panes::apply_profile_defaults(
+            &mut uncommon_rows,
+            &profile,
+            P1,
+            &mut combined,
+        );
         assert!(
             combined.scroll.contains(ScrollMask::REVERSE),
             "Reverse bit preserved after in-place accumulation"
@@ -400,13 +410,27 @@ pub(super) mod tests {
             init: Some(BitmaskInit {
                 from_profile: |p| {
                     let mut bits = HideMask::empty();
-                    if p.hide_targets { bits.insert(HideMask::TARGETS); }
-                    if p.hide_song_bg { bits.insert(HideMask::BACKGROUND); }
-                    if p.hide_combo { bits.insert(HideMask::COMBO); }
-                    if p.hide_lifebar { bits.insert(HideMask::LIFE); }
-                    if p.hide_score { bits.insert(HideMask::SCORE); }
-                    if p.hide_danger { bits.insert(HideMask::DANGER); }
-                    if p.hide_combo_explosions { bits.insert(HideMask::COMBO_EXPLOSIONS); }
+                    if p.hide_targets {
+                        bits.insert(HideMask::TARGETS);
+                    }
+                    if p.hide_song_bg {
+                        bits.insert(HideMask::BACKGROUND);
+                    }
+                    if p.hide_combo {
+                        bits.insert(HideMask::COMBO);
+                    }
+                    if p.hide_lifebar {
+                        bits.insert(HideMask::LIFE);
+                    }
+                    if p.hide_score {
+                        bits.insert(HideMask::SCORE);
+                    }
+                    if p.hide_danger {
+                        bits.insert(HideMask::DANGER);
+                    }
+                    if p.hide_combo_explosions {
+                        bits.insert(HideMask::COMBO_EXPLOSIONS);
+                    }
                     bits.bits() as u32
                 },
                 get_active: |m| m.hide.bits() as u32,
@@ -419,7 +443,9 @@ pub(super) mod tests {
         let mut hide_rows = test_row_map(vec![test_bitmask_row(
             RowId::Hide,
             lookup_key("PlayerOptions", "Hide"),
-            &["Targets", "BG", "Combo", "Life", "Score", "Danger", "ComboExp"],
+            &[
+                "Targets", "BG", "Combo", "Life", "Score", "Danger", "ComboExp",
+            ],
             hide_binding,
         )]);
 
@@ -456,12 +482,24 @@ pub(super) mod tests {
             init: Some(BitmaskInit {
                 from_profile: |p| {
                     let mut bits = FaPlusMask::empty();
-                    if p.show_fa_plus_window { bits.insert(FaPlusMask::WINDOW); }
-                    if p.show_ex_score { bits.insert(FaPlusMask::EX_SCORE); }
-                    if p.show_hard_ex_score { bits.insert(FaPlusMask::HARD_EX_SCORE); }
-                    if p.show_fa_plus_pane { bits.insert(FaPlusMask::PANE); }
-                    if p.fa_plus_10ms_blue_window { bits.insert(FaPlusMask::BLUE_WINDOW_10MS); }
-                    if p.split_15_10ms { bits.insert(FaPlusMask::SPLIT_15_10MS); }
+                    if p.show_fa_plus_window {
+                        bits.insert(FaPlusMask::WINDOW);
+                    }
+                    if p.show_ex_score {
+                        bits.insert(FaPlusMask::EX_SCORE);
+                    }
+                    if p.show_hard_ex_score {
+                        bits.insert(FaPlusMask::HARD_EX_SCORE);
+                    }
+                    if p.show_fa_plus_pane {
+                        bits.insert(FaPlusMask::PANE);
+                    }
+                    if p.fa_plus_10ms_blue_window {
+                        bits.insert(FaPlusMask::BLUE_WINDOW_10MS);
+                    }
+                    if p.split_15_10ms {
+                        bits.insert(FaPlusMask::SPLIT_15_10MS);
+                    }
                     bits.bits() as u32
                 },
                 get_active: |m| m.fa_plus.bits() as u32,

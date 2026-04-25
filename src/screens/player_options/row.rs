@@ -1,6 +1,6 @@
+use super::state::PlayerOptionMasks;
 use super::*;
 use crate::game::profile::{PlayerSide, Profile};
-use super::state::PlayerOptionMasks;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(usize)]

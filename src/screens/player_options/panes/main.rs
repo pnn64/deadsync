@@ -138,7 +138,11 @@ const NOTE_SKIN: CustomBinding = CustomBinding {
                 if should_persist {
                     gp::update_noteskin_for_side(side, setting);
                 }
-                sync_noteskin_previews_for_player(&mut state.noteskin, &state.player_profiles[player_idx], player_idx);
+                sync_noteskin_previews_for_player(
+                    &mut state.noteskin,
+                    &state.player_profiles[player_idx],
+                    player_idx,
+                );
             },
         )
     },
@@ -163,7 +167,11 @@ const MINE_SKIN: CustomBinding = CustomBinding {
                 if should_persist {
                     gp::update_mine_noteskin_for_side(side, setting);
                 }
-                sync_noteskin_previews_for_player(&mut state.noteskin, &state.player_profiles[player_idx], player_idx);
+                sync_noteskin_previews_for_player(
+                    &mut state.noteskin,
+                    &state.player_profiles[player_idx],
+                    player_idx,
+                );
             },
         )
     },
@@ -188,7 +196,11 @@ const RECEPTOR_SKIN: CustomBinding = CustomBinding {
                 if should_persist {
                     gp::update_receptor_noteskin_for_side(side, setting);
                 }
-                sync_noteskin_previews_for_player(&mut state.noteskin, &state.player_profiles[player_idx], player_idx);
+                sync_noteskin_previews_for_player(
+                    &mut state.noteskin,
+                    &state.player_profiles[player_idx],
+                    player_idx,
+                );
             },
         )
     },
@@ -216,7 +228,11 @@ const TAP_EXPLOSION_SKIN: CustomBinding = CustomBinding {
                 if should_persist {
                     gp::update_tap_explosion_noteskin_for_side(side, setting);
                 }
-                sync_noteskin_previews_for_player(&mut state.noteskin, &state.player_profiles[player_idx], player_idx);
+                sync_noteskin_previews_for_player(
+                    &mut state.noteskin,
+                    &state.player_profiles[player_idx],
+                    player_idx,
+                );
             },
         )
     },

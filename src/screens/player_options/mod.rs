@@ -156,10 +156,30 @@ pub fn init(
     let mut p2_masks = PlayerOptionMasks::default();
     apply_profile_defaults(&mut main_row_map, &player_profiles[P1], P1, &mut p1_masks);
     apply_profile_defaults(&mut main_row_map, &player_profiles[P2], P2, &mut p2_masks);
-    apply_profile_defaults(&mut advanced_row_map, &player_profiles[P1], P1, &mut p1_masks);
-    apply_profile_defaults(&mut advanced_row_map, &player_profiles[P2], P2, &mut p2_masks);
-    apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P1], P1, &mut p1_masks);
-    apply_profile_defaults(&mut uncommon_row_map, &player_profiles[P2], P2, &mut p2_masks);
+    apply_profile_defaults(
+        &mut advanced_row_map,
+        &player_profiles[P1],
+        P1,
+        &mut p1_masks,
+    );
+    apply_profile_defaults(
+        &mut advanced_row_map,
+        &player_profiles[P2],
+        P2,
+        &mut p2_masks,
+    );
+    apply_profile_defaults(
+        &mut uncommon_row_map,
+        &player_profiles[P1],
+        P1,
+        &mut p1_masks,
+    );
+    apply_profile_defaults(
+        &mut uncommon_row_map,
+        &player_profiles[P2],
+        P2,
+        &mut p2_masks,
+    );
 
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
     let mut initial_noteskin_names = vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()];

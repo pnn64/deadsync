@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::{FontRole, current_machine_font_key};
 use crate::assets::i18n::tr;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 
