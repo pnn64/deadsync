@@ -80,7 +80,7 @@ impl Default for TexturedMeshVertex {
 #[derive(Clone)]
 pub enum TexturedMeshVertices {
     Shared(Arc<[TexturedMeshVertex]>),
-    Transient(Arc<Vec<TexturedMeshVertex>>),
+    Transient(Vec<TexturedMeshVertex>),
 }
 
 impl AsRef<[TexturedMeshVertex]> for TexturedMeshVertices {

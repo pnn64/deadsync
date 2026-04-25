@@ -149,7 +149,7 @@ impl ComposeScratch {
         let mut objects = std::mem::take(&mut render.objects);
         for obj in objects.drain(..) {
             let renderer::ObjectType::TexturedMesh {
-                vertices: renderer::TexturedMeshVertices::Transient(vertices),
+                vertices: renderer::TexturedMeshVertices::Transient(mut vertices),
                 ..
             } = obj.object_type
             else {
@@ -158,9 +158,6 @@ impl ComposeScratch {
             if self.recycled_text_mesh_vertices.len() >= MAX_RECYCLED_TEXT_MESH_VERTEX_BUFFERS {
                 continue;
             }
-            let Ok(mut vertices) = Arc::try_unwrap(vertices) else {
-                continue;
-            };
             vertices.clear();
             self.recycled_text_mesh_vertices.push(vertices);
         }
@@ -3253,7 +3250,7 @@ fn push_transient_text_mesh_builders(
         out.push(RenderObject {
             object_type: renderer::ObjectType::TexturedMesh {
                 tint,
-                vertices: renderer::TexturedMeshVertices::Transient(Arc::new(builder.vertices)),
+                vertices: renderer::TexturedMeshVertices::Transient(builder.vertices),
                 geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
                 mode: renderer::MeshMode::Triangles,
                 uv_scale: [1.0, 1.0],
@@ -3747,7 +3744,7 @@ fn clip_textured_mesh_to_world_rect(
     Some(ClippedSpriteObject {
         object_type: renderer::ObjectType::TexturedMesh {
             tint,
-            vertices: renderer::TexturedMeshVertices::Transient(Arc::new(out)),
+            vertices: renderer::TexturedMeshVertices::Transient(out),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             mode: renderer::MeshMode::Triangles,
             uv_scale: [1.0, 1.0],
@@ -3820,7 +3817,7 @@ fn clip_rotated_sprite_to_world_rect(
     Some(ClippedSpriteObject {
         object_type: renderer::ObjectType::TexturedMesh {
             tint,
-            vertices: renderer::TexturedMeshVertices::Transient(Arc::new(out.into_vec())),
+            vertices: renderer::TexturedMeshVertices::Transient(out.into_vec()),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             mode: renderer::MeshMode::Triangles,
             uv_scale: [1.0, 1.0],
@@ -4407,9 +4404,10 @@ mod tests {
             objects: vec![RenderObject {
                 object_type: ObjectType::TexturedMesh {
                     tint: [1.0; 4],
-                    vertices: crate::engine::gfx::TexturedMeshVertices::Transient(Arc::new(
-                        vec![TexturedMeshVertex::default(); 6],
-                    )),
+                    vertices: crate::engine::gfx::TexturedMeshVertices::Transient(vec![
+                        TexturedMeshVertex::default();
+                        6
+                    ]),
                     geom_cache_key: INVALID_TMESH_CACHE_KEY,
                     mode: MeshMode::Triangles,
                     uv_scale: [1.0, 1.0],
