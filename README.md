@@ -44,7 +44,7 @@ export RUSTFLAGS="-L native=$brew_prefix/lib -L native=$brew_prefix/opt/vulkan-l
 
 ### BSD build dependencies (FreeBSD)
 ```bash
-pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers
+pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers hidapi
 ```
 
 ## Getting Started
