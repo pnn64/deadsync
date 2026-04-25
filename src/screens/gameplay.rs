@@ -1556,10 +1556,27 @@ fn song_lua_overlay_uv_rect(
 
 #[inline(always)]
 fn song_lua_overlay_axis_scale(state: SongLuaOverlayState) -> [f32; 2] {
-    [
-        state.basezoom_x * state.zoom_x,
-        state.basezoom_y * state.zoom_y,
-    ]
+    let basezoom_x = if (state.basezoom_x - 1.0).abs() <= f32::EPSILON {
+        state.basezoom
+    } else {
+        state.basezoom_x
+    };
+    let basezoom_y = if (state.basezoom_y - 1.0).abs() <= f32::EPSILON {
+        state.basezoom
+    } else {
+        state.basezoom_y
+    };
+    let zoom_x = if (state.zoom_x - 1.0).abs() <= f32::EPSILON {
+        state.zoom
+    } else {
+        state.zoom_x
+    };
+    let zoom_y = if (state.zoom_y - 1.0).abs() <= f32::EPSILON {
+        state.zoom
+    } else {
+        state.zoom_y
+    };
+    [basezoom_x * zoom_x, basezoom_y * zoom_y]
 }
 
 #[inline(always)]
@@ -6990,6 +7007,17 @@ mod tests {
         }
     }
 
+    fn test_skewed_overlay_point(
+        center: [f32; 2],
+        local: [f32; 2],
+        skew_x: f32,
+        skew_y: f32,
+    ) -> [f32; 2] {
+        let y = skew_y.mul_add(local[0], local[1]);
+        let x = skew_x.mul_add(y, local[0]);
+        [center[0] + x, center[1] + y]
+    }
+
     fn test_lobby_player(
         screen_name: &str,
         ready: bool,
@@ -8323,10 +8351,16 @@ mod tests {
             Actor::TexturedMesh { vertices, z, .. } => {
                 assert_eq!(z, 783);
                 assert_eq!(vertices.len(), 6);
-                assert!((vertices[0].pos[0] - 251.25).abs() <= 0.001);
-                assert!((vertices[0].pos[1] - 202.5).abs() <= 0.001);
-                assert!((vertices[2].pos[0] - 388.75).abs() <= 0.001);
-                assert!((vertices[2].pos[1] - 277.5).abs() <= 0.001);
+                let x_scale = screen_width() / 640.0;
+                let y_scale = screen_height() / 480.0;
+                let center = [320.0 * x_scale, 240.0 * y_scale];
+                let half = [20.0 * x_scale, 15.0 * y_scale];
+                let top_left = test_skewed_overlay_point(center, [-half[0], -half[1]], 0.5, 0.25);
+                let bottom_right = test_skewed_overlay_point(center, [half[0], half[1]], 0.5, 0.25);
+                assert!((vertices[0].pos[0] - top_left[0]).abs() <= 0.001);
+                assert!((vertices[0].pos[1] - top_left[1]).abs() <= 0.001);
+                assert!((vertices[2].pos[0] - bottom_right[0]).abs() <= 0.001);
+                assert!((vertices[2].pos[1] - bottom_right[1]).abs() <= 0.001);
             }
             other => panic!("expected skewed textured mesh overlay, got {other:?}"),
         }

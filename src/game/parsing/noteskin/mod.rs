@@ -3848,10 +3848,16 @@ fn itg_find_texture_with_prefix(
 }
 
 fn itg_texture_key(path: &Path) -> Option<String> {
-    let rel = dirs::app_dirs()
+    let mut key = if let Some(rel) = dirs::app_dirs()
         .strip_asset_prefix(path)
-        .or_else(|| path.strip_prefix("assets").ok())?;
-    let mut key = rel.to_string_lossy().replace('\\', "/");
+        .or_else(|| path.strip_prefix("assets").ok())
+    {
+        rel.to_string_lossy().replace('\\', "/")
+    } else if path.is_file() {
+        path.to_string_lossy().replace('\\', "/")
+    } else {
+        return None;
+    };
     while key.starts_with('/') {
         key.remove(0);
     }

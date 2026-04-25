@@ -44,6 +44,7 @@ const SONG_LUA_RUNTIME_BPS_KEY: &str = "__songlua_song_bps";
 const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
+const SONG_LUA_BROADCASTS_KEY: &str = "__songlua_broadcast_messages";
 const SONG_LUA_THEME_PATH_PREFIX: &str = "__songlua_theme_path/";
 const SONG_LUA_THEME_NAME: &str = "Simply Love";
 const SONG_LUA_INITIAL_LIFE: f32 = 0.5;
@@ -1024,20 +1025,18 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     globals.set(
         "GetFallbackBanner",
         lua.create_function(|lua, _args: MultiValue| {
-            Ok(Value::String(lua.create_string(theme_path(
-                "G",
-                "_FallbackBanners/Arrows",
-                "banner1 (doubleres).png",
-            ))?))
+            Ok(Value::String(lua.create_string(
+                SONG_LUA_THEME_PATH_PREFIX.trim_end_matches('/'),
+            )?))
         })?,
     )?;
     globals.set(
         "TotalCourseLength",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
     )?;
     globals.set(
         "TotalCourseLengthPlayed",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
     )?;
     globals.set(
         "IsGameAndMenuButton",
@@ -3517,6 +3516,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
             if let Some(message) = method_arg(&args, 0).cloned().and_then(read_string) {
                 let params = method_arg(&args, 1).cloned();
                 note_song_lua_side_effect(lua)?;
+                record_song_lua_broadcast(lua, &message, params.is_some())?;
                 broadcast_song_lua_message(lua, &message, params)?;
             }
             Ok(())
@@ -8986,8 +8986,8 @@ fn create_timing_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
 
 fn create_song_runtime_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
-    table.set(SONG_LUA_RUNTIME_BEAT_KEY, 0.0_f32)?;
-    table.set(SONG_LUA_RUNTIME_SECONDS_KEY, 0.0_f32)?;
+    table.set(SONG_LUA_RUNTIME_BEAT_KEY, 0_i64)?;
+    table.set(SONG_LUA_RUNTIME_SECONDS_KEY, 0_i64)?;
     table.set(SONG_LUA_RUNTIME_BPS_KEY, song_display_bps(context))?;
     table.set(SONG_LUA_RUNTIME_RATE_KEY, song_music_rate(context))?;
     Ok(table)
@@ -9000,7 +9000,9 @@ fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Result<T
             method,
             lua.create_function({
                 let song_runtime = song_runtime.clone();
-                move |_, _args: MultiValue| Ok(song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?)
+                move |_, _args: MultiValue| {
+                    song_lua_runtime_number(song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?)
+                }
             })?,
         )?;
     }
@@ -9010,7 +9012,7 @@ fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Result<T
             lua.create_function({
                 let song_runtime = song_runtime.clone();
                 move |_, _args: MultiValue| {
-                    Ok(song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?)
+                    song_lua_runtime_number(song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?)
                 }
             })?,
         )?;
@@ -9023,6 +9025,14 @@ fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Result<T
         })?,
     )?;
     Ok(table)
+}
+
+fn song_lua_runtime_number(value: f32) -> mlua::Result<Value> {
+    if value.is_finite() && value.fract().abs() <= f32::EPSILON {
+        Ok(Value::Integer(value as i64))
+    } else {
+        Ok(Value::Number(value as f64))
+    }
 }
 
 fn compile_song_runtime_table(lua: &Lua) -> mlua::Result<Table> {
@@ -9040,6 +9050,33 @@ fn note_song_lua_side_effect(lua: &Lua) -> mlua::Result<()> {
     let globals = lua.globals();
     let count = song_lua_side_effect_count(lua)?;
     globals.set(SONG_LUA_SIDE_EFFECT_COUNT_KEY, count.saturating_add(1))
+}
+
+fn record_song_lua_broadcast(lua: &Lua, message: &str, has_params: bool) -> mlua::Result<()> {
+    let globals = lua.globals();
+    let Some(broadcasts) = globals.get::<Option<Table>>(SONG_LUA_BROADCASTS_KEY)? else {
+        return Ok(());
+    };
+    let entry = lua.create_table()?;
+    entry.set("message", message)?;
+    entry.set("has_params", has_params)?;
+    broadcasts.raw_set(broadcasts.raw_len() + 1, entry)?;
+    Ok(())
+}
+
+fn read_song_lua_broadcasts(table: &Table) -> mlua::Result<Vec<(String, bool)>> {
+    let mut out = Vec::new();
+    for entry in table.sequence_values::<Table>() {
+        let entry = entry?;
+        let Some(message) = entry.get::<Option<String>>("message")? else {
+            continue;
+        };
+        out.push((
+            message,
+            entry.get::<Option<bool>>("has_params")?.unwrap_or(false),
+        ));
+    }
+    Ok(out)
 }
 
 fn compile_song_runtime_values(lua: &Lua) -> mlua::Result<(f32, f32)> {
@@ -10132,9 +10169,7 @@ fn read_overlay_actor(
     else {
         return Ok(None);
     };
-    let on_command = capture_actor_command(lua, actor, "OnCommand")?;
-    let initial_state =
-        overlay_state_after_blocks(actor_overlay_initial_state(actor)?, &on_command, 0.0);
+    let initial_state = overlay_state_after_blocks(actor_overlay_initial_state(actor)?, &[], 0.0);
     let mut message_commands = Vec::new();
     for pair in actor.clone().pairs::<Value, Value>() {
         let (key, value) = pair.map_err(|err| err.to_string())?;
@@ -10145,7 +10180,7 @@ fn read_overlay_actor(
             continue;
         }
         let message = name.trim_end_matches("MessageCommand").to_string();
-        let blocks = match capture_actor_command(lua, actor, name.as_str()) {
+        let blocks = match capture_actor_command_preserving_state(lua, actor, name.as_str()) {
             Ok(blocks) => blocks,
             Err(err) => {
                 let skipped = format!("{}.{}: {err}", actor_debug_label(actor), name);
@@ -10166,10 +10201,15 @@ fn read_overlay_actor(
         .map_err(|err| err.to_string())?;
 
     let kind = if actor_type.eq_ignore_ascii_case("ActorFrame") {
+        let has_draw_function = actor
+            .get::<Option<Function>>("__songlua_draw_function")
+            .map_err(|err| err.to_string())?
+            .is_some();
         if parent_index.is_none()
             && name.is_none()
             && initial_state == SongLuaOverlayState::default()
             && message_commands.is_empty()
+            && !has_draw_function
         {
             return Ok(None);
         }
@@ -10182,7 +10222,11 @@ fn read_overlay_actor(
         };
         SongLuaOverlayKind::ActorProxy { target }
     } else if actor_type.eq_ignore_ascii_case("Sprite") {
-        if let Some(capture_name) = actor_aft_capture_name(actor).map_err(|err| err.to_string())? {
+        if let Some(capture_name) = actor
+            .get::<Option<String>>("__songlua_aft_capture_name")
+            .map_err(|err| err.to_string())?
+            .filter(|name| !name.trim().is_empty())
+        {
             SongLuaOverlayKind::AftSprite { capture_name }
         } else {
             let Some(texture) = actor
@@ -10726,7 +10770,8 @@ fn actor_multi_vertex_line_strip(
         let a1 = actor_multi_vertex_offset_point(a, offsets[index], -1.0);
         let b0 = actor_multi_vertex_offset_point(b, offsets[index + 1], 1.0);
         let b1 = actor_multi_vertex_offset_point(b, offsets[index + 1], -1.0);
-        push_actor_multi_vertex_quad(&mut out, a0, b0, b1, a1);
+        push_actor_multi_vertex_triangle(&mut out, a0, b0, b1);
+        push_actor_multi_vertex_triangle(&mut out, a0, b1, a1);
     }
     out
 }
@@ -11514,6 +11559,93 @@ fn capture_actor_command(
     read_actor_capture_blocks(actor)
 }
 
+fn capture_actor_command_preserving_state(
+    lua: &Lua,
+    actor: &Table,
+    command_name: &str,
+) -> Result<Vec<SongLuaOverlayCommandBlock>, String> {
+    let snapshot = snapshot_actor_mutable_state(lua, actor).map_err(|err| err.to_string())?;
+    let captured = capture_actor_command(lua, actor, command_name);
+    restore_actor_mutable_state(actor, snapshot).map_err(|err| err.to_string())?;
+    captured
+}
+
+fn is_actor_mutable_state_key(key: &str) -> bool {
+    key.starts_with("__songlua_state_")
+        || key.starts_with("__songlua_capture_")
+        || key.starts_with("__songlua_graph_display_")
+        || key.starts_with("__songlua_scroller_")
+        || matches!(
+            key,
+            "__songlua_visible"
+                | "__songlua_diffuse"
+                | "__songlua_text_attributes"
+                | "__songlua_stroke_color"
+                | "__songlua_aux"
+                | "__songlua_aft_capture_name"
+                | "__songlua_stream_width"
+                | "__songlua_sprite_animation_length_seconds"
+                | "__songlua_sprite_effect_mode"
+                | "Text"
+                | "Texture"
+                | "File"
+                | "StreamWidth"
+        )
+}
+
+fn snapshot_actor_mutable_state(lua: &Lua, actor: &Table) -> mlua::Result<Vec<(String, Value)>> {
+    let mut out = Vec::new();
+    for pair in actor.clone().pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        let Value::String(key) = key else {
+            continue;
+        };
+        let key = key.to_str()?.to_string();
+        if is_actor_mutable_state_key(&key) {
+            out.push((key, clone_lua_value(lua, value)?));
+        }
+    }
+    Ok(out)
+}
+
+fn restore_actor_mutable_state(actor: &Table, snapshot: Vec<(String, Value)>) -> mlua::Result<()> {
+    let mut keys = Vec::new();
+    for pair in actor.clone().pairs::<Value, Value>() {
+        let (key, _) = pair?;
+        let Value::String(key) = key else {
+            continue;
+        };
+        let key = key.to_str()?.to_string();
+        if is_actor_mutable_state_key(&key) {
+            keys.push(key);
+        }
+    }
+    for key in keys {
+        actor.set(key, Value::Nil)?;
+    }
+    for (key, value) in snapshot {
+        actor.set(key, value)?;
+    }
+    Ok(())
+}
+
+fn snapshot_actors_mutable_state(
+    lua: &Lua,
+    actors: &[Table],
+) -> mlua::Result<Vec<(Table, Vec<(String, Value)>)>> {
+    actors
+        .iter()
+        .map(|actor| Ok((actor.clone(), snapshot_actor_mutable_state(lua, actor)?)))
+        .collect()
+}
+
+fn restore_actors_mutable_state(snapshots: Vec<(Table, Vec<(String, Value)>)>) -> mlua::Result<()> {
+    for (actor, snapshot) in snapshots {
+        restore_actor_mutable_state(&actor, snapshot)?;
+    }
+    Ok(())
+}
+
 fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set("__songlua_capture_cursor", 0.0_f32)?;
     actor.set("__songlua_capture_duration", 0.0_f32)?;
@@ -11692,8 +11824,40 @@ fn capture_actor_text_attribute(lua: &Lua, actor: &Table, args: &MultiValue) -> 
         attr.raw_set("glow", make_color_table(lua, glow)?)?;
     }
     let attributes = actor_text_attributes_table(lua, actor)?;
+    for existing in attributes.sequence_values::<Table>() {
+        if text_attribute_matches(&existing?, start.max(0), length, color, vertex_colors, glow)? {
+            return Ok(());
+        }
+    }
     attributes.raw_set(attributes.raw_len() + 1, attr)?;
     Ok(())
+}
+
+fn text_attribute_matches(
+    attr: &Table,
+    start: i32,
+    length: i32,
+    color: [f32; 4],
+    vertex_colors: [[f32; 4]; 4],
+    glow: Option<[f32; 4]>,
+) -> mlua::Result<bool> {
+    if attr.raw_get::<Option<i32>>("start")?.unwrap_or(-1) != start
+        || attr.raw_get::<Option<i32>>("length")?.unwrap_or(0) != length
+    {
+        return Ok(false);
+    }
+    let existing_color = attr
+        .raw_get::<Option<Table>>("color")?
+        .and_then(|value| table_vec4(&value))
+        .unwrap_or([1.0; 4]);
+    let existing_vertex_colors = attr
+        .raw_get::<Option<Table>>("vertex_colors")?
+        .and_then(|value| table_vertex_colors(&value))
+        .unwrap_or([existing_color; 4]);
+    let existing_glow = attr
+        .raw_get::<Option<Table>>("glow")?
+        .and_then(|value| table_vec4(&value));
+    Ok(existing_color == color && existing_vertex_colors == vertex_colors && existing_glow == glow)
 }
 
 fn text_attribute_value(params: &Table, keys: &[&str]) -> mlua::Result<Option<Value>> {
@@ -13286,6 +13450,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
+                record_probe_method_call(lua, &actor, "x")?;
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "x", value)?;
                 }
@@ -13298,6 +13463,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
+                record_probe_method_call(lua, &actor, "y")?;
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "y", value)?;
                 }
@@ -14298,6 +14464,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
+                record_probe_method_call(lua, &actor, "z")?;
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "z", value)?;
                 }
@@ -16894,22 +17061,22 @@ fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLuaEas
         let value = value?;
         let (target_kind, method_name) =
             value.split_once('.').unwrap_or(("player", value.as_str()));
-        if !matches!(target_kind, "player" | "notefield") {
+        if !matches!(target_kind, "player" | "notefield" | "overlay") {
             return Ok(None);
         }
         match method_name {
             "x" if target_kind == "player" => saw_x = true,
             "y" if target_kind == "player" => saw_y = true,
-            "z" => saw_z = true,
-            "rotationx" => saw_rotation_x = true,
-            "rotationz" => saw_rotation_z = true,
-            "rotationy" => saw_rotation_y = true,
+            "z" if target_kind != "overlay" => saw_z = true,
+            "rotationx" if target_kind != "overlay" => saw_rotation_x = true,
+            "rotationz" if target_kind != "overlay" => saw_rotation_z = true,
+            "rotationy" if target_kind != "overlay" => saw_rotation_y = true,
             "skewx" => saw_skew_x = true,
             "skewy" => saw_skew_y = true,
-            "zoom" => saw_zoom = true,
-            "zoomx" => saw_zoom_x = true,
-            "zoomy" => saw_zoom_y = true,
-            "zoomz" => saw_zoom_z = true,
+            "zoom" if target_kind != "overlay" => saw_zoom = true,
+            "zoomx" if target_kind != "overlay" => saw_zoom_x = true,
+            "zoomy" if target_kind != "overlay" => saw_zoom_y = true,
+            "zoomz" if target_kind != "overlay" => saw_zoom_z = true,
             _ => return Ok(None),
         }
     }
@@ -17083,12 +17250,19 @@ fn capture_overlay_function_blocks(
     if let Some(song_beat) = song_beat {
         set_compile_song_runtime_beat(lua, song_beat).map_err(|err| err.to_string())?;
     }
+    let snapshot_tables: Vec<_> = overlays
+        .iter()
+        .map(|overlay| overlay.table.clone())
+        .collect();
+    let state_snapshot =
+        snapshot_actors_mutable_state(lua, &snapshot_tables).map_err(|err| err.to_string())?;
     reset_overlay_capture_tables(lua, overlays)?;
     let result = match arg {
         Some(value) => function.call::<Value>(value),
         None => function.call::<Value>(()),
     };
     let blocks = collect_overlay_capture_blocks(overlays);
+    restore_actors_mutable_state(state_snapshot).map_err(|err| err.to_string())?;
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     let blocks = blocks?;
     result.map_err(|err| err.to_string())?;
@@ -17105,25 +17279,45 @@ fn capture_function_action_blocks(
     (
         Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
         Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
+        Vec<(String, bool)>,
         bool,
     ),
     String,
 > {
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
     let side_effect_before = song_lua_side_effect_count(lua).map_err(|err| err.to_string())?;
+    let globals = lua.globals();
+    let previous_broadcasts = globals
+        .get::<Value>(SONG_LUA_BROADCASTS_KEY)
+        .map_err(|err| err.to_string())?;
+    let broadcast_table = lua.create_table().map_err(|err| err.to_string())?;
+    globals
+        .set(SONG_LUA_BROADCASTS_KEY, broadcast_table.clone())
+        .map_err(|err| err.to_string())?;
     set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
+    let mut snapshot_tables = Vec::with_capacity(overlays.len() + tracked_actors.len());
+    snapshot_tables.extend(overlays.iter().map(|overlay| overlay.table.clone()));
+    snapshot_tables.extend(tracked_actors.iter().map(|actor| actor.table.clone()));
+    let state_snapshot =
+        snapshot_actors_mutable_state(lua, &snapshot_tables).map_err(|err| err.to_string())?;
     reset_overlay_capture_tables(lua, overlays)?;
     reset_tracked_capture_tables(lua, tracked_actors)?;
     let result = function.call::<Value>(());
     let overlay_blocks = collect_overlay_capture_blocks(overlays);
     let tracked_blocks = collect_tracked_capture_blocks(tracked_actors);
+    let broadcasts = read_song_lua_broadcasts(&broadcast_table).map_err(|err| err.to_string());
+    restore_actors_mutable_state(state_snapshot).map_err(|err| err.to_string())?;
+    globals
+        .set(SONG_LUA_BROADCASTS_KEY, previous_broadcasts)
+        .map_err(|err| err.to_string())?;
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     let overlay_blocks = overlay_blocks?;
     let tracked_blocks = tracked_blocks?;
+    let broadcasts = broadcasts?;
     let saw_side_effect =
         song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
     result.map_err(|err| err.to_string())?;
-    Ok((overlay_blocks, tracked_blocks, saw_side_effect))
+    Ok((overlay_blocks, tracked_blocks, broadcasts, saw_side_effect))
 }
 
 fn compile_function_action(
@@ -17136,8 +17330,25 @@ fn compile_function_action(
     counter: &mut usize,
     messages: &mut Vec<SongLuaMessageEvent>,
 ) -> Result<bool, String> {
-    let (overlay_captures, tracked_captures, saw_side_effect) =
+    let (overlay_captures, tracked_captures, broadcasts, saw_side_effect) =
         capture_function_action_blocks(lua, overlays, tracked_actors, function, beat)?;
+    if !broadcasts.is_empty() && broadcasts.iter().all(|(_, has_params)| !*has_params) {
+        let mut emitted = false;
+        for (message, _) in broadcasts {
+            if !song_lua_message_has_listener(overlays, tracked_actors, &message) {
+                continue;
+            }
+            messages.push(SongLuaMessageEvent {
+                beat,
+                message,
+                persists,
+            });
+            emitted = true;
+        }
+        if emitted {
+            return Ok(true);
+        }
+    }
     if overlay_captures.is_empty() && tracked_captures.is_empty() {
         return Ok(saw_side_effect);
     }
@@ -17167,6 +17378,26 @@ fn compile_function_action(
         persists,
     });
     Ok(true)
+}
+
+fn song_lua_message_has_listener(
+    overlays: &[OverlayCompileActor],
+    tracked_actors: &[TrackedCompileActor],
+    message: &str,
+) -> bool {
+    overlays.iter().any(|overlay| {
+        overlay
+            .actor
+            .message_commands
+            .iter()
+            .any(|command| command.message == message)
+    }) || tracked_actors.iter().any(|actor| {
+        actor
+            .actor
+            .message_commands
+            .iter()
+            .any(|command| command.message == message)
+    })
 }
 
 fn compile_overlay_function_ease(
@@ -18579,9 +18810,7 @@ fn message_event_cmp(
     left: &SongLuaMessageEvent,
     right: &SongLuaMessageEvent,
 ) -> std::cmp::Ordering {
-    left.beat
-        .total_cmp(&right.beat)
-        .then_with(|| left.message.cmp(&right.message))
+    left.beat.total_cmp(&right.beat)
 }
 
 #[cfg(test)]
@@ -21492,7 +21721,7 @@ return Def.ActorFrame{}
         image::RgbaImage::new(100, 40)
             .save(song_dir.join("banner.png"))
             .unwrap();
-        image::RgbaImage::new(320, 240)
+        image::RgbImage::new(320, 240)
             .save(song_dir.join("background.jpg"))
             .unwrap();
         image::RgbaImage::new(120, 120)
@@ -23998,7 +24227,7 @@ return Def.ActorFrame{
         )
         .unwrap();
         assert_eq!(compiled.info.unsupported_function_actions, 0);
-        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages.len(), 2);
         assert_eq!(
             compiled.messages[0].message,
             "10:20:3:3:4:5:0:1:8:0.2:0.6:0.1:0.4:false:8:4:2:0:0"
@@ -26472,7 +26701,7 @@ return Def.ActorFrame{
             r#"
 local path = "/Songs/Group/Song/"
 local parts = split("/", path)
-local method_parts = "Group/Song":split("/")
+local method_parts = ("Group/Song"):split("/")
 local player_af = GetPlayerAF(ToEnumShortString(PLAYER_1))
 
 mod_actions = {
