@@ -82,6 +82,7 @@ const THEME_KEYS: &[&str] = &[
     "SimplyLoveColor",
     "ShowSelectMusicGameplayTimer",
     "KeyboardFeatures",
+    "MenuBackgroundStyle",
     "VideoBackgrounds",
     "MachineShowEvalSummary",
     "MachineShowGameOver",

@@ -2,6 +2,7 @@ use crate::assets;
 use crate::engine::gfx::BlendMode;
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::engine::present::{anim, font, runtime};
+use glam::Mat4 as Matrix4;
 use smallvec::SmallVec;
 use std::sync::Arc;
 
@@ -1228,6 +1229,7 @@ impl TextBuilder {
         let base = Actor::Text {
             align: [self.hx, self.vy],
             offset: [self.x, self.y],
+            local_transform: Matrix4::IDENTITY,
             color: self.color,
             stroke_color: self.stroke_color,
             glow: self.glow,
@@ -1239,12 +1241,16 @@ impl TextBuilder {
             scale: [self.sx, self.sy],
             fit_width: self.fit_w,
             fit_height: self.fit_h,
+            line_spacing: None,
             wrap_width_pixels: self.wrap_width_pixels,
             max_width: self.max_w,
             max_height: self.max_h,
             max_w_pre_zoom: self.max_w_pre_zoom,
             max_h_pre_zoom: self.max_h_pre_zoom,
+            jitter: false,
+            distortion: 0.0,
             clip: None,
+            mask_dest: false,
             blend: self.blend,
             effect: self.effect,
         };

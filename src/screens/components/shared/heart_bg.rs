@@ -1,4 +1,6 @@
+use super::technique_bg;
 use crate::act;
+use crate::config::{self, MenuBackgroundStyle};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_height, screen_width};
@@ -6,18 +8,15 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 // Shared UI elapsed clock advanced by `app` using post-Tab-acceleration dt so
-// the heart background stays phase-locked across screens while still honoring
+// menu backgrounds stay phase-locked across screens while still honoring
 // fast/slow/paused menu animation controls.
 static GLOBAL_ELAPSED_BITS: AtomicU32 = AtomicU32::new(0.0_f32.to_bits());
 
-// ---- Constants ----
 const COLOR_ADD: [i32; 10] = [-1, 0, 0, -1, -1, -1, 0, 0, 0, 0];
 const DIFFUSE_ALPHA: [f32; 10] = [0.05, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1];
 const XY: [f32; 10] = [
     0.0, 40.0, 80.0, 120.0, 200.0, 280.0, 360.0, 400.0, 480.0, 560.0,
 ];
-
-// UV velocities (screen px/sec scale)
 const UV_VEL: [[f32; 2]; 10] = [
     [0.03, 0.01],
     [0.03, 0.02],
@@ -30,18 +29,23 @@ const UV_VEL: [[f32; 2]; 10] = [
     [0.05, 0.03],
     [0.03, 0.04],
 ];
-
 const VARIANTS: [usize; 10] = [0, 1, 2, 0, 1, 0, 2, 0, 1, 2];
-const DEFAULT_DIMS: (f32, f32) = (668.0, 566.0); // Standard heart.png dimensions
+const DEFAULT_DIMS: (f32, f32) = (668.0, 566.0);
 const BW_BIG: f32 = 668.0;
 const BW_NORMAL: f32 = 543.0;
 const BW_SMALL: f32 = 400.0;
 const PHI: f32 = 0.618_034;
 
 #[derive(Clone)]
-pub struct State {
+struct HeartsState {
     tex_key: Arc<str>,
     variant_size: [[f32; 2]; 3],
+}
+
+#[derive(Clone)]
+pub struct State {
+    hearts: HeartsState,
+    technique: technique_bg::State,
 }
 
 pub struct Params {
@@ -56,15 +60,18 @@ impl Default for State {
     }
 }
 
-impl State {
-    pub fn new() -> Self {
+impl Default for HeartsState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HeartsState {
+    fn new() -> Self {
         Self::with_texture("heart.png")
     }
 
-    pub fn with_texture(tex_key: &'static str) -> Self {
-        // Optimization: Removed image crate I/O and Mutex cache.
-        // We assume standard assets. If dynamic sizing is strictly required later,
-        // it should be passed in via arguments, not read from disk here.
+    fn with_texture(tex_key: &'static str) -> Self {
         let (w, h) = DEFAULT_DIMS;
         let aspect = h / w;
         let scale_k = (w * 0.6) / BW_BIG;
@@ -81,17 +88,10 @@ impl State {
         }
     }
 
-    pub fn build(&self, params: Params) -> Vec<Actor> {
-        self.build_at_elapsed(params, global_elapsed_s())
-    }
-
-    pub fn build_at_elapsed(&self, params: Params, elapsed_s: f32) -> Vec<Actor> {
-        // Pre-allocate for 1 background + 10 hearts (up to 4 clones each for wrapping)
-        let mut actors: Vec<Actor> = Vec::with_capacity(41);
-
+    fn build_at_elapsed(&self, params: &Params, elapsed_s: f32) -> Vec<Actor> {
+        let mut actors = Vec::with_capacity(41);
         let w = screen_width();
         let h = screen_height();
-
         actors.push(act!(quad:
             align(0.0, 0.0):
             xy(0.0, 0.0):
@@ -101,32 +101,21 @@ impl State {
         ));
 
         let speed_scale_px = w.max(h) * 1.3;
-        let t = elapsed_s;
-
         for i in 0..10 {
             let variant = VARIANTS[i];
             let [heart_w, heart_h] = self.variant_size[variant];
             let half_w = heart_w * 0.5;
             let half_h = heart_h * 0.5;
-
-            // Optimization: direct array access, no redundant lookups
             let mut rgba = color::decorative_rgba(params.active_color_index + COLOR_ADD[i]);
             rgba[3] = DIFFUSE_ALPHA[i] * params.alpha_mul;
 
-            // Movement
             let vx_px = -2.0 * UV_VEL[i][0] * speed_scale_px;
             let vy_px = -2.0 * UV_VEL[i][1] * speed_scale_px;
-
             let start_x = (i as f32).mul_add(w * 0.1, XY[i]) % w;
             let start_y = XY[i].mul_add(0.5, (i as f32) * (h * 0.1) * PHI) % h;
+            let x0 = (start_x + vx_px * elapsed_s).rem_euclid(w);
+            let y0 = (start_y + vy_px * elapsed_s).rem_euclid(h);
 
-            let x_raw = start_x + vx_px * t;
-            let y_raw = start_y + vy_px * t;
-
-            let x0 = x_raw.rem_euclid(w);
-            let y0 = y_raw.rem_euclid(h);
-
-            // Optimization: Flat wrap logic to avoid nested loops and array construction
             let wrap_x = if x0 < half_w {
                 Some(x0 + w)
             } else if x0 > w - half_w {
@@ -142,51 +131,77 @@ impl State {
                 None
             };
 
-            // Primary heart
-            actors.push(act!(sprite(&self.tex_key):
-                align(0.5, 0.5):
-                xy(x0, y0):
-                zoomto(heart_w, heart_h):
-                diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
-                z(-99)
-            ));
-
-            // Horizontal wrap
+            push_heart(&mut actors, &self.tex_key, x0, y0, heart_w, heart_h, rgba);
             if let Some(wx) = wrap_x {
-                actors.push(act!(sprite(&self.tex_key):
-                    align(0.5, 0.5):
-                    xy(wx, y0):
-                    zoomto(heart_w, heart_h):
-                    diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
-                    z(-99)
-                ));
+                push_heart(&mut actors, &self.tex_key, wx, y0, heart_w, heart_h, rgba);
             }
-
-            // Vertical wrap
             if let Some(wy) = wrap_y {
-                actors.push(act!(sprite(&self.tex_key):
-                    align(0.5, 0.5):
-                    xy(x0, wy):
-                    zoomto(heart_w, heart_h):
-                    diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
-                    z(-99)
-                ));
+                push_heart(&mut actors, &self.tex_key, x0, wy, heart_w, heart_h, rgba);
             }
-
-            // Corner wrap
             if let (Some(wx), Some(wy)) = (wrap_x, wrap_y) {
-                actors.push(act!(sprite(&self.tex_key):
-                    align(0.5, 0.5):
-                    xy(wx, wy):
-                    zoomto(heart_w, heart_h):
-                    diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
-                    z(-99)
-                ));
+                push_heart(&mut actors, &self.tex_key, wx, wy, heart_w, heart_h, rgba);
             }
         }
 
         actors
     }
+}
+
+impl State {
+    pub fn new() -> Self {
+        Self {
+            hearts: HeartsState::new(),
+            technique: technique_bg::State::new(),
+        }
+    }
+
+    pub fn with_texture(tex_key: &'static str) -> Self {
+        Self {
+            hearts: HeartsState::with_texture(tex_key),
+            technique: technique_bg::State::new(),
+        }
+    }
+
+    pub fn build(&self, params: Params) -> Vec<Actor> {
+        self.build_at_elapsed(params, global_elapsed_s())
+    }
+
+    pub fn build_at_elapsed(&self, params: Params, elapsed_s: f32) -> Vec<Actor> {
+        if matches!(menu_background_style(), MenuBackgroundStyle::Technique)
+            && let Some(actors) = self.technique.build_at_elapsed(
+                params.active_color_index,
+                params.backdrop_rgba,
+                params.alpha_mul,
+                elapsed_s,
+            )
+        {
+            return actors;
+        }
+        self.hearts.build_at_elapsed(&params, elapsed_s)
+    }
+}
+
+fn push_heart(
+    out: &mut Vec<Actor>,
+    tex_key: &Arc<str>,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    rgba: [f32; 4],
+) {
+    out.push(act!(sprite(tex_key.as_ref()):
+        align(0.5, 0.5):
+        xy(x, y):
+        zoomto(w, h):
+        diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
+        z(-99)
+    ));
+}
+
+fn menu_background_style() -> MenuBackgroundStyle {
+    std::panic::catch_unwind(|| config::get().menu_background_style)
+        .unwrap_or(MenuBackgroundStyle::Hearts)
 }
 
 #[inline]
@@ -240,9 +255,9 @@ mod tests {
     #[test]
     fn build_reads_shared_elapsed_clock() {
         set_global_elapsed_for_test(2.5);
-        let state = State::new();
-        let shared_xy = first_heart_xy(&state.build(params()));
-        let explicit_xy = first_heart_xy(&state.build_at_elapsed(params(), 2.5));
+        let state = HeartsState::new();
+        let shared_xy = first_heart_xy(&state.build_at_elapsed(&params(), global_elapsed_s()));
+        let explicit_xy = first_heart_xy(&state.build_at_elapsed(&params(), 2.5));
         assert!(
             (shared_xy[0] - explicit_xy[0]).abs() < EPS
                 && (shared_xy[1] - explicit_xy[1]).abs() < EPS,

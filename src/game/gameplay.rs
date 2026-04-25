@@ -3545,13 +3545,20 @@ pub struct State {
     pub song_lua_song_foreground: SongLuaCapturedActor,
     pub song_lua_song_foreground_events: Vec<SongLuaOverlayMessageRuntime>,
     pub song_lua_hidden_players: [bool; MAX_PLAYERS],
+    pub song_lua_sound_paths: Vec<PathBuf>,
     pub song_lua_screen_width: f32,
     pub song_lua_screen_height: f32,
+    pub song_lua_player_x: [Option<f32>; MAX_PLAYERS],
+    pub song_lua_player_y: [Option<f32>; MAX_PLAYERS],
+    pub song_lua_player_z: [f32; MAX_PLAYERS],
+    pub song_lua_player_rotation_x: [f32; MAX_PLAYERS],
     pub song_lua_player_rotation_z: [f32; MAX_PLAYERS],
     pub song_lua_player_rotation_y: [f32; MAX_PLAYERS],
     pub song_lua_player_skew_x: [f32; MAX_PLAYERS],
+    pub song_lua_player_skew_y: [f32; MAX_PLAYERS],
     pub song_lua_player_zoom_x: [f32; MAX_PLAYERS],
     pub song_lua_player_zoom_y: [f32; MAX_PLAYERS],
+    pub song_lua_player_zoom_z: [f32; MAX_PLAYERS],
     pub song_lua_player_confusion_y_offset: [f32; MAX_PLAYERS],
     active_attack_clear_all: [bool; MAX_PLAYERS],
     active_attack_chart: [ChartAttackEffects; MAX_PLAYERS],
@@ -5561,6 +5568,7 @@ pub fn init(
         song_lua_song_foreground,
         song_lua_song_foreground_events,
         song_lua_hidden_players,
+        song_lua_sound_paths,
         song_lua_screen_width,
         song_lua_screen_height,
     ) = build_song_lua_runtime_windows(
@@ -5938,13 +5946,20 @@ pub fn init(
         song_lua_song_foreground,
         song_lua_song_foreground_events,
         song_lua_hidden_players,
+        song_lua_sound_paths,
         song_lua_screen_width,
         song_lua_screen_height,
+        song_lua_player_x: [None; MAX_PLAYERS],
+        song_lua_player_y: [None; MAX_PLAYERS],
+        song_lua_player_z: [0.0; MAX_PLAYERS],
+        song_lua_player_rotation_x: [0.0; MAX_PLAYERS],
         song_lua_player_rotation_z: [0.0; MAX_PLAYERS],
         song_lua_player_rotation_y: [0.0; MAX_PLAYERS],
         song_lua_player_skew_x: [0.0; MAX_PLAYERS],
+        song_lua_player_skew_y: [0.0; MAX_PLAYERS],
         song_lua_player_zoom_x: [1.0; MAX_PLAYERS],
         song_lua_player_zoom_y: [1.0; MAX_PLAYERS],
+        song_lua_player_zoom_z: [1.0; MAX_PLAYERS],
         song_lua_player_confusion_y_offset: [0.0; MAX_PLAYERS],
         active_attack_clear_all: [false; MAX_PLAYERS],
         active_attack_chart: [ChartAttackEffects::default(); MAX_PLAYERS],
@@ -10048,6 +10063,181 @@ mod tests {
         assert!(
             super::song_lua_ease_window_value(&windows[1], 20.0)
                 .is_some_and(|value| (value - 1.0).abs() <= 0.000_1)
+        );
+    }
+
+    #[test]
+    fn song_lua_builds_playerxy_playerz_rotationx_skewy_zoom_and_zoomz_runtime_targets() {
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(16 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            eases: vec![
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 0.0,
+                    limit: 1.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerX,
+                    from: 320.0,
+                    to: 360.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 1.0,
+                    limit: 1.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerY,
+                    from: 240.0,
+                    to: 210.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 0.0,
+                    limit: 2.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerZ,
+                    from: 0.0,
+                    to: -120.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 0.0,
+                    limit: 4.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerRotationX,
+                    from: 0.0,
+                    to: 20.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 4.0,
+                    limit: 2.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerSkewY,
+                    from: 0.0,
+                    to: 0.25,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 6.0,
+                    limit: 2.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerZoom,
+                    from: 1.0,
+                    to: 0.75,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 8.0,
+                    limit: 2.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::PlayerZoomZ,
+                    from: 1.0,
+                    to: 1.25,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let (windows, unsupported) =
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0);
+
+        assert_eq!(unsupported, 0);
+        assert_eq!(windows.len(), 7);
+        assert!(matches!(
+            windows[0].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerX
+        ));
+        assert!(matches!(
+            windows[1].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerY
+        ));
+        assert!(matches!(
+            windows[2].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerZ
+        ));
+        assert!(matches!(
+            windows[3].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerRotationX
+        ));
+        assert!(matches!(
+            windows[4].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerSkewY
+        ));
+        assert!(matches!(
+            windows[5].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerZoom
+        ));
+        assert!(matches!(
+            windows[6].target,
+            super::attacks::SongLuaEaseMaskTarget::PlayerZoomZ
+        ));
+        assert!(
+            super::song_lua_ease_window_value(&windows[0], 0.5)
+                .is_some_and(|value| (value - 340.0).abs() <= 0.000_1)
+        );
+        assert!(
+            super::song_lua_ease_window_value(&windows[1], 1.5)
+                .is_some_and(|value| (value - 225.0).abs() <= 0.000_1)
+        );
+        assert!(
+            super::song_lua_ease_window_value(&windows[2], 1.0)
+                .is_some_and(|value| (value + 60.0).abs() <= 0.000_1)
+        );
+        assert!(
+            super::song_lua_ease_window_value(&windows[3], 2.0)
+                .is_some_and(|value| (value - 10.0).abs() <= 0.000_1)
+        );
+        assert!(
+            super::song_lua_ease_window_value(&windows[4], 5.0)
+                .is_some_and(|value| (value - 0.125).abs() <= 0.000_1)
+        );
+        assert!(
+            super::song_lua_ease_window_value(&windows[5], 7.0)
+                .is_some_and(|value| (value - 0.875).abs() <= 0.000_1)
+        );
+        assert!(
+            super::song_lua_ease_window_value(&windows[6], 9.0)
+                .is_some_and(|value| (value - 1.125).abs() <= 0.000_1)
         );
     }
 

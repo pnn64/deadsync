@@ -43,40 +43,12 @@ const fn model_blend(draw: ModelDrawState, blend: BlendMode) -> BlendMode {
 }
 
 #[inline(always)]
-fn model_draw_transform(
-    model: &ModelMesh,
-    size: [f32; 2],
-    rotation_deg: f32,
-    draw: ModelDrawState,
-) -> Matrix4 {
-    let model_size = model.size();
-    let model_h = model_size[1];
-    let scale = if model_h > f32::EPSILON && size[1] > f32::EPSILON {
-        size[1] / model_h
-    } else {
-        1.0
-    };
-    let local_scale = Vector3::new(
-        scale * draw.zoom[0].max(0.0),
-        scale * draw.zoom[1].max(0.0),
-        scale * draw.zoom[2].max(0.0),
-    );
-    let align_y = (0.5 - draw.vert_align) * size[1];
+fn model_draw_transform(model_size: [f32; 2], affine: Matrix4) -> Matrix4 {
     let focal = model_size[0]
         .max(model_size[1])
         .mul_add(6.0, 0.0)
         .max(180.0);
     let inv_focal = focal.recip();
-    let affine = Matrix4::from_translation(Vector3::new(
-        draw.pos[0] * scale,
-        draw.pos[1] * scale,
-        draw.pos[2] * scale,
-    )) * Matrix4::from_rotation_z((draw.rot[2] + rotation_deg).to_radians())
-        * Matrix4::from_rotation_y(draw.rot[1].to_radians())
-        * Matrix4::from_rotation_x(draw.rot[0].to_radians())
-        * Matrix4::from_translation(Vector3::new(0.0, align_y, 0.0))
-        * Matrix4::from_scale(local_scale);
-
     Matrix4::from_cols(
         Vec4::new(
             affine.x_axis.x,
@@ -106,6 +78,55 @@ fn model_draw_transform(
 }
 
 #[inline(always)]
+fn model_affine_transform(
+    model: &ModelMesh,
+    size: [f32; 2],
+    rotation_deg: f32,
+    draw: ModelDrawState,
+) -> Matrix4 {
+    let model_size = model.size();
+    let model_h = model_size[1];
+    let scale = if model_h > f32::EPSILON && size[1] > f32::EPSILON {
+        size[1] / model_h
+    } else {
+        1.0
+    };
+    let local_scale = Vector3::new(
+        scale * draw.zoom[0].max(0.0),
+        scale * draw.zoom[1].max(0.0),
+        scale * draw.zoom[2].max(0.0),
+    );
+    let align_y = (0.5 - draw.vert_align) * size[1];
+    Matrix4::from_translation(Vector3::new(draw.pos[0], draw.pos[1], draw.pos[2]))
+        * sm_rotation_xyz(draw.rot[0], draw.rot[1], draw.rot[2] + rotation_deg)
+        * Matrix4::from_translation(Vector3::new(0.0, align_y, 0.0))
+        * Matrix4::from_scale(local_scale)
+}
+
+#[inline(always)]
+fn sm_rotation_xyz(rot_x_deg: f32, rot_y_deg: f32, rot_z_deg: f32) -> Matrix4 {
+    let (sin_x, cos_x) = rot_x_deg.to_radians().sin_cos();
+    let (sin_y, cos_y) = rot_y_deg.to_radians().sin_cos();
+    let (sin_z, cos_z) = rot_z_deg.to_radians().sin_cos();
+    Matrix4::from_cols(
+        Vec4::new(
+            cos_z * cos_y,
+            cos_z * sin_y * sin_x + sin_z * cos_x,
+            cos_z * sin_y * cos_x - sin_z * sin_x,
+            0.0,
+        ),
+        Vec4::new(
+            -sin_z * cos_y,
+            -sin_z * sin_y * sin_x + cos_z * cos_x,
+            -sin_z * sin_y * cos_x - cos_z * sin_x,
+            0.0,
+        ),
+        Vec4::new(-sin_y, cos_y * sin_x, cos_y * cos_x, 0.0),
+        Vec4::new(0.0, 0.0, 0.0, 1.0),
+    )
+}
+
+#[inline(always)]
 fn actor_from_vertices(
     slot: &SpriteSlot,
     xy: [f32; 2],
@@ -116,6 +137,7 @@ fn actor_from_vertices(
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
+    depth_test: bool,
     blend: BlendMode,
     z: i16,
 ) -> Actor {
@@ -133,6 +155,7 @@ fn actor_from_vertices(
         uv_scale,
         uv_offset,
         uv_tex_shift,
+        depth_test,
         visible: true,
         blend,
         z,
@@ -159,7 +182,8 @@ fn actor_from_draw(
     let tint = model_tint(color, draw);
     let blend = model_blend(draw, blend);
     let vertices = build_model_geometry(slot);
-    let local_transform = model_draw_transform(model, size, rotation_deg, draw);
+    let affine = model_affine_transform(model, size, rotation_deg, draw);
+    let local_transform = model_draw_transform(model.size(), affine);
     let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
     Some(actor_from_vertices(
         slot,
@@ -171,6 +195,7 @@ fn actor_from_draw(
         uv_scale,
         uv_offset,
         uv_tex_shift,
+        false,
         blend,
         z,
     ))
@@ -195,7 +220,8 @@ pub(crate) fn noteskin_model_actor_from_draw_cached(
     }
 
     let tint = model_tint(color, draw);
-    let local_transform = model_draw_transform(model, size, rotation_deg, draw);
+    let affine = model_affine_transform(model, size, rotation_deg, draw);
+    let local_transform = model_draw_transform(model.size(), affine);
     let (geom_cache_key, vertices) = cache.get_or_insert_slot(slot)?;
     let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
     Some(actor_from_vertices(
@@ -208,7 +234,45 @@ pub(crate) fn noteskin_model_actor_from_draw_cached(
         uv_scale,
         uv_offset,
         uv_tex_shift,
+        false,
         model_blend(draw, blend),
+        z,
+    ))
+}
+
+pub(crate) fn noteskin_model_actor_from_draw_depth_sorted_affine(
+    slot: &SpriteSlot,
+    draw: ModelDrawState,
+    xy: [f32; 2],
+    size: [f32; 2],
+    uv_rect: [f32; 4],
+    rotation_deg: f32,
+    color: [f32; 4],
+    blend: BlendMode,
+    z: i16,
+) -> Option<Actor> {
+    let model = slot.model.as_ref()?;
+    if !draw.visible || model.vertices.is_empty() {
+        return None;
+    }
+
+    let tint = model_tint(color, draw);
+    let blend = model_blend(draw, blend);
+    let affine = model_affine_transform(model, size, rotation_deg, draw);
+    let local_transform = affine * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+    let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
+    Some(actor_from_vertices(
+        slot,
+        xy,
+        tint,
+        build_model_geometry(slot),
+        crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
+        local_transform,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        true,
+        blend,
         z,
     ))
 }

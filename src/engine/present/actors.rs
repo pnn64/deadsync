@@ -11,7 +11,7 @@ pub enum Background {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TextAlign {
     #[default]
     Left,
@@ -97,6 +97,7 @@ pub enum Actor {
     Text {
         align: [f32; 2],  // halign/valign pivot inside line box
         offset: [f32; 2], // parent top-left space
+        local_transform: Matrix4,
         color: [f32; 4],
         stroke_color: Option<[f32; 4]>,
         #[allow(dead_code)]
@@ -109,13 +110,17 @@ pub enum Actor {
         scale: [f32; 2],
         fit_width: Option<f32>,
         fit_height: Option<f32>,
+        line_spacing: Option<i32>,
         wrap_width_pixels: Option<i32>,
         max_width: Option<f32>,
         max_height: Option<f32>,
         max_w_pre_zoom: bool,
         max_h_pre_zoom: bool,
+        jitter: bool,
+        distortion: f32,
         /// Clip rect in parent TL space: [x, y, w, h].
         clip: Option<[f32; 4]>,
+        mask_dest: bool,
         blend: BlendMode,
         effect: anim::EffectState,
     },
@@ -147,6 +152,7 @@ pub enum Actor {
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
+        depth_test: bool,
         visible: bool,
         blend: BlendMode,
         z: i16,
@@ -226,6 +232,15 @@ pub struct TextAttribute {
     pub start: usize,
     pub length: usize,
     pub color: [f32; 4],
+    pub vertex_colors: Option<[[f32; 4]; 4]>,
+    pub glow: Option<[f32; 4]>,
+}
+
+impl TextAttribute {
+    #[inline(always)]
+    pub fn colors(self) -> [[f32; 4]; 4] {
+        self.vertex_colors.unwrap_or([self.color; 4])
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -299,6 +314,7 @@ mod tests {
         Actor::Text {
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
+            local_transform: Matrix4::IDENTITY,
             color,
             stroke_color: None,
             glow: [0.0, 0.0, 0.0, 0.0],
@@ -310,12 +326,16 @@ mod tests {
             scale: [1.0, 1.0],
             fit_width: None,
             fit_height: None,
+            line_spacing: None,
             wrap_width_pixels: None,
             max_width: None,
             max_height: None,
             max_w_pre_zoom: false,
             max_h_pre_zoom: false,
+            jitter: false,
+            distortion: 0.0,
             clip: None,
+            mask_dest: false,
             blend: BlendMode::Alpha,
             effect: anim::EffectState::default(),
         }

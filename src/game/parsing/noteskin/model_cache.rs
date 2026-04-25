@@ -166,6 +166,7 @@ mod tests {
             }),
             uv_velocity: [0.0, 0.0],
             uv_offset: [0.0, 0.0],
+            uv_cycle_seconds: None,
             note_color_translate: false,
             model: Some(Arc::new(ModelMesh {
                 vertices: Arc::from([ModelVertex {

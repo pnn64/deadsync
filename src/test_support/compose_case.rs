@@ -174,6 +174,8 @@ pub enum ActorSnapshot {
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
+        #[serde(default)]
+        depth_test: bool,
         visible: bool,
         blend: BlendModeSnapshot,
         z: i16,
@@ -248,6 +250,9 @@ pub enum EffectModeSnapshot {
     DiffuseShift,
     GlowShift,
     Pulse,
+    Bob,
+    Bounce,
+    Wag,
     Spin,
 }
 
@@ -327,6 +332,8 @@ pub enum RenderObjectTypeSnapshot {
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
+        #[serde(default)]
+        depth_test: bool,
     },
 }
 
@@ -902,6 +909,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
         Actor::Text {
             align,
             offset,
+            local_transform: _,
             color,
             stroke_color,
             glow,
@@ -913,12 +921,16 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             scale,
             fit_width,
             fit_height,
+            line_spacing: _,
             wrap_width_pixels,
             max_width,
             max_height,
             max_w_pre_zoom,
             max_h_pre_zoom,
+            jitter: _,
+            distortion: _,
             clip,
+            mask_dest: _,
             blend,
             effect,
         } => ActorSnapshot::Text {
@@ -973,6 +985,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             uv_scale,
             uv_offset,
             uv_tex_shift,
+            depth_test,
             visible,
             blend,
             z,
@@ -988,6 +1001,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             uv_scale: *uv_scale,
             uv_offset: *uv_offset,
             uv_tex_shift: *uv_tex_shift,
+            depth_test: *depth_test,
             visible: *visible,
             blend: BlendModeSnapshot::from(*blend),
             z: *z,
@@ -1120,6 +1134,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
         } => Actor::Text {
             align: *align,
             offset: *offset,
+            local_transform: glam::Mat4::IDENTITY,
             color: *color,
             stroke_color: *stroke_color,
             glow: *glow,
@@ -1133,12 +1148,16 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             scale: *scale,
             fit_width: *fit_width,
             fit_height: *fit_height,
+            line_spacing: None,
             wrap_width_pixels: *wrap_width_pixels,
             max_width: *max_width,
             max_height: *max_height,
             max_w_pre_zoom: *max_w_pre_zoom,
             max_h_pre_zoom: *max_h_pre_zoom,
+            jitter: false,
+            distortion: 0.0,
             clip: *clip,
+            mask_dest: false,
             blend: BlendMode::from(*blend),
             effect: EffectState::from(*effect),
         },
@@ -1172,6 +1191,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             uv_scale,
             uv_offset,
             uv_tex_shift,
+            depth_test,
             visible,
             blend,
             z,
@@ -1189,6 +1209,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             uv_scale: *uv_scale,
             uv_offset: *uv_offset,
             uv_tex_shift: *uv_tex_shift,
+            depth_test: *depth_test,
             visible: *visible,
             blend: BlendMode::from(*blend),
             z: *z,
@@ -1282,6 +1303,7 @@ fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
+                depth_test,
                 ..
             } => RenderObjectTypeSnapshot::TexturedMesh {
                 texture_id: None,
@@ -1291,6 +1313,7 @@ fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
                 uv_scale: *uv_scale,
                 uv_offset: *uv_offset,
                 uv_tex_shift: *uv_tex_shift,
+                depth_test: *depth_test,
             },
         },
         texture_handle: render.texture_handle,
@@ -1363,6 +1386,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
+                depth_test,
                 ..
             } => ObjectType::TexturedMesh {
                 tint: *tint,
@@ -1374,6 +1398,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                 uv_scale: *uv_scale,
                 uv_offset: *uv_offset,
                 uv_tex_shift: *uv_tex_shift,
+                depth_test: *depth_test,
             },
         },
         texture_handle,
@@ -1592,6 +1617,9 @@ impl From<EffectMode> for EffectModeSnapshot {
             EffectMode::DiffuseShift => Self::DiffuseShift,
             EffectMode::GlowShift => Self::GlowShift,
             EffectMode::Pulse => Self::Pulse,
+            EffectMode::Bob => Self::Bob,
+            EffectMode::Bounce => Self::Bounce,
+            EffectMode::Wag => Self::Wag,
             EffectMode::Spin => Self::Spin,
         }
     }
@@ -1605,6 +1633,9 @@ impl From<EffectModeSnapshot> for EffectMode {
             EffectModeSnapshot::DiffuseShift => Self::DiffuseShift,
             EffectModeSnapshot::GlowShift => Self::GlowShift,
             EffectModeSnapshot::Pulse => Self::Pulse,
+            EffectModeSnapshot::Bob => Self::Bob,
+            EffectModeSnapshot::Bounce => Self::Bounce,
+            EffectModeSnapshot::Wag => Self::Wag,
             EffectModeSnapshot::Spin => Self::Spin,
         }
     }

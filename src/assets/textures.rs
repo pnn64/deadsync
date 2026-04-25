@@ -886,6 +886,18 @@ impl AssetManager {
             ("circle.png".to_string(), "circle.png".to_string()),
             ("swoosh.png".to_string(), "swoosh.png".to_string()),
             ("heart.png".to_string(), "heart.png".to_string()),
+            (
+                "graphics/menu_bg_technique/arrow_tex.png".to_string(),
+                "menu_bg_technique/arrow_tex.png".to_string(),
+            ),
+            (
+                "graphics/menu_bg_technique/square.png".to_string(),
+                "menu_bg_technique/square.png".to_string(),
+            ),
+            (
+                "graphics/menu_bg_technique/white_tex.png".to_string(),
+                "menu_bg_technique/white_tex.png".to_string(),
+            ),
             ("fave-icon.png".to_string(), "fave-icon.png".to_string()),
             (
                 "folder-solid.png".to_string(),
@@ -1095,16 +1107,17 @@ impl AssetManager {
         for r in res_rx {
             match r {
                 Ok((key, rgba)) => {
-                    let sampler = if key == "swoosh.png" {
-                        SamplerDesc {
-                            wrap: SamplerWrap::Repeat,
-                            ..SamplerDesc::default()
-                        }
-                    } else if key.starts_with("noteskins/") {
-                        parse_texture_hints(&key).sampler_desc()
-                    } else {
-                        SamplerDesc::default()
-                    };
+                    let sampler =
+                        if key == "swoosh.png" || key == "graphics/menu_bg_technique/square.png" {
+                            SamplerDesc {
+                                wrap: SamplerWrap::Repeat,
+                                ..SamplerDesc::default()
+                            }
+                        } else if key.starts_with("noteskins/") {
+                            parse_texture_hints(&key).sampler_desc()
+                        } else {
+                            SamplerDesc::default()
+                        };
                     let texture = backend.create_texture(&rgba, sampler)?;
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     debug!("Loaded texture: {key}");
@@ -1112,16 +1125,17 @@ impl AssetManager {
                 }
                 Err((key, msg)) => {
                     warn!("Failed to load texture for key '{key}': {msg}. Using fallback.");
-                    let sampler = if key == "swoosh.png" {
-                        SamplerDesc {
-                            wrap: SamplerWrap::Repeat,
-                            ..SamplerDesc::default()
-                        }
-                    } else if key.starts_with("noteskins/") {
-                        parse_texture_hints(&key).sampler_desc()
-                    } else {
-                        SamplerDesc::default()
-                    };
+                    let sampler =
+                        if key == "swoosh.png" || key == "graphics/menu_bg_technique/square.png" {
+                            SamplerDesc {
+                                wrap: SamplerWrap::Repeat,
+                                ..SamplerDesc::default()
+                            }
+                        } else if key.starts_with("noteskins/") {
+                            parse_texture_hints(&key).sampler_desc()
+                        } else {
+                            SamplerDesc::default()
+                        };
                     let texture = backend.create_texture(&fallback_image, sampler)?;
                     register_texture_dims(&key, fallback_image.width(), fallback_image.height());
                     self.insert_texture(
@@ -1180,13 +1194,21 @@ impl AssetManager {
         }
 
         let hints = parse_texture_hints(&key);
+        let sampler = if key == "graphics/menu_bg_technique/square.png" {
+            SamplerDesc {
+                wrap: SamplerWrap::Repeat,
+                ..hints.sampler_desc()
+            }
+        } else {
+            hints.sampler_desc()
+        };
         match open_image_fallback(&path) {
             Ok(img) => {
                 let mut rgba = img.to_rgba8();
                 if !hints.is_default() {
                     apply_texture_hints(&mut rgba, &hints);
                 }
-                match backend.create_texture(&rgba, hints.sampler_desc()) {
+                match backend.create_texture(&rgba, sampler) {
                     Ok(texture) => {
                         self.insert_texture(key.clone(), texture, rgba.width(), rgba.height());
                         register_texture_dims(&key, rgba.width(), rgba.height());

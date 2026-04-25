@@ -11,6 +11,7 @@ pub mod profile_boxes;
 pub mod qr_code;
 pub mod screen_bar;
 pub mod stats_overlay;
+mod technique_bg;
 pub mod test_input;
 pub mod timers;
 pub mod transitions;

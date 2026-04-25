@@ -281,6 +281,7 @@ pub enum ItemId {
     MchGameoverScreen,
     MchWriteCurrentScreen,
     MchMenuMusic,
+    MchMenuBackground,
     MchReplays,
     MchPerPlayerGlobalOffsets,
     MchKeyboardFeatures,
@@ -508,6 +509,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsMachine", "NameEntry")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "GameoverScreen")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuMusic")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuBackground")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "KeyboardFeatures")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "VideoBGs")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "WriteCurrentScreen")),
@@ -902,6 +904,7 @@ pub enum SubRowId {
     GameoverScreen,
     WriteCurrentScreen,
     MenuMusic,
+    MenuBackground,
     Replays,
     PerPlayerGlobalOffsets,
     KeyboardFeatures,
@@ -1916,6 +1919,12 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::MenuBackground,
+        label: lookup_key("OptionsMachine", "MenuBackground"),
+        choices: &[literal_choice("❤"), literal_choice("🌀")],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::Replays,
         label: lookup_key("OptionsMachine", "Replays"),
         choices: &[
@@ -2048,6 +2057,14 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "MenuMusicHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::MchMenuBackground,
+        name: lookup_key("OptionsMachine", "MenuBackground"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "MenuBackgroundHelp",
         ))],
     },
     Item {
@@ -6260,6 +6277,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
+        SubRowId::MenuBackground,
+        menu_background_style_choice_index(cfg.menu_background_style),
+    );
+    set_choice_by_id(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
         SubRowId::Replays,
         usize::from(cfg.machine_enable_replays),
     );
@@ -8124,6 +8147,9 @@ fn apply_submenu_choice_delta(
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
             SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),
             SubRowId::MenuMusic => config::update_menu_music(enabled),
+            SubRowId::MenuBackground => {
+                config::update_menu_background_style(menu_background_style_from_choice(new_index))
+            }
             SubRowId::Replays => config::update_machine_enable_replays(enabled),
             SubRowId::PerPlayerGlobalOffsets => {
                 config::update_machine_allow_per_player_global_offsets(enabled)
