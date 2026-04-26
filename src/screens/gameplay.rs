@@ -488,7 +488,71 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         gameplay_lobby_player_stats(state, profile::PlayerSide::P1),
         gameplay_lobby_player_stats(state, profile::PlayerSide::P2),
     );
-    map_gameplay_action(gameplay_update(state, delta_time))
+    let previous_song_lua_time = state.current_music_time_display;
+    let action = gameplay_update(state, delta_time);
+    play_song_lua_sound_events(
+        state,
+        previous_song_lua_time,
+        state.current_music_time_display,
+    );
+    map_gameplay_action(action)
+}
+
+fn song_lua_sound_time_crossed(previous: f32, now: f32, event_second: f32) -> bool {
+    if !event_second.is_finite() {
+        return false;
+    }
+    let starts_at_zero = previous <= 0.0 && event_second.abs() <= f32::EPSILON;
+    (event_second > previous || starts_at_zero) && event_second <= now
+}
+
+fn play_song_lua_sound_events(state: &State, previous: f32, now: f32) {
+    if !previous.is_finite() || !now.is_finite() || now < previous {
+        return;
+    }
+    play_song_lua_sound_events_for(
+        &state.song_lua_overlays,
+        &state.song_lua_overlay_events,
+        previous,
+        now,
+    );
+    for layer in &state.song_lua_background_visual_layers {
+        play_song_lua_sound_events_for(&layer.overlays, &layer.overlay_events, previous, now);
+    }
+    for layer in &state.song_lua_foreground_visual_layers {
+        play_song_lua_sound_events_for(&layer.overlays, &layer.overlay_events, previous, now);
+    }
+}
+
+fn play_song_lua_sound_events_for(
+    overlays: &[SongLuaOverlayActor],
+    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
+    previous: f32,
+    now: f32,
+) {
+    for (overlay_index, overlay) in overlays.iter().enumerate() {
+        let SongLuaOverlayKind::Sound { sound_path } = &overlay.kind else {
+            continue;
+        };
+        let Some(events) = overlay_events.get(overlay_index) else {
+            continue;
+        };
+        for event in events {
+            let Some(command) = overlay.message_commands.get(event.command_index) else {
+                continue;
+            };
+            for block in &command.blocks {
+                if block.delta.sound_play != Some(true) {
+                    continue;
+                }
+                let play_second = event.event_second + block.start;
+                if song_lua_sound_time_crossed(previous, now, play_second) {
+                    let key = sound_path.to_string_lossy();
+                    crate::engine::audio::play_sfx(key.as_ref());
+                }
+            }
+        }
+    }
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -958,8 +1022,14 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.z {
         state.z = value;
     }
+    if let Some(value) = delta.z_bias {
+        state.z_bias = value;
+    }
     if let Some(value) = delta.draw_order {
         state.draw_order = value;
+    }
+    if let Some(value) = delta.draw_by_z_position {
+        state.draw_by_z_position = value;
     }
     if let Some(value) = delta.halign {
         state.halign = value;
@@ -1027,6 +1097,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.mask_dest {
         state.mask_dest = value;
     }
+    if let Some(value) = delta.depth_test {
+        state.depth_test = value;
+    }
     if let Some(value) = delta.zoom {
         state.zoom = value;
     }
@@ -1047,6 +1120,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     }
     if let Some(value) = delta.basezoom_y {
         state.basezoom_y = value;
+    }
+    if let Some(value) = delta.basezoom_z {
+        state.basezoom_z = value;
     }
     if let Some(value) = delta.rot_x_deg {
         state.rot_x_deg = value;
@@ -1147,6 +1223,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.max_dimension_uses_zoom {
         state.max_dimension_uses_zoom = value;
     }
+    if let Some(value) = delta.texture_filtering {
+        state.texture_filtering = value;
+    }
     if let Some(value) = delta.texture_wrapping {
         state.texture_wrapping = value;
     }
@@ -1190,8 +1269,14 @@ fn song_lua_overlay_state_lerp(
     if delta.z.is_some() {
         from.z = (to.z - from.z).mul_add(t, from.z);
     }
+    if delta.z_bias.is_some() {
+        from.z_bias = (to.z_bias - from.z_bias).mul_add(t, from.z_bias);
+    }
     if delta.draw_order.is_some() && t >= 1.0 - f32::EPSILON {
         from.draw_order = to.draw_order;
+    }
+    if delta.draw_by_z_position.is_some() && t >= 1.0 - f32::EPSILON {
+        from.draw_by_z_position = to.draw_by_z_position;
     }
     if delta.halign.is_some() {
         from.halign = (to.halign - from.halign).mul_add(t, from.halign);
@@ -1302,6 +1387,9 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.basezoom_y.is_some() {
         from.basezoom_y = (to.basezoom_y - from.basezoom_y).mul_add(t, from.basezoom_y);
+    }
+    if delta.basezoom_z.is_some() {
+        from.basezoom_z = (to.basezoom_z - from.basezoom_z).mul_add(t, from.basezoom_z);
     }
     if delta.rot_x_deg.is_some() {
         from.rot_x_deg = (to.rot_x_deg - from.rot_x_deg).mul_add(t, from.rot_x_deg);
@@ -1580,6 +1668,21 @@ fn song_lua_overlay_axis_scale(state: SongLuaOverlayState) -> [f32; 2] {
 }
 
 #[inline(always)]
+fn song_lua_overlay_z_scale(state: SongLuaOverlayState) -> f32 {
+    let basezoom_z = if (state.basezoom_z - 1.0).abs() <= f32::EPSILON {
+        state.basezoom
+    } else {
+        state.basezoom_z
+    };
+    let zoom_z = if (state.zoom_z - 1.0).abs() <= f32::EPSILON {
+        state.zoom
+    } else {
+        state.zoom_z
+    };
+    basezoom_z * zoom_z
+}
+
+#[inline(always)]
 fn song_lua_overlay_parent_uses_center_origin(
     parent_kind: &SongLuaOverlayKind,
     parent_axis: f32,
@@ -1587,7 +1690,9 @@ fn song_lua_overlay_parent_uses_center_origin(
 ) -> bool {
     matches!(
         parent_kind,
-        SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+        SongLuaOverlayKind::Actor
+            | SongLuaOverlayKind::ActorFrame
+            | SongLuaOverlayKind::ActorFrameTexture
     ) && (parent_axis - 0.5 * overlay_space_axis).abs() <= 0.01
 }
 
@@ -1603,7 +1708,9 @@ fn song_lua_overlay_compose_state(
     let epsilon = 0.01;
     let local_x = if matches!(
         parent_kind,
-        SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+        SongLuaOverlayKind::Actor
+            | SongLuaOverlayKind::ActorFrame
+            | SongLuaOverlayKind::ActorFrameTexture
     ) && song_lua_overlay_parent_uses_center_origin(
         parent_kind,
         parent.x,
@@ -1616,7 +1723,9 @@ fn song_lua_overlay_compose_state(
     } * parent_scale_x;
     let local_y = if matches!(
         parent_kind,
-        SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+        SongLuaOverlayKind::Actor
+            | SongLuaOverlayKind::ActorFrame
+            | SongLuaOverlayKind::ActorFrameTexture
     ) && song_lua_overlay_parent_uses_center_origin(
         parent_kind,
         parent.y,
@@ -1638,6 +1747,7 @@ fn song_lua_overlay_compose_state(
     child.basezoom *= parent.basezoom * parent.zoom;
     child.basezoom_x *= parent.basezoom_x * parent.zoom_x;
     child.basezoom_y *= parent.basezoom_y * parent.zoom_y;
+    child.basezoom_z *= parent.basezoom_z * parent.zoom_z;
     child.rot_x_deg += parent.rot_x_deg;
     child.rot_y_deg += parent.rot_y_deg;
     child.rot_z_deg += parent.rot_z_deg;
@@ -2145,16 +2255,35 @@ fn song_lua_push_order(
             children.push(idx);
         }
     }
-    children.sort_by_key(|&idx| {
-        (
-            overlay_states
-                .get(idx)
-                .map_or(overlays[idx].initial_state.draw_order, |state| {
-                    state.draw_order
-                }),
-            idx,
-        )
+    let draw_by_z_position = parent_index.is_some_and(|idx| {
+        overlay_states
+            .get(idx)
+            .map_or(overlays[idx].initial_state.draw_by_z_position, |state| {
+                state.draw_by_z_position
+            })
     });
+    if draw_by_z_position {
+        children.sort_by(|&left, &right| {
+            let left_z = overlay_states
+                .get(left)
+                .map_or(overlays[left].initial_state.z, |state| state.z);
+            let right_z = overlay_states
+                .get(right)
+                .map_or(overlays[right].initial_state.z, |state| state.z);
+            left_z.total_cmp(&right_z).then_with(|| left.cmp(&right))
+        });
+    } else {
+        children.sort_by_key(|&idx| {
+            (
+                overlay_states
+                    .get(idx)
+                    .map_or(overlays[idx].initial_state.draw_order, |state| {
+                        state.draw_order
+                    }),
+                idx,
+            )
+        });
+    }
     for idx in children {
         out.push(idx);
         song_lua_push_order(overlays, overlay_states, Some(idx), out);
@@ -2183,7 +2312,9 @@ fn song_lua_capture_children(
         }
         if matches!(
             overlay.kind,
-            SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+            SongLuaOverlayKind::Actor
+                | SongLuaOverlayKind::ActorFrame
+                | SongLuaOverlayKind::ActorFrameTexture
         ) {
             continue;
         }
@@ -2387,6 +2518,10 @@ fn song_lua_capture_tint(color: [f32; 4], tint: [f32; 4]) -> [f32; 4] {
         color[2] * tint[2],
         color[3] * tint[3],
     ]
+}
+
+fn song_lua_biased_world_z(state: SongLuaOverlayState, effect_z: f32) -> f32 {
+    effect_z + state.z_bias
 }
 
 fn song_lua_add_z(z: i16, delta: i16) -> i16 {
@@ -2657,20 +2792,21 @@ fn song_lua_capture_transform_matrix(
     let y_scale = screen_height() / overlay_space_height.max(1.0);
     let translate_x = (state.x - 0.5 * overlay_space_width) * x_scale + extra_offset[0];
     let translate_y = (state.y - 0.5 * overlay_space_height) * y_scale + extra_offset[1];
-    let scale_x = state.basezoom_x * state.zoom_x;
-    let scale_y = state.basezoom_y * state.zoom_y;
+    let [scale_x, scale_y] = song_lua_overlay_axis_scale(state);
+    let scale_z = song_lua_overlay_z_scale(state);
     if translate_x.abs() <= f32::EPSILON
         && translate_y.abs() <= f32::EPSILON
         && state.rot_z_deg.abs() <= f32::EPSILON
         && (scale_x - 1.0).abs() <= f32::EPSILON
         && (scale_y - 1.0).abs() <= f32::EPSILON
+        && (scale_z - 1.0).abs() <= f32::EPSILON
     {
         return None;
     }
     Some(
         Matrix4::from_translation(Vector3::new(translate_x, -translate_y, 0.0))
             * Matrix4::from_rotation_z(state.rot_z_deg.to_radians())
-            * Matrix4::from_scale(Vector3::new(scale_x, scale_y, 1.0)),
+            * Matrix4::from_scale(Vector3::new(scale_x, scale_y, scale_z)),
     )
 }
 
@@ -3199,7 +3335,7 @@ fn song_lua_model_actor(
         let actor = Actor::TexturedMesh {
             align: [0.0, 0.0],
             offset,
-            world_z: effect_offset[2],
+            world_z: song_lua_biased_world_z(state, effect_offset[2]),
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             local_transform: song_lua_model_local_transform(
                 layer.model_size,
@@ -3971,7 +4107,7 @@ fn song_lua_projected_overlay_actor(
     Some(Actor::TexturedMesh {
         align: [0.0, 0.0],
         offset: [0.0, 0.0],
-        world_z: 0.0,
+        world_z: state.z_bias,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         local_transform: Matrix4::IDENTITY,
         texture,
@@ -4025,6 +4161,7 @@ fn build_song_lua_overlay_actor(
     let finalize_actor =
         |actor, glow| song_lua_finalize_overlay_actor(state, actor, glow, x_scale, y_scale);
     match &overlay.kind {
+        SongLuaOverlayKind::Actor => None,
         SongLuaOverlayKind::ActorFrame => None,
         SongLuaOverlayKind::ActorFrameTexture => None,
         SongLuaOverlayKind::ActorProxy { .. } => None,
@@ -4216,7 +4353,7 @@ fn build_song_lua_overlay_actor(
                 *rot_z_deg = effect_rot[2];
                 offset[0] += effect_offset[0] * x_scale;
                 offset[1] += effect_offset[1] * y_scale;
-                *world_z += effect_offset[2];
+                *world_z += song_lua_biased_world_z(state, effect_offset[2]);
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
                 *uv_rect = song_lua_overlay_uv_rect(state, Some(key.as_ref()), total_elapsed);
@@ -4366,7 +4503,7 @@ fn build_song_lua_overlay_actor(
                             state.x * x_scale + effect_offset[0] * x_scale,
                             state.y * y_scale + effect_offset[1] * y_scale,
                         ],
-                        world_z: effect_offset[2],
+                        world_z: song_lua_biased_world_z(state, effect_offset[2]),
                         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                         local_transform: Matrix4::IDENTITY,
                         texture: key,
@@ -4672,7 +4809,7 @@ fn build_song_lua_overlay_actor(
                 *rot_z_deg = effect_rot[2];
                 offset[0] += effect_offset[0] * x_scale;
                 offset[1] += effect_offset[1] * y_scale;
-                *world_z += effect_offset[2];
+                *world_z += song_lua_biased_world_z(state, effect_offset[2]);
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
                 *actor_effect = EffectState::default();
@@ -5807,9 +5944,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let rotation_y = player_state.rot_y_deg + state.song_lua_player_rotation_y[player_idx];
         let skew_x = state.song_lua_player_skew_x[player_idx];
         let skew_y = state.song_lua_player_skew_y[player_idx];
-        let zoom_x = player_state.zoom_x * state.song_lua_player_zoom_x[player_idx];
-        let zoom_y = player_state.zoom_y * state.song_lua_player_zoom_y[player_idx];
-        let zoom_z = player_state.zoom_z * state.song_lua_player_zoom_z[player_idx];
+        let [player_scale_x, player_scale_y] = song_lua_overlay_axis_scale(player_state);
+        let player_scale_z = song_lua_overlay_z_scale(player_state);
+        let zoom_x = player_scale_x * state.song_lua_player_zoom_x[player_idx];
+        let zoom_y = player_scale_y * state.song_lua_player_zoom_y[player_idx];
+        let zoom_z = player_scale_z * state.song_lua_player_zoom_z[player_idx];
         let target_x = state.song_lua_player_x[player_idx].unwrap_or(player_state.x);
         let target_y = state.song_lua_player_y[player_idx].unwrap_or(player_state.y);
         let z_shift = song_lua_player_layer_z(
@@ -7735,6 +7874,7 @@ mod tests {
                 effect_period: 2.0,
                 effect_offset: 1.0,
                 effect_magnitude: [10.0, 20.0, 5.0],
+                z_bias: 2.5,
                 ..SongLuaOverlayState::default()
             },
             None,
@@ -7761,7 +7901,7 @@ mod tests {
                 assert_eq!(z, 777);
                 assert!((offset[0] - (320.0 + 10.0) * x_scale).abs() <= 0.000_1);
                 assert!((offset[1] - (240.0 + 20.0) * y_scale).abs() <= 0.000_1);
-                assert!((world_z - 5.0).abs() <= 0.000_1);
+                assert!((world_z - 7.5).abs() <= 0.000_1);
                 assert!(scale[0] > 0.0);
                 assert!(scale[1] > 0.0);
             }
@@ -9260,6 +9400,55 @@ mod tests {
             song_lua_overlay_order(&overlays, &states, None),
             [3, 0, 2, 1]
         );
+    }
+
+    #[test]
+    fn song_lua_overlay_order_sorts_children_by_z_when_enabled() {
+        let overlays = vec![
+            SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::ActorFrame,
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState {
+                    draw_by_z_position: true,
+                    ..SongLuaOverlayState::default()
+                },
+                message_commands: Vec::new(),
+            },
+            test_order_overlay(SongLuaOverlayKind::Quad, Some(0), 100),
+            test_order_overlay(SongLuaOverlayKind::Quad, Some(0), -100),
+            test_order_overlay(SongLuaOverlayKind::Quad, Some(0), 0),
+        ];
+        let mut states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        states[1].z = -20.0;
+        states[2].z = 5.0;
+        states[3].z = 0.0;
+
+        assert_eq!(
+            song_lua_overlay_order(&overlays, &states, None),
+            [0, 1, 3, 2]
+        );
+    }
+
+    #[test]
+    fn song_lua_overlay_delta_applies_depth_filtering_and_draw_by_z() {
+        let mut state = SongLuaOverlayState::default();
+        apply_song_lua_overlay_delta(
+            &mut state,
+            &SongLuaOverlayStateDelta {
+                depth_test: Some(true),
+                draw_by_z_position: Some(true),
+                texture_filtering: Some(false),
+                ..SongLuaOverlayStateDelta::default()
+            },
+        );
+
+        assert!(state.depth_test);
+        assert!(state.draw_by_z_position);
+        assert!(!state.texture_filtering);
     }
 
     #[test]

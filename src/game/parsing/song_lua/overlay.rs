@@ -33,6 +33,7 @@ pub enum SongLuaTextGlowMode {
 
 #[derive(Debug, Clone)]
 pub enum SongLuaOverlayKind {
+    Actor,
     ActorFrame,
     ActorFrameTexture,
     ActorProxy {
@@ -109,7 +110,9 @@ pub struct SongLuaOverlayState {
     pub x: f32,
     pub y: f32,
     pub z: f32,
+    pub z_bias: f32,
     pub draw_order: i32,
+    pub draw_by_z_position: bool,
     pub halign: f32,
     pub valign: f32,
     pub text_align: TextAlign,
@@ -140,6 +143,7 @@ pub struct SongLuaOverlayState {
     pub basezoom: f32,
     pub basezoom_x: f32,
     pub basezoom_y: f32,
+    pub basezoom_z: f32,
     pub rot_x_deg: f32,
     pub rot_y_deg: f32,
     pub rot_z_deg: f32,
@@ -189,7 +193,9 @@ impl Default for SongLuaOverlayState {
             x: 0.0,
             y: 0.0,
             z: 0.0,
+            z_bias: 0.0,
             draw_order: 0,
+            draw_by_z_position: false,
             halign: 0.5,
             valign: 0.5,
             text_align: TextAlign::Center,
@@ -220,6 +226,7 @@ impl Default for SongLuaOverlayState {
             basezoom: 1.0,
             basezoom_x: 1.0,
             basezoom_y: 1.0,
+            basezoom_z: 1.0,
             rot_x_deg: 0.0,
             rot_y_deg: 0.0,
             rot_z_deg: 0.0,
@@ -270,7 +277,9 @@ pub struct SongLuaOverlayStateDelta {
     pub x: Option<f32>,
     pub y: Option<f32>,
     pub z: Option<f32>,
+    pub z_bias: Option<f32>,
     pub draw_order: Option<i32>,
+    pub draw_by_z_position: Option<bool>,
     pub halign: Option<f32>,
     pub valign: Option<f32>,
     pub text_align: Option<TextAlign>,
@@ -301,6 +310,7 @@ pub struct SongLuaOverlayStateDelta {
     pub basezoom: Option<f32>,
     pub basezoom_x: Option<f32>,
     pub basezoom_y: Option<f32>,
+    pub basezoom_z: Option<f32>,
     pub rot_x_deg: Option<f32>,
     pub rot_y_deg: Option<f32>,
     pub rot_z_deg: Option<f32>,
@@ -341,6 +351,7 @@ pub struct SongLuaOverlayStateDelta {
     pub texcoord_velocity: Option<[f32; 2]>,
     pub size: Option<[f32; 2]>,
     pub stretch_rect: Option<[f32; 4]>,
+    pub sound_play: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -428,8 +439,14 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.z {
         state.z = value;
     }
+    if let Some(value) = delta.z_bias {
+        state.z_bias = value;
+    }
     if let Some(value) = delta.draw_order {
         state.draw_order = value;
+    }
+    if let Some(value) = delta.draw_by_z_position {
+        state.draw_by_z_position = value;
     }
     if let Some(value) = delta.halign {
         state.halign = value;
@@ -520,6 +537,9 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     }
     if let Some(value) = delta.basezoom_y {
         state.basezoom_y = value;
+    }
+    if let Some(value) = delta.basezoom_z {
+        state.basezoom_z = value;
     }
     if let Some(value) = delta.rot_x_deg {
         state.rot_x_deg = value;
@@ -658,8 +678,14 @@ fn overlay_state_lerp(
     if delta.z.is_some() {
         from.z = (to.z - from.z).mul_add(t, from.z);
     }
+    if delta.z_bias.is_some() {
+        from.z_bias = (to.z_bias - from.z_bias).mul_add(t, from.z_bias);
+    }
     if delta.draw_order.is_some() && t >= 1.0 - f32::EPSILON {
         from.draw_order = to.draw_order;
+    }
+    if delta.draw_by_z_position.is_some() && t >= 1.0 - f32::EPSILON {
+        from.draw_by_z_position = to.draw_by_z_position;
     }
     if delta.halign.is_some() {
         from.halign = (to.halign - from.halign).mul_add(t, from.halign);
@@ -770,6 +796,9 @@ fn overlay_state_lerp(
     }
     if delta.basezoom_y.is_some() {
         from.basezoom_y = (to.basezoom_y - from.basezoom_y).mul_add(t, from.basezoom_y);
+    }
+    if delta.basezoom_z.is_some() {
+        from.basezoom_z = (to.basezoom_z - from.basezoom_z).mul_add(t, from.basezoom_z);
     }
     if delta.rot_x_deg.is_some() {
         from.rot_x_deg = (to.rot_x_deg - from.rot_x_deg).mul_add(t, from.rot_x_deg);
@@ -1036,7 +1065,9 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
     delta.x.is_none()
         && delta.y.is_none()
         && delta.z.is_none()
+        && delta.z_bias.is_none()
         && delta.draw_order.is_none()
+        && delta.draw_by_z_position.is_none()
         && delta.halign.is_none()
         && delta.valign.is_none()
         && delta.text_align.is_none()
@@ -1067,6 +1098,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.basezoom.is_none()
         && delta.basezoom_x.is_none()
         && delta.basezoom_y.is_none()
+        && delta.basezoom_z.is_none()
         && delta.rot_x_deg.is_none()
         && delta.rot_y_deg.is_none()
         && delta.rot_z_deg.is_none()
@@ -1107,6 +1139,7 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.texcoord_velocity.is_none()
         && delta.size.is_none()
         && delta.stretch_rect.is_none()
+        && delta.sound_play.is_none()
 }
 
 fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverlayStateDelta) {
@@ -1119,8 +1152,14 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.z.is_some() {
         into.z = from.z;
     }
+    if from.z_bias.is_some() {
+        into.z_bias = from.z_bias;
+    }
     if from.draw_order.is_some() {
         into.draw_order = from.draw_order;
+    }
+    if from.draw_by_z_position.is_some() {
+        into.draw_by_z_position = from.draw_by_z_position;
     }
     if from.halign.is_some() {
         into.halign = from.halign;
@@ -1229,6 +1268,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     }
     if from.basezoom_y.is_some() {
         into.basezoom_y = from.basezoom_y;
+    }
+    if from.basezoom_z.is_some() {
+        into.basezoom_z = from.basezoom_z;
     }
     if from.rot_x_deg.is_some() {
         into.rot_x_deg = from.rot_x_deg;
@@ -1350,6 +1392,9 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.stretch_rect.is_some() {
         into.stretch_rect = from.stretch_rect;
     }
+    if from.sound_play.is_some() {
+        into.sound_play = from.sound_play;
+    }
 }
 
 pub(super) fn overlay_delta_from_blocks(
@@ -1379,7 +1424,9 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(x);
     copy_pair!(y);
     copy_pair!(z);
+    copy_pair!(z_bias);
     copy_pair!(draw_order);
+    copy_pair!(draw_by_z_position);
     copy_pair!(halign);
     copy_pair!(valign);
     copy_pair!(text_align);
@@ -1410,6 +1457,7 @@ pub(super) fn overlay_delta_intersection(
     copy_pair!(basezoom);
     copy_pair!(basezoom_x);
     copy_pair!(basezoom_y);
+    copy_pair!(basezoom_z);
     copy_pair!(rot_x_deg);
     copy_pair!(rot_y_deg);
     copy_pair!(rot_z_deg);
