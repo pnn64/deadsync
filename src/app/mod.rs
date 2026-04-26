@@ -3391,6 +3391,7 @@ impl App {
                 vsync,
                 present_mode_policy,
                 max_fps,
+                high_dpi,
             } => {
                 // Ensure options menu reflects current hardware state before processing changes
                 self.update_options_monitor_specs(event_loop);
@@ -3419,6 +3420,11 @@ impl App {
                     );
                     present_config_changed = true;
                 }
+                if let Some(enabled) = high_dpi {
+                    debug!("Graphics setting changed: high_dpi={enabled}");
+                    config::update_high_dpi(enabled);
+                    options::sync_high_dpi(&mut self.state.screens.options_state, enabled);
+                }
 
                 let mut pending_resolution = None;
                 if let Some((w, h)) = resolution {
@@ -3432,10 +3438,19 @@ impl App {
                     event_loop,
                     monitor.unwrap_or(self.state.shell.display_monitor),
                 );
-                let recreate_renderer = renderer.is_some();
+                let target_renderer = renderer.unwrap_or(self.backend_type);
+                let high_dpi_affects_renderer =
+                    high_dpi.is_some() && target_renderer == BackendType::OpenGL;
+                if high_dpi_affects_renderer && pending_resolution.is_none() {
+                    pending_resolution = Some((
+                        self.state.shell.display_width,
+                        self.state.shell.display_height,
+                    ));
+                }
+                let recreate_renderer = renderer.is_some() || high_dpi_affects_renderer;
 
-                match (renderer, display_mode) {
-                    (Some(new_backend), Some(mode)) => {
+                match (recreate_renderer, display_mode) {
+                    (true, Some(mode)) => {
                         // When both change, avoid touching the old window; update state/config
                         // first so the new renderer is created directly in the target mode.
                         let prev_mode = self.state.shell.display_mode;
@@ -3460,15 +3475,20 @@ impl App {
                             chosen_monitor,
                             monitor_count,
                         );
-                        self.switch_renderer(new_backend, pending_resolution, event_loop)?;
+                        self.switch_renderer(
+                            target_renderer,
+                            pending_resolution,
+                            event_loop,
+                            high_dpi_affects_renderer,
+                        )?;
                     }
-                    (None, Some(mode)) => {
+                    (false, Some(mode)) => {
                         self.apply_display_mode(mode, Some(chosen_monitor), event_loop)?;
                         if let Some((w, h)) = pending_resolution {
                             self.apply_resolution(w, h, event_loop)?;
                         }
                     }
-                    (Some(new_backend), None) => {
+                    (true, None) => {
                         if monitor.is_some() {
                             self.state.shell.display_monitor = chosen_monitor;
                             config::update_display_monitor(chosen_monitor);
@@ -3484,9 +3504,14 @@ impl App {
                                 monitor_count,
                             );
                         }
-                        self.switch_renderer(new_backend, pending_resolution, event_loop)?;
+                        self.switch_renderer(
+                            target_renderer,
+                            pending_resolution,
+                            event_loop,
+                            high_dpi_affects_renderer,
+                        )?;
                     }
-                    (None, None) => {
+                    (false, None) => {
                         if monitor.is_some() {
                             // Move the existing window/fullscreen session to the chosen monitor.
                             self.apply_display_mode(

@@ -124,6 +124,8 @@ pub struct Config {
     pub display_width: u32,
     pub display_height: u32,
     pub video_renderer: BackendType,
+    /// Native high-DPI/Retina rendering. Currently affects macOS OpenGL only.
+    pub high_dpi: bool,
     pub gfx_debug: bool,
     /// Windows-only: choose which gamepad backend to use.
     pub windows_gamepad_backend: WindowsPadBackend,
@@ -289,6 +291,7 @@ impl Default for Config {
             display_width: 1600,
             display_height: 900,
             video_renderer: BackendType::OpenGL,
+            high_dpi: false,
             gfx_debug: false,
             windows_gamepad_backend: WindowsPadBackend::RawInput,
             software_renderer_threads: 1,

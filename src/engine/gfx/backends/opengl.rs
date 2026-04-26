@@ -25,6 +25,55 @@ use winit::window::Window;
 #[cfg(all(unix, not(target_os = "macos")))]
 use glutin::context::{ContextApi, GlProfile, Version};
 
+#[cfg(target_os = "macos")]
+fn logical_px_for_physical(px: u32, scale: f64) -> u32 {
+    if px == 0 {
+        return 0;
+    }
+    ((f64::from(px) / scale.max(0.001)).round().max(1.0)) as u32
+}
+
+#[cfg(target_os = "macos")]
+fn opengl_render_size(window: &Window, high_dpi_enabled: bool) -> (u32, u32) {
+    let size = window.inner_size();
+    if high_dpi_enabled {
+        return (size.width, size.height);
+    }
+    let scale = window.scale_factor();
+    (
+        logical_px_for_physical(size.width, scale),
+        logical_px_for_physical(size.height, scale),
+    )
+}
+
+#[cfg(not(target_os = "macos"))]
+fn opengl_render_size(window: &Window, _high_dpi_enabled: bool) -> (u32, u32) {
+    let size = window.inner_size();
+    (size.width, size.height)
+}
+
+#[cfg(target_os = "macos")]
+fn set_macos_opengl_high_dpi_surface(window: &Window, enabled: bool) {
+    use objc2::rc::Retained;
+    use objc2_app_kit::NSView;
+
+    let Ok(handle) = window.window_handle() else {
+        warn!("Unable to get macOS window handle for OpenGL high-DPI setup.");
+        return;
+    };
+    let RawWindowHandle::AppKit(appkit) = handle.as_raw() else {
+        return;
+    };
+    // SAFETY: the raw AppKit view handle comes from the live winit window and is
+    // retained only for this call so the Objective-C object stays valid.
+    let Some(view) = (unsafe { Retained::retain(appkit.ns_view.as_ptr().cast::<NSView>()) }) else {
+        warn!("Unable to get macOS NSView for OpenGL high-DPI setup.");
+        return;
+    };
+    #[allow(deprecated)]
+    view.setWantsBestResolutionOpenGLSurface(enabled);
+}
+
 const OPENGL_PRESENT_SPIKE_US: u32 = 3_000;
 const OPENGL_GPU_WAIT_SPIKE_US: u32 = 1_000;
 const OPENGL_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
@@ -131,6 +180,7 @@ pub fn init(
     window: Arc<Window>,
     vsync_enabled: bool,
     gfx_debug_enabled: bool,
+    high_dpi_enabled: bool,
 ) -> Result<State, Box<dyn Error>> {
     info!("Initializing OpenGL backend...");
     if gfx_debug_enabled {
@@ -138,7 +188,9 @@ pub fn init(
     }
 
     let (gl_surface, gl_context, gl, api) =
-        create_opengl_context(&window, vsync_enabled, gfx_debug_enabled)?;
+        create_opengl_context(&window, vsync_enabled, gfx_debug_enabled, high_dpi_enabled)?;
+    #[cfg(target_os = "macos")]
+    set_macos_opengl_high_dpi_surface(&window, high_dpi_enabled);
     info!("OpenGL context API: {}", api.label());
     log_opengl_driver_info(&gl);
     let shaders = api.shaders();
@@ -399,13 +451,24 @@ pub fn init(
         (vao, vbo, instance_vbo)
     };
 
-    let initial_size = window.inner_size();
-    let projection = ortho_for_window(initial_size.width, initial_size.height);
+    let (initial_width, initial_height) = opengl_render_size(&window, high_dpi_enabled);
+    let projection = ortho_for_window(initial_width, initial_height);
+    let (surface_width, surface_height) = surface_extent(initial_width, initial_height);
+    gl_surface.resize(&gl_context, surface_width, surface_height);
+    info!(
+        "OpenGL render size: {}x{} high_dpi={} window_physical={}x{} scale={:.2}",
+        initial_width,
+        initial_height,
+        high_dpi_enabled,
+        window.inner_size().width,
+        window.inner_size().height,
+        window.scale_factor()
+    );
 
     // SAFETY: the OpenGL context is current and all program/texture handles used
     // below were created successfully in this function.
     unsafe {
-        gl.viewport(0, 0, initial_size.width as i32, initial_size.height as i32);
+        gl.viewport(0, 0, initial_width as i32, initial_height as i32);
         gl.use_program(Some(program));
         gl.active_texture(glow::TEXTURE0);
         gl.uniform_1_i32(Some(&texture_location), 0);
@@ -426,7 +489,7 @@ pub fn init(
         tmesh_texture_location,
         texture_location,
         projection,
-        window_size: (initial_size.width, initial_size.height),
+        window_size: (initial_width, initial_height),
         shared_vao,
         _shared_vbo,
         _shared_ibo,
@@ -1223,6 +1286,7 @@ fn create_opengl_context(
     window: &Window,
     vsync_enabled: bool,
     gfx_debug_enabled: bool,
+    high_dpi_enabled: bool,
 ) -> Result<
     (
         Surface<WindowSurface>,
@@ -1310,7 +1374,7 @@ fn create_opengl_context(
         (display, vsync_logic)
     };
 
-    let (width, height): (u32, u32) = window.inner_size().into();
+    let (width, height) = opengl_render_size(window, high_dpi_enabled);
     let raw_window_handle = window.window_handle()?.as_raw();
     #[cfg(target_os = "windows")]
     let (surface, context, api) = {

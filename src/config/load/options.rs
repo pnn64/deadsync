@@ -148,6 +148,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "VideoRenderer")
         .and_then(|s| BackendType::from_str(&s).ok())
         .unwrap_or(default.video_renderer);
+    cfg.high_dpi = conf
+        .get("Options", "HighDPI")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.high_dpi);
     cfg.windows_gamepad_backend = conf
         .get("Options", "GamepadBackend")
         .and_then(|s| WindowsPadBackend::from_str(&s).ok())

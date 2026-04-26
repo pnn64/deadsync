@@ -253,6 +253,7 @@ pub enum ItemId {
     GfxMaxFpsValue,
     GfxShowStats,
     GfxValidationLayers,
+    GfxHighDpi,
     GfxVisualDelay,
 
     // Input Options submenu (launcher)
@@ -467,6 +468,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsGraphics", "PresentMode")),
             HelpEntry::Bullet(lookup_key("OptionsGraphics", "MaxFps")),
             HelpEntry::Bullet(lookup_key("OptionsGraphics", "ShowStats")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "HighDPI")),
             HelpEntry::Bullet(lookup_key("OptionsGraphics", "VisualDelay")),
         ],
     },
@@ -870,6 +872,7 @@ pub enum SubRowId {
     MaxFpsValue,
     ShowStats,
     ValidationLayers,
+    HighDpi,
     VisualDelay,
     // Sound Options
     SoundDevice,
@@ -1513,6 +1516,15 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::HighDpi,
+        label: lookup_key("OptionsGraphics", "HighDPI"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::VisualDelay,
         label: lookup_key("OptionsGraphics", "VisualDelay"),
         choices: &[literal_choice("0 ms")],
@@ -1623,6 +1635,14 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGraphicsHelp",
             "ValidationLayersHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GfxHighDpi,
+        name: lookup_key("OptionsGraphics", "HighDPI"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "HighDPIHelp",
         ))],
     },
     Item {
@@ -3807,6 +3827,14 @@ fn selected_present_mode_policy(state: &State) -> PresentModePolicy {
         .map_or(state.present_mode_policy_at_load, present_mode_from_choice)
 }
 
+fn selected_high_dpi(state: &State) -> bool {
+    GRAPHICS_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::HighDpi)
+        .and_then(|idx| state.sub_choice_indices_graphics.get(idx).copied())
+        .is_some_and(yes_no_from_choice)
+}
+
 #[inline(always)]
 fn set_max_fps_enabled_choice(state: &mut State, enabled: bool) {
     let idx = yes_no_choice_index(enabled);
@@ -3875,6 +3903,11 @@ fn graphics_show_max_fps_value(state: &State) -> bool {
     graphics_show_max_fps(state) && max_fps_enabled(state)
 }
 
+#[inline(always)]
+fn graphics_show_high_dpi(state: &State) -> bool {
+    cfg!(target_os = "macos") && selected_video_renderer(state) == BackendType::OpenGL
+}
+
 fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow]) -> Vec<usize> {
     match kind {
         SubmenuKind::Graphics => {
@@ -3882,6 +3915,7 @@ fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow]
             let show_present_mode = graphics_show_present_mode(state);
             let show_max_fps = graphics_show_max_fps(state);
             let show_max_fps_value = graphics_show_max_fps_value(state);
+            let show_high_dpi = graphics_show_high_dpi(state);
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
@@ -3892,6 +3926,8 @@ fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow]
                     } else if row.id == SubRowId::MaxFps && !show_max_fps {
                         None
                     } else if row.id == SubRowId::MaxFpsValue && !show_max_fps_value {
+                        None
+                    } else if row.id == SubRowId::HighDpi && !show_high_dpi {
                         None
                     } else {
                         Some(idx)
@@ -5938,6 +5974,7 @@ pub struct State {
     max_fps_at_load: u16,
     vsync_at_load: bool,
     present_mode_policy_at_load: PresentModePolicy,
+    high_dpi_at_load: bool,
     display_mode_choices: Vec<String>,
     software_thread_choices: Vec<u8>,
     software_thread_labels: Vec<String>,
@@ -6101,6 +6138,7 @@ pub fn init() -> State {
         max_fps_at_load: cfg.max_fps,
         vsync_at_load: cfg.vsync,
         present_mode_policy_at_load: cfg.present_mode_policy,
+        high_dpi_at_load: cfg.high_dpi,
         display_mode_choices: build_display_mode_choices(&[]),
         software_thread_choices,
         software_thread_labels,
@@ -6201,6 +6239,12 @@ pub fn init() -> State {
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::ValidationLayers,
         yes_no_choice_index(cfg.gfx_debug),
+    );
+    set_choice_by_id(
+        &mut state.sub_choice_indices_graphics,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::HighDpi,
+        yes_no_choice_index(cfg.high_dpi),
     );
     if let Some(slot) = state
         .sub_choice_indices_graphics
@@ -6949,6 +6993,18 @@ pub fn sync_vsync(state: &mut State, enabled: bool) {
     clear_render_cache(state);
 }
 
+pub fn sync_high_dpi(state: &mut State, enabled: bool) {
+    state.high_dpi_at_load = enabled;
+    set_choice_by_id(
+        &mut state.sub_choice_indices_graphics,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::HighDpi,
+        yes_no_choice_index(enabled),
+    );
+    sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
+}
+
 pub fn sync_present_mode_policy(state: &mut State, mode: PresentModePolicy) {
     state.present_mode_policy_at_load = mode;
     if let Some(slot) = state
@@ -7529,6 +7585,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 desired_vsync,
                 desired_present_mode_policy,
                 desired_max_fps,
+                desired_high_dpi,
             ) = if leaving_graphics {
                 let vsync = state
                     .sub_choice_indices_graphics
@@ -7543,9 +7600,10 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     Some(vsync),
                     Some(selected_present_mode_policy(state)),
                     Some(selected_max_fps(state)),
+                    Some(selected_high_dpi(state)),
                 )
             } else {
-                (None, None, None, None, None, None, None)
+                (None, None, None, None, None, None, None, None)
             };
             let step = if SUBMENU_FADE_DURATION > 0.0 {
                 dt / SUBMENU_FADE_DURATION
@@ -7583,6 +7641,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 let mut vsync_change: Option<bool> = None;
                 let mut present_mode_policy_change: Option<PresentModePolicy> = None;
                 let mut max_fps_change: Option<u16> = None;
+                let mut high_dpi_change: Option<bool> = None;
 
                 if let Some(renderer) = desired_renderer
                     && renderer != state.video_renderer_at_load
@@ -7619,6 +7678,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 {
                     max_fps_change = Some(max_fps);
                 }
+                if let Some(high_dpi) = desired_high_dpi
+                    && high_dpi != state.high_dpi_at_load
+                {
+                    high_dpi_change = Some(high_dpi);
+                    if resolution_change.is_none() {
+                        resolution_change = desired_resolution;
+                    }
+                }
 
                 if renderer_change.is_some()
                     || display_mode_change.is_some()
@@ -7627,6 +7694,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     || vsync_change.is_some()
                     || present_mode_policy_change.is_some()
                     || max_fps_change.is_some()
+                    || high_dpi_change.is_some()
                 {
                     pending_action = Some(ScreenAction::ChangeGraphics {
                         renderer: renderer_change,
@@ -7636,6 +7704,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                         vsync: vsync_change,
                         present_mode_policy: present_mode_policy_change,
                         max_fps: max_fps_change,
+                        high_dpi: high_dpi_change,
                     });
                 }
             }

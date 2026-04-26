@@ -31,6 +31,7 @@ const OPTION_KEYS: &[&str] = &[
     "GamepadBackend",
     "GfxDebug",
     "GlobalOffsetSeconds",
+    "HighDPI",
     "Language",
     "LogLevel",
     "LogToFile",

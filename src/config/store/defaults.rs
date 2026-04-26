@@ -73,6 +73,7 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(content, "Game", default.game_flag.as_str());
     push_line(content, "GamepadBackend", default.windows_gamepad_backend);
     push_bool(content, "GfxDebug", default.gfx_debug);
+    push_bool(content, "HighDPI", default.high_dpi);
     push_line(
         content,
         "GlobalOffsetSeconds",
