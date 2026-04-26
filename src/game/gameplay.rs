@@ -8233,11 +8233,19 @@ mod tests {
     }
 
     fn test_input_event(action: VirtualAction) -> InputEvent {
+        test_input_event_with_source(action, true, InputSource::Keyboard)
+    }
+
+    fn test_input_event_with_source(
+        action: VirtualAction,
+        pressed: bool,
+        source: InputSource,
+    ) -> InputEvent {
         let now = Instant::now();
         InputEvent {
             action,
-            pressed: true,
-            source: InputSource::Keyboard,
+            pressed,
+            source,
             timestamp: now,
             timestamp_host_nanos: 0,
             stored_at: now,
@@ -8349,6 +8357,44 @@ mod tests {
                 handle_input(&mut back_state, &test_input_event(VirtualAction::p2_back));
                 assert_eq!(back_state.hold_to_exit_key, Some(HoldToExitKey::Back));
                 assert!(back_state.hold_to_exit_start.is_some());
+            },
+        );
+    }
+
+    #[test]
+    fn gameplay_lane_input_keeps_back_hold_active() {
+        with_session(
+            profile::PlayStyle::Single,
+            profile::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+                let mut state = regression_state(state_profiles);
+
+                handle_input(&mut state, &test_input_event(VirtualAction::p1_back));
+                let hold_start = state.hold_to_exit_start;
+
+                handle_input(
+                    &mut state,
+                    &test_input_event_with_source(
+                        VirtualAction::p1_left,
+                        true,
+                        InputSource::Gamepad,
+                    ),
+                );
+                handle_input(
+                    &mut state,
+                    &test_input_event_with_source(
+                        VirtualAction::p1_left,
+                        false,
+                        InputSource::Gamepad,
+                    ),
+                );
+
+                assert_eq!(state.hold_to_exit_key, Some(HoldToExitKey::Back));
+                assert_eq!(state.hold_to_exit_start, hold_start);
+                assert_eq!(state.hold_to_exit_aborted_at, None);
             },
         );
     }

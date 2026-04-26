@@ -389,7 +389,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
             ev.stored_at,
             ev.emitted_at,
         );
-        abort_hold_to_exit(state, ev.timestamp);
         return GameplayAction::None;
     }
     let p2_runtime_player = single_runtime_player_is_p2(
