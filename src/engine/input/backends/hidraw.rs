@@ -628,8 +628,12 @@ pub fn run(
     emit_sys(GpSystemEvent::StartupComplete);
     let mut pollfds = Vec::with_capacity(9);
     let mut buf = vec![0u8; 64];
+    let mut hotplug = Vec::with_capacity(16);
+    let mut remove = Vec::with_capacity(16);
 
     loop {
+        hotplug.clear();
+        remove.clear();
         pollfds.clear();
         let watch_offset = if let Some(watch) = &watch {
             pollfds.push(PollFd {
@@ -659,7 +663,6 @@ pub fn run(
             continue;
         }
 
-        let mut hotplug = Vec::new();
         if watch_offset == 1 {
             let revents = pollfds[0].revents;
             if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
@@ -668,11 +671,10 @@ pub fn run(
             if (revents & POLLIN) != 0
                 && let Some(watch) = &watch
             {
-                hotplug = watch.collect_events();
+                watch.collect_events(&mut hotplug);
             }
         }
 
-        let mut remove = Vec::new();
         for idx in 0..devs.len() {
             let revents = pollfds[idx + watch_offset].revents;
             if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
@@ -741,7 +743,7 @@ pub fn run(
                 initial: false,
             });
         }
-        for event in hotplug {
+        for event in hotplug.drain(..) {
             match event {
                 DevdEvent::Create(path) => {
                     add_dev_if_new(path, &mut devs, &mut next_id, false, emit_sys)

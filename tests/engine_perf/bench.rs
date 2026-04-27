@@ -1,0 +1,818 @@
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
+use std::hint::black_box;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
+use twox_hash::XxHash64;
+
+#[global_allocator]
+static ALLOC: CountingAlloc = CountingAlloc::new();
+
+const SORT_ITERS_SMALL: usize = 20_000;
+const SORT_ITERS_LARGE: usize = 2_000;
+const SFX_ITERS_1: usize = 120_000;
+const SFX_ITERS_4: usize = 40_000;
+const SFX_ITERS_16: usize = 8_000;
+const TMESH_ITERS: usize = 20_000;
+const INPUT_TEMP_ITERS: usize = 500_000;
+const ACTIVE_SFX_ITERS: usize = 100_000;
+
+struct CountingAlloc {
+    alloc_calls: AtomicU64,
+    dealloc_calls: AtomicU64,
+    realloc_calls: AtomicU64,
+    alloc_bytes: AtomicU64,
+    free_bytes: AtomicU64,
+    live_bytes: AtomicU64,
+    peak_live_bytes: AtomicU64,
+    measure_peak_live_bytes: AtomicU64,
+}
+
+#[derive(Clone, Copy)]
+struct AllocSnapshot {
+    alloc_calls: u64,
+    dealloc_calls: u64,
+    realloc_calls: u64,
+    alloc_bytes: u64,
+    free_bytes: u64,
+    live_bytes: u64,
+    measure_peak_live_bytes: u64,
+}
+
+#[derive(Clone, Copy)]
+struct AllocDelta {
+    alloc_calls: u64,
+    dealloc_calls: u64,
+    realloc_calls: u64,
+    alloc_bytes: u64,
+    free_bytes: u64,
+    live_bytes: u64,
+    peak_live_delta: u64,
+}
+
+struct BenchResult {
+    name: String,
+    iters: usize,
+    elapsed: Duration,
+    alloc: AllocDelta,
+    checksum: u64,
+}
+
+#[derive(Clone)]
+struct SortScratch {
+    z_counts: Vec<usize>,
+    z_perm: Vec<usize>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct TMeshGeomKey {
+    ptr: usize,
+    len: usize,
+}
+
+type TMeshGeomMap = HashMap<TMeshGeomKey, (u32, u32), BuildHasherDefault<XxHash64>>;
+
+type TextureHandle = u64;
+
+#[derive(Clone, Copy)]
+enum BlendMode {
+    Alpha,
+}
+
+#[derive(Clone)]
+struct RenderObject {
+    object_type: ObjectType,
+    texture_handle: TextureHandle,
+    transform: [f32; 16],
+    blend: BlendMode,
+    z: i16,
+    order: u32,
+    camera: u8,
+}
+
+#[derive(Clone)]
+enum ObjectType {
+    Sprite {
+        center: [f32; 4],
+        size: [f32; 2],
+        rot_sin_cos: [f32; 2],
+        tint: [f32; 4],
+        uv_scale: [f32; 2],
+        uv_offset: [f32; 2],
+        local_offset: [f32; 2],
+        local_offset_rot_sin_cos: [f32; 2],
+        edge_fade: [f32; 4],
+    },
+}
+
+#[derive(Clone, Copy)]
+struct TexturedMeshVertex {
+    pos: [f32; 3],
+    uv: [f32; 2],
+    tex_matrix_scale: [f32; 2],
+    color: [f32; 4],
+}
+
+impl CountingAlloc {
+    const fn new() -> Self {
+        Self {
+            alloc_calls: AtomicU64::new(0),
+            dealloc_calls: AtomicU64::new(0),
+            realloc_calls: AtomicU64::new(0),
+            alloc_bytes: AtomicU64::new(0),
+            free_bytes: AtomicU64::new(0),
+            live_bytes: AtomicU64::new(0),
+            peak_live_bytes: AtomicU64::new(0),
+            measure_peak_live_bytes: AtomicU64::new(0),
+        }
+    }
+
+    fn begin_measurement(&self) -> AllocSnapshot {
+        let live = self.live_bytes.load(Ordering::Relaxed);
+        self.measure_peak_live_bytes.store(live, Ordering::Relaxed);
+        self.snapshot()
+    }
+
+    fn snapshot(&self) -> AllocSnapshot {
+        AllocSnapshot {
+            alloc_calls: self.alloc_calls.load(Ordering::Relaxed),
+            dealloc_calls: self.dealloc_calls.load(Ordering::Relaxed),
+            realloc_calls: self.realloc_calls.load(Ordering::Relaxed),
+            alloc_bytes: self.alloc_bytes.load(Ordering::Relaxed),
+            free_bytes: self.free_bytes.load(Ordering::Relaxed),
+            live_bytes: self.live_bytes.load(Ordering::Relaxed),
+            measure_peak_live_bytes: self.measure_peak_live_bytes.load(Ordering::Relaxed),
+        }
+    }
+
+    fn add_live(&self, size: usize) {
+        let live = self.live_bytes.fetch_add(size as u64, Ordering::Relaxed) + size as u64;
+        update_peak(&self.peak_live_bytes, live);
+        update_peak(&self.measure_peak_live_bytes, live);
+    }
+
+    fn sub_live(&self, size: usize) {
+        let _ = self.live_bytes.fetch_sub(size as u64, Ordering::Relaxed);
+    }
+}
+
+impl AllocSnapshot {
+    fn diff(self, start: Self) -> AllocDelta {
+        AllocDelta {
+            alloc_calls: self.alloc_calls.saturating_sub(start.alloc_calls),
+            dealloc_calls: self.dealloc_calls.saturating_sub(start.dealloc_calls),
+            realloc_calls: self.realloc_calls.saturating_sub(start.realloc_calls),
+            alloc_bytes: self.alloc_bytes.saturating_sub(start.alloc_bytes),
+            free_bytes: self.free_bytes.saturating_sub(start.free_bytes),
+            live_bytes: self.live_bytes.saturating_sub(start.live_bytes),
+            peak_live_delta: self
+                .measure_peak_live_bytes
+                .saturating_sub(start.measure_peak_live_bytes),
+        }
+    }
+}
+
+unsafe impl GlobalAlloc for CountingAlloc {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let ptr = unsafe { System.alloc(layout) };
+        if !ptr.is_null() {
+            self.alloc_calls.fetch_add(1, Ordering::Relaxed);
+            self.alloc_bytes
+                .fetch_add(layout.size() as u64, Ordering::Relaxed);
+            self.add_live(layout.size());
+        }
+        ptr
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) };
+        self.dealloc_calls.fetch_add(1, Ordering::Relaxed);
+        self.free_bytes
+            .fetch_add(layout.size() as u64, Ordering::Relaxed);
+        self.sub_live(layout.size());
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, old: Layout, new_size: usize) -> *mut u8 {
+        let out = unsafe { System.realloc(ptr, old, new_size) };
+        if !out.is_null() {
+            self.realloc_calls.fetch_add(1, Ordering::Relaxed);
+            if new_size >= old.size() {
+                let delta = new_size - old.size();
+                self.alloc_bytes.fetch_add(delta as u64, Ordering::Relaxed);
+                self.add_live(delta);
+            } else {
+                let delta = old.size() - new_size;
+                self.free_bytes.fetch_add(delta as u64, Ordering::Relaxed);
+                self.sub_live(delta);
+            }
+        }
+        out
+    }
+}
+
+fn main() {
+    println!("engine perf microbench");
+    println!("synthetic targeted checks for review recommendations\n");
+
+    bench_sorting();
+    bench_sfx_mix();
+    bench_transient_tmesh();
+    bench_active_sfx_growth();
+    bench_input_temp_vecs();
+}
+
+fn bench_sorting() {
+    println!("render object sort");
+    run_sort_pair(
+        "sorted 512",
+        make_sort_objects(512, SortPattern::Sorted),
+        SORT_ITERS_SMALL,
+    );
+    run_sort_pair(
+        "dense z shuffled 512",
+        make_sort_objects(512, SortPattern::DenseShuffled),
+        SORT_ITERS_SMALL,
+    );
+    run_sort_pair(
+        "same z shuffled order 512",
+        make_sort_objects(512, SortPattern::SameZShuffledOrder),
+        SORT_ITERS_SMALL,
+    );
+    run_sort_pair(
+        "sparse z shuffled 512",
+        make_sort_objects(512, SortPattern::SparseShuffled),
+        SORT_ITERS_SMALL,
+    );
+    run_sort_pair(
+        "dense z shuffled 4096",
+        make_sort_objects(4096, SortPattern::DenseShuffled),
+        SORT_ITERS_LARGE,
+    );
+    println!();
+}
+
+fn bench_sfx_mix() {
+    println!("audio SFX mix");
+    run_sfx_pair("1 active sfx", 1, SFX_ITERS_1);
+    run_sfx_pair("4 active sfx", 4, SFX_ITERS_4);
+    run_sfx_pair("16 active sfx", 16, SFX_ITERS_16);
+    println!();
+}
+
+fn bench_transient_tmesh() {
+    println!("transient textured mesh draw-prep dedupe");
+    run_tmesh_pair("unique 64 meshes x 24 verts", 64, 24, false);
+    run_tmesh_pair("duplicate 64 meshes x 24 verts", 64, 24, true);
+    run_tmesh_pair("unique 256 meshes x 6 verts", 256, 6, false);
+    run_tmesh_pair("duplicate 256 meshes x 6 verts", 256, 6, true);
+    println!();
+}
+
+fn bench_active_sfx_growth() {
+    println!("active_sfx vector growth");
+    let data: Arc<[i16]> = Arc::from(make_i16_samples(2048));
+    let cold = bench("cold Vec::new push 32", ACTIVE_SFX_ITERS, || {
+        let mut active = Vec::new();
+        let mut checksum = 0u64;
+        for lane in 0..32 {
+            active.push((Arc::clone(&data), lane * 3, lane as u8));
+            checksum = checksum.wrapping_add(active.len() as u64);
+        }
+        checksum
+    });
+    let presized = bench(
+        "new Vec::with_capacity(32) push 32",
+        ACTIVE_SFX_ITERS,
+        || {
+            let mut active = Vec::with_capacity(32);
+            let mut checksum = 0u64;
+            for lane in 0..32 {
+                active.push((Arc::clone(&data), lane * 3, lane as u8));
+                checksum = checksum.wrapping_add(active.len() as u64);
+            }
+            checksum
+        },
+    );
+    let mut active = Vec::with_capacity(32);
+    let reused = bench("reused Vec capacity 32 push 32", ACTIVE_SFX_ITERS, || {
+        active.clear();
+        let mut checksum = 0u64;
+        for lane in 0..32 {
+            active.push((Arc::clone(&data), lane * 3, lane as u8));
+            checksum = checksum.wrapping_add(active.len() as u64);
+        }
+        checksum
+    });
+    print_result(&cold);
+    print_result(&presized);
+    print_result(&reused);
+    print_ratio("presized vs cold", &cold, &presized);
+    print_ratio("reused vs cold", &cold, &reused);
+    println!();
+}
+
+fn bench_input_temp_vecs() {
+    println!("input backend temporary vectors");
+    let fresh = bench("fresh Vecs per poll loop", INPUT_TEMP_ITERS, || {
+        let mut hotplug = Vec::new();
+        let mut remove = Vec::new();
+        let mut key_remove = Vec::new();
+        for i in 0..8 {
+            hotplug.push(i);
+        }
+        for i in 0..3 {
+            remove.push(i * 2);
+        }
+        for i in 0..2 {
+            key_remove.push(i * 3);
+        }
+        (hotplug.len() ^ remove.len() ^ key_remove.len()) as u64
+    });
+
+    let mut hotplug = Vec::with_capacity(16);
+    let mut remove = Vec::with_capacity(16);
+    let mut key_remove = Vec::with_capacity(16);
+    let reused = bench("reused Vecs per poll loop", INPUT_TEMP_ITERS, || {
+        hotplug.clear();
+        remove.clear();
+        key_remove.clear();
+        for i in 0..8 {
+            hotplug.push(i);
+        }
+        for i in 0..3 {
+            remove.push(i * 2);
+        }
+        for i in 0..2 {
+            key_remove.push(i * 3);
+        }
+        (hotplug.len() ^ remove.len() ^ key_remove.len()) as u64
+    });
+
+    print_result(&fresh);
+    print_result(&reused);
+    print_ratio("reused vs fresh", &fresh, &reused);
+    println!();
+}
+
+fn run_sort_pair(name: &str, base: Vec<RenderObject>, iters: usize) {
+    let mut work = Vec::with_capacity(base.len());
+    let mut current_scratch = SortScratch {
+        z_counts: Vec::new(),
+        z_perm: Vec::new(),
+    };
+    let mut simple_scratch = SortScratch {
+        z_counts: Vec::new(),
+        z_perm: Vec::new(),
+    };
+
+    let current = bench(format!("{name}: current z-bucket"), iters, || {
+        work.clear();
+        work.extend_from_slice(&base);
+        sort_current(black_box(&mut work), &mut current_scratch);
+        checksum_objects(&work)
+    });
+
+    let simple = bench(format!("{name}: sorted-check sort"), iters, || {
+        work.clear();
+        work.extend_from_slice(&base);
+        sort_simple(black_box(&mut work), &mut simple_scratch);
+        checksum_objects(&work)
+    });
+
+    print_result(&current);
+    print_result(&simple);
+    print_ratio("candidate vs current", &current, &simple);
+}
+
+fn run_sfx_pair(name: &str, active_count: usize, iters: usize) {
+    let samples = 1024 * 2;
+    let music = make_f32_samples(samples);
+    let sfx = make_i16_samples(samples + active_count * 17);
+    let starts = (0..active_count)
+        .map(|idx| (idx * 17) % 97)
+        .collect::<Vec<_>>();
+    let mut out = vec![0.0f32; samples];
+
+    let current = bench(format!("{name}: clamp inside each add"), iters, || {
+        mix_sfx_current(black_box(&music), black_box(&sfx), &starts, &mut out)
+    });
+    let final_clamp = bench(format!("{name}: clamp once at output"), iters, || {
+        mix_sfx_final_clamp(black_box(&music), black_box(&sfx), &starts, &mut out)
+    });
+
+    print_result(&current);
+    print_result(&final_clamp);
+    print_ratio("final clamp vs current", &current, &final_clamp);
+}
+
+fn run_tmesh_pair(name: &str, mesh_count: usize, verts_per_mesh: usize, duplicate: bool) {
+    let storage = make_tmesh_storage(mesh_count, verts_per_mesh, duplicate);
+    let slices = if duplicate {
+        (0..mesh_count)
+            .map(|_| storage[0].as_slice())
+            .collect::<Vec<_>>()
+    } else {
+        storage.iter().map(Vec::as_slice).collect::<Vec<_>>()
+    };
+    let mut map = TMeshGeomMap::default();
+    let mut out = Vec::with_capacity(mesh_count * verts_per_mesh);
+
+    let dedupe = bench(format!("{name}: HashMap dedupe"), TMESH_ITERS, || {
+        copy_tmesh_dedupe(black_box(&slices), &mut map, &mut out)
+    });
+    let direct = bench(format!("{name}: direct append"), TMESH_ITERS, || {
+        copy_tmesh_direct(black_box(&slices), &mut out)
+    });
+
+    print_result(&dedupe);
+    print_result(&direct);
+    print_ratio("direct vs dedupe", &dedupe, &direct);
+}
+
+fn bench<F>(name: impl Into<String>, iters: usize, mut f: F) -> BenchResult
+where
+    F: FnMut() -> u64,
+{
+    let name = name.into();
+    let mut checksum = 0u64;
+    for _ in 0..32 {
+        checksum = checksum.wrapping_add(black_box(f()));
+    }
+
+    let start_alloc = ALLOC.begin_measurement();
+    let started = Instant::now();
+    for _ in 0..iters {
+        checksum = checksum.wrapping_add(black_box(f()));
+    }
+    BenchResult {
+        name,
+        iters,
+        elapsed: started.elapsed(),
+        alloc: ALLOC.snapshot().diff(start_alloc),
+        checksum,
+    }
+}
+
+fn print_result(result: &BenchResult) {
+    let total_ms = result.elapsed.as_secs_f64() * 1000.0;
+    let per_iter_us = result.elapsed.as_secs_f64() * 1_000_000.0 / result.iters as f64;
+    println!(
+        "{:<42} {:>9.3} ms total {:>10.3} us/iter alloc {:>6} dealloc {:>6} realloc {:>4} bytes {:>10} freed {:>10} live {:>8} peak {:>9} checksum {}",
+        result.name,
+        total_ms,
+        per_iter_us,
+        result.alloc.alloc_calls,
+        result.alloc.dealloc_calls,
+        result.alloc.realloc_calls,
+        result.alloc.alloc_bytes,
+        result.alloc.free_bytes,
+        result.alloc.live_bytes,
+        result.alloc.peak_live_delta,
+        result.checksum
+    );
+}
+
+fn print_ratio(label: &str, base: &BenchResult, candidate: &BenchResult) {
+    let base_us = base.elapsed.as_secs_f64() * 1_000_000.0 / base.iters as f64;
+    let candidate_us = candidate.elapsed.as_secs_f64() * 1_000_000.0 / candidate.iters as f64;
+    println!("{label}: {:.2}x", base_us / candidate_us);
+}
+
+fn update_peak(slot: &AtomicU64, value: u64) {
+    let mut observed = slot.load(Ordering::Relaxed);
+    while value > observed {
+        match slot.compare_exchange_weak(observed, value, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => break,
+            Err(actual) => observed = actual,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum SortPattern {
+    Sorted,
+    DenseShuffled,
+    SameZShuffledOrder,
+    SparseShuffled,
+}
+
+fn make_sort_objects(len: usize, pattern: SortPattern) -> Vec<RenderObject> {
+    let mut objects = Vec::with_capacity(len);
+    for i in 0..len {
+        let (z, order) = match pattern {
+            SortPattern::Sorted => ((i / 64) as i16, i as u32),
+            SortPattern::DenseShuffled => {
+                let idx = permute(i, len);
+                ((idx % 32) as i16, idx as u32)
+            }
+            SortPattern::SameZShuffledOrder => (0, permute(i, len) as u32),
+            SortPattern::SparseShuffled => {
+                let idx = permute(i, len);
+                (((idx * 257) % 30_000) as i16, idx as u32)
+            }
+        };
+        objects.push(RenderObject {
+            object_type: ObjectType::Sprite {
+                center: [i as f32, 0.0, 0.5, 0.5],
+                size: [32.0, 32.0],
+                rot_sin_cos: [0.0, 1.0],
+                tint: [1.0; 4],
+                uv_scale: [1.0, 1.0],
+                uv_offset: [0.0, 0.0],
+                local_offset: [0.0, 0.0],
+                local_offset_rot_sin_cos: [0.0, 1.0],
+                edge_fade: [0.0; 4],
+            },
+            texture_handle: 1 + (i % 16) as TextureHandle,
+            transform: [
+                1.0, 0.0, 0.0, 0.0, //
+                0.0, 1.0, 0.0, 0.0, //
+                0.0, 0.0, 1.0, 0.0, //
+                0.0, 0.0, 0.0, 1.0,
+            ],
+            blend: BlendMode::Alpha,
+            z,
+            order,
+            camera: 0,
+        });
+    }
+    objects
+}
+
+fn permute(i: usize, len: usize) -> usize {
+    if len == 0 {
+        return 0;
+    }
+    i.wrapping_mul(1_664_525).wrapping_add(1_013_904_223) % len
+}
+
+fn sort_current(objects: &mut [RenderObject], scratch: &mut SortScratch) {
+    if objects.len() < 2 {
+        return;
+    }
+
+    let mut min_z = objects[0].z;
+    let mut max_z = min_z;
+    let mut sorted_by_z = true;
+    let mut sorted_by_key = true;
+    let mut prev_key = (min_z, objects[0].order);
+    for obj in &objects[1..] {
+        let key = (obj.z, obj.order);
+        sorted_by_z &= prev_key.0 <= obj.z;
+        sorted_by_key &= prev_key <= key;
+        min_z = min_z.min(obj.z);
+        max_z = max_z.max(obj.z);
+        prev_key = key;
+    }
+    if sorted_by_key {
+        return;
+    }
+    if sorted_by_z {
+        objects.sort_unstable_by_key(|o| (o.z, o.order));
+        return;
+    }
+
+    let range = (i32::from(max_z) - i32::from(min_z) + 1) as usize;
+    let dense_range_limit = objects.len().saturating_mul(8).max(256);
+    if range > dense_range_limit {
+        objects.sort_unstable_by_key(|o| (o.z, o.order));
+        return;
+    }
+
+    scratch.z_counts.clear();
+    scratch.z_counts.resize(range, 0);
+    scratch.z_perm.clear();
+    scratch.z_perm.resize(objects.len(), 0);
+
+    let min_z_i = i32::from(min_z);
+    for obj in objects.iter() {
+        scratch.z_counts[(i32::from(obj.z) - min_z_i) as usize] += 1;
+    }
+
+    let mut next = 0usize;
+    for count in &mut scratch.z_counts {
+        let bucket_len = *count;
+        *count = next;
+        next += bucket_len;
+    }
+
+    for (old_idx, obj) in objects.iter().enumerate() {
+        let bucket = (i32::from(obj.z) - min_z_i) as usize;
+        let new_idx = scratch.z_counts[bucket];
+        scratch.z_counts[bucket] = new_idx + 1;
+        scratch.z_perm[old_idx] = new_idx;
+    }
+
+    for start in 0..objects.len() {
+        let current = start;
+        while scratch.z_perm[current] != current {
+            let next = scratch.z_perm[current];
+            objects.swap(current, next);
+            scratch.z_perm.swap(current, next);
+        }
+    }
+
+    if objects
+        .windows(2)
+        .any(|pair| (pair[0].z, pair[0].order) > (pair[1].z, pair[1].order))
+    {
+        objects.sort_unstable_by_key(|o| (o.z, o.order));
+    }
+}
+
+fn sort_simple(objects: &mut [RenderObject], _scratch: &mut SortScratch) {
+    if objects.len() < 2 {
+        return;
+    }
+
+    let mut prev_key = (objects[0].z, objects[0].order);
+    for obj in &objects[1..] {
+        let key = (obj.z, obj.order);
+        if prev_key > key {
+            objects.sort_unstable_by_key(|o| (o.z, o.order));
+            return;
+        }
+        prev_key = key;
+    }
+}
+
+fn checksum_objects(objects: &[RenderObject]) -> u64 {
+    let mut out = 0u64;
+    for obj in objects {
+        let sprite_bits = match &obj.object_type {
+            ObjectType::Sprite {
+                center,
+                size,
+                rot_sin_cos,
+                tint,
+                uv_scale,
+                uv_offset,
+                local_offset,
+                local_offset_rot_sin_cos,
+                edge_fade,
+            } => {
+                center[0].to_bits() as u64
+                    ^ size[0].to_bits() as u64
+                    ^ rot_sin_cos[1].to_bits() as u64
+                    ^ tint[3].to_bits() as u64
+                    ^ uv_scale[0].to_bits() as u64
+                    ^ uv_offset[0].to_bits() as u64
+                    ^ local_offset[0].to_bits() as u64
+                    ^ local_offset_rot_sin_cos[1].to_bits() as u64
+                    ^ edge_fade[0].to_bits() as u64
+            }
+        };
+        let blend_bits = match obj.blend {
+            BlendMode::Alpha => 1,
+        };
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(obj.z as i64 as u64)
+            .wrapping_add(obj.order as u64)
+            .wrapping_add(obj.texture_handle)
+            .wrapping_add(obj.transform[0].to_bits() as u64)
+            .wrapping_add(blend_bits)
+            .wrapping_add(obj.camera as u64)
+            .wrapping_add(sprite_bits);
+    }
+    out
+}
+
+fn make_f32_samples(len: usize) -> Vec<f32> {
+    let mut out = Vec::with_capacity(len);
+    for i in 0..len {
+        let raw = pseudo(i) as i16;
+        out.push(f32::from(raw) / 65536.0);
+    }
+    out
+}
+
+fn make_i16_samples(len: usize) -> Vec<i16> {
+    let mut out = Vec::with_capacity(len);
+    for i in 0..len {
+        out.push(pseudo(i.wrapping_mul(17)) as i16);
+    }
+    out
+}
+
+fn pseudo(i: usize) -> u32 {
+    (i as u32)
+        .wrapping_mul(1_664_525)
+        .wrapping_add(1_013_904_223)
+        .rotate_left((i % 31) as u32)
+}
+
+fn mix_sfx_current(music: &[f32], sfx: &[i16], starts: &[usize], out: &mut [f32]) -> u64 {
+    out.copy_from_slice(music);
+    for &start in starts {
+        for (dst, &src) in out.iter_mut().zip(&sfx[start..]) {
+            let sample = f32::from(src) * (0.65 / 32768.0);
+            *dst = (*dst + sample).clamp(-1.0, 1.0);
+        }
+    }
+    checksum_f32(out)
+}
+
+fn mix_sfx_final_clamp(music: &[f32], sfx: &[i16], starts: &[usize], out: &mut [f32]) -> u64 {
+    out.copy_from_slice(music);
+    for &start in starts {
+        for (dst, &src) in out.iter_mut().zip(&sfx[start..]) {
+            *dst += f32::from(src) * (0.65 / 32768.0);
+        }
+    }
+    for sample in out.iter_mut() {
+        *sample = sample.clamp(-1.0, 1.0);
+    }
+    checksum_f32(out)
+}
+
+fn checksum_f32(samples: &[f32]) -> u64 {
+    let mut out = 0u64;
+    for &sample in samples {
+        out = out.wrapping_mul(131).wrapping_add(sample.to_bits() as u64);
+    }
+    out
+}
+
+fn make_tmesh_storage(
+    mesh_count: usize,
+    verts_per_mesh: usize,
+    duplicate: bool,
+) -> Vec<Vec<TexturedMeshVertex>> {
+    let storage_len = if duplicate { 1 } else { mesh_count };
+    let mut storage = Vec::with_capacity(storage_len);
+    for mesh in 0..storage_len {
+        let mut vertices = Vec::with_capacity(verts_per_mesh);
+        for i in 0..verts_per_mesh {
+            vertices.push(TexturedMeshVertex {
+                pos: [i as f32, mesh as f32, 0.0],
+                uv: [i as f32 * 0.01, mesh as f32 * 0.01],
+                tex_matrix_scale: [1.0, 1.0],
+                color: [1.0, 0.5, 0.25, 1.0],
+            });
+        }
+        storage.push(vertices);
+    }
+    storage
+}
+
+fn copy_tmesh_dedupe(
+    meshes: &[&[TexturedMeshVertex]],
+    map: &mut TMeshGeomMap,
+    out: &mut Vec<TexturedMeshVertex>,
+) -> u64 {
+    map.clear();
+    out.clear();
+    let mut checksum = 0u64;
+    for vertices in meshes {
+        let key = TMeshGeomKey {
+            ptr: vertices.as_ptr() as usize,
+            len: vertices.len(),
+        };
+        let (start, count) = if let Some(&(start, count)) = map.get(&key) {
+            (start, count)
+        } else {
+            let start = out.len() as u32;
+            out.extend_from_slice(vertices);
+            let count = vertices.len() as u32;
+            map.insert(key, (start, count));
+            (start, count)
+        };
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(start as u64)
+            .wrapping_add(count as u64);
+    }
+    checksum
+        .wrapping_add(out.len() as u64)
+        .wrapping_add(checksum_tmesh_tail(out))
+}
+
+fn copy_tmesh_direct(meshes: &[&[TexturedMeshVertex]], out: &mut Vec<TexturedMeshVertex>) -> u64 {
+    out.clear();
+    let mut checksum = 0u64;
+    for vertices in meshes {
+        let start = out.len() as u32;
+        out.extend_from_slice(vertices);
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(start as u64)
+            .wrapping_add(vertices.len() as u64);
+    }
+    checksum
+        .wrapping_add(out.len() as u64)
+        .wrapping_add(checksum_tmesh_tail(out))
+}
+
+fn checksum_tmesh_tail(vertices: &[TexturedMeshVertex]) -> u64 {
+    let Some(v) = vertices.last() else {
+        return 0;
+    };
+    v.pos[0].to_bits() as u64
+        ^ v.pos[1].to_bits() as u64
+        ^ v.uv[0].to_bits() as u64
+        ^ v.tex_matrix_scale[0].to_bits() as u64
+        ^ v.color[3].to_bits() as u64
+}
