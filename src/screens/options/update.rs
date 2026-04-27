@@ -33,10 +33,11 @@ pub(super) fn clear_navigation_holds(state: &mut State) {
 
 pub fn sync_video_renderer(state: &mut State, renderer: BackendType) {
     state.video_renderer_at_load = renderer;
-    if let Some(slot) = state
-        .sub[SubmenuKind::Graphics].choice_indices
-        .get_mut(VIDEO_RENDERER_ROW_INDEX)
-    {
+    if let Some(slot) = get_choice_by_id_mut(
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::VideoRenderer,
+    ) {
         *slot = backend_to_renderer_choice_index(renderer);
     }
     sync_submenu_cursor_indices(state);
@@ -57,10 +58,11 @@ pub fn sync_display_mode(
         DisplayMode::Fullscreen(ft) => ft,
         DisplayMode::Windowed => fullscreen_type,
     };
-    if let Some(slot) = state
-        .sub[SubmenuKind::Graphics].choice_indices
-        .get_mut(FULLSCREEN_TYPE_ROW_INDEX)
-    {
+    if let Some(slot) = get_choice_by_id_mut(
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::FullscreenType,
+    ) {
         *slot = fullscreen_type_to_choice_index(target_type);
     }
     sync_submenu_cursor_indices(state);
@@ -111,7 +113,7 @@ pub fn sync_max_fps(state: &mut State, max_fps: u16) {
 
 pub fn sync_vsync(state: &mut State, enabled: bool) {
     state.vsync_at_load = enabled;
-    if let Some(slot) = state.sub[SubmenuKind::Graphics].choice_indices.get_mut(VSYNC_ROW_INDEX) {
+    if let Some(slot) = get_choice_by_id_mut(&mut state.sub[SubmenuKind::Graphics].choice_indices, GRAPHICS_OPTIONS_ROWS, SubRowId::VSync) {
         *slot = yes_no_choice_index(enabled);
     }
     sync_submenu_cursor_indices(state);
@@ -132,10 +134,11 @@ pub fn sync_high_dpi(state: &mut State, enabled: bool) {
 
 pub fn sync_present_mode_policy(state: &mut State, mode: PresentModePolicy) {
     state.present_mode_policy_at_load = mode;
-    if let Some(slot) = state
-        .sub[SubmenuKind::Graphics].choice_indices
-        .get_mut(PRESENT_MODE_ROW_INDEX)
-    {
+    if let Some(slot) = get_choice_by_id_mut(
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::PresentMode,
+    ) {
         *slot = present_mode_choice_index(mode);
     }
     sync_submenu_cursor_indices(state);
@@ -268,11 +271,11 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 desired_max_fps,
                 desired_high_dpi,
             ) = if leaving_graphics {
-                let vsync = state
-                    .sub[SubmenuKind::Graphics].choice_indices
-                    .get(VSYNC_ROW_INDEX)
-                    .copied()
-                    .is_none_or(yes_no_from_choice);
+                let vsync = get_choice_by_id(
+                    &state.sub[SubmenuKind::Graphics].choice_indices,
+                    GRAPHICS_OPTIONS_ROWS,
+                    SubRowId::VSync,
+                ).is_none_or(yes_no_from_choice);
                 (
                     Some(selected_video_renderer(state)),
                     Some(selected_display_mode(state)),

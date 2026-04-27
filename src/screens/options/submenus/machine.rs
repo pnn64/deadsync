@@ -301,10 +301,7 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-pub(in crate::screens::options) const MACHINE_SELECT_STYLE_ROW_INDEX: usize = 2;
-pub(in crate::screens::options) const MACHINE_PREFERRED_STYLE_ROW_INDEX: usize = 3;
-pub(in crate::screens::options) const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
-pub(in crate::screens::options) const MACHINE_PREFERRED_MODE_ROW_INDEX: usize = 5;
+
 
 pub(in crate::screens::options) const fn machine_preferred_style_choice_index(
     style: MachinePreferredPlayStyle,
