@@ -1616,7 +1616,7 @@ impl RenderState {
             device_channels,
             mix_i16: Vec::new(),
             mix_f32: Vec::new(),
-            active_sfx: Vec::new(),
+            active_sfx: Vec::with_capacity(32),
             queued_music_map: QUEUED_MUSIC_MAP_SEGS.clone(),
             played_music_map: PLAYED_MUSIC_MAP_SEGS.clone(),
             active_music_map: None,
