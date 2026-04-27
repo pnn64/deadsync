@@ -737,8 +737,18 @@ fn gameplay_panes_from_snapshot(
         return vec![gameplay_status_pane(side, "No Scores")];
     }
 
-    let mut panes = Vec::with_capacity(data.panes.len());
-    for pane in &data.panes {
+    let filter = select_music_pane_filter();
+    if !select_music_filter_has_any(filter) {
+        return Vec::new();
+    }
+
+    let filtered = select_music_filtered_panes(data.panes.as_slice(), filter);
+    if filtered.is_empty() {
+        return vec![gameplay_status_pane(side, "No Scores")];
+    }
+
+    let mut panes = Vec::with_capacity(filtered.len());
+    for pane in filtered {
         panes.push(gameplay_pane_from_leaderboard(
             pane,
             pane.entries.as_slice(),
@@ -1534,5 +1544,48 @@ mod tests {
 
         assert_eq!(entries.len(), 2);
         assert!(!entries.iter().any(|entry| entry.is_self));
+    }
+
+    #[test]
+    fn gameplay_panes_respect_select_music_leaderboard_filter() {
+        let prev = crate::config::get();
+        crate::config::update_select_music_scorebox_cycle_itg(false);
+        crate::config::update_select_music_scorebox_cycle_ex(false);
+        crate::config::update_select_music_scorebox_cycle_hard_ex(true);
+        crate::config::update_select_music_scorebox_cycle_tournaments(false);
+
+        let snapshot = scores::CachedPlayerLeaderboardData {
+            loading: false,
+            error: None,
+            data: Some(scores::PlayerLeaderboardData {
+                panes: vec![
+                    pane("GrooveStats", vec![entry(1, "itg", false, false)]),
+                    scores::LeaderboardPane {
+                        name: "ArrowCloud".to_string(),
+                        entries: vec![entry(1, "hard-ex", false, false)],
+                        is_ex: false,
+                        disabled: false,
+                        personalized: true,
+                        arrowcloud_kind: Some(scores::ArrowCloudPaneKind::HardEx),
+                    },
+                ],
+                itl_self_score: None,
+            }),
+        };
+
+        let panes = gameplay_panes_from_snapshot(&snapshot, profile::PlayerSide::P1);
+
+        crate::config::update_select_music_scorebox_cycle_itg(prev.select_music_scorebox_cycle_itg);
+        crate::config::update_select_music_scorebox_cycle_ex(prev.select_music_scorebox_cycle_ex);
+        crate::config::update_select_music_scorebox_cycle_hard_ex(
+            prev.select_music_scorebox_cycle_hard_ex,
+        );
+        crate::config::update_select_music_scorebox_cycle_tournaments(
+            prev.select_music_scorebox_cycle_tournaments,
+        );
+
+        assert_eq!(panes.len(), 1);
+        assert_eq!(panes[0].kind, PaneKind::HardEx);
+        assert_eq!(panes[0].mode_text.as_ref(), "H.EX");
     }
 }
