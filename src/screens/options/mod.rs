@@ -33,25 +33,25 @@ use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
-use crate::screens::components::shared::{heart_bg, screen_bar, transitions};
+use crate::screens::components::shared::{heart_bg, screen_bar};
 
 // Submodules — wildcard re-exports let sibling modules reach every item via
 // `use super::*`.
-mod submenus;       #[allow(unused_imports)] use submenus::*;
-mod constants;      #[allow(unused_imports)] use constants::*;
-mod format;         #[allow(unused_imports)] use format::*;
-mod row;            #[allow(unused_imports)] use row::*;
-mod item;           #[allow(unused_imports)] use item::*;
-mod state;          #[allow(unused_imports)] use state::*;
-mod visibility;     #[allow(unused_imports)] use visibility::*;
-mod reload;         #[allow(unused_imports)] use reload::*;
-mod score_import;   #[allow(unused_imports)] use score_import::*;
-mod pack_sync;      #[allow(unused_imports)] use pack_sync::*;
-mod transitions_mod; #[allow(unused_imports)] use transitions_mod::*;
-mod layout;         #[allow(unused_imports)] use layout::*;
-mod update;         #[allow(unused_imports)] use update::*;
-mod input;          #[allow(unused_imports)] use input::*;
-mod render;         #[allow(unused_imports)] use render::*;
+mod submenus;       use submenus::*;
+mod constants;      use constants::*;
+mod format;         use format::*;
+mod row;            use row::*;
+mod item;           use item::*;
+mod state;          use state::*;
+mod visibility;     use visibility::*;
+mod reload;         use reload::*;
+mod score_import;   use score_import::*;
+mod pack_sync;      use pack_sync::*;
+mod transitions;
+mod layout;         use layout::*;
+mod update;         use update::*;
+mod input;          use input::*;
+mod render;         use render::*;
 
 // Public API re-exports
 pub use state::{State, init};
@@ -62,7 +62,7 @@ pub use update::{
     sync_present_mode_policy, open_input_submenu, sync_high_dpi,
 };
 pub use render::{get_actors, clear_description_layout_cache, clear_render_cache};
-pub use transitions_mod::{in_transition, out_transition};
+pub use transitions::{in_transition, out_transition};
 pub use layout::clear_submenu_row_layout_cache;
 pub use submenus::update_monitor_specs;
 
