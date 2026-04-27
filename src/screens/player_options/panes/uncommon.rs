@@ -120,11 +120,12 @@ const APPEARANCE: BitmaskBinding = BitmaskBinding {
 
 pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
     let mut b = RowBuilder::new();
-    b.push(Row {
-        id: RowId::Insert,
-        behavior: RowBehavior::Bitmask(INSERT),
-        name: lookup_key("PlayerOptions", "Insert"),
-        choices: vec![
+    b.push(Row::bitmask(
+        RowId::Insert,
+        lookup_key("PlayerOptions", "Insert"),
+        lookup_key("PlayerOptionsHelp", "InsertHelp"),
+        INSERT,
+        vec![
             tr("PlayerOptions", "InsertWide").to_string(),
             tr("PlayerOptions", "InsertBig").to_string(),
             tr("PlayerOptions", "InsertQuick").to_string(),
@@ -133,16 +134,13 @@ pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "InsertEcho").to_string(),
             tr("PlayerOptions", "InsertStomp").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "InsertHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::Remove,
-        behavior: RowBehavior::Bitmask(REMOVE),
-        name: lookup_key("PlayerOptions", "Remove"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::Remove,
+        lookup_key("PlayerOptions", "Remove"),
+        lookup_key("PlayerOptionsHelp", "RemoveHelp"),
+        REMOVE,
+        vec![
             tr("PlayerOptions", "RemoveLittle").to_string(),
             tr("PlayerOptions", "RemoveNoMines").to_string(),
             tr("PlayerOptions", "RemoveNoHolds").to_string(),
@@ -152,48 +150,39 @@ pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "RemoveNoLifts").to_string(),
             tr("PlayerOptions", "RemoveNoFakes").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "RemoveHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::Holds,
-        behavior: RowBehavior::Bitmask(HOLDS),
-        name: lookup_key("PlayerOptions", "Holds"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::Holds,
+        lookup_key("PlayerOptions", "Holds"),
+        lookup_key("PlayerOptionsHelp", "HoldsHelp"),
+        HOLDS,
+        vec![
             tr("PlayerOptions", "HoldsPlanted").to_string(),
             tr("PlayerOptions", "HoldsFloored").to_string(),
             tr("PlayerOptions", "HoldsTwister").to_string(),
             tr("PlayerOptions", "HoldsNoRolls").to_string(),
             tr("PlayerOptions", "HoldsToRolls").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "HoldsHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::Accel,
-        behavior: RowBehavior::Bitmask(ACCEL),
-        name: lookup_key("PlayerOptions", "Accel"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::Accel,
+        lookup_key("PlayerOptions", "Accel"),
+        lookup_key("PlayerOptionsHelp", "AccelHelp"),
+        ACCEL,
+        vec![
             tr("PlayerOptions", "AccelBoost").to_string(),
             tr("PlayerOptions", "AccelBrake").to_string(),
             tr("PlayerOptions", "AccelWave").to_string(),
             tr("PlayerOptions", "AccelExpand").to_string(),
             tr("PlayerOptions", "AccelBoomerang").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "AccelHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::Effect,
-        behavior: RowBehavior::Bitmask(EFFECT),
-        name: lookup_key("PlayerOptions", "Effect"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::Effect,
+        lookup_key("PlayerOptions", "Effect"),
+        lookup_key("PlayerOptionsHelp", "EffectHelp"),
+        EFFECT,
+        vec![
             tr("PlayerOptions", "EffectDrunk").to_string(),
             tr("PlayerOptions", "EffectDizzy").to_string(),
             tr("PlayerOptions", "EffectConfusion").to_string(),
@@ -205,78 +194,61 @@ pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "EffectBumpy").to_string(),
             tr("PlayerOptions", "EffectBeat").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "EffectHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::Appearance,
-        behavior: RowBehavior::Bitmask(APPEARANCE),
-        name: lookup_key("PlayerOptions", "Appearance"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::Appearance,
+        lookup_key("PlayerOptions", "Appearance"),
+        lookup_key("PlayerOptionsHelp", "AppearanceHelp"),
+        APPEARANCE,
+        vec![
             tr("PlayerOptions", "AppearanceHidden").to_string(),
             tr("PlayerOptions", "AppearanceSudden").to_string(),
             tr("PlayerOptions", "AppearanceStealth").to_string(),
             tr("PlayerOptions", "AppearanceBlink").to_string(),
             tr("PlayerOptions", "AppearanceRVanish").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "AppearanceHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::Attacks,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(ATTACKS)),
-        name: lookup_key("PlayerOptions", "Attacks"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::Attacks,
+        lookup_key("PlayerOptions", "Attacks"),
+        lookup_key("PlayerOptionsHelp", "AttacksHelp"),
+        CycleBinding::Index(ATTACKS),
+        vec![
             tr("PlayerOptions", "AttacksOn").to_string(),
             tr("PlayerOptions", "AttacksRandomAttacks").to_string(),
             tr("PlayerOptions", "AttacksOff").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "AttacksHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::HideLightType,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(HIDE_LIGHT_TYPE)),
-        name: lookup_key("PlayerOptions", "HideLightType"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::HideLightType,
+        lookup_key("PlayerOptions", "HideLightType"),
+        lookup_key("PlayerOptionsHelp", "HideLightTypeHelp"),
+        CycleBinding::Index(HIDE_LIGHT_TYPE),
+        vec![
             tr("PlayerOptions", "HideLightTypeNoHideLights").to_string(),
             tr("PlayerOptions", "HideLightTypeHideAllLights").to_string(),
             tr("PlayerOptions", "HideLightTypeHideMarqueeLights").to_string(),
             tr("PlayerOptions", "HideLightTypeHideBassLights").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "HideLightTypeHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
+    ));
+    // `WhatComesNext` here uses two distinct lookup keys for its two help
+    // lines (not a single `\n`-split key), so the standard `help: LookupKey`
+    // constructor parameter cannot express it. Keep the help vec as a
+    // struct-update literal.
     b.push(Row {
-        id: RowId::WhatComesNext,
-        behavior: RowBehavior::Custom(super::WHAT_COMES_NEXT),
-        name: lookup_key("PlayerOptions", "WhatComesNext"),
-        choices: what_comes_next_choices(OptionsPane::Uncommon, return_screen),
-        selected_choice_index: [0; PLAYER_SLOTS],
         help: vec![
             tr("PlayerOptionsHelp", "WhatComesNextHelp1").to_string(),
             tr("PlayerOptionsHelp", "WhatComesNextHelp2").to_string(),
         ],
-        choice_difficulty_indices: None,
-        mirror_across_players: true,
+        ..Row::custom(
+            RowId::WhatComesNext,
+            lookup_key("PlayerOptions", "WhatComesNext"),
+            lookup_key("PlayerOptionsHelp", "WhatComesNextHelp1"),
+            super::WHAT_COMES_NEXT,
+            what_comes_next_choices(OptionsPane::Uncommon, return_screen),
+        )
+        .with_mirror_across_players()
     });
-    b.push(Row {
-        id: RowId::Exit,
-        behavior: RowBehavior::Exit,
-        name: lookup_key("Common", "Exit"),
-        choices: vec![tr("Common", "Exit").to_string()],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![String::new()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
+    b.push(Row::exit());
     b.finish()
 }
