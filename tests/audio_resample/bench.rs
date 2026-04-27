@@ -10,6 +10,8 @@ const OUT_FRAMES_PER_CALL: usize = 256;
 const PLANAR_INPUT_CAP_FRAMES: usize = 4096;
 const PLANAR_COMPACT_THRESHOLD_FRAMES: usize = 2048;
 const PACKET_FRAMES: usize = 1024;
+const RATE_CHANGE_COUNT: usize = 32;
+const RATE_PATTERN: [f32; 8] = [1.0, 1.05, 0.95, 1.25, 0.75, 1.0, 1.1, 0.9];
 
 struct BenchResult {
     name: &'static str,
@@ -99,7 +101,10 @@ fn main() {
     bench_channel_only_resample();
     bench_staging();
     bench_resampler_construction();
+    bench_rate_changes();
+    bench_multichannel_slices();
     bench_output_write();
+    bench_sfx_output_growth();
     bench_fast_preview();
 }
 
@@ -143,10 +148,18 @@ fn bench_staging() {
                 .unwrap();
         resample_direct_fill_checksum(resampler, black_box(&input), 2, 2)
     });
+    let direct_packet = bench("staging: direct packet fill + sinc", 4, || {
+        let resampler =
+            SincFixedOut::<f32>::new(ratio, 1.0, resampler_params(), OUT_FRAMES_PER_CALL, 2)
+                .unwrap();
+        resample_direct_packet_fill_checksum(resampler, black_box(&input), 2, 2)
+    });
 
     print_result(&planar);
     print_result(&direct);
+    print_result(&direct_packet);
     print_ratio("direct fill vs PlanarAccum", &planar, &direct);
+    print_ratio("direct packet fill vs PlanarAccum", &planar, &direct_packet);
     println!();
 }
 
@@ -154,6 +167,12 @@ fn bench_resampler_construction() {
     let construct = bench("construct: SincFixedOut::new", 80, || {
         let resampler =
             SincFixedOut::<f32>::new(48_000.0 / 44_100.0, 1.0, resampler_params(), 256, 2).unwrap();
+        black_box(resampler.input_frames_next() as i64)
+    });
+    let construct_wide = bench("construct: SincFixedOut::new max x64", 80, || {
+        let resampler =
+            SincFixedOut::<f32>::new(48_000.0 / 44_100.0, 64.0, resampler_params(), 256, 2)
+                .unwrap();
         black_box(resampler.input_frames_next() as i64)
     });
 
@@ -165,8 +184,73 @@ fn bench_resampler_construction() {
     });
 
     print_result(&construct);
+    print_result(&construct_wide);
     print_result(&reset);
     print_ratio("reset existing vs construct", &construct, &reset);
+    print_ratio(
+        "max x1 construct vs max x64 construct",
+        &construct_wide,
+        &construct,
+    );
+    println!();
+}
+
+fn bench_rate_changes() {
+    let base_ratio = 48_000.0 / 44_100.0;
+    let rebuild = bench("rate change: rebuild sinc x32", 30, || {
+        let mut checksum = 0i64;
+        for i in 0..RATE_CHANGE_COUNT {
+            let rate = RATE_PATTERN[i % RATE_PATTERN.len()];
+            let ratio = base_ratio / f64::from(rate);
+            let resampler =
+                SincFixedOut::<f32>::new(ratio, 1.0, resampler_params(), 256, 2).unwrap();
+            checksum = checksum.wrapping_add(resampler.input_frames_next() as i64);
+        }
+        checksum
+    });
+
+    let mut reusable =
+        SincFixedOut::<f32>::new(base_ratio, 64.0, resampler_params(), 256, 2).unwrap();
+    let set_ratio = bench("rate change: reset + set_ratio x32", 30_000, || {
+        let mut checksum = 0i64;
+        for i in 0..RATE_CHANGE_COUNT {
+            let rate = RATE_PATTERN[i % RATE_PATTERN.len()];
+            let ratio = base_ratio / f64::from(rate);
+            reusable.reset();
+            reusable.set_resample_ratio(ratio, false).unwrap();
+            checksum = checksum.wrapping_add(reusable.input_frames_next() as i64);
+        }
+        checksum
+    });
+
+    print_result(&rebuild);
+    print_result(&set_ratio);
+    print_ratio("set_resample_ratio vs rebuild", &rebuild, &set_ratio);
+    println!();
+}
+
+fn bench_multichannel_slices() {
+    let input = make_interleaved_i16(24_000, 6);
+    let ratio = 48_000.0 / 44_100.0;
+
+    let inline2 = bench("multich: SmallVec inline 2 + sinc", 2, || {
+        resample_planar_sinc_inline_checksum::<2>(black_box(&input), 6, 6, ratio)
+    });
+    let inline8 = bench("multich: SmallVec inline 8 + sinc", 2, || {
+        resample_planar_sinc_inline_checksum::<8>(black_box(&input), 6, 6, ratio)
+    });
+    let direct_packet = bench("multich: direct packet fill + sinc", 2, || {
+        let resampler =
+            SincFixedOut::<f32>::new(ratio, 1.0, resampler_params(), OUT_FRAMES_PER_CALL, 6)
+                .unwrap();
+        resample_direct_packet_fill_checksum(resampler, black_box(&input), 6, 6)
+    });
+
+    print_result(&inline2);
+    print_result(&inline8);
+    print_result(&direct_packet);
+    print_ratio("inline 8 vs inline 2", &inline2, &inline8);
+    print_ratio("direct packet vs inline 2", &inline2, &direct_packet);
     println!();
 }
 
@@ -178,20 +262,37 @@ fn bench_output_write() {
         out[1][frame] = ((frame as f32 * 0.011).cos() * 0.8).clamp(-1.0, 1.0);
     }
 
+    let mut generic_tmp = Vec::with_capacity(frames * 2);
     let generic = bench("write output: generic modulo stereo", 20_000, || {
-        let mut tmp = Vec::with_capacity(frames * 2);
-        write_output_generic(black_box(&out), frames, 2, &mut tmp);
-        checksum_i16(&tmp)
+        write_output_generic(black_box(&out), frames, 2, &mut generic_tmp);
+        checksum_i16(&generic_tmp)
     });
+    let mut stereo_tmp = Vec::with_capacity(frames * 2);
     let stereo = bench("write output: specialized stereo", 20_000, || {
-        let mut tmp = Vec::with_capacity(frames * 2);
-        write_output_stereo(black_box(&out), frames, &mut tmp);
-        checksum_i16(&tmp)
+        write_output_stereo(black_box(&out), frames, &mut stereo_tmp);
+        checksum_i16(&stereo_tmp)
     });
 
     print_result(&generic);
     print_result(&stereo);
     print_ratio("specialized vs generic", &generic, &stereo);
+    println!();
+}
+
+fn bench_sfx_output_growth() {
+    let input = make_interleaved_i16(48_000 * 8, 2);
+    let chunk_samples = OUT_FRAMES_PER_CALL * 2;
+
+    let grow = bench("sfx collect: Vec::new extend", 120, || {
+        collect_sfx_output_checksum(black_box(&input), chunk_samples, 0)
+    });
+    let presized = bench("sfx collect: with_capacity extend", 120, || {
+        collect_sfx_output_checksum(black_box(&input), chunk_samples, input.len())
+    });
+
+    print_result(&grow);
+    print_result(&presized);
+    print_ratio("presized vs growth", &grow, &presized);
     println!();
 }
 
@@ -275,6 +376,15 @@ fn make_interleaved_i16(frames: usize, channels: usize) -> Vec<i16> {
 }
 
 fn resample_planar_sinc_checksum(input: &[i16], in_ch: usize, out_ch: usize, ratio: f64) -> i64 {
+    resample_planar_sinc_inline_checksum::<2>(input, in_ch, out_ch, ratio)
+}
+
+fn resample_planar_sinc_inline_checksum<const INLINE: usize>(
+    input: &[i16],
+    in_ch: usize,
+    out_ch: usize,
+    ratio: f64,
+) -> i64 {
     let mut resampler =
         SincFixedOut::<f32>::new(ratio, 1.0, resampler_params(), OUT_FRAMES_PER_CALL, in_ch)
             .unwrap();
@@ -292,7 +402,7 @@ fn resample_planar_sinc_checksum(input: &[i16], in_ch: usize, out_ch: usize, rat
                 break;
             }
             let produced_frames = {
-                let mut input_slices = SmallVec::<[&[f32]; 2]>::with_capacity(in_ch);
+                let mut input_slices = SmallVec::<[&[f32]; INLINE]>::with_capacity(in_ch);
                 let start = in_planar.start_frame;
                 let end = start + need;
                 for channel in &in_planar.channels {
@@ -330,6 +440,75 @@ fn resample_planar_sinc_checksum(input: &[i16], in_ch: usize, out_ch: usize, rat
     let need = resampler.input_frames_next();
     for dst in &mut resample_in {
         dst[..need].fill(0.0);
+    }
+    let produced_frames = resampler
+        .process_into_buffer(resample_in.as_slice(), &mut resample_out, None)
+        .unwrap()
+        .1;
+    write_output_generic(&resample_out, produced_frames, out_ch, &mut out_tmp);
+    checksum.wrapping_add(checksum_i16(&out_tmp))
+}
+
+fn resample_direct_packet_fill_checksum<R>(
+    mut resampler: R,
+    input: &[i16],
+    in_ch: usize,
+    out_ch: usize,
+) -> i64
+where
+    R: Resampler<f32>,
+{
+    let mut resample_in = resampler.input_buffer_allocate(true);
+    let mut resample_out = resampler.output_buffer_allocate(true);
+    let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
+    let mut checksum = 0i64;
+    let mut filled = 0usize;
+
+    for packet in input.chunks(PACKET_FRAMES * in_ch) {
+        let mut src_frame = 0usize;
+        let packet_frames = packet.len() / in_ch;
+        while src_frame < packet_frames {
+            let need = resampler.input_frames_next();
+            let copy_frames = (need - filled).min(packet_frames - src_frame);
+            copy_interleaved_to_planar(
+                &mut resample_in,
+                filled,
+                packet,
+                src_frame,
+                copy_frames,
+                in_ch,
+            );
+            filled += copy_frames;
+            src_frame += copy_frames;
+            if filled < need {
+                continue;
+            }
+            let produced_frames = resampler
+                .process_into_buffer(resample_in.as_slice(), &mut resample_out, None)
+                .unwrap()
+                .1;
+            write_output_generic(&resample_out, produced_frames, out_ch, &mut out_tmp);
+            checksum = checksum.wrapping_add(checksum_i16(&out_tmp));
+            filled = 0;
+        }
+    }
+
+    if filled > 0 {
+        let need = resampler.input_frames_next();
+        for channel in &mut resample_in {
+            channel[filled..need].fill(0.0);
+        }
+        let produced_frames = resampler
+            .process_into_buffer(resample_in.as_slice(), &mut resample_out, None)
+            .unwrap()
+            .1;
+        write_output_generic(&resample_out, produced_frames, out_ch, &mut out_tmp);
+        checksum = checksum.wrapping_add(checksum_i16(&out_tmp));
+    }
+
+    let need = resampler.input_frames_next();
+    for channel in &mut resample_in {
+        channel[..need].fill(0.0);
     }
     let produced_frames = resampler
         .process_into_buffer(resample_in.as_slice(), &mut resample_out, None)
@@ -434,6 +613,18 @@ fn direct_mono_to_stereo_checksum(input: &[i16]) -> i64 {
         checksum = checksum.wrapping_add(checksum_i16(&tmp));
     }
     checksum
+}
+
+fn collect_sfx_output_checksum(input: &[i16], chunk_samples: usize, capacity: usize) -> i64 {
+    let mut out = if capacity == 0 {
+        Vec::new()
+    } else {
+        Vec::with_capacity(capacity)
+    };
+    for chunk in input.chunks(chunk_samples) {
+        out.extend_from_slice(chunk);
+    }
+    checksum_i16(&out)
 }
 
 fn write_output_generic(

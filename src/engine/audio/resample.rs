@@ -16,6 +16,9 @@ const OUT_FRAMES_PER_CALL: usize = 256;
 const PLANAR_INPUT_CAP_FRAMES: usize = 4096;
 const PLANAR_COMPACT_THRESHOLD_FRAMES: usize = 2048;
 const SILENCE_CHUNK_FRAMES: usize = 2048;
+const MIN_MUSIC_RATE: f32 = 0.05;
+const MAX_MUSIC_RATE: f32 = 8.0;
+const RESAMPLE_MAX_RELATIVE_RATIO: f64 = 64.0;
 
 fn push_music_block_with_map(
     sample_ring: &internal::SpscRingI16,
@@ -449,6 +452,8 @@ fn music_decoder_thread_loop(
         let mut current_rate_f32 = f32::from_bits(rate_bits.load(Ordering::Relaxed));
         if !current_rate_f32.is_finite() || current_rate_f32 <= 0.0 {
             current_rate_f32 = 1.0;
+        } else {
+            current_rate_f32 = current_rate_f32.clamp(MIN_MUSIC_RATE, MAX_MUSIC_RATE);
         }
         let direct_audio = in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= f32::EPSILON;
         let mut ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
@@ -464,12 +469,14 @@ fn music_decoder_thread_loop(
             && in_planar.is_some()
             && resampler_rate == current_rate_f32
         {
-            resampler.as_mut().expect("resampler exists").reset();
+            let resampler = resampler.as_mut().expect("resampler exists");
+            resampler.reset();
+            resampler.set_resample_ratio(ratio, false)?;
             in_planar.as_mut().expect("planar input exists").clear();
         } else {
             let new_resampler = SincFixedOut::<f32>::new(
                 ratio,
-                1.0,
+                RESAMPLE_MAX_RELATIVE_RATIO,
                 resampler_params(),
                 OUT_FRAMES_PER_CALL,
                 in_ch,
@@ -589,7 +596,7 @@ fn music_decoder_thread_loop(
                 1.0
             };
             if (desired_rate - current_rate_f32).abs() > 0.0005 {
-                desired_rate = desired_rate.clamp(0.05, 8.0);
+                desired_rate = desired_rate.clamp(MIN_MUSIC_RATE, MAX_MUSIC_RATE);
                 current_rate_f32 = desired_rate;
                 ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
                 if in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= f32::EPSILON {
@@ -599,16 +606,23 @@ fn music_decoder_thread_loop(
                     resample_out = None;
                     in_planar = None;
                 } else {
-                    let new_resampler = SincFixedOut::<f32>::new(
-                        ratio,
-                        1.0,
-                        resampler_params(),
-                        OUT_FRAMES_PER_CALL,
-                        in_ch,
-                    )?;
-                    resample_in = Some(new_resampler.input_buffer_allocate(true));
-                    resample_out = Some(new_resampler.output_buffer_allocate(true));
-                    resampler = Some(new_resampler);
+                    let mut reuse_resampler = false;
+                    if let Some(existing) = &mut resampler {
+                        existing.reset();
+                        reuse_resampler = existing.set_resample_ratio(ratio, false).is_ok();
+                    }
+                    if !reuse_resampler {
+                        let new_resampler = SincFixedOut::<f32>::new(
+                            ratio,
+                            RESAMPLE_MAX_RELATIVE_RATIO,
+                            resampler_params(),
+                            OUT_FRAMES_PER_CALL,
+                            in_ch,
+                        )?;
+                        resample_in = Some(new_resampler.input_buffer_allocate(true));
+                        resample_out = Some(new_resampler.output_buffer_allocate(true));
+                        resampler = Some(new_resampler);
+                    }
                     resampler_rate = current_rate_f32;
                     if in_planar.is_none() {
                         in_planar = Some(PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
