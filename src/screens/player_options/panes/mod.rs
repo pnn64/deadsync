@@ -232,21 +232,6 @@ pub(super) fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = idx;
         }
     }
-
-    if let Some(row) = row_map.get_mut(RowId::Attacks) {
-        row.selected_choice_index[player_idx] = ATTACK_MODE_VARIANTS
-            .iter()
-            .position(|&v| v == profile.attack_mode)
-            .unwrap_or(0)
-            .min(row.choices.len().saturating_sub(1));
-    }
-    if let Some(row) = row_map.get_mut(RowId::HideLightType) {
-        row.selected_choice_index[player_idx] = HIDE_LIGHT_TYPE_VARIANTS
-            .iter()
-            .position(|&v| v == profile.hide_light_type)
-            .unwrap_or(0)
-            .min(row.choices.len().saturating_sub(1));
-    }
 }
 
 fn init_opted_in_bitmask_rows(

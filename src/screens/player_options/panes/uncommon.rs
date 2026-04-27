@@ -1,5 +1,5 @@
 use super::super::row::index_binding;
-use super::super::row::{BitmaskInit, CursorInit};
+use super::super::row::{BitmaskInit, CursorInit, CycleInit};
 use super::*;
 use crate::game::profile as gp;
 use crate::game::profile::{
@@ -11,14 +11,30 @@ const ATTACKS: ChoiceBinding<usize> = index_binding!(
     gp::AttackMode::On,
     attack_mode,
     gp::update_attack_mode_for_side,
-    false
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            ATTACK_MODE_VARIANTS
+                .iter()
+                .position(|&v| v == p.attack_mode)
+                .unwrap_or(0)
+        }
+    })
 );
 const HIDE_LIGHT_TYPE: ChoiceBinding<usize> = index_binding!(
     HIDE_LIGHT_TYPE_VARIANTS,
     gp::HideLightType::NoHideLights,
     hide_light_type,
     gp::update_hide_light_type_for_side,
-    false
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            HIDE_LIGHT_TYPE_VARIANTS
+                .iter()
+                .position(|&v| v == p.hide_light_type)
+                .unwrap_or(0)
+        }
+    })
 );
 
 const INSERT: BitmaskBinding = BitmaskBinding {
