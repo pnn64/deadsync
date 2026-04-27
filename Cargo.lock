@@ -3023,18 +3023,18 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "opusic-c"
-version = "1.5.5"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9486eb5a1a735bf56430b5b44e21157be30ac9fcc17999ba309981b8bd90d2ff"
+checksum = "89f8e9c909466f15e60277212cc4fec082c68a5e1c9f6e373eee716fec2fed47"
 dependencies = [
  "opusic-sys",
 ]
 
 [[package]]
 name = "opusic-sys"
-version = "0.6.0"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc3280fe5b6f97ac1a35a0ac003e2fb0b92f8e4bdf2b2057e1bf9b87acca5696"
+checksum = "0011730945a2d92f1c7d40847956ecb639f1dcfd7703867d7294bc6bfdc6da37"
 dependencies = [
  "cmake",
 ]

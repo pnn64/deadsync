@@ -72,7 +72,7 @@ lewton = "0.10.2"
 ogg = "0.9.2"
 minimp3 = "0.6.1"
 claxon = "0.4.3"
-opusic-c = "1.5.5"
+opusic-c = "1.6.1"
 rubato = "0.16.2"
 memmap2 = "0.9.10"
 
