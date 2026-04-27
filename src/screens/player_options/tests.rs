@@ -3,13 +3,14 @@ use super::*;
 #[cfg(test)]
 pub(super) mod tests {
     use super::{
-        BitmaskBinding, BitmaskInit, CursorInit, ErrorBarMask, FaPlusMask, GameplayExtrasMask,
-        GameplayExtrasMoreMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask,
-        NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, P1, P2, PlayerOptionMasks, Row,
-        RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event,
-        handle_start_event, hud_offset_choices, is_row_visible, judgment_tilt_intensity_visible,
-        repeat_held_arcade_start, row_visibility, session_active_players,
-        sync_profile_scroll_speed,
+        BitmaskBinding, BitmaskInit, ChoiceBinding, CursorInit, CycleInit, ErrorBarMask,
+        FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
+        HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL,
+        NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row, RowBehavior, RowId, RowMap,
+        ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event,
+        hud_offset_choices, init_cycle_row_from_binding, init_numeric_row_from_binding,
+        is_row_visible, judgment_tilt_intensity_visible, repeat_held_arcade_start, row_visibility,
+        session_active_players, sync_profile_scroll_speed,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -832,6 +833,7 @@ pub(super) mod tests {
                 super::Outcome::persisted_with_visibility()
             },
             persist_for_side: profile::update_judgment_tilt_for_side,
+            init: None,
         };
         let tilt_row = Row {
             id: RowId::JudgmentTilt,
@@ -1340,5 +1342,154 @@ pub(super) mod tests {
             [target, target],
             "WhatComesNext (mirror_across_players=true) must sync both player slots on inline focus commit"
         );
+    }
+
+    // ---------------------------------------------------------------------
+    // CycleInit / NumericInit contract helpers
+    //
+    // Direct unit tests for `init_cycle_row_from_binding` and
+    // `init_numeric_row_from_binding`. These guard the legacy semantics
+    // mirrored from `apply_profile_defaults`:
+    //
+    //   * Cycle helper clamps the returned index to `choices.len() - 1`
+    //     (matches the `.min(row.choices.len().saturating_sub(1))` pattern
+    //     used by every variant-table init block in `panes/mod.rs`).
+    //   * Numeric helper preserves the row's existing selection when the
+    //     formatted value does not match any entry in `Row::choices`
+    //     (matches the `if let Some(idx) = ... position(...)` pattern used
+    //     by every numeric init block in `panes/mod.rs`).
+    //   * Both helpers return `false` (no-op) when the binding has no
+    //     `init` contract — letting callers fall back to the legacy
+    //     hand-written init blocks during the in-progress migration.
+    // ---------------------------------------------------------------------
+
+    fn cycle_test_row(choices: &[&str], initial: [usize; 2]) -> Row {
+        Row {
+            id: RowId::Perspective,
+            behavior: RowBehavior::Exit, // behavior unused by the helper
+            name: lookup_key("PlayerOptions", "Perspective"),
+            choices: choices.iter().map(ToString::to_string).collect(),
+            selected_choice_index: initial,
+            help: Vec::new(),
+            choice_difficulty_indices: None,
+            mirror_across_players: false,
+        }
+    }
+
+    fn numeric_test_row(choices: &[&str], initial: [usize; 2]) -> Row {
+        Row {
+            id: RowId::Spacing,
+            behavior: RowBehavior::Exit, // behavior unused by the helper
+            name: lookup_key("PlayerOptions", "Spacing"),
+            choices: choices.iter().map(ToString::to_string).collect(),
+            selected_choice_index: initial,
+            help: Vec::new(),
+            choice_difficulty_indices: None,
+            mirror_across_players: false,
+        }
+    }
+
+    #[test]
+    fn init_cycle_row_from_binding_uses_init_function() {
+        let binding: ChoiceBinding<usize> = ChoiceBinding::<usize> {
+            apply: |_, _| super::Outcome::NONE,
+            persist_for_side: |_, _| {},
+            init: Some(CycleInit { from_profile: |_| 2 }),
+        };
+        let mut row = cycle_test_row(&["A", "B", "C", "D"], [0, 0]);
+        let applied = init_cycle_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        assert!(applied, "binding has init; helper must apply it");
+        assert_eq!(row.selected_choice_index[P1], 2);
+        assert_eq!(row.selected_choice_index[P2], 0, "P2 untouched");
+    }
+
+    #[test]
+    fn init_cycle_row_from_binding_clamps_to_choices_length() {
+        // Mirrors the `.min(row.choices.len().saturating_sub(1))` clamp used
+        // by every variant-table init block in apply_profile_defaults.
+        let binding: ChoiceBinding<usize> = ChoiceBinding::<usize> {
+            apply: |_, _| super::Outcome::NONE,
+            persist_for_side: |_, _| {},
+            init: Some(CycleInit {
+                from_profile: |_| 99,
+            }),
+        };
+        let mut row = cycle_test_row(&["A", "B", "C"], [0, 0]);
+        init_cycle_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        assert_eq!(
+            row.selected_choice_index[P1], 2,
+            "out-of-range init must clamp to choices.len()-1"
+        );
+    }
+
+    #[test]
+    fn init_cycle_row_from_binding_returns_false_without_init() {
+        let binding: ChoiceBinding<usize> = ChoiceBinding::<usize> {
+            apply: |_, _| super::Outcome::NONE,
+            persist_for_side: |_, _| {},
+            init: None,
+        };
+        let mut row = cycle_test_row(&["A", "B", "C"], [1, 1]);
+        let applied = init_cycle_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        assert!(!applied, "no init contract => helper reports no-op");
+        assert_eq!(
+            row.selected_choice_index, [1, 1],
+            "selection must be untouched when no init is wired"
+        );
+    }
+
+    #[test]
+    fn init_numeric_row_from_binding_finds_matching_choice() {
+        let binding = NumericBinding {
+            parse: super::parse_i32_percent,
+            apply: |_, _| super::Outcome::NONE,
+            persist_for_side: |_, _| {},
+            init: Some(NumericInit {
+                from_profile: |_| 50,
+                format: |v| format!("{v}%"),
+            }),
+        };
+        let mut row = numeric_test_row(&["0%", "25%", "50%", "75%", "100%"], [0, 0]);
+        let applied = init_numeric_row_from_binding(&mut row, &binding, &Profile::default(), P2);
+        assert!(applied);
+        assert_eq!(row.selected_choice_index[P2], 2);
+        assert_eq!(row.selected_choice_index[P1], 0, "P1 untouched");
+    }
+
+    #[test]
+    fn init_numeric_row_from_binding_preserves_selection_on_no_match() {
+        // Mirrors the legacy `if let Some(idx) = row.choices.iter().position(...)`
+        // pattern in apply_profile_defaults — when the formatted value is not
+        // present in choices, the row's existing selection is left alone.
+        let binding = NumericBinding {
+            parse: super::parse_i32_percent,
+            apply: |_, _| super::Outcome::NONE,
+            persist_for_side: |_, _| {},
+            init: Some(NumericInit {
+                from_profile: |_| 33,
+                format: |v| format!("{v}%"),
+            }),
+        };
+        let mut row = numeric_test_row(&["0%", "50%", "100%"], [1, 1]);
+        let applied = init_numeric_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        assert!(applied, "binding has init; helper applied it (even if no-op)");
+        assert_eq!(
+            row.selected_choice_index, [1, 1],
+            "no matching choice => selection preserved"
+        );
+    }
+
+    #[test]
+    fn init_numeric_row_from_binding_returns_false_without_init() {
+        let binding = NumericBinding {
+            parse: super::parse_i32_percent,
+            apply: |_, _| super::Outcome::NONE,
+            persist_for_side: |_, _| {},
+            init: None,
+        };
+        let mut row = numeric_test_row(&["0%", "50%", "100%"], [1, 1]);
+        let applied = init_numeric_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        assert!(!applied);
+        assert_eq!(row.selected_choice_index, [1, 1]);
     }
 }
