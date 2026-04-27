@@ -137,10 +137,17 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 #[inline(always)]
 fn itl_score_line_y(side: profile::PlayerSide, joined_sides: usize) -> (f32, f32) {
     if joined_sides >= 2 {
+        // Wendy at zoom(ITL_POINTS_SCORE_ZOOM) is ~6.24 logical units tall, so
+        // adjacent line centers must be at least that far apart to avoid
+        // overlap. The previous P1/P2 layout left only 6 units between
+        // P1's EX line and P2's points line, causing the two sides to
+        // visually collide (issue #259). Stack all four lines uniformly
+        // 9 units apart, symmetric around the row center, which fits within
+        // the 32-unit row height (logical_height/NUM_VISIBLE_WHEEL_ITEMS).
         return if side == profile::PlayerSide::P1 {
-            (-15.0, -6.0)
+            (-14.0, -5.0)
         } else {
-            (0.0, 9.0)
+            (5.0, 14.0)
         };
     }
     (-7.0, 3.0)
