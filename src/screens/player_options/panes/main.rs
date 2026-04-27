@@ -91,6 +91,14 @@ const GLOBAL_OFFSET_SHIFT: NumericBinding = NumericBinding {
     },
     persist_for_side: gp::update_global_offset_shift_ms_for_side,
 };
+const SPACING: NumericBinding = NumericBinding {
+    parse: parse_i32_percent,
+    apply: |p, v| {
+        p.spacing_percent = v;
+        Outcome::persisted()
+    },
+    persist_for_side: gp::update_spacing_percent_for_side,
+};
 
 /// Shared boilerplate for a noteskin-style cycle row implemented via
 /// `CustomBinding`: advance the choice index, look up the chosen string, then
@@ -569,6 +577,21 @@ pub(super) fn build_main_rows(
         choices: (-100..=150).map(|v| format!("{v}%")).collect(),
         selected_choice_index: [0; PLAYER_SLOTS],
         help: tr("PlayerOptionsHelp", "MiniHelp")
+            .split("\\n")
+            .map(|s| s.to_string())
+            .collect(),
+        choice_difficulty_indices: None,
+        mirror_across_players: false,
+    });
+    b.push(Row {
+        id: RowId::Spacing,
+        behavior: RowBehavior::Numeric(SPACING),
+        name: lookup_key("PlayerOptions", "Spacing"),
+        choices: (SPACING_PERCENT_MIN..=SPACING_PERCENT_MAX)
+            .map(|v| format!("{v}%"))
+            .collect(),
+        selected_choice_index: [0; PLAYER_SLOTS],
+        help: tr("PlayerOptionsHelp", "SpacingHelp")
             .split("\\n")
             .map(|s| s.to_string())
             .collect(),

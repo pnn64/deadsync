@@ -23,6 +23,10 @@ pub const PLAYER_INITIALS_MAX_LEN: usize = 4;
 pub const HUD_OFFSET_MIN: i32 = -250;
 pub const HUD_OFFSET_MAX: i32 = 250;
 
+/// Min/max for the per-player Spacing modifier (zmod parity, step 1).
+pub const SPACING_PERCENT_MIN: i32 = -100;
+pub const SPACING_PERCENT_MAX: i32 = 100;
+
 #[inline(always)]
 const fn clamp_weight_pounds(weight_pounds: i32) -> i32 {
     if weight_pounds == 0 {
@@ -756,6 +760,7 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
             .map_or("", NoteSkin::as_str)
     ));
     content.push_str(&format!("MiniPercent={}\n", options.mini_percent));
+    content.push_str(&format!("Spacing={}\n", options.spacing_percent));
     content.push_str(&format!("Perspective={}\n", options.perspective));
     content.push_str(&format!(
         "NoteFieldOffsetX={}\n",
@@ -839,6 +844,10 @@ fn load_player_options(
         .get(section, "MiniPercent")
         .and_then(|s| s.parse::<i32>().ok())
         .unwrap_or(options.mini_percent);
+    options.spacing_percent = profile_conf
+        .get(section, "Spacing")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.spacing_percent);
     options.perspective = profile_conf
         .get(section, "Perspective")
         .and_then(|s| Perspective::from_str(&s).ok())
@@ -2509,6 +2518,7 @@ pub struct PlayerOptionsData {
     pub mini_indicator: MiniIndicator,
     pub mini_indicator_score_type: MiniIndicatorScoreType,
     pub mini_percent: i32,
+    pub spacing_percent: i32,
     pub perspective: Perspective,
     pub note_field_offset_x: i32,
     pub note_field_offset_y: i32,
@@ -2601,6 +2611,7 @@ fn default_player_options() -> PlayerOptionsData {
         mini_indicator: MiniIndicator::None,
         mini_indicator_score_type: MiniIndicatorScoreType::Itg,
         mini_percent: 0,
+        spacing_percent: 0,
         perspective: Perspective::default(),
         note_field_offset_x: 0,
         note_field_offset_y: 0,
@@ -2742,6 +2753,10 @@ pub struct Profile {
     // Mini modifier as a percentage, mirroring Simply Love semantics.
     // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
     pub mini_percent: i32,
+    /// Horizontal spacing between note columns as a percentage (zmod parity).
+    /// 0 = noteskin default, +N% scales lateral column offsets by
+    /// `1 + N/100`. Range -100..=100 (capped on read to stay sane).
+    pub spacing_percent: i32,
     pub perspective: Perspective,
     // NoteField positional offsets (Simply Love semantics).
     // X is non-negative and interpreted relative to player side:
@@ -2887,6 +2902,7 @@ impl Default for Profile {
             mini_indicator: player_options.mini_indicator,
             mini_indicator_score_type: player_options.mini_indicator_score_type,
             mini_percent: player_options.mini_percent,
+            spacing_percent: player_options.spacing_percent,
             perspective: player_options.perspective,
             note_field_offset_x: player_options.note_field_offset_x,
             note_field_offset_y: player_options.note_field_offset_y,
@@ -3040,6 +3056,7 @@ impl Profile {
             mini_indicator: self.mini_indicator,
             mini_indicator_score_type: self.mini_indicator_score_type,
             mini_percent: self.mini_percent,
+            spacing_percent: self.spacing_percent,
             perspective: self.perspective,
             note_field_offset_x: self.note_field_offset_x,
             note_field_offset_y: self.note_field_offset_y,
@@ -3134,6 +3151,7 @@ impl Profile {
         self.mini_indicator = options.mini_indicator;
         self.mini_indicator_score_type = options.mini_indicator_score_type;
         self.mini_percent = options.mini_percent;
+        self.spacing_percent = options.spacing_percent;
         self.perspective = options.perspective;
         self.note_field_offset_x = options.note_field_offset_x;
         self.note_field_offset_y = options.note_field_offset_y;

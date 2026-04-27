@@ -1584,6 +1584,8 @@ fn build_holds_mines_rolls_pane_at(
 fn notefield_width(state: &State) -> Option<f32> {
     let ns = state.noteskin[0].as_ref()?;
     let field_zoom = state.field_zoom[0];
+    let spacing_mult =
+        gameplay::spacing_multiplier_for_percent(state.player_profiles[0].spacing_percent);
     let cols = state
         .cols_per_player
         .min(ns.column_xs.len())
@@ -1595,7 +1597,7 @@ fn notefield_width(state: &State) -> Option<f32> {
     let mut min_x = f32::INFINITY;
     let mut max_x = f32::NEG_INFINITY;
     for x in ns.column_xs.iter().take(cols) {
-        let xf = *x as f32;
+        let xf = *x as f32 * spacing_mult;
         min_x = min_x.min(xf);
         max_x = max_x.max(xf);
     }

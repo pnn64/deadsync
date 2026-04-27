@@ -8,6 +8,7 @@ pub enum RowId {
     TypeOfSpeedMod,
     SpeedMod,
     Mini,
+    Spacing,
     Perspective,
     NoteSkin,
     MineSkin,
