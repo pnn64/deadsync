@@ -437,6 +437,14 @@ fn music_decoder_thread_loop(
         }
     }
 
+    let mut resampler: Option<SincFixedOut<f32>> = None;
+    let mut resampler_rate = f32::NAN;
+    let mut resample_out: Option<Vec<Vec<f32>>> = None;
+    let mut resample_in: Option<Vec<Vec<f32>>> = None;
+    let mut in_planar: Option<PlanarAccum> = None;
+    let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
+    let mut pkt_buf = Vec::new();
+
     'main_loop: loop {
         let mut current_rate_f32 = f32::from_bits(rate_bits.load(Ordering::Relaxed));
         if !current_rate_f32.is_finite() || current_rate_f32 <= 0.0 {
@@ -444,17 +452,34 @@ fn music_decoder_thread_loop(
         }
         let direct_audio = in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= f32::EPSILON;
         let mut ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
-        let mut resampler = if direct_audio {
-            None
+        if direct_audio {
+            resampler = None;
+            resampler_rate = f32::NAN;
+            resample_in = None;
+            resample_out = None;
+            in_planar = None;
+        } else if resampler.is_some()
+            && resample_in.is_some()
+            && resample_out.is_some()
+            && in_planar.is_some()
+            && resampler_rate == current_rate_f32
+        {
+            resampler.as_mut().expect("resampler exists").reset();
+            in_planar.as_mut().expect("planar input exists").clear();
         } else {
-            Some(SincFixedOut::<f32>::new(
+            let new_resampler = SincFixedOut::<f32>::new(
                 ratio,
                 1.0,
                 resampler_params(),
                 OUT_FRAMES_PER_CALL,
                 in_ch,
-            )?)
-        };
+            )?;
+            resample_in = Some(new_resampler.input_buffer_allocate(true));
+            resample_out = Some(new_resampler.output_buffer_allocate(true));
+            in_planar = Some(PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
+            resampler = Some(new_resampler);
+            resampler_rate = current_rate_f32;
+        }
 
         let start_frame_f = (cut.start_sec * f64::from(in_hz)).max(0.0);
         let start_floor = start_frame_f.floor() as u64;
@@ -533,17 +558,8 @@ fn music_decoder_thread_loop(
             false
         }
 
-        let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
-        let mut resample_out = resampler
-            .as_ref()
-            .map(|resampler| resampler.output_buffer_allocate(true));
-        let mut resample_in = resampler
-            .as_ref()
-            .map(|resampler| resampler.input_buffer_allocate(true));
-        let mut in_planar = resampler
-            .as_ref()
-            .map(|_| PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
-        let mut pkt_buf = Vec::new();
+        out_tmp.clear();
+        pkt_buf.clear();
 
         loop {
             if stop.load(Ordering::Relaxed) {
@@ -578,6 +594,7 @@ fn music_decoder_thread_loop(
                 ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
                 if in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= f32::EPSILON {
                     resampler = None;
+                    resampler_rate = f32::NAN;
                     resample_in = None;
                     resample_out = None;
                     in_planar = None;
@@ -592,6 +609,7 @@ fn music_decoder_thread_loop(
                     resample_in = Some(new_resampler.input_buffer_allocate(true));
                     resample_out = Some(new_resampler.output_buffer_allocate(true));
                     resampler = Some(new_resampler);
+                    resampler_rate = current_rate_f32;
                     if in_planar.is_none() {
                         in_planar = Some(PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
                     }
