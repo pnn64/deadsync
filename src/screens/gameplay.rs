@@ -5892,10 +5892,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if cols == 0 {
             return 256.0;
         }
+        let spacing_mult = crate::game::gameplay::spacing_multiplier_for_percent(
+            state.player_profiles[player_idx].spacing_percent,
+        );
         let mut min_x = f32::INFINITY;
         let mut max_x = f32::NEG_INFINITY;
         for x in ns.column_xs.iter().take(cols) {
-            let xf = *x as f32;
+            let xf = *x as f32 * spacing_mult;
             min_x = min_x.min(xf);
             max_x = max_x.max(xf);
         }

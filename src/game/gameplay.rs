@@ -72,8 +72,9 @@ pub use self::attacks::{
     active_chart_attack_effects_for_player, effective_accel_effects_for_player,
     effective_appearance_effects_for_player, effective_mini_percent_for_player,
     effective_perspective_effects_for_player, effective_scroll_effects_for_player,
-    effective_scroll_speed_for_player, effective_visibility_effects_for_player,
-    effective_visual_effects_for_player,
+    effective_scroll_speed_for_player, effective_spacing_multiplier_for_player,
+    effective_visibility_effects_for_player, effective_visual_effects_for_player,
+    spacing_multiplier_for_percent,
 };
 #[cfg(test)]
 use self::attacks::{
@@ -4826,6 +4827,7 @@ fn step_stats_notefield_width(
     noteskin: Option<&Noteskin>,
     cols_per_player: usize,
     field_zoom: f32,
+    spacing_mult: f32,
 ) -> Option<f32> {
     let ns = noteskin?;
     let cols = cols_per_player
@@ -4838,7 +4840,7 @@ fn step_stats_notefield_width(
     let mut min_x = f32::INFINITY;
     let mut max_x = f32::NEG_INFINITY;
     for x in ns.column_xs.iter().take(cols) {
-        let xf = *x as f32;
+        let xf = *x as f32 * spacing_mult;
         min_x = min_x.min(xf);
         max_x = max_x.max(xf);
     }
@@ -5728,6 +5730,7 @@ pub fn init(
                 noteskin[0].as_ref().map(Arc::as_ref),
                 cols_per_player,
                 field_zoom[0],
+                spacing_multiplier_for_percent(player_profiles[0].spacing_percent),
             )
             .unwrap_or(256.0_f32)
             .max(1.0_f32);

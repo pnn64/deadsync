@@ -18,8 +18,9 @@ use crate::game::gameplay::{
     effective_accel_effects_for_player, effective_appearance_effects_for_player,
     effective_mini_percent_for_player, effective_perspective_effects_for_player,
     effective_scroll_effects_for_player, effective_scroll_speed_for_player,
-    effective_visibility_effects_for_player, effective_visual_effects_for_player,
-    receptor_glow_visual_for_col, row_hides_completed_note, scroll_receptor_y,
+    effective_spacing_multiplier_for_player, effective_visibility_effects_for_player,
+    effective_visual_effects_for_player, receptor_glow_visual_for_col,
+    row_hides_completed_note, scroll_receptor_y,
 };
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldResult, MineResult, NoteType};
@@ -220,6 +221,7 @@ struct GameplayModsTextKey {
     turn_bits: u16,
     attack_mode: u8,
     mini_percent: i16,
+    spacing_percent: i16,
     visual_delay_ms: i16,
     accel: [i16; 5],
     visual: [i16; 9],
@@ -379,6 +381,13 @@ fn append_mod_part(parts: &mut Vec<String>, percent: i16, name: &str) {
 fn append_mini_part(parts: &mut Vec<String>, mini_percent: i16) {
     if mini_percent != 0 {
         parts.push(format!("{mini_percent}% Mini"));
+    }
+}
+
+#[inline(always)]
+fn append_spacing_part(parts: &mut Vec<String>, spacing_percent: i16) {
+    if spacing_percent != 0 {
+        parts.push(format!("{spacing_percent}% Spacing"));
     }
 }
 
@@ -579,6 +588,9 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
         turn_bits: turn_option_bits(profile.turn_option) | chart_attack.turn_bits,
         attack_mode: profile.attack_mode as u8,
         mini_percent: clamp_rounded_i16(display_mini),
+        spacing_percent: profile
+            .spacing_percent
+            .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
         visual_delay_ms: profile
             .visual_delay_ms
             .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
@@ -1416,6 +1428,7 @@ pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
             append_mod_part(&mut parts, percent, name);
         }
         append_mini_part(&mut parts, key.mini_percent);
+        append_spacing_part(&mut parts, key.spacing_percent);
         for (percent, name) in
             key.appearance
                 .into_iter()
@@ -3090,6 +3103,7 @@ pub fn build_bundles(
     let visibility = effective_visibility_effects_for_player(state, player_idx);
     let mini_percent = effective_mini_percent_for_player(state, player_idx);
     let mini = effective_mini_value(profile, visual, mini_percent);
+    let spacing_mult = effective_spacing_multiplier_for_player(state, player_idx);
     let reverse_scroll = state.reverse_scroll[player_idx];
     let hud_reverse = column_reverse_percent[0] >= 0.999_9;
     let judgment_y_base = hud_y(
@@ -3195,7 +3209,7 @@ pub fn build_bundles(
         let beat_push = beat_factor(current_beat);
         let mut col_offsets = [0.0_f32; MAX_COLS];
         for (i, col_offset) in col_offsets.iter_mut().take(num_cols).enumerate() {
-            *col_offset = ns.column_xs[i] as f32 * field_zoom;
+            *col_offset = ns.column_xs[i] as f32 * spacing_mult * field_zoom;
         }
         let mut invert_distances = [0.0_f32; MAX_COLS];
         compute_invert_distances(&col_offsets[..num_cols], &mut invert_distances[..num_cols]);
@@ -3412,7 +3426,7 @@ pub fn build_bundles(
             let mut neg_any = false;
 
             for i in 0..num_cols {
-                let x = ns.column_xs[i] as f32;
+                let x = ns.column_xs[i] as f32 * spacing_mult;
                 if column_dirs[i] >= 0.0 {
                     if pos_any {
                         pos_min_x = pos_min_x.min(x);
@@ -3542,7 +3556,7 @@ pub fn build_bundles(
                             let local_col = last_col.column.saturating_sub(col_start);
                             if local_col < num_cols {
                                 let x = playfield_center_x
-                                    + ns.column_xs[local_col] as f32 * field_zoom;
+                                    + ns.column_xs[local_col] as f32 * spacing_mult * field_zoom;
                                 let y = if column_dirs[local_col] < 0.0 {
                                     COLUMN_CUE_TEXT_REVERSE_Y
                                         + COLUMN_CUE_Y_OFFSET
@@ -3562,7 +3576,7 @@ pub fn build_bundles(
                         if local_col >= num_cols {
                             continue;
                         }
-                        let x = playfield_center_x + ns.column_xs[local_col] as f32 * field_zoom;
+                        let x = playfield_center_x + ns.column_xs[local_col] as f32 * spacing_mult * field_zoom;
                         let alpha = COLUMN_CUE_BASE_ALPHA * alpha_mul;
                         let color = if col_cue.is_mine {
                             [1.0, 0.0, 0.0, alpha]
@@ -7196,7 +7210,7 @@ pub fn build_bundles(
             let column_offset = state.noteskin[player_idx]
                 .as_ref()
                 .and_then(|ns| ns.column_xs.get(i))
-                .map(|&x| x as f32)
+                .map(|&x| x as f32 * spacing_mult)
                 .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
             push_hud_capture(
                 &mut hud_actors,
@@ -7282,7 +7296,8 @@ mod tests {
     use super::{
         MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
-        append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
+        append_mini_part, append_perspective_parts, append_spacing_part, append_turn_parts,
+        bottom_cap_uv_window,
         calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, hallway_judgment_zoom,
         hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
         hold_window_for_display_run, hud_layout_ys, hud_y, judgment_actor_zoom,

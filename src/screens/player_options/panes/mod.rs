@@ -227,6 +227,16 @@ pub(super) fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = idx;
         }
     }
+    // Initialize Spacing row from profile (range SPACING_PERCENT_MIN..=SPACING_PERCENT_MAX).
+    if let Some(row) = row_map.get_mut(RowId::Spacing) {
+        let val = profile
+            .spacing_percent
+            .clamp(SPACING_PERCENT_MIN, SPACING_PERCENT_MAX);
+        let needle = format!("{val}%");
+        if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
+            row.selected_choice_index[player_idx] = idx;
+        }
+    }
     // Initialize Perspective row from profile setting (Overhead, Hallway, Distant, Incoming, Space).
     if let Some(row) = row_map.get_mut(RowId::Perspective) {
         row.selected_choice_index[player_idx] = PERSPECTIVE_VARIANTS

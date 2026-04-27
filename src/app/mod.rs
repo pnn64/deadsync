@@ -1614,6 +1614,9 @@ fn fallback_eval_mods_text(side: profile::PlayerSide, speed_mod: ScrollSpeedSett
     if profile.mini_percent != 0 {
         parts.push(format!("{}% Mini", profile.mini_percent));
     }
+    if profile.spacing_percent != 0 {
+        parts.push(format!("{}% Spacing", profile.spacing_percent));
+    }
     let scroll = profile.scroll_option;
     if scroll.contains(profile::ScrollOption::Reverse) {
         parts.push("Reverse".to_string());

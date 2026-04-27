@@ -3733,6 +3733,24 @@ pub fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f3
         })
 }
 
+/// Multiplier applied to the noteskin's per-column lateral offsets to
+/// realise the Spacing player option (zmod parity, proportional model).
+/// `1.0 + spacing_percent / 100`.
+#[inline(always)]
+pub fn effective_spacing_multiplier_for_player(state: &State, player_idx: usize) -> f32 {
+    if player_idx >= state.num_players {
+        return 1.0;
+    }
+    spacing_multiplier_for_percent(state.player_profiles[player_idx].spacing_percent)
+}
+
+#[inline(always)]
+pub fn spacing_multiplier_for_percent(spacing_percent: i32) -> f32 {
+    1.0 + (spacing_percent
+        .clamp(profile::SPACING_PERCENT_MIN, profile::SPACING_PERCENT_MAX) as f32)
+        / 100.0
+}
+
 #[inline(always)]
 pub fn effective_scroll_speed_for_player(state: &State, player_idx: usize) -> ScrollSpeedSetting {
     if player_idx >= state.num_players {

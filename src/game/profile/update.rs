@@ -3,10 +3,11 @@ use super::{
     ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
     HideLightType, HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType,
     MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorScoreType, NoteSkin, Perspective,
-    PlayStyle, PlayerSide, RemoveMask, ScrollOption, ScrollSpeedSetting, TargetScoreSetting,
-    TimingWindowsOption, TurnOption, VisualEffectsMask, clamp_custom_fantastic_window_ms,
-    error_bar_style_from_mask, error_bar_text_from_mask, lock_profiles, sanitize_player_initials,
-    save_profile_ini_for_side, save_profile_stats_for_side, session_side_is_guest, side_ix,
+    PlayStyle, PlayerSide, RemoveMask, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN, ScrollOption,
+    ScrollSpeedSetting, TargetScoreSetting, TimingWindowsOption, TurnOption, VisualEffectsMask,
+    clamp_custom_fantastic_window_ms, error_bar_style_from_mask, error_bar_text_from_mask,
+    lock_profiles, sanitize_player_initials, save_profile_ini_for_side,
+    save_profile_stats_for_side, session_side_is_guest, side_ix,
 };
 use chrono::Local;
 use std::path::Path;
@@ -633,6 +634,20 @@ pub fn update_mini_percent_for_side(side: PlayerSide, percent: i32) {
             return;
         }
         profile.mini_percent = clamped;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_spacing_percent_for_side(side: PlayerSide, percent: i32) {
+    // Mirror zmod's range: -100% to +100%, step 1.
+    let clamped = percent.clamp(SPACING_PERCENT_MIN, SPACING_PERCENT_MAX);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.spacing_percent == clamped {
+            return;
+        }
+        profile.spacing_percent = clamped;
     }
     save_profile_ini_for_side(side);
 }

@@ -28,6 +28,10 @@ pub(super) const HUD_OFFSET_MAX: i32 = crate::game::profile::HUD_OFFSET_MAX;
 
 pub(super) const HUD_OFFSET_ZERO_INDEX: usize = (-HUD_OFFSET_MIN) as usize;
 
+pub(super) const SPACING_PERCENT_MIN: i32 = crate::game::profile::SPACING_PERCENT_MIN;
+
+pub(super) const SPACING_PERCENT_MAX: i32 = crate::game::profile::SPACING_PERCENT_MAX;
+
 pub(super) const VISIBLE_ROWS: usize = 10;
 
 pub(super) const ROW_START_OFFSET: f32 = -164.0;
