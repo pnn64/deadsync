@@ -111,38 +111,14 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-pub(in crate::screens::options) const fn breakdown_style_choice_index(
-    style: BreakdownStyle,
-) -> usize {
-    match style {
-        BreakdownStyle::Sl => 0,
-        BreakdownStyle::Sn => 1,
-    }
+impl ChoiceEnum for BreakdownStyle {
+    const ALL: &'static [Self] = &[Self::Sl, Self::Sn];
+    const DEFAULT: Self = Self::Sl;
 }
 
-pub(in crate::screens::options) const fn breakdown_style_from_choice(idx: usize) -> BreakdownStyle {
-    match idx {
-        1 => BreakdownStyle::Sn,
-        _ => BreakdownStyle::Sl,
-    }
-}
-
-pub(in crate::screens::options) const fn sync_graph_mode_choice_index(
-    mode: SyncGraphMode,
-) -> usize {
-    match mode {
-        SyncGraphMode::Frequency => 0,
-        SyncGraphMode::BeatIndex => 1,
-        SyncGraphMode::PostKernelFingerprint => 2,
-    }
-}
-
-pub(in crate::screens::options) const fn sync_graph_mode_from_choice(idx: usize) -> SyncGraphMode {
-    match idx {
-        0 => SyncGraphMode::Frequency,
-        1 => SyncGraphMode::BeatIndex,
-        _ => SyncGraphMode::PostKernelFingerprint,
-    }
+impl ChoiceEnum for SyncGraphMode {
+    const ALL: &'static [Self] = &[Self::Frequency, Self::BeatIndex, Self::PostKernelFingerprint];
+    const DEFAULT: Self = Self::PostKernelFingerprint;
 }
 
 pub(in crate::screens::options) const fn sync_confidence_choice_index(percent: u8) -> usize {

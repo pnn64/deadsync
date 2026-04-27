@@ -63,7 +63,7 @@ pub fn sync_display_mode(
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::FullscreenType,
     ) {
-        *slot = fullscreen_type_to_choice_index(target_type);
+        *slot = target_type.choice_index();
     }
     sync_submenu_cursor_indices(state);
     clear_render_cache(state);
@@ -139,7 +139,7 @@ pub fn sync_present_mode_policy(state: &mut State, mode: PresentModePolicy) {
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::PresentMode,
     ) {
-        *slot = present_mode_choice_index(mode);
+        *slot = mode.choice_index();
     }
     sync_submenu_cursor_indices(state);
     clear_render_cache(state);

@@ -586,24 +586,9 @@ pub(in crate::screens::options) fn toggle_auto_screenshot_option(
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
-pub(in crate::screens::options) const fn select_music_pattern_info_choice_index(
-    mode: SelectMusicPatternInfoMode,
-) -> usize {
-    match mode {
-        SelectMusicPatternInfoMode::Auto => 0,
-        SelectMusicPatternInfoMode::Tech => 1,
-        SelectMusicPatternInfoMode::Stamina => 2,
-    }
-}
-
-pub(in crate::screens::options) const fn select_music_pattern_info_from_choice(
-    idx: usize,
-) -> SelectMusicPatternInfoMode {
-    match idx {
-        1 => SelectMusicPatternInfoMode::Tech,
-        2 => SelectMusicPatternInfoMode::Stamina,
-        _ => SelectMusicPatternInfoMode::Auto,
-    }
+impl ChoiceEnum for SelectMusicPatternInfoMode {
+    const ALL: &'static [Self] = &[Self::Auto, Self::Tech, Self::Stamina];
+    const DEFAULT: Self = Self::Auto;
 }
 
 #[inline(always)]
@@ -696,94 +681,28 @@ pub(in crate::screens::options) fn select_music_chart_info_enabled_mask() -> u8 
     if mask == 0 { 1 } else { mask }
 }
 
-pub(in crate::screens::options) const fn select_music_itl_wheel_choice_index(
-    mode: SelectMusicItlWheelMode,
-) -> usize {
-    match mode {
-        SelectMusicItlWheelMode::Off => 0,
-        SelectMusicItlWheelMode::Score => 1,
-        SelectMusicItlWheelMode::PointsAndScore => 2,
-    }
+impl ChoiceEnum for SelectMusicItlWheelMode {
+    const ALL: &'static [Self] = &[Self::Off, Self::Score, Self::PointsAndScore];
+    const DEFAULT: Self = Self::Off;
 }
 
-pub(in crate::screens::options) const fn select_music_itl_rank_choice_index(
-    mode: SelectMusicItlRankMode,
-) -> usize {
-    match mode {
-        SelectMusicItlRankMode::None => 0,
-        SelectMusicItlRankMode::Chart => 1,
-        SelectMusicItlRankMode::Overall => 2,
-    }
+impl ChoiceEnum for SelectMusicItlRankMode {
+    const ALL: &'static [Self] = &[Self::None, Self::Chart, Self::Overall];
+    const DEFAULT: Self = Self::None;
 }
 
-pub(in crate::screens::options) const fn select_music_itl_rank_from_choice(
-    idx: usize,
-) -> SelectMusicItlRankMode {
-    match idx {
-        1 => SelectMusicItlRankMode::Chart,
-        2 => SelectMusicItlRankMode::Overall,
-        _ => SelectMusicItlRankMode::None,
-    }
+impl ChoiceEnum for SelectMusicWheelStyle {
+    const ALL: &'static [Self] = &[Self::Itg, Self::Iidx];
+    const DEFAULT: Self = Self::Itg;
 }
 
-pub(in crate::screens::options) const fn select_music_itl_wheel_from_choice(
-    idx: usize,
-) -> SelectMusicItlWheelMode {
-    match idx {
-        1 => SelectMusicItlWheelMode::Score,
-        2 => SelectMusicItlWheelMode::PointsAndScore,
-        _ => SelectMusicItlWheelMode::Off,
-    }
+impl ChoiceEnum for NewPackMode {
+    const ALL: &'static [Self] = &[Self::Disabled, Self::OpenPack, Self::HasScore];
+    const DEFAULT: Self = Self::Disabled;
 }
 
-pub(in crate::screens::options) const fn select_music_wheel_style_choice_index(
-    style: SelectMusicWheelStyle,
-) -> usize {
-    match style {
-        SelectMusicWheelStyle::Itg => 0,
-        SelectMusicWheelStyle::Iidx => 1,
-    }
+impl ChoiceEnum for SelectMusicScoreboxPlacement {
+    const ALL: &'static [Self] = &[Self::Auto, Self::StepPane];
+    const DEFAULT: Self = Self::Auto;
 }
 
-pub(in crate::screens::options) const fn select_music_wheel_style_from_choice(
-    idx: usize,
-) -> SelectMusicWheelStyle {
-    match idx {
-        1 => SelectMusicWheelStyle::Iidx,
-        _ => SelectMusicWheelStyle::Itg,
-    }
-}
-
-pub(in crate::screens::options) const fn new_pack_mode_choice_index(mode: NewPackMode) -> usize {
-    match mode {
-        NewPackMode::Disabled => 0,
-        NewPackMode::OpenPack => 1,
-        NewPackMode::HasScore => 2,
-    }
-}
-
-pub(in crate::screens::options) const fn new_pack_mode_from_choice(idx: usize) -> NewPackMode {
-    match idx {
-        1 => NewPackMode::OpenPack,
-        2 => NewPackMode::HasScore,
-        _ => NewPackMode::Disabled,
-    }
-}
-
-pub(in crate::screens::options) const fn select_music_scorebox_placement_choice_index(
-    placement: SelectMusicScoreboxPlacement,
-) -> usize {
-    match placement {
-        SelectMusicScoreboxPlacement::Auto => 0,
-        SelectMusicScoreboxPlacement::StepPane => 1,
-    }
-}
-
-pub(in crate::screens::options) const fn select_music_scorebox_placement_from_choice(
-    idx: usize,
-) -> SelectMusicScoreboxPlacement {
-    match idx {
-        1 => SelectMusicScoreboxPlacement::StepPane,
-        _ => SelectMusicScoreboxPlacement::Auto,
-    }
-}

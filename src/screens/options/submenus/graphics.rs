@@ -562,22 +562,9 @@ pub(in crate::screens::options) fn max_fps_from_choice(values: &[u16], idx: usiz
     values.get(idx).copied().unwrap_or(MAX_FPS_DEFAULT)
 }
 
-#[inline(always)]
-pub(in crate::screens::options) const fn present_mode_choice_index(
-    mode: PresentModePolicy,
-) -> usize {
-    match mode {
-        PresentModePolicy::Mailbox => 0,
-        PresentModePolicy::Immediate => 1,
-    }
-}
-
-#[inline(always)]
-pub(in crate::screens::options) const fn present_mode_from_choice(idx: usize) -> PresentModePolicy {
-    match idx {
-        1 => PresentModePolicy::Immediate,
-        _ => PresentModePolicy::Mailbox,
-    }
+impl ChoiceEnum for PresentModePolicy {
+    const ALL: &'static [Self] = &[Self::Mailbox, Self::Immediate];
+    const DEFAULT: Self = Self::Mailbox;
 }
 
 pub(in crate::screens::options) fn selected_present_mode_policy(state: &State) -> PresentModePolicy {
@@ -585,7 +572,7 @@ pub(in crate::screens::options) fn selected_present_mode_policy(state: &State) -
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::PresentMode,
-    ).map_or(state.present_mode_policy_at_load, present_mode_from_choice)
+    ).map_or(state.present_mode_policy_at_load, PresentModePolicy::from_choice)
 }
 
 pub(in crate::screens::options) fn selected_high_dpi(state: &State) -> bool {
@@ -673,22 +660,9 @@ pub(in crate::screens::options) fn graphics_show_high_dpi(state: &State) -> bool
     cfg!(target_os = "macos") && selected_video_renderer(state) == BackendType::OpenGL
 }
 
-pub(in crate::screens::options) const fn fullscreen_type_to_choice_index(
-    fullscreen_type: FullscreenType,
-) -> usize {
-    match fullscreen_type {
-        FullscreenType::Exclusive => 0,
-        FullscreenType::Borderless => 1,
-    }
-}
-
-pub(in crate::screens::options) const fn choice_index_to_fullscreen_type(
-    idx: usize,
-) -> FullscreenType {
-    match idx {
-        1 => FullscreenType::Borderless,
-        _ => FullscreenType::Exclusive,
-    }
+impl ChoiceEnum for FullscreenType {
+    const ALL: &'static [Self] = &[Self::Exclusive, Self::Borderless];
+    const DEFAULT: Self = Self::Exclusive;
 }
 
 pub(in crate::screens::options) fn selected_fullscreen_type(state: &State) -> FullscreenType {
@@ -696,7 +670,7 @@ pub(in crate::screens::options) fn selected_fullscreen_type(state: &State) -> Fu
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::FullscreenType,
-    ).map_or(FullscreenType::Exclusive, choice_index_to_fullscreen_type)
+    ).map_or(FullscreenType::Exclusive, FullscreenType::from_choice)
 }
 
 pub(in crate::screens::options) fn selected_display_mode(state: &State) -> DisplayMode {
