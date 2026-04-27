@@ -9,14 +9,30 @@ const PERSPECTIVE: ChoiceBinding<usize> = index_binding!(
     gp::Perspective::Overhead,
     perspective,
     gp::update_perspective_for_side,
-    false
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            PERSPECTIVE_VARIANTS
+                .iter()
+                .position(|&v| v == p.perspective)
+                .unwrap_or(0)
+        }
+    })
 );
 const COMBO_FONT: ChoiceBinding<usize> = index_binding!(
     COMBO_FONT_VARIANTS,
     gp::ComboFont::Wendy,
     combo_font,
     gp::update_combo_font_for_side,
-    true
+    true,
+    Some(CycleInit {
+        from_profile: |p| {
+            COMBO_FONT_VARIANTS
+                .iter()
+                .position(|&v| v == p.combo_font)
+                .unwrap_or(0)
+        }
+    })
 );
 const BACKGROUND_FILTER: NumericBinding = NumericBinding {
     parse: parse_i32_percent,
@@ -25,7 +41,10 @@ const BACKGROUND_FILTER: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_background_filter_for_side,
-    init: None,
+    init: Some(NumericInit {
+        from_profile: |p| p.background_filter.percent() as i32,
+        format: |v| format!("{v}%"),
+    }),
 };
 
 const JUDGMENT_OFFSET_X: NumericBinding = NumericBinding {
@@ -35,7 +54,10 @@ const JUDGMENT_OFFSET_X: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_judgment_offset_x_for_side,
-    init: None,
+    init: Some(NumericInit {
+        from_profile: |p| p.judgment_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+        format: |v| format!("{v}"),
+    }),
 };
 const JUDGMENT_OFFSET_Y: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -44,7 +66,10 @@ const JUDGMENT_OFFSET_Y: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_judgment_offset_y_for_side,
-    init: None,
+    init: Some(NumericInit {
+        from_profile: |p| p.judgment_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+        format: |v| format!("{v}"),
+    }),
 };
 const COMBO_OFFSET_X: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -53,7 +78,10 @@ const COMBO_OFFSET_X: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_combo_offset_x_for_side,
-    init: None,
+    init: Some(NumericInit {
+        from_profile: |p| p.combo_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+        format: |v| format!("{v}"),
+    }),
 };
 const COMBO_OFFSET_Y: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -62,7 +90,10 @@ const COMBO_OFFSET_Y: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_combo_offset_y_for_side,
-    init: None,
+    init: Some(NumericInit {
+        from_profile: |p| p.combo_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+        format: |v| format!("{v}"),
+    }),
 };
 const NOTEFIELD_OFFSET_X: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -71,7 +102,10 @@ const NOTEFIELD_OFFSET_X: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_notefield_offset_x_for_side,
-    init: None,
+    init: Some(NumericInit {
+        from_profile: |p| p.note_field_offset_x.clamp(0, 50),
+        format: |v| format!("{v}"),
+    }),
 };
 const NOTEFIELD_OFFSET_Y: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -80,7 +114,10 @@ const NOTEFIELD_OFFSET_Y: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_notefield_offset_y_for_side,
-    init: None,
+    init: Some(NumericInit {
+        from_profile: |p| p.note_field_offset_y.clamp(-50, 50),
+        format: |v| format!("{v}"),
+    }),
 };
 const VISUAL_DELAY: NumericBinding = NumericBinding {
     parse: parse_i32_ms,
@@ -89,7 +126,10 @@ const VISUAL_DELAY: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_visual_delay_ms_for_side,
-    init: None,
+    init: Some(NumericInit {
+        from_profile: |p| p.visual_delay_ms.clamp(-100, 100),
+        format: |v| format!("{v}ms"),
+    }),
 };
 const GLOBAL_OFFSET_SHIFT: NumericBinding = NumericBinding {
     parse: parse_i32_ms,
@@ -98,7 +138,10 @@ const GLOBAL_OFFSET_SHIFT: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_global_offset_shift_ms_for_side,
-    init: None,
+    init: Some(NumericInit {
+        from_profile: |p| p.global_offset_shift_ms.clamp(-100, 100),
+        format: |v| format!("{v}ms"),
+    }),
 };
 const SPACING: NumericBinding = NumericBinding {
     parse: parse_i32_percent,
@@ -107,7 +150,13 @@ const SPACING: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_spacing_percent_for_side,
-    init: None,
+    init: Some(NumericInit {
+        from_profile: |p| {
+            p.spacing_percent
+                .clamp(SPACING_PERCENT_MIN, SPACING_PERCENT_MAX)
+        },
+        format: |v| format!("{v}%"),
+    }),
 };
 
 /// Shared boilerplate for a noteskin-style cycle row implemented via

@@ -1468,4 +1468,150 @@ pub(super) mod tests {
         assert!(!applied);
         assert_eq!(row.selected_choice_index, [1, 1]);
     }
+
+    /// End-to-end check that the cycle/numeric init dispatchers in
+    /// `apply_profile_defaults` produce the same `selected_choice_index`
+    /// values that the legacy hand-written if-let blocks did, for every
+    /// Main pane row migrated to the binding-driven contract.
+    ///
+    /// Sets a non-default value on each migrated profile field so a stale
+    /// `[0, 0]` result would fail the assertion.
+    #[test]
+    fn apply_profile_defaults_initializes_main_pane_rows_via_contracts() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+
+        // Mutate every profile field whose Main pane row was migrated to the
+        // CycleInit / NumericInit contract.
+        let p = &mut state.player_profiles[P1];
+        p.perspective = profile::Perspective::Distant;
+        p.combo_font = profile::ComboFont::Wendy;
+        p.background_filter = profile::BackgroundFilter::from_i32(42);
+        p.spacing_percent = 95;
+        p.judgment_offset_x = -25;
+        p.judgment_offset_y = 30;
+        p.combo_offset_x = 12;
+        p.combo_offset_y = -8;
+        p.note_field_offset_x = 17;
+        p.note_field_offset_y = -22;
+        p.visual_delay_ms = 35;
+        p.global_offset_shift_ms = -45;
+
+        let profile = state.player_profiles[P1].clone();
+        let noteskin_names = super::discover_noteskin_names();
+        let mut row_map = super::build_rows(
+            &state.song,
+            &state.speed_mod[P1],
+            state.chart_steps_index,
+            [0; 2],
+            state.music_rate,
+            super::OptionsPane::Main,
+            &noteskin_names,
+            Screen::SelectMusic,
+            state.fixed_stepchart.as_ref(),
+        );
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+
+        // Cycle rows: assert the selected variant matches the profile value.
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::Perspective,
+            &super::PERSPECTIVE_VARIANTS,
+            profile.perspective,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::ComboFont,
+            &super::COMBO_FONT_VARIANTS,
+            profile.combo_font,
+        );
+
+        // Numeric rows: assert the choice string at the cursor matches the
+        // formatted profile value (the same lookup the dispatcher does).
+        assert_choice_at_cursor(&row_map, RowId::BackgroundFilter, "42%");
+        assert_choice_at_cursor(&row_map, RowId::Spacing, "95%");
+        assert_choice_at_cursor(&row_map, RowId::JudgmentOffsetX, "-25");
+        assert_choice_at_cursor(&row_map, RowId::JudgmentOffsetY, "30");
+        assert_choice_at_cursor(&row_map, RowId::ComboOffsetX, "12");
+        assert_choice_at_cursor(&row_map, RowId::ComboOffsetY, "-8");
+        assert_choice_at_cursor(&row_map, RowId::NoteFieldOffsetX, "17");
+        assert_choice_at_cursor(&row_map, RowId::NoteFieldOffsetY, "-22");
+        assert_choice_at_cursor(&row_map, RowId::VisualDelay, "35ms");
+        assert_choice_at_cursor(&row_map, RowId::GlobalOffsetShift, "-45ms");
+    }
+
+    /// Numeric values outside the row's choice range (clamped by the binding's
+    /// `from_profile` closure) must still land on a valid in-range choice,
+    /// matching the legacy behaviour. Picks the largest representable value
+    /// for each row's clamp range; the cursor must end up on the choice that
+    /// formats to the clamped value.
+    #[test]
+    fn apply_profile_defaults_clamps_numeric_values_to_range() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+
+        let p = &mut state.player_profiles[P1];
+        p.judgment_offset_x = 10_000; // clamps to HUD_OFFSET_MAX
+        p.note_field_offset_x = -10; // clamps to 0 (range 0..50)
+        p.visual_delay_ms = -10_000; // clamps to -100
+        p.spacing_percent = 100_000; // clamps to SPACING_PERCENT_MAX
+
+        let profile = state.player_profiles[P1].clone();
+        let noteskin_names = super::discover_noteskin_names();
+        let mut row_map = super::build_rows(
+            &state.song,
+            &state.speed_mod[P1],
+            state.chart_steps_index,
+            [0; 2],
+            state.music_rate,
+            super::OptionsPane::Main,
+            &noteskin_names,
+            Screen::SelectMusic,
+            state.fixed_stepchart.as_ref(),
+        );
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+
+        assert_choice_at_cursor(&row_map, RowId::JudgmentOffsetX, &HUD_OFFSET_MAX.to_string());
+        assert_choice_at_cursor(&row_map, RowId::NoteFieldOffsetX, "0");
+        assert_choice_at_cursor(&row_map, RowId::VisualDelay, "-100ms");
+        assert_choice_at_cursor(
+            &row_map,
+            RowId::Spacing,
+            &format!("{}%", super::SPACING_PERCENT_MAX),
+        );
+    }
+
+    fn assert_choice_at_cursor(row_map: &RowMap, id: RowId, expected: &str) {
+        let row = row_map
+            .get(id)
+            .unwrap_or_else(|| panic!("Row {id:?} missing from Main pane row map"));
+        let idx = row.selected_choice_index[P1];
+        let actual = row.choices.get(idx).map(String::as_str).unwrap_or("<oob>");
+        assert_eq!(
+            actual, expected,
+            "Row {id:?}: cursor at {idx} points to {actual:?}, expected {expected:?}"
+        );
+    }
+
+    fn assert_variant_at_cursor<T: Copy + PartialEq + std::fmt::Debug>(
+        row_map: &RowMap,
+        id: RowId,
+        variants: &[T],
+        expected: T,
+    ) {
+        let row = row_map
+            .get(id)
+            .unwrap_or_else(|| panic!("Row {id:?} missing from Main pane row map"));
+        let idx = row.selected_choice_index[P1];
+        let actual = variants
+            .get(idx)
+            .copied()
+            .unwrap_or_else(|| panic!("Row {id:?}: cursor {idx} out of variant range"));
+        assert_eq!(
+            actual, expected,
+            "Row {id:?}: variant at cursor {idx} = {actual:?}, expected {expected:?}"
+        );
+    }
 }

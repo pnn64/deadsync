@@ -294,7 +294,6 @@ pub struct NumericInit {
 /// cursor index from the profile and clamp it to the row's choices length.
 /// Returns `true` when the binding had an `init` contract and was applied;
 /// `false` when the binding has no init.
-#[allow(dead_code)] // wired up by phase-2b migration
 pub fn init_cycle_row_from_binding<T: Copy + 'static>(
     row: &mut Row,
     binding: &ChoiceBinding<T>,
@@ -319,7 +318,6 @@ pub fn init_cycle_row_from_binding<T: Copy + 'static>(
 /// Returns `true` when the binding had an `init` contract and was applied
 /// (even if the format produced no match); `false` when the binding has no
 /// init.
-#[allow(dead_code)] // wired up by phase-2b migration
 pub fn init_numeric_row_from_binding(
     row: &mut Row,
     binding: &NumericBinding,
@@ -372,6 +370,9 @@ pub(super) fn parse_i32_percent(s: &str) -> Option<i32> {
 /// `[Enum; N]` variant table. Cuts per-binding boilerplate down to its data.
 macro_rules! index_binding {
     ($table:expr, $default:expr, $field:ident, $persist:expr, $vis:expr) => {
+        index_binding!($table, $default, $field, $persist, $vis, None)
+    };
+    ($table:expr, $default:expr, $field:ident, $persist:expr, $vis:expr, $init:expr) => {
         $crate::screens::player_options::row::ChoiceBinding::<usize> {
             apply: |p, i| {
                 p.$field = $table.get(i).copied().unwrap_or($default);
@@ -382,7 +383,7 @@ macro_rules! index_binding {
                 }
             },
             persist_for_side: |s, i| $persist(s, $table.get(i).copied().unwrap_or($default)),
-            init: None,
+            init: $init,
         }
     };
 }
