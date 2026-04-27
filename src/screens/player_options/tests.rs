@@ -1344,29 +1344,10 @@ pub(super) mod tests {
         );
     }
 
-    // ---------------------------------------------------------------------
-    // CycleInit / NumericInit contract helpers
-    //
-    // Direct unit tests for `init_cycle_row_from_binding` and
-    // `init_numeric_row_from_binding`. These guard the legacy semantics
-    // mirrored from `apply_profile_defaults`:
-    //
-    //   * Cycle helper clamps the returned index to `choices.len() - 1`
-    //     (matches the `.min(row.choices.len().saturating_sub(1))` pattern
-    //     used by every variant-table init block in `panes/mod.rs`).
-    //   * Numeric helper preserves the row's existing selection when the
-    //     formatted value does not match any entry in `Row::choices`
-    //     (matches the `if let Some(idx) = ... position(...)` pattern used
-    //     by every numeric init block in `panes/mod.rs`).
-    //   * Both helpers return `false` (no-op) when the binding has no
-    //     `init` contract — letting callers fall back to the legacy
-    //     hand-written init blocks during the in-progress migration.
-    // ---------------------------------------------------------------------
-
     fn cycle_test_row(choices: &[&str], initial: [usize; 2]) -> Row {
         Row {
             id: RowId::Perspective,
-            behavior: RowBehavior::Exit, // behavior unused by the helper
+            behavior: RowBehavior::Exit,
             name: lookup_key("PlayerOptions", "Perspective"),
             choices: choices.iter().map(ToString::to_string).collect(),
             selected_choice_index: initial,
@@ -1379,7 +1360,7 @@ pub(super) mod tests {
     fn numeric_test_row(choices: &[&str], initial: [usize; 2]) -> Row {
         Row {
             id: RowId::Spacing,
-            behavior: RowBehavior::Exit, // behavior unused by the helper
+            behavior: RowBehavior::Exit,
             name: lookup_key("PlayerOptions", "Spacing"),
             choices: choices.iter().map(ToString::to_string).collect(),
             selected_choice_index: initial,
@@ -1405,8 +1386,6 @@ pub(super) mod tests {
 
     #[test]
     fn init_cycle_row_from_binding_clamps_to_choices_length() {
-        // Mirrors the `.min(row.choices.len().saturating_sub(1))` clamp used
-        // by every variant-table init block in apply_profile_defaults.
         let binding: ChoiceBinding<usize> = ChoiceBinding::<usize> {
             apply: |_, _| super::Outcome::NONE,
             persist_for_side: |_, _| {},
@@ -1458,9 +1437,6 @@ pub(super) mod tests {
 
     #[test]
     fn init_numeric_row_from_binding_preserves_selection_on_no_match() {
-        // Mirrors the legacy `if let Some(idx) = row.choices.iter().position(...)`
-        // pattern in apply_profile_defaults — when the formatted value is not
-        // present in choices, the row's existing selection is left alone.
         let binding = NumericBinding {
             parse: super::parse_i32_percent,
             apply: |_, _| super::Outcome::NONE,
