@@ -71,7 +71,6 @@ struct QueuedSfx {
 
 // Commands to the audio engine
 enum AudioCommand {
-    PlaySfx(QueuedSfx),
     // Path, cut, looping, rate (1.0 = normal)
     PlayMusic(PathBuf, Cut, bool, f32),
     StopMusic,
@@ -86,6 +85,7 @@ static ENGINE: std::sync::LazyLock<AudioEngine> =
 
 struct AudioEngine {
     command_sender: Sender<AudioCommand>,
+    sfx_sender: Sender<QueuedSfx>,
     sfx_cache: Mutex<HashMap<String, Arc<[i16]>>>,
     device_sample_rate: u32,
     device_channels: usize,
@@ -195,6 +195,11 @@ struct OutputBackendReady {
     fallback_from_native: bool,
     timing_clock: OutputTelemetryClock,
     timing_quality: OutputTimingQuality,
+}
+
+struct AudioThreadReady {
+    backend_ready: OutputBackendReady,
+    sfx_sender: Sender<QueuedSfx>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -997,7 +1002,7 @@ fn play_sfx_on_lane(path: &str, lane: SfxLane) {
         data: sound_data,
         lane,
     };
-    let _ = ENGINE.command_sender.send(AudioCommand::PlaySfx(queued));
+    let _ = ENGINE.sfx_sender.send(queued);
 }
 
 /// Preloads a sound effect into cache without playing it.
@@ -2151,11 +2156,15 @@ fn init_engine_and_thread(cfg: InitConfig) -> AudioEngine {
         audio_manager_thread(command_receiver, ready_sender, launch);
     });
 
-    let ready = match ready_receiver.recv() {
+    let thread_ready = match ready_receiver.recv() {
         Ok(Ok(ready)) => ready,
         Ok(Err(err)) => panic!("failed to initialize audio engine: {err}"),
         Err(_) => panic!("audio manager thread exited before reporting ready"),
     };
+    let AudioThreadReady {
+        backend_ready: ready,
+        sfx_sender,
+    } = thread_ready;
 
     info!(
         "Audio engine initialized ({} Hz, {} ch, backend={} req={} fallback={} clock={} quality={} device='{}').",
@@ -2171,6 +2180,7 @@ fn init_engine_and_thread(cfg: InitConfig) -> AudioEngine {
     publish_output_backend_ready(ready.clone());
     AudioEngine {
         command_sender,
+        sfx_sender,
         sfx_cache: Mutex::new(HashMap::new()),
         device_sample_rate: ready.device_sample_rate,
         device_channels: ready.device_channels,
@@ -2590,10 +2600,10 @@ fn start_output_backend(
     }
 }
 
-/// Manager thread: builds the output backend, mixes SFX, and forwards music via ring.
+/// Manager thread: builds the output backend and manages music decoder lifecycle.
 fn audio_manager_thread(
     command_receiver: Receiver<AudioCommand>,
-    ready_sender: Sender<Result<OutputBackendReady, String>>,
+    ready_sender: Sender<Result<AudioThreadReady, String>>,
     launch: AudioThreadLaunch,
 ) {
     let mut music_stream: Option<MusicStream> = None;
@@ -2606,16 +2616,19 @@ fn audio_manager_thread(
             return;
         }
     };
-    if ready_sender.send(Ok(_ready)).is_err() {
+    if ready_sender
+        .send(Ok(AudioThreadReady {
+            backend_ready: _ready,
+            sfx_sender,
+        }))
+        .is_err()
+    {
         return;
     }
 
-    // Command loop: manage music decoder thread and pass SFX to the callback
+    // Command loop: manage music decoder thread.
     loop {
         match command_receiver.recv() {
-            Ok(AudioCommand::PlaySfx(queued)) => {
-                let _ = sfx_sender.send(queued);
-            }
             Ok(AudioCommand::PlayMusic(path, cut, looping, rate)) => {
                 if let Some(old) = music_stream.take() {
                     old.stop_signal
