@@ -121,9 +121,9 @@ fn save_screenshot_image(
     let now = Local::now();
     let month_idx = now.month0() as usize;
     let month_name = MONTH_NAMES.get(month_idx).copied().unwrap_or("Unknown");
-    let dir = root
-        .join(format!("{:04}", now.year()))
-        .join(format!("{:02}-{}", now.month(), month_name));
+    let dir =
+        root.join(format!("{:04}", now.year()))
+            .join(format!("{:02}-{}", now.month(), month_name));
     std::fs::create_dir_all(&dir)?;
 
     let stamp = now.format("%Y-%m-%d_%H%M%S").to_string();

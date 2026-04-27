@@ -3746,8 +3746,7 @@ pub fn effective_spacing_multiplier_for_player(state: &State, player_idx: usize)
 
 #[inline(always)]
 pub fn spacing_multiplier_for_percent(spacing_percent: i32) -> f32 {
-    1.0 + (spacing_percent
-        .clamp(profile::SPACING_PERCENT_MIN, profile::SPACING_PERCENT_MAX) as f32)
+    1.0 + (spacing_percent.clamp(profile::SPACING_PERCENT_MIN, profile::SPACING_PERCENT_MAX) as f32)
         / 100.0
 }
 

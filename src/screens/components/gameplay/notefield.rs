@@ -19,8 +19,8 @@ use crate::game::gameplay::{
     effective_mini_percent_for_player, effective_perspective_effects_for_player,
     effective_scroll_effects_for_player, effective_scroll_speed_for_player,
     effective_spacing_multiplier_for_player, effective_visibility_effects_for_player,
-    effective_visual_effects_for_player, receptor_glow_visual_for_col,
-    row_hides_completed_note, scroll_receptor_y,
+    effective_visual_effects_for_player, receptor_glow_visual_for_col, row_hides_completed_note,
+    scroll_receptor_y,
 };
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldResult, MineResult, NoteType};
@@ -3576,7 +3576,8 @@ pub fn build_bundles(
                         if local_col >= num_cols {
                             continue;
                         }
-                        let x = playfield_center_x + ns.column_xs[local_col] as f32 * spacing_mult * field_zoom;
+                        let x = playfield_center_x
+                            + ns.column_xs[local_col] as f32 * spacing_mult * field_zoom;
                         let alpha = COLUMN_CUE_BASE_ALPHA * alpha_mul;
                         let color = if col_cue.is_mine {
                             [1.0, 0.0, 0.0, alpha]
@@ -7297,9 +7298,8 @@ mod tests {
         MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_spacing_part, append_turn_parts,
-        bottom_cap_uv_window,
-        calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, hallway_judgment_zoom,
-        hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
+        bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
+        hallway_judgment_zoom, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
         hold_window_for_display_run, hud_layout_ys, hud_y, judgment_actor_zoom,
         lane_hold_window_bounds_by_time_ns, let_go_head_beat,
         maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size,
