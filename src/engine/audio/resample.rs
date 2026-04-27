@@ -233,21 +233,6 @@ fn push_silence_with_map(
     Ok(next_music_sec)
 }
 
-fn process_resampler_partial<'a>(
-    resampler: &mut SincFixedOut<f32>,
-    in_planar: &'a PlanarAccum,
-    frames: usize,
-) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error + Send + Sync>> {
-    debug_assert!(frames <= in_planar.available_frames());
-    let mut input_slices = SmallVec::<[&[f32]; 2]>::with_capacity(in_planar.channels.len());
-    let start = in_planar.start_frame;
-    let end = start + frames;
-    for channel in &in_planar.channels {
-        input_slices.push(&channel[start..end]);
-    }
-    Ok(resampler.process_partial(Some(input_slices.as_slice()), None)?)
-}
-
 pub(super) fn spawn_music_decoder_thread(
     path: PathBuf,
     cut: Cut,
@@ -486,6 +471,9 @@ fn music_decoder_thread_loop(
         let mut resample_out = resampler
             .as_ref()
             .map(|resampler| resampler.output_buffer_allocate(true));
+        let mut resample_in = resampler
+            .as_ref()
+            .map(|resampler| resampler.input_buffer_allocate(true));
         let mut in_planar = resampler
             .as_ref()
             .map(|_| PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
@@ -529,6 +517,7 @@ fn music_decoder_thread_loop(
                     OUT_FRAMES_PER_CALL,
                     in_ch,
                 )?;
+                resample_in = Some(new_resampler.input_buffer_allocate(true));
                 resample_out = Some(new_resampler.output_buffer_allocate(true));
                 resampler = Some(new_resampler);
                 if in_planar.is_none() {
@@ -667,14 +656,29 @@ fn music_decoder_thread_loop(
             let in_planar = in_planar
                 .as_mut()
                 .expect("resampler mode must keep planar input");
+            let resample_in = resample_in
+                .as_mut()
+                .expect("resampler mode must keep input buffer");
+            let resample_out = resample_out
+                .as_mut()
+                .expect("resampler mode must keep output buffer");
             if !in_planar.is_empty() {
                 let remain = in_planar.available_frames();
-                let out = process_resampler_partial(resampler, in_planar, remain)?;
+                let need = resampler.input_frames_next();
+                let copy_frames = remain.min(need);
+                let start = in_planar.start_frame;
+                let end = start + copy_frames;
+                for (dst, channel) in resample_in.iter_mut().zip(&in_planar.channels) {
+                    dst[..need].fill(0.0);
+                    dst[..copy_frames].copy_from_slice(&channel[start..end]);
+                }
+                let produced_frames = resampler
+                    .process_into_buffer(resample_in.as_slice(), resample_out, None)?
+                    .1;
                 in_planar.clear();
-                if !out.is_empty() {
-                    let out_frames = out.first().map_or(0, Vec::len);
+                if produced_frames > 0 {
                     let produced_frames =
-                        write_resampler_output(&out, out_frames, out_ch, &mut out_tmp);
+                        write_resampler_output(resample_out, produced_frames, out_ch, &mut out_tmp);
                     let music_sec_per_frame = if produced_frames == 0 {
                         0.0
                     } else {
@@ -706,11 +710,16 @@ fn music_decoder_thread_loop(
                 }
             }
 
-            let out_tail = resampler.process_partial::<&[f32]>(None, None)?;
-            if !out_tail.is_empty() {
-                let out_frames = out_tail.first().map_or(0, Vec::len);
+            let need = resampler.input_frames_next();
+            for dst in resample_in.iter_mut() {
+                dst[..need].fill(0.0);
+            }
+            let produced_frames = resampler
+                .process_into_buffer(resample_in.as_slice(), resample_out, None)?
+                .1;
+            if produced_frames > 0 {
                 let _produced_frames =
-                    write_resampler_output(&out_tail, out_frames, out_ch, &mut out_tmp);
+                    write_resampler_output(resample_out, produced_frames, out_ch, &mut out_tmp);
                 let music_sec_per_frame = f64::from(current_rate_f32) / f64::from(out_hz.max(1));
                 let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
                 if !out_tmp.is_empty() {
@@ -771,6 +780,7 @@ pub(super) fn load_and_resample_sfx(
         SincFixedOut::<f32>::new(ratio, 1.0, resampler_params(), OUT_FRAMES_PER_CALL, in_ch)?;
 
     let mut in_planar = PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES);
+    let mut resample_in = resampler.input_buffer_allocate(true);
     let mut resample_out = resampler.output_buffer_allocate(true);
     let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
     let mut pkt_buf = Vec::new();
@@ -809,19 +819,33 @@ pub(super) fn load_and_resample_sfx(
 
     if !in_planar.is_empty() {
         let remain = in_planar.available_frames();
-        let out = process_resampler_partial(&mut resampler, &in_planar, remain)?;
-        if !out.is_empty() {
-            let out_frames = out.first().map_or(0, Vec::len);
-            write_resampler_output(&out, out_frames, out_ch, &mut out_tmp);
+        let need = resampler.input_frames_next();
+        let copy_frames = remain.min(need);
+        let start = in_planar.start_frame;
+        let end = start + copy_frames;
+        for (dst, channel) in resample_in.iter_mut().zip(&in_planar.channels) {
+            dst[..need].fill(0.0);
+            dst[..copy_frames].copy_from_slice(&channel[start..end]);
+        }
+        let produced_frames = resampler
+            .process_into_buffer(resample_in.as_slice(), &mut resample_out, None)?
+            .1;
+        if produced_frames > 0 {
+            write_resampler_output(&resample_out, produced_frames, out_ch, &mut out_tmp);
             resampled_data.extend_from_slice(&out_tmp);
         }
         in_planar.clear();
     }
 
-    let out_tail = resampler.process_partial::<&[f32]>(None, None)?;
-    if !out_tail.is_empty() {
-        let out_frames = out_tail.first().map_or(0, Vec::len);
-        write_resampler_output(&out_tail, out_frames, out_ch, &mut out_tmp);
+    let need = resampler.input_frames_next();
+    for dst in &mut resample_in {
+        dst[..need].fill(0.0);
+    }
+    let produced_frames = resampler
+        .process_into_buffer(resample_in.as_slice(), &mut resample_out, None)?
+        .1;
+    if produced_frames > 0 {
+        write_resampler_output(&resample_out, produced_frames, out_ch, &mut out_tmp);
         resampled_data.extend_from_slice(&out_tmp);
     }
     Ok(Arc::new(resampled_data))
