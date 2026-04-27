@@ -65,7 +65,7 @@ enum SfxLane {
 
 #[derive(Clone)]
 struct QueuedSfx {
-    data: Arc<Vec<i16>>,
+    data: Arc<[i16]>,
     lane: SfxLane,
 }
 
@@ -86,7 +86,7 @@ static ENGINE: std::sync::LazyLock<AudioEngine> =
 
 struct AudioEngine {
     command_sender: Sender<AudioCommand>,
-    sfx_cache: Mutex<HashMap<String, Arc<Vec<i16>>>>,
+    sfx_cache: Mutex<HashMap<String, Arc<[i16]>>>,
     device_sample_rate: u32,
     device_channels: usize,
     startup_output_devices: Vec<OutputDeviceInfo>,
@@ -1592,7 +1592,7 @@ struct RenderState {
     device_channels: usize,
     mix_i16: Vec<i16>,
     mix_f32: Vec<f32>,
-    active_sfx: Vec<(Arc<Vec<i16>>, usize, SfxLane)>,
+    active_sfx: Vec<(Arc<[i16]>, usize, SfxLane)>,
     queued_music_map: Arc<internal::SpscRingMusicSeg>,
     played_music_map: Arc<internal::SpscRingMusicSeg>,
     active_music_map: Option<MusicMapSeg>,

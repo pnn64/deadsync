@@ -756,7 +756,7 @@ fn music_decoder_thread_loop(
 
 pub(super) fn load_and_resample_sfx(
     path: &str,
-) -> Result<Arc<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Arc<[i16]>, Box<dyn std::error::Error + Send + Sync>> {
     let opened = decode::open_file(Path::new(path))?;
     let mut reader = opened.reader;
     let in_ch = opened.channels;
@@ -772,7 +772,7 @@ pub(super) fn load_and_resample_sfx(
                 decoded_data.extend_from_slice(&pkt_buf);
             }
         }
-        return Ok(Arc::new(decoded_data));
+        return Ok(Arc::from(decoded_data.into_boxed_slice()));
     }
 
     let ratio = f64::from(out_hz) / f64::from(in_hz);
@@ -848,5 +848,5 @@ pub(super) fn load_and_resample_sfx(
         write_resampler_output(&resample_out, produced_frames, out_ch, &mut out_tmp);
         resampled_data.extend_from_slice(&out_tmp);
     }
-    Ok(Arc::new(resampled_data))
+    Ok(Arc::from(resampled_data.into_boxed_slice()))
 }
