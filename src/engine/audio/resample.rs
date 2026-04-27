@@ -778,8 +778,7 @@ pub(super) fn load_and_resample_sfx(
             if out.is_empty() {
                 break;
             }
-            let produced_frames = write_resampler_output(&out, out_ch, &mut out_tmp);
-            resampled_data.reserve(produced_frames * out_ch);
+            write_resampler_output(&out, out_ch, &mut out_tmp);
             resampled_data.extend_from_slice(&out_tmp);
         }
     }
@@ -788,8 +787,7 @@ pub(super) fn load_and_resample_sfx(
         let remain = in_planar.available_frames();
         let out = process_resampler_partial(&mut resampler, &in_planar, remain)?;
         if !out.is_empty() {
-            let out_frames = write_resampler_output(&out, out_ch, &mut out_tmp);
-            resampled_data.reserve(out_frames * out_ch);
+            write_resampler_output(&out, out_ch, &mut out_tmp);
             resampled_data.extend_from_slice(&out_tmp);
         }
         in_planar.clear();
@@ -797,8 +795,7 @@ pub(super) fn load_and_resample_sfx(
 
     let out_tail = resampler.process_partial::<&[f32]>(None, None)?;
     if !out_tail.is_empty() {
-        let produced_frames = write_resampler_output(&out_tail, out_ch, &mut out_tmp);
-        resampled_data.reserve(produced_frames * out_ch);
+        write_resampler_output(&out_tail, out_ch, &mut out_tmp);
         resampled_data.extend_from_slice(&out_tmp);
     }
     Ok(Arc::new(resampled_data))
