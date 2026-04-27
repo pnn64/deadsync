@@ -16,6 +16,7 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.max_fps = conf
         .get("Options", "MaxFps")
         .and_then(|v| v.parse::<u16>().ok())
+        .map(MaxFpsCap::from_hz)
         .unwrap_or(default.max_fps);
     cfg.present_mode_policy = conf
         .get("Options", "PresentModePolicy")

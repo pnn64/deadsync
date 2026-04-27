@@ -6,8 +6,8 @@ use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, MenuBackgroundStyle, NewPackMode,
-    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, MaxFpsCap, MenuBackgroundStyle,
+    NewPackMode, SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
     SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SimpleIni, SyncGraphMode, dirs,
 };
 use crate::engine::audio;
@@ -249,7 +249,6 @@ pub enum ItemId {
     GfxVSync,
     GfxPresentMode,
     GfxMaxFps,
-    GfxMaxFpsValue,
     GfxShowStats,
     GfxValidationLayers,
     GfxVisualDelay,
@@ -859,7 +858,6 @@ pub enum SubRowId {
     VSync,
     PresentMode,
     MaxFps,
-    MaxFpsValue,
     ShowStats,
     ValidationLayers,
     VisualDelay,
@@ -1341,8 +1339,7 @@ const REFRESH_RATE_ROW_INDEX: usize = 5;
 const FULLSCREEN_TYPE_ROW_INDEX: usize = 6;
 const VSYNC_ROW_INDEX: usize = 7;
 const PRESENT_MODE_ROW_INDEX: usize = 8;
-const MAX_FPS_ENABLED_ROW_INDEX: usize = 9;
-const MAX_FPS_VALUE_ROW_INDEX: usize = 10;
+const MAX_FPS_ROW_INDEX: usize = 9;
 const SELECT_MUSIC_SHOW_BANNERS_ROW_INDEX: usize = 0;
 const SELECT_MUSIC_SHOW_VIDEO_BANNERS_ROW_INDEX: usize = 1;
 const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 2;
@@ -1359,10 +1356,19 @@ const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
 const MACHINE_PREFERRED_MODE_ROW_INDEX: usize = 5;
 const ADVANCED_SONG_PARSING_THREADS_ROW_INDEX: usize = 3;
 
-const MAX_FPS_MIN: u16 = 5;
-const MAX_FPS_MAX: u16 = 1000;
-const MAX_FPS_STEP: u16 = 5;
-const MAX_FPS_DEFAULT: u16 = 60;
+// Curated set of framerate cap values offered in the Max FPS picker.
+// Index 0 represents Uncapped; the rest are common framerate targets.
+const MAX_FPS_CAP_CHOICES: &[MaxFpsCap] = &[
+    MaxFpsCap::Uncapped,
+    MaxFpsCap::Capped(25),
+    MaxFpsCap::Capped(30),
+    MaxFpsCap::Capped(60),
+    MaxFpsCap::Capped(80),
+    MaxFpsCap::Capped(120),
+    MaxFpsCap::Capped(144),
+    MaxFpsCap::Capped(200),
+    MaxFpsCap::Capped(240),
+];
 const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
 
 const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
@@ -1471,16 +1477,7 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::MaxFps,
         label: lookup_key("OptionsGraphics", "MaxFps"),
-        choices: &[
-            localized_choice("Common", "No"),
-            localized_choice("Common", "Yes"),
-        ],
-        inline: true,
-    },
-    SubRow {
-        id: SubRowId::MaxFpsValue,
-        label: lookup_key("OptionsGraphics", "MaxFpsValue"),
-        choices: &[localized_choice("Common", "Off")], // Replaced dynamically
+        choices: &[localized_choice("OptionsGraphics", "MaxFpsUncapped")], // Replaced dynamically
         inline: false,
     },
     SubRow {
@@ -1590,14 +1587,6 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGraphicsHelp",
             "MaxFpsHelp",
-        ))],
-    },
-    Item {
-        id: ItemId::GfxMaxFpsValue,
-        name: lookup_key("OptionsGraphics", "MaxFpsValue"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsGraphicsHelp",
-            "MaxFpsValueHelp",
         ))],
     },
     Item {
@@ -3718,46 +3707,35 @@ fn software_thread_from_choice(values: &[u8], idx: usize) -> u8 {
     values.get(idx).copied().unwrap_or(0)
 }
 
-fn build_max_fps_choices() -> Vec<u16> {
-    let mut out = Vec::with_capacity(
-        1 + usize::from(MAX_FPS_MAX.saturating_sub(MAX_FPS_MIN)) / usize::from(MAX_FPS_STEP),
-    );
-    let mut fps = MAX_FPS_MIN;
-    while fps <= MAX_FPS_MAX {
-        out.push(fps);
-        fps = fps.saturating_add(MAX_FPS_STEP);
+fn build_max_fps_choices() -> Vec<MaxFpsCap> {
+    MAX_FPS_CAP_CHOICES.to_vec()
+}
+
+/// Build the picker labels for the combined Max FPS row.
+fn max_fps_choice_labels(values: &[MaxFpsCap]) -> Vec<String> {
+    values.iter().copied().map(MaxFpsCap::display_text).collect()
+}
+
+fn max_fps_choice_index(values: &[MaxFpsCap], target: MaxFpsCap) -> usize {
+    if let Some(idx) = values.iter().position(|cap| *cap == target) {
+        return idx;
     }
-    out
-}
-
-fn max_fps_choice_labels(values: &[u16]) -> Vec<String> {
-    values.iter().map(ToString::to_string).collect()
-}
-
-#[inline(always)]
-const fn clamped_max_fps(max_fps: u16) -> u16 {
-    if max_fps < MAX_FPS_MIN {
-        MAX_FPS_MIN
-    } else if max_fps > MAX_FPS_MAX {
-        MAX_FPS_MAX
-    } else {
-        max_fps
-    }
-}
-
-fn max_fps_choice_index(values: &[u16], max_fps: u16) -> usize {
-    let target = clamped_max_fps(max_fps);
-    values.iter().position(|&v| v == target).unwrap_or_else(|| {
-        values
+    match target {
+        MaxFpsCap::Uncapped => 0,
+        MaxFpsCap::Capped(hz) => values
             .iter()
             .enumerate()
-            .min_by_key(|(_, v)| v.abs_diff(target))
-            .map_or(0, |(idx, _)| idx)
-    })
+            .filter_map(|(idx, cap)| match cap {
+                MaxFpsCap::Capped(v) => Some((idx, v.abs_diff(hz))),
+                MaxFpsCap::Uncapped => None,
+            })
+            .min_by_key(|(_, dist)| *dist)
+            .map_or(0, |(idx, _)| idx),
+    }
 }
 
-fn max_fps_from_choice(values: &[u16], idx: usize) -> u16 {
-    values.get(idx).copied().unwrap_or(MAX_FPS_DEFAULT)
+fn max_fps_from_choice(values: &[MaxFpsCap], idx: usize) -> MaxFpsCap {
+    values.get(idx).copied().unwrap_or(MaxFpsCap::Uncapped)
 }
 
 #[inline(always)]
@@ -3784,38 +3762,21 @@ fn selected_present_mode_policy(state: &State) -> PresentModePolicy {
         .map_or(state.present_mode_policy_at_load, present_mode_from_choice)
 }
 
+/// Write the combined Max FPS row index for the given cap.
 #[inline(always)]
-fn set_max_fps_enabled_choice(state: &mut State, enabled: bool) {
-    let idx = yes_no_choice_index(enabled);
+fn set_max_fps_choice(state: &mut State, max_fps: MaxFpsCap) {
+    let idx = max_fps_choice_index(&state.max_fps_choices, max_fps);
     if let Some(slot) = state
         .sub_choice_indices_graphics
-        .get_mut(MAX_FPS_ENABLED_ROW_INDEX)
+        .get_mut(MAX_FPS_ROW_INDEX)
     {
         *slot = idx;
     }
     if let Some(slot) = state
         .sub_cursor_indices_graphics
-        .get_mut(MAX_FPS_ENABLED_ROW_INDEX)
+        .get_mut(MAX_FPS_ROW_INDEX)
     {
         *slot = idx;
-    }
-}
-
-#[inline(always)]
-fn set_max_fps_value_choice_index(state: &mut State, idx: usize) {
-    let max_idx = state.max_fps_choices.len().saturating_sub(1);
-    let clamped = idx.min(max_idx);
-    if let Some(slot) = state
-        .sub_choice_indices_graphics
-        .get_mut(MAX_FPS_VALUE_ROW_INDEX)
-    {
-        *slot = clamped;
-    }
-    if let Some(slot) = state
-        .sub_cursor_indices_graphics
-        .get_mut(MAX_FPS_VALUE_ROW_INDEX)
-    {
-        *slot = clamped;
     }
 }
 
@@ -3838,27 +3799,12 @@ fn graphics_show_max_fps(state: &State) -> bool {
     graphics_show_present_mode(state)
 }
 
-#[inline(always)]
-fn max_fps_enabled(state: &State) -> bool {
-    state
-        .sub_choice_indices_graphics
-        .get(MAX_FPS_ENABLED_ROW_INDEX)
-        .copied()
-        .is_some_and(yes_no_from_choice)
-}
-
-#[inline(always)]
-fn graphics_show_max_fps_value(state: &State) -> bool {
-    graphics_show_max_fps(state) && max_fps_enabled(state)
-}
-
 fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow]) -> Vec<usize> {
     match kind {
         SubmenuKind::Graphics => {
             let show_sw = graphics_show_software_threads(state);
             let show_present_mode = graphics_show_present_mode(state);
             let show_max_fps = graphics_show_max_fps(state);
-            let show_max_fps_value = graphics_show_max_fps_value(state);
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
@@ -3867,8 +3813,6 @@ fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow]
                     } else if row.id == SubRowId::PresentMode && !show_present_mode {
                         None
                     } else if row.id == SubRowId::MaxFps && !show_max_fps {
-                        None
-                    } else if row.id == SubRowId::MaxFpsValue && !show_max_fps_value {
                         None
                     } else {
                         Some(idx)
@@ -4044,63 +3988,10 @@ fn selected_display_monitor(state: &State) -> usize {
     }
 }
 
-fn selected_refresh_rate_millihertz(state: &State) -> u32 {
+fn selected_max_fps(state: &State) -> MaxFpsCap {
     let idx = state
         .sub_choice_indices_graphics
-        .get(REFRESH_RATE_ROW_INDEX)
-        .copied()
-        .unwrap_or(0);
-    state.refresh_rate_choices.get(idx).copied().unwrap_or(0)
-}
-
-fn max_fps_seed_value(state: &State, max_fps: u16) -> u16 {
-    if max_fps != 0 {
-        return clamped_max_fps(max_fps);
-    }
-
-    let selected_refresh_mhz = selected_refresh_rate_millihertz(state);
-    let refresh_mhz = if selected_refresh_mhz != 0 {
-        selected_refresh_mhz
-    } else if let Some(spec) = state.monitor_specs.get(selected_display_monitor(state)) {
-        if matches!(selected_display_mode(state), DisplayMode::Fullscreen(_)) {
-            let (width, height) = selected_resolution(state);
-            display::supported_refresh_rates(Some(spec), width, height)
-                .into_iter()
-                .max()
-                .or_else(|| {
-                    spec.modes
-                        .iter()
-                        .map(|mode| mode.refresh_rate_millihertz)
-                        .max()
-                })
-                .unwrap_or(60_000)
-        } else {
-            spec.modes
-                .iter()
-                .map(|mode| mode.refresh_rate_millihertz)
-                .max()
-                .unwrap_or(60_000)
-        }
-    } else {
-        60_000
-    };
-
-    clamped_max_fps(((refresh_mhz + 500) / 1000) as u16)
-}
-
-fn seed_max_fps_value_choice(state: &mut State, max_fps: u16) {
-    let seeded = max_fps_seed_value(state, max_fps);
-    let idx = max_fps_choice_index(&state.max_fps_choices, seeded);
-    set_max_fps_value_choice_index(state, idx);
-}
-
-fn selected_max_fps(state: &State) -> u16 {
-    if !max_fps_enabled(state) {
-        return 0;
-    }
-    let idx = state
-        .sub_choice_indices_graphics
-        .get(MAX_FPS_VALUE_ROW_INDEX)
+        .get(MAX_FPS_ROW_INDEX)
         .copied()
         .unwrap_or(0);
     max_fps_from_choice(&state.max_fps_choices, idx)
@@ -4141,9 +4032,6 @@ pub fn update_monitor_specs(state: &mut State, specs: Vec<MonitorSpec>) {
         state.display_mode_at_load,
         state.display_monitor_at_load,
     );
-    if state.max_fps_at_load == 0 && !max_fps_enabled(state) {
-        seed_max_fps_value_choice(state, 0);
-    }
     clear_render_cache(state);
 }
 
@@ -4357,9 +4245,6 @@ fn rebuild_refresh_rate_choices(state: &mut State) {
         .get_mut(REFRESH_RATE_ROW_INDEX)
     {
         *slot = next_idx;
-    }
-    if state.max_fps_at_load == 0 && !max_fps_enabled(state) {
-        seed_max_fps_value_choice(state, 0);
     }
 }
 
@@ -4729,7 +4614,7 @@ fn row_choices(
                 .map(Cow::Owned)
                 .collect();
         }
-        if row.id == SubRowId::MaxFpsValue {
+        if row.id == SubRowId::MaxFps {
             return state
                 .max_fps_labels
                 .iter()
@@ -5884,13 +5769,13 @@ pub struct State {
     display_monitor_at_load: usize,
     display_width_at_load: u32,
     display_height_at_load: u32,
-    max_fps_at_load: u16,
+    max_fps_at_load: MaxFpsCap,
     vsync_at_load: bool,
     present_mode_policy_at_load: PresentModePolicy,
     display_mode_choices: Vec<String>,
     software_thread_choices: Vec<u8>,
     software_thread_labels: Vec<String>,
-    max_fps_choices: Vec<u16>,
+    max_fps_choices: Vec<MaxFpsCap>,
     max_fps_labels: Vec<String>,
     resolution_choices: Vec<(u32, u32)>,
     refresh_rate_choices: Vec<u32>, // New: stored in millihertz
@@ -6872,13 +6757,9 @@ pub fn sync_translated_titles(state: &mut State, enabled: bool) {
     clear_render_cache(state);
 }
 
-pub fn sync_max_fps(state: &mut State, max_fps: u16) {
-    let had_explicit_cap = state.max_fps_at_load != 0;
+pub fn sync_max_fps(state: &mut State, max_fps: MaxFpsCap) {
     state.max_fps_at_load = max_fps;
-    set_max_fps_enabled_choice(state, max_fps != 0);
-    if max_fps != 0 || !had_explicit_cap {
-        seed_max_fps_value_choice(state, max_fps);
-    }
+    set_max_fps_choice(state, max_fps);
     sync_submenu_cursor_indices(state);
     clear_render_cache(state);
 }
@@ -7525,7 +7406,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 let mut monitor_change: Option<usize> = None;
                 let mut vsync_change: Option<bool> = None;
                 let mut present_mode_policy_change: Option<PresentModePolicy> = None;
-                let mut max_fps_change: Option<u16> = None;
+                let mut max_fps_change: Option<MaxFpsCap> = None;
 
                 if let Some(renderer) = desired_renderer
                     && renderer != state.video_renderer_at_load
@@ -8063,14 +7944,6 @@ fn apply_submenu_choice_delta(
         if row.id == SubRowId::DisplayMode {
             let (cur_w, cur_h) = selected_resolution(state);
             rebuild_resolution_choices(state, cur_w, cur_h);
-        }
-        if row.id == SubRowId::RefreshRate && state.max_fps_at_load == 0 && !max_fps_enabled(state)
-        {
-            seed_max_fps_value_choice(state, 0);
-        }
-        if row.id == SubRowId::MaxFps && yes_no_from_choice(new_index) && state.max_fps_at_load == 0
-        {
-            seed_max_fps_value_choice(state, 0);
         }
         if row.id == SubRowId::ShowStats {
             let mode = new_index.min(3) as u8;
@@ -9690,6 +9563,7 @@ fn sync_i18n_cache(state: &mut State) {
     state.i18n_revision = rev;
     state.display_mode_choices = build_display_mode_choices(&state.monitor_specs);
     state.software_thread_labels = software_thread_choice_labels(&state.software_thread_choices);
+    state.max_fps_labels = max_fps_choice_labels(&state.max_fps_choices);
     let (si_packs, si_filters) = score_import_pack_options();
     state.score_import_pack_choices = si_packs;
     state.score_import_pack_filters = si_filters;

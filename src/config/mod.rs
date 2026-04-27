@@ -88,11 +88,61 @@ pub enum DisplayMode {
     Fullscreen(FullscreenType),
 }
 
+/// Maximum FPS cap configuration: either uncapped or a specific framerate.
+///
+/// Wire format (INI/CLI) uses a single `u16` where `0` denotes uncapped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaxFpsCap {
+    Uncapped,
+    Capped(u16),
+}
+
+impl MaxFpsCap {
+    /// Convert from the INI wire format where `0` means uncapped.
+    #[inline(always)]
+    pub const fn from_hz(hz: u16) -> Self {
+        if hz == 0 {
+            Self::Uncapped
+        } else {
+            Self::Capped(hz)
+        }
+    }
+
+    /// Convert to the INI wire format where `0` means uncapped.
+    #[inline(always)]
+    pub const fn as_hz(self) -> u16 {
+        match self {
+            Self::Uncapped => 0,
+            Self::Capped(hz) => hz,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn is_uncapped(self) -> bool {
+        matches!(self, Self::Uncapped)
+    }
+
+    /// Localized label for menu/UI rendering.
+    pub fn display_text(self) -> String {
+        match self {
+            Self::Uncapped => crate::assets::i18n::tr("OptionsGraphics", "MaxFpsUncapped")
+                .as_ref()
+                .to_owned(),
+            Self::Capped(hz) => hz.to_string(),
+        }
+    }
+}
+
+impl std::fmt::Display for MaxFpsCap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_hz())
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub vsync: bool,
-    /// Stored MaxFPS cap value. `0` means "off".
-    pub max_fps: u16,
+    pub max_fps: MaxFpsCap,
     pub present_mode_policy: PresentModePolicy,
     pub windowed: bool,
     pub fullscreen_type: FullscreenType,
@@ -262,7 +312,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             vsync: false,
-            max_fps: 0,
+            max_fps: MaxFpsCap::Uncapped,
             present_mode_policy: PresentModePolicy::Immediate,
             windowed: true,
             fullscreen_type: FullscreenType::Exclusive,

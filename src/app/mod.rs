@@ -14,7 +14,7 @@ use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::{AssetManager, TextureUploadBudget};
-use crate::config::{self, DisplayMode, dirs};
+use crate::config::{self, DisplayMode, MaxFpsCap, dirs};
 use crate::engine::display;
 use crate::engine::gfx::{
     self as renderer, BackendType, PresentModePolicy, SamplerDesc, SamplerWrap,
@@ -806,11 +806,10 @@ fn apply_tab_acceleration(
 }
 
 #[inline(always)]
-fn frame_interval_for_max_fps(max_fps: u16) -> Option<Duration> {
-    if max_fps == 0 {
-        None
-    } else {
-        Some(Duration::from_secs_f64(1.0 / f64::from(max_fps)))
+fn frame_interval_for_max_fps(max_fps: MaxFpsCap) -> Option<Duration> {
+    match max_fps {
+        MaxFpsCap::Uncapped => None,
+        MaxFpsCap::Capped(hz) => Some(Duration::from_secs_f64(1.0 / f64::from(hz))),
     }
 }
 
@@ -939,7 +938,7 @@ impl ShellState {
     }
 
     #[inline(always)]
-    fn set_max_fps(&mut self, max_fps: u16) {
+    fn set_max_fps(&mut self, max_fps: MaxFpsCap) {
         self.frame_interval = frame_interval_for_max_fps(max_fps);
         self.next_redraw_at = Instant::now();
         self.last_logged_frame_loop_mode = None;

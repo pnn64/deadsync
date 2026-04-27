@@ -124,7 +124,7 @@ pub fn update_vsync(enabled: bool) {
     save_without_keymaps();
 }
 
-pub fn update_max_fps(max_fps: u16) {
+pub fn update_max_fps(max_fps: MaxFpsCap) {
     {
         let mut cfg = lock_config();
         if cfg.max_fps == max_fps {
