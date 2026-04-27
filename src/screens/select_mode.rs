@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
@@ -461,7 +462,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let label = &labels[state.selected_index];
     let measured_w = asset_manager.with_fonts(|all_fonts| {
         asset_manager
-            .with_font("wendy", |f| {
+            .with_font(current_machine_font_key(FontRole::Header), |f| {
                 font::measure_line_width_logical(f, label, all_fonts) as f32
             })
             .unwrap_or(0.0)
@@ -506,7 +507,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ];
 
         actors.push(act!(text:
-            font("wendy"):
+            font(current_machine_font_key(FontRole::Header)):
             settext(label.clone()):
             align(1.0, 0.5):
             xy(x, y):
@@ -520,7 +521,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let score_alpha = fade_after(exit_t, 0.4, 0.2);
     let (sx, sy) = root_pt(124.0, -68.0);
     actors.push(act!(text:
-        font("wendy_monospace_numbers"):
+        font(current_machine_font_key(FontRole::Numbers)):
         settext("77.41"):
         align(0.5, 0.5):
         xy(sx, sy):

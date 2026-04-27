@@ -16,14 +16,12 @@ pub(super) fn emit_dir_edges(
     timestamp: Instant,
     host_nanos: u64,
     want: [bool; 4],
-) -> bool {
-    let mut changed = false;
+) {
     for i in 0..DIRS.len() {
         if dir_state[i] == want[i] {
             continue;
         }
         dir_state[i] = want[i];
-        changed = true;
         emit_pad(PadEvent::Dir {
             id,
             timestamp,
@@ -32,7 +30,6 @@ pub(super) fn emit_dir_edges(
             pressed: want[i],
         });
     }
-    changed
 }
 
 #[cfg(target_os = "freebsd")]
@@ -58,14 +55,14 @@ mod tests {
         let timestamp = Instant::now();
         let mut dir_state = [false; 4];
 
-        assert!(emit_dir_edges(
+        emit_dir_edges(
             &mut |event| events.push(event),
             PadId(7),
             &mut dir_state,
             timestamp,
             42,
             [true, false, true, false],
-        ));
+        );
         assert_eq!(dir_state, [true, false, true, false]);
         assert_eq!(events.len(), 2);
         assert!(matches!(
@@ -90,14 +87,14 @@ mod tests {
         ));
 
         events.clear();
-        assert!(!emit_dir_edges(
+        emit_dir_edges(
             &mut |event| events.push(event),
             PadId(7),
             &mut dir_state,
             timestamp,
             42,
             [true, false, true, false],
-        ));
+        );
         assert!(events.is_empty());
     }
 }

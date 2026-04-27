@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
+use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::engine::present::actors::{Actor, SizeSpec, TextAttribute};
 use crate::engine::present::color::{self, JUDGMENT_RGBA};
 use crate::engine::present::font;
@@ -295,6 +296,8 @@ fn push_attr(
             start: char_start,
             length: char_len,
             color,
+            vertex_colors: None,
+            glow: None,
         });
     }
 }
@@ -388,8 +391,9 @@ fn build_body_attributes(text: &str) -> Vec<TextAttribute> {
 
 #[inline(always)]
 fn build_header_text(text: String, pane_width: f32, y: f32, z: i16) -> Actor {
+    let font_key = current_machine_font_key_for_text(FontRole::Header, &text);
     act!(text:
-        font("wendy"):
+        font(font_key):
         settext(text):
         align(0.5, 0.5):
         xy(0.0, y):
@@ -705,7 +709,7 @@ fn build_overlay_panel(
         4,
     ));
     children.push(act!(text:
-        font("wendy"):
+        font(current_machine_font_key_for_text(FontRole::Header, "EX")):
         settext("EX"):
         align(0.5, 0.5):
         xy(pane_width * 0.5 - 18.0, header_y):

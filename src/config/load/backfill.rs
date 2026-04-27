@@ -31,6 +31,7 @@ const OPTION_KEYS: &[&str] = &[
     "GamepadBackend",
     "GfxDebug",
     "GlobalOffsetSeconds",
+    "HighDPI",
     "Language",
     "LogLevel",
     "LogToFile",
@@ -94,6 +95,7 @@ const THEME_KEYS: &[&str] = &[
     "MachineEnableReplays",
     "MachinePreferredStyle",
     "MachinePreferredPlayMode",
+    "MachineFont",
     "ZmodRatingBoxText",
     "ShowBpmDecimal",
 ];

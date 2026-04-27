@@ -5,7 +5,9 @@ use crate::engine::space::{screen_height, screen_width};
 use std::sync::OnceLock;
 
 pub fn fade_in_black_actor(duration: f32, z: i16) -> Actor {
+    let salt = (u64::from(duration.to_bits()) << 16) ^ u64::from(z as u16);
     act!(quad:
+        tweensalt(salt):
         align(0.0, 0.0): xy(0.0, 0.0):
         zoomto(screen_width(), screen_height()):
         diffuse(0.0, 0.0, 0.0, 1.0):
@@ -16,7 +18,9 @@ pub fn fade_in_black_actor(duration: f32, z: i16) -> Actor {
 }
 
 pub fn fade_out_black_actor(duration: f32, z: i16) -> Actor {
+    let salt = (u64::from(duration.to_bits()) << 16) ^ u64::from(z as u16);
     act!(quad:
+        tweensalt(salt):
         align(0.0, 0.0): xy(0.0, 0.0):
         zoomto(screen_width(), screen_height()):
         diffuse(0.0, 0.0, 0.0, 0.0):

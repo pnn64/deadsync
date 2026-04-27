@@ -13,6 +13,7 @@ use crate::game::song::SongData;
 use crate::game::timing::{ROWS_PER_BEAT, TimingData};
 use log::{debug, info, trace, warn};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -102,6 +103,14 @@ pub struct SongLuaVisualLayerRuntime {
     pub song_foreground_events: Vec<SongLuaOverlayMessageRuntime>,
 }
 
+fn extend_song_lua_sound_paths(out: &mut Vec<PathBuf>, paths: &[PathBuf]) {
+    for path in paths {
+        if !out.contains(path) {
+            out.push(path.clone());
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SongLuaEaseMaskTarget {
     AccelBoost,
@@ -138,11 +147,18 @@ pub(super) enum SongLuaEaseMaskTarget {
     ScrollSpeedC,
     ScrollSpeedM,
     MiniPercent,
+    PlayerX,
+    PlayerY,
+    PlayerZ,
+    PlayerRotationX,
     PlayerRotationZ,
     PlayerRotationY,
     PlayerSkewX,
+    PlayerSkewY,
+    PlayerZoom,
     PlayerZoomX,
     PlayerZoomY,
+    PlayerZoomZ,
     ConfusionYOffsetY,
 }
 
@@ -1449,11 +1465,18 @@ fn append_song_lua_ease_targets(
 fn song_lua_persistent_player_transform_target(target: SongLuaEaseMaskTarget) -> bool {
     matches!(
         target,
-        SongLuaEaseMaskTarget::PlayerRotationZ
+        SongLuaEaseMaskTarget::PlayerX
+            | SongLuaEaseMaskTarget::PlayerY
+            | SongLuaEaseMaskTarget::PlayerZ
+            | SongLuaEaseMaskTarget::PlayerRotationX
+            | SongLuaEaseMaskTarget::PlayerRotationZ
             | SongLuaEaseMaskTarget::PlayerRotationY
             | SongLuaEaseMaskTarget::PlayerSkewX
+            | SongLuaEaseMaskTarget::PlayerSkewY
+            | SongLuaEaseMaskTarget::PlayerZoom
             | SongLuaEaseMaskTarget::PlayerZoomX
             | SongLuaEaseMaskTarget::PlayerZoomY
+            | SongLuaEaseMaskTarget::PlayerZoomZ
             | SongLuaEaseMaskTarget::ConfusionYOffsetY
     )
 }
@@ -1551,6 +1574,50 @@ pub(super) fn build_song_lua_ease_windows_for_player(
                     );
                 }
             }
+            SongLuaEaseTarget::PlayerX => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerX,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
+            SongLuaEaseTarget::PlayerY => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerY,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
+            SongLuaEaseTarget::PlayerZ => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerZ,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
+            SongLuaEaseTarget::PlayerRotationX => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerRotationX,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
             SongLuaEaseTarget::PlayerRotationZ => out.push(SongLuaEaseMaskWindow {
                 start_second,
                 end_second,
@@ -1584,6 +1651,28 @@ pub(super) fn build_song_lua_ease_windows_for_player(
                 opt1: window.opt1,
                 opt2: window.opt2,
             }),
+            SongLuaEaseTarget::PlayerSkewY => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerSkewY,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
+            SongLuaEaseTarget::PlayerZoom => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerZoom,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
             SongLuaEaseTarget::PlayerZoomX => out.push(SongLuaEaseMaskWindow {
                 start_second,
                 end_second,
@@ -1600,6 +1689,17 @@ pub(super) fn build_song_lua_ease_windows_for_player(
                 end_second,
                 sustain_end_second,
                 target: SongLuaEaseMaskTarget::PlayerZoomY,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
+            SongLuaEaseTarget::PlayerZoomZ => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerZoomZ,
                 from: window.from,
                 to: window.to,
                 easing: window.easing.clone(),
@@ -1804,12 +1904,25 @@ fn song_lua_overlay_delta_overlaps(
     overlap!(x);
     overlap!(y);
     overlap!(z);
+    overlap!(halign);
+    overlap!(valign);
+    overlap!(text_align);
+    overlap!(uppercase);
+    overlap!(shadow_len);
+    overlap!(shadow_color);
+    overlap!(glow);
     overlap!(diffuse);
     overlap!(visible);
     overlap!(cropleft);
     overlap!(cropright);
     overlap!(croptop);
     overlap!(cropbottom);
+    overlap!(fadeleft);
+    overlap!(faderight);
+    overlap!(fadetop);
+    overlap!(fadebottom);
+    overlap!(mask_source);
+    overlap!(mask_dest);
     overlap!(zoom);
     overlap!(zoom_x);
     overlap!(zoom_y);
@@ -1820,6 +1933,8 @@ fn song_lua_overlay_delta_overlaps(
     overlap!(rot_x_deg);
     overlap!(rot_y_deg);
     overlap!(rot_z_deg);
+    overlap!(skew_x);
+    overlap!(skew_y);
     overlap!(blend);
     overlap!(vibrate);
     overlap!(effect_magnitude);
@@ -1827,6 +1942,15 @@ fn song_lua_overlay_delta_overlaps(
     overlap!(effect_color1);
     overlap!(effect_color2);
     overlap!(effect_period);
+    overlap!(effect_timing);
+    overlap!(vert_spacing);
+    overlap!(wrap_width_pixels);
+    overlap!(max_width);
+    overlap!(max_height);
+    overlap!(max_w_pre_zoom);
+    overlap!(max_h_pre_zoom);
+    overlap!(texture_wrapping);
+    overlap!(texcoord_offset);
     overlap!(custom_texture_rect);
     overlap!(texcoord_velocity);
     overlap!(size);
@@ -1960,6 +2084,7 @@ fn build_song_lua_compile_context(
     } else {
         1.0
     };
+    context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
     context.style_name = match play_style {
         profile::PlayStyle::Single => "single",
         profile::PlayStyle::Versus => "versus",
@@ -2115,6 +2240,7 @@ pub(super) fn build_song_lua_runtime_windows(
     SongLuaCapturedActor,
     Vec<SongLuaOverlayMessageRuntime>,
     [bool; MAX_PLAYERS],
+    Vec<PathBuf>,
     f32,
     f32,
 ) {
@@ -2162,6 +2288,7 @@ pub(super) fn build_song_lua_runtime_windows(
     let mut song_foreground = SongLuaCapturedActor::default();
     let mut song_foreground_events = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
+    let mut sound_paths = Vec::new();
     let screen_width = screen_width();
     let screen_height = screen_height();
 
@@ -2188,6 +2315,7 @@ pub(super) fn build_song_lua_runtime_windows(
             song_foreground,
             song_foreground_events,
             hidden_players,
+            sound_paths,
             screen_width,
             screen_height,
         );
@@ -2230,11 +2358,13 @@ pub(super) fn build_song_lua_runtime_windows(
                     song_foreground,
                     song_foreground_events,
                     hidden_players,
+                    sound_paths,
                     screen_width,
                     screen_height,
                 );
             }
         };
+        extend_song_lua_sound_paths(&mut sound_paths, &compiled.sound_paths);
         overlays = compiled.overlays.clone();
         let overlay_runtime_eases = build_song_lua_overlay_ease_windows(
             &compiled,
@@ -2295,23 +2425,27 @@ pub(super) fn build_song_lua_runtime_windows(
             || !overlays.is_empty()
             || !overlay_eases.is_empty()
             || !compiled.messages.is_empty()
+            || !compiled.sound_paths.is_empty()
             || compiled.info.unsupported_perframes > 0
             || compiled.info.unsupported_function_eases > 0
             || compiled.info.unsupported_function_actions > 0
+            || !compiled.info.skipped_message_command_captures.is_empty()
             || unsupported_targets > 0
         {
             info!(
-                "Compiled gameplay lua for '{}' (constants={}, eases={}, overlay_eases={}, overlays={}, messages={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}).",
+                "Compiled gameplay lua for '{}' (constants={}, eases={}, overlay_eases={}, overlays={}, messages={}, sound_assets={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}, skipped_message_commands={}).",
                 song.title,
                 total_constant,
                 total_eases,
                 overlay_eases.len(),
                 overlays.len(),
                 compiled.messages.len(),
+                compiled.sound_paths.len(),
                 unsupported_targets,
                 compiled.info.unsupported_function_eases,
                 compiled.info.unsupported_function_actions,
                 compiled.info.unsupported_perframes,
+                compiled.info.skipped_message_command_captures.len(),
             );
             log_song_lua_runtime_debug(
                 song.title.as_str(),
@@ -2342,6 +2476,7 @@ pub(super) fn build_song_lua_runtime_windows(
                 continue;
             }
         };
+        extend_song_lua_sound_paths(&mut sound_paths, &compiled.sound_paths);
         if let Some(layer) = build_song_lua_visual_layer_runtime(
             song,
             change.start_beat,
@@ -2372,6 +2507,7 @@ pub(super) fn build_song_lua_runtime_windows(
                 continue;
             }
         };
+        extend_song_lua_sound_paths(&mut sound_paths, &compiled.sound_paths);
         if let Some(layer) = build_song_lua_visual_layer_runtime(
             song,
             change.start_beat,
@@ -2397,6 +2533,7 @@ pub(super) fn build_song_lua_runtime_windows(
         song_foreground,
         song_foreground_events,
         hidden_players,
+        sound_paths,
         out_screen_width,
         out_screen_height,
     )
@@ -2413,7 +2550,7 @@ fn log_song_lua_runtime_debug(
     unsupported_targets: usize,
 ) {
     debug!(
-        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} constants={} eases={} overlay_eases={} overlays={} messages={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={}",
+        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} constants={} eases={} overlay_eases={} overlays={} messages={} sound_assets={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={} skipped_message_commands={}",
         song_title,
         compiled.entry_path.display(),
         compiled.screen_width,
@@ -2424,10 +2561,12 @@ fn log_song_lua_runtime_debug(
         overlay_eases.len(),
         compiled.overlays.len(),
         messages.len(),
+        compiled.sound_paths.len(),
         unsupported_targets,
         compiled.info.unsupported_function_eases,
         compiled.info.unsupported_function_actions,
         compiled.info.unsupported_perframes,
+        compiled.info.skipped_message_command_captures.len(),
     );
 
     let mut message_counts = BTreeMap::<&str, usize>::new();
@@ -2443,6 +2582,53 @@ fn log_song_lua_runtime_debug(
                 .map(|(message, count)| format!("{message}x{count}"))
                 .collect::<Vec<_>>()
                 .join(", ")
+        );
+    }
+    if !compiled.sound_paths.is_empty() {
+        debug!(
+            "Song lua sound assets for '{}': {}",
+            song_title,
+            compiled
+                .sound_paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(" | ")
+        );
+    }
+    if !compiled.info.skipped_message_command_captures.is_empty() {
+        debug!(
+            "Song lua skipped message command captures for '{}': {}",
+            song_title,
+            compiled.info.skipped_message_command_captures.join(" | ")
+        );
+    }
+    if !compiled
+        .info
+        .unsupported_function_action_captures
+        .is_empty()
+    {
+        debug!(
+            "Song lua unsupported function action captures for '{}': {}",
+            song_title,
+            compiled
+                .info
+                .unsupported_function_action_captures
+                .join(" | ")
+        );
+    }
+    if !compiled.info.unsupported_function_ease_captures.is_empty() {
+        debug!(
+            "Song lua unsupported function ease captures for '{}': {}",
+            song_title,
+            compiled.info.unsupported_function_ease_captures.join(" | ")
+        );
+    }
+    if !compiled.info.unsupported_perframe_captures.is_empty() {
+        debug!(
+            "Song lua unsupported perframe captures for '{}': {}",
+            song_title,
+            compiled.info.unsupported_perframe_captures.join(" | ")
         );
     }
 
@@ -2768,11 +2954,17 @@ pub(super) fn song_lua_apply_eased_target(
     perspective: &mut PerspectiveOverrides,
     scroll_speed: &mut Option<ScrollSpeedSetting>,
     mini_percent: &mut Option<f32>,
+    player_x: &mut Option<f32>,
+    player_y: &mut Option<f32>,
+    player_z: &mut Option<f32>,
+    player_rotation_x: &mut Option<f32>,
     player_rotation_z: &mut Option<f32>,
     player_rotation_y: &mut Option<f32>,
     player_skew_x: &mut Option<f32>,
+    player_skew_y: &mut Option<f32>,
     player_zoom_x: &mut Option<f32>,
     player_zoom_y: &mut Option<f32>,
+    player_zoom_z: &mut Option<f32>,
     player_confusion_y_offset: &mut Option<f32>,
 ) {
     if !value.is_finite() {
@@ -2825,11 +3017,22 @@ pub(super) fn song_lua_apply_eased_target(
             }
         }
         SongLuaEaseMaskTarget::MiniPercent => *mini_percent = Some(value),
+        SongLuaEaseMaskTarget::PlayerX => *player_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerY => *player_y = Some(value),
+        SongLuaEaseMaskTarget::PlayerZ => *player_z = Some(value),
+        SongLuaEaseMaskTarget::PlayerRotationX => *player_rotation_x = Some(value),
         SongLuaEaseMaskTarget::PlayerRotationZ => *player_rotation_z = Some(value),
         SongLuaEaseMaskTarget::PlayerRotationY => *player_rotation_y = Some(value),
         SongLuaEaseMaskTarget::PlayerSkewX => *player_skew_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerSkewY => *player_skew_y = Some(value),
+        SongLuaEaseMaskTarget::PlayerZoom => {
+            *player_zoom_x = Some(value);
+            *player_zoom_y = Some(value);
+            *player_zoom_z = Some(value);
+        }
         SongLuaEaseMaskTarget::PlayerZoomX => *player_zoom_x = Some(value),
         SongLuaEaseMaskTarget::PlayerZoomY => *player_zoom_y = Some(value),
+        SongLuaEaseMaskTarget::PlayerZoomZ => *player_zoom_z = Some(value),
         SongLuaEaseMaskTarget::ConfusionYOffsetY => *player_confusion_y_offset = Some(value),
     }
 }
@@ -3173,11 +3376,17 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         let mut perspective = PerspectiveOverrides::default();
         let mut scroll_speed = None;
         let mut mini_percent = None;
+        let mut player_x = None;
+        let mut player_y = None;
+        let mut player_z = None;
+        let mut player_rotation_x = None;
         let mut player_rotation_z = None;
         let mut player_rotation_y = None;
         let mut player_skew_x = None;
+        let mut player_skew_y = None;
         let mut player_zoom_x = None;
         let mut player_zoom_y = None;
+        let mut player_zoom_z = None;
         let mut player_confusion_y_offset = None;
         for window in &state.attack_mask_windows[player] {
             if now >= window.start_second && now < window.end_second {
@@ -3308,11 +3517,17 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                     &mut perspective,
                     &mut scroll_speed,
                     &mut mini_percent,
+                    &mut player_x,
+                    &mut player_y,
+                    &mut player_z,
+                    &mut player_rotation_x,
                     &mut player_rotation_z,
                     &mut player_rotation_y,
                     &mut player_skew_x,
+                    &mut player_skew_y,
                     &mut player_zoom_x,
                     &mut player_zoom_y,
+                    &mut player_zoom_z,
                     &mut player_confusion_y_offset,
                 );
             }
@@ -3330,16 +3545,25 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
         state.active_attack_perspective[player] = perspective;
         state.active_attack_scroll_speed[player] = scroll_speed;
         state.active_attack_mini_percent[player] = mini_percent;
+        state.song_lua_player_x[player] = player_x.filter(|v| v.is_finite());
+        state.song_lua_player_y[player] = player_y.filter(|v| v.is_finite());
+        state.song_lua_player_z[player] = player_z.filter(|v| v.is_finite()).unwrap_or(0.0);
+        state.song_lua_player_rotation_x[player] =
+            player_rotation_x.filter(|v| v.is_finite()).unwrap_or(0.0);
         state.song_lua_player_rotation_z[player] =
             player_rotation_z.filter(|v| v.is_finite()).unwrap_or(0.0);
         state.song_lua_player_rotation_y[player] =
             player_rotation_y.filter(|v| v.is_finite()).unwrap_or(0.0);
         state.song_lua_player_skew_x[player] =
             player_skew_x.filter(|v| v.is_finite()).unwrap_or(0.0);
+        state.song_lua_player_skew_y[player] =
+            player_skew_y.filter(|v| v.is_finite()).unwrap_or(0.0);
         state.song_lua_player_zoom_x[player] =
             player_zoom_x.filter(|v| v.is_finite()).unwrap_or(1.0);
         state.song_lua_player_zoom_y[player] =
             player_zoom_y.filter(|v| v.is_finite()).unwrap_or(1.0);
+        state.song_lua_player_zoom_z[player] =
+            player_zoom_z.filter(|v| v.is_finite()).unwrap_or(1.0);
         state.song_lua_player_confusion_y_offset[player] = player_confusion_y_offset
             .filter(|v| v.is_finite())
             .unwrap_or(0.0);

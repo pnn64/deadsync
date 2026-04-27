@@ -2,6 +2,7 @@ use crate::assets;
 use crate::engine::gfx::BlendMode;
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::engine::present::{anim, font, runtime};
+use glam::Mat4 as Matrix4;
 use smallvec::SmallVec;
 use std::sync::Arc;
 
@@ -64,30 +65,6 @@ pub fn __dsl_parse_effect_clock(raw: &str) -> anim::EffectClock {
         _ if lower.contains("beat") => anim::EffectClock::Beat,
         _ => anim::EffectClock::Time,
     }
-}
-
-/* ===================== small hashing helpers ===================== */
-/* Fix for clippy::items_after_statements: no nested fn items mid-block */
-
-#[inline(always)]
-fn mix_u64(h: &mut u64, v: u64) {
-    *h ^= v.wrapping_mul(0x9E3779B97F4A7C15);
-    *h = h.rotate_left(27) ^ (*h >> 33);
-}
-
-#[inline(always)]
-fn f32b_u64(f: f32) -> u64 {
-    f.to_bits() as u64
-}
-
-#[inline(always)]
-fn hash_bytes64(bs: &[u8]) -> u64 {
-    let mut x = 0xcbf29ce484222325u64;
-    for &b in bs {
-        x ^= b as u64;
-        x = x.wrapping_mul(0x100000001b3);
-    }
-    x
 }
 
 #[inline(always)]
@@ -213,6 +190,7 @@ pub struct SpriteBuilder {
     shx: f32,
     shy: f32,
     shc: [f32; 4],
+    tween_salt: u64,
     tw: SmallVec<[anim::Step; 4]>,
 }
 
@@ -259,6 +237,7 @@ impl SpriteBuilder {
             shx: 0.0,
             shy: 0.0,
             shc: [0.0, 0.0, 0.0, 0.5],
+            tween_salt: 0,
             tw: SmallVec::new(),
         }
     }
@@ -281,6 +260,11 @@ impl SpriteBuilder {
     #[inline(always)]
     pub fn set_tween(&mut self, steps: SmallVec<[anim::Step; 4]>) {
         self.tw = steps;
+    }
+
+    #[inline(always)]
+    pub fn tweensalt(&mut self, salt: u64) {
+        self.tween_salt = salt;
     }
 
     #[inline(always)]
@@ -657,59 +641,7 @@ impl SpriteBuilder {
             init.crop_b = self.cb;
             init.scale = [self.sx, self.sy];
 
-            #[inline(always)]
-            fn auto_salt(src: &SpriteSource, init: &anim::TweenState, steps: &[anim::Step]) -> u64 {
-                let mut h = 0xcbf29ce484222325u64;
-
-                match src {
-                    SpriteSource::TextureStatic(key) => {
-                        mix_u64(&mut h, 0x54455854);
-                        mix_u64(&mut h, hash_bytes64(key.as_bytes()));
-                    }
-                    SpriteSource::Texture(key) => {
-                        mix_u64(&mut h, 0x54455854);
-                        mix_u64(&mut h, hash_bytes64(key.as_bytes()));
-                    }
-                    SpriteSource::Solid => {
-                        mix_u64(&mut h, 0x534F4C49);
-                    }
-                }
-
-                mix_u64(&mut h, f32b_u64(init.x));
-                mix_u64(&mut h, f32b_u64(init.y));
-                mix_u64(&mut h, f32b_u64(init.w));
-                mix_u64(&mut h, f32b_u64(init.h));
-                mix_u64(&mut h, f32b_u64(init.hx));
-                mix_u64(&mut h, f32b_u64(init.vy));
-                mix_u64(&mut h, f32b_u64(init.rot_x));
-                mix_u64(&mut h, f32b_u64(init.rot_y));
-                mix_u64(&mut h, f32b_u64(init.rot_z));
-                for c in init.tint {
-                    mix_u64(&mut h, f32b_u64(c));
-                }
-                for c in init.glow {
-                    mix_u64(&mut h, f32b_u64(c));
-                }
-                mix_u64(&mut h, u64::from(init.visible));
-                mix_u64(&mut h, u64::from(init.flip_x));
-                mix_u64(&mut h, u64::from(init.flip_y));
-                mix_u64(&mut h, f32b_u64(init.fade_l));
-                mix_u64(&mut h, f32b_u64(init.fade_r));
-                mix_u64(&mut h, f32b_u64(init.fade_t));
-                mix_u64(&mut h, f32b_u64(init.fade_b));
-                mix_u64(&mut h, f32b_u64(init.crop_l));
-                mix_u64(&mut h, f32b_u64(init.crop_r));
-                mix_u64(&mut h, f32b_u64(init.crop_t));
-                mix_u64(&mut h, f32b_u64(init.crop_b));
-                mix_u64(&mut h, f32b_u64(init.scale[0]));
-                mix_u64(&mut h, f32b_u64(init.scale[1]));
-                for s in steps {
-                    mix_u64(&mut h, s.fingerprint64());
-                }
-                h
-            }
-
-            let sid = runtime::site_id(site_base, auto_salt(&self.source, &init, &self.tw));
+            let sid = runtime::site_id(site_base, self.tween_salt);
             let s = runtime::materialize(sid, init, &self.tw);
 
             self.x = s.x;
@@ -840,6 +772,7 @@ pub struct TextBuilder {
     shx: f32,
     shy: f32,
     shc: [f32; 4],
+    tween_salt: u64,
     tw: SmallVec<[anim::Step; 4]>,
 }
 
@@ -874,6 +807,7 @@ impl TextBuilder {
             shx: 0.0,
             shy: 0.0,
             shc: [0.0, 0.0, 0.0, 0.5],
+            tween_salt: 0,
             tw: SmallVec::new(),
         }
     }
@@ -881,6 +815,11 @@ impl TextBuilder {
     #[inline(always)]
     pub fn set_tween(&mut self, steps: SmallVec<[anim::Step; 4]>) {
         self.tw = steps;
+    }
+
+    #[inline(always)]
+    pub fn tweensalt(&mut self, salt: u64) {
+        self.tween_salt = salt;
     }
 
     #[inline(always)]
@@ -1205,16 +1144,7 @@ impl TextBuilder {
             init.glow = self.glow;
             init.scale = [self.sx, self.sy];
 
-            let salt = {
-                let mut h = 0xcbf29ce484222325u64;
-                for &b in self.content.as_str().as_bytes() {
-                    h ^= b as u64;
-                    h = h.wrapping_mul(0x100000001b3);
-                }
-                h
-            };
-
-            let sid = runtime::site_id(site_base, salt);
+            let sid = runtime::site_id(site_base, self.tween_salt);
             let s = runtime::materialize(sid, init, &self.tw);
 
             self.x = s.x;
@@ -1228,6 +1158,7 @@ impl TextBuilder {
         let base = Actor::Text {
             align: [self.hx, self.vy],
             offset: [self.x, self.y],
+            local_transform: Matrix4::IDENTITY,
             color: self.color,
             stroke_color: self.stroke_color,
             glow: self.glow,
@@ -1239,12 +1170,16 @@ impl TextBuilder {
             scale: [self.sx, self.sy],
             fit_width: self.fit_w,
             fit_height: self.fit_h,
+            line_spacing: None,
             wrap_width_pixels: self.wrap_width_pixels,
             max_width: self.max_w,
             max_height: self.max_h,
             max_w_pre_zoom: self.max_w_pre_zoom,
             max_h_pre_zoom: self.max_h_pre_zoom,
+            jitter: false,
+            distortion: 0.0,
             clip: None,
+            mask_dest: false,
             blend: self.blend,
             effect: self.effect,
         };
@@ -1383,6 +1318,10 @@ macro_rules! __dsl_apply {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __dsl_apply_one {
+    (tweensalt ($salt:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.tweensalt(($salt) as u64);
+    }};
+
     // --- segment controls ---
     (linear ($d:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(seg)=$cur.take(){$tw.push(seg.build());}

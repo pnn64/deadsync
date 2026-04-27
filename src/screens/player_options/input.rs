@@ -33,7 +33,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         }
         match direction {
             NavDirection::Up => {
-                move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up);
+                move_selection_vertical(
+                    state,
+                    asset_manager,
+                    active,
+                    player_idx,
+                    NavDirection::Up,
+                    NavWrap::Clamp,
+                );
             }
             NavDirection::Down => {
                 move_selection_vertical(
@@ -42,16 +49,17 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     active,
                     player_idx,
                     NavDirection::Down,
+                    NavWrap::Clamp,
                 );
             }
             NavDirection::Left => {
                 if !move_arcade_horizontal_focus(state, asset_manager, player_idx, -1) {
-                    apply_choice_delta(state, asset_manager, player_idx, -1);
+                    apply_choice_delta(state, asset_manager, player_idx, -1, NavWrap::Clamp);
                 }
             }
             NavDirection::Right => {
                 if !move_arcade_horizontal_focus(state, asset_manager, player_idx, 1) {
-                    apply_choice_delta(state, asset_manager, player_idx, 1);
+                    apply_choice_delta(state, asset_manager, player_idx, 1, NavWrap::Clamp);
                 }
             }
         }
@@ -382,19 +390,25 @@ pub(super) fn handle_nav_event(
     if pressed {
         sync_selected_rows_with_visibility(state, active);
         match dir {
-            NavDirection::Up => {
-                move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up)
-            }
+            NavDirection::Up => move_selection_vertical(
+                state,
+                asset_manager,
+                active,
+                player_idx,
+                NavDirection::Up,
+                NavWrap::Wrap,
+            ),
             NavDirection::Down => move_selection_vertical(
                 state,
                 asset_manager,
                 active,
                 player_idx,
                 NavDirection::Down,
+                NavWrap::Wrap,
             ),
             NavDirection::Left => {
                 if !move_arcade_horizontal_focus(state, asset_manager, player_idx, -1) {
-                    apply_choice_delta(state, asset_manager, player_idx, -1);
+                    apply_choice_delta(state, asset_manager, player_idx, -1, NavWrap::Wrap);
                     if arcade_row_uses_choice_focus(state, player_idx) {
                         state.pane_mut().arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
                     }
@@ -402,7 +416,7 @@ pub(super) fn handle_nav_event(
             }
             NavDirection::Right => {
                 if !move_arcade_horizontal_focus(state, asset_manager, player_idx, 1) {
-                    apply_choice_delta(state, asset_manager, player_idx, 1);
+                    apply_choice_delta(state, asset_manager, player_idx, 1, NavWrap::Wrap);
                     if arcade_row_uses_choice_focus(state, player_idx) {
                         state.pane_mut().arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
                     }
@@ -513,7 +527,7 @@ pub(super) fn move_arcade_horizontal_focus(
         return false;
     }
     if row_supports_inline {
-        apply_choice_delta(state, asset_manager, idx, delta);
+        apply_choice_delta(state, asset_manager, idx, delta, NavWrap::Wrap);
         return true;
     }
     if num_choices <= 1 {
@@ -527,7 +541,13 @@ pub(super) fn move_arcade_horizontal_focus(
         if current_choice == 0 {
             audio::play_sfx("assets/sounds/change_value.ogg");
         } else {
-            change_choice_for_player(state, asset_manager, idx, -(current_choice as isize));
+            change_choice_for_player(
+                state,
+                asset_manager,
+                idx,
+                -(current_choice as isize),
+                NavWrap::Wrap,
+            );
         }
         return true;
     }
@@ -537,13 +557,13 @@ pub(super) fn move_arcade_horizontal_focus(
             audio::play_sfx("assets/sounds/change_value.ogg");
             return true;
         }
-        change_choice_for_player(state, asset_manager, idx, -1);
+        change_choice_for_player(state, asset_manager, idx, -1, NavWrap::Wrap);
         return true;
     }
     if current_choice + 1 >= num_choices {
         return false;
     }
-    change_choice_for_player(state, asset_manager, idx, 1);
+    change_choice_for_player(state, asset_manager, idx, 1, NavWrap::Wrap);
     true
 }
 
@@ -559,7 +579,14 @@ pub(super) fn handle_arcade_prev_event(
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let prev_row = state.pane().selected_row[idx];
     clear_nav_hold(state, player_idx);
-    move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up);
+    move_selection_vertical(
+        state,
+        asset_manager,
+        active,
+        player_idx,
+        NavDirection::Up,
+        NavWrap::Wrap,
+    );
     if state.pane().selected_row[idx] != prev_row {
         audio::play_sfx("assets/sounds/prev_row.ogg");
         state.help_anim_time[idx] = 0.0;
@@ -592,7 +619,14 @@ pub(super) fn handle_arcade_start_event(
         state.pane_mut().arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
         return action;
     }
-    move_selection_vertical(state, asset_manager, active, idx, NavDirection::Down);
+    move_selection_vertical(
+        state,
+        asset_manager,
+        active,
+        idx,
+        NavDirection::Down,
+        NavWrap::Wrap,
+    );
     state.pane_mut().arcade_row_focus[idx] =
         row_allows_arcade_next_row(state, state.pane().selected_row[idx]);
     None
@@ -626,7 +660,7 @@ pub(super) fn handle_start_event(
     if row_supports_inline {
         let changed = commit_inline_focus_selection(state, asset_manager, player_idx, row_index);
         if changed && !row_toggles {
-            change_choice_for_player(state, asset_manager, player_idx, 0);
+            change_choice_for_player(state, asset_manager, player_idx, 0, NavWrap::Wrap);
             return finish_start_without_action(state, active, player_idx, should_focus_exit);
         }
     }

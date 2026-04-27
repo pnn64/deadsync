@@ -18,8 +18,9 @@ fn apply_what_comes_next_cycle(
     player_idx: usize,
     id: RowId,
     delta: isize,
+    wrap: NavWrap,
 ) -> Outcome {
-    match super::choice::cycle_choice_index(state, player_idx, id, delta) {
+    match super::choice::cycle_choice_index(state, player_idx, id, delta, wrap) {
         Some(_) => Outcome::persisted(),
         None => Outcome::NONE,
     }
@@ -108,34 +109,21 @@ fn find_noteskin_choice_index(
     }
 }
 
+/// Initialize per-row cursor positions from `profile` and accumulate any
+/// bitmask state into `masks`. Production calls this once per (pane, player)
+/// pair, passing the same `&mut PlayerOptionMasks` for both pane calls of a
+/// given player so per-pane mask writes accumulate without needing a merge
+/// step. Each `BitmaskBinding` writes a disjoint mask field, and the derived
+/// pass is a pure function of `profile`, so multiple invocations are safe.
 pub(super) fn apply_profile_defaults(
     row_map: &mut RowMap,
     profile: &crate::game::profile::Profile,
     player_idx: usize,
-) -> PlayerOptionMasks {
-    let mut scroll_active_mask = ScrollMask::empty();
-    let mut hide_active_mask = HideMask::empty();
-    let mut insert_active_mask = InsertMask::empty();
-    let mut remove_active_mask = RemoveMask::empty();
-    let mut holds_active_mask = HoldsMask::empty();
-    let mut accel_effects_active_mask = AccelEffectsMask::empty();
-    let mut visual_effects_active_mask = VisualEffectsMask::empty();
-    let mut appearance_effects_active_mask = AppearanceEffectsMask::empty();
-    let mut fa_plus_active_mask = FaPlusMask::empty();
-    let mut early_dw_active_mask = EarlyDwMask::empty();
-    let mut gameplay_extras_active_mask = GameplayExtrasMask::empty();
-    let mut gameplay_extras_more_active_mask = GameplayExtrasMoreMask::empty();
-    let mut results_extras_active_mask = ResultsExtrasMask::empty();
-    let mut life_bar_options_active_mask = LifeBarOptionsMask::empty();
-    let mut error_bar_active_mask = profile.error_bar_active_mask;
-    if error_bar_active_mask.is_empty() {
-        error_bar_active_mask = crate::game::profile::error_bar_mask_from_style(
-            profile.error_bar,
-            profile.error_bar_text,
-        );
-    }
-    let mut error_bar_options_active_mask = ErrorBarOptionsMask::empty();
-    let mut measure_counter_options_active_mask = MeasureCounterOptionsMask::empty();
+    masks: &mut PlayerOptionMasks,
+) {
+    init_opted_in_bitmask_rows(row_map, profile, masks, player_idx);
+    apply_derived_masks(profile, masks);
+
     let match_ns_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
     // Initialize Background Filter row from profile setting (0..=100 %).
@@ -361,20 +349,6 @@ pub(super) fn apply_profile_defaults(
     if let Some(row) = row_map.get_mut(RowId::OffsetIndicator) {
         row.selected_choice_index[player_idx] = if profile.error_ms_display { 1 } else { 0 };
     }
-    if let Some(row) = row_map.get_mut(RowId::ErrorBar) {
-        if !error_bar_active_mask.is_empty() {
-            let bits = error_bar_active_mask.bits();
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (bits & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
     if let Some(row) = row_map.get_mut(RowId::DataVisualizations) {
         row.selected_choice_index[player_idx] = DATA_VISUALIZATIONS_VARIANTS
             .iter()
@@ -396,53 +370,12 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if profile.rainbow_max {
-        life_bar_options_active_mask.insert(LifeBarOptionsMask::RAINBOW_MAX);
-    }
-    if profile.responsive_colors {
-        life_bar_options_active_mask.insert(LifeBarOptionsMask::RESPONSIVE_COLORS);
-    }
-    if profile.show_life_percent {
-        life_bar_options_active_mask.insert(LifeBarOptionsMask::SHOW_LIFE_PERCENT);
-    }
-    if let Some(row) = row_map.get_mut(RowId::LifeBarOptions) {
-        if !life_bar_options_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (life_bar_options_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
     if let Some(row) = row_map.get_mut(RowId::ErrorBarTrim) {
         row.selected_choice_index[player_idx] = ERROR_BAR_TRIM_VARIANTS
             .iter()
             .position(|&v| v == profile.error_bar_trim)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
-    }
-    if profile.error_bar_up {
-        error_bar_options_active_mask.insert(ErrorBarOptionsMask::MOVE_UP);
-    }
-    if profile.error_bar_multi_tick {
-        error_bar_options_active_mask.insert(ErrorBarOptionsMask::MULTI_TICK);
-    }
-    if let Some(row) = row_map.get_mut(RowId::ErrorBarOptions) {
-        if !error_bar_options_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (error_bar_options_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
     }
     // Initialize Measure Counter rows (zmod semantics).
     if let Some(row) = row_map.get_mut(RowId::MeasureCounter) {
@@ -455,34 +388,6 @@ pub(super) fn apply_profile_defaults(
     if let Some(row) = row_map.get_mut(RowId::MeasureCounterLookahead) {
         row.selected_choice_index[player_idx] = (profile.measure_counter_lookahead.min(4) as usize)
             .min(row.choices.len().saturating_sub(1));
-    }
-    if profile.measure_counter_left {
-        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::MOVE_LEFT);
-    }
-    if profile.measure_counter_up {
-        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::MOVE_UP);
-    }
-    if profile.measure_counter_vert {
-        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::VERTICAL_LOOKAHEAD);
-    }
-    if profile.broken_run {
-        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::BROKEN_RUN_TOTAL);
-    }
-    if profile.run_timer {
-        measure_counter_options_active_mask.insert(MeasureCounterOptionsMask::RUN_TIMER);
-    }
-    if let Some(row) = row_map.get_mut(RowId::MeasureCounterOptions) {
-        if !measure_counter_options_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (measure_counter_options_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
     }
     if let Some(row) = row_map.get_mut(RowId::MeasureLines) {
         row.selected_choice_index[player_idx] = MEASURE_LINES_VARIANTS
@@ -509,22 +414,6 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    if profile.track_early_judgments {
-        results_extras_active_mask.insert(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
-    }
-    if let Some(row) = row_map.get_mut(RowId::ResultsExtras) {
-        if !results_extras_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (results_extras_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
     if let Some(row) = row_map.get_mut(RowId::MiniIndicator) {
         row.selected_choice_index[player_idx] = MINI_INDICATOR_VARIANTS
             .iter()
@@ -538,49 +427,6 @@ pub(super) fn apply_profile_defaults(
             .position(|&v| v == profile.mini_indicator_score_type)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
-    }
-    if let Some(row) = row_map.get_mut(RowId::EarlyDecentWayOffOptions) {
-        if profile.hide_early_dw_judgments {
-            early_dw_active_mask.insert(EarlyDwMask::HIDE_JUDGMENTS);
-        }
-        if profile.hide_early_dw_flash {
-            early_dw_active_mask.insert(EarlyDwMask::HIDE_FLASH);
-        }
-
-        if !early_dw_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (early_dw_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
-    // Initialize FA+ Options row from profile (independent toggles).
-    if let Some(row) = row_map.get_mut(RowId::FAPlusOptions) {
-        // Cursor always starts on the first option; toggled state is reflected visually.
-        row.selected_choice_index[player_idx] = 0;
-    }
-    if profile.show_fa_plus_window {
-        fa_plus_active_mask.insert(FaPlusMask::WINDOW);
-    }
-    if profile.show_ex_score {
-        fa_plus_active_mask.insert(FaPlusMask::EX_SCORE);
-    }
-    if profile.show_hard_ex_score {
-        fa_plus_active_mask.insert(FaPlusMask::HARD_EX_SCORE);
-    }
-    if profile.show_fa_plus_pane {
-        fa_plus_active_mask.insert(FaPlusMask::PANE);
-    }
-    if profile.fa_plus_10ms_blue_window {
-        fa_plus_active_mask.insert(FaPlusMask::BLUE_WINDOW_10MS);
-    }
-    if profile.split_15_10ms {
-        fa_plus_active_mask.insert(FaPlusMask::SPLIT_15_10MS);
     }
     if let Some(row) = row_map.get_mut(RowId::CustomBlueFantasticWindow) {
         row.selected_choice_index[player_idx] = if profile.custom_fantastic_window {
@@ -599,34 +445,6 @@ pub(super) fn apply_profile_defaults(
         }
     }
 
-    // Initialize Gameplay Extras row from profile (multi-choice toggle group).
-    if profile.column_flash_on_miss {
-        gameplay_extras_active_mask.insert(GameplayExtrasMask::FLASH_COLUMN_FOR_MISS);
-    }
-    if profile.nps_graph_at_top {
-        gameplay_extras_active_mask.insert(GameplayExtrasMask::DENSITY_GRAPH_AT_TOP);
-    }
-    if profile.column_cues {
-        gameplay_extras_active_mask.insert(GameplayExtrasMask::COLUMN_CUES);
-        gameplay_extras_more_active_mask.insert(GameplayExtrasMoreMask::COLUMN_CUES);
-    }
-    if profile.display_scorebox {
-        gameplay_extras_active_mask.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
-        gameplay_extras_more_active_mask.insert(GameplayExtrasMoreMask::DISPLAY_SCOREBOX);
-    }
-    if let Some(row) = row_map.get_mut(RowId::GameplayExtras) {
-        if !gameplay_extras_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (gameplay_extras_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
     if let Some(row) = row_map.get_mut(RowId::DensityGraphBackground) {
         row.selected_choice_index[player_idx] = if profile.transparent_density_graph_bg {
             1
@@ -635,165 +453,6 @@ pub(super) fn apply_profile_defaults(
         };
     }
 
-    // Initialize Gameplay Extras (More) row from profile (multi-choice toggle group).
-    if let Some(row) = row_map.get_mut(RowId::GameplayExtrasMore) {
-        if !gameplay_extras_more_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (gameplay_extras_more_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
-
-    // Initialize Hide row from profile (multi-choice toggle group).
-    if profile.hide_targets {
-        hide_active_mask.insert(HideMask::TARGETS);
-    }
-    if profile.hide_song_bg {
-        hide_active_mask.insert(HideMask::BACKGROUND);
-    }
-    if profile.hide_combo {
-        hide_active_mask.insert(HideMask::COMBO);
-    }
-    if profile.hide_lifebar {
-        hide_active_mask.insert(HideMask::LIFE);
-    }
-    if profile.hide_score {
-        hide_active_mask.insert(HideMask::SCORE);
-    }
-    if profile.hide_danger {
-        hide_active_mask.insert(HideMask::DANGER);
-    }
-    if profile.hide_combo_explosions {
-        hide_active_mask.insert(HideMask::COMBO_EXPLOSIONS);
-    }
-    if let Some(row) = row_map.get_mut(RowId::Hide) {
-        if !hide_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (hide_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
-
-    // Initialize Scroll row from profile setting (multi-choice toggle group).
-    if let Some(row) = row_map.get_mut(RowId::Scroll) {
-        use crate::game::profile::ScrollOption;
-        // Choice indices are fixed by construction order in build_advanced_rows:
-        // 0=Reverse, 1=Split, 2=Alternate, 3=Cross, 4=Centered
-        const REVERSE: usize = 0;
-        const SPLIT: usize = 1;
-        const ALTERNATE: usize = 2;
-        const CROSS: usize = 3;
-        const CENTERED: usize = 4;
-        let flags: &[(ScrollOption, usize)] = &[
-            (ScrollOption::Reverse, REVERSE),
-            (ScrollOption::Split, SPLIT),
-            (ScrollOption::Alternate, ALTERNATE),
-            (ScrollOption::Cross, CROSS),
-            (ScrollOption::Centered, CENTERED),
-        ];
-        for &(flag, idx) in flags {
-            if profile.scroll_option.contains(flag) && idx < row.choices.len() && idx < 8 {
-                scroll_active_mask.insert(ScrollMask::from_bits_truncate(1u8 << (idx as u8)));
-            }
-        }
-
-        // Cursor starts at the first active choice if any, otherwise at the first option.
-        if !scroll_active_mask.is_empty() {
-            let first_idx = (0..row.choices.len())
-                .find(|i| {
-                    let bit = 1u8 << (*i as u8);
-                    (scroll_active_mask.bits() & bit) != 0
-                })
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
-    if let Some(row) = row_map.get_mut(RowId::Insert) {
-        insert_active_mask = profile.insert_active_mask;
-        let bits = insert_active_mask.bits();
-        if bits != 0 {
-            let first_idx = (0..row.choices.len())
-                .find(|i| (bits & (1u8 << (*i as u8))) != 0)
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
-    if let Some(row) = row_map.get_mut(RowId::Remove) {
-        remove_active_mask = profile.remove_active_mask;
-        let bits = remove_active_mask.bits();
-        if bits != 0 {
-            let first_idx = (0..row.choices.len())
-                .find(|i| (bits & (1u8 << (*i as u8))) != 0)
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
-    if let Some(row) = row_map.get_mut(RowId::Holds) {
-        holds_active_mask = profile.holds_active_mask;
-        let bits = holds_active_mask.bits();
-        if bits != 0 {
-            let first_idx = (0..row.choices.len())
-                .find(|i| (bits & (1u8 << (*i as u8))) != 0)
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
-    if let Some(row) = row_map.get_mut(RowId::Accel) {
-        accel_effects_active_mask = profile.accel_effects_active_mask;
-        let bits = accel_effects_active_mask.bits();
-        if bits != 0 {
-            let first_idx = (0..row.choices.len())
-                .find(|i| (bits & (1u8 << (*i as u8))) != 0)
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
-    if let Some(row) = row_map.get_mut(RowId::Effect) {
-        visual_effects_active_mask = profile.visual_effects_active_mask;
-        let bits = visual_effects_active_mask.bits();
-        if bits != 0 {
-            let first_idx = (0..row.choices.len())
-                .find(|i| (bits & (1u16 << (*i as u16))) != 0)
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
-    if let Some(row) = row_map.get_mut(RowId::Appearance) {
-        appearance_effects_active_mask = profile.appearance_effects_active_mask;
-        let bits = appearance_effects_active_mask.bits();
-        if bits != 0 {
-            let first_idx = (0..row.choices.len())
-                .find(|i| (bits & (1u8 << (*i as u8))) != 0)
-                .unwrap_or(0);
-            row.selected_choice_index[player_idx] = first_idx;
-        } else {
-            row.selected_choice_index[player_idx] = 0;
-        }
-    }
     if let Some(row) = row_map.get_mut(RowId::Attacks) {
         row.selected_choice_index[player_idx] = ATTACK_MODE_VARIANTS
             .iter()
@@ -808,23 +467,63 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
-    PlayerOptionMasks {
-        scroll: scroll_active_mask,
-        hide: hide_active_mask,
-        insert: insert_active_mask,
-        remove: remove_active_mask,
-        holds: holds_active_mask,
-        accel_effects: accel_effects_active_mask,
-        visual_effects: visual_effects_active_mask,
-        appearance_effects: appearance_effects_active_mask,
-        fa_plus: fa_plus_active_mask,
-        early_dw: early_dw_active_mask,
-        gameplay_extras: gameplay_extras_active_mask,
-        gameplay_extras_more: gameplay_extras_more_active_mask,
-        results_extras: results_extras_active_mask,
-        life_bar_options: life_bar_options_active_mask,
-        error_bar: error_bar_active_mask,
-        error_bar_options: error_bar_options_active_mask,
-        measure_counter_options: measure_counter_options_active_mask,
+}
+
+fn init_opted_in_bitmask_rows(
+    row_map: &mut RowMap,
+    profile: &crate::game::profile::Profile,
+    masks: &mut PlayerOptionMasks,
+    player_idx: usize,
+) {
+    let ids: Vec<RowId> = row_map.display_order().to_vec();
+    for id in ids {
+        let Some(row) = row_map.get(id) else {
+            continue;
+        };
+        let RowBehavior::Bitmask(binding) = row.behavior else {
+            continue;
+        };
+        if binding.init.is_none() {
+            continue;
+        }
+        let row = row_map.get_mut(id).expect("row was just observed");
+        super::row::init_bitmask_row_from_binding(row, &binding, profile, masks, player_idx);
+    }
+}
+
+/// Mask fields that are populated as a function of profile state alone, with
+/// no user-facing Row of their own. Each rule writes the entire target field
+/// based on the current profile, so the order of rules is irrelevant. Run
+/// after `init_opted_in_bitmask_rows` so the per-row contracts can no longer
+/// stomp derived state.
+///
+/// To add a derived mask: append a new `DerivedMaskRule` with an `apply`
+/// closure that reads the relevant `profile` fields and assigns the target
+/// `masks.<field>`. Multiple rules writing the same field are allowed but
+/// discouraged; prefer a single closure that builds the full value.
+struct DerivedMaskRule {
+    apply: fn(&crate::game::profile::Profile, &mut PlayerOptionMasks),
+}
+
+const DERIVED_MASKS: &[DerivedMaskRule] = &[DerivedMaskRule {
+    // GameplayExtrasMore has no constructed Row; its bits are derived from
+    // sibling profile fields that the GameplayExtras row also reads. Keeping
+    // both reads in one place prevents the two masks from drifting if a new
+    // shared toggle is added later.
+    apply: |profile, masks| {
+        let mut bits = super::state::GameplayExtrasMoreMask::empty();
+        if profile.column_cues {
+            bits.insert(super::state::GameplayExtrasMoreMask::COLUMN_CUES);
+        }
+        if profile.display_scorebox {
+            bits.insert(super::state::GameplayExtrasMoreMask::DISPLAY_SCOREBOX);
+        }
+        masks.gameplay_extras_more = bits;
+    },
+}];
+
+fn apply_derived_masks(profile: &crate::game::profile::Profile, masks: &mut PlayerOptionMasks) {
+    for rule in DERIVED_MASKS {
+        (rule.apply)(profile, masks);
     }
 }

@@ -79,6 +79,17 @@ pub fn update_gfx_debug(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_high_dpi(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.high_dpi == enabled {
+            return;
+        }
+        cfg.high_dpi = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_simply_love_color(index: i32) {
     {
         let mut cfg = lock_config();

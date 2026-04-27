@@ -68,10 +68,9 @@ impl DebounceStore {
         self.slots.clear();
         self.due_slots.clear();
         self.active_len = 0;
-        let needed = cap.saturating_sub(self.slots.capacity());
-        if needed > 0 {
-            self.slots.reserve(needed);
-        }
+        self.slots.reserve(cap);
+        let due_cap = cap.saturating_mul(2);
+        self.due_slots.reserve(due_cap);
     }
 
     #[inline(always)]
@@ -80,18 +79,6 @@ impl DebounceStore {
         if len != 0 {
             self.slots.resize(len, SlotState::default());
         }
-    }
-
-    #[cfg_attr(not(test), allow(dead_code))]
-    #[inline(always)]
-    pub(super) fn capacity(&self) -> usize {
-        self.slots.capacity()
-    }
-
-    #[cfg_attr(not(test), allow(dead_code))]
-    #[inline(always)]
-    pub(super) fn len(&self) -> usize {
-        self.active_len
     }
 
     #[inline(always)]
@@ -148,7 +135,6 @@ pub(super) struct DebounceWindows {
 }
 
 impl DebounceWindows {
-    #[cfg_attr(not(test), allow(dead_code))]
     #[inline(always)]
     pub(super) const fn uniform(window: Duration) -> Self {
         // ITGmania InputFilter parity: one global debounce window gates both
@@ -396,6 +382,18 @@ mod tests {
         assert_eq!(edge.timestamp_host_nanos, timestamp_host_nanos);
         assert_eq!(edge.stored_at, stored_at);
         assert_eq!(edge.emitted_at, emitted_at);
+    }
+
+    #[test]
+    fn clear_and_reserve_presizes_due_queue_with_stale_slack() {
+        let mut store = DebounceStore::new();
+        store.clear_and_reserve(8);
+        assert!(store.slots.capacity() >= 8);
+        assert!(store.due_slots.capacity() >= 16);
+
+        store.clear_and_reserve(16);
+        assert!(store.slots.capacity() >= 16);
+        assert!(store.due_slots.capacity() >= 32);
     }
 
     #[test]
@@ -659,7 +657,7 @@ mod tests {
         assert_eq!(emitted.len(), 1);
         assert_eq!(emitted[0].action_mask, TEST_MASK);
         assert!(!emitted[0].pressed);
-        assert_eq!(states.lock().unwrap().len(), 2);
+        assert_eq!(states.lock().unwrap().active_len, 2);
 
         emitted.clear();
         assert!(emit_due_debounce_edges_from(
@@ -671,7 +669,7 @@ mod tests {
         assert_eq!(emitted.len(), 1);
         assert_eq!(emitted[0].action_mask, TEST_MASK << 1);
         assert!(!emitted[0].pressed);
-        assert_eq!(states.lock().unwrap().len(), 2);
+        assert_eq!(states.lock().unwrap().active_len, 2);
 
         emitted.clear();
         assert!(!emit_due_debounce_edges_from(
@@ -681,7 +679,7 @@ mod tests {
             |edge| emitted.push(edge)
         ));
         assert!(emitted.is_empty());
-        assert_eq!(states.lock().unwrap().len(), 1);
+        assert_eq!(states.lock().unwrap().active_len, 1);
 
         emitted.clear();
         assert!(!emit_due_debounce_edges_from(
@@ -691,7 +689,7 @@ mod tests {
             |edge| emitted.push(edge)
         ));
         assert!(emitted.is_empty());
-        assert_eq!(states.lock().unwrap().len(), 0);
+        assert_eq!(states.lock().unwrap().active_len, 0);
     }
 
     #[test]

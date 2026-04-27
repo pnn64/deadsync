@@ -17,7 +17,7 @@ use crate::assets::{AssetManager, TextureUploadBudget};
 use crate::config::{self, DisplayMode, MaxFpsCap, dirs};
 use crate::engine::display;
 use crate::engine::gfx::{
-    self as renderer, BackendType, PresentModePolicy, SamplerDesc, SamplerWrap,
+    self as renderer, BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap,
 };
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use crate::engine::host_time;
@@ -1668,6 +1668,9 @@ fn push_song_lua_video_paths(
         if !crate::assets::dynamic::is_dynamic_video_path(texture_path) {
             continue;
         }
+        if !overlay.initial_state.decode_movie {
+            continue;
+        }
         let key = texture_path.to_string_lossy().into_owned();
         if seen.insert(key) {
             paths.push(texture_path.clone());
@@ -1714,28 +1717,61 @@ fn prewarm_gameplay_assets(
     backend: &mut renderer::Backend,
     state: &gameplay::State,
 ) {
-    fn song_lua_overlay_uses_repeat_sampler(
+    fn song_lua_overlay_sampler(
         overlay: &crate::game::parsing::song_lua::SongLuaOverlayActor,
-    ) -> bool {
+    ) -> SamplerDesc {
         let uses_repeat_state = |state: &crate::game::parsing::song_lua::SongLuaOverlayState| {
-            state
-                .custom_texture_rect
-                .is_some_and(|[u0, v0, u1, v1]| u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0)
+            state.texture_wrapping
+                || state
+                    .texcoord_offset
+                    .is_some_and(|[u, v]| u.abs() > f32::EPSILON || v.abs() > f32::EPSILON)
+                || state
+                    .custom_texture_rect
+                    .is_some_and(|[u0, v0, u1, v1]| u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0)
                 || state.texcoord_velocity.is_some()
         };
         let uses_repeat_delta =
             |delta: &crate::game::parsing::song_lua::SongLuaOverlayStateDelta| {
-                delta
-                    .custom_texture_rect
-                    .is_some_and(|[u0, v0, u1, v1]| u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0)
+                delta.texture_wrapping == Some(true)
+                    || delta
+                        .texcoord_offset
+                        .is_some_and(|[u, v]| u.abs() > f32::EPSILON || v.abs() > f32::EPSILON)
+                    || delta.custom_texture_rect.is_some_and(|[u0, v0, u1, v1]| {
+                        u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0
+                    })
                     || delta.texcoord_velocity.is_some()
             };
-        uses_repeat_state(&overlay.initial_state)
+        let uses_nearest_state =
+            |state: &crate::game::parsing::song_lua::SongLuaOverlayState| !state.texture_filtering;
+        let uses_nearest_delta =
+            |delta: &crate::game::parsing::song_lua::SongLuaOverlayStateDelta| {
+                delta.texture_filtering == Some(false)
+            };
+        let uses_repeat = uses_repeat_state(&overlay.initial_state)
             || overlay
                 .message_commands
                 .iter()
                 .flat_map(|command| command.blocks.iter())
-                .any(|block| uses_repeat_delta(&block.delta))
+                .any(|block| uses_repeat_delta(&block.delta));
+        let uses_nearest = uses_nearest_state(&overlay.initial_state)
+            || overlay
+                .message_commands
+                .iter()
+                .flat_map(|command| command.blocks.iter())
+                .any(|block| uses_nearest_delta(&block.delta));
+        SamplerDesc {
+            filter: if uses_nearest {
+                SamplerFilter::Nearest
+            } else {
+                SamplerFilter::Linear
+            },
+            wrap: if uses_repeat {
+                SamplerWrap::Repeat
+            } else {
+                SamplerWrap::Clamp
+            },
+            ..SamplerDesc::default()
+        }
     }
 
     fn gameplay_media_paths(state: &gameplay::State) -> Vec<&PathBuf> {
@@ -1818,30 +1854,67 @@ fn prewarm_gameplay_assets(
                     }
                     crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } => {
                         let key = texture_path.to_string_lossy().into_owned();
-                        if seen.insert(key.clone()) {
-                            if song_lua_overlay_uses_repeat_sampler(overlay) {
-                                match media_cache::load_banner_source_rgba(texture_path) {
-                                    Ok(rgba) => {
-                                        let sampler = SamplerDesc {
-                                            wrap: SamplerWrap::Repeat,
-                                            ..SamplerDesc::default()
-                                        };
-                                        if let Err(e) = assets.update_texture_for_key_with_sampler(
-                                            backend, &key, &rgba, sampler,
-                                        ) {
-                                            warn!(
-                                                "Failed to create repeating GPU texture for image {texture_path:?}: {e}. Skipping."
-                                            );
-                                        }
-                                    }
-                                    Err(e) => {
+                        let first_seen = seen.insert(key.clone());
+                        let sampler = song_lua_overlay_sampler(overlay);
+                        if sampler != SamplerDesc::default() {
+                            match media_cache::load_banner_source_rgba(texture_path) {
+                                Ok(rgba) => {
+                                    if let Err(e) = assets.update_texture_for_key_with_sampler(
+                                        backend, &key, &rgba, sampler,
+                                    ) {
                                         warn!(
-                                            "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
+                                            "Failed to create custom-sampled GPU texture for image {texture_path:?}: {e}. Skipping."
                                         );
                                     }
                                 }
-                            } else {
-                                media_cache::ensure_banner_texture(assets, backend, texture_path);
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
+                                    );
+                                }
+                            }
+                        } else if first_seen {
+                            media_cache::ensure_banner_texture(assets, backend, texture_path);
+                        }
+                    }
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::Sound { sound_path } => {
+                        let key = sound_path.to_string_lossy().into_owned();
+                        if seen.insert(key.clone()) {
+                            crate::engine::audio::preload_sfx(&key);
+                        }
+                    }
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::ActorMultiVertex {
+                        texture_path: Some(texture_path),
+                        ..
+                    } => {
+                        let key = texture_path.to_string_lossy().into_owned();
+                        let first_seen = seen.insert(key.clone());
+                        let sampler = song_lua_overlay_sampler(overlay);
+                        if sampler != SamplerDesc::default() {
+                            match media_cache::load_banner_source_rgba(texture_path) {
+                                Ok(rgba) => {
+                                    if let Err(e) = assets.update_texture_for_key_with_sampler(
+                                        backend, &key, &rgba, sampler,
+                                    ) {
+                                        warn!(
+                                            "Failed to create custom-sampled GPU texture for image {texture_path:?}: {e}. Skipping."
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
+                                    );
+                                }
+                            }
+                        } else if first_seen {
+                            media_cache::ensure_banner_texture(assets, backend, texture_path);
+                        }
+                    }
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::Model { layers } => {
+                        for layer in layers.iter() {
+                            if seen.insert(layer.texture_key.to_string()) {
+                                assets.ensure_texture_for_key(backend, layer.texture_key.as_ref());
                             }
                         }
                     }
@@ -1855,6 +1928,12 @@ fn prewarm_gameplay_assets(
     }
     for layer in &state.song_lua_foreground_visual_layers {
         prewarm_song_lua_overlays(&layer.overlays);
+    }
+    for sound_path in &state.song_lua_sound_paths {
+        let key = sound_path.to_string_lossy().into_owned();
+        if seen.insert(key.clone()) {
+            crate::engine::audio::preload_sfx(&key);
+        }
     }
     crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");
     crate::engine::audio::preload_sfx("assets/sounds/assist_tick.ogg");
@@ -3311,6 +3390,7 @@ impl App {
                 vsync,
                 present_mode_policy,
                 max_fps,
+                high_dpi,
             } => {
                 // Ensure options menu reflects current hardware state before processing changes
                 self.update_options_monitor_specs(event_loop);
@@ -3339,6 +3419,11 @@ impl App {
                     );
                     present_config_changed = true;
                 }
+                if let Some(enabled) = high_dpi {
+                    debug!("Graphics setting changed: high_dpi={enabled}");
+                    config::update_high_dpi(enabled);
+                    options::sync_high_dpi(&mut self.state.screens.options_state, enabled);
+                }
 
                 let mut pending_resolution = None;
                 if let Some((w, h)) = resolution {
@@ -3352,10 +3437,19 @@ impl App {
                     event_loop,
                     monitor.unwrap_or(self.state.shell.display_monitor),
                 );
-                let recreate_renderer = renderer.is_some();
+                let target_renderer = renderer.unwrap_or(self.backend_type);
+                let high_dpi_affects_renderer =
+                    high_dpi.is_some() && target_renderer == BackendType::OpenGL;
+                if high_dpi_affects_renderer && pending_resolution.is_none() {
+                    pending_resolution = Some((
+                        self.state.shell.display_width,
+                        self.state.shell.display_height,
+                    ));
+                }
+                let recreate_renderer = renderer.is_some() || high_dpi_affects_renderer;
 
-                match (renderer, display_mode) {
-                    (Some(new_backend), Some(mode)) => {
+                match (recreate_renderer, display_mode) {
+                    (true, Some(mode)) => {
                         // When both change, avoid touching the old window; update state/config
                         // first so the new renderer is created directly in the target mode.
                         let prev_mode = self.state.shell.display_mode;
@@ -3380,15 +3474,20 @@ impl App {
                             chosen_monitor,
                             monitor_count,
                         );
-                        self.switch_renderer(new_backend, pending_resolution, event_loop)?;
+                        self.switch_renderer(
+                            target_renderer,
+                            pending_resolution,
+                            event_loop,
+                            high_dpi_affects_renderer,
+                        )?;
                     }
-                    (None, Some(mode)) => {
+                    (false, Some(mode)) => {
                         self.apply_display_mode(mode, Some(chosen_monitor), event_loop)?;
                         if let Some((w, h)) = pending_resolution {
                             self.apply_resolution(w, h, event_loop)?;
                         }
                     }
-                    (Some(new_backend), None) => {
+                    (true, None) => {
                         if monitor.is_some() {
                             self.state.shell.display_monitor = chosen_monitor;
                             config::update_display_monitor(chosen_monitor);
@@ -3404,9 +3503,14 @@ impl App {
                                 monitor_count,
                             );
                         }
-                        self.switch_renderer(new_backend, pending_resolution, event_loop)?;
+                        self.switch_renderer(
+                            target_renderer,
+                            pending_resolution,
+                            event_loop,
+                            high_dpi_affects_renderer,
+                        )?;
                     }
-                    (None, None) => {
+                    (false, None) => {
                         if monitor.is_some() {
                             // Move the existing window/fullscreen session to the chosen monitor.
                             self.apply_display_mode(
@@ -7274,7 +7378,7 @@ mod tests {
     use super::*;
     use crate::game::{
         chart::{ChartData, StaminaCounts},
-        parsing::song_lua::{SongLuaOverlayActor, SongLuaOverlayKind},
+        parsing::song_lua::{SongLuaOverlayActor, SongLuaOverlayKind, SongLuaOverlayState},
         song::SongData,
     };
 
@@ -7359,7 +7463,10 @@ mod tests {
                 },
                 name: None,
                 parent_index: None,
-                initial_state: Default::default(),
+                initial_state: SongLuaOverlayState {
+                    decode_movie: true,
+                    ..Default::default()
+                },
                 message_commands: Vec::new(),
             },
             SongLuaOverlayActor {
@@ -7368,7 +7475,10 @@ mod tests {
                 },
                 name: None,
                 parent_index: None,
-                initial_state: Default::default(),
+                initial_state: SongLuaOverlayState {
+                    decode_movie: true,
+                    ..Default::default()
+                },
                 message_commands: Vec::new(),
             },
             SongLuaOverlayActor {
@@ -7390,6 +7500,25 @@ mod tests {
         ];
 
         assert_eq!(song_lua_video_paths(&overlays), vec![movie]);
+    }
+
+    #[test]
+    fn song_lua_video_paths_skip_disabled_video_decode() {
+        let movie = PathBuf::from("badapple.AVI");
+        let overlays = vec![SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: movie.clone(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState {
+                decode_movie: false,
+                ..Default::default()
+            },
+            message_commands: Vec::new(),
+        }];
+
+        assert!(song_lua_video_paths(&overlays).is_empty());
     }
 
     fn test_score_info(

@@ -137,45 +137,23 @@ pub struct PlayerOptionMasks {
     pub measure_counter_options: MeasureCounterOptionsMask,
 }
 
-impl PlayerOptionMasks {
-    /// Field-wise bitwise OR of two mask sets. Used to accumulate the partial
-    /// results of `apply_profile_defaults` across the Main/Advanced/Uncommon
-    /// panes (each pane only populates the masks for rows it contains; the
-    /// rest are left at `Default::default()` and are identity under OR).
-    #[inline]
-    pub fn merge(self, other: Self) -> Self {
-        Self {
-            scroll: self.scroll | other.scroll,
-            hide: self.hide | other.hide,
-            insert: self.insert | other.insert,
-            remove: self.remove | other.remove,
-            holds: self.holds | other.holds,
-            accel_effects: self.accel_effects | other.accel_effects,
-            visual_effects: self.visual_effects | other.visual_effects,
-            appearance_effects: self.appearance_effects | other.appearance_effects,
-            fa_plus: self.fa_plus | other.fa_plus,
-            early_dw: self.early_dw | other.early_dw,
-            gameplay_extras: self.gameplay_extras | other.gameplay_extras,
-            gameplay_extras_more: self.gameplay_extras_more | other.gameplay_extras_more,
-            results_extras: self.results_extras | other.results_extras,
-            life_bar_options: self.life_bar_options | other.life_bar_options,
-            error_bar: self.error_bar | other.error_bar,
-            error_bar_options: self.error_bar_options | other.error_bar_options,
-            measure_counter_options: self.measure_counter_options | other.measure_counter_options,
-        }
-    }
-}
-
 /// Loaded noteskin previews for a single player slot.
 ///
-/// Stored as `[PlayerNoteskinPreviews; PLAYER_SLOTS]` on `State` (one entry
-/// per player slot).
+/// Stored as `[PlayerNoteskinPreviews; PLAYER_SLOTS]` on `NoteskinState` (one
+/// entry per player slot).
 #[derive(Clone, Default)]
 pub(super) struct PlayerNoteskinPreviews {
     pub(super) base: Option<Arc<Noteskin>>,
     pub(super) mine: Option<Arc<Noteskin>>,
     pub(super) receptor: Option<Arc<Noteskin>>,
     pub(super) tap_explosion: Option<Arc<Noteskin>>,
+}
+
+/// Owns the noteskin loading subsystem: the shared cache and the per-player
+/// resolved previews.
+pub(super) struct NoteskinState {
+    pub(super) cache: HashMap<String, Arc<Noteskin>>,
+    pub(super) previews: [PlayerNoteskinPreviews; PLAYER_SLOTS],
 }
 
 /// Per-player navigation key hold/repeat timing.
@@ -264,8 +242,7 @@ pub struct State {
     pub start_input: [PlayerStartInput; PLAYER_SLOTS],
     pub(super) allow_per_player_global_offsets: bool,
     pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
-    pub(super) noteskin_cache: HashMap<String, Arc<Noteskin>>,
-    pub(super) noteskin_previews: [PlayerNoteskinPreviews; PLAYER_SLOTS],
+    pub(super) noteskin: NoteskinState,
     pub(super) preview_time: f32,
     pub(super) preview_beat: f32,
     pub(super) help_anim_time: [f32; PLAYER_SLOTS],

@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
@@ -940,7 +941,7 @@ fn build_wheel(
         };
 
         let mut actor = act!(text:
-            font("wendy_white"):
+            font(current_machine_font_key(FontRole::Header)):
             settext(content):
             align(0.5, 0.5):
             xy(x, 0.0):
@@ -1111,7 +1112,7 @@ fn build_player_frame(side: profile::PlayerSide, state: &State) -> Actor {
     if p.can_enter {
         // PlayerName text (stays visible even after finishing input).
         children.push(act!(text:
-            font("wendy_white"):
+            font(current_machine_font_key(FontRole::Header)):
             settext(p.name.clone()):
             align(0.0, 0.5):
             xy(PLAYERNAME_X, 0.0):

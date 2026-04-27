@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
@@ -224,7 +225,7 @@ pub(crate) fn build_stats_pane(
         digits_to_fmt,
     ));
 
-    asset_manager.with_fonts(|all_fonts| asset_manager.with_font("wendy_screenevaluation", |metrics_font| {
+    asset_manager.with_fonts(|all_fonts| asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |metrics_font| {
         let numbers_frame_zoom: f32 = 0.8;
         let final_numbers_zoom = numbers_frame_zoom * 0.5;
         let digit_width = font::measure_line_width_logical(metrics_font, "0", all_fonts) as f32 * final_numbers_zoom;
@@ -269,7 +270,7 @@ pub(crate) fn build_stats_pane(
                     let index_from_right = digits_to_fmt - 1 - char_idx;
                     let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
 
-                    actors.push(act!(text: font("wendy_screenevaluation"): settext(digit_text(*digit)):
+                    actors.push(act!(text: font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(*digit)):
                         align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
                         diffuse(color[0], color[1], color[2], color[3]): z(101)
                     ));
@@ -324,7 +325,7 @@ pub(crate) fn build_stats_pane(
                     let index_from_right = digits_to_fmt - 1 - char_idx;
                     let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
 
-                    actors.push(act!(text: font("wendy_screenevaluation"): settext(digit_text(*digit)):
+                    actors.push(act!(text: font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(*digit)):
                         align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
                         diffuse(color[0], color[1], color[2], color[3]): z(101)
                     ));
@@ -384,7 +385,7 @@ pub(crate) fn build_stats_pane(
                 let x_pos = (char_idx_from_right as f32).mul_add(-digit_width, achieved_anchor_x);
                 let digit_idx = 2 - char_idx_from_right;
 
-                actors.push(act!(text: font("wendy_screenevaluation"): settext(digit_text(digits[digit_idx])):
+                actors.push(act!(text: font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(digits[digit_idx])):
                     align(1.0, 0.5): xy(x_pos, number_final_y): zoom(final_numbers_zoom):
                     diffuse(color[0], color[1], color[2], color[3]): z(101)
                 ));
@@ -413,7 +414,7 @@ pub(crate) fn build_stats_pane(
                 let color = if is_dim { GRAY_POSSIBLE } else { white_color };
                 let digit_idx = 2 - char_idx_from_right;
 
-                actors.push(act!(text: font("wendy_screenevaluation"): settext(digit_text(digits[digit_idx])):
+                actors.push(act!(text: font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(digits[digit_idx])):
                     align(1.0, 0.5): xy(cursor_x, number_final_y): zoom(final_numbers_zoom):
                     diffuse(color[0], color[1], color[2], color[3]): z(101)
                 ));
@@ -422,7 +423,7 @@ pub(crate) fn build_stats_pane(
 
             // 2. Draw slash
             // Moved 1px to the right for visual parity
-            actors.push(act!(text: font("wendy_screenevaluation"): settext(SLASH_TEXT.clone()):
+            actors.push(act!(text: font(current_machine_font_key(FontRole::ScreenEval)): settext(SLASH_TEXT.clone()):
                 align(1.0, 0.5): xy(cursor_x + 0.5, number_final_y): zoom(final_numbers_zoom):
                 diffuse(GRAY_POSSIBLE[0], GRAY_POSSIBLE[1], GRAY_POSSIBLE[2], GRAY_POSSIBLE[3]): z(101)
             ));

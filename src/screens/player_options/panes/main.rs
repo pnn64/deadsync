@@ -101,10 +101,11 @@ fn apply_noteskin_delta(
     player_idx: usize,
     row_id: RowId,
     delta: isize,
+    wrap: NavWrap,
     apply: fn(&mut State, usize, &str, bool, gp::PlayerSide),
 ) -> Outcome {
     let Some(new_index) =
-        super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+        super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
     else {
         return Outcome::NONE;
     };
@@ -121,12 +122,13 @@ fn apply_noteskin_delta(
 }
 
 const NOTE_SKIN: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         apply_noteskin_delta(
             state,
             player_idx,
             row_id,
             delta,
+            wrap,
             |state, player_idx, choice, should_persist, side| {
                 let name = if choice.is_empty() {
                     gp::NoteSkin::DEFAULT_NAME.to_string()
@@ -138,18 +140,23 @@ const NOTE_SKIN: CustomBinding = CustomBinding {
                 if should_persist {
                     gp::update_noteskin_for_side(side, setting);
                 }
-                sync_noteskin_previews_for_player(state, player_idx);
+                sync_noteskin_previews_for_player(
+                    &mut state.noteskin,
+                    &state.player_profiles[player_idx],
+                    player_idx,
+                );
             },
         )
     },
 };
 const MINE_SKIN: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         apply_noteskin_delta(
             state,
             player_idx,
             row_id,
             delta,
+            wrap,
             |state, player_idx, choice, should_persist, side| {
                 let match_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
                 let setting = if choice == match_label.as_ref() {
@@ -163,18 +170,23 @@ const MINE_SKIN: CustomBinding = CustomBinding {
                 if should_persist {
                     gp::update_mine_noteskin_for_side(side, setting);
                 }
-                sync_noteskin_previews_for_player(state, player_idx);
+                sync_noteskin_previews_for_player(
+                    &mut state.noteskin,
+                    &state.player_profiles[player_idx],
+                    player_idx,
+                );
             },
         )
     },
 };
 const RECEPTOR_SKIN: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         apply_noteskin_delta(
             state,
             player_idx,
             row_id,
             delta,
+            wrap,
             |state, player_idx, choice, should_persist, side| {
                 let match_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
                 let setting = if choice == match_label.as_ref() {
@@ -188,18 +200,23 @@ const RECEPTOR_SKIN: CustomBinding = CustomBinding {
                 if should_persist {
                     gp::update_receptor_noteskin_for_side(side, setting);
                 }
-                sync_noteskin_previews_for_player(state, player_idx);
+                sync_noteskin_previews_for_player(
+                    &mut state.noteskin,
+                    &state.player_profiles[player_idx],
+                    player_idx,
+                );
             },
         )
     },
 };
 const TAP_EXPLOSION_SKIN: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         apply_noteskin_delta(
             state,
             player_idx,
             row_id,
             delta,
+            wrap,
             |state, player_idx, choice, should_persist, side| {
                 let match_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
                 let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
@@ -216,14 +233,18 @@ const TAP_EXPLOSION_SKIN: CustomBinding = CustomBinding {
                 if should_persist {
                     gp::update_tap_explosion_noteskin_for_side(side, setting);
                 }
-                sync_noteskin_previews_for_player(state, player_idx);
+                sync_noteskin_previews_for_player(
+                    &mut state.noteskin,
+                    &state.player_profiles[player_idx],
+                    player_idx,
+                );
             },
         )
     },
 };
 
 const MUSIC_RATE: CustomBinding = CustomBinding {
-    apply: |state, _player_idx, row_id, delta| {
+    apply: |state, _player_idx, row_id, delta, _wrap| {
         let increment = 0.01f32;
         state.music_rate += delta as f32 * increment;
         state.music_rate = (state.music_rate / increment).round() * increment;
@@ -242,7 +263,7 @@ const MUSIC_RATE: CustomBinding = CustomBinding {
 };
 
 const SPEED_MOD: CustomBinding = CustomBinding {
-    apply: |state, player_idx, _row_id, delta| {
+    apply: |state, player_idx, _row_id, delta, _wrap| {
         let speed_mod = {
             let speed_mod = &mut state.speed_mod[player_idx];
             let (upper, increment) = match speed_mod.mod_type {
@@ -260,9 +281,9 @@ const SPEED_MOD: CustomBinding = CustomBinding {
 };
 
 const TYPE_OF_SPEED_MOD: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -308,9 +329,9 @@ const TYPE_OF_SPEED_MOD: CustomBinding = CustomBinding {
 };
 
 const MINI: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -336,9 +357,9 @@ const MINI: CustomBinding = CustomBinding {
 };
 
 const JUDGMENT_FONT: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -359,9 +380,9 @@ const JUDGMENT_FONT: CustomBinding = CustomBinding {
 };
 
 const HOLD_JUDGMENT: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -384,9 +405,9 @@ const HOLD_JUDGMENT: CustomBinding = CustomBinding {
 };
 
 const STEPCHART: CustomBinding = CustomBinding {
-    apply: |state, player_idx, row_id, delta| {
+    apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta)
+            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };

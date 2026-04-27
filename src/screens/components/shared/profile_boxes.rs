@@ -1092,8 +1092,10 @@ fn push_join_prompt(
         .sin()
         .mul_add(0.5, 0.5);
     let shade = 0.5f32.mul_add(f, 0.5);
+    let salt = u64::from(cx.to_bits());
 
     out.push(act!(quad:
+        tweensalt(salt):
         align(0.5, 0.5):
         xy(cx, cy):
         zoomto(FRAME_W_JOIN + FRAME_BORDER, frame_h + FRAME_BORDER):
@@ -1103,6 +1105,7 @@ fn push_join_prompt(
         z(100)
     ));
     out.push(act!(quad:
+        tweensalt(salt):
         align(0.5, 0.5):
         xy(cx, cy):
         zoomto(FRAME_W_JOIN, frame_h):
@@ -1147,9 +1150,11 @@ fn push_scroller_frame(
     // - Scroller highlight + info pane use semi-transparent black overlays (alpha 0.5)
     let col_frame = color::simply_love_rgba(color_index);
     let col_frame_top = color::lighten_rgba(col_frame);
+    let salt = u64::from(frame_cx.to_bits());
 
     // Frame border.
     out.push(act!(quad:
+        tweensalt(salt):
         align(0.5, 0.5):
         xy(frame_cx, frame_cy):
         zoomto(FRAME_W_SCROLLER + FRAME_BORDER, frame_h + FRAME_BORDER):
@@ -1160,6 +1165,7 @@ fn push_scroller_frame(
     ));
     // Base fill.
     out.push(act!(quad:
+        tweensalt(salt):
         align(0.5, 0.5):
         xy(frame_cx, frame_cy):
         zoomto(FRAME_W_SCROLLER, frame_h):
@@ -1170,6 +1176,7 @@ fn push_scroller_frame(
     ));
     // Top-edge lighten gradient (approx for diffusetopedge()).
     out.push(act!(quad:
+        tweensalt(salt):
         align(0.5, 0.5):
         xy(frame_cx, frame_cy):
         zoomto(FRAME_W_SCROLLER, frame_h):
@@ -1186,6 +1193,7 @@ fn push_scroller_frame(
     let info_max_w = INFO_PAD.mul_add(-2.5, INFO_W);
 
     out.push(act!(quad:
+        tweensalt(salt):
         align(0.0, 0.0):
         xy(info_x0, frame_y0):
         zoomto(INFO_W, frame_h):
@@ -1198,6 +1206,7 @@ fn push_scroller_frame(
     // Scroller highlight bar.
     let scroller_cx = frame_cx + SCROLLER_CX_OFF;
     out.push(act!(quad:
+        tweensalt(salt):
         align(0.5, 0.5):
         xy(scroller_cx, frame_cy):
         zoomto(SCROLLER_W, ROW_H):
@@ -1527,8 +1536,8 @@ fn build_box_actors(
 
     let frame_y0 = frame_h.mul_add(-0.5, cy);
 
-    // IMPORTANT: Apply shake as a post-transform, otherwise the changing X affects
-    // act! tween site_ids (salt includes init.x) and restarts tweens every frame.
+    // IMPORTANT: Apply shake as a post-transform so the frame's explicit tween salt
+    // stays stable and the crop-in tweens do not restart every frame.
     let p1_cx = cx - FRAME_CX_OFF;
     let p2_cx = cx + FRAME_CX_OFF;
     let p1_shake_dx = shake_x(state.p1_shake_t);

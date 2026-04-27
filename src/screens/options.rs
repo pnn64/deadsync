@@ -1,11 +1,12 @@
 use crate::act;
 use crate::assets::{self, AssetManager};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::display::{self, MonitorSpec};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
 use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app via the dispatcher
 use crate::config::{
-    self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
+    self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel, MachineFont,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, MaxFpsCap, MenuBackgroundStyle,
     NewPackMode, SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
     SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SimpleIni, SyncGraphMode, dirs,
@@ -251,6 +252,7 @@ pub enum ItemId {
     GfxMaxFps,
     GfxShowStats,
     GfxValidationLayers,
+    GfxHighDpi,
     GfxVisualDelay,
 
     // Input Options submenu (launcher)
@@ -273,6 +275,7 @@ pub enum ItemId {
     MchPreferredStyle,
     MchSelectPlayMode,
     MchPreferredMode,
+    MchFont,
     MchEvalSummary,
     MchNameEntry,
     MchGameoverScreen,
@@ -464,6 +467,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsGraphics", "PresentMode")),
             HelpEntry::Bullet(lookup_key("OptionsGraphics", "MaxFps")),
             HelpEntry::Bullet(lookup_key("OptionsGraphics", "ShowStats")),
+            HelpEntry::Bullet(lookup_key("OptionsGraphics", "HighDPI")),
             HelpEntry::Bullet(lookup_key("OptionsGraphics", "VisualDelay")),
         ],
     },
@@ -623,6 +627,12 @@ pub const ITEMS: &[Item] = &[
 pub enum NavDirection {
     Up,
     Down,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NavWrap {
+    Wrap,
+    Clamp,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -860,6 +870,7 @@ pub enum SubRowId {
     MaxFps,
     ShowStats,
     ValidationLayers,
+    HighDpi,
     VisualDelay,
     // Sound Options
     SoundDevice,
@@ -894,6 +905,7 @@ pub enum SubRowId {
     PreferredStyle,
     SelectPlayMode,
     PreferredMode,
+    Font,
     EvalSummary,
     NameEntry,
     GameoverScreen,
@@ -1501,6 +1513,15 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::HighDpi,
+        label: lookup_key("OptionsGraphics", "HighDPI"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::VisualDelay,
         label: lookup_key("OptionsGraphics", "VisualDelay"),
         choices: &[literal_choice("0 ms")],
@@ -1603,6 +1624,14 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGraphicsHelp",
             "ValidationLayersHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GfxHighDpi,
+        name: lookup_key("OptionsGraphics", "HighDPI"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGraphicsHelp",
+            "HighDPIHelp",
         ))],
     },
     Item {
@@ -1851,6 +1880,15 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::Font,
+        label: lookup_key("OptionsMachine", "MachineFont"),
+        choices: &[
+            localized_choice("OptionsMachine", "MachineFontCommon"),
+            localized_choice("OptionsMachine", "MachineFontMega"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::EvalSummary,
         label: lookup_key("OptionsMachine", "EvalSummary"),
         choices: &[
@@ -1898,10 +1936,7 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::MenuBackground,
         label: lookup_key("OptionsMachine", "MenuBackground"),
-        choices: &[
-            localized_choice("OptionsMachine", "MenuBackgroundHearts"),
-            localized_choice("OptionsMachine", "MenuBackgroundTechnique"),
-        ],
+        choices: &[literal_choice("❤"), literal_choice("🌀")],
         inline: true,
     },
     SubRow {
@@ -1989,6 +2024,14 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "PreferredModeHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::MchFont,
+        name: lookup_key("OptionsMachine", "MachineFont"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "MachineFontHelp",
         ))],
     },
     Item {
@@ -3762,6 +3805,14 @@ fn selected_present_mode_policy(state: &State) -> PresentModePolicy {
         .map_or(state.present_mode_policy_at_load, present_mode_from_choice)
 }
 
+fn selected_high_dpi(state: &State) -> bool {
+    GRAPHICS_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::HighDpi)
+        .and_then(|idx| state.sub_choice_indices_graphics.get(idx).copied())
+        .is_some_and(yes_no_from_choice)
+}
+
 /// Write the combined Max FPS row index for the given cap.
 #[inline(always)]
 fn set_max_fps_choice(state: &mut State, max_fps: MaxFpsCap) {
@@ -3799,12 +3850,18 @@ fn graphics_show_max_fps(state: &State) -> bool {
     graphics_show_present_mode(state)
 }
 
+#[inline(always)]
+fn graphics_show_high_dpi(state: &State) -> bool {
+    cfg!(target_os = "macos") && selected_video_renderer(state) == BackendType::OpenGL
+}
+
 fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow]) -> Vec<usize> {
     match kind {
         SubmenuKind::Graphics => {
             let show_sw = graphics_show_software_threads(state);
             let show_present_mode = graphics_show_present_mode(state);
             let show_max_fps = graphics_show_max_fps(state);
+            let show_high_dpi = graphics_show_high_dpi(state);
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
@@ -3813,6 +3870,8 @@ fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow]
                     } else if row.id == SubRowId::PresentMode && !show_present_mode {
                         None
                     } else if row.id == SubRowId::MaxFps && !show_max_fps {
+                        None
+                    } else if row.id == SubRowId::HighDpi && !show_high_dpi {
                         None
                     } else {
                         Some(idx)
@@ -4934,24 +4993,38 @@ fn move_submenu_selection_vertical(
     asset_manager: &AssetManager,
     kind: SubmenuKind,
     dir: NavDirection,
+    wrap: NavWrap,
 ) {
     let total = submenu_total_rows(state, kind);
     if total == 0 {
         return;
     }
     let current_row = state.sub_selected.min(total.saturating_sub(1));
+    let last = total - 1;
     if !state.sub_inline_x.is_finite() {
         sync_submenu_inline_x_from_row(state, asset_manager, kind, current_row);
     }
     state.sub_selected = match dir {
         NavDirection::Up => {
             if current_row == 0 {
-                total - 1
+                match wrap {
+                    NavWrap::Wrap => last,
+                    NavWrap::Clamp => 0,
+                }
             } else {
                 current_row - 1
             }
         }
-        NavDirection::Down => (current_row + 1) % total,
+        NavDirection::Down => {
+            if current_row >= last {
+                match wrap {
+                    NavWrap::Wrap => 0,
+                    NavWrap::Clamp => last,
+                }
+            } else {
+                current_row + 1
+            }
+        }
     };
     apply_submenu_inline_x_to_row(state, asset_manager, kind, state.sub_selected);
 }
@@ -5644,6 +5717,20 @@ const fn machine_preferred_mode_from_choice(idx: usize) -> MachinePreferredPlayM
     }
 }
 
+const fn machine_font_choice_index(font: MachineFont) -> usize {
+    match font {
+        MachineFont::Common => 0,
+        MachineFont::Mega => 1,
+    }
+}
+
+const fn machine_font_from_choice(idx: usize) -> MachineFont {
+    match idx {
+        1 => MachineFont::Mega,
+        _ => MachineFont::Common,
+    }
+}
+
 const fn menu_background_style_choice_index(style: MenuBackgroundStyle) -> usize {
     match style {
         MenuBackgroundStyle::Hearts => 0,
@@ -5772,6 +5859,7 @@ pub struct State {
     max_fps_at_load: MaxFpsCap,
     vsync_at_load: bool,
     present_mode_policy_at_load: PresentModePolicy,
+    high_dpi_at_load: bool,
     display_mode_choices: Vec<String>,
     software_thread_choices: Vec<u8>,
     software_thread_labels: Vec<String>,
@@ -5935,6 +6023,7 @@ pub fn init() -> State {
         max_fps_at_load: cfg.max_fps,
         vsync_at_load: cfg.vsync,
         present_mode_policy_at_load: cfg.present_mode_policy,
+        high_dpi_at_load: cfg.high_dpi,
         display_mode_choices: build_display_mode_choices(&[]),
         software_thread_choices,
         software_thread_labels,
@@ -6036,6 +6125,12 @@ pub fn init() -> State {
         SubRowId::ValidationLayers,
         yes_no_choice_index(cfg.gfx_debug),
     );
+    set_choice_by_id(
+        &mut state.sub_choice_indices_graphics,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::HighDpi,
+        yes_no_choice_index(cfg.high_dpi),
+    );
     if let Some(slot) = state
         .sub_choice_indices_graphics
         .get_mut(SOFTWARE_THREADS_ROW_INDEX)
@@ -6111,6 +6206,12 @@ pub fn init() -> State {
         MACHINE_OPTIONS_ROWS,
         SubRowId::PreferredMode,
         machine_preferred_mode_choice_index(cfg.machine_preferred_play_mode),
+    );
+    set_choice_by_id(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::Font,
+        machine_font_choice_index(cfg.machine_font),
     );
     set_choice_by_id(
         &mut state.sub_choice_indices_machine,
@@ -6773,6 +6874,18 @@ pub fn sync_vsync(state: &mut State, enabled: bool) {
     clear_render_cache(state);
 }
 
+pub fn sync_high_dpi(state: &mut State, enabled: bool) {
+    state.high_dpi_at_load = enabled;
+    set_choice_by_id(
+        &mut state.sub_choice_indices_graphics,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::HighDpi,
+        yes_no_choice_index(enabled),
+    );
+    sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
+}
+
 pub fn sync_present_mode_policy(state: &mut State, mode: PresentModePolicy) {
     state.present_mode_policy_at_load = mode;
     if let Some(slot) = state
@@ -7353,6 +7466,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 desired_vsync,
                 desired_present_mode_policy,
                 desired_max_fps,
+                desired_high_dpi,
             ) = if leaving_graphics {
                 let vsync = state
                     .sub_choice_indices_graphics
@@ -7367,9 +7481,10 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     Some(vsync),
                     Some(selected_present_mode_policy(state)),
                     Some(selected_max_fps(state)),
+                    Some(selected_high_dpi(state)),
                 )
             } else {
-                (None, None, None, None, None, None, None)
+                (None, None, None, None, None, None, None, None)
             };
             let step = if SUBMENU_FADE_DURATION > 0.0 {
                 dt / SUBMENU_FADE_DURATION
@@ -7407,6 +7522,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 let mut vsync_change: Option<bool> = None;
                 let mut present_mode_policy_change: Option<PresentModePolicy> = None;
                 let mut max_fps_change: Option<MaxFpsCap> = None;
+                let mut high_dpi_change: Option<bool> = None;
 
                 if let Some(renderer) = desired_renderer
                     && renderer != state.video_renderer_at_load
@@ -7443,6 +7559,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 {
                     max_fps_change = Some(max_fps);
                 }
+                if let Some(high_dpi) = desired_high_dpi
+                    && high_dpi != state.high_dpi_at_load
+                {
+                    high_dpi_change = Some(high_dpi);
+                    if resolution_change.is_none() {
+                        resolution_change = desired_resolution;
+                    }
+                }
 
                 if renderer_change.is_some()
                     || display_mode_change.is_some()
@@ -7451,6 +7575,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     || vsync_change.is_some()
                     || present_mode_policy_change.is_some()
                     || max_fps_change.is_some()
+                    || high_dpi_change.is_some()
                 {
                     pending_action = Some(ScreenAction::ChangeGraphics {
                         renderer: renderer_change,
@@ -7460,6 +7585,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                         vsync: vsync_change,
                         present_mode_policy: present_mode_policy_change,
                         max_fps: max_fps_change,
+                        high_dpi: high_dpi_change,
                     });
                 }
             }
@@ -7498,23 +7624,30 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 OptionsView::Main => {
                     let total = ITEMS.len();
                     if total > 0 {
+                        let last = total - 1;
                         match direction {
                             NavDirection::Up => {
-                                state.selected = if state.selected == 0 {
-                                    total - 1
-                                } else {
-                                    state.selected - 1
-                                };
+                                if state.selected > 0 {
+                                    state.selected -= 1;
+                                }
                             }
                             NavDirection::Down => {
-                                state.selected = (state.selected + 1) % total;
+                                if state.selected < last {
+                                    state.selected += 1;
+                                }
                             }
                         }
                         state.nav_key_last_scrolled_at = Some(now);
                     }
                 }
                 OptionsView::Submenu(kind) => {
-                    move_submenu_selection_vertical(state, asset_manager, kind, direction);
+                    move_submenu_selection_vertical(
+                        state,
+                        asset_manager,
+                        kind,
+                        direction,
+                        NavWrap::Clamp,
+                    );
                     state.nav_key_last_scrolled_at = Some(now);
                 }
             }
@@ -7532,9 +7665,10 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             && matches!(state.view, OptionsView::Submenu(_))
         {
             if pending_action.is_none() {
-                pending_action = apply_submenu_choice_delta(state, asset_manager, delta_lr);
+                pending_action =
+                    apply_submenu_choice_delta(state, asset_manager, delta_lr, NavWrap::Clamp);
             } else {
-                apply_submenu_choice_delta(state, asset_manager, delta_lr);
+                apply_submenu_choice_delta(state, asset_manager, delta_lr, NavWrap::Clamp);
             }
             state.nav_lr_last_adjusted_at = Some(now);
         }
@@ -7691,6 +7825,7 @@ fn apply_submenu_choice_delta(
     state: &mut State,
     asset_manager: &AssetManager,
     delta: isize,
+    wrap: NavWrap,
 ) -> Option<ScreenAction> {
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
         return None;
@@ -7891,7 +8026,11 @@ fn apply_submenu_choice_delta(
         submenu_cursor_indices(state, kind)[row_index].min(num_choices.saturating_sub(1));
     let cur = choice_index as isize;
     let n = num_choices as isize;
-    let mut new_index = ((cur + delta).rem_euclid(n)) as usize;
+    let raw = cur + delta;
+    let mut new_index = match wrap {
+        NavWrap::Wrap => raw.rem_euclid(n) as usize,
+        NavWrap::Clamp => raw.clamp(0, n - 1) as usize,
+    };
     if new_index >= num_choices {
         new_index = num_choices.saturating_sub(1);
     }
@@ -7990,6 +8129,7 @@ fn apply_submenu_choice_delta(
             SubRowId::PreferredMode => config::update_machine_preferred_play_mode(
                 machine_preferred_mode_from_choice(new_index),
             ),
+            SubRowId::Font => config::update_machine_font(machine_font_from_choice(new_index)),
             SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
             SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),
@@ -8255,7 +8395,13 @@ fn undo_three_key_selection(state: &mut State, asset_manager: &AssetManager) {
                 }
             }
             OptionsView::Submenu(kind) => {
-                move_submenu_selection_vertical(state, asset_manager, kind, NavDirection::Down);
+                move_submenu_selection_vertical(
+                    state,
+                    asset_manager,
+                    kind,
+                    NavDirection::Down,
+                    NavWrap::Wrap,
+                );
             }
         },
         -1 => match state.view {
@@ -8270,7 +8416,13 @@ fn undo_three_key_selection(state: &mut State, asset_manager: &AssetManager) {
                 }
             }
             OptionsView::Submenu(kind) => {
-                move_submenu_selection_vertical(state, asset_manager, kind, NavDirection::Up);
+                move_submenu_selection_vertical(
+                    state,
+                    asset_manager,
+                    kind,
+                    NavDirection::Up,
+                    NavWrap::Wrap,
+                );
             }
         },
         _ => {}
@@ -8568,7 +8720,8 @@ fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -
                 }
             }
             if screen_input::dedicated_three_key_nav_enabled()
-                && let Some(action) = apply_submenu_choice_delta(state, asset_manager, 1)
+                && let Some(action) =
+                    apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap)
             {
                 return action;
             }
@@ -8812,6 +8965,7 @@ pub fn handle_input(
                             asset_manager,
                             kind,
                             NavDirection::Up,
+                            NavWrap::Wrap,
                         );
                     }
                 }
@@ -8833,6 +8987,7 @@ pub fn handle_input(
                             asset_manager,
                             kind,
                             NavDirection::Down,
+                            NavWrap::Wrap,
                         );
                     }
                 }
@@ -8880,6 +9035,7 @@ pub fn handle_input(
                             asset_manager,
                             kind,
                             NavDirection::Up,
+                            NavWrap::Wrap,
                         );
                     }
                 }
@@ -8906,6 +9062,7 @@ pub fn handle_input(
                             asset_manager,
                             kind,
                             NavDirection::Down,
+                            NavWrap::Wrap,
                         );
                     }
                 }
@@ -8919,7 +9076,9 @@ pub fn handle_input(
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
             if ev.pressed {
-                if let Some(action) = apply_submenu_choice_delta(state, asset_manager, -1) {
+                if let Some(action) =
+                    apply_submenu_choice_delta(state, asset_manager, -1, NavWrap::Wrap)
+                {
                     on_lr_press(state, -1);
                     return action;
                 }
@@ -8933,7 +9092,9 @@ pub fn handle_input(
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
             if ev.pressed {
-                if let Some(action) = apply_submenu_choice_delta(state, asset_manager, 1) {
+                if let Some(action) =
+                    apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap)
+                {
                     on_lr_press(state, 1);
                     return action;
                 }
@@ -9677,7 +9838,7 @@ fn build_yes_no_confirm_overlay(
         act!(text:
             align(0.5, 0.5):
             xy(yes_x, answer_y):
-            font("wendy"):
+            font(current_machine_font_key(FontRole::Header)):
             zoom(0.72):
             settext(tr("Common", "Yes")):
             diffuse(1.0, 1.0, 1.0, 1.0):
@@ -9687,7 +9848,7 @@ fn build_yes_no_confirm_overlay(
         act!(text:
             align(0.5, 0.5):
             xy(no_x, answer_y):
-            font("wendy"):
+            font(current_machine_font_key(FontRole::Header)):
             zoom(0.72):
             settext(tr("Common", "No")):
             diffuse(1.0, 1.0, 1.0, 1.0):

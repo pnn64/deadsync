@@ -80,7 +80,7 @@ impl Default for TexturedMeshVertex {
 #[derive(Clone)]
 pub enum TexturedMeshVertices {
     Shared(Arc<[TexturedMeshVertex]>),
-    Transient(Arc<Vec<TexturedMeshVertex>>),
+    Transient(Vec<TexturedMeshVertex>),
 }
 
 impl AsRef<[TexturedMeshVertex]> for TexturedMeshVertices {
@@ -134,6 +134,7 @@ pub enum ObjectType {
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
+        depth_test: bool,
     },
 }
 
@@ -659,6 +660,7 @@ pub fn create_backend(
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
+    high_dpi_enabled: bool,
 ) -> Result<Backend, Box<dyn Error>> {
     let backend_impl = match backend_type {
         #[cfg(not(target_pointer_width = "32"))]
@@ -682,9 +684,12 @@ pub fn create_backend(
             present_mode_policy,
             gfx_debug_enabled,
         )?),
-        BackendType::OpenGL => {
-            BackendImpl::OpenGL(opengl::init(window, vsync_enabled, gfx_debug_enabled)?)
-        }
+        BackendType::OpenGL => BackendImpl::OpenGL(opengl::init(
+            window,
+            vsync_enabled,
+            gfx_debug_enabled,
+            high_dpi_enabled,
+        )?),
         BackendType::OpenGLWgpu => BackendImpl::OpenGLWgpu(wgpu_core::init_opengl(
             window,
             vsync_enabled,

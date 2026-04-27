@@ -85,6 +85,7 @@ pub enum ScreenAction {
         vsync: Option<bool>,
         present_mode_policy: Option<PresentModePolicy>,
         max_fps: Option<crate::config::MaxFpsCap>,
+        high_dpi: Option<bool>,
     },
     UpdateShowOverlay(u8),
 }

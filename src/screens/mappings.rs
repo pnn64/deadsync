@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
 use crate::engine::input::{
     GamepadCodeBinding, InputBinding, InputEvent, InputSource, PadEvent, RawKeyboardEvent,
@@ -155,6 +156,12 @@ pub enum NavDirection {
     Down,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NavWrap {
+    Wrap,
+    Clamp,
+}
+
 /// Which slot (player + primary/secondary) is currently focused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActiveSlot {
@@ -278,21 +285,34 @@ const fn total_rows() -> usize {
     NUM_MAPPING_ROWS + 1 // + Exit row
 }
 
-fn move_selection(state: &mut State, dir: NavDirection) {
+fn move_selection(state: &mut State, dir: NavDirection, wrap: NavWrap) {
     let total = total_rows();
     if total == 0 {
         return;
     }
     let old = state.selected_row;
+    let last = total - 1;
     let new = match dir {
         NavDirection::Up => {
             if state.selected_row == 0 {
-                total.saturating_sub(1)
+                match wrap {
+                    NavWrap::Wrap => last,
+                    NavWrap::Clamp => 0,
+                }
             } else {
                 state.selected_row - 1
             }
         }
-        NavDirection::Down => (state.selected_row + 1) % total,
+        NavDirection::Down => {
+            if state.selected_row >= last {
+                match wrap {
+                    NavWrap::Wrap => 0,
+                    NavWrap::Clamp => last,
+                }
+            } else {
+                state.selected_row + 1
+            }
+        }
     };
     if new != old {
         state.selected_row = new;
@@ -443,7 +463,7 @@ pub fn update(state: &mut State, dt: f32) {
         if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
             && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL
         {
-            move_selection(state, direction);
+            move_selection(state, direction, NavWrap::Clamp);
             state.nav_key_last_scrolled_at = Some(now);
         }
     }
@@ -596,7 +616,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
     match code {
         KeyCode::ArrowUp => {
             if is_pressed {
-                move_selection(state, NavDirection::Up);
+                move_selection(state, NavDirection::Up, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Up);
             } else {
                 on_nav_release(state, NavDirection::Up);
@@ -604,7 +624,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         }
         KeyCode::ArrowDown => {
             if is_pressed {
-                move_selection(state, NavDirection::Down);
+                move_selection(state, NavDirection::Down, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Down);
             } else {
                 on_nav_release(state, NavDirection::Down);
@@ -767,7 +787,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             return match nav {
                 screen_input::ThreeKeyMenuAction::Prev => {
                     if matches!(state.three_key_focus, ThreeKeyFocus::Row) {
-                        move_selection(state, NavDirection::Up);
+                        move_selection(state, NavDirection::Up, NavWrap::Wrap);
                         on_nav_press(state, NavDirection::Up);
                         state.menu_lr_undo_row = 1;
                     } else if state.selected_row < NUM_MAPPING_ROWS {
@@ -780,7 +800,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 }
                 screen_input::ThreeKeyMenuAction::Next => {
                     if matches!(state.three_key_focus, ThreeKeyFocus::Row) {
-                        move_selection(state, NavDirection::Down);
+                        move_selection(state, NavDirection::Down, NavWrap::Wrap);
                         on_nav_press(state, NavDirection::Down);
                         state.menu_lr_undo_row = -1;
                     } else if state.selected_row < NUM_MAPPING_ROWS {
@@ -821,8 +841,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         ScreenAction::None
                     } else {
                         match state.menu_lr_undo_row {
-                            1 => move_selection(state, NavDirection::Down),
-                            -1 => move_selection(state, NavDirection::Up),
+                            1 => move_selection(state, NavDirection::Down, NavWrap::Wrap),
+                            -1 => move_selection(state, NavDirection::Up, NavWrap::Wrap),
                             _ => {}
                         }
                         state.menu_lr_undo_row = 0;
@@ -842,7 +862,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p2_up
         | VirtualAction::p2_menu_up => {
             if ev.pressed {
-                move_selection(state, NavDirection::Up);
+                move_selection(state, NavDirection::Up, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Up);
             } else {
                 on_nav_release(state, NavDirection::Up);
@@ -853,7 +873,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p2_down
         | VirtualAction::p2_menu_down => {
             if ev.pressed {
-                move_selection(state, NavDirection::Down);
+                move_selection(state, NavDirection::Down, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Down);
             } else {
                 on_nav_release(state, NavDirection::Down);
@@ -1161,7 +1181,7 @@ pub fn get_actors(
         xy(p1_center_x, header_main_y):
         zoom(header_main_zoom):
         diffuse(1.0, 1.0, 1.0, 1.0):
-        font("wendy"): settext("Player 1"):
+        font(current_machine_font_key(FontRole::Header)): settext("Player 1"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
@@ -1169,7 +1189,7 @@ pub fn get_actors(
         xy(p2_center_x, header_main_y):
         zoom(header_main_zoom):
         diffuse(1.0, 1.0, 1.0, 1.0):
-        font("wendy"): settext("Player 2"):
+        font(current_machine_font_key(FontRole::Header)): settext("Player 2"):
         horizalign(center)
     ));
 
@@ -1183,7 +1203,7 @@ pub fn get_actors(
         xy(p1_primary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font("wendy"): settext("Primary"):
+        font(current_machine_font_key(FontRole::Header)): settext("Primary"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
@@ -1191,7 +1211,7 @@ pub fn get_actors(
         xy(p1_secondary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font("wendy"): settext("Secondary"):
+        font(current_machine_font_key(FontRole::Header)): settext("Secondary"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
@@ -1199,7 +1219,7 @@ pub fn get_actors(
         xy(p1_default_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font("wendy"): settext("Default"):
+        font(current_machine_font_key(FontRole::Header)): settext("Default"):
         horizalign(center)
     ));
 
@@ -1209,7 +1229,7 @@ pub fn get_actors(
         xy(p2_primary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font("wendy"): settext("Primary"):
+        font(current_machine_font_key(FontRole::Header)): settext("Primary"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
@@ -1217,7 +1237,7 @@ pub fn get_actors(
         xy(p2_secondary_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font("wendy"): settext("Secondary"):
+        font(current_machine_font_key(FontRole::Header)): settext("Secondary"):
         horizalign(center)
     ));
     ui_actors.push(act!(text:
@@ -1225,7 +1245,7 @@ pub fn get_actors(
         xy(p2_default_x, header_sub_y):
         zoom(header_zoom):
         diffuse(header_dec[0], header_dec[1], header_dec[2], header_dec[3]):
-        font("wendy"): settext("Default"):
+        font(current_machine_font_key(FontRole::Header)): settext("Default"):
         horizalign(center)
     ));
 

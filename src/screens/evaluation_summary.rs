@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
@@ -306,7 +307,7 @@ fn build_player_stats(
         (0.5, -24.0)
     };
     let mut percent_actor = act!(text:
-        font("wendy"):
+        font(current_machine_font_key(FontRole::Header)):
         settext(percent_text):
         align(align1_x, 0.5):
         xy(col1x, percent_y):
@@ -325,7 +326,7 @@ fn build_player_stats(
         let ex_text = format!("{:.2}", p.ex_score_percent.max(0.0));
         let (ex_zoom, ex_y) = if showex { (0.48, -32.0) } else { (0.38, -12.0) };
         let mut ex_actor = act!(text:
-            font("wendy"):
+            font(current_machine_font_key(FontRole::Header)):
             settext(ex_text):
             align(align1_x, 0.5):
             xy(col1x, ex_y):
@@ -368,7 +369,7 @@ fn build_player_stats(
         let diff_color = color::difficulty_rgba(&p.chart.difficulty, active_color_index);
         let (meter_zoom, meter_y) = if show_w0 { (0.3, 5.0) } else { (0.4, -1.0) };
         let mut a = act!(text:
-            font("wendy"):
+            font(current_machine_font_key(FontRole::Header)):
             settext(p.chart.meter.to_string()):
             align(align1_x, 0.5):
             xy(col1x, meter_y):
@@ -441,7 +442,7 @@ fn build_player_stats(
         };
 
         let mut a = act!(text:
-            font("wendy"):
+            font(current_machine_font_key(FontRole::Header)):
             settext(count.to_string()):
             align(align2_x, 0.5):
             xy(col2x, y):
@@ -603,7 +604,7 @@ pub fn get_actors(
 
     if stages.is_empty() {
         actors.push(act!(text:
-            font("wendy"):
+            font(current_machine_font_key(FontRole::Header)):
             settext(tr("EvaluationSummary", "NoStageDataAvailable")):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_height() * 0.5):
@@ -620,7 +621,7 @@ pub fn get_actors(
 
     // Centered "Page x/y"
     actors.push(act!(text:
-        font("wendy"):
+        font(current_machine_font_key(FontRole::Header)):
         settext(tr_fmt("EvaluationSummary", "PageFormat", &[("page", &page.to_string()), ("pages", &pages.to_string())])):
         align(0.5, 0.5):
         xy(screen_center_x(), 15.0):
@@ -634,7 +635,7 @@ pub fn get_actors(
     {
         let itg_text_x = screen_width() - 10.0;
         actors.push(act!(text:
-                font("wendy"):
+                font(current_machine_font_key(FontRole::Header)):
                 settext(tr("EvaluationSummary", "ITGLabel")):
                 align(1.0, 0.5):
             xy(itg_text_x, 15.0):
@@ -713,7 +714,7 @@ pub fn get_actors(
 
         let timestamp_text = Local::now().format("%Y/%m/%d %H:%M").to_string();
         actors.push(act!(text:
-            font("wendy_monospace_numbers"):
+            font(current_machine_font_key(FontRole::Numbers)):
             settext(timestamp_text):
             align(0.5, 1.0):
             xy(screen_center_x(), screen_height() - 14.0):
