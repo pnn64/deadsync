@@ -27,6 +27,23 @@ pub const HUD_OFFSET_MAX: i32 = 250;
 pub const SPACING_PERCENT_MIN: i32 = -100;
 pub const SPACING_PERCENT_MAX: i32 = 100;
 
+/// Min/max for the Mini player option (Simply Love parity).
+pub const MINI_PERCENT_MIN: i32 = -100;
+pub const MINI_PERCENT_MAX: i32 = 150;
+
+/// Min/max for the per-player NoteField horizontal offset.
+pub const NOTE_FIELD_OFFSET_X_MIN: i32 = 0;
+pub const NOTE_FIELD_OFFSET_X_MAX: i32 = 50;
+
+/// Min/max for the per-player NoteField vertical offset.
+pub const NOTE_FIELD_OFFSET_Y_MIN: i32 = -50;
+pub const NOTE_FIELD_OFFSET_Y_MAX: i32 = 50;
+
+/// Min/max (in milliseconds) for the per-player visual-delay calibration
+/// (Simply Love parity). Also used as the range for the global offset shift.
+pub const VISUAL_DELAY_MS_MIN: i32 = -100;
+pub const VISUAL_DELAY_MS_MAX: i32 = 100;
+
 #[inline(always)]
 const fn clamp_weight_pounds(weight_pounds: i32) -> i32 {
     if weight_pounds == 0 {

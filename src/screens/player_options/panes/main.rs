@@ -566,7 +566,9 @@ pub(super) fn build_main_rows(
         lookup_key("PlayerOptions", "Mini"),
         lookup_key("PlayerOptionsHelp", "MiniHelp"),
         MINI,
-        (-100..=150).map(|v| format!("{v}%")).collect(),
+        (gp::MINI_PERCENT_MIN..=gp::MINI_PERCENT_MAX)
+            .map(|v| format!("{v}%"))
+            .collect(),
     ));
     b.push(Row::numeric(
         RowId::Spacing,
@@ -716,14 +718,18 @@ pub(super) fn build_main_rows(
         lookup_key("PlayerOptions", "NoteFieldOffsetX"),
         lookup_key("PlayerOptionsHelp", "NoteFieldOffsetXHelp"),
         NOTEFIELD_OFFSET_X,
-        (0..=50).map(|v| v.to_string()).collect(),
+        (gp::NOTE_FIELD_OFFSET_X_MIN..=gp::NOTE_FIELD_OFFSET_X_MAX)
+            .map(|v| v.to_string())
+            .collect(),
     ));
     b.push(Row::numeric(
         RowId::NoteFieldOffsetY,
         lookup_key("PlayerOptions", "NoteFieldOffsetY"),
         lookup_key("PlayerOptionsHelp", "NoteFieldOffsetYHelp"),
         NOTEFIELD_OFFSET_Y,
-        (-50..=50).map(|v| v.to_string()).collect(),
+        (gp::NOTE_FIELD_OFFSET_Y_MIN..=gp::NOTE_FIELD_OFFSET_Y_MAX)
+            .map(|v| v.to_string())
+            .collect(),
     ));
     b.push(
         Row::numeric(
@@ -731,9 +737,11 @@ pub(super) fn build_main_rows(
             lookup_key("PlayerOptions", "VisualDelay"),
             lookup_key("PlayerOptionsHelp", "VisualDelayHelp"),
             VISUAL_DELAY,
-            (-100..=100).map(|v| format!("{v}ms")).collect(),
+            (gp::VISUAL_DELAY_MS_MIN..=gp::VISUAL_DELAY_MS_MAX)
+                .map(|v| format!("{v}ms"))
+                .collect(),
         )
-        .with_initial_choice_index(100),
+        .with_initial_choice_index((-gp::VISUAL_DELAY_MS_MIN) as usize),
     );
     b.push(
         Row::numeric(
@@ -741,9 +749,11 @@ pub(super) fn build_main_rows(
             lookup_key("PlayerOptions", "GlobalOffsetShift"),
             lookup_key("PlayerOptionsHelp", "GlobalOffsetShiftHelp"),
             GLOBAL_OFFSET_SHIFT,
-            (-100..=100).map(|v| format!("{v}ms")).collect(),
+            (gp::VISUAL_DELAY_MS_MIN..=gp::VISUAL_DELAY_MS_MAX)
+                .map(|v| format!("{v}ms"))
+                .collect(),
         )
-        .with_initial_choice_index(100),
+        .with_initial_choice_index((-gp::VISUAL_DELAY_MS_MIN) as usize),
     );
     b.push(Row::custom(
         RowId::MusicRate,
