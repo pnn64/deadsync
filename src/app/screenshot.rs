@@ -7,7 +7,7 @@ use crate::engine::present::actors::Actor;
 use crate::engine::space;
 use crate::game::{profile, scores};
 use crate::screens::evaluation;
-use chrono::Local;
+use chrono::{Datelike, Local};
 use log::{info, warn};
 use std::error::Error;
 use std::path::PathBuf;
@@ -25,6 +25,53 @@ const SCREENSHOT_PREVIEW_GLOW_PERIOD_SECONDS: f32 = 0.5;
 const SCREENSHOT_PREVIEW_GLOW_ALPHA: f32 = 0.2;
 const SCREENSHOT_PREVIEW_BORDER_PX: f32 = 4.0;
 const SCREENSHOT_PREVIEW_Z: i16 = 32010;
+
+const MONTH_NAMES: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+
+fn sanitize_song_title(title: &str) -> String {
+    title
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect()
+}
+
+fn current_song_title(state: &super::AppState) -> Option<(String, Option<u32>)> {
+    match state.screens.current_screen {
+        CurrentScreen::Gameplay => state.screens.gameplay_state.as_ref().map(|gs| {
+            let title = gs.gameplay.song.title.clone();
+            let meter = gs
+                .gameplay
+                .charts
+                .iter()
+                .find(|c| c.meter > 0)
+                .map(|c| c.meter);
+            (title, meter)
+        }),
+        CurrentScreen::Evaluation => state
+            .screens
+            .evaluation_state
+            .score_info
+            .iter()
+            .flatten()
+            .next()
+            .map(|si| (si.song.title.clone(), Some(si.chart.meter))),
+        _ => None,
+    }
+    .filter(|(t, _)| !t.is_empty())
+}
 
 #[derive(Clone, Copy)]
 enum ScreenshotPreviewTarget {
@@ -66,15 +113,35 @@ pub(super) fn should_auto_screenshot_eval(eval: &evaluation::State, mask: u8) ->
     false
 }
 
-fn save_screenshot_image(image: &image::RgbaImage) -> Result<PathBuf, Box<dyn Error>> {
-    let dir = dirs::app_dirs().screenshots_dir();
+fn save_screenshot_image(
+    image: &image::RgbaImage,
+    song_info: Option<(&str, Option<u32>)>,
+) -> Result<PathBuf, Box<dyn Error>> {
+    let root = dirs::app_dirs().screenshots_dir();
+    let now = Local::now();
+    let month_idx = now.month0() as usize;
+    let month_name = MONTH_NAMES.get(month_idx).copied().unwrap_or("Unknown");
+    let dir = root
+        .join(format!("{:04}", now.year()))
+        .join(format!("{:02}-{}", now.month(), month_name));
     std::fs::create_dir_all(&dir)?;
 
-    let stamp = Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
-    let mut path = dir.join(format!("deadsync-{stamp}.png"));
+    let stamp = now.format("%Y-%m-%d_%H%M%S").to_string();
+    let title_part = song_info
+        .map(|(title, meter)| {
+            let title = sanitize_song_title(title);
+            match meter {
+                Some(m) if m > 0 => format!("__{m}__{title}"),
+                _ => format!("__{title}"),
+            }
+        })
+        .filter(|t| !t.is_empty())
+        .unwrap_or_default();
+
+    let mut path = dir.join(format!("{stamp}{title_part}.png"));
     let mut suffix = 1_u32;
     while path.exists() {
-        path = dir.join(format!("deadsync-{stamp}-{suffix:02}.png"));
+        path = dir.join(format!("{stamp}{title_part}-{suffix:02}.png"));
         suffix = suffix.saturating_add(1);
         if suffix > 9_999 {
             return Err(
@@ -133,7 +200,9 @@ impl App {
             Ok(mut image) => {
                 // Screen captures should be opaque to avoid viewer-side alpha compositing.
                 set_opaque_alpha(&mut image);
-                match save_screenshot_image(&image) {
+                let song_info = current_song_title(&self.state);
+                let song_info_ref = song_info.as_ref().map(|(t, m)| (t.as_str(), *m));
+                match save_screenshot_image(&image, song_info_ref) {
                     Ok(path) => {
                         self.state.shell.screenshot_flash_started_at = Some(now);
 
