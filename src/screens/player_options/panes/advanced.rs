@@ -594,11 +594,12 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
     }
 
     let mut b = RowBuilder::new();
-    b.push(Row {
-        id: RowId::Turn,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(TURN)),
-        name: lookup_key("PlayerOptions", "Turn"),
-        choices: vec![
+    b.push(Row::cycle(
+        RowId::Turn,
+        lookup_key("PlayerOptions", "Turn"),
+        lookup_key("PlayerOptionsHelp", "TurnHelp"),
+        CycleBinding::Index(TURN),
+        vec![
             tr("PlayerOptions", "TurnNone").to_string(),
             tr("PlayerOptions", "TurnMirror").to_string(),
             tr("PlayerOptions", "TurnLeft").to_string(),
@@ -609,32 +610,26 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "TurnBlender").to_string(),
             tr("PlayerOptions", "TurnRandom").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "TurnHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::Scroll,
-        behavior: RowBehavior::Bitmask(SCROLL),
-        name: lookup_key("PlayerOptions", "Scroll"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::Scroll,
+        lookup_key("PlayerOptions", "Scroll"),
+        lookup_key("PlayerOptionsHelp", "ScrollHelp"),
+        SCROLL,
+        vec![
             tr("PlayerOptions", "ScrollReverse").to_string(),
             tr("PlayerOptions", "ScrollSplit").to_string(),
             tr("PlayerOptions", "ScrollAlternate").to_string(),
             tr("PlayerOptions", "ScrollCross").to_string(),
             tr("PlayerOptions", "ScrollCentered").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "ScrollHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::Hide,
-        behavior: RowBehavior::Bitmask(HIDE),
-        name: lookup_key("PlayerOptions", "Hide"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::Hide,
+        lookup_key("PlayerOptions", "Hide"),
+        lookup_key("PlayerOptionsHelp", "HideHelp"),
+        HIDE,
+        vec![
             tr("PlayerOptions", "HideTargets").to_string(),
             tr("PlayerOptions", "HideBackground").to_string(),
             tr("PlayerOptions", "HideCombo").to_string(),
@@ -643,110 +638,92 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "HideDanger").to_string(),
             tr("PlayerOptions", "HideComboExplosions").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "HideHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::LifeMeterType,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(LIFE_METER_TYPE)),
-        name: lookup_key("PlayerOptions", "LifeMeterType"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::LifeMeterType,
+        lookup_key("PlayerOptions", "LifeMeterType"),
+        lookup_key("PlayerOptionsHelp", "LifeMeterTypeHelp"),
+        CycleBinding::Index(LIFE_METER_TYPE),
+        vec![
             tr("PlayerOptions", "LifeMeterTypeStandard").to_string(),
             tr("PlayerOptions", "LifeMeterTypeSurround").to_string(),
             tr("PlayerOptions", "LifeMeterTypeVertical").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "LifeMeterTypeHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::LifeBarOptions,
-        behavior: RowBehavior::Bitmask(LIFE_BAR_OPTIONS),
-        name: lookup_key("PlayerOptions", "LifeBarOptions"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::LifeBarOptions,
+        lookup_key("PlayerOptions", "LifeBarOptions"),
+        lookup_key("PlayerOptionsHelp", "LifeBarOptionsHelp"),
+        LIFE_BAR_OPTIONS,
+        vec![
             tr("PlayerOptions", "LifeBarOptionsRainbowMax").to_string(),
             tr("PlayerOptions", "LifeBarOptionsResponsiveColors").to_string(),
             tr("PlayerOptions", "LifeBarOptionsShowLifePercentage").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "LifeBarOptionsHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::DataVisualizations,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(DATA_VISUALIZATIONS)),
-        name: lookup_key("PlayerOptions", "DataVisualizations"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::DataVisualizations,
+        lookup_key("PlayerOptions", "DataVisualizations"),
+        lookup_key("PlayerOptionsHelp", "DataVisualizationsHelp"),
+        CycleBinding::Index(DATA_VISUALIZATIONS),
+        vec![
             tr("PlayerOptions", "DataVisualizationsNone").to_string(),
             tr("PlayerOptions", "DataVisualizationsTargetScoreGraph").to_string(),
             tr("PlayerOptions", "DataVisualizationsStepStatistics").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "DataVisualizationsHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::DensityGraphBackground,
-        behavior: RowBehavior::Cycle(CycleBinding::Bool(DENSITY_GRAPH_BACKGROUND)),
-        name: lookup_key("PlayerOptions", "DensityGraphBackground"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::DensityGraphBackground,
+        lookup_key("PlayerOptions", "DensityGraphBackground"),
+        lookup_key("PlayerOptionsHelp", "DensityGraphBackgroundHelp"),
+        CycleBinding::Bool(DENSITY_GRAPH_BACKGROUND),
+        vec![
             tr("PlayerOptions", "DensityGraphBackgroundSolid").to_string(),
             tr("PlayerOptions", "DensityGraphBackgroundTransparent").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "DensityGraphBackgroundHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::TargetScore,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(TARGET_SCORE)),
-        name: lookup_key("PlayerOptions", "TargetScore"),
-        choices: vec![
-            tr("PlayerOptions", "TargetScoreCMinus").to_string(),
-            tr("PlayerOptions", "TargetScoreC").to_string(),
-            tr("PlayerOptions", "TargetScoreCPlus").to_string(),
-            tr("PlayerOptions", "TargetScoreBMinus").to_string(),
-            tr("PlayerOptions", "TargetScoreB").to_string(),
-            tr("PlayerOptions", "TargetScoreBPlus").to_string(),
-            tr("PlayerOptions", "TargetScoreAMinus").to_string(),
-            tr("PlayerOptions", "TargetScoreA").to_string(),
-            tr("PlayerOptions", "TargetScoreAPlus").to_string(),
-            tr("PlayerOptions", "TargetScoreSMinus").to_string(),
-            tr("PlayerOptions", "TargetScoreS").to_string(),
-            tr("PlayerOptions", "TargetScoreSPlus").to_string(),
-            tr("PlayerOptions", "TargetScoreMachineBest").to_string(),
-            tr("PlayerOptions", "TargetScorePersonalBest").to_string(),
-        ],
-        selected_choice_index: [10; PLAYER_SLOTS], // S by default
-        help: vec![tr("PlayerOptionsHelp", "TargetScoreHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::ActionOnMissedTarget,
-        behavior: RowBehavior::Custom(ACTION_ON_MISSED_TARGET),
-        name: lookup_key("PlayerOptions", "TargetScoreMissPolicy"),
-        choices: vec![
+    ));
+    b.push(
+        Row::cycle(
+            RowId::TargetScore,
+            lookup_key("PlayerOptions", "TargetScore"),
+            lookup_key("PlayerOptionsHelp", "TargetScoreHelp"),
+            CycleBinding::Index(TARGET_SCORE),
+            vec![
+                tr("PlayerOptions", "TargetScoreCMinus").to_string(),
+                tr("PlayerOptions", "TargetScoreC").to_string(),
+                tr("PlayerOptions", "TargetScoreCPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreBMinus").to_string(),
+                tr("PlayerOptions", "TargetScoreB").to_string(),
+                tr("PlayerOptions", "TargetScoreBPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreAMinus").to_string(),
+                tr("PlayerOptions", "TargetScoreA").to_string(),
+                tr("PlayerOptions", "TargetScoreAPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreSMinus").to_string(),
+                tr("PlayerOptions", "TargetScoreS").to_string(),
+                tr("PlayerOptions", "TargetScoreSPlus").to_string(),
+                tr("PlayerOptions", "TargetScoreMachineBest").to_string(),
+                tr("PlayerOptions", "TargetScorePersonalBest").to_string(),
+            ],
+        )
+        .with_initial_choice_index(10), // S by default
+    );
+    b.push(Row::custom(
+        RowId::ActionOnMissedTarget,
+        lookup_key("PlayerOptions", "TargetScoreMissPolicy"),
+        lookup_key("PlayerOptionsHelp", "TargetScoreMissPolicyHelp"),
+        ACTION_ON_MISSED_TARGET,
+        vec![
             tr("PlayerOptions", "TargetScoreMissPolicyNothing").to_string(),
             tr("PlayerOptions", "TargetScoreMissPolicyFail").to_string(),
             tr("PlayerOptions", "TargetScoreMissPolicyRestartSong").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "TargetScoreMissPolicyHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::MiniIndicator,
-        behavior: RowBehavior::Custom(MINI_INDICATOR),
-        name: lookup_key("PlayerOptions", "MiniIndicator"),
-        choices: vec![
+    ));
+    b.push(Row::custom(
+        RowId::MiniIndicator,
+        lookup_key("PlayerOptions", "MiniIndicator"),
+        lookup_key("PlayerOptionsHelp", "MiniIndicatorHelp"),
+        MINI_INDICATOR,
+        vec![
             tr("PlayerOptions", "MiniIndicatorNone").to_string(),
             tr("PlayerOptions", "MiniIndicatorSubtractiveScoring").to_string(),
             tr("PlayerOptions", "MiniIndicatorPredictiveScoring").to_string(),
@@ -755,195 +732,156 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "MiniIndicatorPacemaker").to_string(),
             tr("PlayerOptions", "MiniIndicatorStreamProg").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "MiniIndicatorHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::IndicatorScoreType,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(INDICATOR_SCORE_TYPE)),
-        name: lookup_key("PlayerOptions", "IndicatorScoreType"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::IndicatorScoreType,
+        lookup_key("PlayerOptions", "IndicatorScoreType"),
+        lookup_key("PlayerOptionsHelp", "IndicatorScoreTypeHelp"),
+        CycleBinding::Index(INDICATOR_SCORE_TYPE),
+        vec![
             tr("PlayerOptions", "IndicatorScoreTypeITG").to_string(),
             tr("PlayerOptions", "IndicatorScoreTypeEX").to_string(),
             tr("PlayerOptions", "IndicatorScoreTypeHEX").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "IndicatorScoreTypeHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::GameplayExtras,
-        behavior: RowBehavior::Bitmask(GAMEPLAY_EXTRAS),
-        name: lookup_key("PlayerOptions", "GameplayExtras"),
-        choices: gameplay_extras_choices,
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "GameplayExtrasHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::ComboColors,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(COMBO_COLORS)),
-        name: lookup_key("PlayerOptions", "ComboColors"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::GameplayExtras,
+        lookup_key("PlayerOptions", "GameplayExtras"),
+        lookup_key("PlayerOptionsHelp", "GameplayExtrasHelp"),
+        GAMEPLAY_EXTRAS,
+        gameplay_extras_choices,
+    ));
+    b.push(Row::cycle(
+        RowId::ComboColors,
+        lookup_key("PlayerOptions", "ComboColors"),
+        lookup_key("PlayerOptionsHelp", "ComboColorsHelp"),
+        CycleBinding::Index(COMBO_COLORS),
+        vec![
             tr("PlayerOptions", "ComboColorsGlow").to_string(),
             tr("PlayerOptions", "ComboColorsSolid").to_string(),
             tr("PlayerOptions", "ComboColorsRainbow").to_string(),
             tr("PlayerOptions", "ComboColorsRainbowScroll").to_string(),
             tr("PlayerOptions", "ComboColorsNone").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "ComboColorsHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::ComboColorMode,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(COMBO_COLOR_MODE)),
-        name: lookup_key("PlayerOptions", "ComboColorMode"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::ComboColorMode,
+        lookup_key("PlayerOptions", "ComboColorMode"),
+        lookup_key("PlayerOptionsHelp", "ComboColorModeHelp"),
+        CycleBinding::Index(COMBO_COLOR_MODE),
+        vec![
             tr("PlayerOptions", "ComboColorModeFullCombo").to_string(),
             tr("PlayerOptions", "ComboColorModeCurrentCombo").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "ComboColorModeHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::CarryCombo,
-        behavior: RowBehavior::Cycle(CycleBinding::Bool(CARRY_COMBO)),
-        name: lookup_key("PlayerOptions", "CarryCombo"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::CarryCombo,
+        lookup_key("PlayerOptions", "CarryCombo"),
+        lookup_key("PlayerOptionsHelp", "CarryComboHelp"),
+        CycleBinding::Bool(CARRY_COMBO),
+        vec![
             tr("PlayerOptions", "CarryComboNo").to_string(),
             tr("PlayerOptions", "CarryComboYes").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "CarryComboHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::JudgmentTilt,
-        behavior: RowBehavior::Cycle(CycleBinding::Bool(JUDGMENT_TILT)),
-        name: lookup_key("PlayerOptions", "JudgmentTilt"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::JudgmentTilt,
+        lookup_key("PlayerOptions", "JudgmentTilt"),
+        lookup_key("PlayerOptionsHelp", "JudgmentTiltHelp"),
+        CycleBinding::Bool(JUDGMENT_TILT),
+        vec![
             tr("PlayerOptions", "JudgmentTiltNo").to_string(),
             tr("PlayerOptions", "JudgmentTiltYes").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "JudgmentTiltHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::JudgmentTiltIntensity,
-        behavior: RowBehavior::Custom(JUDGMENT_TILT_INTENSITY),
-        name: lookup_key("PlayerOptions", "JudgmentTiltIntensity"),
-        choices: tilt_intensity_choices(),
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "JudgmentTiltIntensityHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::JudgmentBehindArrows,
-        behavior: RowBehavior::Cycle(CycleBinding::Bool(JUDGMENT_BEHIND_ARROWS)),
-        name: lookup_key("PlayerOptions", "JudgmentBehindArrows"),
-        choices: vec![
+    ));
+    b.push(Row::custom(
+        RowId::JudgmentTiltIntensity,
+        lookup_key("PlayerOptions", "JudgmentTiltIntensity"),
+        lookup_key("PlayerOptionsHelp", "JudgmentTiltIntensityHelp"),
+        JUDGMENT_TILT_INTENSITY,
+        tilt_intensity_choices(),
+    ));
+    b.push(Row::cycle(
+        RowId::JudgmentBehindArrows,
+        lookup_key("PlayerOptions", "JudgmentBehindArrows"),
+        lookup_key("PlayerOptionsHelp", "JudgmentBehindArrowsHelp"),
+        CycleBinding::Bool(JUDGMENT_BEHIND_ARROWS),
+        vec![
             tr("PlayerOptions", "JudgmentBehindArrowsOff").to_string(),
             tr("PlayerOptions", "JudgmentBehindArrowsOn").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "JudgmentBehindArrowsHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::OffsetIndicator,
-        behavior: RowBehavior::Cycle(CycleBinding::Bool(OFFSET_INDICATOR)),
-        name: lookup_key("PlayerOptions", "OffsetIndicator"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::OffsetIndicator,
+        lookup_key("PlayerOptions", "OffsetIndicator"),
+        lookup_key("PlayerOptionsHelp", "OffsetIndicatorHelp"),
+        CycleBinding::Bool(OFFSET_INDICATOR),
+        vec![
             tr("PlayerOptions", "OffsetIndicatorOff").to_string(),
             tr("PlayerOptions", "OffsetIndicatorOn").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "OffsetIndicatorHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::ErrorBar,
-        behavior: RowBehavior::Bitmask(ERROR_BAR),
-        name: lookup_key("PlayerOptions", "ErrorBar"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::ErrorBar,
+        lookup_key("PlayerOptions", "ErrorBar"),
+        lookup_key("PlayerOptionsHelp", "ErrorBarHelp"),
+        ERROR_BAR,
+        vec![
             tr("PlayerOptions", "ErrorBarColorful").to_string(),
             tr("PlayerOptions", "ErrorBarMonochrome").to_string(),
             tr("PlayerOptions", "ErrorBarText").to_string(),
             tr("PlayerOptions", "ErrorBarHighlight").to_string(),
             tr("PlayerOptions", "ErrorBarAverage").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "ErrorBarHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::ErrorBarTrim,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(ERROR_BAR_TRIM)),
-        name: lookup_key("PlayerOptions", "ErrorBarTrim"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::ErrorBarTrim,
+        lookup_key("PlayerOptions", "ErrorBarTrim"),
+        lookup_key("PlayerOptionsHelp", "ErrorBarTrimHelp"),
+        CycleBinding::Index(ERROR_BAR_TRIM),
+        vec![
             tr("PlayerOptions", "ErrorBarTrimOff").to_string(),
             tr("PlayerOptions", "ErrorBarTrimFantastic").to_string(),
             tr("PlayerOptions", "ErrorBarTrimExcellent").to_string(),
             tr("PlayerOptions", "ErrorBarTrimGreat").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "ErrorBarTrimHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::ErrorBarOptions,
-        behavior: RowBehavior::Bitmask(ERROR_BAR_OPTIONS),
-        name: lookup_key("PlayerOptions", "ErrorBarOptions"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::ErrorBarOptions,
+        lookup_key("PlayerOptions", "ErrorBarOptions"),
+        lookup_key("PlayerOptionsHelp", "ErrorBarOptionsHelp"),
+        ERROR_BAR_OPTIONS,
+        vec![
             tr("PlayerOptions", "ErrorBarOptionsMoveUp").to_string(),
             tr("PlayerOptions", "ErrorBarOptionsMultiTick").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "ErrorBarOptionsHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::ErrorBarOffsetX,
-        behavior: RowBehavior::Numeric(ERROR_BAR_OFFSET_X),
-        name: lookup_key("PlayerOptions", "ErrorBarOffsetX"),
-        choices: hud_offset_choices(),
-        selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "ErrorBarOffsetXHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::ErrorBarOffsetY,
-        behavior: RowBehavior::Numeric(ERROR_BAR_OFFSET_Y),
-        name: lookup_key("PlayerOptions", "ErrorBarOffsetY"),
-        choices: hud_offset_choices(),
-        selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "ErrorBarOffsetYHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::MeasureCounter,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(MEASURE_COUNTER)),
-        name: lookup_key("PlayerOptions", "MeasureCounter"),
-        choices: vec![
+    ));
+    b.push(
+        Row::numeric(
+            RowId::ErrorBarOffsetX,
+            lookup_key("PlayerOptions", "ErrorBarOffsetX"),
+            lookup_key("PlayerOptionsHelp", "ErrorBarOffsetXHelp"),
+            ERROR_BAR_OFFSET_X,
+            hud_offset_choices(),
+        )
+        .with_initial_choice_index(HUD_OFFSET_ZERO_INDEX),
+    );
+    b.push(
+        Row::numeric(
+            RowId::ErrorBarOffsetY,
+            lookup_key("PlayerOptions", "ErrorBarOffsetY"),
+            lookup_key("PlayerOptionsHelp", "ErrorBarOffsetYHelp"),
+            ERROR_BAR_OFFSET_Y,
+            hud_offset_choices(),
+        )
+        .with_initial_choice_index(HUD_OFFSET_ZERO_INDEX),
+    );
+    b.push(Row::cycle(
+        RowId::MeasureCounter,
+        lookup_key("PlayerOptions", "MeasureCounter"),
+        lookup_key("PlayerOptionsHelp", "MeasureCounterHelp"),
+        CycleBinding::Index(MEASURE_COUNTER),
+        vec![
             tr("PlayerOptions", "MeasureCounterNone").to_string(),
             tr("PlayerOptions", "MeasureCounter8th").to_string(),
             tr("PlayerOptions", "MeasureCounter12th").to_string(),
@@ -951,76 +889,61 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "MeasureCounter24th").to_string(),
             tr("PlayerOptions", "MeasureCounter32nd").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "MeasureCounterHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::MeasureCounterLookahead,
-        behavior: RowBehavior::Custom(MEASURE_COUNTER_LOOKAHEAD),
-        name: lookup_key("PlayerOptions", "MeasureCounterLookahead"),
-        choices: vec![
+    ));
+    b.push(Row::custom(
+        RowId::MeasureCounterLookahead,
+        lookup_key("PlayerOptions", "MeasureCounterLookahead"),
+        lookup_key("PlayerOptionsHelp", "MeasureCounterLookaheadHelp"),
+        MEASURE_COUNTER_LOOKAHEAD,
+        vec![
             tr("PlayerOptions", "MeasureCounterLookahead0").to_string(),
             tr("PlayerOptions", "MeasureCounterLookahead1").to_string(),
             tr("PlayerOptions", "MeasureCounterLookahead2").to_string(),
             tr("PlayerOptions", "MeasureCounterLookahead3").to_string(),
             tr("PlayerOptions", "MeasureCounterLookahead4").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "MeasureCounterLookaheadHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::MeasureCounterOptions,
-        behavior: RowBehavior::Bitmask(MEASURE_COUNTER_OPTIONS),
-        name: lookup_key("PlayerOptions", "MeasureCounterOptions"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::MeasureCounterOptions,
+        lookup_key("PlayerOptions", "MeasureCounterOptions"),
+        lookup_key("PlayerOptionsHelp", "MeasureCounterOptionsHelp"),
+        MEASURE_COUNTER_OPTIONS,
+        vec![
             tr("PlayerOptions", "MeasureCounterOptionsMoveLeft").to_string(),
             tr("PlayerOptions", "MeasureCounterOptionsMoveUp").to_string(),
             tr("PlayerOptions", "MeasureCounterOptionsVerticalLookahead").to_string(),
             tr("PlayerOptions", "MeasureCounterOptionsBrokenRunTotal").to_string(),
             tr("PlayerOptions", "MeasureCounterOptionsRunTimer").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "MeasureCounterOptionsHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::MeasureLines,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(MEASURE_LINES)),
-        name: lookup_key("PlayerOptions", "MeasureLines"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::MeasureLines,
+        lookup_key("PlayerOptions", "MeasureLines"),
+        lookup_key("PlayerOptionsHelp", "MeasureLinesHelp"),
+        CycleBinding::Index(MEASURE_LINES),
+        vec![
             tr("PlayerOptions", "MeasureLinesOff").to_string(),
             tr("PlayerOptions", "MeasureLinesMeasure").to_string(),
             tr("PlayerOptions", "MeasureLinesQuarter").to_string(),
             tr("PlayerOptions", "MeasureLinesEighth").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "MeasureLinesHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::RescoreEarlyHits,
-        behavior: RowBehavior::Cycle(CycleBinding::Bool(RESCORE_EARLY_HITS)),
-        name: lookup_key("PlayerOptions", "RescoreEarlyHits"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::RescoreEarlyHits,
+        lookup_key("PlayerOptions", "RescoreEarlyHits"),
+        lookup_key("PlayerOptionsHelp", "RescoreEarlyHitsHelp"),
+        CycleBinding::Bool(RESCORE_EARLY_HITS),
+        vec![
             tr("PlayerOptions", "RescoreEarlyHitsNo").to_string(),
             tr("PlayerOptions", "RescoreEarlyHitsYes").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "RescoreEarlyHitsHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::EarlyDecentWayOffOptions,
-        behavior: RowBehavior::Bitmask(EARLY_DW_OPTIONS),
-        name: lookup_key("PlayerOptions", "EarlyDecentWayOffOptions"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::EarlyDecentWayOffOptions,
+        lookup_key("PlayerOptions", "EarlyDecentWayOffOptions"),
+        lookup_key("PlayerOptionsHelp", "EarlyDecentWayOffOptionsHelp"),
+        EARLY_DW_OPTIONS,
+        vec![
             tr("PlayerOptions", "EarlyDecentWayOffOptionsHideJudgments").to_string(),
             tr(
                 "PlayerOptions",
@@ -1028,41 +951,32 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             )
             .to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "EarlyDecentWayOffOptionsHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::ResultsExtras,
-        behavior: RowBehavior::Bitmask(RESULTS_EXTRAS),
-        name: lookup_key("PlayerOptions", "ResultsExtras"),
-        choices: vec![tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string()],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "ResultsExtrasHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::TimingWindows,
-        behavior: RowBehavior::Cycle(CycleBinding::Index(TIMING_WINDOWS)),
-        name: lookup_key("PlayerOptions", "TimingWindows"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::ResultsExtras,
+        lookup_key("PlayerOptions", "ResultsExtras"),
+        lookup_key("PlayerOptionsHelp", "ResultsExtrasHelp"),
+        RESULTS_EXTRAS,
+        vec![tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string()],
+    ));
+    b.push(Row::cycle(
+        RowId::TimingWindows,
+        lookup_key("PlayerOptions", "TimingWindows"),
+        lookup_key("PlayerOptionsHelp", "TimingWindowsHelp"),
+        CycleBinding::Index(TIMING_WINDOWS),
+        vec![
             tr("PlayerOptions", "TimingWindowsNone").to_string(),
             tr("PlayerOptions", "TimingWindowsWayOffs").to_string(),
             tr("PlayerOptions", "TimingWindowsDecentsAndWayOffs").to_string(),
             tr("PlayerOptions", "TimingWindowsFantasticsAndExcellents").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "TimingWindowsHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::FAPlusOptions,
-        behavior: RowBehavior::Bitmask(FA_PLUS_OPTIONS),
-        name: lookup_key("PlayerOptions", "FAPlusOptions"),
-        choices: vec![
+    ));
+    b.push(Row::bitmask(
+        RowId::FAPlusOptions,
+        lookup_key("PlayerOptions", "FAPlusOptions"),
+        lookup_key("PlayerOptionsHelp", "FAPlusOptionsHelp"),
+        FA_PLUS_OPTIONS,
+        vec![
             tr("PlayerOptions", "FAPlusOptionsDisplayFAPlusWindow").to_string(),
             tr("PlayerOptions", "FAPlusOptionsDisplayEXScore").to_string(),
             tr("PlayerOptions", "FAPlusOptionsDisplayHEXScore").to_string(),
@@ -1070,54 +984,35 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "FAPlusOptions10msBlueWindow").to_string(),
             tr("PlayerOptions", "FAPlusOptions1510msSplit").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "FAPlusOptionsHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::CustomBlueFantasticWindow,
-        behavior: RowBehavior::Cycle(CycleBinding::Bool(CUSTOM_BLUE_FANTASTIC_WINDOW)),
-        name: lookup_key("PlayerOptions", "CustomBlueFantasticWindow"),
-        choices: vec![
+    ));
+    b.push(Row::cycle(
+        RowId::CustomBlueFantasticWindow,
+        lookup_key("PlayerOptions", "CustomBlueFantasticWindow"),
+        lookup_key("PlayerOptionsHelp", "CustomBlueFantasticWindowHelp"),
+        CycleBinding::Bool(CUSTOM_BLUE_FANTASTIC_WINDOW),
+        vec![
             tr("PlayerOptions", "CustomBlueFantasticWindowNo").to_string(),
             tr("PlayerOptions", "CustomBlueFantasticWindowYes").to_string(),
         ],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "CustomBlueFantasticWindowHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::CustomBlueFantasticWindowMs,
-        behavior: RowBehavior::Custom(CUSTOM_BLUE_FANTASTIC_WINDOW_MS),
-        name: lookup_key("PlayerOptions", "CustomBlueFantasticWindowMs"),
-        choices: custom_fantastic_window_choices(),
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "CustomBlueFantasticWindowMsHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
-    b.push(Row {
-        id: RowId::WhatComesNext,
-        behavior: RowBehavior::Custom(super::WHAT_COMES_NEXT),
-        name: lookup_key("PlayerOptions", "WhatComesNext"),
-        choices: what_comes_next_choices(OptionsPane::Advanced, return_screen),
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![tr("PlayerOptionsHelp", "WhatComesNextAdvancedHelp").to_string()],
-        choice_difficulty_indices: None,
-        mirror_across_players: true,
-    });
-    b.push(Row {
-        id: RowId::Exit,
-        behavior: RowBehavior::Exit,
-        name: lookup_key("Common", "Exit"),
-        choices: vec![tr("Common", "Exit").to_string()],
-        selected_choice_index: [0; PLAYER_SLOTS],
-        help: vec![String::new()],
-        choice_difficulty_indices: None,
-        mirror_across_players: false,
-    });
+    ));
+    b.push(Row::custom(
+        RowId::CustomBlueFantasticWindowMs,
+        lookup_key("PlayerOptions", "CustomBlueFantasticWindowMs"),
+        lookup_key("PlayerOptionsHelp", "CustomBlueFantasticWindowMsHelp"),
+        CUSTOM_BLUE_FANTASTIC_WINDOW_MS,
+        custom_fantastic_window_choices(),
+    ));
+    b.push(
+        Row::custom(
+            RowId::WhatComesNext,
+            lookup_key("PlayerOptions", "WhatComesNext"),
+            lookup_key("PlayerOptionsHelp", "WhatComesNextAdvancedHelp"),
+            super::WHAT_COMES_NEXT,
+            what_comes_next_choices(OptionsPane::Advanced, return_screen),
+        )
+        .with_mirror_across_players(),
+    );
+    b.push(Row::exit());
     b.finish()
 }
 
