@@ -81,7 +81,7 @@ ureq = { version = "3.3.0", features = ["json", "rustls"] }
 tungstenite = "0.29.0"
 
 # Unlocks
-zip = { version = "8.5.1", default-features = false, features = ["deflate"] }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 # Platform-native data directories
 directories = "6.0.0"
