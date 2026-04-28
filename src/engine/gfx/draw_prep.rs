@@ -43,24 +43,6 @@ pub struct SpriteInstanceRaw {
     bytemuck::Pod,
     bytemuck::Zeroable,
 )]
-pub struct TexturedMeshVertexRaw {
-    pub pos: [f32; 3],
-    pub uv: [f32; 2],
-    pub color: [f32; 4],
-    pub tex_matrix_scale: [f32; 2],
-}
-
-#[repr(C)]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    serde::Serialize,
-    serde::Deserialize,
-    bytemuck::Pod,
-    bytemuck::Zeroable,
-)]
 pub struct TexturedMeshInstanceRaw {
     pub model_col0: [f32; 4],
     pub model_col1: [f32; 4],
@@ -145,7 +127,7 @@ pub enum DrawOp {
 pub struct DrawScratch {
     pub sprite_instances: Vec<SpriteInstanceRaw>,
     pub mesh_vertices: Vec<MeshVertex>,
-    pub tmesh_vertices: Vec<TexturedMeshVertexRaw>,
+    pub tmesh_vertices: Vec<TexturedMeshVertex>,
     pub tmesh_instances: Vec<TexturedMeshInstanceRaw>,
     pub ops: Vec<DrawOp>,
     transient_tmesh_geom: TMeshGeomMap,
@@ -246,15 +228,7 @@ fn transient_tmesh_source(
     }
 
     let vertex_start = scratch.tmesh_vertices.len() as u32;
-    scratch.tmesh_vertices.reserve(vertices.len());
-    for v in vertices.iter() {
-        scratch.tmesh_vertices.push(TexturedMeshVertexRaw {
-            pos: v.pos,
-            uv: v.uv,
-            color: v.color,
-            tex_matrix_scale: v.tex_matrix_scale,
-        });
-    }
+    scratch.tmesh_vertices.extend_from_slice(vertices);
     stats.dynamic_upload_vertices = stats
         .dynamic_upload_vertices
         .saturating_add(vertices.len() as u64);
@@ -295,29 +269,8 @@ where
     }
 
     scratch.mesh_vertices.clear();
-    let want_mesh = objects_len.saturating_mul(4);
-    if scratch.mesh_vertices.capacity() < want_mesh {
-        scratch
-            .mesh_vertices
-            .reserve(ensure_capacity(want_mesh, scratch.mesh_vertices.capacity()));
-    }
-
     scratch.tmesh_vertices.clear();
-    let want_tmesh = objects_len.saturating_mul(4);
-    if scratch.tmesh_vertices.capacity() < want_tmesh {
-        scratch.tmesh_vertices.reserve(ensure_capacity(
-            want_tmesh,
-            scratch.tmesh_vertices.capacity(),
-        ));
-    }
-
     scratch.tmesh_instances.clear();
-    if scratch.tmesh_instances.capacity() < objects_len {
-        scratch.tmesh_instances.reserve(ensure_capacity(
-            objects_len,
-            scratch.tmesh_instances.capacity(),
-        ));
-    }
 
     scratch.ops.clear();
     if scratch.ops.capacity() < objects_len {
@@ -327,20 +280,7 @@ where
     }
 
     scratch.transient_tmesh_geom.clear();
-    if scratch.transient_tmesh_geom.capacity() < objects_len {
-        scratch.transient_tmesh_geom.reserve(ensure_capacity(
-            objects_len,
-            scratch.transient_tmesh_geom.capacity(),
-        ));
-    }
-
     scratch.cached_tmesh.clear();
-    if scratch.cached_tmesh.capacity() < objects_len {
-        scratch.cached_tmesh.reserve(ensure_capacity(
-            objects_len,
-            scratch.cached_tmesh.capacity(),
-        ));
-    }
 
     let mut stats = PrepareStats::default();
 

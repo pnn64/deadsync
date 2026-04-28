@@ -18,6 +18,9 @@ const SFX_ITERS_16: usize = 8_000;
 const TMESH_ITERS: usize = 20_000;
 const INPUT_TEMP_ITERS: usize = 500_000;
 const ACTIVE_SFX_ITERS: usize = 100_000;
+const DRAW_PREP_RESERVE_ITERS: usize = 12_000;
+const TMESH_REPACK_ITERS: usize = 30_000;
+const TEXTURE_LOOKUP_ITERS: usize = 12_000;
 
 struct CountingAlloc {
     alloc_calls: AtomicU64,
@@ -73,6 +76,7 @@ struct TMeshGeomKey {
 }
 
 type TMeshGeomMap = HashMap<TMeshGeomKey, (u32, u32), BuildHasherDefault<XxHash64>>;
+type FastU64Map<V> = HashMap<u64, V, BuildHasherDefault<XxHash64>>;
 
 type TextureHandle = u64;
 
@@ -113,6 +117,48 @@ struct TexturedMeshVertex {
     uv: [f32; 2],
     tex_matrix_scale: [f32; 2],
     color: [f32; 4],
+}
+
+#[derive(Clone, Copy)]
+enum PrepObj {
+    Sprite { texture: TextureHandle },
+    Mesh { vertices: usize },
+    TMeshTransient { vertices: usize, geom_id: usize },
+    TMeshCached { vertices: usize, cache_key: u64 },
+}
+
+#[derive(Default)]
+struct PrepReserveScratch {
+    sprite_instances: Vec<u64>,
+    mesh_vertices: Vec<u64>,
+    tmesh_vertices: Vec<u64>,
+    tmesh_instances: Vec<u64>,
+    ops: Vec<u64>,
+    transient_tmesh_geom: TMeshGeomMap,
+    cached_tmesh: FastU64Map<bool>,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct TexturedMeshVertexRaw {
+    pos: [f32; 3],
+    uv: [f32; 2],
+    color: [f32; 4],
+    tex_matrix_scale: [f32; 2],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct TexturedMeshVertexGpu {
+    pos: [f32; 3],
+    uv: [f32; 2],
+    color: [f32; 4],
+    tex_matrix_scale: [f32; 2],
+}
+
+#[derive(Clone, Copy)]
+struct TextureSlot {
+    marker: u64,
 }
 
 impl CountingAlloc {
@@ -217,6 +263,9 @@ fn main() {
     println!("synthetic targeted checks for review recommendations\n");
 
     bench_sorting();
+    bench_draw_prep_reserves();
+    bench_tmesh_repack();
+    bench_texture_lookup();
     bench_sfx_mix();
     bench_transient_tmesh();
     bench_active_sfx_growth();
@@ -258,6 +307,45 @@ fn bench_sfx_mix() {
     run_sfx_pair("1 active sfx", 1, SFX_ITERS_1);
     run_sfx_pair("4 active sfx", 4, SFX_ITERS_4);
     run_sfx_pair("16 active sfx", 16, SFX_ITERS_16);
+    println!();
+}
+
+fn bench_draw_prep_reserves() {
+    println!("draw-prep scratch reserve policy");
+    run_prep_reserve_pair(
+        "sprite-only 4096 cold",
+        &make_prep_shape(4096, PrepShape::SpriteOnly),
+        true,
+    );
+    run_prep_reserve_pair(
+        "sprite-only 4096 retained",
+        &make_prep_shape(4096, PrepShape::SpriteOnly),
+        false,
+    );
+    run_prep_reserve_pair(
+        "mixed 512 retained",
+        &make_prep_shape(512, PrepShape::Mixed),
+        false,
+    );
+    run_prep_reserve_pair(
+        "cached tmesh 1024 retained",
+        &make_prep_shape(1024, PrepShape::CachedTMesh),
+        false,
+    );
+    println!();
+}
+
+fn bench_tmesh_repack() {
+    println!("cached textured mesh upload packing");
+    run_tmesh_repack_pair("cached geom 256 verts", 256);
+    run_tmesh_repack_pair("cached geom 2048 verts", 2048);
+    println!();
+}
+
+fn bench_texture_lookup() {
+    println!("texture handle lookup");
+    run_texture_lookup_pair("64 textures, 4096 draw ops", 64, 4096);
+    run_texture_lookup_pair("1024 textures, 4096 draw ops", 1024, 4096);
     println!();
 }
 
@@ -429,6 +517,385 @@ fn run_tmesh_pair(name: &str, mesh_count: usize, verts_per_mesh: usize, duplicat
     print_result(&dedupe);
     print_result(&direct);
     print_ratio("direct vs dedupe", &dedupe, &direct);
+}
+
+fn run_prep_reserve_pair(name: &str, objects: &[PrepObj], cold: bool) {
+    if cold {
+        let current = bench(
+            format!("{name}: current upfront reserve"),
+            DRAW_PREP_RESERVE_ITERS,
+            || {
+                let mut scratch = PrepReserveScratch::default();
+                prep_reserve_current(black_box(objects), &mut scratch)
+            },
+        );
+        let lazy = bench(
+            format!("{name}: lazy typed reserve"),
+            DRAW_PREP_RESERVE_ITERS,
+            || {
+                let mut scratch = PrepReserveScratch::default();
+                prep_reserve_lazy(black_box(objects), &mut scratch)
+            },
+        );
+        print_result(&current);
+        print_result(&lazy);
+        print_ratio("lazy vs current", &current, &lazy);
+        return;
+    }
+
+    let mut current_scratch = PrepReserveScratch::default();
+    let mut lazy_scratch = PrepReserveScratch::default();
+    prep_reserve_current(objects, &mut current_scratch);
+    prep_reserve_lazy(objects, &mut lazy_scratch);
+
+    let current = bench(
+        format!("{name}: current upfront reserve"),
+        DRAW_PREP_RESERVE_ITERS,
+        || prep_reserve_current(black_box(objects), &mut current_scratch),
+    );
+    let lazy = bench(
+        format!("{name}: lazy typed reserve"),
+        DRAW_PREP_RESERVE_ITERS,
+        || prep_reserve_lazy(black_box(objects), &mut lazy_scratch),
+    );
+    print_result(&current);
+    print_result(&lazy);
+    print_ratio("lazy vs current", &current, &lazy);
+}
+
+fn run_tmesh_repack_pair(name: &str, vertices: usize) {
+    let current = make_tmesh_storage(1, vertices, false);
+    let current = current[0].as_slice();
+    let gpu = make_gpu_tmesh_storage(vertices);
+    let mut raw = Vec::with_capacity(vertices);
+
+    let alloc_repack = bench(
+        format!("{name}: current alloc+repack"),
+        TMESH_REPACK_ITERS,
+        || repack_tmesh_alloc(black_box(current)),
+    );
+    let reused_repack = bench(
+        format!("{name}: reused Vec repack"),
+        TMESH_REPACK_ITERS,
+        || repack_tmesh_reuse(black_box(current), &mut raw),
+    );
+    let direct = bench(
+        format!("{name}: direct GPU layout"),
+        TMESH_REPACK_ITERS,
+        || checksum_gpu_tmesh(black_box(&gpu)),
+    );
+
+    print_result(&alloc_repack);
+    print_result(&reused_repack);
+    print_result(&direct);
+    print_ratio("reused repack vs alloc", &alloc_repack, &reused_repack);
+    print_ratio("direct layout vs alloc", &alloc_repack, &direct);
+}
+
+fn run_texture_lookup_pair(name: &str, texture_count: usize, op_count: usize) {
+    let handles = make_texture_handles(texture_count, op_count);
+    let map = make_texture_map(texture_count);
+    let slots = make_texture_slots(texture_count);
+
+    let hash = bench(format!("{name}: HashMap get"), TEXTURE_LOOKUP_ITERS, || {
+        lookup_textures_hash(black_box(&handles), black_box(&map))
+    });
+    let dense = bench(
+        format!("{name}: dense Vec index"),
+        TEXTURE_LOOKUP_ITERS,
+        || lookup_textures_dense(black_box(&handles), black_box(&slots)),
+    );
+
+    print_result(&hash);
+    print_result(&dense);
+    print_ratio("dense vs hash", &hash, &dense);
+}
+
+#[derive(Clone, Copy)]
+enum PrepShape {
+    SpriteOnly,
+    Mixed,
+    CachedTMesh,
+}
+
+fn make_prep_shape(len: usize, shape: PrepShape) -> Vec<PrepObj> {
+    let mut objects = Vec::with_capacity(len);
+    for i in 0..len {
+        objects.push(match shape {
+            PrepShape::SpriteOnly => PrepObj::Sprite {
+                texture: 1 + (i % 32) as TextureHandle,
+            },
+            PrepShape::Mixed => match i % 4 {
+                0 | 1 => PrepObj::Sprite {
+                    texture: 1 + (i % 32) as TextureHandle,
+                },
+                2 => PrepObj::Mesh { vertices: 6 },
+                _ => PrepObj::TMeshTransient {
+                    vertices: 6,
+                    geom_id: i,
+                },
+            },
+            PrepShape::CachedTMesh => PrepObj::TMeshCached {
+                vertices: 6,
+                cache_key: 0x1000 + (i % 64) as u64,
+            },
+        });
+    }
+    objects
+}
+
+fn prep_reserve_current(objects: &[PrepObj], scratch: &mut PrepReserveScratch) -> u64 {
+    let objects_len = objects.len();
+
+    scratch.sprite_instances.clear();
+    if scratch.sprite_instances.capacity() < objects_len {
+        scratch.sprite_instances.reserve(reserve_gap(
+            objects_len,
+            scratch.sprite_instances.capacity(),
+        ));
+    }
+
+    scratch.mesh_vertices.clear();
+    scratch.tmesh_vertices.clear();
+    scratch.tmesh_instances.clear();
+
+    scratch.ops.clear();
+    if scratch.ops.capacity() < objects_len {
+        scratch
+            .ops
+            .reserve(reserve_gap(objects_len, scratch.ops.capacity()));
+    }
+
+    scratch.transient_tmesh_geom.clear();
+    scratch.cached_tmesh.clear();
+
+    prep_reserve_fill(objects, scratch, true)
+}
+
+fn prep_reserve_lazy(objects: &[PrepObj], scratch: &mut PrepReserveScratch) -> u64 {
+    scratch.sprite_instances.clear();
+    scratch.mesh_vertices.clear();
+    scratch.tmesh_vertices.clear();
+    scratch.tmesh_instances.clear();
+    scratch.ops.clear();
+    prep_reserve_fill(objects, scratch, false)
+}
+
+fn prep_reserve_fill(
+    objects: &[PrepObj],
+    scratch: &mut PrepReserveScratch,
+    maps_cleared: bool,
+) -> u64 {
+    let mut maps_cleared = maps_cleared;
+    let mut checksum = 0u64;
+    for (i, &obj) in objects.iter().enumerate() {
+        match obj {
+            PrepObj::Sprite { texture } => {
+                let start = scratch.sprite_instances.len() as u64;
+                scratch.sprite_instances.push(texture);
+                scratch.ops.push(start ^ texture);
+                checksum = checksum.wrapping_mul(131).wrapping_add(start ^ texture);
+            }
+            PrepObj::Mesh { vertices } => {
+                let start = scratch.mesh_vertices.len() as u64;
+                for v in 0..vertices {
+                    scratch.mesh_vertices.push((i as u64) ^ (v as u64));
+                }
+                scratch.ops.push(start ^ vertices as u64);
+                checksum = checksum
+                    .wrapping_mul(131)
+                    .wrapping_add(start ^ vertices as u64);
+            }
+            PrepObj::TMeshTransient { vertices, geom_id } => {
+                if !maps_cleared {
+                    scratch.transient_tmesh_geom.clear();
+                    scratch.cached_tmesh.clear();
+                    maps_cleared = true;
+                }
+                let key = TMeshGeomKey {
+                    ptr: geom_id,
+                    len: vertices,
+                };
+                let (start, count) =
+                    if let Some(&(start, count)) = scratch.transient_tmesh_geom.get(&key) {
+                        (start, count)
+                    } else {
+                        let start = scratch.tmesh_vertices.len() as u32;
+                        for v in 0..vertices {
+                            scratch.tmesh_vertices.push((geom_id as u64) ^ (v as u64));
+                        }
+                        let count = vertices as u32;
+                        scratch.transient_tmesh_geom.insert(key, (start, count));
+                        (start, count)
+                    };
+                let instance_start = scratch.tmesh_instances.len() as u64;
+                scratch.tmesh_instances.push(instance_start);
+                scratch.ops.push(u64::from(start) ^ u64::from(count));
+                checksum = checksum
+                    .wrapping_mul(131)
+                    .wrapping_add(u64::from(start) ^ u64::from(count));
+            }
+            PrepObj::TMeshCached {
+                vertices,
+                cache_key,
+            } => {
+                if !maps_cleared {
+                    scratch.transient_tmesh_geom.clear();
+                    scratch.cached_tmesh.clear();
+                    maps_cleared = true;
+                }
+                let cached = if let Some(&cached) = scratch.cached_tmesh.get(&cache_key) {
+                    cached
+                } else {
+                    scratch.cached_tmesh.insert(cache_key, true);
+                    true
+                };
+                let instance_start = scratch.tmesh_instances.len() as u64;
+                scratch.tmesh_instances.push(instance_start);
+                scratch.ops.push(cache_key ^ vertices as u64);
+                checksum = checksum
+                    .wrapping_mul(131)
+                    .wrapping_add(cache_key ^ vertices as u64 ^ cached as u64);
+            }
+        }
+    }
+
+    checksum
+        .wrapping_add(scratch.sprite_instances.len() as u64)
+        .wrapping_add((scratch.mesh_vertices.len() as u64) << 8)
+        .wrapping_add((scratch.tmesh_vertices.len() as u64) << 16)
+        .wrapping_add((scratch.tmesh_instances.len() as u64) << 24)
+        .wrapping_add((scratch.ops.len() as u64) << 32)
+}
+
+#[inline(always)]
+fn reserve_gap(want: usize, capacity: usize) -> usize {
+    want.saturating_sub(capacity)
+}
+
+fn repack_tmesh_alloc(vertices: &[TexturedMeshVertex]) -> u64 {
+    let mut raw = Vec::with_capacity(vertices.len());
+    for v in vertices {
+        raw.push(TexturedMeshVertexRaw {
+            pos: v.pos,
+            uv: v.uv,
+            color: v.color,
+            tex_matrix_scale: v.tex_matrix_scale,
+        });
+    }
+    checksum_raw_tmesh(&raw)
+}
+
+fn repack_tmesh_reuse(
+    vertices: &[TexturedMeshVertex],
+    raw: &mut Vec<TexturedMeshVertexRaw>,
+) -> u64 {
+    raw.clear();
+    if raw.capacity() < vertices.len() {
+        raw.reserve(vertices.len() - raw.capacity());
+    }
+    for v in vertices {
+        raw.push(TexturedMeshVertexRaw {
+            pos: v.pos,
+            uv: v.uv,
+            color: v.color,
+            tex_matrix_scale: v.tex_matrix_scale,
+        });
+    }
+    checksum_raw_tmesh(raw)
+}
+
+fn make_gpu_tmesh_storage(len: usize) -> Vec<TexturedMeshVertexGpu> {
+    let mut out = Vec::with_capacity(len);
+    for i in 0..len {
+        out.push(TexturedMeshVertexGpu {
+            pos: [i as f32, (i % 17) as f32, 0.0],
+            uv: [i as f32 * 0.01, (i % 31) as f32 * 0.01],
+            color: [1.0, 0.5, 0.25, 1.0],
+            tex_matrix_scale: [1.0, 1.0],
+        });
+    }
+    out
+}
+
+fn checksum_raw_tmesh(vertices: &[TexturedMeshVertexRaw]) -> u64 {
+    let mut out = 0u64;
+    for v in vertices {
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(v.pos[0].to_bits() as u64)
+            .wrapping_add(v.uv[0].to_bits() as u64)
+            .wrapping_add(v.color[3].to_bits() as u64)
+            .wrapping_add(v.tex_matrix_scale[0].to_bits() as u64);
+    }
+    out
+}
+
+fn checksum_gpu_tmesh(vertices: &[TexturedMeshVertexGpu]) -> u64 {
+    let mut out = 0u64;
+    for v in vertices {
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(v.pos[0].to_bits() as u64)
+            .wrapping_add(v.uv[0].to_bits() as u64)
+            .wrapping_add(v.color[3].to_bits() as u64)
+            .wrapping_add(v.tex_matrix_scale[0].to_bits() as u64);
+    }
+    out
+}
+
+fn make_texture_handles(texture_count: usize, op_count: usize) -> Vec<TextureHandle> {
+    let mut out = Vec::with_capacity(op_count);
+    for i in 0..op_count {
+        out.push(1 + (permute(i, texture_count) as TextureHandle));
+    }
+    out
+}
+
+fn make_texture_map(texture_count: usize) -> FastU64Map<TextureSlot> {
+    let mut map = FastU64Map::default();
+    map.reserve(texture_count);
+    for i in 0..texture_count {
+        let handle = 1 + i as TextureHandle;
+        map.insert(
+            handle,
+            TextureSlot {
+                marker: handle.wrapping_mul(17),
+            },
+        );
+    }
+    map
+}
+
+fn make_texture_slots(texture_count: usize) -> Vec<TextureSlot> {
+    let mut slots = vec![TextureSlot { marker: 0 }; texture_count + 1];
+    for i in 0..texture_count {
+        let handle = 1 + i as TextureHandle;
+        slots[handle as usize] = TextureSlot {
+            marker: handle.wrapping_mul(17),
+        };
+    }
+    slots
+}
+
+fn lookup_textures_hash(handles: &[TextureHandle], textures: &FastU64Map<TextureSlot>) -> u64 {
+    let mut out = 0u64;
+    for &handle in handles {
+        if let Some(texture) = textures.get(&handle) {
+            out = out.wrapping_mul(131).wrapping_add(texture.marker);
+        }
+    }
+    out
+}
+
+fn lookup_textures_dense(handles: &[TextureHandle], textures: &[TextureSlot]) -> u64 {
+    let mut out = 0u64;
+    for &handle in handles {
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(textures[handle as usize].marker);
+    }
+    out
 }
 
 fn bench<F>(name: impl Into<String>, iters: usize, mut f: F) -> BenchResult

@@ -1,9 +1,8 @@
 use crate::engine::gfx::{
     BlendMode, DrawStats, FastU64Map, MeshMode, RenderList, SamplerDesc, SamplerFilter,
-    SamplerWrap, TMeshCacheKey, Texture as RendererTexture, TextureHandleMap,
+    SamplerWrap, TMeshCacheKey, Texture as RendererTexture, TextureHandleMap, TexturedMeshVertex,
     draw_prep::{
         self, DrawOp, DrawScratch, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshSource,
-        TexturedMeshVertexRaw,
     },
 };
 use crate::engine::space::ortho_for_window;
@@ -369,7 +368,7 @@ pub fn init(
         gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
 
         // a_pos (location 0), a_uv (location 1), a_color (location 2), a_tex_matrix_scale (location 3)
-        let stride = std::mem::size_of::<TexturedMeshVertexRaw>() as i32;
+        let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
         gl.enable_vertex_attrib_array(0);
         gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
         gl.enable_vertex_attrib_array(1);
@@ -663,21 +662,11 @@ fn ensure_cached_tmesh(
         return entry.vertex_count == vertices.len() as u32;
     }
 
-    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertexRaw>();
+    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertex>();
     if bytes > OPENGL_TMESH_CACHE_MAX_BYTES
         || cached_tmesh_bytes.saturating_add(bytes) > OPENGL_TMESH_CACHE_MAX_BYTES
     {
         return false;
-    }
-
-    let mut raw = Vec::with_capacity(vertices.len());
-    for v in vertices {
-        raw.push(TexturedMeshVertexRaw {
-            pos: v.pos,
-            uv: v.uv,
-            color: v.color,
-            tex_matrix_scale: v.tex_matrix_scale,
-        });
     }
 
     // SAFETY: the OpenGL context is current on this thread while draw prep runs,
@@ -689,7 +678,7 @@ fn ensure_cached_tmesh(
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
         gl.buffer_data_u8_slice(
             glow::ARRAY_BUFFER,
-            bytemuck::cast_slice(raw.as_slice()),
+            bytemuck::cast_slice(vertices),
             glow::STATIC_DRAW,
         );
         gl.bind_buffer(glow::ARRAY_BUFFER, None);
@@ -700,7 +689,7 @@ fn ensure_cached_tmesh(
         cache_key,
         CachedTMeshGeom {
             vbo,
-            vertex_count: raw.len() as u32,
+            vertex_count: vertices.len() as u32,
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
@@ -1010,7 +999,7 @@ pub fn draw(
                     }
 
                     if last_tmesh_source != Some(run.source) {
-                        let stride = std::mem::size_of::<TexturedMeshVertexRaw>() as i32;
+                        let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
                         let Some(vertex_buffer) = (match run.source {
                             TexturedMeshSource::Transient { .. } => Some(state.tmesh_vbo),
                             TexturedMeshSource::Cached { cache_key, .. } => {

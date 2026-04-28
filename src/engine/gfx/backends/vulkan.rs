@@ -1,11 +1,10 @@
 use crate::engine::gfx::{
     BlendMode, ClockDomainTrace, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    TMeshCacheKey, Texture as RendererTexture, TextureHandleMap,
+    TMeshCacheKey, Texture as RendererTexture, TextureHandleMap, TexturedMeshVertex,
     draw_prep::{
         self, DrawOp, DrawScratch, SpriteInstanceRaw as InstanceData,
         TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshSource,
-        TexturedMeshVertexRaw as TexturedMeshVertexGpu,
     },
 };
 use crate::engine::space::ortho_for_window;
@@ -210,7 +209,7 @@ pub struct State {
     mesh_capacity_vertices: usize,         // total vertices across ring
     per_frame_stride_vertices: usize,      // vertices reserved per frame
     tmesh_ring: Option<BufferResource>,    // one big VB for all frames (textured mesh)
-    tmesh_ring_ptr: *mut TexturedMeshVertexGpu, // persistently mapped pointer
+    tmesh_ring_ptr: *mut TexturedMeshVertex, // persistently mapped pointer
     tmesh_capacity_vertices: usize,        // total textured mesh vertices across ring
     per_frame_stride_tmesh_vertices: usize, // textured mesh vertices reserved per frame
     tmesh_instance_ring: Option<BufferResource>, // one big instanced VB for textured meshes
@@ -940,7 +939,7 @@ fn ensure_tmesh_ring_capacity(
     };
 
     let need_total_vertices = stride * MAX_FRAMES_IN_FLIGHT;
-    let bytes_per_vertex = std::mem::size_of::<TexturedMeshVertexGpu>() as vk::DeviceSize;
+    let bytes_per_vertex = std::mem::size_of::<TexturedMeshVertex>() as vk::DeviceSize;
     let need_bytes = (need_total_vertices as u64) * (bytes_per_vertex as u64);
 
     let dev = state.device.as_ref().unwrap();
@@ -975,7 +974,7 @@ fn ensure_tmesh_ring_capacity(
             buffer: buf,
             memory: mem,
         });
-        state.tmesh_ring_ptr = mapped.cast::<TexturedMeshVertexGpu>();
+        state.tmesh_ring_ptr = mapped.cast::<TexturedMeshVertex>();
         state.tmesh_capacity_vertices = need_total_vertices;
         state.per_frame_stride_tmesh_vertices = stride;
     } else if state.per_frame_stride_tmesh_vertices != stride {
@@ -2588,7 +2587,7 @@ fn vertex_input_descriptions_tmesh() -> (
 ) {
     let b0 = vk::VertexInputBindingDescription::default()
         .binding(0)
-        .stride(std::mem::size_of::<TexturedMeshVertexGpu>() as u32)
+        .stride(std::mem::size_of::<TexturedMeshVertex>() as u32)
         .input_rate(vk::VertexInputRate::VERTEX);
     let b1 = vk::VertexInputBindingDescription::default()
         .binding(1)
@@ -2861,7 +2860,7 @@ fn ensure_cached_tmesh(
         return Ok(entry.vertex_count == vertices.len() as u32);
     }
 
-    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertexGpu>();
+    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertex>();
     if bytes > VULKAN_TMESH_CACHE_MAX_BYTES
         || cached_tmesh_bytes.saturating_add(bytes) > VULKAN_TMESH_CACHE_MAX_BYTES
     {
@@ -2882,18 +2881,8 @@ fn ensure_cached_tmesh(
     // mapped range is fully written with initialized vertex data before unmapping.
     unsafe {
         let mapped = device.map_memory(memory, 0, size, vk::MemoryMapFlags::empty())?;
-        let dst = mapped.cast::<TexturedMeshVertexGpu>();
-        for (ix, vertex) in vertices.iter().enumerate() {
-            std::ptr::write(
-                dst.add(ix),
-                TexturedMeshVertexGpu {
-                    pos: vertex.pos,
-                    uv: vertex.uv,
-                    color: vertex.color,
-                    tex_matrix_scale: vertex.tex_matrix_scale,
-                },
-            );
-        }
+        let dst = mapped.cast::<TexturedMeshVertex>();
+        std::ptr::copy_nonoverlapping(vertices.as_ptr(), dst, vertices.len());
         device.unmap_memory(memory);
     }
 
