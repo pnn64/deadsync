@@ -1708,7 +1708,7 @@ impl RenderState {
         )
     }
 
-    fn mix_f32_buffer(&mut self, total_before: u64, len: usize) -> usize {
+    fn mix_f32_buffer(&mut self, total_before: u64, len: usize) -> (usize, bool) {
         self.ensure_mix_buffers(len);
         let popped = internal::callback_fill_from_ring_i16(&self.music_ring, &mut self.mix_i16);
         if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
@@ -1730,21 +1730,23 @@ impl RenderState {
             }
         }
 
+        let mut mixed_sfx = false;
         self.active_sfx.retain_mut(|(data, cursor, lane)| {
             let n = (data.len().saturating_sub(*cursor)).min(self.mix_f32.len());
+            mixed_sfx |= n > 0;
             let lane_vol = match *lane {
                 SfxLane::Effect => sfx_vol,
                 SfxLane::AssistTick => assist_tick_vol,
             };
             for i in 0..n {
                 let sfx_sample_f32 = i16_to_f32(data[*cursor + i]) * lane_vol;
-                self.mix_f32[i] = (self.mix_f32[i] + sfx_sample_f32).clamp(-1.0, 1.0);
+                self.mix_f32[i] += sfx_sample_f32;
             }
             *cursor += n;
             *cursor < data.len()
         });
 
-        popped
+        (popped, mixed_sfx)
     }
 
     #[inline(always)]
@@ -1789,7 +1791,7 @@ impl RenderState {
     #[cfg(windows)]
     fn render_i16_qpc(&mut self, out: &mut [i16], anchor_nanos: u64) {
         let total_before = self.begin_callback_qpc(anchor_nanos);
-        let popped = self.mix_f32_buffer(total_before, out.len());
+        let (popped, _) = self.mix_f32_buffer(total_before, out.len());
         for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
             *dst = f32_to_i16(*src);
         }
@@ -1799,7 +1801,7 @@ impl RenderState {
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     fn render_i16_host_nanos(&mut self, out: &mut [i16], anchor_nanos: u64) {
         let total_before = self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
-        let popped = self.mix_f32_buffer(total_before, out.len());
+        let (popped, _) = self.mix_f32_buffer(total_before, out.len());
         for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
             *dst = f32_to_i16(*src);
         }
@@ -1812,16 +1814,28 @@ impl RenderState {
     ))]
     fn render_f32_host_nanos(&mut self, out: &mut [f32], anchor_nanos: u64) {
         let total_before = self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
-        let popped = self.mix_f32_buffer(total_before, out.len());
-        out.copy_from_slice(&self.mix_f32[..out.len()]);
+        let (popped, mixed_sfx) = self.mix_f32_buffer(total_before, out.len());
+        if mixed_sfx {
+            for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
+                *dst = src.clamp(-1.0, 1.0);
+            }
+        } else {
+            out.copy_from_slice(&self.mix_f32[..out.len()]);
+        }
         self.finish_callback(total_before, out.len(), popped);
     }
 
     #[cfg(windows)]
     fn render_f32_qpc(&mut self, out: &mut [f32], anchor_nanos: u64) {
         let total_before = self.begin_callback_qpc(anchor_nanos);
-        let popped = self.mix_f32_buffer(total_before, out.len());
-        out.copy_from_slice(&self.mix_f32[..out.len()]);
+        let (popped, mixed_sfx) = self.mix_f32_buffer(total_before, out.len());
+        if mixed_sfx {
+            for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
+                *dst = src.clamp(-1.0, 1.0);
+            }
+        } else {
+            out.copy_from_slice(&self.mix_f32[..out.len()]);
+        }
         self.finish_callback(total_before, out.len(), popped);
     }
 }

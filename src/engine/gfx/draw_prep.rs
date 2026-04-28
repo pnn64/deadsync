@@ -279,10 +279,8 @@ where
             .reserve(ensure_capacity(objects_len, scratch.ops.capacity()));
     }
 
-    scratch.transient_tmesh_geom.clear();
-    scratch.cached_tmesh.clear();
-
     let mut stats = PrepareStats::default();
+    let mut tmesh_maps_cleared = false;
 
     for obj in render_list.objects.iter() {
         match &obj.object_type {
@@ -396,6 +394,11 @@ where
                 let texture_handle = obj.texture_handle;
                 if texture_handle == INVALID_TEXTURE_HANDLE {
                     continue;
+                }
+                if !tmesh_maps_cleared {
+                    scratch.transient_tmesh_geom.clear();
+                    scratch.cached_tmesh.clear();
+                    tmesh_maps_cleared = true;
                 }
 
                 let source = if *geom_cache_key != INVALID_TMESH_CACHE_KEY {
