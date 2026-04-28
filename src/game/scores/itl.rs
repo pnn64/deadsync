@@ -408,6 +408,36 @@ pub fn get_cached_itl_score_for_song(
         .and_then(|data| itl_score_for_song(song, data))
 }
 
+/// Returns true if the song folder is unlocked for this player's ITL profile.
+/// Songs not present in the unlock map are treated as locked, matching SL.
+pub fn is_itl_song_folder_unlocked_for_side(song_folder: &str, side: profile::PlayerSide) -> bool {
+    let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+        return false;
+    };
+    ensure_itl_score_cache_loaded(&profile_id);
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(&profile_id)
+        .map(|data| data.unlock_folders.get(song_folder).copied().unwrap_or(false))
+        .unwrap_or(false)
+}
+
+/// True when `pack_dir` matches the SL-style pattern `ITL Online <year> Unlocks`
+/// (case-insensitive, any 4-digit year).
+pub fn is_itl_unlocks_pack(pack_dir: &str) -> bool {
+    let trimmed = pack_dir.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let Some(rest) = lower.strip_prefix("itl online ") else {
+        return false;
+    };
+    let Some(year_part) = rest.strip_suffix(" unlocks") else {
+        return false;
+    };
+    year_part.len() == 4 && year_part.chars().all(|c| c.is_ascii_digit())
+}
+
 pub fn get_cached_itl_tournament_rank_for_side(
     chart_hash: &str,
     side: profile::PlayerSide,

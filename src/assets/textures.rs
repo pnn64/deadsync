@@ -901,6 +901,7 @@ impl AssetManager {
                 "menu_bg_technique/white_tex.png".to_string(),
             ),
             ("fave-icon.png".to_string(), "fave-icon.png".to_string()),
+            ("lock.png".to_string(), "lock.png".to_string()),
             (
                 "folder-solid.png".to_string(),
                 "folder-solid.png".to_string(),

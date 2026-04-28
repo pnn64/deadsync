@@ -5574,7 +5574,7 @@ fn lobby_song_path(song: &SongData) -> Option<String> {
     Some(format!("{group_dir}/{song_dir}"))
 }
 
-fn song_pack_and_dir_name(song: &SongData) -> Option<(&str, &str)> {
+pub(crate) fn song_pack_and_dir_name(song: &SongData) -> Option<(&str, &str)> {
     let song_dir = song.simfile_path.parent()?.file_name()?.to_str()?;
     let pack_dir = song
         .simfile_path

@@ -45,6 +45,10 @@ const HEART_COLOR_P1: [f32; 4] = [0.3, 0.5, 1.0, 1.0]; // blue
 const HEART_COLOR_P2: [f32; 4] = [1.0, 0.47, 0.47, 1.0]; // pink (#ff7777)
 const HEART_ZOOM_SINGLE: f32 = 0.039; // 512 * 0.039 ≈ 20px
 const HEART_ZOOM_DUAL: f32 = 0.029; // 512 * 0.029 ≈ 15px
+const LOCK_COLOR_P1: [f32; 4] = [1.0, 1.0, 0.0, 1.0]; // yellow
+const LOCK_COLOR_P2: [f32; 4] = [1.0, 0.5, 0.0, 1.0]; // orange
+const LOCK_ZOOM_SINGLE: f32 = 0.039; // 512 * 0.039 ≈ 20px
+const LOCK_ZOOM_DUAL: f32 = 0.029; // 512 * 0.029 ≈ 15px
 const ITL_RANK_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
@@ -900,6 +904,70 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 diffuse(col[0], col[1], col[2], col[3]):
                                 z(3)
                             ));
+                        }
+                    }
+
+                    // ITL unlocks lock icon (per-player)
+                    {
+                        let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+                        let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+                        let both_joined = p1_joined && p2_joined;
+                        if (p1_joined || p2_joined)
+                            && let Some((pack_dir, song_dir)) =
+                                crate::screens::select_music::song_pack_and_dir_name(info.as_ref())
+                            && scores::is_itl_unlocks_pack(pack_dir)
+                        {
+                            let p1_locked = p1_joined
+                                && !scores::is_itl_song_folder_unlocked_for_side(
+                                    song_dir,
+                                    profile::PlayerSide::P1,
+                                );
+                            let p2_locked = p2_joined
+                                && !scores::is_itl_song_folder_unlocked_for_side(
+                                    song_dir,
+                                    profile::PlayerSide::P2,
+                                );
+                            let lock_x = -12.0_f32;
+                            if p1_locked {
+                                let lock_y = if both_joined {
+                                    half_item_h - 8.0
+                                } else {
+                                    half_item_h
+                                };
+                                let zm = if both_joined {
+                                    LOCK_ZOOM_DUAL
+                                } else {
+                                    LOCK_ZOOM_SINGLE
+                                };
+                                let c = LOCK_COLOR_P1;
+                                slot_children.push(act!(sprite("lock.png"):
+                                    align(0.5, 0.5):
+                                    xy(lock_x, lock_y):
+                                    zoom(zm):
+                                    diffuse(c[0], c[1], c[2], c[3]):
+                                    z(3)
+                                ));
+                            }
+                            if p2_locked {
+                                let lock_y = if both_joined {
+                                    half_item_h + 8.0
+                                } else {
+                                    half_item_h
+                                };
+                                let zm = if both_joined {
+                                    LOCK_ZOOM_DUAL
+                                } else {
+                                    LOCK_ZOOM_SINGLE
+                                };
+                                let c = LOCK_COLOR_P2;
+                                slot_children.push(act!(sprite("lock.png"):
+                                    align(0.5, 0.5):
+                                    xy(lock_x, lock_y):
+                                    zoom(zm):
+                                    diffuse(c[0], c[1], c[2], c[3]):
+                                    z(3)
+                                ));
+                            }
                         }
                     }
 
