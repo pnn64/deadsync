@@ -2141,6 +2141,61 @@ fn apply_effect_to_text(
 }
 
 #[inline(always)]
+fn has_shadow(len: [f32; 2]) -> bool {
+    len[0] != 0.0 || len[1] != 0.0
+}
+
+fn push_shadow_objects_for_range(
+    out: &mut Vec<RenderObject>,
+    start: usize,
+    end: usize,
+    len: [f32; 2],
+    color: [f32; 4],
+) {
+    let t_world = Matrix4::from_translation(Vector3::new(len[0], len[1], 0.0));
+    for i in start..end {
+        let obj = &out[i];
+        let mut obj_type = obj.object_type.clone();
+        match &mut obj_type {
+            renderer::ObjectType::Sprite { center, tint, .. } => {
+                let mut shadow_tint = color;
+                shadow_tint[3] *= (*tint)[3];
+                *tint = shadow_tint;
+                center[0] += len[0];
+                center[1] += len[1];
+            }
+            renderer::ObjectType::Mesh { tint, .. } => {
+                tint[0] *= color[0];
+                tint[1] *= color[1];
+                tint[2] *= color[2];
+                tint[3] *= color[3];
+            }
+            renderer::ObjectType::TexturedMesh { tint, .. } => {
+                let mut shadow_tint = color;
+                shadow_tint[0] *= tint[0];
+                shadow_tint[1] *= tint[1];
+                shadow_tint[2] *= tint[2];
+                shadow_tint[3] *= tint[3];
+                *tint = shadow_tint;
+            }
+        }
+
+        out.push(renderer::RenderObject {
+            object_type: obj_type,
+            texture_handle: obj.texture_handle,
+            transform: match &obj.object_type {
+                renderer::ObjectType::Sprite { .. } => obj.transform,
+                _ => t_world * obj.transform,
+            },
+            blend: obj.blend,
+            z: obj.z.saturating_sub(1),
+            order: obj.order,
+            camera: obj.camera,
+        });
+    }
+}
+
+#[inline(always)]
 fn build_actor_recursive<'a>(
     actor: &'a actors::Actor,
     parent: SmRect,
@@ -2193,6 +2248,8 @@ fn build_actor_recursive<'a>(
             animate,
             state_delay,
             scale,
+            shadow_len,
+            shadow_color,
             effect,
         } => {
             if !*visible {
@@ -2319,14 +2376,18 @@ fn build_actor_recursive<'a>(
                 clip_objects_range_to_world_masks(out, before, masks);
             }
 
+            let end = out.len();
             let layer = base_z.saturating_add(*z);
-            for obj in out.iter_mut().skip(before) {
+            for obj in out.iter_mut().take(end).skip(before) {
                 obj.z = layer;
                 obj.order = {
                     let o = *order_counter;
                     *order_counter += 1;
                     o
                 };
+            }
+            if has_shadow(*shadow_len) {
+                push_shadow_objects_for_range(out, before, end, *shadow_len, *shadow_color);
             }
         }
 
@@ -2439,8 +2500,6 @@ fn build_actor_recursive<'a>(
         }
 
         actors::Actor::Shadow { len, color, child } => {
-            // Build the child first to push its objects; then duplicate those objects
-            // with a pre-multiplied world translation and shadow tint at z-1.
             let start = out.len();
             build_actor_recursive(
                 child,
@@ -2458,55 +2517,9 @@ fn build_actor_recursive<'a>(
                 texture_cache,
                 total_elapsed,
             );
-
-            // Prepare world-space translation matrix that matches StepMania's
-            // DISPLAY->TranslateWorld behavior.
-            let t_world = Matrix4::from_translation(Vector3::new(len[0], len[1], 0.0));
-
-            // Duplicate each object produced for the child as a shadow pass.
             let end = out.len();
-            for i in start..end {
-                let obj = &out[i];
-                let mut obj_type = obj.object_type.clone();
-                match &mut obj_type {
-                    renderer::ObjectType::Sprite { center, tint, .. } => {
-                        // Multiply alpha like SM: shadow.a *= child_alpha
-                        let mut shadow_tint = *color;
-                        shadow_tint[3] *= (*tint)[3];
-                        *tint = shadow_tint;
-                        center[0] += len[0];
-                        center[1] += len[1];
-                    }
-                    renderer::ObjectType::Mesh { tint, .. } => {
-                        tint[0] *= color[0];
-                        tint[1] *= color[1];
-                        tint[2] *= color[2];
-                        tint[3] *= color[3];
-                    }
-                    renderer::ObjectType::TexturedMesh { tint, .. } => {
-                        let mut shadow_tint = *color;
-                        shadow_tint[0] *= tint[0];
-                        shadow_tint[1] *= tint[1];
-                        shadow_tint[2] *= tint[2];
-                        shadow_tint[3] *= tint[3];
-                        *tint = shadow_tint;
-                    }
-                }
-
-                out.push(renderer::RenderObject {
-                    object_type: obj_type,
-                    texture_handle: obj.texture_handle,
-                    transform: match &obj.object_type {
-                        renderer::ObjectType::Sprite { .. } => obj.transform,
-                        _ => t_world * obj.transform,
-                    },
-                    blend: obj.blend,
-                    // Draw behind the original to ensure correct order without
-                    // having to rewind the global order counter.
-                    z: obj.z.saturating_sub(1),
-                    order: obj.order, // order doesn't matter since z is lower
-                    camera: obj.camera,
-                });
+            if has_shadow(*len) {
+                push_shadow_objects_for_range(out, start, end, *len, *color);
             }
         }
 
@@ -2561,6 +2574,8 @@ fn build_actor_recursive<'a>(
             clip,
             mask_dest,
             blend,
+            shadow_len,
+            shadow_color,
             glow: _,
             effect,
         } => {
@@ -2758,6 +2773,9 @@ fn build_actor_recursive<'a>(
                         tint[2] *= effect_color[2];
                         tint[3] *= effect_color[3];
                     }
+                }
+                if has_shadow(*shadow_len) {
+                    push_shadow_objects_for_range(out, before, end, *shadow_len, *shadow_color);
                 }
             }
         }
@@ -4852,6 +4870,8 @@ mod tests {
             clip: None,
             mask_dest: false,
             blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
         let fonts = HashMap::from([("test", test_font())]);
@@ -4907,6 +4927,8 @@ mod tests {
             clip: Some([10.0, 20.0, 4.0, 10.0]),
             mask_dest: false,
             blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
         let fonts = HashMap::from([("test", test_font())]);
@@ -4960,6 +4982,8 @@ mod tests {
             clip: Some([0.0, 0.0, 200.0, 100.0]),
             mask_dest: false,
             blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
         let fonts = HashMap::from([("test", test_font())]);
@@ -5008,6 +5032,8 @@ mod tests {
             clip: None,
             mask_dest: false,
             blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
         let fonts = HashMap::from([("test", test_font())]);
@@ -5067,6 +5093,8 @@ mod tests {
             clip: None,
             mask_dest: false,
             blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
         let fonts = HashMap::from([("test", test_font())]);
@@ -5134,6 +5162,8 @@ mod tests {
             clip: None,
             mask_dest: false,
             blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
         let fonts = HashMap::from([("test", test_font())]);
@@ -5184,6 +5214,8 @@ mod tests {
             clip: None,
             mask_dest: false,
             blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         };
         let fonts = HashMap::from([("test", test_font())]);
@@ -5247,6 +5279,8 @@ mod tests {
             clip: None,
             mask_dest: false,
             blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         };
         let fonts = HashMap::from([("test", test_font())]);
@@ -5321,6 +5355,8 @@ mod tests {
             clip: None,
             mask_dest: false,
             blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         }];
         let fonts = HashMap::from([("test", test_font_split_pages())]);

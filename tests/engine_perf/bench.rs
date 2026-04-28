@@ -1,4 +1,6 @@
-use deadsync::engine::present::font;
+use deadsync::engine::gfx::BlendMode as GfxBlendMode;
+use deadsync::engine::present::actors::{Actor, SizeSpec, SpriteSource};
+use deadsync::engine::present::{anim, font};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -445,6 +447,7 @@ fn bench_marker_scan() {
 
 fn bench_shadow_build() {
     println!("shadow actor build");
+    run_real_shadow_build_pair("real Actor 256 shadowed sprites", 256);
     run_shadow_build_pair("64 shadowed sprites", 64);
     run_shadow_build_pair("256 shadowed sprites", 256);
     println!();
@@ -924,6 +927,22 @@ fn run_shadow_build_pair(name: &str, count: usize) {
     print_ratio("direct draws vs boxed actor", &boxed, &direct);
 }
 
+fn run_real_shadow_build_pair(name: &str, count: usize) {
+    let boxed = bench(
+        format!("{name}: Actor::Shadow Box"),
+        SHADOW_BUILD_ITERS,
+        || build_real_shadow_boxed(count),
+    );
+    let inline = bench(
+        format!("{name}: inline sprite shadow"),
+        SHADOW_BUILD_ITERS,
+        || build_real_shadow_inline(count),
+    );
+    print_result(&boxed);
+    print_result(&inline);
+    print_ratio("inline actor shadow vs boxed", &boxed, &inline);
+}
+
 #[derive(Clone, Copy)]
 enum PrepShape {
     SpriteOnly,
@@ -1357,6 +1376,68 @@ fn build_shadow_direct(count: usize) -> u64 {
     checksum_sprite_draws(&draws)
 }
 
+fn build_real_shadow_boxed(count: usize) -> u64 {
+    let mut actors = Vec::with_capacity(count);
+    for i in 0..count {
+        actors.push(Actor::Shadow {
+            len: [2.0, -2.0],
+            color: [0.0, 0.0, 0.0, 0.5],
+            child: Box::new(real_sprite_actor(i, [0.0, 0.0])),
+        });
+    }
+    checksum_real_actors(&actors)
+}
+
+fn build_real_shadow_inline(count: usize) -> u64 {
+    let mut actors = Vec::with_capacity(count);
+    for i in 0..count {
+        actors.push(real_sprite_actor(i, [2.0, -2.0]));
+    }
+    checksum_real_actors(&actors)
+}
+
+fn real_sprite_actor(i: usize, shadow_len: [f32; 2]) -> Actor {
+    Actor::Sprite {
+        align: [0.5, 0.5],
+        offset: [i as f32, i as f32 * 0.5],
+        world_z: 0.0,
+        size: [SizeSpec::Px(32.0), SizeSpec::Px(32.0)],
+        source: SpriteSource::TextureStatic("bench_tex"),
+        tint: [1.0; 4],
+        glow: [0.0; 4],
+        z: 0,
+        cell: None,
+        grid: None,
+        uv_rect: None,
+        visible: true,
+        flip_x: false,
+        flip_y: false,
+        cropleft: 0.0,
+        cropright: 0.0,
+        croptop: 0.0,
+        cropbottom: 0.0,
+        fadeleft: 0.0,
+        faderight: 0.0,
+        fadetop: 0.0,
+        fadebottom: 0.0,
+        blend: GfxBlendMode::Alpha,
+        mask_source: false,
+        mask_dest: false,
+        rot_x_deg: 0.0,
+        rot_y_deg: 0.0,
+        rot_z_deg: 0.0,
+        local_offset: [0.0, 0.0],
+        local_offset_rot_sin_cos: [0.0, 1.0],
+        texcoordvelocity: None,
+        animate: false,
+        state_delay: 0.0,
+        scale: [1.0, 1.0],
+        shadow_len,
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
+        effect: anim::EffectState::default(),
+    }
+}
+
 fn checksum_shadow_actors(actors: &[ShadowActorSim]) -> u64 {
     let mut out = 0u64;
     for actor in actors {
@@ -1369,6 +1450,43 @@ fn checksum_shadow_actors(actors: &[ShadowActorSim]) -> u64 {
             .wrapping_add(actor.child.texture);
     }
     out
+}
+
+fn checksum_real_actors(actors: &[Actor]) -> u64 {
+    let mut out = 0u64;
+    for actor in actors {
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(checksum_real_actor(actor));
+    }
+    out
+}
+
+fn checksum_real_actor(actor: &Actor) -> u64 {
+    match actor {
+        Actor::Sprite {
+            offset,
+            size,
+            tint,
+            shadow_len,
+            shadow_color,
+            ..
+        } => {
+            let size_bits = match size[0] {
+                SizeSpec::Px(value) => value.to_bits() as u64,
+                SizeSpec::Fill => 1,
+            };
+            (offset[0].to_bits() as u64)
+                .wrapping_add(size_bits)
+                .wrapping_add(tint[3].to_bits() as u64)
+                .wrapping_add(shadow_len[0].to_bits() as u64)
+                .wrapping_add(shadow_color[3].to_bits() as u64)
+        }
+        Actor::Shadow { len, color, child } => (len[0].to_bits() as u64)
+            .wrapping_add(color[3].to_bits() as u64)
+            .wrapping_add(checksum_real_actor(child)),
+        _ => 0,
+    }
 }
 
 fn checksum_sprite_draws(draws: &[SpriteDrawSim]) -> u64 {

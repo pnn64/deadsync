@@ -2597,6 +2597,8 @@ fn song_lua_style_capture_actor(
             animate,
             state_delay,
             scale,
+            shadow_len,
+            shadow_color,
             effect,
         } => Actor::Sprite {
             align,
@@ -2633,6 +2635,8 @@ fn song_lua_style_capture_actor(
             animate,
             state_delay,
             scale,
+            shadow_len,
+            shadow_color: song_lua_capture_tint(shadow_color, tint),
             effect,
         },
         Actor::Text {
@@ -2661,6 +2665,8 @@ fn song_lua_style_capture_actor(
             clip,
             mask_dest,
             blend: actor_blend,
+            shadow_len,
+            shadow_color,
             effect,
         } => Actor::Text {
             align,
@@ -2688,6 +2694,8 @@ fn song_lua_style_capture_actor(
             clip,
             mask_dest,
             blend: blend.unwrap_or(actor_blend),
+            shadow_len,
+            shadow_color: song_lua_capture_tint(shadow_color, tint),
             effect,
         },
         Actor::Mesh {
@@ -4457,6 +4465,8 @@ fn build_song_lua_overlay_actor(
                     clip: None,
                     mask_dest: state.mask_dest,
                     blend: overlay_blend,
+                    shadow_len: [0.0, 0.0],
+                    shadow_color: [0.0, 0.0, 0.0, 0.5],
                     effect: EffectState::default(),
                 },
                 glow,
@@ -4925,6 +4935,8 @@ fn song_lua_overlay_glow_actor(
                 animate: *animate,
                 state_delay: *state_delay,
                 scale: *scale,
+                shadow_len: [0.0, 0.0],
+                shadow_color: [0.0, 0.0, 0.0, 0.5],
                 effect: *effect,
             })
         }
@@ -5005,6 +5017,8 @@ fn song_lua_overlay_glow_actor(
                 clip: *clip,
                 mask_dest: *mask_dest,
                 blend: BlendMode::Add,
+                shadow_len: [0.0, 0.0],
+                shadow_color: [0.0, 0.0, 0.0, 0.5],
                 effect: *effect,
             })
         }
@@ -5143,6 +5157,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             animate,
             state_delay,
             scale,
+            shadow_len,
+            shadow_color,
             effect,
         } => {
             offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
@@ -5181,6 +5197,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 animate,
                 state_delay,
                 scale,
+                shadow_len,
+                shadow_color,
                 effect,
             }
         }
@@ -5210,6 +5228,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             clip,
             mask_dest,
             blend,
+            shadow_len,
+            shadow_color,
             effect,
         } => {
             offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
@@ -5240,6 +5260,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 clip,
                 mask_dest,
                 blend,
+                shadow_len,
+                shadow_color,
                 effect,
             }
         }

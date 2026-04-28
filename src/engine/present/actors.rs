@@ -90,6 +90,8 @@ pub enum Actor {
         animate: bool,
         state_delay: f32,
         scale: [f32; 2],
+        shadow_len: [f32; 2],
+        shadow_color: [f32; 4],
         effect: anim::EffectState,
     },
 
@@ -122,6 +124,8 @@ pub enum Actor {
         clip: Option<[f32; 4]>,
         mask_dest: bool,
         blend: BlendMode,
+        shadow_len: [f32; 2],
+        shadow_color: [f32; 4],
         effect: anim::EffectState,
     },
 
@@ -187,8 +191,20 @@ pub enum Actor {
 impl Actor {
     pub fn mul_alpha(&mut self, alpha: f32) {
         match self {
-            Self::Sprite { tint, .. } => tint[3] *= alpha,
-            Self::Text { color, .. } => color[3] *= alpha,
+            Self::Sprite {
+                tint, shadow_color, ..
+            } => {
+                tint[3] *= alpha;
+                shadow_color[3] *= alpha;
+            }
+            Self::Text {
+                color,
+                shadow_color,
+                ..
+            } => {
+                color[3] *= alpha;
+                shadow_color[3] *= alpha;
+            }
             Self::Mesh { vertices, .. } => {
                 let mut out = Vec::with_capacity(vertices.len());
                 for vertex in vertices.iter() {
@@ -337,6 +353,8 @@ mod tests {
             clip: None,
             mask_dest: false,
             blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: anim::EffectState::default(),
         }
     }

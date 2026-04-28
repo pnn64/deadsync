@@ -661,6 +661,8 @@ fn perf_text_actor(mode: PerfTextMode, row: usize, col: usize, offset: [f32; 2])
         clip,
         mask_dest: false,
         blend: BlendMode::Alpha,
+        shadow_len: [0.0, 0.0],
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
         effect: EffectState::default(),
     }
 }
@@ -835,6 +837,8 @@ fn resolve_ci_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> 
                 animate: false,
                 state_delay: 0.0,
                 scale: [1.0, 1.0],
+                shadow_len: [0.0, 0.0],
+                shadow_color: [0.0, 0.0, 0.0, 0.5],
                 effect: EffectState::default(),
             });
         }
@@ -883,6 +887,8 @@ fn stroked_text_actor(text: &'static str, x: f32, y: f32, row: usize) -> Actor {
         clip: Some([x, y, 210.0, 24.0]),
         mask_dest: false,
         blend: BlendMode::Alpha,
+        shadow_len: [0.0, 0.0],
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
         effect: EffectState {
             mode: EffectMode::Pulse,
             magnitude: [0.98, 1.02, 1.0],
@@ -975,6 +981,8 @@ fn mask_source_actor() -> Actor {
         animate: false,
         state_delay: 0.0,
         scale: [1.0, 1.0],
+        shadow_len: [0.0, 0.0],
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
         effect: EffectState::default(),
     }
 }
@@ -1016,6 +1024,8 @@ fn masked_rotating_sprite(x: f32, y: f32, rot_z_deg: f32) -> Actor {
         animate: false,
         state_delay: 0.0,
         scale: [1.0, 1.0],
+        shadow_len: [0.0, 0.0],
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
         effect: EffectState {
             mode: EffectMode::DiffuseShift,
             color1: [1.0, 1.0, 1.0, 1.0],
@@ -1142,6 +1152,8 @@ fn sprite_actor(
         animate: false,
         state_delay: 0.0,
         scale: [1.0, 1.0],
+        shadow_len: [0.0, 0.0],
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
         effect: EffectState::default(),
     }
 }
@@ -1182,6 +1194,8 @@ fn animated_sheet(align: [f32; 2], offset: [f32; 2], size: [f32; 2], z: i16) -> 
         animate: true,
         state_delay: 0.08,
         scale: [1.0, 1.0],
+        shadow_len: [0.0, 0.0],
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
         effect: EffectState {
             mode: EffectMode::Spin,
             magnitude: [0.0, 0.0, 32.0],
@@ -1223,6 +1237,8 @@ fn text_actor(
         clip: None,
         mask_dest: false,
         blend: BlendMode::Alpha,
+        shadow_len: [0.0, 0.0],
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
         effect: EffectState::default(),
     }
 }

@@ -933,6 +933,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             mask_dest: _,
             blend,
             effect,
+            ..
         } => ActorSnapshot::Text {
             align: *align,
             offset: *offset,
@@ -1108,6 +1109,8 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             animate: *animate,
             state_delay: *state_delay,
             scale: *scale,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: EffectState::from(*effect),
         },
         ActorSnapshot::Text {
@@ -1159,6 +1162,8 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             clip: *clip,
             mask_dest: false,
             blend: BlendMode::from(*blend),
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: EffectState::from(*effect),
         },
         ActorSnapshot::Mesh {

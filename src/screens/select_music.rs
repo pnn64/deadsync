@@ -4913,6 +4913,8 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             animate: false,
             state_delay: 0.0,
             scale: [1.0, 1.0],
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         });
     }

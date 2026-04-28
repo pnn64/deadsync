@@ -691,7 +691,7 @@ impl SpriteBuilder {
             [self.sx, self.sy]
         };
 
-        let base = Actor::Sprite {
+        Actor::Sprite {
             align: [self.hx, self.vy],
             offset: [self.x, self.y],
             world_z: 0.0,
@@ -726,17 +726,9 @@ impl SpriteBuilder {
             animate: self.anim_enable,
             state_delay: self.state_delay,
             scale: scale_carry,
+            shadow_len: [self.shx, self.shy],
+            shadow_color: self.shc,
             effect: self.effect,
-        };
-
-        if self.shx != 0.0 || self.shy != 0.0 {
-            Actor::Shadow {
-                len: [self.shx, self.shy],
-                color: self.shc,
-                child: Box::new(base),
-            }
-        } else {
-            base
         }
     }
 }
@@ -1157,7 +1149,7 @@ impl TextBuilder {
             self.sy = s.scale[1];
         }
 
-        let base = Actor::Text {
+        Actor::Text {
             align: [self.hx, self.vy],
             offset: [self.x, self.y],
             local_transform: Matrix4::IDENTITY,
@@ -1183,17 +1175,9 @@ impl TextBuilder {
             clip: None,
             mask_dest: false,
             blend: self.blend,
+            shadow_len: [self.shx, self.shy],
+            shadow_color: self.shc,
             effect: self.effect,
-        };
-
-        if self.shx != 0.0 || self.shy != 0.0 {
-            Actor::Shadow {
-                len: [self.shx, self.shy],
-                color: self.shc,
-                child: Box::new(base),
-            }
-        } else {
-            base
         }
     }
 }
