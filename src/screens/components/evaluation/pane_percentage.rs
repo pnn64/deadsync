@@ -62,7 +62,7 @@ pub(crate) fn build_pane_percentage_display(
                 diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
             ));
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(current_machine_font_key(FontRole::Headline)):
                 settext(percent_text):
                 align(1.0, 0.5):
                 xy(30.0, -2.0):
@@ -78,7 +78,7 @@ pub(crate) fn build_pane_percentage_display(
                 diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
             ));
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(current_machine_font_key(FontRole::Headline)):
                 settext(percent_text):
                 align(1.0, 0.5):
                 xy(percent_x, 0.0):
@@ -94,7 +94,7 @@ pub(crate) fn build_pane_percentage_display(
             };
             let bottom_label_x = bottom_value_x - 108.0;
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(current_machine_font_key(FontRole::Headline)):
                 settext("EX"):
                 align(1.0, 0.5):
                 xy(bottom_label_x, 40.0):
@@ -103,7 +103,7 @@ pub(crate) fn build_pane_percentage_display(
                 diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
             ));
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(current_machine_font_key(FontRole::Headline)):
                 settext(ex_percent_text):
                 align(1.0, 0.5):
                 xy(bottom_value_x, 40.0):
@@ -123,7 +123,7 @@ pub(crate) fn build_pane_percentage_display(
             let ex_color = color::JUDGMENT_RGBA[0];
             let hex_color = color::HARD_EX_SCORE_RGBA;
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(current_machine_font_key(FontRole::Headline)):
                 settext(ex_percent_text):
                 align(1.0, 0.5):
                 xy(percent_x, 0.0):
@@ -139,7 +139,7 @@ pub(crate) fn build_pane_percentage_display(
             };
             let bottom_label_x = bottom_value_x - 92.0;
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(current_machine_font_key(FontRole::Headline)):
                 settext("H.EX"):
                 align(1.0, 0.5):
                 xy(bottom_label_x, 40.0):
@@ -148,7 +148,7 @@ pub(crate) fn build_pane_percentage_display(
                 diffuse(hex_color[0], hex_color[1], hex_color[2], hex_color[3])
             ));
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(current_machine_font_key(FontRole::Headline)):
                 settext(hard_ex_percent_text):
                 align(1.0, 0.5):
                 xy(bottom_value_x, 40.0):
@@ -165,7 +165,7 @@ pub(crate) fn build_pane_percentage_display(
                 diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], 1.0)
             ));
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
+                font(current_machine_font_key(FontRole::Headline)):
                 settext(percent_text):
                 align(1.0, 0.5):
                 xy(percent_x, 0.0):
