@@ -2016,6 +2016,8 @@ struct SongLuaScreenProxyRequests {
 
 fn song_lua_screen_proxy_sources<'a>(
     actors: &'a [Actor],
+    p1_player_source: Option<&'a [Actor]>,
+    p2_player_source: Option<&'a [Actor]>,
     p1_actor_range: Option<(usize, usize)>,
     p2_actor_range: Option<(usize, usize)>,
     p1_sources: [Option<&'a [Actor]>; 3],
@@ -2026,13 +2028,15 @@ fn song_lua_screen_proxy_sources<'a>(
     SongLuaScreenProxySources {
         players: [
             SongLuaPlayerProxySources {
-                player: p1_actor_range.map(|(start, end)| &actors[start..end]),
+                player: p1_player_source
+                    .or_else(|| p1_actor_range.map(|(start, end)| &actors[start..end])),
                 note_field: p1_sources[0],
                 judgment: p1_sources[1],
                 combo: p1_sources[2],
             },
             SongLuaPlayerProxySources {
-                player: p2_actor_range.map(|(start, end)| &actors[start..end]),
+                player: p2_player_source
+                    .or_else(|| p2_actor_range.map(|(start, end)| &actors[start..end])),
                 note_field: p2_sources[0],
                 judgment: p2_sources[1],
                 combo: p2_sources[2],
@@ -6005,41 +6009,53 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             SongLuaOverlayBlendMode::Multiply => Some(BlendMode::Multiply),
             SongLuaOverlayBlendMode::Subtract => Some(BlendMode::Subtract),
         };
+        let render_source_bundle = |bundle| {
+            apply_song_lua_player_transform(
+                bundle,
+                z_shift,
+                player_state.diffuse,
+                player_blend,
+                layout_center_x,
+                target_x,
+                target_y,
+                rotation_x,
+                rotation_z,
+                rotation_y,
+                skew_x,
+                skew_y,
+                zoom_x,
+                zoom_y,
+                zoom_z,
+            )
+        };
+        let player_source = requests
+            .player
+            .then(|| render_source_bundle(actors.clone()));
         let render_bundle = |bundle| {
             if !player_state.visible {
                 Vec::new()
             } else {
-                apply_song_lua_player_transform(
-                    bundle,
-                    z_shift,
-                    player_state.diffuse,
-                    player_blend,
-                    layout_center_x,
-                    target_x,
-                    target_y,
-                    rotation_x,
-                    rotation_z,
-                    rotation_y,
-                    skew_x,
-                    skew_y,
-                    zoom_x,
-                    zoom_y,
-                    zoom_z,
-                )
+                render_source_bundle(bundle)
             }
         };
         let player = render_bundle(actors);
         let proxy_sources = [
-            requests.note_field.then(|| render_bundle(field_actors)),
-            requests.judgment.then(|| render_bundle(judgment_actors)),
-            requests.combo.then(|| render_bundle(combo_actors)),
+            requests
+                .note_field
+                .then(|| render_source_bundle(field_actors)),
+            requests
+                .judgment
+                .then(|| render_source_bundle(judgment_actors)),
+            requests.combo.then(|| render_source_bundle(combo_actors)),
         ];
-        (player, layout_center_x, proxy_sources)
+        (player, layout_center_x, player_source, proxy_sources)
     };
 
     let (
         p1_actors,
         p2_actors,
+        p1_player_proxy_source,
+        p2_player_proxy_source,
         p1_proxy_sources,
         p2_proxy_sources,
         playfield_center_x,
@@ -6047,19 +6063,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     ): (
         Vec<Actor>,
         Option<Vec<Actor>>,
+        Option<Vec<Actor>>,
+        Option<Vec<Actor>>,
         [Option<Vec<Actor>>; 3],
         [Option<Vec<Actor>>; 3],
         f32,
         [(usize, f32); 2],
     ) = match play_style {
         profile::PlayStyle::Versus => {
-            let (p1, p1_x, p1_sources) = build_player_bundle(
+            let (p1, p1_x, p1_player_source, p1_sources) = build_player_bundle(
                 0,
                 &state.player_profiles[0],
                 notefield::FieldPlacement::P1,
                 proxy_requests.players[0],
             );
-            let (p2, p2_x, p2_sources) = build_player_bundle(
+            let (p2, p2_x, p2_player_source, p2_sources) = build_player_bundle(
                 1,
                 &state.player_profiles[1],
                 notefield::FieldPlacement::P2,
@@ -6068,6 +6086,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             (
                 p1,
                 Some(p2),
+                p1_player_source,
+                p2_player_source,
                 p1_sources,
                 p2_sources,
                 p1_x,
@@ -6080,7 +6100,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 notefield::FieldPlacement::P1
             };
-            let (nf, nf_x, nf_sources) = build_player_bundle(
+            let (nf, nf_x, nf_player_source, nf_sources) = build_player_bundle(
                 0,
                 &state.player_profiles[0],
                 placement,
@@ -6088,6 +6108,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             );
             (
                 nf,
+                None,
+                nf_player_source,
                 None,
                 nf_sources,
                 [None, None, None],
@@ -6098,18 +6120,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
     let replacement_proxy_sources = [
         SongLuaPlayerProxySources {
-            player: proxy_requests.players[0]
-                .player
-                .then_some(p1_actors.as_slice()),
+            player: p1_player_proxy_source.as_deref(),
             note_field: p1_proxy_sources[0].as_deref(),
             judgment: p1_proxy_sources[1].as_deref(),
             combo: p1_proxy_sources[2].as_deref(),
         },
         SongLuaPlayerProxySources {
-            player: proxy_requests.players[1]
-                .player
-                .then(|| p2_actors.as_deref())
-                .flatten(),
+            player: p2_player_proxy_source.as_deref(),
             note_field: p2_proxy_sources[0].as_deref(),
             judgment: p2_proxy_sources[1].as_deref(),
             combo: p2_proxy_sources[2].as_deref(),
@@ -7021,11 +7038,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         p2_proxy_sources[1].as_deref(),
         p2_proxy_sources[2].as_deref(),
     ];
+    let p1_player_proxy_slice = p1_player_proxy_source.as_deref();
+    let p2_player_proxy_slice = p2_player_proxy_source.as_deref();
     let underlay_proxy_slice = underlay_proxy_source.as_deref();
     let overlay_proxy_slice = overlay_proxy_source.as_deref();
     let main_layer_actors = {
         let proxy_sources = song_lua_screen_proxy_sources(
             &actors,
+            p1_player_proxy_slice,
+            p2_player_proxy_slice,
             p1_actor_range,
             p2_actor_range,
             p1_proxy_slices,
@@ -7071,6 +7092,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let layer_actors = {
             let proxy_sources = song_lua_screen_proxy_sources(
                 &actors,
+                p1_player_proxy_slice,
+                p2_player_proxy_slice,
                 p1_actor_range,
                 p2_actor_range,
                 p1_proxy_slices,

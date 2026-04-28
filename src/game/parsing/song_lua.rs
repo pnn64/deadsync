@@ -1,6 +1,6 @@
 use chrono::{Datelike, Local, Timelike};
 use image::image_dimensions;
-use log::debug;
+use log::{debug, info};
 use mlua::{Function, Lua, MultiValue, Table, Value, ffi};
 use std::collections::{HashMap, HashSet};
 use std::ffi::c_int;
@@ -8,6 +8,7 @@ use std::ffi::c_void;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Instant;
 
 use crate::engine::present::actors::{TextAlign, TextAttribute};
 use crate::engine::present::anim::EffectClock;
@@ -50,6 +51,9 @@ const SONG_LUA_BROADCASTS_KEY: &str = "__songlua_broadcast_messages";
 const SONG_LUA_PROBE_METHODS_KEY: &str = "__songlua_probe_methods";
 const SONG_LUA_PROBE_ACTORS_KEY: &str = "__songlua_probe_actors";
 const SONG_LUA_PROBE_ACTOR_SET_KEY: &str = "__songlua_probe_actor_set";
+const SONG_LUA_CAPTURE_ACTORS_KEY: &str = "__songlua_capture_scope_actors";
+const SONG_LUA_CAPTURE_ACTOR_SET_KEY: &str = "__songlua_capture_scope_actor_set";
+const SONG_LUA_CAPTURE_SNAPSHOTS_KEY: &str = "__songlua_capture_scope_snapshots";
 const SONG_LUA_STARTUP_MESSAGE: &str = "__songlua_startup";
 const SONG_LUA_THEME_PATH_PREFIX: &str = "__songlua_theme_path/";
 const SONG_LUA_THEME_NAME: &str = "Simply Love";
@@ -774,32 +778,42 @@ pub fn compile_song_lua(
     entry_path: &Path,
     context: &SongLuaCompileContext,
 ) -> Result<CompiledSongLua, String> {
+    let compile_started = Instant::now();
+    let mut stage_started = compile_started;
+    let mut stage_times = Vec::new();
     let entry_path = entry_file_path(entry_path)
         .ok_or_else(|| format!("song lua entry '{}' does not exist", entry_path.display()))?;
+    let trace_entry_path = entry_path.clone();
     let lua = Lua::new();
     let mut host = HostState::default();
     install_host(&lua, context, &mut host).map_err(|err| err.to_string())?;
+    push_song_lua_stage_time(&mut stage_times, "host", &mut stage_started);
     let root = execute_script_file(&lua, &entry_path, context.song_dir.as_path())
         .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
+    push_song_lua_stage_time(&mut stage_times, "execute", &mut stage_started);
     run_actor_init_commands(&lua, &root).map_err(|err| {
         format!(
             "failed to run actor init commands for '{}': {err}",
             entry_path.display()
         )
     })?;
+    push_song_lua_stage_time(&mut stage_times, "init_commands", &mut stage_started);
     run_actor_startup_commands(&lua, &root).map_err(|err| {
         format!(
             "failed to run actor startup commands for '{}': {err}",
             entry_path.display()
         )
     })?;
+    push_song_lua_stage_time(&mut stage_times, "startup_commands", &mut stage_started);
     run_actor_update_functions(&lua, &root).map_err(|err| {
         format!(
             "failed to run actor update functions for '{}': {err}",
             entry_path.display()
         )
     })?;
+    push_song_lua_stage_time(&mut stage_times, "update_functions", &mut stage_started);
     run_actor_draw_functions(&lua, &root);
+    push_song_lua_stage_time(&mut stage_times, "draw_functions", &mut stage_started);
 
     let globals = lua.globals();
     let mut out = CompiledSongLua {
@@ -815,6 +829,7 @@ pub fn compile_song_lua(
     let overlays = read_overlay_actors(&lua, &root, context, &mut out.info);
     restore_compile_globals(&globals, compile_globals).map_err(|err| err.to_string())?;
     let mut overlays = overlays?;
+    push_song_lua_stage_time(&mut stage_times, "read_overlays", &mut stage_started);
     let mut tracked_actors = read_tracked_compile_actors(&lua)?;
     let mut overlay_trigger_counter = 0usize;
     let hidden_players = std::array::from_fn(|player| {
@@ -842,6 +857,7 @@ pub fn compile_song_lua(
     let global_perframes = globals
         .get::<Option<Table>>("mod_perframes")
         .map_err(|err| err.to_string())?;
+    push_song_lua_stage_time(&mut stage_times, "read_globals", &mut stage_started);
 
     if let Some(prefix_globals) = globals
         .get::<Option<Table>>("prefix_globals")
@@ -853,6 +869,7 @@ pub fn compile_song_lua(
                 .map_err(|err| err.to_string())?,
             SongLuaTimeUnit::Beat,
         )?);
+        push_song_lua_stage_time(&mut stage_times, "prefix_mods", &mut stage_started);
         let (eases, overlay_eases, info) = read_eases(
             &lua,
             prefix_globals
@@ -865,6 +882,7 @@ pub fn compile_song_lua(
         out.eases.extend(eases);
         out.overlay_eases.extend(overlay_eases);
         merge_compile_info(&mut out.info, info);
+        push_song_lua_stage_time(&mut stage_times, "prefix_eases", &mut stage_started);
         read_actions(
             &lua,
             prefix_globals
@@ -876,6 +894,7 @@ pub fn compile_song_lua(
             &mut overlay_trigger_counter,
             &mut out.info,
         )?;
+        push_song_lua_stage_time(&mut stage_times, "prefix_actions", &mut stage_started);
     }
 
     out.beat_mods.extend(read_mod_windows(
@@ -890,6 +909,7 @@ pub fn compile_song_lua(
             .map_err(|err| err.to_string())?,
         SongLuaTimeUnit::Second,
     )?);
+    push_song_lua_stage_time(&mut stage_times, "global_mods", &mut stage_started);
     let (global_eases, global_overlay_eases, global_info) = read_eases(
         &lua,
         globals
@@ -902,6 +922,7 @@ pub fn compile_song_lua(
     out.eases.extend(global_eases);
     out.overlay_eases.extend(global_overlay_eases);
     merge_compile_info(&mut out.info, global_info);
+    push_song_lua_stage_time(&mut stage_times, "global_eases", &mut stage_started);
     read_actions(
         &lua,
         globals
@@ -913,6 +934,7 @@ pub fn compile_song_lua(
         &mut overlay_trigger_counter,
         &mut out.info,
     )?;
+    push_song_lua_stage_time(&mut stage_times, "global_actions", &mut stage_started);
     read_update_function_actions(
         &lua,
         &root,
@@ -922,6 +944,7 @@ pub fn compile_song_lua(
         &mut overlay_trigger_counter,
         &mut out.info,
     )?;
+    push_song_lua_stage_time(&mut stage_times, "update_actions", &mut stage_started);
     let (perframe_eases, perframe_overlay_eases, perframe_info) = compile_perframes(
         &lua,
         prefix_perframes,
@@ -933,6 +956,7 @@ pub fn compile_song_lua(
     out.eases.extend(perframe_eases);
     out.overlay_eases.extend(perframe_overlay_eases);
     merge_compile_info(&mut out.info, perframe_info);
+    push_song_lua_stage_time(&mut stage_times, "perframes", &mut stage_started);
     if overlays.iter().any(|overlay| {
         overlay
             .actor
@@ -966,7 +990,43 @@ pub fn compile_song_lua(
     });
     out.messages.sort_by(message_event_cmp);
     out.sound_paths = read_song_lua_sound_paths(&lua)?;
+    push_song_lua_stage_time(&mut stage_times, "finalize", &mut stage_started);
+    log_song_lua_compile_timing(&trace_entry_path, compile_started, &stage_times);
     Ok(out)
+}
+
+fn push_song_lua_stage_time(
+    stage_times: &mut Vec<(&'static str, f64)>,
+    stage: &'static str,
+    stage_started: &mut Instant,
+) {
+    stage_times.push((stage, stage_started.elapsed().as_secs_f64() * 1000.0));
+    *stage_started = Instant::now();
+}
+
+fn log_song_lua_compile_timing(
+    entry_path: &Path,
+    compile_started: Instant,
+    stage_times: &[(&'static str, f64)],
+) {
+    let elapsed_ms = compile_started.elapsed().as_secs_f64() * 1000.0;
+    if elapsed_ms < 1000.0 {
+        return;
+    }
+    let mut stages = String::new();
+    for (stage, ms) in stage_times {
+        if !stages.is_empty() {
+            stages.push(' ');
+        }
+        stages.push_str(stage);
+        stages.push_str("_ms=");
+        stages.push_str(format!("{ms:.3}").as_str());
+    }
+    info!(
+        "Song lua compile timing: entry='{}' elapsed_ms={elapsed_ms:.3} {}",
+        entry_path.display(),
+        stages
+    );
 }
 
 fn install_host(
@@ -14540,7 +14600,23 @@ fn is_actor_mutable_state_key(key: &str) -> bool {
         )
 }
 
+fn is_actor_semantic_state_key(key: &str) -> bool {
+    is_actor_mutable_state_key(key) && !key.starts_with("__songlua_capture_")
+}
+
 fn snapshot_actor_mutable_state(lua: &Lua, actor: &Table) -> mlua::Result<Vec<(String, Value)>> {
+    snapshot_actor_state(lua, actor, is_actor_mutable_state_key)
+}
+
+fn snapshot_actor_semantic_state(lua: &Lua, actor: &Table) -> mlua::Result<Vec<(String, Value)>> {
+    snapshot_actor_state(lua, actor, is_actor_semantic_state_key)
+}
+
+fn snapshot_actor_state(
+    lua: &Lua,
+    actor: &Table,
+    keep_key: fn(&str) -> bool,
+) -> mlua::Result<Vec<(String, Value)>> {
     let mut out = Vec::new();
     for pair in actor.clone().pairs::<Value, Value>() {
         let (key, value) = pair?;
@@ -14548,7 +14624,7 @@ fn snapshot_actor_mutable_state(lua: &Lua, actor: &Table) -> mlua::Result<Vec<(S
             continue;
         };
         let key = key.to_str()?.to_string();
-        if is_actor_mutable_state_key(&key) {
+        if keep_key(&key) {
             out.push((key, clone_lua_value(lua, value)?));
         }
     }
@@ -14556,6 +14632,18 @@ fn snapshot_actor_mutable_state(lua: &Lua, actor: &Table) -> mlua::Result<Vec<(S
 }
 
 fn restore_actor_mutable_state(actor: &Table, snapshot: Vec<(String, Value)>) -> mlua::Result<()> {
+    restore_actor_state(actor, snapshot, is_actor_mutable_state_key)
+}
+
+fn restore_actor_semantic_state(actor: &Table, snapshot: Vec<(String, Value)>) -> mlua::Result<()> {
+    restore_actor_state(actor, snapshot, is_actor_semantic_state_key)
+}
+
+fn restore_actor_state(
+    actor: &Table,
+    snapshot: Vec<(String, Value)>,
+    clear_key: fn(&str) -> bool,
+) -> mlua::Result<()> {
     let mut keys = Vec::new();
     for pair in actor.clone().pairs::<Value, Value>() {
         let (key, _) = pair?;
@@ -14563,7 +14651,7 @@ fn restore_actor_mutable_state(actor: &Table, snapshot: Vec<(String, Value)>) ->
             continue;
         };
         let key = key.to_str()?.to_string();
-        if is_actor_mutable_state_key(&key) {
+        if clear_key(&key) {
             keys.push(key);
         }
     }
@@ -14576,21 +14664,46 @@ fn restore_actor_mutable_state(actor: &Table, snapshot: Vec<(String, Value)>) ->
     Ok(())
 }
 
-fn snapshot_actors_mutable_state(
+fn snapshot_actors_semantic_state(
     lua: &Lua,
     actors: &[Table],
 ) -> mlua::Result<Vec<(Table, Vec<(String, Value)>)>> {
     actors
         .iter()
-        .map(|actor| Ok((actor.clone(), snapshot_actor_mutable_state(lua, actor)?)))
+        .map(|actor| Ok((actor.clone(), snapshot_actor_semantic_state(lua, actor)?)))
         .collect()
 }
 
-fn restore_actors_mutable_state(snapshots: Vec<(Table, Vec<(String, Value)>)>) -> mlua::Result<()> {
+fn restore_actors_semantic_state(
+    snapshots: Vec<(Table, Vec<(String, Value)>)>,
+) -> mlua::Result<()> {
     for (actor, snapshot) in snapshots {
-        restore_actor_mutable_state(&actor, snapshot)?;
+        restore_actor_semantic_state(&actor, snapshot)?;
     }
     Ok(())
+}
+
+fn snapshot_actor_semantic_state_table(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    let snapshot = lua.create_table()?;
+    for (index, (key, value)) in snapshot_actor_semantic_state(lua, actor)?
+        .into_iter()
+        .enumerate()
+    {
+        let entry = lua.create_table()?;
+        entry.raw_set(1, key)?;
+        entry.raw_set(2, value)?;
+        snapshot.raw_set(index + 1, entry)?;
+    }
+    Ok(snapshot)
+}
+
+fn read_actor_semantic_state_table(snapshot: &Table) -> mlua::Result<Vec<(String, Value)>> {
+    let mut out = Vec::with_capacity(snapshot.raw_len());
+    for entry in snapshot.sequence_values::<Table>() {
+        let entry = entry?;
+        out.push((entry.raw_get(1)?, entry.raw_get(2)?));
+    }
+    Ok(out)
 }
 
 fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -14607,6 +14720,7 @@ fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
 
 fn actor_current_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     record_probe_actor_call(lua, actor)?;
+    prepare_capture_scope_actor(lua, actor)?;
     if let Some(block) = actor.get::<Option<Table>>("__songlua_capture_block")? {
         return Ok(block);
     }
@@ -16212,6 +16326,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 if let Some(value) = args.get(1).map(truthy) {
+                    prepare_capture_scope_actor(lua, &actor)?;
                     actor.set("__songlua_visible", value)?;
                     capture_block_set_bool(lua, &actor, "visible", value)?;
                 }
@@ -16264,7 +16379,8 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "sleep",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
+                prepare_capture_scope_actor(lua, &actor)?;
                 flush_actor_capture(&actor)?;
                 let duration = args
                     .get(1)
@@ -16286,6 +16402,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
+                prepare_capture_scope_actor(lua, &actor)?;
                 flush_actor_capture(&actor)?;
                 let duration = args
                     .get(1)
@@ -18686,8 +18803,9 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "hurrytweening",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
                 if let Some(factor) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                    prepare_capture_scope_actor(lua, &actor)?;
                     hurry_actor_tweening(&actor, factor)?;
                 }
                 Ok(actor.clone())
@@ -20284,6 +20402,7 @@ fn make_actor_chain_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
 fn make_actor_stop_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |lua, _args: MultiValue| {
+        prepare_capture_scope_actor(lua, &actor)?;
         flush_actor_capture(&actor)?;
         reset_actor_capture(lua, &actor)?;
         Ok(actor.clone())
@@ -20293,6 +20412,7 @@ fn make_actor_stop_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result<Fun
 fn make_actor_finish_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |lua, _args: MultiValue| {
+        prepare_capture_scope_actor(lua, &actor)?;
         finish_actor_tweening(lua, &actor)?;
         Ok(actor.clone())
     })
@@ -20453,7 +20573,8 @@ fn make_actor_tween_method(
     easing: Option<&'static str>,
 ) -> mlua::Result<Function> {
     let actor = actor.clone();
-    lua.create_function(move |_, args: MultiValue| {
+    lua.create_function(move |lua, args: MultiValue| {
+        prepare_capture_scope_actor(lua, &actor)?;
         flush_actor_capture(&actor)?;
         let cursor = actor
             .get::<Option<f32>>("__songlua_capture_cursor")?
@@ -20559,10 +20680,18 @@ fn read_eases(
     let mut out = Vec::new();
     let mut overlay_eases = Vec::new();
     let mut info = SongLuaCompileInfo::default();
+    let trace_started = Instant::now();
+    let mut entry_count = 0usize;
+    let mut function_targets = 0usize;
+    let mut overlay_capture_attempts = 0usize;
+    let mut overlay_capture_outputs = 0usize;
+    let mut probe_ms = 0.0;
+    let mut overlay_capture_ms = 0.0;
     for value in table.sequence_values::<Value>() {
         let Value::Table(entry) = value.map_err(|err| err.to_string())? else {
             continue;
         };
+        entry_count += 1;
         let Some(start) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?)
         else {
             continue;
@@ -20609,11 +20738,16 @@ fn read_eases(
                 false,
             ),
             Value::Function(function) => {
+                function_targets += 1;
+                let probe_started = Instant::now();
                 let (probed_target, probe_methods, probe_actor_ptrs) =
                     probe_function_ease_target(lua, &function).map_err(|err| err.to_string())?;
+                probe_ms += probe_started.elapsed().as_secs_f64() * 1000.0;
                 let target = probed_target.unwrap_or(SongLuaEaseTarget::Function);
                 if matches!(target, SongLuaEaseTarget::Function) {
-                    match compile_overlay_function_ease(
+                    overlay_capture_attempts += 1;
+                    let capture_started = Instant::now();
+                    let captured = compile_overlay_function_ease(
                         lua,
                         overlays,
                         &function,
@@ -20628,8 +20762,19 @@ fn read_eases(
                         opt1,
                         opt2,
                         &probe_actor_ptrs,
-                    ) {
+                    );
+                    let capture_ms = capture_started.elapsed().as_secs_f64() * 1000.0;
+                    overlay_capture_ms += capture_ms;
+                    if capture_ms >= 1000.0 {
+                        info!(
+                            "Slow song lua function ease capture: unit={unit:?} start={start:.3} limit={limit:.3} span={span_mode:?} from={from:.3} to={to:.3} easing={easing:?} probe_actors={} overlays={} capture_ms={capture_ms:.3}",
+                            probe_actor_ptrs.len(),
+                            overlays.len(),
+                        );
+                    }
+                    match captured {
                         Ok(compiled) if !compiled.is_empty() => {
+                            overlay_capture_outputs += compiled.len();
                             overlay_eases.extend(compiled);
                             continue;
                         }
@@ -20671,6 +20816,19 @@ fn read_eases(
             opt2,
         });
     }
+    let elapsed_ms = trace_started.elapsed().as_secs_f64() * 1000.0;
+    if elapsed_ms >= 1000.0 {
+        info!(
+            "Song lua read_eases timing: unit={unit:?} entries={} function_targets={} overlay_capture_attempts={} overlay_capture_outputs={} player_eases={} overlay_eases={} unsupported_function_eases={} probe_ms={probe_ms:.3} overlay_capture_ms={overlay_capture_ms:.3} elapsed_ms={elapsed_ms:.3}",
+            entry_count,
+            function_targets,
+            overlay_capture_attempts,
+            overlay_capture_outputs,
+            out.len(),
+            overlay_eases.len(),
+            info.unsupported_function_eases,
+        );
+    }
     Ok((out, overlay_eases, info))
 }
 
@@ -20703,6 +20861,35 @@ fn record_probe_actor_call(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     }
     seen.raw_set(actor.clone(), true)?;
     actors.raw_set(actors.raw_len() + 1, actor.clone())?;
+    Ok(())
+}
+
+fn prepare_capture_scope_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let globals = lua.globals();
+    let Some(actors) = globals.get::<Option<Table>>(SONG_LUA_CAPTURE_ACTORS_KEY)? else {
+        return Ok(());
+    };
+    let Some(seen) = globals.get::<Option<Table>>(SONG_LUA_CAPTURE_ACTOR_SET_KEY)? else {
+        return Ok(());
+    };
+    let Some(snapshots) = globals.get::<Option<Table>>(SONG_LUA_CAPTURE_SNAPSHOTS_KEY)? else {
+        return Ok(());
+    };
+    if seen
+        .raw_get::<Option<bool>>(actor.clone())?
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+    seen.raw_set(actor.clone(), true)?;
+    actors.raw_set(actors.raw_len() + 1, actor.clone())?;
+
+    let snapshot = lua.create_table()?;
+    snapshot.raw_set(1, actor.clone())?;
+    snapshot.raw_set(2, snapshot_actor_semantic_state_table(lua, actor)?)?;
+    snapshots.raw_set(snapshots.raw_len() + 1, snapshot)?;
+
+    reset_actor_capture(lua, actor)?;
     Ok(())
 }
 
@@ -20934,17 +21121,22 @@ fn reset_tracked_capture_tables(
     lua: &Lua,
     tracked_actors: &[TrackedCompileActor],
 ) -> Result<(), String> {
-    for actor in tracked_actors {
+    let indices: Vec<_> = (0..tracked_actors.len()).collect();
+    reset_tracked_capture_tables_for_indices(lua, tracked_actors, &indices)
+}
+
+fn reset_tracked_capture_tables_for_indices(
+    lua: &Lua,
+    tracked_actors: &[TrackedCompileActor],
+    indices: &[usize],
+) -> Result<(), String> {
+    for &index in indices {
+        let Some(actor) = tracked_actors.get(index) else {
+            continue;
+        };
         reset_actor_capture(lua, &actor.table).map_err(|err| err.to_string())?;
     }
     Ok(())
-}
-
-fn collect_overlay_capture_blocks(
-    overlays: &[OverlayCompileActor],
-) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
-    let indices: Vec<_> = (0..overlays.len()).collect();
-    collect_overlay_capture_blocks_for_indices(overlays, &indices)
 }
 
 fn collect_overlay_capture_blocks_for_indices(
@@ -20965,11 +21157,15 @@ fn collect_overlay_capture_blocks_for_indices(
     Ok(out)
 }
 
-fn collect_tracked_capture_blocks(
+fn collect_tracked_capture_blocks_for_indices(
     tracked_actors: &[TrackedCompileActor],
+    indices: &[usize],
 ) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
     let mut out = Vec::new();
-    for (idx, actor) in tracked_actors.iter().enumerate() {
+    for &idx in indices {
+        let Some(actor) = tracked_actors.get(idx) else {
+            continue;
+        };
         flush_actor_capture(&actor.table).map_err(|err| err.to_string())?;
         let blocks = read_actor_capture_blocks(&actor.table)?;
         if !blocks.is_empty() {
@@ -20977,6 +21173,99 @@ fn collect_tracked_capture_blocks(
         }
     }
     Ok(out)
+}
+
+struct SongLuaActionCaptureScope {
+    actors: Table,
+    snapshots: Table,
+    previous_actors: Value,
+    previous_actor_set: Value,
+    previous_snapshots: Value,
+}
+
+fn begin_action_capture_scope(lua: &Lua) -> mlua::Result<SongLuaActionCaptureScope> {
+    let globals = lua.globals();
+    let previous_actors = globals.get::<Value>(SONG_LUA_CAPTURE_ACTORS_KEY)?;
+    let previous_actor_set = globals.get::<Value>(SONG_LUA_CAPTURE_ACTOR_SET_KEY)?;
+    let previous_snapshots = globals.get::<Value>(SONG_LUA_CAPTURE_SNAPSHOTS_KEY)?;
+    let actors = lua.create_table()?;
+    let snapshots = lua.create_table()?;
+    globals.set(SONG_LUA_CAPTURE_ACTORS_KEY, actors.clone())?;
+    globals.set(SONG_LUA_CAPTURE_ACTOR_SET_KEY, lua.create_table()?)?;
+    globals.set(SONG_LUA_CAPTURE_SNAPSHOTS_KEY, snapshots.clone())?;
+    Ok(SongLuaActionCaptureScope {
+        actors,
+        snapshots,
+        previous_actors,
+        previous_actor_set,
+        previous_snapshots,
+    })
+}
+
+fn restore_action_capture_scope(lua: &Lua, scope: SongLuaActionCaptureScope) -> mlua::Result<()> {
+    let globals = lua.globals();
+    globals.set(SONG_LUA_CAPTURE_ACTORS_KEY, scope.previous_actors)?;
+    globals.set(SONG_LUA_CAPTURE_ACTOR_SET_KEY, scope.previous_actor_set)?;
+    globals.set(SONG_LUA_CAPTURE_SNAPSHOTS_KEY, scope.previous_snapshots)?;
+    Ok(())
+}
+
+fn capture_scope_actor_pointers(actors: &Table) -> mlua::Result<HashSet<usize>> {
+    let mut out = HashSet::with_capacity(actors.raw_len());
+    for actor in actors.sequence_values::<Table>() {
+        out.insert(actor?.to_pointer() as usize);
+    }
+    Ok(out)
+}
+
+fn capture_scope_actor_tables(actors: &Table) -> mlua::Result<Vec<Table>> {
+    let mut out = Vec::with_capacity(actors.raw_len());
+    for actor in actors.sequence_values::<Table>() {
+        out.push(actor?);
+    }
+    Ok(out)
+}
+
+fn capture_scope_snapshots(snapshots: &Table) -> mlua::Result<Vec<(Table, Vec<(String, Value)>)>> {
+    let mut out = Vec::with_capacity(snapshots.raw_len());
+    for snapshot in snapshots.sequence_values::<Table>() {
+        let snapshot = snapshot?;
+        let actor = snapshot.raw_get(1)?;
+        let state = read_actor_semantic_state_table(&snapshot.raw_get(2)?)?;
+        out.push((actor, state));
+    }
+    Ok(out)
+}
+
+fn reset_actor_capture_tables(lua: &Lua, actors: &[Table]) -> Result<(), String> {
+    for actor in actors {
+        reset_actor_capture(lua, actor).map_err(|err| err.to_string())?;
+    }
+    Ok(())
+}
+
+fn overlay_indices_for_actor_pointers(
+    overlays: &[OverlayCompileActor],
+    actor_ptrs: &HashSet<usize>,
+) -> Vec<usize> {
+    overlays
+        .iter()
+        .enumerate()
+        .filter(|(_, overlay)| actor_ptrs.contains(&(overlay.table.to_pointer() as usize)))
+        .map(|(index, _)| index)
+        .collect()
+}
+
+fn tracked_indices_for_actor_pointers(
+    tracked_actors: &[TrackedCompileActor],
+    actor_ptrs: &HashSet<usize>,
+) -> Vec<usize> {
+    tracked_actors
+        .iter()
+        .enumerate()
+        .filter(|(_, actor)| actor_ptrs.contains(&(actor.table.to_pointer() as usize)))
+        .map(|(index, _)| index)
+        .collect()
 }
 
 fn capture_overlay_function_blocks(
@@ -20997,14 +21286,15 @@ fn capture_overlay_function_blocks(
         .map(|overlay| overlay.table.clone())
         .collect();
     let state_snapshot =
-        snapshot_actors_mutable_state(lua, &snapshot_tables).map_err(|err| err.to_string())?;
+        snapshot_actors_semantic_state(lua, &snapshot_tables).map_err(|err| err.to_string())?;
     reset_overlay_capture_tables_for_indices(lua, overlays, overlay_indices)?;
     let result = match arg {
         Some(value) => function.call::<Value>(value),
         None => function.call::<Value>(()),
     };
     let blocks = collect_overlay_capture_blocks_for_indices(overlays, overlay_indices);
-    restore_actors_mutable_state(state_snapshot).map_err(|err| err.to_string())?;
+    reset_overlay_capture_tables_for_indices(lua, overlays, overlay_indices)?;
+    restore_actors_semantic_state(state_snapshot).map_err(|err| err.to_string())?;
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     let blocks = blocks?;
     result.map_err(|err| err.to_string())?;
@@ -21037,18 +21327,23 @@ fn capture_function_action_blocks(
         .set(SONG_LUA_BROADCASTS_KEY, broadcast_table.clone())
         .map_err(|err| err.to_string())?;
     set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
-    let mut snapshot_tables = Vec::with_capacity(overlays.len() + tracked_actors.len());
-    snapshot_tables.extend(overlays.iter().map(|overlay| overlay.table.clone()));
-    snapshot_tables.extend(tracked_actors.iter().map(|actor| actor.table.clone()));
-    let state_snapshot =
-        snapshot_actors_mutable_state(lua, &snapshot_tables).map_err(|err| err.to_string())?;
-    reset_overlay_capture_tables(lua, overlays)?;
-    reset_tracked_capture_tables(lua, tracked_actors)?;
+    let capture_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
     let result = function.call::<Value>(());
-    let overlay_blocks = collect_overlay_capture_blocks(overlays);
-    let tracked_blocks = collect_tracked_capture_blocks(tracked_actors);
+    let touched_actors =
+        capture_scope_actor_tables(&capture_scope.actors).map_err(|err| err.to_string())?;
+    let actor_ptrs =
+        capture_scope_actor_pointers(&capture_scope.actors).map_err(|err| err.to_string())?;
+    let state_snapshot =
+        capture_scope_snapshots(&capture_scope.snapshots).map_err(|err| err.to_string())?;
+    restore_action_capture_scope(lua, capture_scope).map_err(|err| err.to_string())?;
+    let overlay_indices = overlay_indices_for_actor_pointers(overlays, &actor_ptrs);
+    let tracked_indices = tracked_indices_for_actor_pointers(tracked_actors, &actor_ptrs);
+    let overlay_blocks = collect_overlay_capture_blocks_for_indices(overlays, &overlay_indices);
+    let tracked_blocks =
+        collect_tracked_capture_blocks_for_indices(tracked_actors, &tracked_indices);
     let broadcasts = read_song_lua_broadcasts(&broadcast_table).map_err(|err| err.to_string());
-    restore_actors_mutable_state(state_snapshot).map_err(|err| err.to_string())?;
+    reset_actor_capture_tables(lua, &touched_actors)?;
+    restore_actors_semantic_state(state_snapshot).map_err(|err| err.to_string())?;
     globals
         .set(SONG_LUA_BROADCASTS_KEY, previous_broadcasts)
         .map_err(|err| err.to_string())?;

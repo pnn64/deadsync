@@ -6124,6 +6124,7 @@ mod tests {
     use std::collections::{HashMap, HashSet};
     use std::path::Path;
     use std::sync::Arc;
+    use std::sync::atomic::AtomicU64;
 
     fn test_auto_rot_slot(total_frames: f32, keys: Vec<ModelAutoRotKey>) -> SpriteSlot {
         SpriteSlot {
