@@ -122,15 +122,12 @@ pub(super) fn apply_profile_defaults(
     masks: &mut PlayerOptionMasks,
 ) {
     init_opted_in_bitmask_rows(row_map, profile, masks, player_idx);
+    init_opted_in_cycle_rows(row_map, profile, player_idx);
+    init_opted_in_numeric_rows(row_map, profile, player_idx);
     apply_derived_masks(profile, masks);
 
     let match_ns_label = tr("PlayerOptions", MATCH_NOTESKIN_LABEL);
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
-    // Initialize Background Filter row from profile setting (0..=100 %).
-    if let Some(row) = row_map.get_mut(RowId::BackgroundFilter) {
-        row.selected_choice_index[player_idx] =
-            (profile.background_filter.percent() as usize).min(row.choices.len().saturating_sub(1));
-    }
     // Initialize Judgment Font row from profile setting
     if let Some(row) = row_map.get_mut(RowId::JudgmentFont) {
         row.selected_choice_index[player_idx] = assets::judgment_texture_choices()
@@ -180,13 +177,6 @@ pub(super) fn apply_profile_defaults(
         );
     }
     // Initialize Combo Font row from profile setting
-    if let Some(row) = row_map.get_mut(RowId::ComboFont) {
-        row.selected_choice_index[player_idx] = COMBO_FONT_VARIANTS
-            .iter()
-            .position(|&v| v == profile.combo_font)
-            .unwrap_or(0)
-            .min(row.choices.len().saturating_sub(1));
-    }
     if let Some(row) = row_map.get_mut(RowId::ComboColors) {
         row.selected_choice_index[player_idx] = COMBO_COLORS_VARIANTS
             .iter()
@@ -227,77 +217,7 @@ pub(super) fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = idx;
         }
     }
-    // Initialize Spacing row from profile (range SPACING_PERCENT_MIN..=SPACING_PERCENT_MAX).
-    if let Some(row) = row_map.get_mut(RowId::Spacing) {
-        let val = profile
-            .spacing_percent
-            .clamp(SPACING_PERCENT_MIN, SPACING_PERCENT_MAX);
-        let needle = format!("{val}%");
-        if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
-            row.selected_choice_index[player_idx] = idx;
-        }
-    }
-    // Initialize Perspective row from profile setting (Overhead, Hallway, Distant, Incoming, Space).
-    if let Some(row) = row_map.get_mut(RowId::Perspective) {
-        row.selected_choice_index[player_idx] = PERSPECTIVE_VARIANTS
-            .iter()
-            .position(|&v| v == profile.perspective)
-            .unwrap_or(0)
-            .min(row.choices.len().saturating_sub(1));
-    }
-    // Initialize NoteField Offset X from profile (0..50, non-negative; P1 uses negative sign at render time)
-    if let Some(row) = row_map.get_mut(RowId::NoteFieldOffsetX) {
-        let val = profile.note_field_offset_x.clamp(0, 50);
-        let val_str = val.to_string();
-        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
-            row.selected_choice_index[player_idx] = idx;
-        }
-    }
-    // Initialize NoteField Offset Y from profile (-50..50)
-    if let Some(row) = row_map.get_mut(RowId::NoteFieldOffsetY) {
-        let val = profile.note_field_offset_y.clamp(-50, 50);
-        let val_str = val.to_string();
-        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
-            row.selected_choice_index[player_idx] = idx;
-        }
-    }
     // Initialize Judgment Offset X from profile (HUD offset range)
-    if let Some(row) = row_map.get_mut(RowId::JudgmentOffsetX) {
-        let val = profile
-            .judgment_offset_x
-            .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
-        let val_str = val.to_string();
-        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
-            row.selected_choice_index[player_idx] = idx;
-        }
-    }
-    // Initialize Judgment Offset Y from profile (HUD offset range)
-    if let Some(row) = row_map.get_mut(RowId::JudgmentOffsetY) {
-        let val = profile
-            .judgment_offset_y
-            .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
-        let val_str = val.to_string();
-        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
-            row.selected_choice_index[player_idx] = idx;
-        }
-    }
-    // Initialize Combo Offset X from profile (HUD offset range)
-    if let Some(row) = row_map.get_mut(RowId::ComboOffsetX) {
-        let val = profile.combo_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
-        let val_str = val.to_string();
-        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
-            row.selected_choice_index[player_idx] = idx;
-        }
-    }
-    // Initialize Combo Offset Y from profile (HUD offset range)
-    if let Some(row) = row_map.get_mut(RowId::ComboOffsetY) {
-        let val = profile.combo_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
-        let val_str = val.to_string();
-        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
-            row.selected_choice_index[player_idx] = idx;
-        }
-    }
-    // Initialize Error Bar Offset X from profile (HUD offset range)
     if let Some(row) = row_map.get_mut(RowId::ErrorBarOffsetX) {
         let val = profile
             .error_bar_offset_x
@@ -314,21 +234,6 @@ pub(super) fn apply_profile_defaults(
             .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
-            row.selected_choice_index[player_idx] = idx;
-        }
-    }
-    // Initialize Visual Delay from profile (-100..100ms)
-    if let Some(row) = row_map.get_mut(RowId::VisualDelay) {
-        let val = profile.visual_delay_ms.clamp(-100, 100);
-        let needle = format!("{val}ms");
-        if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
-            row.selected_choice_index[player_idx] = idx;
-        }
-    }
-    if let Some(row) = row_map.get_mut(RowId::GlobalOffsetShift) {
-        let val = profile.global_offset_shift_ms.clamp(-100, 100);
-        let needle = format!("{val}ms");
-        if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
             row.selected_choice_index[player_idx] = idx;
         }
     }
@@ -498,6 +403,49 @@ fn init_opted_in_bitmask_rows(
         }
         let row = row_map.get_mut(id).expect("row was just observed");
         super::row::init_bitmask_row_from_binding(row, &binding, profile, masks, player_idx);
+    }
+}
+
+fn init_opted_in_cycle_rows(
+    row_map: &mut RowMap,
+    profile: &crate::game::profile::Profile,
+    player_idx: usize,
+) {
+    let ids: Vec<RowId> = row_map.display_order().to_vec();
+    for id in ids {
+        let Some(row) = row_map.get_mut(id) else {
+            continue;
+        };
+        match row.behavior {
+            RowBehavior::Cycle(super::row::CycleBinding::Index(binding)) => {
+                super::row::init_cycle_row_from_binding(row, &binding, profile, player_idx);
+            }
+            RowBehavior::Cycle(super::row::CycleBinding::Bool(binding)) => {
+                super::row::init_cycle_row_from_binding(row, &binding, profile, player_idx);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn init_opted_in_numeric_rows(
+    row_map: &mut RowMap,
+    profile: &crate::game::profile::Profile,
+    player_idx: usize,
+) {
+    let ids: Vec<RowId> = row_map.display_order().to_vec();
+    for id in ids {
+        let Some(row) = row_map.get(id) else {
+            continue;
+        };
+        let RowBehavior::Numeric(binding) = row.behavior else {
+            continue;
+        };
+        if binding.init.is_none() {
+            continue;
+        }
+        let row = row_map.get_mut(id).expect("row was just observed");
+        super::row::init_numeric_row_from_binding(row, &binding, profile, player_idx);
     }
 }
 
