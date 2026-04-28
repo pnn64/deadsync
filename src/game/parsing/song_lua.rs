@@ -10784,11 +10784,11 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
                 return Ok(Value::Nil);
             };
             if let Some(noteskin_name) = method_arg(&args, 0).cloned().and_then(read_string) {
-                owner.set("__songlua_noteskin_name", noteskin_name)?;
+                owner.raw_set("__songlua_noteskin_name", noteskin_name)?;
                 return Ok(Value::Table(owner));
             }
             let noteskin_name = owner
-                .get::<Option<String>>("__songlua_noteskin_name")?
+                .raw_get::<Option<String>>("__songlua_noteskin_name")?
                 .unwrap_or_else(|| player.noteskin_name.clone());
             Ok(Value::String(lua.create_string(&noteskin_name)?))
         })?,
@@ -11092,7 +11092,7 @@ fn install_speedmod_state_method(
                 return Ok(Value::Table(owner.clone()));
             }
 
-            let active = owner.get::<Option<String>>("__songlua_speedmod_active")?;
+            let active = owner.raw_get::<Option<String>>("__songlua_speedmod_active")?;
             if active
                 .as_deref()
                 .is_some_and(|active| active != key.as_str())
@@ -11101,7 +11101,7 @@ fn install_speedmod_state_method(
             }
             if active.as_deref() == Some(key.as_str()) {
                 return Ok(owner
-                    .get::<Option<f32>>(value_key.as_str())?
+                    .raw_get::<Option<f32>>(value_key.as_str())?
                     .map_or(Value::Nil, |value| Value::Number(value as f64)));
             }
             Ok(initial.clone())
@@ -11112,11 +11112,11 @@ fn install_speedmod_state_method(
 fn set_player_speedmod(owner: &Table, key: &str, value: Option<f32>) -> mlua::Result<()> {
     let value_key = format!("__songlua_speedmod_{key}");
     if let Some(value) = value {
-        owner.set("__songlua_speedmod_active", key)?;
-        owner.set(value_key.as_str(), value)?;
+        owner.raw_set("__songlua_speedmod_active", key)?;
+        owner.raw_set(value_key.as_str(), value)?;
     } else {
-        owner.set("__songlua_speedmod_active", "none")?;
-        owner.set(value_key.as_str(), Value::Nil)?;
+        owner.raw_set("__songlua_speedmod_active", "none")?;
+        owner.raw_set(value_key.as_str(), Value::Nil)?;
     }
     Ok(())
 }
@@ -30450,7 +30450,7 @@ return Def.ActorFrame{
 return Def.ActorFrame{
     InitCommand=function(self)
         local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
-        local initial = string.format("%.2f:%s", po:XMod(), tostring(po:NoMines()))
+        local initial = string.format("%.2f:%s:%s", po:XMod(), tostring(po:CMod()), tostring(po:NoMines()))
         po:XMod(3.5, 9e9, true):Overhead(true, 9e9):Mini(0.15, 9e9, true)
         local after_x = string.format("%.2f:%s:%.2f", po:XMod(), tostring(po:Overhead()), po:Mini())
         po:CMod(650, 1)
@@ -30472,7 +30472,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "2.25:false|3.50:true:0.15|nil:650:nil|nil:nil:700"
+            "2.25:nil:false|3.50:true:0.15|nil:650:nil|nil:nil:700"
         );
     }
 
