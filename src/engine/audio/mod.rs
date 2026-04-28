@@ -1341,16 +1341,11 @@ fn stream_position_frames_from_window(
     window.total_frames.saturating_sub(start_frame) as f64
 }
 
-fn drain_played_music_map_segments() {
+fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f32, f32)> {
     let mut map = PLAYBACK_POS_MAP.lock().unwrap();
     while let Some(seg) = internal::music_seg_ring_pop(&PLAYED_MUSIC_MAP_SEGS) {
         map.insert(seg);
     }
-}
-
-fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f32, f32)> {
-    drain_played_music_map_segments();
-    let map = PLAYBACK_POS_MAP.lock().unwrap();
     map.search(stream_frames).map(|(music_sec, sec_per_frame)| {
         (
             music_sec as f32,
