@@ -579,6 +579,15 @@ pub(crate) fn clear_texture_handles() {
 
 pub fn register_texture_dims(key: &str, w: u32, h: u32) {
     let sheet = parse_sprite_sheet_dims(key);
+    let same_meta = TEX_META
+        .read()
+        .unwrap()
+        .get(key)
+        .is_some_and(|meta| meta.w == w && meta.h == h);
+    if same_meta && SHEET_DIMS.read().unwrap().get(key).copied() == Some(sheet) {
+        return;
+    }
+
     let key = key.to_string();
     let mut m = TEX_META.write().unwrap();
     m.insert(key.clone(), TexMeta { w, h });

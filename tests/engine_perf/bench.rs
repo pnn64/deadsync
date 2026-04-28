@@ -1,6 +1,8 @@
+use deadsync::assets;
 use deadsync::engine::gfx::BlendMode as GfxBlendMode;
-use deadsync::engine::present::actors::{Actor, SizeSpec, SpriteSource};
-use deadsync::engine::present::{anim, font};
+use deadsync::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextContent};
+use deadsync::engine::present::{anim, compose, font};
+use deadsync::test_support::compose_scenarios;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -26,6 +28,9 @@ const DRAW_PREP_RESERVE_ITERS: usize = 12_000;
 const TMESH_REPACK_ITERS: usize = 30_000;
 const TEXTURE_LOOKUP_ITERS: usize = 12_000;
 const COMPOSE_TEXTURE_LOOKUP_ITERS: usize = 20_000;
+const COMPOSE_REGISTRY_CHURN_ITERS: usize = 1_500;
+const COMPOSE_TEXT_CACHE_ITERS: usize = 800;
+const TEXT_CACHE_CHURN_POOL: usize = 512;
 const MARKER_SCAN_ITERS: usize = 80_000;
 const SHADOW_BUILD_ITERS: usize = 12_000;
 const SFX_PLAY_ITERS: usize = 80_000;
@@ -315,6 +320,8 @@ fn main() {
     bench_tmesh_repack();
     bench_texture_lookup();
     bench_compose_texture_lookup();
+    bench_compose_registry_churn();
+    bench_text_layout_cache_churn();
     bench_marker_scan();
     bench_shadow_build();
     bench_sfx_play_path();
@@ -407,6 +414,126 @@ fn bench_compose_texture_lookup() {
     println!("compose texture key lookup");
     run_compose_texture_lookup_pair("64 textures, 4096 sprites", 64, 4096);
     run_compose_texture_lookup_pair("1024 textures, 4096 sprites", 1024, 4096);
+    println!();
+}
+
+fn bench_compose_registry_churn() {
+    println!("compose texture registry generation churn");
+    let scenario = compose_scenarios::build_scenario("perf-texture-lookup")
+        .expect("perf-texture-lookup scenario should exist");
+    assets::register_texture_dims("__engine_perf_video_frame", 1280, 720);
+
+    let mut stable_cache = compose::TextLayoutCache::default();
+    let mut stable_scratch = compose::ComposeScratch::default();
+    let stable = bench(
+        "stable registry retained compose",
+        COMPOSE_REGISTRY_CHURN_ITERS,
+        || {
+            let render = compose::build_screen_cached_with_scratch(
+                black_box(&scenario.actors),
+                scenario.clear_color,
+                &scenario.metrics,
+                &scenario.fonts,
+                scenario.total_elapsed,
+                &mut stable_cache,
+                &mut stable_scratch,
+            );
+            checksum_gfx_render(black_box(&render))
+        },
+    );
+
+    let mut churn_cache = compose::TextLayoutCache::default();
+    let mut churn_scratch = compose::ComposeScratch::default();
+    let churn = bench(
+        "same dims register before compose",
+        COMPOSE_REGISTRY_CHURN_ITERS,
+        || {
+            assets::register_texture_dims("__engine_perf_video_frame", 1280, 720);
+            let render = compose::build_screen_cached_with_scratch(
+                black_box(&scenario.actors),
+                scenario.clear_color,
+                &scenario.metrics,
+                &scenario.fonts,
+                scenario.total_elapsed,
+                &mut churn_cache,
+                &mut churn_scratch,
+            );
+            checksum_gfx_render(black_box(&render))
+        },
+    );
+
+    print_result(&stable);
+    print_result(&churn);
+    print_ratio("stable registry vs repeated register_dims", &churn, &stable);
+    println!();
+}
+
+fn bench_text_layout_cache_churn() {
+    println!("compose text layout cache churn");
+    let stable_scenario = compose_scenarios::build_scenario("perf-text-plain")
+        .expect("perf-text-plain scenario should exist");
+    let mut stable_cache = compose::TextLayoutCache::default();
+    let mut stable_scratch = compose::ComposeScratch::default();
+    let stable = bench(
+        "stable shared text retained cache",
+        COMPOSE_TEXT_CACHE_ITERS,
+        || {
+            stable_cache.begin_frame_stats();
+            let render = compose::build_screen_cached_with_scratch(
+                black_box(&stable_scenario.actors),
+                stable_scenario.clear_color,
+                &stable_scenario.metrics,
+                &stable_scenario.fonts,
+                stable_scenario.total_elapsed,
+                &mut stable_cache,
+                &mut stable_scratch,
+            );
+            let stats = stable_cache.frame_stats();
+            checksum_gfx_render(black_box(&render))
+                .wrapping_add(u64::from(stats.shared_hits))
+                .wrapping_add((u64::from(stats.misses)) << 16)
+                .wrapping_add((u64::from(stats.built_glyphs)) << 32)
+        },
+    );
+
+    let mut churn_scenario = compose_scenarios::build_scenario("perf-text-plain")
+        .expect("perf-text-plain scenario should exist");
+    let text_pool = make_text_pool(TEXT_CACHE_CHURN_POOL);
+    let mut churn_cache = compose::TextLayoutCache::saturating(64);
+    let mut churn_scratch = compose::ComposeScratch::default();
+    let mut frame = 0usize;
+    let churn = bench(
+        "rotating shared text, cache capped 64",
+        COMPOSE_TEXT_CACHE_ITERS,
+        || {
+            let text_count = retarget_text_contents(&mut churn_scenario.actors, &text_pool, frame);
+            frame = frame.wrapping_add(1);
+            churn_cache.begin_frame_stats();
+            let render = compose::build_screen_cached_with_scratch(
+                black_box(&churn_scenario.actors),
+                churn_scenario.clear_color,
+                &churn_scenario.metrics,
+                &churn_scenario.fonts,
+                churn_scenario.total_elapsed,
+                &mut churn_cache,
+                &mut churn_scratch,
+            );
+            let stats = churn_cache.frame_stats();
+            checksum_gfx_render(black_box(&render))
+                .wrapping_add(text_count as u64)
+                .wrapping_add((u64::from(stats.shared_hits)) << 8)
+                .wrapping_add((u64::from(stats.misses)) << 24)
+                .wrapping_add((u64::from(stats.built_glyphs)) << 40)
+        },
+    );
+
+    print_result(&stable);
+    print_result(&churn);
+    print_ratio(
+        "stable shared text vs rotating capped cache",
+        &churn,
+        &stable,
+    );
     println!();
 }
 
@@ -1533,6 +1660,71 @@ fn checksum_bytes(bytes: &[u8]) -> u64 {
         ^ u64::from(bytes[0])
         ^ (u64::from(bytes[mid]) << 8)
         ^ (u64::from(bytes[bytes.len() - 1]) << 16)
+}
+
+fn checksum_gfx_render(render: &deadsync::engine::gfx::RenderList) -> u64 {
+    let mut out = render.objects.len() as u64 ^ ((render.cameras.len() as u64) << 32);
+    for obj in &render.objects {
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(obj.texture_handle)
+            .wrapping_add(obj.z as u64)
+            .wrapping_add((obj.order as u64) << 16)
+            .wrapping_add((obj.camera as u64) << 48);
+        match &obj.object_type {
+            deadsync::engine::gfx::ObjectType::Sprite {
+                center, size, tint, ..
+            } => {
+                out = out
+                    .wrapping_add(center[0].to_bits() as u64)
+                    .wrapping_add(center[1].to_bits() as u64)
+                    .wrapping_add(size[0].to_bits() as u64)
+                    .wrapping_add((tint[3].to_bits() as u64) << 1);
+            }
+            deadsync::engine::gfx::ObjectType::Mesh { tint, vertices, .. } => {
+                out = out
+                    .wrapping_add(vertices.len() as u64)
+                    .wrapping_add(tint[3].to_bits() as u64);
+            }
+            deadsync::engine::gfx::ObjectType::TexturedMesh { tint, vertices, .. } => {
+                out = out
+                    .wrapping_add(vertices.len() as u64)
+                    .wrapping_add(tint[3].to_bits() as u64);
+            }
+        }
+    }
+    out
+}
+
+fn make_text_pool(count: usize) -> Vec<Arc<str>> {
+    (0..count)
+        .map(|idx| Arc::<str>::from(format!("W1 {idx:04}  offset {:+.3}", idx as f32 * 0.001)))
+        .collect()
+}
+
+fn retarget_text_contents(actors: &mut [Actor], texts: &[Arc<str>], frame: usize) -> usize {
+    let mut index = 0usize;
+    for actor in actors {
+        retarget_text_actor(actor, texts, frame, &mut index);
+    }
+    index
+}
+
+fn retarget_text_actor(actor: &mut Actor, texts: &[Arc<str>], frame: usize, index: &mut usize) {
+    match actor {
+        Actor::Text { content, .. } => {
+            let text = &texts[(frame.wrapping_mul(251) + (*index).wrapping_mul(17)) % texts.len()];
+            *content = TextContent::Shared(Arc::clone(text));
+            *index += 1;
+        }
+        Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
+            for child in children {
+                retarget_text_actor(child, texts, frame, index);
+            }
+        }
+        Actor::Shadow { child, .. } => retarget_text_actor(child, texts, frame, index),
+        _ => {}
+    }
 }
 
 fn bench<F>(name: impl Into<String>, iters: usize, mut f: F) -> BenchResult

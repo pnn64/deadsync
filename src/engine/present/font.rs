@@ -501,6 +501,10 @@ fn replace_unicode_markers(text: &str) -> Cow<'_, str> {
 /// - `&NAME;` (`FontCharAliases` like `&START;`, `&MENULEFT;`)
 /// - `&#NNNN;` (decimal) and `&xNNNN;` (hex) Unicode markers
 pub fn replace_markers(text: &str) -> Cow<'_, str> {
+    if !text.as_bytes().contains(&b'&') {
+        return Cow::Borrowed(text);
+    }
+
     let t = replace_entity_markers(text);
     match t {
         Cow::Borrowed(s) => replace_unicode_markers(s),
