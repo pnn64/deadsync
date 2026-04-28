@@ -2346,7 +2346,12 @@ fn build_actor_recursive<'a>(
                 total_elapsed,
             );
             if *mask_dest {
-                clip_objects_range_to_world_masks(out, before, masks);
+                clip_objects_range_to_world_masks(
+                    out,
+                    before,
+                    masks,
+                    &mut scratch.recycled_text_mesh_vertices,
+                );
             }
 
             let end = out.len();
@@ -2728,7 +2733,12 @@ fn build_actor_recursive<'a>(
                     before
                 };
                 if *mask_dest {
-                    clip_objects_range_to_world_masks(out, before, masks);
+                    clip_objects_range_to_world_masks(
+                        out,
+                        before,
+                        masks,
+                        &mut scratch.recycled_text_mesh_vertices,
+                    );
                 }
                 for obj in out.iter_mut().take(end).skip(before) {
                     obj.z = layer;
@@ -3419,6 +3429,7 @@ fn clip_objects_range_to_world_masks(
     objects: &mut Vec<RenderObject>,
     start: usize,
     masks: &[WorldRect],
+    recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
 ) {
     if start >= objects.len() {
         return;
@@ -3428,8 +3439,7 @@ fn clip_objects_range_to_world_masks(
         return;
     }
     if let [mask] = masks {
-        let mut recycled_vertices = Vec::new();
-        clip_objects_range_to_world_rect(objects, start, *mask, &mut recycled_vertices);
+        clip_objects_range_to_world_rect(objects, start, *mask, recycled_vertices);
         return;
     }
     let len = objects.len();
