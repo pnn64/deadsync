@@ -1,6 +1,6 @@
 use super::super::constants::MINI_INDICATOR_VARIANTS;
 use super::super::row::index_binding;
-use super::super::row::{BitmaskInit, CursorInit};
+use super::super::row::{BitmaskInit, CursorInit, CycleInit, NumericInit};
 use super::*;
 use crate::game::profile as gp;
 
@@ -11,77 +11,165 @@ const TURN: ChoiceBinding<usize> = index_binding!(
     gp::TurnOption::None,
     turn_option,
     gp::update_turn_option_for_side,
-    false
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            TURN_OPTION_VARIANTS
+                .iter()
+                .position(|&v| v == p.turn_option)
+                .unwrap_or(0)
+        }
+    })
 );
 const LIFE_METER_TYPE: ChoiceBinding<usize> = index_binding!(
     LIFE_METER_TYPE_VARIANTS,
     gp::LifeMeterType::Standard,
     lifemeter_type,
     gp::update_lifemeter_type_for_side,
-    false
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            LIFE_METER_TYPE_VARIANTS
+                .iter()
+                .position(|&v| v == p.lifemeter_type)
+                .unwrap_or(0)
+        }
+    })
 );
 const DATA_VISUALIZATIONS: ChoiceBinding<usize> = index_binding!(
     DATA_VISUALIZATIONS_VARIANTS,
     gp::DataVisualizations::None,
     data_visualizations,
     gp::update_data_visualizations_for_side,
-    true
+    true,
+    Some(CycleInit {
+        from_profile: |p| {
+            DATA_VISUALIZATIONS_VARIANTS
+                .iter()
+                .position(|&v| v == p.data_visualizations)
+                .unwrap_or(0)
+        }
+    })
 );
 const TARGET_SCORE: ChoiceBinding<usize> = index_binding!(
     TARGET_SCORE_VARIANTS,
     gp::TargetScoreSetting::S,
     target_score,
     gp::update_target_score_for_side,
-    false
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            TARGET_SCORE_VARIANTS
+                .iter()
+                .position(|&v| v == p.target_score)
+                .unwrap_or(0)
+        }
+    })
 );
 const INDICATOR_SCORE_TYPE: ChoiceBinding<usize> = index_binding!(
     MINI_INDICATOR_SCORE_TYPE_VARIANTS,
     gp::MiniIndicatorScoreType::Itg,
     mini_indicator_score_type,
     gp::update_mini_indicator_score_type_for_side,
-    false
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            MINI_INDICATOR_SCORE_TYPE_VARIANTS
+                .iter()
+                .position(|&v| v == p.mini_indicator_score_type)
+                .unwrap_or(0)
+        }
+    })
 );
 const COMBO_COLORS: ChoiceBinding<usize> = index_binding!(
     COMBO_COLORS_VARIANTS,
     gp::ComboColors::Glow,
     combo_colors,
     gp::update_combo_colors_for_side,
-    false
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            COMBO_COLORS_VARIANTS
+                .iter()
+                .position(|&v| v == p.combo_colors)
+                .unwrap_or(0)
+        }
+    })
 );
 const COMBO_COLOR_MODE: ChoiceBinding<usize> = index_binding!(
     COMBO_MODE_VARIANTS,
     gp::ComboMode::FullCombo,
     combo_mode,
     gp::update_combo_mode_for_side,
-    false
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            COMBO_MODE_VARIANTS
+                .iter()
+                .position(|&v| v == p.combo_mode)
+                .unwrap_or(0)
+        }
+    })
 );
 const ERROR_BAR_TRIM: ChoiceBinding<usize> = index_binding!(
     ERROR_BAR_TRIM_VARIANTS,
     gp::ErrorBarTrim::Off,
     error_bar_trim,
     gp::update_error_bar_trim_for_side,
-    false
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            ERROR_BAR_TRIM_VARIANTS
+                .iter()
+                .position(|&v| v == p.error_bar_trim)
+                .unwrap_or(0)
+        }
+    })
 );
 const MEASURE_COUNTER: ChoiceBinding<usize> = index_binding!(
     MEASURE_COUNTER_VARIANTS,
     gp::MeasureCounter::None,
     measure_counter,
     gp::update_measure_counter_for_side,
-    true
+    true,
+    Some(CycleInit {
+        from_profile: |p| {
+            MEASURE_COUNTER_VARIANTS
+                .iter()
+                .position(|&v| v == p.measure_counter)
+                .unwrap_or(0)
+        }
+    })
 );
 const MEASURE_LINES: ChoiceBinding<usize> = index_binding!(
     MEASURE_LINES_VARIANTS,
     gp::MeasureLines::Off,
     measure_lines,
     gp::update_measure_lines_for_side,
-    false
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            MEASURE_LINES_VARIANTS
+                .iter()
+                .position(|&v| v == p.measure_lines)
+                .unwrap_or(0)
+        }
+    })
 );
 const TIMING_WINDOWS: ChoiceBinding<usize> = index_binding!(
     TIMING_WINDOWS_VARIANTS,
     gp::TimingWindowsOption::None,
     timing_windows,
     gp::update_timing_windows_for_side,
-    false
+    false,
+    Some(CycleInit {
+        from_profile: |p| {
+            TIMING_WINDOWS_VARIANTS
+                .iter()
+                .position(|&v| v == p.timing_windows)
+                .unwrap_or(0)
+        }
+    })
 );
 
 const DENSITY_GRAPH_BACKGROUND: ChoiceBinding<bool> = ChoiceBinding::<bool> {
@@ -90,7 +178,15 @@ const DENSITY_GRAPH_BACKGROUND: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         Outcome::persisted()
     },
     persist_for_side: gp::update_transparent_density_graph_bg_for_side,
-    init: None,
+    init: Some(CycleInit {
+        from_profile: |p| {
+            if p.transparent_density_graph_bg {
+                1
+            } else {
+                0
+            }
+        },
+    }),
 };
 const CARRY_COMBO: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
@@ -98,7 +194,15 @@ const CARRY_COMBO: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         Outcome::persisted()
     },
     persist_for_side: gp::update_carry_combo_between_songs_for_side,
-    init: None,
+    init: Some(CycleInit {
+        from_profile: |p| {
+            if p.carry_combo_between_songs {
+                1
+            } else {
+                0
+            }
+        },
+    }),
 };
 const JUDGMENT_TILT: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
@@ -106,7 +210,9 @@ const JUDGMENT_TILT: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         Outcome::persisted_with_visibility()
     },
     persist_for_side: gp::update_judgment_tilt_for_side,
-    init: None,
+    init: Some(CycleInit {
+        from_profile: |p| if p.judgment_tilt { 1 } else { 0 },
+    }),
 };
 const JUDGMENT_BEHIND_ARROWS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
@@ -114,7 +220,9 @@ const JUDGMENT_BEHIND_ARROWS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         Outcome::persisted()
     },
     persist_for_side: gp::update_judgment_back_for_side,
-    init: None,
+    init: Some(CycleInit {
+        from_profile: |p| if p.judgment_back { 1 } else { 0 },
+    }),
 };
 const OFFSET_INDICATOR: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
@@ -122,7 +230,9 @@ const OFFSET_INDICATOR: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         Outcome::persisted()
     },
     persist_for_side: gp::update_error_ms_display_for_side,
-    init: None,
+    init: Some(CycleInit {
+        from_profile: |p| if p.error_ms_display { 1 } else { 0 },
+    }),
 };
 const RESCORE_EARLY_HITS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
@@ -130,7 +240,9 @@ const RESCORE_EARLY_HITS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         Outcome::persisted()
     },
     persist_for_side: gp::update_rescore_early_hits_for_side,
-    init: None,
+    init: Some(CycleInit {
+        from_profile: |p| if p.rescore_early_hits { 1 } else { 0 },
+    }),
 };
 const CUSTOM_BLUE_FANTASTIC_WINDOW: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
@@ -138,7 +250,9 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW: ChoiceBinding<bool> = ChoiceBinding::<bool> 
         Outcome::persisted_with_visibility()
     },
     persist_for_side: gp::update_custom_fantastic_window_for_side,
-    init: None,
+    init: Some(CycleInit {
+        from_profile: |p| if p.custom_fantastic_window { 1 } else { 0 },
+    }),
 };
 
 const ERROR_BAR_OFFSET_X: NumericBinding = NumericBinding {
@@ -148,7 +262,10 @@ const ERROR_BAR_OFFSET_X: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_error_bar_offset_x_for_side,
-    init: None,
+    init: Some(NumericInit {
+        from_profile: |p| p.error_bar_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+        format: |v| format!("{v}"),
+    }),
 };
 const ERROR_BAR_OFFSET_Y: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -157,7 +274,10 @@ const ERROR_BAR_OFFSET_Y: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_error_bar_offset_y_for_side,
-    init: None,
+    init: Some(NumericInit {
+        from_profile: |p| p.error_bar_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+        format: |v| format!("{v}"),
+    }),
 };
 
 const SCROLL: BitmaskBinding = BitmaskBinding {

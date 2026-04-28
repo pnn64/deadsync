@@ -1583,6 +1583,78 @@ pub(super) mod tests {
         );
     }
 
+    #[test]
+    fn apply_profile_defaults_initializes_advanced_pane_rows_via_contracts() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+
+        let p = &mut state.player_profiles[P1];
+        p.turn_option = super::TURN_OPTION_VARIANTS[1];
+        p.lifemeter_type = super::LIFE_METER_TYPE_VARIANTS[1];
+        p.data_visualizations = super::DATA_VISUALIZATIONS_VARIANTS[1];
+        p.target_score = super::TARGET_SCORE_VARIANTS[1];
+        p.mini_indicator_score_type = super::MINI_INDICATOR_SCORE_TYPE_VARIANTS[1];
+        p.combo_colors = super::COMBO_COLORS_VARIANTS[1];
+        p.combo_mode = super::COMBO_MODE_VARIANTS[1];
+        p.error_bar_trim = super::ERROR_BAR_TRIM_VARIANTS[1];
+        p.measure_counter = super::MEASURE_COUNTER_VARIANTS[1];
+        p.measure_lines = super::MEASURE_LINES_VARIANTS[1];
+        p.timing_windows = super::TIMING_WINDOWS_VARIANTS[1];
+        p.transparent_density_graph_bg = true;
+        p.carry_combo_between_songs = true;
+        p.judgment_tilt = true;
+        p.judgment_back = true;
+        p.error_ms_display = true;
+        p.rescore_early_hits = true;
+        p.custom_fantastic_window = true;
+        p.error_bar_offset_x = -25;
+        p.error_bar_offset_y = 30;
+
+        let profile = state.player_profiles[P1].clone();
+        let noteskin_names = super::discover_noteskin_names();
+        let mut row_map = super::build_rows(
+            &state.song,
+            &state.speed_mod[P1],
+            state.chart_steps_index,
+            [0; 2],
+            state.music_rate,
+            super::OptionsPane::Advanced,
+            &noteskin_names,
+            Screen::SelectMusic,
+            state.fixed_stepchart.as_ref(),
+        );
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+
+        assert_variant_at_cursor(&row_map, RowId::Turn, &super::TURN_OPTION_VARIANTS, profile.turn_option);
+        assert_variant_at_cursor(&row_map, RowId::LifeMeterType, &super::LIFE_METER_TYPE_VARIANTS, profile.lifemeter_type);
+        assert_variant_at_cursor(&row_map, RowId::DataVisualizations, &super::DATA_VISUALIZATIONS_VARIANTS, profile.data_visualizations);
+        assert_variant_at_cursor(&row_map, RowId::TargetScore, &super::TARGET_SCORE_VARIANTS, profile.target_score);
+        assert_variant_at_cursor(&row_map, RowId::IndicatorScoreType, &super::MINI_INDICATOR_SCORE_TYPE_VARIANTS, profile.mini_indicator_score_type);
+        assert_variant_at_cursor(&row_map, RowId::ComboColors, &super::COMBO_COLORS_VARIANTS, profile.combo_colors);
+        assert_variant_at_cursor(&row_map, RowId::ComboColorMode, &super::COMBO_MODE_VARIANTS, profile.combo_mode);
+        assert_variant_at_cursor(&row_map, RowId::ErrorBarTrim, &super::ERROR_BAR_TRIM_VARIANTS, profile.error_bar_trim);
+        assert_variant_at_cursor(&row_map, RowId::MeasureCounter, &super::MEASURE_COUNTER_VARIANTS, profile.measure_counter);
+        assert_variant_at_cursor(&row_map, RowId::MeasureLines, &super::MEASURE_LINES_VARIANTS, profile.measure_lines);
+        assert_variant_at_cursor(&row_map, RowId::TimingWindows, &super::TIMING_WINDOWS_VARIANTS, profile.timing_windows);
+
+        for id in [
+            RowId::DensityGraphBackground,
+            RowId::CarryCombo,
+            RowId::JudgmentTilt,
+            RowId::JudgmentBehindArrows,
+            RowId::OffsetIndicator,
+            RowId::RescoreEarlyHits,
+            RowId::CustomBlueFantasticWindow,
+        ] {
+            let row = row_map.get(id).unwrap_or_else(|| panic!("Row {id:?} missing"));
+            assert_eq!(row.selected_choice_index[P1], 1, "bool row {id:?} should be at index 1 (true)");
+        }
+
+        assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetX, "-25");
+        assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetY, "30");
+    }
+
     fn assert_choice_at_cursor(row_map: &RowMap, id: RowId, expected: &str) {
         let row = row_map
             .get(id)
