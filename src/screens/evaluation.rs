@@ -1435,25 +1435,26 @@ const fn eval_graph_default_for(show_fa_plus_pane: bool, show_hard_ex: bool) -> 
 }
 
 #[inline(always)]
-const fn eval_graph_next(pane: EvalGraphPane) -> EvalGraphPane {
-    match pane {
-        EvalGraphPane::Itg => EvalGraphPane::Ex,
-        EvalGraphPane::Ex => EvalGraphPane::HardEx,
-        EvalGraphPane::HardEx => EvalGraphPane::Arrow,
-        EvalGraphPane::Arrow => EvalGraphPane::Foot,
-        EvalGraphPane::Foot => EvalGraphPane::Itg,
-    }
+fn eval_graph_cycle(show_fa_plus_pane: bool, show_hard_ex: bool) -> Vec<EvalGraphPane> {
+    let scoring = eval_graph_default_for(show_fa_plus_pane, show_hard_ex);
+    vec![scoring, EvalGraphPane::Arrow, EvalGraphPane::Foot]
 }
 
 #[inline(always)]
-const fn eval_graph_prev(pane: EvalGraphPane) -> EvalGraphPane {
-    match pane {
-        EvalGraphPane::Itg => EvalGraphPane::Foot,
-        EvalGraphPane::Ex => EvalGraphPane::Itg,
-        EvalGraphPane::HardEx => EvalGraphPane::Ex,
-        EvalGraphPane::Arrow => EvalGraphPane::HardEx,
-        EvalGraphPane::Foot => EvalGraphPane::Arrow,
-    }
+fn eval_graph_shift(
+    pane: EvalGraphPane,
+    dir: i32,
+    show_fa_plus_pane: bool,
+    show_hard_ex: bool,
+) -> EvalGraphPane {
+    let cycle = eval_graph_cycle(show_fa_plus_pane, show_hard_ex);
+    let cur_idx = cycle
+        .iter()
+        .position(|&candidate| candidate == pane)
+        .unwrap_or(0);
+    let step = if dir >= 0 { 1 } else { -1 };
+    let next_idx = (cur_idx as i32 + step).rem_euclid(cycle.len() as i32) as usize;
+    cycle[next_idx]
 }
 
 pub struct State {
@@ -1836,50 +1837,59 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
-            scatter_mesh_itg[player_idx] = {
-                const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
-                    &si.scatter,
-                    si.graph_first_second,
-                    si.graph_last_second,
-                    graph_width,
-                    GRAPH_H,
-                    si.scatter_worst_window_ms,
-                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Itg,
-                );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
-            };
+            let scoring_scatter =
+                eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score);
 
-            scatter_mesh_ex[player_idx] = {
-                const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
-                    &si.scatter,
-                    si.graph_first_second,
-                    si.graph_last_second,
-                    graph_width,
-                    GRAPH_H,
-                    si.scatter_worst_window_ms,
-                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Ex,
-                );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
-            };
+            if scoring_scatter == EvalGraphPane::Itg {
+                scatter_mesh_itg[player_idx] = {
+                    const GRAPH_H: f32 = 64.0;
+                    let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
+                        &si.scatter,
+                        si.graph_first_second,
+                        si.graph_last_second,
+                        graph_width,
+                        GRAPH_H,
+                        si.scatter_worst_window_ms,
+                        crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Itg,
+                    );
+                    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                };
+            }
 
-            scatter_mesh_hard_ex[player_idx] = {
-                const GRAPH_H: f32 = 64.0;
-                let hard_ex_worst_window = si
-                    .scatter_worst_window_ms
-                    .min(timing_stats::effective_windows_ms()[1]);
-                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
-                    &si.scatter,
-                    si.graph_first_second,
-                    si.graph_last_second,
-                    graph_width,
-                    GRAPH_H,
-                    hard_ex_worst_window,
-                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::HardEx,
-                );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
-            };
+            if scoring_scatter == EvalGraphPane::Ex {
+                scatter_mesh_ex[player_idx] = {
+                    const GRAPH_H: f32 = 64.0;
+                    let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
+                        &si.scatter,
+                        si.graph_first_second,
+                        si.graph_last_second,
+                        graph_width,
+                        GRAPH_H,
+                        si.scatter_worst_window_ms,
+                        crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Ex,
+                    );
+                    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                };
+            }
+
+            if scoring_scatter == EvalGraphPane::HardEx {
+                scatter_mesh_hard_ex[player_idx] = {
+                    const GRAPH_H: f32 = 64.0;
+                    let hard_ex_worst_window = si
+                        .scatter_worst_window_ms
+                        .min(timing_stats::effective_windows_ms()[1]);
+                    let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
+                        &si.scatter,
+                        si.graph_first_second,
+                        si.graph_last_second,
+                        graph_width,
+                        GRAPH_H,
+                        hard_ex_worst_window,
+                        crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::HardEx,
+                    );
+                    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                };
+            }
 
             scatter_mesh_arrow[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
@@ -2779,20 +2789,20 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     let mut shift_graph_for = |controller: profile::PlayerSide, dir: i32| {
         let controller_idx = side_idx(controller);
         let player_idx = player_idx_for_controller(controller);
-        if state
+        let Some(si) = state
             .score_info
             .get(player_idx)
             .and_then(|s| s.as_ref())
-            .is_none()
-        {
+        else {
             return;
-        }
-
-        state.active_graph[controller_idx] = if dir >= 0 {
-            eval_graph_next(state.active_graph[controller_idx])
-        } else {
-            eval_graph_prev(state.active_graph[controller_idx])
         };
+
+        state.active_graph[controller_idx] = eval_graph_shift(
+            state.active_graph[controller_idx],
+            dir,
+            si.show_fa_plus_pane,
+            si.show_hard_ex_score,
+        );
 
         // Single/double have one lower graph; keep both controller slots in sync.
         if play_style != profile::PlayStyle::Versus {
