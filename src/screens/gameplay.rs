@@ -1766,25 +1766,38 @@ fn song_lua_overlay_compose_state(
     child
 }
 
-fn song_lua_overlay_states_from(
+fn song_lua_overlay_local_states_from(
     now: f32,
     overlays: &[SongLuaOverlayActor],
     overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
     overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
+) -> Vec<SongLuaOverlayState> {
+    overlays
+        .iter()
+        .enumerate()
+        .map(|(idx, overlay)| {
+            song_lua_overlay_render_state_from(
+                now,
+                idx,
+                overlay,
+                overlay_events,
+                overlay_eases,
+                overlay_ease_ranges,
+            )
+        })
+        .collect()
+}
+
+fn song_lua_overlay_states_from_local(
+    overlays: &[SongLuaOverlayActor],
+    local_states: &[SongLuaOverlayState],
     screen_width: f32,
     screen_height: f32,
 ) -> Vec<SongLuaOverlayState> {
     let mut out = Vec::with_capacity(overlays.len());
     for (idx, overlay) in overlays.iter().enumerate() {
-        let local = song_lua_overlay_render_state_from(
-            now,
-            idx,
-            overlay,
-            overlay_events,
-            overlay_eases,
-            overlay_ease_ranges,
-        );
+        let local = local_states.get(idx).copied().unwrap_or_default();
         let composed = overlay
             .parent_index
             .and_then(|parent_index| {
@@ -1807,8 +1820,52 @@ fn song_lua_overlay_states_from(
     out
 }
 
-fn song_lua_overlay_states(state: &State) -> Vec<SongLuaOverlayState> {
-    song_lua_overlay_states_from(
+fn song_lua_overlay_state_sets_from(
+    now: f32,
+    overlays: &[SongLuaOverlayActor],
+    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
+    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
+    overlay_ease_ranges: &[std::ops::Range<usize>],
+    screen_width: f32,
+    screen_height: f32,
+) -> (Vec<SongLuaOverlayState>, Vec<SongLuaOverlayState>) {
+    let local_states = song_lua_overlay_local_states_from(
+        now,
+        overlays,
+        overlay_events,
+        overlay_eases,
+        overlay_ease_ranges,
+    );
+    let overlay_states =
+        song_lua_overlay_states_from_local(overlays, &local_states, screen_width, screen_height);
+    (local_states, overlay_states)
+}
+
+fn song_lua_overlay_states_from(
+    now: f32,
+    overlays: &[SongLuaOverlayActor],
+    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
+    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
+    overlay_ease_ranges: &[std::ops::Range<usize>],
+    screen_width: f32,
+    screen_height: f32,
+) -> Vec<SongLuaOverlayState> {
+    let (_, overlay_states) = song_lua_overlay_state_sets_from(
+        now,
+        overlays,
+        overlay_events,
+        overlay_eases,
+        overlay_ease_ranges,
+        screen_width,
+        screen_height,
+    );
+    overlay_states
+}
+
+fn song_lua_overlay_state_sets(
+    state: &State,
+) -> (Vec<SongLuaOverlayState>, Vec<SongLuaOverlayState>) {
+    song_lua_overlay_state_sets_from(
         state.current_music_time_display,
         &state.song_lua_overlays,
         &state.song_lua_overlay_events,
@@ -2294,17 +2351,86 @@ fn song_lua_push_order(
     }
 }
 
+fn song_lua_capture_root_state(state: SongLuaOverlayState) -> SongLuaOverlayState {
+    SongLuaOverlayState {
+        draw_order: state.draw_order,
+        draw_by_z_position: state.draw_by_z_position,
+        glow: state.glow,
+        fov: state.fov,
+        vanishpoint: state.vanishpoint,
+        diffuse: state.diffuse,
+        visible: state.visible,
+        mask_source: state.mask_source,
+        mask_dest: state.mask_dest,
+        depth_test: state.depth_test,
+        blend: state.blend,
+        ..SongLuaOverlayState::default()
+    }
+}
+
+fn song_lua_capture_overlay_states(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    local_overlay_states: &[SongLuaOverlayState],
+    capture_index: usize,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+) -> Vec<SongLuaOverlayState> {
+    let mut out = vec![SongLuaOverlayState::default(); overlays.len()];
+    let Some(capture_state) = overlay_states.get(capture_index).copied() else {
+        return out;
+    };
+    // AFTs capture in texture space; placement transforms apply to the sprite
+    // that consumes the texture, not to the captured children.
+    out[capture_index] = song_lua_capture_root_state(capture_state);
+    for (idx, overlay) in overlays.iter().enumerate() {
+        if idx == capture_index
+            || song_lua_overlay_aft_ancestor(overlays, idx) != Some(capture_index)
+        {
+            continue;
+        }
+        let local = local_overlay_states.get(idx).copied().unwrap_or_default();
+        out[idx] = overlay
+            .parent_index
+            .and_then(|parent_index| {
+                out.get(parent_index)
+                    .copied()
+                    .zip(overlays.get(parent_index))
+            })
+            .map(|(parent, parent_overlay)| {
+                song_lua_overlay_compose_state(
+                    &parent_overlay.kind,
+                    parent,
+                    local,
+                    overlay_space_width,
+                    overlay_space_height,
+                )
+            })
+            .unwrap_or(local);
+    }
+    out
+}
+
 fn song_lua_capture_children(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
+    local_overlay_states: &[SongLuaOverlayState],
     asset_manager: &AssetManager,
     capture_index: usize,
     proxy_sources: &SongLuaScreenProxySources<'_>,
     overlay_space_width: f32,
     overlay_space_height: f32,
 ) -> Vec<Actor> {
+    let capture_states = song_lua_capture_overlay_states(
+        overlays,
+        overlay_states,
+        local_overlay_states,
+        capture_index,
+        overlay_space_width,
+        overlay_space_height,
+    );
     let mut out = Vec::new();
-    for (draw_idx, idx) in song_lua_overlay_order(overlays, overlay_states, Some(capture_index))
+    for (draw_idx, idx) in song_lua_overlay_order(overlays, &capture_states, Some(capture_index))
         .into_iter()
         .enumerate()
     {
@@ -2322,7 +2448,7 @@ fn song_lua_capture_children(
         ) {
             continue;
         }
-        let overlay_state = overlay_states.get(idx).copied().unwrap_or_default();
+        let overlay_state = capture_states.get(idx).copied().unwrap_or_default();
         let actor = match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
                 song_lua_proxy_source(target, proxy_sources).and_then(|source| {
@@ -2338,7 +2464,7 @@ fn song_lua_capture_children(
             _ => build_song_lua_overlay_actor(
                 overlay,
                 overlay_state,
-                song_lua_overlay_camera_state(overlays, overlay_states, overlay.parent_index),
+                song_lua_overlay_camera_state(overlays, &capture_states, overlay.parent_index),
                 asset_manager,
                 draw_idx.min(i16::MAX as usize) as i16,
                 overlay_space_width,
@@ -5582,6 +5708,7 @@ fn apply_song_lua_player_transform(
 
 fn build_song_lua_layer_actors(
     overlays: &[SongLuaOverlayActor],
+    local_overlay_states: &[SongLuaOverlayState],
     overlay_states: &[SongLuaOverlayState],
     song_foreground_state: SongLuaOverlayState,
     proxy_sources: &SongLuaScreenProxySources<'_>,
@@ -5632,6 +5759,7 @@ fn build_song_lua_layer_actors(
                         let source = song_lua_capture_children(
                             overlays,
                             overlay_states,
+                            local_overlay_states,
                             asset_manager,
                             capture_index,
                             proxy_sources,
@@ -5693,7 +5821,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         state.player_color
     };
-    let overlay_states = song_lua_overlay_states(state);
+    let (local_overlay_states, overlay_states) = song_lua_overlay_state_sets(state);
     let proxy_requests = song_lua_proxy_requests(&state.song_lua_overlays, &overlay_states);
     let mut underlay_proxy_source = proxy_requests.underlay.then_some(Vec::new());
     let mut overlay_proxy_source = proxy_requests.overlay.then_some(Vec::new());
@@ -5704,7 +5832,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
-        let overlay_states = song_lua_overlay_states_from(
+        let (local_overlay_states, overlay_states) = song_lua_overlay_state_sets_from(
             state.current_music_time_display,
             &layer.overlays,
             &layer.overlay_events,
@@ -5720,6 +5848,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         );
         actors.extend(build_song_lua_layer_actors(
             &layer.overlays,
+            &local_overlay_states,
             &overlay_states,
             song_foreground_state,
             &SongLuaScreenProxySources::default(),
@@ -7056,6 +7185,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         );
         build_song_lua_layer_actors(
             &state.song_lua_overlays,
+            &local_overlay_states,
             &overlay_states,
             song_foreground_state,
             &proxy_sources,
@@ -7075,7 +7205,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
-        let layer_states = song_lua_overlay_states_from(
+        let (layer_local_states, layer_states) = song_lua_overlay_state_sets_from(
             state.current_music_time_display,
             &layer.overlays,
             &layer.overlay_events,
@@ -7103,6 +7233,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             );
             build_song_lua_layer_actors(
                 &layer.overlays,
+                &layer_local_states,
                 &layer_states,
                 song_foreground_state,
                 &proxy_sources,
@@ -7389,6 +7520,63 @@ mod tests {
         );
         assert_eq!(composed.x, 247.0);
         assert_eq!(composed.y, 240.0);
+    }
+
+    #[test]
+    fn song_lua_aft_capture_uses_local_proxy_origin() {
+        let root = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorFrame,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState {
+                x: 427.0,
+                y: 240.0,
+                ..SongLuaOverlayState::default()
+            },
+            message_commands: Vec::new(),
+        };
+        let mut capture = test_capture_overlay("cap");
+        capture.parent_index = Some(0);
+        let overlays = vec![
+            root,
+            capture,
+            test_capture_proxy_child(1, SongLuaProxyTarget::Player { player_index: 0 }),
+        ];
+        let local_states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let overlay_states =
+            song_lua_overlay_states_from_local(&overlays, &local_states, 854.0, 480.0);
+        assert_eq!(overlay_states[2].x, 427.0);
+        assert_eq!(overlay_states[2].y, 240.0);
+
+        let source = vec![test_source_actor()];
+        let proxy_sources = SongLuaScreenProxySources {
+            players: [
+                SongLuaPlayerProxySources {
+                    player: Some(source.as_slice()),
+                    ..SongLuaPlayerProxySources::default()
+                },
+                SongLuaPlayerProxySources::default(),
+            ],
+            ..SongLuaScreenProxySources::default()
+        };
+        let actors = song_lua_capture_children(
+            &overlays,
+            &overlay_states,
+            &local_states,
+            &AssetManager::new(),
+            1,
+            &proxy_sources,
+            854.0,
+            480.0,
+        );
+
+        match actors.as_slice() {
+            [Actor::Frame { offset, .. }] => assert_eq!(*offset, [0.0, 0.0]),
+            other => panic!("expected one capture proxy frame, got {other:?}"),
+        }
     }
 
     #[test]
