@@ -47,6 +47,9 @@ const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
 const SONG_LUA_BROADCASTS_KEY: &str = "__songlua_broadcast_messages";
+const SONG_LUA_PROBE_METHODS_KEY: &str = "__songlua_probe_methods";
+const SONG_LUA_PROBE_ACTORS_KEY: &str = "__songlua_probe_actors";
+const SONG_LUA_PROBE_ACTOR_SET_KEY: &str = "__songlua_probe_actor_set";
 const SONG_LUA_STARTUP_MESSAGE: &str = "__songlua_startup";
 const SONG_LUA_THEME_PATH_PREFIX: &str = "__songlua_theme_path/";
 const SONG_LUA_THEME_NAME: &str = "Simply Love";
@@ -14603,6 +14606,7 @@ fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
 }
 
 fn actor_current_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    record_probe_actor_call(lua, actor)?;
     if let Some(block) = actor.get::<Option<Table>>("__songlua_capture_block")? {
         return Ok(block);
     }
@@ -20605,7 +20609,7 @@ fn read_eases(
                 false,
             ),
             Value::Function(function) => {
-                let (probed_target, probe_methods) =
+                let (probed_target, probe_methods, probe_actor_ptrs) =
                     probe_function_ease_target(lua, &function).map_err(|err| err.to_string())?;
                 let target = probed_target.unwrap_or(SongLuaEaseTarget::Function);
                 if matches!(target, SongLuaEaseTarget::Function) {
@@ -20623,6 +20627,7 @@ fn read_eases(
                         sustain,
                         opt1,
                         opt2,
+                        &probe_actor_ptrs,
                     ) {
                         Ok(compiled) if !compiled.is_empty() => {
                             overlay_eases.extend(compiled);
@@ -20670,14 +20675,34 @@ fn read_eases(
 }
 
 fn record_probe_method_call(lua: &Lua, actor: &Table, method_name: &str) -> mlua::Result<()> {
+    record_probe_actor_call(lua, actor)?;
     let globals = lua.globals();
-    let Some(calls) = globals.get::<Option<Table>>("__songlua_probe_methods")? else {
+    let Some(calls) = globals.get::<Option<Table>>(SONG_LUA_PROBE_METHODS_KEY)? else {
         return Ok(());
     };
     calls.raw_set(
         calls.raw_len() + 1,
         format!("{}.{}", probe_target_kind(actor)?, method_name),
     )?;
+    Ok(())
+}
+
+fn record_probe_actor_call(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let globals = lua.globals();
+    let Some(actors) = globals.get::<Option<Table>>(SONG_LUA_PROBE_ACTORS_KEY)? else {
+        return Ok(());
+    };
+    let Some(seen) = globals.get::<Option<Table>>(SONG_LUA_PROBE_ACTOR_SET_KEY)? else {
+        return Ok(());
+    };
+    if seen
+        .raw_get::<Option<bool>>(actor.clone())?
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+    seen.raw_set(actor.clone(), true)?;
+    actors.raw_set(actors.raw_len() + 1, actor.clone())?;
     Ok(())
 }
 
@@ -20702,21 +20727,29 @@ fn probe_target_kind(actor: &Table) -> mlua::Result<&'static str> {
 fn probe_function_ease_target(
     lua: &Lua,
     function: &Function,
-) -> mlua::Result<(Option<SongLuaEaseTarget>, Vec<String>)> {
+) -> mlua::Result<(Option<SongLuaEaseTarget>, Vec<String>, Vec<usize>)> {
     let globals = lua.globals();
     let previous_time = compile_song_runtime_values(lua)?;
     set_compile_song_runtime_beat(lua, 0.0)?;
-    let previous = globals.get::<Value>("__songlua_probe_methods")?;
+    let previous_methods = globals.get::<Value>(SONG_LUA_PROBE_METHODS_KEY)?;
+    let previous_actors = globals.get::<Value>(SONG_LUA_PROBE_ACTORS_KEY)?;
+    let previous_actor_set = globals.get::<Value>(SONG_LUA_PROBE_ACTOR_SET_KEY)?;
     let calls = lua.create_table()?;
-    globals.set("__songlua_probe_methods", calls.clone())?;
+    let actors = lua.create_table()?;
+    globals.set(SONG_LUA_PROBE_METHODS_KEY, calls.clone())?;
+    globals.set(SONG_LUA_PROBE_ACTORS_KEY, actors.clone())?;
+    globals.set(SONG_LUA_PROBE_ACTOR_SET_KEY, lua.create_table()?)?;
     let result = function.call::<Value>(1.0_f32);
     let methods = probe_call_names(&calls)?;
+    let actor_ptrs = probe_actor_pointers(&actors)?;
     let classify = classify_function_ease_probe(&calls);
-    globals.set("__songlua_probe_methods", previous)?;
+    globals.set(SONG_LUA_PROBE_METHODS_KEY, previous_methods)?;
+    globals.set(SONG_LUA_PROBE_ACTORS_KEY, previous_actors)?;
+    globals.set(SONG_LUA_PROBE_ACTOR_SET_KEY, previous_actor_set)?;
     set_compile_song_runtime_values(lua, previous_time.0, previous_time.1)?;
     match result {
-        Ok(_) => Ok((classify?, methods)),
-        Err(_) => Ok((None, methods)),
+        Ok(_) => Ok((classify?, methods, actor_ptrs)),
+        Err(_) => Ok((None, methods, actor_ptrs)),
     }
 }
 
@@ -20820,6 +20853,14 @@ fn probe_call_names(calls: &Table) -> mlua::Result<Vec<String>> {
     Ok(out)
 }
 
+fn probe_actor_pointers(actors: &Table) -> mlua::Result<Vec<usize>> {
+    let mut out = Vec::new();
+    for value in actors.sequence_values::<Table>() {
+        out.push(value?.to_pointer() as usize);
+    }
+    Ok(out)
+}
+
 fn read_tracked_compile_actors(lua: &Lua) -> Result<Vec<TrackedCompileActor>, String> {
     let globals = lua.globals();
     let top_screen = globals
@@ -20871,7 +20912,19 @@ fn tracked_compile_actor(
 }
 
 fn reset_overlay_capture_tables(lua: &Lua, overlays: &[OverlayCompileActor]) -> Result<(), String> {
-    for overlay in overlays {
+    let indices: Vec<_> = (0..overlays.len()).collect();
+    reset_overlay_capture_tables_for_indices(lua, overlays, &indices)
+}
+
+fn reset_overlay_capture_tables_for_indices(
+    lua: &Lua,
+    overlays: &[OverlayCompileActor],
+    indices: &[usize],
+) -> Result<(), String> {
+    for &index in indices {
+        let Some(overlay) = overlays.get(index) else {
+            continue;
+        };
         reset_actor_capture(lua, &overlay.table).map_err(|err| err.to_string())?;
     }
     Ok(())
@@ -20890,8 +20943,19 @@ fn reset_tracked_capture_tables(
 fn collect_overlay_capture_blocks(
     overlays: &[OverlayCompileActor],
 ) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
+    let indices: Vec<_> = (0..overlays.len()).collect();
+    collect_overlay_capture_blocks_for_indices(overlays, &indices)
+}
+
+fn collect_overlay_capture_blocks_for_indices(
+    overlays: &[OverlayCompileActor],
+    indices: &[usize],
+) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
     let mut out = Vec::new();
-    for (idx, overlay) in overlays.iter().enumerate() {
+    for &idx in indices {
+        let Some(overlay) = overlays.get(idx) else {
+            continue;
+        };
         flush_actor_capture(&overlay.table).map_err(|err| err.to_string())?;
         let blocks = read_actor_capture_blocks(&overlay.table)?;
         if !blocks.is_empty() {
@@ -20918,6 +20982,7 @@ fn collect_tracked_capture_blocks(
 fn capture_overlay_function_blocks(
     lua: &Lua,
     overlays: &[OverlayCompileActor],
+    overlay_indices: &[usize],
     function: &Function,
     arg: Option<f32>,
     song_beat: Option<f32>,
@@ -20926,18 +20991,19 @@ fn capture_overlay_function_blocks(
     if let Some(song_beat) = song_beat {
         set_compile_song_runtime_beat(lua, song_beat).map_err(|err| err.to_string())?;
     }
-    let snapshot_tables: Vec<_> = overlays
+    let snapshot_tables: Vec<_> = overlay_indices
         .iter()
+        .filter_map(|&index| overlays.get(index))
         .map(|overlay| overlay.table.clone())
         .collect();
     let state_snapshot =
         snapshot_actors_mutable_state(lua, &snapshot_tables).map_err(|err| err.to_string())?;
-    reset_overlay_capture_tables(lua, overlays)?;
+    reset_overlay_capture_tables_for_indices(lua, overlays, overlay_indices)?;
     let result = match arg {
         Some(value) => function.call::<Value>(value),
         None => function.call::<Value>(()),
     };
-    let blocks = collect_overlay_capture_blocks(overlays);
+    let blocks = collect_overlay_capture_blocks_for_indices(overlays, overlay_indices);
     restore_actors_mutable_state(state_snapshot).map_err(|err| err.to_string())?;
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     let blocks = blocks?;
@@ -21090,13 +21156,27 @@ fn compile_overlay_function_ease(
     sustain: Option<f32>,
     opt1: Option<f32>,
     opt2: Option<f32>,
+    probe_actor_ptrs: &[usize],
 ) -> Result<Vec<SongLuaOverlayEase>, String> {
     let start_beat = start;
     let end_beat = song_lua_span_end(start, limit, span_mode).max(start_beat);
-    let from_blocks =
-        capture_overlay_function_blocks(lua, overlays, function, Some(from), Some(start_beat))?;
-    let to_blocks =
-        capture_overlay_function_blocks(lua, overlays, function, Some(to), Some(end_beat))?;
+    let overlay_indices = overlay_function_ease_indices(overlays, probe_actor_ptrs);
+    let from_blocks = capture_overlay_function_blocks(
+        lua,
+        overlays,
+        &overlay_indices,
+        function,
+        Some(from),
+        Some(start_beat),
+    )?;
+    let to_blocks = capture_overlay_function_blocks(
+        lua,
+        overlays,
+        &overlay_indices,
+        function,
+        Some(to),
+        Some(end_beat),
+    )?;
     if from_blocks.is_empty() && to_blocks.is_empty() {
         return Ok(Vec::new());
     }
@@ -21138,6 +21218,27 @@ fn compile_overlay_function_ease(
         });
     }
     Ok(out)
+}
+
+fn overlay_function_ease_indices(
+    overlays: &[OverlayCompileActor],
+    probe_actor_ptrs: &[usize],
+) -> Vec<usize> {
+    if probe_actor_ptrs.is_empty() {
+        return (0..overlays.len()).collect();
+    }
+    let probe_actor_ptrs: HashSet<_> = probe_actor_ptrs.iter().copied().collect();
+    let out: Vec<_> = overlays
+        .iter()
+        .enumerate()
+        .filter(|(_, overlay)| probe_actor_ptrs.contains(&(overlay.table.to_pointer() as usize)))
+        .map(|(index, _)| index)
+        .collect();
+    if out.is_empty() {
+        (0..overlays.len()).collect()
+    } else {
+        out
+    }
 }
 
 #[inline(always)]
