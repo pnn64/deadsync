@@ -602,6 +602,8 @@ pub enum FontRole {
     Numbers,
     /// Evaluation panel numerics (large grade/percentage on results).
     ScreenEval,
+    /// Big white headline numerals (e.g., the evaluation-screen percentage).
+    Headline,
 }
 
 /// Resolve a logical [`FontRole`] under the given [`crate::config::MachineFont`]
@@ -617,6 +619,7 @@ pub enum FontRole {
 /// | `Footer`     | `wendy`                     | `mega_alpha`                  |
 /// | `Numbers`    | `wendy_monospace_numbers`   | `mega_monospace_numbers`      |
 /// | `ScreenEval` | `wendy_screenevaluation`    | `mega_screenevaluation`       |
+/// | `Headline`   | `wendy_white`               | `mega_alpha`                  |
 pub fn machine_font_key(machine_font: crate::config::MachineFont, role: FontRole) -> &'static str {
     use crate::config::MachineFont::{Common, Mega};
     match (machine_font, role) {
@@ -627,6 +630,8 @@ pub fn machine_font_key(machine_font: crate::config::MachineFont, role: FontRole
         (Mega, FontRole::Numbers) => "mega_monospace_numbers",
         (Common, FontRole::ScreenEval) => "wendy_screenevaluation",
         (Mega, FontRole::ScreenEval) => "mega_screenevaluation",
+        (Common, FontRole::Headline) => "wendy_white",
+        (Mega, FontRole::Headline) => "mega_alpha",
     }
 }
 
@@ -740,6 +745,10 @@ mod tests {
             machine_font_key(MachineFont::Common, FontRole::ScreenEval),
             "wendy_screenevaluation"
         );
+        assert_eq!(
+            machine_font_key(MachineFont::Common, FontRole::Headline),
+            "wendy_white"
+        );
     }
 
     #[test]
@@ -763,6 +772,10 @@ mod tests {
         assert_eq!(
             machine_font_key(MachineFont::Mega, FontRole::ScreenEval),
             "mega_screenevaluation"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Mega, FontRole::Headline),
+            "mega_alpha"
         );
     }
 
