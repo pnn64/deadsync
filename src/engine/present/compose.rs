@@ -3541,15 +3541,38 @@ fn clipped_sprite_object_to_world_rect(
             uv_offset,
             uv_tex_shift,
             ..
-        } => clip_textured_mesh_to_world_rect(
-            *tint,
-            vertices.as_ref(),
-            obj.transform,
-            *uv_scale,
-            *uv_offset,
-            *uv_tex_shift,
-            clip,
-        ),
+        } => {
+            let vertices = vertices.as_ref();
+            let Some(bounds) = textured_mesh_world_bounds(vertices, obj.transform) else {
+                return None;
+            };
+            if bounds.right < clip.left
+                || bounds.left > clip.right
+                || bounds.top < clip.bottom
+                || bounds.bottom > clip.top
+            {
+                return None;
+            }
+            if bounds.left >= clip.left
+                && bounds.right <= clip.right
+                && bounds.bottom >= clip.bottom
+                && bounds.top <= clip.top
+            {
+                return Some(ClippedSpriteObject {
+                    object_type: obj.object_type.clone(),
+                    transform: obj.transform,
+                });
+            }
+            clip_textured_mesh_to_world_rect(
+                *tint,
+                vertices,
+                obj.transform,
+                *uv_scale,
+                *uv_offset,
+                *uv_tex_shift,
+                clip,
+            )
+        }
         renderer::ObjectType::Mesh { .. } => Some(ClippedSpriteObject {
             object_type: obj.object_type.clone(),
             transform: obj.transform,
@@ -3595,6 +3618,28 @@ fn world_xy_3d(t: &Matrix4, p: [f32; 3]) -> [f32; 2] {
         1.0
     };
     [clip.x * inv_w, clip.y * inv_w]
+}
+
+fn textured_mesh_world_bounds(
+    vertices: &[renderer::TexturedMeshVertex],
+    transform: Matrix4,
+) -> Option<WorldRect> {
+    let first = vertices.first()?;
+    let first = world_xy_3d(&transform, first.pos);
+    let mut bounds = WorldRect {
+        left: first[0],
+        right: first[0],
+        bottom: first[1],
+        top: first[1],
+    };
+    for vertex in &vertices[1..] {
+        let p = world_xy_3d(&transform, vertex.pos);
+        bounds.left = bounds.left.min(p[0]);
+        bounds.right = bounds.right.max(p[0]);
+        bounds.bottom = bounds.bottom.min(p[1]);
+        bounds.top = bounds.top.max(p[1]);
+    }
+    Some(bounds)
 }
 
 #[inline(always)]
@@ -4641,6 +4686,54 @@ mod tests {
                 assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
             }
             _ => panic!("expected clipped batched text to remain textured mesh"),
+        }
+    }
+
+    #[test]
+    fn fully_inside_clipped_text_keeps_cached_mesh() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 200.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let actors = [Actor::Text {
+            align: [0.0, 0.0],
+            offset: [10.0, 20.0],
+            local_transform: Matrix4::IDENTITY,
+            color: [1.0; 4],
+            stroke_color: None,
+            glow: [0.0; 4],
+            font: "test",
+            content: TextContent::static_str("AB"),
+            attributes: Vec::new(),
+            align_text: TextAlign::Left,
+            z: 0,
+            scale: [1.0, 1.0],
+            fit_width: None,
+            fit_height: None,
+            line_spacing: None,
+            wrap_width_pixels: None,
+            max_width: None,
+            max_height: None,
+            max_w_pre_zoom: false,
+            max_h_pre_zoom: false,
+            jitter: false,
+            distortion: 0.0,
+            clip: Some([0.0, 0.0, 200.0, 100.0]),
+            mask_dest: false,
+            blend: BlendMode::Alpha,
+            effect: Default::default(),
+        }];
+        let fonts = HashMap::from([("test", test_font())]);
+        let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+
+        assert_eq!(render.objects.len(), 1);
+        match &render.objects[0].object_type {
+            ObjectType::TexturedMesh { geom_cache_key, .. } => {
+                assert_ne!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
+            }
+            _ => panic!("expected fully inside clipped text to keep cached textured mesh"),
         }
     }
 

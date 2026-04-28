@@ -68,6 +68,7 @@ struct Args {
 enum CacheMode {
     Fresh,
     Retained,
+    Scratch,
 }
 
 #[derive(Clone, Copy)]
@@ -104,7 +105,11 @@ impl CacheMode {
         match value {
             "fresh" => Ok(Self::Fresh),
             "retained" => Ok(Self::Retained),
-            _ => Err(format!("unknown --cache value '{value}', expected fresh or retained").into()),
+            "scratch" => Ok(Self::Scratch),
+            _ => Err(format!(
+                "unknown --cache value '{value}', expected fresh, retained, or scratch"
+            )
+            .into()),
         }
     }
 
@@ -112,7 +117,12 @@ impl CacheMode {
         match self {
             Self::Fresh => "fresh",
             Self::Retained => "retained",
+            Self::Scratch => "scratch",
         }
+    }
+
+    const fn retains_actor_data(self) -> bool {
+        matches!(self, Self::Retained | Self::Scratch)
     }
 }
 
@@ -397,7 +407,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     args.iters,
                     args.warmup,
                     args.cache_mode,
-                    || fixture.build(matches!(args.cache_mode, CacheMode::Retained)),
+                    || fixture.build(args.cache_mode.retains_actor_data()),
                 )
             }
             gs_scorebox_bench::SCENARIO_NAME => {
@@ -439,7 +449,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     args.iters,
                     args.warmup,
                     args.cache_mode,
-                    || fixture.build(matches!(args.cache_mode, CacheMode::Retained)),
+                    || fixture.build(args.cache_mode.retains_actor_data()),
                 )
             }
             menu_bench::SCENARIO_NAME => {
@@ -453,7 +463,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     args.iters,
                     args.warmup,
                     args.cache_mode,
-                    || fixture.build(matches!(args.cache_mode, CacheMode::Retained)),
+                    || fixture.build(args.cache_mode.retains_actor_data()),
                 )
             }
             notefield_bench::SCENARIO_NAME => {
@@ -481,7 +491,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     args.iters,
                     args.warmup,
                     args.cache_mode,
-                    || fixture.build(matches!(args.cache_mode, CacheMode::Retained)),
+                    || fixture.build(args.cache_mode.retains_actor_data()),
                 )
             }
             pane_stats_bench::SCENARIO_NAME => {
@@ -509,7 +519,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     args.iters,
                     args.warmup,
                     args.cache_mode,
-                    || fixture.build(matches!(args.cache_mode, CacheMode::Retained)),
+                    || fixture.build(args.cache_mode.retains_actor_data()),
                 )
             }
             _ => Err("actors phase currently only supports --scenario music-wheel, density-graph, density-graph-life, gameplay, gameplay-stats, gameplay-stats-double, gameplay-stats-versus, gs-scorebox, heart-bg, init, menu, notefield, options, pane-stats, or player-options".into()),
@@ -701,6 +711,7 @@ fn write_requested_outputs(
 fn build_screen_for_mode(
     cache_mode: CacheMode,
     text_cache: &mut compose::TextLayoutCache,
+    scratch: &mut compose::ComposeScratch,
     actors: &[Actor],
     clear_color: [f32; 4],
     metrics: &deadsync::engine::space::Metrics,
@@ -719,6 +730,26 @@ fn build_screen_for_mode(
             total_elapsed,
             text_cache,
         ),
+        CacheMode::Scratch => compose::build_screen_cached_with_scratch(
+            actors,
+            clear_color,
+            metrics,
+            fonts,
+            total_elapsed,
+            text_cache,
+            scratch,
+        ),
+    }
+}
+
+#[inline(always)]
+fn recycle_screen_for_mode(
+    cache_mode: CacheMode,
+    scratch: &mut compose::ComposeScratch,
+    screen: &mut RenderList,
+) {
+    if matches!(cache_mode, CacheMode::Scratch) {
+        scratch.recycle_render_list(screen);
     }
 }
 
@@ -741,9 +772,11 @@ where
     let actor_snapshot = compose_case::actor_list_snapshot(&sample_actors);
     let actor_hash = compose_case::actor_snapshot_hash(&actor_snapshot)?;
     let mut text_cache = compose::TextLayoutCache::default();
+    let mut scratch = compose::ComposeScratch::default();
     let sample_render = build_screen_for_mode(
         cache_mode,
         &mut text_cache,
+        &mut scratch,
         &sample_actors,
         clear_color,
         metrics,
@@ -787,9 +820,11 @@ where
         .into());
     }
     let mut verify_cache = compose::TextLayoutCache::default();
+    let mut verify_scratch = compose::ComposeScratch::default();
     let final_render = build_screen_for_mode(
         cache_mode,
         &mut verify_cache,
+        &mut verify_scratch,
         &final_actors,
         clear_color,
         metrics,
@@ -844,7 +879,7 @@ fn benchmark_notefield_actor_builder(
     cache_mode: CacheMode,
     fixture: &mut notefield_bench::NotefieldBenchFixture,
 ) -> Result<BenchmarkResult, Box<dyn Error>> {
-    let retained = matches!(cache_mode, CacheMode::Retained);
+    let retained = cache_mode.retains_actor_data();
     let build_actors = |fixture: &notefield_bench::NotefieldBenchFixture| fixture.build(retained);
 
     let sample_actors = build_actors(fixture);
@@ -852,9 +887,11 @@ fn benchmark_notefield_actor_builder(
     let actor_snapshot = compose_case::actor_list_snapshot(&sample_actors);
     let actor_hash = compose_case::actor_snapshot_hash(&actor_snapshot)?;
     let mut text_cache = compose::TextLayoutCache::default();
+    let mut scratch = compose::ComposeScratch::default();
     let sample_render = build_screen_for_mode(
         cache_mode,
         &mut text_cache,
+        &mut scratch,
         &sample_actors,
         clear_color,
         metrics,
@@ -902,9 +939,11 @@ fn benchmark_notefield_actor_builder(
         .into());
     }
     let mut verify_cache = compose::TextLayoutCache::default();
+    let mut verify_scratch = compose::ComposeScratch::default();
     let final_render = build_screen_for_mode(
         cache_mode,
         &mut verify_cache,
+        &mut verify_scratch,
         &final_actors,
         clear_color,
         metrics,
@@ -982,9 +1021,11 @@ where
 {
     let _assets = compose_case::asset_manager_for_scene(name, actors, fonts)?;
     let mut text_cache = compose::TextLayoutCache::default();
+    let mut scratch = compose::ComposeScratch::default();
     let sample = build_screen_for_mode(
         cache_mode,
         &mut text_cache,
+        &mut scratch,
         actors,
         clear_color,
         metrics,
@@ -996,9 +1037,10 @@ where
     black_box(objects ^ cameras);
 
     for idx in 0..warmup {
-        let screen = build_screen_for_mode(
+        let mut screen = build_screen_for_mode(
             cache_mode,
             &mut text_cache,
+            &mut scratch,
             actors,
             clear_color,
             metrics,
@@ -1006,15 +1048,17 @@ where
             elapsed_for_iter(idx),
         );
         black_box(screen.objects.len());
+        recycle_screen_for_mode(cache_mode, &mut scratch, &mut screen);
     }
 
     let start_alloc = ALLOC.begin_measurement();
     let started = Instant::now();
     let mut checksum = 0u64;
     for idx in 0..iters {
-        let screen = black_box(build_screen_for_mode(
+        let mut screen = black_box(build_screen_for_mode(
             cache_mode,
             &mut text_cache,
+            &mut scratch,
             actors,
             clear_color,
             metrics,
@@ -1026,6 +1070,7 @@ where
             .wrapping_add(screen.objects.len() as u64)
             .wrapping_add(screen.cameras.len() as u64);
         black_box(checksum);
+        recycle_screen_for_mode(cache_mode, &mut scratch, &mut screen);
     }
 
     Ok(BenchmarkResult {
@@ -1122,9 +1167,11 @@ where
     F: Fn(u64) -> f32,
 {
     let mut text_cache = compose::TextLayoutCache::default();
+    let mut scratch = compose::ComposeScratch::default();
     let sample = build_screen_for_mode(
         cache_mode,
         &mut text_cache,
+        &mut scratch,
         actors,
         clear_color,
         metrics,
@@ -1138,9 +1185,10 @@ where
     )?;
 
     for idx in 0..warmup {
-        let screen = build_screen_for_mode(
+        let mut screen = build_screen_for_mode(
             cache_mode,
             &mut text_cache,
+            &mut scratch,
             actors,
             clear_color,
             metrics,
@@ -1148,15 +1196,17 @@ where
             elapsed_for_iter(idx),
         );
         black_box(texture_handle_checksum(&screen));
+        recycle_screen_for_mode(cache_mode, &mut scratch, &mut screen);
     }
 
     let start_alloc = ALLOC.begin_measurement();
     let started = Instant::now();
     let mut checksum = 0u64;
     for idx in 0..iters {
-        let screen = build_screen_for_mode(
+        let mut screen = build_screen_for_mode(
             cache_mode,
             &mut text_cache,
+            &mut scratch,
             actors,
             clear_color,
             metrics,
@@ -1168,6 +1218,7 @@ where
             .wrapping_add(texture_handle_checksum(&screen))
             .wrapping_add(screen.objects.len() as u64);
         black_box(checksum);
+        recycle_screen_for_mode(cache_mode, &mut scratch, &mut screen);
     }
     let elapsed_s = started.elapsed().as_secs_f64();
     let alloc = ALLOC.snapshot().diff(start_alloc);
@@ -1175,6 +1226,7 @@ where
     let final_screen = build_screen_for_mode(
         cache_mode,
         &mut text_cache,
+        &mut scratch,
         actors,
         clear_color,
         metrics,
@@ -1361,6 +1413,6 @@ fn next_value(
 
 fn print_help() {
     println!(
-        "compose_bench [--scenario all|hud|text|text-ci|resolve-ci|mask|heart-bg|init|menu|music-wheel|gameplay|gameplay-stats|gs-scorebox] [--case PATH] [--phase actors|compose|resolve|compose-resolve] [--iters N] [--warmup N] [--cache fresh|retained] [--write-case PATH] [--write-actors-output PATH] [--write-output PATH] [--write-resolved-output PATH]"
+        "compose_bench [--scenario all|hud|text|text-ci|resolve-ci|mask|perf-text-plain|perf-text-clip-inside|perf-text-clip-partial|perf-text-attr|perf-shadow-text|perf-sort-z|perf-texture-lookup|heart-bg|init|menu|music-wheel|gameplay|gameplay-stats|gs-scorebox] [--case PATH] [--phase actors|compose|resolve|compose-resolve] [--iters N] [--warmup N] [--cache fresh|retained|scratch] [--write-case PATH] [--write-actors-output PATH] [--write-output PATH] [--write-resolved-output PATH]"
     );
 }

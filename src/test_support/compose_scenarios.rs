@@ -24,7 +24,7 @@ use crate::test_support::player_options_bench;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 20] = [
+const SCENARIO_NAMES: [&str; 27] = [
     density_graph_bench::SCENARIO_NAME,
     density_graph_life_bench::SCENARIO_NAME,
     gameplay_bench::SCENARIO_NAME,
@@ -39,6 +39,13 @@ const SCENARIO_NAMES: [&str; 20] = [
     "text-ci",
     "resolve-ci",
     "mask",
+    "perf-text-plain",
+    "perf-text-clip-inside",
+    "perf-text-clip-partial",
+    "perf-text-attr",
+    "perf-shadow-text",
+    "perf-sort-z",
+    "perf-texture-lookup",
     menu_bench::SCENARIO_NAME,
     music_wheel_bench::SCENARIO_NAME,
     notefield_bench::SCENARIO_NAME,
@@ -115,6 +122,19 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         "text-ci" => Some(text_ci_scenario(metrics, fonts)),
         "resolve-ci" => Some(resolve_ci_scenario(metrics, fonts)),
         "mask" => Some(mask_scenario(metrics, fonts)),
+        "perf-text-plain" => Some(perf_text_scenario(metrics, fonts, PerfTextMode::Plain)),
+        "perf-text-clip-inside" => {
+            Some(perf_text_scenario(metrics, fonts, PerfTextMode::ClipInside))
+        }
+        "perf-text-clip-partial" => Some(perf_text_scenario(
+            metrics,
+            fonts,
+            PerfTextMode::ClipPartial,
+        )),
+        "perf-text-attr" => Some(perf_text_scenario(metrics, fonts, PerfTextMode::Attributes)),
+        "perf-shadow-text" => Some(perf_shadow_text_scenario(metrics, fonts)),
+        "perf-sort-z" => Some(perf_sort_z_scenario(metrics, fonts)),
+        "perf-texture-lookup" => Some(perf_texture_lookup_scenario(metrics, fonts)),
         menu_bench::SCENARIO_NAME => Some(menu_scenario(metrics, fonts)),
         music_wheel_bench::SCENARIO_NAME => Some(music_wheel_scenario(metrics, fonts)),
         notefield_bench::SCENARIO_NAME => Some(notefield_scenario(metrics, fonts)),
@@ -328,6 +348,10 @@ fn ensure_textures() {
             assets::register_texture_dims(&key, 128, 64);
             assets::register_texture_dims(&mixed, 128, 64);
         }
+        for idx in 0..512 {
+            let key = perf_texture_key(idx);
+            assets::register_texture_dims(&key, 32, 32);
+        }
     });
 }
 
@@ -532,6 +556,228 @@ fn text_ci_scenario(metrics: Metrics, mut fonts: HashMap<&'static str, Font>) ->
     scenario.name = "text-ci";
     remap_actor_texture_case(&mut scenario.actors);
     scenario
+}
+
+#[derive(Clone, Copy)]
+enum PerfTextMode {
+    Plain,
+    ClipInside,
+    ClipPartial,
+    Attributes,
+}
+
+impl PerfTextMode {
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Plain => "perf-text-plain",
+            Self::ClipInside => "perf-text-clip-inside",
+            Self::ClipPartial => "perf-text-clip-partial",
+            Self::Attributes => "perf-text-attr",
+        }
+    }
+}
+
+fn perf_text_scenario(
+    metrics: Metrics,
+    fonts: HashMap<&'static str, Font>,
+    mode: PerfTextMode,
+) -> ComposeScenario {
+    let rows = 18usize;
+    let cols = 12usize;
+    let mut actors = Vec::with_capacity(1 + rows * cols);
+    actors.push(Actor::Frame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children: Vec::new(),
+        background: Some(Background::Color([0.01, 0.01, 0.012, 1.0])),
+        z: -20,
+    });
+
+    for row in 0..rows {
+        for col in 0..cols {
+            let x = 18.0 + col as f32 * 68.0;
+            let y = 14.0 + row as f32 * 24.0;
+            actors.push(perf_text_actor(mode, row, col, [x, y]));
+        }
+    }
+
+    ComposeScenario {
+        name: mode.name(),
+        actors,
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 9.25,
+    }
+}
+
+fn perf_text_actor(mode: PerfTextMode, row: usize, col: usize, offset: [f32; 2]) -> Actor {
+    const TEXT: [&str; 4] = [
+        "W1 0042  +0.003",
+        "Marvelous 128",
+        "Stream 17.3",
+        "Offset -0.012",
+    ];
+    let content = TextContent::Shared(Arc::<str>::from(TEXT[(row + col) & 3]));
+    let attributes = match mode {
+        PerfTextMode::Attributes => vec![
+            text_attr(0, 3, [1.0, 0.35, 0.32, 1.0]),
+            text_attr(4, 4, [0.35, 0.75, 1.0, 1.0]),
+            text_attr(9, 6, [0.95, 0.88, 0.42, 1.0]),
+        ],
+        PerfTextMode::Plain | PerfTextMode::ClipInside | PerfTextMode::ClipPartial => Vec::new(),
+    };
+    let clip = match mode {
+        PerfTextMode::ClipInside => Some([0.0, 0.0, SCREEN_W, SCREEN_H]),
+        PerfTextMode::ClipPartial => Some([offset[0], offset[1], 52.0, 18.0]),
+        PerfTextMode::Plain | PerfTextMode::Attributes => None,
+    };
+    Actor::Text {
+        align: [0.0, 0.0],
+        offset,
+        local_transform: glam::Mat4::IDENTITY,
+        color: [0.9, 0.92, 0.96, 1.0],
+        stroke_color: None,
+        glow: [0.0; 4],
+        font: BENCH_FONT,
+        content,
+        attributes,
+        align_text: TextAlign::Left,
+        z: ((row + col) % 7) as i16,
+        scale: [0.74, 0.74],
+        fit_width: None,
+        fit_height: None,
+        line_spacing: None,
+        wrap_width_pixels: None,
+        max_width: None,
+        max_height: None,
+        max_w_pre_zoom: false,
+        max_h_pre_zoom: false,
+        jitter: false,
+        distortion: 0.0,
+        clip,
+        mask_dest: false,
+        blend: BlendMode::Alpha,
+        effect: EffectState::default(),
+    }
+}
+
+fn text_attr(
+    start: usize,
+    length: usize,
+    color: [f32; 4],
+) -> crate::engine::present::actors::TextAttribute {
+    crate::engine::present::actors::TextAttribute {
+        start,
+        length,
+        color,
+        vertex_colors: None,
+        glow: None,
+    }
+}
+
+fn perf_shadow_text_scenario(
+    metrics: Metrics,
+    fonts: HashMap<&'static str, Font>,
+) -> ComposeScenario {
+    let rows = 12usize;
+    let cols = 10usize;
+    let mut actors = Vec::with_capacity(1 + rows * cols);
+    actors.push(Actor::Frame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children: Vec::new(),
+        background: Some(Background::Color([0.015, 0.012, 0.01, 1.0])),
+        z: -20,
+    });
+    for row in 0..rows {
+        for col in 0..cols {
+            let child = perf_text_actor(
+                PerfTextMode::Plain,
+                row,
+                col,
+                [28.0 + col as f32 * 80.0, 30.0 + row as f32 * 34.0],
+            );
+            actors.push(Actor::Shadow {
+                len: [2.0, -2.0],
+                color: [0.0, 0.0, 0.0, 0.65],
+                child: Box::new(child),
+            });
+        }
+    }
+
+    ComposeScenario {
+        name: "perf-shadow-text",
+        actors,
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 9.25,
+    }
+}
+
+fn perf_sort_z_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
+    let count = 1800usize;
+    let mut actors = Vec::with_capacity(count);
+    for idx in 0..count {
+        let x = (idx % 60) as f32 * 14.0 + 8.0;
+        let y = (idx / 60) as f32 * 14.0 + 8.0;
+        let mut actor = sprite_actor(PANEL_TEX, [0.5, 0.5], [x, y], [10.0, 10.0], 0);
+        if let Actor::Sprite { z, tint, .. } = &mut actor {
+            *z = ((count - idx) % 37) as i16 - 18;
+            *tint = [
+                0.45 + ((idx * 13) % 32) as f32 / 96.0,
+                0.6 + ((idx * 7) % 32) as f32 / 96.0,
+                0.85,
+                0.75,
+            ];
+        }
+        actors.push(actor);
+    }
+
+    ComposeScenario {
+        name: "perf-sort-z",
+        actors,
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 1.0,
+    }
+}
+
+fn perf_texture_lookup_scenario(
+    metrics: Metrics,
+    fonts: HashMap<&'static str, Font>,
+) -> ComposeScenario {
+    let count = 512usize;
+    let mut actors = Vec::with_capacity(count);
+    for idx in 0..count {
+        let x = (idx % 32) as f32 * 26.0 + 12.0;
+        let y = (idx / 32) as f32 * 26.0 + 12.0;
+        let mut actor = sprite_actor(
+            PANEL_TEX,
+            [0.5, 0.5],
+            [x, y],
+            [22.0, 22.0],
+            (idx % 8) as i16,
+        );
+        if let Actor::Sprite { source, tint, .. } = &mut actor {
+            *source = SpriteSource::Texture(Arc::<str>::from(perf_texture_key(idx)));
+            *tint = [0.7, 0.8, 1.0, 0.9];
+        }
+        actors.push(actor);
+    }
+
+    ComposeScenario {
+        name: "perf-texture-lookup",
+        actors,
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 1.0,
+    }
 }
 
 fn resolve_ci_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
@@ -1051,6 +1297,10 @@ fn mixed_case_texture_key(input: &str) -> String {
 
 fn casefold_tex_key(idx: usize) -> String {
     format!("bench/casefold/tex{:02}.png", idx)
+}
+
+fn perf_texture_key(idx: usize) -> String {
+    format!("bench/perf/tex{:03}.png", idx)
 }
 
 fn screen_pos(x: f32, y: f32) -> [f32; 2] {
