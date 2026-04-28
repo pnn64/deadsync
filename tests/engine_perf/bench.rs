@@ -1,9 +1,10 @@
+use deadsync::engine::present::font;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 use std::hint::black_box;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
@@ -21,6 +22,12 @@ const ACTIVE_SFX_ITERS: usize = 100_000;
 const DRAW_PREP_RESERVE_ITERS: usize = 12_000;
 const TMESH_REPACK_ITERS: usize = 30_000;
 const TEXTURE_LOOKUP_ITERS: usize = 12_000;
+const COMPOSE_TEXTURE_LOOKUP_ITERS: usize = 20_000;
+const MARKER_SCAN_ITERS: usize = 80_000;
+const SHADOW_BUILD_ITERS: usize = 12_000;
+const SFX_PLAY_ITERS: usize = 80_000;
+const INPUT_LOCK_ITERS: usize = 500_000;
+const VIDEO_FRAME_ITERS: usize = 800;
 
 struct CountingAlloc {
     alloc_calls: AtomicU64,
@@ -77,6 +84,7 @@ struct TMeshGeomKey {
 
 type TMeshGeomMap = HashMap<TMeshGeomKey, (u32, u32), BuildHasherDefault<XxHash64>>;
 type FastU64Map<V> = HashMap<u64, V, BuildHasherDefault<XxHash64>>;
+type FastUsizeMap<V> = HashMap<usize, V, BuildHasherDefault<XxHash64>>;
 
 type TextureHandle = u64;
 
@@ -159,6 +167,38 @@ struct TexturedMeshVertexGpu {
 #[derive(Clone, Copy)]
 struct TextureSlot {
     marker: u64,
+}
+
+struct TextureLookupSim {
+    handles: HashMap<String, TextureHandle, BuildHasherDefault<XxHash64>>,
+    frame_handles: FastUsizeMap<TextureHandle>,
+}
+
+#[derive(Clone, Copy)]
+struct SpriteSim {
+    center: [f32; 2],
+    size: [f32; 2],
+    color: [f32; 4],
+    texture: TextureHandle,
+}
+
+struct ShadowActorSim {
+    len: f32,
+    color: [f32; 4],
+    child: Box<SpriteSim>,
+}
+
+#[derive(Clone, Copy)]
+struct SpriteDrawSim {
+    sprite: SpriteSim,
+    offset: [f32; 2],
+    color: [f32; 4],
+}
+
+#[derive(Clone)]
+struct SfxCommandSim {
+    data: Arc<[i16]>,
+    lane: u8,
 }
 
 impl CountingAlloc {
@@ -266,6 +306,12 @@ fn main() {
     bench_draw_prep_reserves();
     bench_tmesh_repack();
     bench_texture_lookup();
+    bench_compose_texture_lookup();
+    bench_marker_scan();
+    bench_shadow_build();
+    bench_sfx_play_path();
+    bench_input_locks();
+    bench_video_frame_alloc();
     bench_sfx_mix();
     bench_transient_tmesh();
     bench_active_sfx_growth();
@@ -346,6 +392,161 @@ fn bench_texture_lookup() {
     println!("texture handle lookup");
     run_texture_lookup_pair("64 textures, 4096 draw ops", 64, 4096);
     run_texture_lookup_pair("1024 textures, 4096 draw ops", 1024, 4096);
+    println!();
+}
+
+fn bench_compose_texture_lookup() {
+    println!("compose texture key lookup");
+    run_compose_texture_lookup_pair("64 textures, 4096 sprites", 64, 4096);
+    run_compose_texture_lookup_pair("1024 textures, 4096 sprites", 1024, 4096);
+    println!();
+}
+
+fn bench_marker_scan() {
+    println!("text marker replacement scan");
+    let plain = make_marker_texts(128, false);
+    let marked = make_marker_texts(128, true);
+
+    let current_plain = bench(
+        "plain text: always replace_markers",
+        MARKER_SCAN_ITERS,
+        || replace_markers_current(black_box(&plain)),
+    );
+    let skip_plain = bench(
+        "plain text: contains('&') fast path",
+        MARKER_SCAN_ITERS,
+        || replace_markers_skip_plain(black_box(&plain)),
+    );
+    let current_marked = bench(
+        "marked text: always replace_markers",
+        MARKER_SCAN_ITERS,
+        || replace_markers_current(black_box(&marked)),
+    );
+    let skip_marked = bench(
+        "marked text: contains('&') fast path",
+        MARKER_SCAN_ITERS,
+        || replace_markers_skip_plain(black_box(&marked)),
+    );
+
+    print_result(&current_plain);
+    print_result(&skip_plain);
+    print_ratio("plain fast path vs current", &current_plain, &skip_plain);
+    print_result(&current_marked);
+    print_result(&skip_marked);
+    print_ratio("marked fast path vs current", &current_marked, &skip_marked);
+    println!();
+}
+
+fn bench_shadow_build() {
+    println!("shadow actor build");
+    run_shadow_build_pair("64 shadowed sprites", 64);
+    run_shadow_build_pair("256 shadowed sprites", 256);
+    println!();
+}
+
+fn bench_sfx_play_path() {
+    println!("SFX play dispatch path");
+    let data: Arc<[i16]> = Arc::from(make_i16_samples(2048));
+    let mut map = HashMap::new();
+    map.insert("assist_tick".to_string(), Arc::clone(&data));
+    map.insert("effect".to_string(), Arc::clone(&data));
+    let cache = Mutex::new(map);
+    let (tx, rx) = mpsc::channel::<SfxCommandSim>();
+    let paths = ["assist_tick", "effect", "assist_tick", "effect"];
+
+    let current = bench("Mutex<HashMap<String, Arc>> + mpsc", SFX_PLAY_ITERS, || {
+        let mut checksum = 0u64;
+        for (idx, path) in paths.iter().enumerate() {
+            let data = {
+                let cache = cache.lock().unwrap();
+                Arc::clone(cache.get(*path).unwrap())
+            };
+            tx.send(SfxCommandSim {
+                data,
+                lane: idx as u8,
+            })
+            .unwrap();
+        }
+        while let Ok(cmd) = rx.try_recv() {
+            checksum = checksum
+                .wrapping_mul(131)
+                .wrapping_add(cmd.data.len() as u64)
+                .wrapping_add(cmd.lane as u64);
+        }
+        checksum
+    });
+
+    let mut queue = Vec::with_capacity(8);
+    let direct = bench("preloaded Arc + reused queue", SFX_PLAY_ITERS, || {
+        queue.clear();
+        for idx in 0..paths.len() {
+            queue.push(SfxCommandSim {
+                data: Arc::clone(&data),
+                lane: idx as u8,
+            });
+        }
+        checksum_sfx_commands(&queue)
+    });
+
+    print_result(&current);
+    print_result(&direct);
+    print_ratio("preloaded queue vs current", &current, &direct);
+    println!();
+}
+
+fn bench_input_locks() {
+    println!("input map/debounce locking");
+    let keymap = RwLock::new(0x9e37_79b9_u64);
+    let debounce = Mutex::new(0u64);
+    let current = bench("RwLock read + Mutex debounce", INPUT_LOCK_ITERS, || {
+        let mut checksum = 0u64;
+        for event in 0..8u64 {
+            let map = *keymap.read().unwrap();
+            let mut state = debounce.lock().unwrap();
+            *state = state.wrapping_mul(131).wrapping_add(map ^ event);
+            checksum = checksum.wrapping_add(*state);
+        }
+        checksum
+    });
+
+    let map = 0x9e37_79b9_u64;
+    let mut state = 0u64;
+    let direct = bench("direct owned input state", INPUT_LOCK_ITERS, || {
+        let mut checksum = 0u64;
+        for event in 0..8u64 {
+            state = state.wrapping_mul(131).wrapping_add(map ^ event);
+            checksum = checksum.wrapping_add(state);
+        }
+        checksum
+    });
+
+    print_result(&current);
+    print_result(&direct);
+    print_ratio("direct state vs locks", &current, &direct);
+    println!();
+}
+
+fn bench_video_frame_alloc() {
+    println!("video decoded frame buffer");
+    let frame_bytes = 1280 * 720 * 4;
+    let mut byte = 0u8;
+    let allocate = bench("vec![byte; 1280x720 RGBA]", VIDEO_FRAME_ITERS, || {
+        byte = byte.wrapping_add(1);
+        let raw = vec![black_box(byte); frame_bytes];
+        checksum_bytes(black_box(&raw))
+    });
+
+    let mut raw = vec![0u8; frame_bytes];
+    let mut byte = 0u8;
+    let reuse = bench("reused RGBA Vec fill", VIDEO_FRAME_ITERS, || {
+        byte = byte.wrapping_add(1);
+        black_box(raw.as_mut_slice()).fill(black_box(byte));
+        checksum_bytes(black_box(&raw))
+    });
+
+    print_result(&allocate);
+    print_result(&reuse);
+    print_ratio("reused buffer vs allocate", &allocate, &reuse);
     println!();
 }
 
@@ -609,6 +810,40 @@ fn run_texture_lookup_pair(name: &str, texture_count: usize, op_count: usize) {
     print_result(&hash);
     print_result(&dense);
     print_ratio("dense vs hash", &hash, &dense);
+}
+
+fn run_compose_texture_lookup_pair(name: &str, texture_count: usize, op_count: usize) {
+    let (keys, handles, mut cache) = make_compose_texture_work(texture_count, op_count);
+    let current = bench(
+        format!("{name}: frame ptr map + String map"),
+        COMPOSE_TEXTURE_LOOKUP_ITERS,
+        || lookup_compose_textures_current(black_box(&keys), &mut cache),
+    );
+    let direct = bench(
+        format!("{name}: direct TextureHandle"),
+        COMPOSE_TEXTURE_LOOKUP_ITERS,
+        || lookup_compose_textures_direct(black_box(&handles)),
+    );
+
+    print_result(&current);
+    print_result(&direct);
+    print_ratio("direct handles vs current", &current, &direct);
+}
+
+fn run_shadow_build_pair(name: &str, count: usize) {
+    let boxed = bench(
+        format!("{name}: Box<child> actor"),
+        SHADOW_BUILD_ITERS,
+        || build_shadow_boxed(count),
+    );
+    let direct = bench(
+        format!("{name}: direct duplicate draws"),
+        SHADOW_BUILD_ITERS,
+        || build_shadow_direct(count),
+    );
+    print_result(&boxed);
+    print_result(&direct);
+    print_ratio("direct draws vs boxed actor", &boxed, &direct);
 }
 
 #[derive(Clone, Copy)]
@@ -896,6 +1131,199 @@ fn lookup_textures_dense(handles: &[TextureHandle], textures: &[TextureSlot]) ->
             .wrapping_add(textures[handle as usize].marker);
     }
     out
+}
+
+impl TextureLookupSim {
+    fn new(texture_count: usize) -> Self {
+        let mut handles = HashMap::with_capacity_and_hasher(
+            texture_count,
+            BuildHasherDefault::<XxHash64>::default(),
+        );
+        for i in 0..texture_count {
+            handles.insert(format!("tex_{i:04}"), 1 + i as TextureHandle);
+        }
+        Self {
+            handles,
+            frame_handles: FastUsizeMap::with_capacity_and_hasher(
+                texture_count,
+                BuildHasherDefault::default(),
+            ),
+        }
+    }
+
+    fn begin_frame(&mut self) {
+        self.frame_handles.clear();
+    }
+
+    fn handle_with_ptr(&mut self, key: &str) -> TextureHandle {
+        let key_ptr = key.as_ptr() as usize;
+        if let Some(&handle) = self.frame_handles.get(&key_ptr) {
+            return handle;
+        }
+        let handle = *self.handles.get(key).unwrap_or(&0);
+        self.frame_handles.insert(key_ptr, handle);
+        handle
+    }
+}
+
+fn make_compose_texture_work(
+    texture_count: usize,
+    op_count: usize,
+) -> (Vec<Arc<str>>, Vec<TextureHandle>, TextureLookupSim) {
+    let atoms = (0..texture_count)
+        .map(|i| Arc::<str>::from(format!("tex_{i:04}")))
+        .collect::<Vec<_>>();
+    let mut keys = Vec::with_capacity(op_count);
+    let mut handles = Vec::with_capacity(op_count);
+    for i in 0..op_count {
+        let idx = permute(i, texture_count);
+        keys.push(Arc::clone(&atoms[idx]));
+        handles.push(1 + idx as TextureHandle);
+    }
+    (keys, handles, TextureLookupSim::new(texture_count))
+}
+
+fn lookup_compose_textures_current(keys: &[Arc<str>], cache: &mut TextureLookupSim) -> u64 {
+    cache.begin_frame();
+    let mut out = 0u64;
+    for key in keys {
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(cache.handle_with_ptr(key.as_ref()));
+    }
+    out
+}
+
+fn lookup_compose_textures_direct(handles: &[TextureHandle]) -> u64 {
+    let mut out = 0u64;
+    for &handle in handles {
+        out = out.wrapping_mul(131).wrapping_add(handle);
+    }
+    out
+}
+
+fn make_marker_texts(count: usize, marked: bool) -> Vec<String> {
+    let mut out = Vec::with_capacity(count);
+    for i in 0..count {
+        if marked {
+            out.push(format!("score {i:03} &#9654; combo &#9733;"));
+        } else {
+            out.push(format!("score {i:03} combo clear timing detail"));
+        }
+    }
+    out
+}
+
+fn replace_markers_current(texts: &[String]) -> u64 {
+    let mut out = 0u64;
+    for text in texts {
+        let replaced = font::replace_markers(text);
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(replaced.as_ref().len() as u64);
+    }
+    out
+}
+
+fn replace_markers_skip_plain(texts: &[String]) -> u64 {
+    let mut out = 0u64;
+    for text in texts {
+        let len = if text.as_bytes().contains(&b'&') {
+            font::replace_markers(text).as_ref().len()
+        } else {
+            text.len()
+        };
+        out = out.wrapping_mul(131).wrapping_add(len as u64);
+    }
+    out
+}
+
+fn build_shadow_boxed(count: usize) -> u64 {
+    let mut actors = Vec::with_capacity(count);
+    for i in 0..count {
+        let sprite = SpriteSim {
+            center: [i as f32, i as f32 * 0.5],
+            size: [32.0, 32.0],
+            color: [1.0; 4],
+            texture: 1 + (i % 16) as TextureHandle,
+        };
+        actors.push(ShadowActorSim {
+            len: 2.0,
+            color: [0.0, 0.0, 0.0, 0.5],
+            child: Box::new(sprite),
+        });
+    }
+    checksum_shadow_actors(&actors)
+}
+
+fn build_shadow_direct(count: usize) -> u64 {
+    let mut draws = Vec::with_capacity(count * 2);
+    for i in 0..count {
+        let sprite = SpriteSim {
+            center: [i as f32, i as f32 * 0.5],
+            size: [32.0, 32.0],
+            color: [1.0; 4],
+            texture: 1 + (i % 16) as TextureHandle,
+        };
+        draws.push(SpriteDrawSim {
+            sprite,
+            offset: [2.0, 2.0],
+            color: [0.0, 0.0, 0.0, 0.5],
+        });
+        draws.push(SpriteDrawSim {
+            sprite,
+            offset: [0.0, 0.0],
+            color: sprite.color,
+        });
+    }
+    checksum_sprite_draws(&draws)
+}
+
+fn checksum_shadow_actors(actors: &[ShadowActorSim]) -> u64 {
+    let mut out = 0u64;
+    for actor in actors {
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(actor.len.to_bits() as u64)
+            .wrapping_add(actor.color[3].to_bits() as u64)
+            .wrapping_add(actor.child.center[0].to_bits() as u64)
+            .wrapping_add(actor.child.size[0].to_bits() as u64)
+            .wrapping_add(actor.child.texture);
+    }
+    out
+}
+
+fn checksum_sprite_draws(draws: &[SpriteDrawSim]) -> u64 {
+    let mut out = 0u64;
+    for draw in draws {
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(draw.sprite.center[0].to_bits() as u64)
+            .wrapping_add(draw.sprite.size[0].to_bits() as u64)
+            .wrapping_add(draw.sprite.texture)
+            .wrapping_add(draw.offset[0].to_bits() as u64)
+            .wrapping_add(draw.color[3].to_bits() as u64);
+    }
+    out
+}
+
+fn checksum_sfx_commands(queue: &[SfxCommandSim]) -> u64 {
+    let mut out = 0u64;
+    for cmd in queue {
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(cmd.data.len() as u64)
+            .wrapping_add(cmd.lane as u64);
+    }
+    out
+}
+
+fn checksum_bytes(bytes: &[u8]) -> u64 {
+    let mid = bytes.len() / 2;
+    bytes.len() as u64
+        ^ u64::from(bytes[0])
+        ^ (u64::from(bytes[mid]) << 8)
+        ^ (u64::from(bytes[bytes.len() - 1]) << 16)
 }
 
 fn bench<F>(name: impl Into<String>, iters: usize, mut f: F) -> BenchResult

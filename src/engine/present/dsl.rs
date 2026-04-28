@@ -1132,7 +1132,9 @@ impl TextBuilder {
 
     #[inline(always)]
     pub fn build(mut self, site_base: u64) -> Actor {
-        if let std::borrow::Cow::Owned(s) = font::replace_markers(self.content.as_str()) {
+        if self.content.as_str().as_bytes().contains(&b'&')
+            && let std::borrow::Cow::Owned(s) = font::replace_markers(self.content.as_str())
+        {
             self.content = TextContent::Owned(s);
         }
 

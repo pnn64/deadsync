@@ -1375,7 +1375,9 @@ pub(super) mod tests {
         let binding: ChoiceBinding<usize> = ChoiceBinding::<usize> {
             apply: |_, _| super::Outcome::NONE,
             persist_for_side: |_, _| {},
-            init: Some(CycleInit { from_profile: |_| 2 }),
+            init: Some(CycleInit {
+                from_profile: |_| 2,
+            }),
         };
         let mut row = cycle_test_row(&["A", "B", "C", "D"], [0, 0]);
         let applied = init_cycle_row_from_binding(&mut row, &binding, &Profile::default(), P1);
@@ -1412,7 +1414,8 @@ pub(super) mod tests {
         let applied = init_cycle_row_from_binding(&mut row, &binding, &Profile::default(), P1);
         assert!(!applied, "no init contract => helper reports no-op");
         assert_eq!(
-            row.selected_choice_index, [1, 1],
+            row.selected_choice_index,
+            [1, 1],
             "selection must be untouched when no init is wired"
         );
     }
@@ -1448,9 +1451,13 @@ pub(super) mod tests {
         };
         let mut row = numeric_test_row(&["0%", "50%", "100%"], [1, 1]);
         let applied = init_numeric_row_from_binding(&mut row, &binding, &Profile::default(), P1);
-        assert!(applied, "binding has init; helper applied it (even if no-op)");
+        assert!(
+            applied,
+            "binding has init; helper applied it (even if no-op)"
+        );
         assert_eq!(
-            row.selected_choice_index, [1, 1],
+            row.selected_choice_index,
+            [1, 1],
             "no matching choice => selection preserved"
         );
     }
@@ -1573,7 +1580,11 @@ pub(super) mod tests {
         let mut masks = PlayerOptionMasks::default();
         super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
 
-        assert_choice_at_cursor(&row_map, RowId::JudgmentOffsetX, &HUD_OFFSET_MAX.to_string());
+        assert_choice_at_cursor(
+            &row_map,
+            RowId::JudgmentOffsetX,
+            &HUD_OFFSET_MAX.to_string(),
+        );
         assert_choice_at_cursor(&row_map, RowId::NoteFieldOffsetX, "0");
         assert_choice_at_cursor(&row_map, RowId::VisualDelay, "-100ms");
         assert_choice_at_cursor(
@@ -1626,17 +1637,72 @@ pub(super) mod tests {
         let mut masks = PlayerOptionMasks::default();
         super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
 
-        assert_variant_at_cursor(&row_map, RowId::Turn, &super::TURN_OPTION_VARIANTS, profile.turn_option);
-        assert_variant_at_cursor(&row_map, RowId::LifeMeterType, &super::LIFE_METER_TYPE_VARIANTS, profile.lifemeter_type);
-        assert_variant_at_cursor(&row_map, RowId::DataVisualizations, &super::DATA_VISUALIZATIONS_VARIANTS, profile.data_visualizations);
-        assert_variant_at_cursor(&row_map, RowId::TargetScore, &super::TARGET_SCORE_VARIANTS, profile.target_score);
-        assert_variant_at_cursor(&row_map, RowId::IndicatorScoreType, &super::MINI_INDICATOR_SCORE_TYPE_VARIANTS, profile.mini_indicator_score_type);
-        assert_variant_at_cursor(&row_map, RowId::ComboColors, &super::COMBO_COLORS_VARIANTS, profile.combo_colors);
-        assert_variant_at_cursor(&row_map, RowId::ComboColorMode, &super::COMBO_MODE_VARIANTS, profile.combo_mode);
-        assert_variant_at_cursor(&row_map, RowId::ErrorBarTrim, &super::ERROR_BAR_TRIM_VARIANTS, profile.error_bar_trim);
-        assert_variant_at_cursor(&row_map, RowId::MeasureCounter, &super::MEASURE_COUNTER_VARIANTS, profile.measure_counter);
-        assert_variant_at_cursor(&row_map, RowId::MeasureLines, &super::MEASURE_LINES_VARIANTS, profile.measure_lines);
-        assert_variant_at_cursor(&row_map, RowId::TimingWindows, &super::TIMING_WINDOWS_VARIANTS, profile.timing_windows);
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::Turn,
+            &super::TURN_OPTION_VARIANTS,
+            profile.turn_option,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::LifeMeterType,
+            &super::LIFE_METER_TYPE_VARIANTS,
+            profile.lifemeter_type,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::DataVisualizations,
+            &super::DATA_VISUALIZATIONS_VARIANTS,
+            profile.data_visualizations,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::TargetScore,
+            &super::TARGET_SCORE_VARIANTS,
+            profile.target_score,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::IndicatorScoreType,
+            &super::MINI_INDICATOR_SCORE_TYPE_VARIANTS,
+            profile.mini_indicator_score_type,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::ComboColors,
+            &super::COMBO_COLORS_VARIANTS,
+            profile.combo_colors,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::ComboColorMode,
+            &super::COMBO_MODE_VARIANTS,
+            profile.combo_mode,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::ErrorBarTrim,
+            &super::ERROR_BAR_TRIM_VARIANTS,
+            profile.error_bar_trim,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::MeasureCounter,
+            &super::MEASURE_COUNTER_VARIANTS,
+            profile.measure_counter,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::MeasureLines,
+            &super::MEASURE_LINES_VARIANTS,
+            profile.measure_lines,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::TimingWindows,
+            &super::TIMING_WINDOWS_VARIANTS,
+            profile.timing_windows,
+        );
 
         for id in [
             RowId::DensityGraphBackground,
@@ -1647,8 +1713,13 @@ pub(super) mod tests {
             RowId::RescoreEarlyHits,
             RowId::CustomBlueFantasticWindow,
         ] {
-            let row = row_map.get(id).unwrap_or_else(|| panic!("Row {id:?} missing"));
-            assert_eq!(row.selected_choice_index[P1], 1, "bool row {id:?} should be at index 1 (true)");
+            let row = row_map
+                .get(id)
+                .unwrap_or_else(|| panic!("Row {id:?} missing"));
+            assert_eq!(
+                row.selected_choice_index[P1], 1,
+                "bool row {id:?} should be at index 1 (true)"
+            );
         }
 
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetX, "-25");

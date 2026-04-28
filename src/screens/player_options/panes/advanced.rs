@@ -180,11 +180,7 @@ const DENSITY_GRAPH_BACKGROUND: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     persist_for_side: gp::update_transparent_density_graph_bg_for_side,
     init: Some(CycleInit {
         from_profile: |p| {
-            if p.transparent_density_graph_bg {
-                1
-            } else {
-                0
-            }
+            if p.transparent_density_graph_bg { 1 } else { 0 }
         },
     }),
 };
@@ -196,11 +192,7 @@ const CARRY_COMBO: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     persist_for_side: gp::update_carry_combo_between_songs_for_side,
     init: Some(CycleInit {
         from_profile: |p| {
-            if p.carry_combo_between_songs {
-                1
-            } else {
-                0
-            }
+            if p.carry_combo_between_songs { 1 } else { 0 }
         },
     }),
 };

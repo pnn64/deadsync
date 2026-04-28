@@ -15,6 +15,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Instant;
 
+const MAX_ACTIVE_SFX: usize = 32;
+const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
+
 /* ============================== Public API ============================== */
 
 #[derive(Clone, Copy, Debug)]
@@ -82,6 +85,7 @@ enum AudioCommand {
 static ENGINE_INIT_CFG: OnceLock<InitConfig> = OnceLock::new();
 static ENGINE: std::sync::LazyLock<AudioEngine> =
     std::sync::LazyLock::new(|| init_engine_and_thread(engine_init_cfg()));
+static ASSIST_TICK_SFX: OnceLock<Arc<[i16]>> = OnceLock::new();
 
 struct AudioEngine {
     command_sender: Sender<AudioCommand>,
@@ -969,6 +973,15 @@ pub fn play_sfx(path: &str) {
 
 /// Plays a gameplay assist tick that uses its own volume lane.
 pub fn play_assist_tick(path: &str) {
+    if path == ASSIST_TICK_SFX_PATH
+        && let Some(sound_data) = ASSIST_TICK_SFX.get().cloned()
+    {
+        let _ = ENGINE.sfx_sender.send(QueuedSfx {
+            data: sound_data,
+            lane: SfxLane::AssistTick,
+        });
+        return;
+    }
     play_sfx_on_lane(path, SfxLane::AssistTick);
 }
 
@@ -978,49 +991,74 @@ fn play_sfx_on_lane(path: &str, lane: SfxLane) {
         return;
     }
 
-    let sound_data = {
-        let mut cache = ENGINE.sfx_cache.lock().unwrap();
-        if let Some(data) = cache.get(path) {
-            data.clone()
-        } else {
-            let resolved = dirs::app_dirs().resolve_asset_path(path);
-            let resolved_str = resolved.to_string_lossy();
-            match resample::load_and_resample_sfx(&resolved_str) {
-                Ok(data) => {
-                    cache.insert(path.to_string(), data.clone());
-                    debug!("Cached SFX: {path}");
-                    data
-                }
-                Err(e) => {
-                    warn!("Failed to load SFX '{path}': {e}");
-                    return;
-                }
-            }
+    let cached = { ENGINE.sfx_cache.lock().unwrap().get(path).cloned() };
+    if let Some(sound_data) = cached {
+        let _ = ENGINE.sfx_sender.send(QueuedSfx {
+            data: sound_data,
+            lane,
+        });
+        return;
+    }
+
+    let resolved = dirs::app_dirs().resolve_asset_path(path);
+    let resolved_str = resolved.to_string_lossy();
+    let decoded = match resample::load_and_resample_sfx(&resolved_str) {
+        Ok(data) => data,
+        Err(e) => {
+            warn!("Failed to load SFX '{path}': {e}");
+            return;
         }
     };
-    let queued = QueuedSfx {
+
+    let sound_data = {
+        let mut cache = ENGINE.sfx_cache.lock().unwrap();
+        cache
+            .entry(path.to_string())
+            .or_insert_with(|| {
+                debug!("Cached SFX: {path}");
+                decoded
+            })
+            .clone()
+    };
+    cache_assist_tick(path, sound_data.clone());
+    let _ = ENGINE.sfx_sender.send(QueuedSfx {
         data: sound_data,
         lane,
-    };
-    let _ = ENGINE.sfx_sender.send(queued);
+    });
 }
 
 /// Preloads a sound effect into cache without playing it.
 pub fn preload_sfx(path: &str) {
-    let mut cache = ENGINE.sfx_cache.lock().unwrap();
-    if cache.contains_key(path) {
+    let cached = { ENGINE.sfx_cache.lock().unwrap().get(path).cloned() };
+    if let Some(data) = cached {
+        cache_assist_tick(path, data);
         return;
     }
+
     let resolved = dirs::app_dirs().resolve_asset_path(path);
     let resolved_str = resolved.to_string_lossy();
-    match resample::load_and_resample_sfx(&resolved_str) {
-        Ok(data) => {
-            cache.insert(path.to_string(), data);
-            debug!("Cached SFX: {path}");
-        }
+    let decoded = match resample::load_and_resample_sfx(&resolved_str) {
+        Ok(data) => data,
         Err(e) => {
             warn!("Failed to preload SFX '{path}': {e}");
+            return;
         }
+    };
+
+    let mut cache = ENGINE.sfx_cache.lock().unwrap();
+    let data = cache
+        .entry(path.to_string())
+        .or_insert_with(|| {
+            debug!("Cached SFX: {path}");
+            decoded
+        })
+        .clone();
+    cache_assist_tick(path, data);
+}
+
+fn cache_assist_tick(path: &str, data: Arc<[i16]>) {
+    if path == ASSIST_TICK_SFX_PATH {
+        let _ = ASSIST_TICK_SFX.set(data);
     }
 }
 
@@ -1616,7 +1654,7 @@ impl RenderState {
             device_channels,
             mix_i16: Vec::new(),
             mix_f32: Vec::new(),
-            active_sfx: Vec::with_capacity(32),
+            active_sfx: Vec::with_capacity(MAX_ACTIVE_SFX),
             queued_music_map: QUEUED_MUSIC_MAP_SEGS.clone(),
             played_music_map: PLAYED_MUSIC_MAP_SEGS.clone(),
             active_music_map: None,
@@ -1686,7 +1724,9 @@ impl RenderState {
         }
 
         for new_sfx in self.sfx_receiver.try_iter() {
-            self.active_sfx.push((new_sfx.data, 0, new_sfx.lane));
+            if self.active_sfx.len() < MAX_ACTIVE_SFX {
+                self.active_sfx.push((new_sfx.data, 0, new_sfx.lane));
+            }
         }
 
         self.active_sfx.retain_mut(|(data, cursor, lane)| {
