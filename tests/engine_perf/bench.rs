@@ -1,5 +1,6 @@
 use deadsync::engine::present::font;
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 use std::hint::black_box;
@@ -199,6 +200,10 @@ struct SpriteDrawSim {
 struct SfxCommandSim {
     data: Arc<[i16]>,
     lane: u8,
+}
+
+thread_local! {
+    static INPUT_MAP_CACHE_SIM: RefCell<(u64, u64)> = RefCell::new((0, 0));
 }
 
 impl CountingAlloc {
@@ -530,17 +535,34 @@ fn bench_sfx_play_path() {
 fn bench_input_locks() {
     println!("input map/debounce locking");
     let keymap = RwLock::new(0x9e37_79b9_u64);
-    let debounce = Mutex::new(0u64);
+    let keymap_generation = AtomicU64::new(1);
+    let debounce_current = Mutex::new(0u64);
     let current = bench("RwLock read + Mutex debounce", INPUT_LOCK_ITERS, || {
         let mut checksum = 0u64;
         for event in 0..8u64 {
             let map = *keymap.read().unwrap();
-            let mut state = debounce.lock().unwrap();
+            let mut state = debounce_current.lock().unwrap();
             *state = state.wrapping_mul(131).wrapping_add(map ^ event);
             checksum = checksum.wrapping_add(*state);
         }
         checksum
     });
+
+    let debounce_cached = Mutex::new(0u64);
+    let cached = bench(
+        "thread-local keymap cache + Mutex debounce",
+        INPUT_LOCK_ITERS,
+        || {
+            let mut checksum = 0u64;
+            for event in 0..8u64 {
+                let map = cached_input_map(&keymap, &keymap_generation);
+                let mut state = debounce_cached.lock().unwrap();
+                *state = state.wrapping_mul(131).wrapping_add(map ^ event);
+                checksum = checksum.wrapping_add(*state);
+            }
+            checksum
+        },
+    );
 
     let map = 0x9e37_79b9_u64;
     let mut state = 0u64;
@@ -554,6 +576,8 @@ fn bench_input_locks() {
     });
 
     print_result(&current);
+    print_result(&cached);
+    print_ratio("TLS keymap cache vs locks", &current, &cached);
     print_result(&direct);
     print_ratio("direct state vs locks", &current, &direct);
     println!();
@@ -1349,6 +1373,19 @@ fn checksum_sfx_commands(queue: &[SfxCommandSim]) -> u64 {
             .wrapping_add(cmd.lane as u64);
     }
     out
+}
+
+fn cached_input_map(keymap: &RwLock<u64>, generation: &AtomicU64) -> u64 {
+    let current_generation = generation.load(Ordering::Acquire);
+    INPUT_MAP_CACHE_SIM.with(|cache| {
+        let (cached_generation, value) = *cache.borrow();
+        if cached_generation == current_generation {
+            return value;
+        }
+        let value = *keymap.read().unwrap();
+        *cache.borrow_mut() = (current_generation, value);
+        value
+    })
 }
 
 fn checksum_bytes(bytes: &[u8]) -> u64 {

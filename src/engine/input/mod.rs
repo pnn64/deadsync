@@ -1,5 +1,6 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
 
@@ -735,12 +736,18 @@ static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> =
     std::sync::LazyLock::new(|| RwLock::new(Keymap::default()));
 static COMPILED_KEYMAP: std::sync::LazyLock<RwLock<CompiledKeymap>> =
     std::sync::LazyLock::new(|| RwLock::new(CompiledKeymap::default()));
+static COMPILED_KEYMAP_GEN: AtomicU64 = AtomicU64::new(1);
 static ONLY_DEDICATED_MENU_BUTTONS: AtomicBool = AtomicBool::new(false);
 static INPUT_DEBOUNCE_SECONDS_BITS: AtomicU32 = AtomicU32::new((0.02f32).to_bits());
 static KEYBOARD_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<DebounceStore>> =
     std::sync::LazyLock::new(|| Mutex::new(DebounceStore::new()));
 static PAD_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<DebounceStore>> =
     std::sync::LazyLock::new(|| Mutex::new(DebounceStore::new()));
+
+thread_local! {
+    static THREAD_COMPILED_KEYMAP: RefCell<(u64, CompiledKeymap)> =
+        RefCell::new((0, CompiledKeymap::default()));
+}
 
 const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
 
@@ -772,6 +779,7 @@ pub fn set_keymap(new_map: Keymap) {
     *KEYMAP.write().unwrap() = new_map;
     *COMPILED_KEYMAP.write().unwrap() = compiled;
     reset_debounce_state(key_slot_count, pad_slot_count);
+    COMPILED_KEYMAP_GEN.fetch_add(1, Ordering::Release);
 }
 
 #[inline(always)]
@@ -783,7 +791,13 @@ pub fn clear_debounce_state() {
 
 #[inline(always)]
 fn with_compiled_keymap<R>(f: impl FnOnce(&CompiledKeymap) -> R) -> R {
-    f(&COMPILED_KEYMAP.read().unwrap())
+    let generation = COMPILED_KEYMAP_GEN.load(Ordering::Acquire);
+    THREAD_COMPILED_KEYMAP.with(|local| {
+        if local.borrow().0 != generation {
+            *local.borrow_mut() = (generation, COMPILED_KEYMAP.read().unwrap().clone());
+        }
+        f(&local.borrow().1)
+    })
 }
 
 #[inline(always)]

@@ -1570,6 +1570,7 @@ mod tests {
                     },
                 ],
                 itl_self_score: None,
+                itl_self_rank: None,
             }),
         };
 
