@@ -90,6 +90,7 @@ const DENSITY_GRAPH_BACKGROUND: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         Outcome::persisted()
     },
     persist_for_side: gp::update_transparent_density_graph_bg_for_side,
+    init: None,
 };
 const CARRY_COMBO: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
@@ -97,6 +98,7 @@ const CARRY_COMBO: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         Outcome::persisted()
     },
     persist_for_side: gp::update_carry_combo_between_songs_for_side,
+    init: None,
 };
 const JUDGMENT_TILT: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
@@ -104,6 +106,7 @@ const JUDGMENT_TILT: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         Outcome::persisted_with_visibility()
     },
     persist_for_side: gp::update_judgment_tilt_for_side,
+    init: None,
 };
 const JUDGMENT_BEHIND_ARROWS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
@@ -111,6 +114,7 @@ const JUDGMENT_BEHIND_ARROWS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         Outcome::persisted()
     },
     persist_for_side: gp::update_judgment_back_for_side,
+    init: None,
 };
 const OFFSET_INDICATOR: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
@@ -118,6 +122,7 @@ const OFFSET_INDICATOR: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         Outcome::persisted()
     },
     persist_for_side: gp::update_error_ms_display_for_side,
+    init: None,
 };
 const RESCORE_EARLY_HITS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
@@ -125,6 +130,7 @@ const RESCORE_EARLY_HITS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         Outcome::persisted()
     },
     persist_for_side: gp::update_rescore_early_hits_for_side,
+    init: None,
 };
 const CUSTOM_BLUE_FANTASTIC_WINDOW: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
@@ -132,6 +138,7 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW: ChoiceBinding<bool> = ChoiceBinding::<bool> 
         Outcome::persisted_with_visibility()
     },
     persist_for_side: gp::update_custom_fantastic_window_for_side,
+    init: None,
 };
 
 const ERROR_BAR_OFFSET_X: NumericBinding = NumericBinding {
@@ -141,6 +148,7 @@ const ERROR_BAR_OFFSET_X: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_error_bar_offset_x_for_side,
+    init: None,
 };
 const ERROR_BAR_OFFSET_Y: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -149,6 +157,7 @@ const ERROR_BAR_OFFSET_Y: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_error_bar_offset_y_for_side,
+    init: None,
 };
 
 const SCROLL: BitmaskBinding = BitmaskBinding {

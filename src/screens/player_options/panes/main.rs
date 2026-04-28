@@ -25,6 +25,7 @@ const BACKGROUND_FILTER: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_background_filter_for_side,
+    init: None,
 };
 
 const JUDGMENT_OFFSET_X: NumericBinding = NumericBinding {
@@ -34,6 +35,7 @@ const JUDGMENT_OFFSET_X: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_judgment_offset_x_for_side,
+    init: None,
 };
 const JUDGMENT_OFFSET_Y: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -42,6 +44,7 @@ const JUDGMENT_OFFSET_Y: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_judgment_offset_y_for_side,
+    init: None,
 };
 const COMBO_OFFSET_X: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -50,6 +53,7 @@ const COMBO_OFFSET_X: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_combo_offset_x_for_side,
+    init: None,
 };
 const COMBO_OFFSET_Y: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -58,6 +62,7 @@ const COMBO_OFFSET_Y: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_combo_offset_y_for_side,
+    init: None,
 };
 const NOTEFIELD_OFFSET_X: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -66,6 +71,7 @@ const NOTEFIELD_OFFSET_X: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_notefield_offset_x_for_side,
+    init: None,
 };
 const NOTEFIELD_OFFSET_Y: NumericBinding = NumericBinding {
     parse: parse_i32,
@@ -74,6 +80,7 @@ const NOTEFIELD_OFFSET_Y: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_notefield_offset_y_for_side,
+    init: None,
 };
 const VISUAL_DELAY: NumericBinding = NumericBinding {
     parse: parse_i32_ms,
@@ -82,6 +89,7 @@ const VISUAL_DELAY: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_visual_delay_ms_for_side,
+    init: None,
 };
 const GLOBAL_OFFSET_SHIFT: NumericBinding = NumericBinding {
     parse: parse_i32_ms,
@@ -90,6 +98,7 @@ const GLOBAL_OFFSET_SHIFT: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_global_offset_shift_ms_for_side,
+    init: None,
 };
 const SPACING: NumericBinding = NumericBinding {
     parse: parse_i32_percent,
@@ -98,6 +107,7 @@ const SPACING: NumericBinding = NumericBinding {
         Outcome::persisted()
     },
     persist_for_side: gp::update_spacing_percent_for_side,
+    init: None,
 };
 
 /// Shared boilerplate for a noteskin-style cycle row implemented via
