@@ -204,6 +204,7 @@ struct SfxCommandSim {
 
 thread_local! {
     static INPUT_MAP_CACHE_SIM: RefCell<(u64, u64)> = RefCell::new((0, 0));
+    static INPUT_DEBOUNCE_STATE_SIM: RefCell<u64> = const { RefCell::new(0) };
 }
 
 impl CountingAlloc {
@@ -564,6 +565,24 @@ fn bench_input_locks() {
         },
     );
 
+    INPUT_DEBOUNCE_STATE_SIM.with(|state| *state.borrow_mut() = 0);
+    let cached_debounce = bench(
+        "thread-local keymap + debounce state",
+        INPUT_LOCK_ITERS,
+        || {
+            let mut checksum = 0u64;
+            for event in 0..8u64 {
+                let map = cached_input_map(&keymap, &keymap_generation);
+                INPUT_DEBOUNCE_STATE_SIM.with(|state| {
+                    let mut state = state.borrow_mut();
+                    *state = state.wrapping_mul(131).wrapping_add(map ^ event);
+                    checksum = checksum.wrapping_add(*state);
+                });
+            }
+            checksum
+        },
+    );
+
     let map = 0x9e37_79b9_u64;
     let mut state = 0u64;
     let direct = bench("direct owned input state", INPUT_LOCK_ITERS, || {
@@ -578,6 +597,8 @@ fn bench_input_locks() {
     print_result(&current);
     print_result(&cached);
     print_ratio("TLS keymap cache vs locks", &current, &cached);
+    print_result(&cached_debounce);
+    print_ratio("TLS keymap + debounce vs locks", &current, &cached_debounce);
     print_result(&direct);
     print_ratio("direct state vs locks", &current, &direct);
     println!();

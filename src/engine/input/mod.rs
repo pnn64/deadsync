@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 use winit::keyboard::KeyCode;
@@ -10,8 +10,8 @@ mod backends;
 mod debounce;
 
 use debounce::{
-    DebounceEdges, DebounceStore, DebounceWindows, DebouncedEdge, debounce_input_edge_in_store,
-    emit_due_debounce_edges_from,
+    DebounceEdges, DebounceStore, DebounceWindows, DebouncedEdge, debounce_input_edge_in_store_mut,
+    emit_due_debounce_edges_from_mut,
 };
 
 /* ------------------------ Pad types + backend ------------------------ */
@@ -739,26 +739,24 @@ static COMPILED_KEYMAP: std::sync::LazyLock<RwLock<CompiledKeymap>> =
 static COMPILED_KEYMAP_GEN: AtomicU64 = AtomicU64::new(1);
 static ONLY_DEDICATED_MENU_BUTTONS: AtomicBool = AtomicBool::new(false);
 static INPUT_DEBOUNCE_SECONDS_BITS: AtomicU32 = AtomicU32::new((0.02f32).to_bits());
-static KEYBOARD_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<DebounceStore>> =
-    std::sync::LazyLock::new(|| Mutex::new(DebounceStore::new()));
-static PAD_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<DebounceStore>> =
-    std::sync::LazyLock::new(|| Mutex::new(DebounceStore::new()));
 
 thread_local! {
     static THREAD_COMPILED_KEYMAP: RefCell<(u64, CompiledKeymap)> =
         RefCell::new((0, CompiledKeymap::default()));
+    // Input mapping/draining is app-thread work; keep debounce state local to
+    // that thread instead of paying a mutex on every raw input event.
+    static THREAD_KEYBOARD_DEBOUNCE_STATE: RefCell<DebounceStore> =
+        RefCell::new(DebounceStore::new());
+    static THREAD_PAD_DEBOUNCE_STATE: RefCell<DebounceStore> =
+        RefCell::new(DebounceStore::new());
 }
 
 const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
 
 #[inline(always)]
 fn reset_debounce_state(key_slot_count: usize, pad_slot_count: usize) {
-    let mut keyboard = KEYBOARD_DEBOUNCE_STATE.lock().unwrap();
-    keyboard.prepare_slots(key_slot_count);
-    drop(keyboard);
-
-    let mut pad = PAD_DEBOUNCE_STATE.lock().unwrap();
-    pad.clear_and_reserve(pad_slot_count);
+    THREAD_KEYBOARD_DEBOUNCE_STATE.with(|states| states.borrow_mut().prepare_slots(key_slot_count));
+    THREAD_PAD_DEBOUNCE_STATE.with(|states| states.borrow_mut().clear_and_reserve(pad_slot_count));
 }
 
 #[inline(always)]
@@ -1298,16 +1296,18 @@ pub fn map_raw_key_event_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent
     else {
         return;
     };
-    let edges = debounce_input_edge_in_store(
-        &KEYBOARD_DEBOUNCE_STATE,
-        binding.slot as usize,
-        binding.mask,
-        InputSource::Keyboard,
-        ev.pressed,
-        ev.timestamp,
-        ev.host_nanos,
-        debounce_windows(),
-    );
+    let edges = THREAD_KEYBOARD_DEBOUNCE_STATE.with(|states| {
+        debounce_input_edge_in_store_mut(
+            &mut states.borrow_mut(),
+            binding.slot as usize,
+            binding.mask,
+            InputSource::Keyboard,
+            ev.pressed,
+            ev.timestamp,
+            ev.host_nanos,
+            debounce_windows(),
+        )
+    });
     emit_debounced_edges(edges, emit);
 }
 
@@ -1392,27 +1392,38 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
     }) else {
         return;
     };
-    let edges = debounce_input_edge_in_store(
-        &PAD_DEBOUNCE_STATE,
-        slot,
-        mask,
-        InputSource::Gamepad,
-        pressed,
-        timestamp,
-        host_nanos,
-        debounce_windows(),
-    );
+    let edges = THREAD_PAD_DEBOUNCE_STATE.with(|states| {
+        debounce_input_edge_in_store_mut(
+            &mut states.borrow_mut(),
+            slot,
+            mask,
+            InputSource::Gamepad,
+            pressed,
+            timestamp,
+            host_nanos,
+            debounce_windows(),
+        )
+    });
     emit_debounced_edges(edges, &mut emit);
 }
 
 pub fn drain_debounced_input_events_with(mut emit: impl FnMut(InputEvent)) -> bool {
     let now = Instant::now();
-    let mut flushed =
-        emit_due_debounce_edges_from(&KEYBOARD_DEBOUNCE_STATE, now, debounce_windows(), |edge| {
-            emit_input_events_from_edge(edge, &mut emit)
-        });
-    flushed |= emit_due_debounce_edges_from(&PAD_DEBOUNCE_STATE, now, debounce_windows(), |edge| {
-        emit_input_events_from_edge(edge, &mut emit)
+    let mut flushed = THREAD_KEYBOARD_DEBOUNCE_STATE.with(|states| {
+        emit_due_debounce_edges_from_mut(
+            &mut states.borrow_mut(),
+            now,
+            debounce_windows(),
+            |edge| emit_input_events_from_edge(edge, &mut emit),
+        )
+    });
+    flushed |= THREAD_PAD_DEBOUNCE_STATE.with(|states| {
+        emit_due_debounce_edges_from_mut(
+            &mut states.borrow_mut(),
+            now,
+            debounce_windows(),
+            |edge| emit_input_events_from_edge(edge, &mut emit),
+        )
     });
     flushed
 }
@@ -1451,7 +1462,8 @@ const fn primary_from_menu_alias(act: VirtualAction) -> Option<VirtualAction> {
 mod tests {
     use super::*;
 
-    static TEST_GUARD: std::sync::LazyLock<Mutex<()>> = std::sync::LazyLock::new(|| Mutex::new(()));
+    static TEST_GUARD: std::sync::LazyLock<std::sync::Mutex<()>> =
+        std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
 
     fn lock_test_guard() -> std::sync::MutexGuard<'static, ()> {
         TEST_GUARD
