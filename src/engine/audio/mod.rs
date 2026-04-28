@@ -10,12 +10,13 @@ use log::{debug, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Instant;
 
 const MAX_ACTIVE_SFX: usize = 32;
+const SFX_QUEUE_CAP: usize = 128;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 
 /* ============================== Public API ============================== */
@@ -89,7 +90,7 @@ static ASSIST_TICK_SFX: OnceLock<Arc<[i16]>> = OnceLock::new();
 
 struct AudioEngine {
     command_sender: Sender<AudioCommand>,
-    sfx_sender: Sender<QueuedSfx>,
+    sfx_sender: SyncSender<QueuedSfx>,
     sfx_cache: Mutex<HashMap<String, Arc<[i16]>>>,
     device_sample_rate: u32,
     device_channels: usize,
@@ -203,7 +204,7 @@ struct OutputBackendReady {
 
 struct AudioThreadReady {
     backend_ready: OutputBackendReady,
-    sfx_sender: Sender<QueuedSfx>,
+    sfx_sender: SyncSender<QueuedSfx>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -976,7 +977,7 @@ pub fn play_assist_tick(path: &str) {
     if path == ASSIST_TICK_SFX_PATH
         && let Some(sound_data) = ASSIST_TICK_SFX.get().cloned()
     {
-        let _ = ENGINE.sfx_sender.send(QueuedSfx {
+        let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
             data: sound_data,
             lane: SfxLane::AssistTick,
         });
@@ -993,7 +994,7 @@ fn play_sfx_on_lane(path: &str, lane: SfxLane) {
 
     let cached = { ENGINE.sfx_cache.lock().unwrap().get(path).cloned() };
     if let Some(sound_data) = cached {
-        let _ = ENGINE.sfx_sender.send(QueuedSfx {
+        let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
             data: sound_data,
             lane,
         });
@@ -1021,7 +1022,7 @@ fn play_sfx_on_lane(path: &str, lane: SfxLane) {
             .clone()
     };
     cache_assist_tick(path, sound_data.clone());
-    let _ = ENGINE.sfx_sender.send(QueuedSfx {
+    let _ = ENGINE.sfx_sender.try_send(QueuedSfx {
         data: sound_data,
         lane,
     });
@@ -2253,7 +2254,7 @@ enum OutputBackend {
 fn start_linux_alsa_backend(
     alsa: AlsaBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
     let access_mode = match alsa.output_mode {
         crate::config::AudioOutputMode::Exclusive => {
             backends::linux_alsa::AlsaAccessMode::Exclusive
@@ -2271,7 +2272,7 @@ fn start_linux_alsa_backend(
     )?;
     let mut ready = prep.ready();
     ready.requested_output_mode = alsa.output_mode;
-    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
     let stream = backends::linux_alsa::start(prep, music_ring, sfx_receiver)?;
     Ok((OutputBackend::Alsa(stream), ready, sfx_sender))
 }
@@ -2281,7 +2282,7 @@ fn start_linux_alsa_backend(
 fn start_linux_jack_backend(
     jack: JackBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
     if matches!(jack.output_mode, crate::config::AudioOutputMode::Exclusive) {
         return Err("JACK does not expose a separate exclusive output mode.".to_string());
     }
@@ -2289,7 +2290,7 @@ fn start_linux_jack_backend(
         backends::linux_jack::prepare(jack.requested_device_name.clone(), jack.requested_rate_hz)?;
     let mut ready = prep.ready();
     ready.requested_output_mode = jack.output_mode;
-    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
     let stream = backends::linux_jack::start(prep, music_ring, sfx_receiver)?;
     Ok((OutputBackend::Jack(stream), ready, sfx_sender))
 }
@@ -2299,7 +2300,7 @@ fn start_linux_jack_backend(
 fn start_linux_pipewire_backend(
     pipewire: PipeWireBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
     if matches!(
         pipewire.output_mode,
         crate::config::AudioOutputMode::Exclusive
@@ -2319,7 +2320,7 @@ fn start_linux_pipewire_backend(
     )?;
     let mut ready = prep.ready();
     ready.requested_output_mode = pipewire.output_mode;
-    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
     let stream = backends::linux_pipewire::start(prep, music_ring, sfx_receiver)?;
     Ok((OutputBackend::PipeWire(stream), ready, sfx_sender))
 }
@@ -2329,7 +2330,7 @@ fn start_linux_pipewire_backend(
 fn start_linux_pulse_backend(
     pulse: PulseBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
     if matches!(pulse.output_mode, crate::config::AudioOutputMode::Exclusive) {
         return Err("PulseAudio does not support exclusive output.".to_string());
     }
@@ -2346,7 +2347,7 @@ fn start_linux_pulse_backend(
     )?;
     let mut ready = prep.ready();
     ready.requested_output_mode = pulse.output_mode;
-    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
     let stream = backends::linux_pulse::start(prep, music_ring, sfx_receiver)?;
     Ok((OutputBackend::Pulse(stream), ready, sfx_sender))
 }
@@ -2355,7 +2356,7 @@ fn start_linux_pulse_backend(
 fn start_freebsd_pcm_backend(
     pcm: FreeBsdPcmBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
     if matches!(pcm.output_mode, crate::config::AudioOutputMode::Exclusive) {
         return Err("FreeBSD PCM exclusive output is not implemented yet.".to_string());
     }
@@ -2367,7 +2368,7 @@ fn start_freebsd_pcm_backend(
     )?;
     let mut ready = prep.ready();
     ready.requested_output_mode = pcm.output_mode;
-    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
     let stream = backends::freebsd_pcm::start(prep, music_ring, sfx_receiver)?;
     Ok((OutputBackend::FreeBsdPcm(stream), ready, sfx_sender))
 }
@@ -2376,7 +2377,7 @@ fn start_freebsd_pcm_backend(
 fn start_macos_coreaudio_backend(
     coreaudio: CoreAudioBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
     if matches!(
         coreaudio.output_mode,
         crate::config::AudioOutputMode::Exclusive
@@ -2391,7 +2392,7 @@ fn start_macos_coreaudio_backend(
     )?;
     let mut ready = prep.ready();
     ready.requested_output_mode = coreaudio.output_mode;
-    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
     let stream = backends::macos_coreaudio::start(prep, music_ring, sfx_receiver)?;
     Ok((OutputBackend::CoreAudio(stream), ready, sfx_sender))
 }
@@ -2399,7 +2400,7 @@ fn start_macos_coreaudio_backend(
 fn start_output_backend(
     launch: AudioThreadLaunch,
     music_ring: Arc<internal::SpscRingI16>,
-) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+) -> Result<(OutputBackend, OutputBackendReady, SyncSender<QueuedSfx>), String> {
     let AudioThreadLaunch {
         #[cfg(target_os = "linux")]
         explicit_device_requested,
@@ -2623,7 +2624,7 @@ fn start_output_backend(
         })?;
         let mut ready = prep.ready();
         ready.requested_output_mode = wasapi.output_mode;
-        let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+        let (sfx_sender, sfx_receiver) = sync_channel::<QueuedSfx>(SFX_QUEUE_CAP);
         let stream =
             backends::windows_wasapi::start(prep, music_ring, sfx_receiver).map_err(|err| {
                 format!(

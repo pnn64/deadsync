@@ -408,11 +408,13 @@ struct TextureLookupCache {
     generation: u64,
     dims: TextureMetaMap,
     frame_dims: PtrTextureMetaMap,
+    stable_dims: PtrTextureMetaMap,
     sheets: TextureSheetMap,
     frame_sheets: PtrTextureSheetMap,
+    stable_sheets: PtrTextureSheetMap,
     handles: TextureHandleLookupMap,
     frame_handles: PtrTextureHandleLookupMap,
-    glyph_handles: PtrTextureHandleLookupMap,
+    stable_handles: PtrTextureHandleLookupMap,
 }
 
 impl TextureLookupCache {
@@ -425,9 +427,11 @@ impl TextureLookupCache {
         if self.generation != generation {
             self.generation = generation;
             self.dims.clear();
+            self.stable_dims.clear();
             self.sheets.clear();
+            self.stable_sheets.clear();
             self.handles.clear();
-            self.glyph_handles.clear();
+            self.stable_handles.clear();
         }
     }
 
@@ -465,6 +469,34 @@ impl TextureLookupCache {
     }
 
     #[inline(always)]
+    fn texture_dims_stable_ptr(
+        &mut self,
+        key_ptr: *const str,
+        key: &str,
+    ) -> Option<assets::TexMeta> {
+        let key_ptr = Self::ptr_cache_key(key_ptr);
+        if let Some(&meta) = self.stable_dims.get(&key_ptr) {
+            return Some(meta);
+        }
+        let meta = self.texture_dims(key)?;
+        self.stable_dims.insert(key_ptr, meta);
+        Some(meta)
+    }
+
+    #[inline(always)]
+    fn texture_dims_cached(
+        &mut self,
+        key_ptr: Option<*const str>,
+        key: &str,
+        stable_ptr: bool,
+    ) -> Option<assets::TexMeta> {
+        if stable_ptr && let Some(key_ptr) = key_ptr {
+            return self.texture_dims_stable_ptr(key_ptr, key);
+        }
+        self.texture_dims_with_ptr(key_ptr, key)
+    }
+
+    #[inline(always)]
     fn sprite_sheet_dims(&mut self, key: &str) -> (u32, u32) {
         if let Some(&dims) = self.sheets.get(key) {
             return dims;
@@ -486,6 +518,30 @@ impl TextureLookupCache {
         let dims = self.sprite_sheet_dims(key);
         self.frame_sheets.insert(key_ptr, dims);
         dims
+    }
+
+    #[inline(always)]
+    fn sprite_sheet_dims_stable_ptr(&mut self, key_ptr: *const str, key: &str) -> (u32, u32) {
+        let key_ptr = Self::ptr_cache_key(key_ptr);
+        if let Some(&dims) = self.stable_sheets.get(&key_ptr) {
+            return dims;
+        }
+        let dims = self.sprite_sheet_dims(key);
+        self.stable_sheets.insert(key_ptr, dims);
+        dims
+    }
+
+    #[inline(always)]
+    fn sprite_sheet_dims_cached(
+        &mut self,
+        key_ptr: Option<*const str>,
+        key: &str,
+        stable_ptr: bool,
+    ) -> (u32, u32) {
+        if stable_ptr && let Some(key_ptr) = key_ptr {
+            return self.sprite_sheet_dims_stable_ptr(key_ptr, key);
+        }
+        self.sprite_sheet_dims_with_ptr(key_ptr, key)
     }
 
     #[inline(always)]
@@ -523,12 +579,25 @@ impl TextureLookupCache {
         key: &str,
     ) -> renderer::TextureHandle {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&handle) = self.glyph_handles.get(&key_ptr) {
+        if let Some(&handle) = self.stable_handles.get(&key_ptr) {
             return handle;
         }
         let handle = self.texture_handle(key);
-        self.glyph_handles.insert(key_ptr, handle);
+        self.stable_handles.insert(key_ptr, handle);
         handle
+    }
+
+    #[inline(always)]
+    fn texture_handle_cached(
+        &mut self,
+        key_ptr: Option<*const str>,
+        key: &str,
+        stable_ptr: bool,
+    ) -> renderer::TextureHandle {
+        if stable_ptr && let Some(key_ptr) = key_ptr {
+            return self.texture_handle_stable_ptr(key_ptr, key);
+        }
+        self.texture_handle_with_ptr(key_ptr, key)
     }
 }
 
@@ -2130,13 +2199,15 @@ fn build_actor_recursive<'a>(
                 return;
             }
 
-            let (is_solid, texture_name, texture_key_ptr) = match source {
-                actors::SpriteSource::TextureStatic(name) => (false, *name, Some(str_ptr(name))),
+            let (is_solid, texture_name, texture_key_ptr, texture_key_stable) = match source {
+                actors::SpriteSource::TextureStatic(name) => {
+                    (false, *name, Some(str_ptr(name)), true)
+                }
                 actors::SpriteSource::Texture(name) => {
                     let name = name.as_ref();
-                    (false, name, Some(str_ptr(name)))
+                    (false, name, Some(str_ptr(name)), false)
                 }
-                actors::SpriteSource::Solid => (true, "__white", Some(str_ptr("__white"))),
+                actors::SpriteSource::Solid => (true, "__white", Some(str_ptr("__white")), true),
             };
 
             let mut chosen_cell = *cell;
@@ -2144,7 +2215,11 @@ fn build_actor_recursive<'a>(
 
             if !is_solid && uv_rect.is_none() {
                 let (cols, rows) = grid.unwrap_or_else(|| {
-                    texture_cache.sprite_sheet_dims_with_ptr(texture_key_ptr, texture_name)
+                    texture_cache.sprite_sheet_dims_cached(
+                        texture_key_ptr,
+                        texture_name,
+                        texture_key_stable,
+                    )
                 });
                 let total = cols.saturating_mul(rows).max(1);
 
@@ -2185,6 +2260,7 @@ fn build_actor_recursive<'a>(
                 is_solid,
                 texture_name,
                 texture_key_ptr,
+                texture_key_stable,
                 *uv_rect,
                 chosen_cell,
                 chosen_grid,
@@ -2213,6 +2289,7 @@ fn build_actor_recursive<'a>(
                 is_solid,
                 texture_name,
                 texture_key_ptr,
+                texture_key_stable,
                 effect_tint,
                 *uv_rect,
                 chosen_cell,
@@ -2708,6 +2785,7 @@ fn build_actor_recursive<'a>(
                             true,
                             "__white",
                             Some(str_ptr("__white")),
+                            true,
                             *c,
                             None,
                             None,
@@ -2752,6 +2830,7 @@ fn build_actor_recursive<'a>(
                             false,
                             tex,
                             Some(str_ptr(tex)),
+                            true,
                             [1.0; 4],
                             None,
                             None,
@@ -2819,6 +2898,7 @@ fn resolve_sprite_size_like_sm(
     is_solid: bool,
     texture_name: &str,
     texture_key_ptr: Option<*const str>,
+    texture_key_stable: bool,
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
     grid: Option<(u32, u32)>,
@@ -2832,6 +2912,7 @@ fn resolve_sprite_size_like_sm(
         is_solid: bool,
         texture_name: &str,
         texture_key_ptr: Option<*const str>,
+        texture_key_stable: bool,
         _uv: Option<[f32; 4]>,
         cell: Option<(u32, u32)>,
         grid: Option<(u32, u32)>,
@@ -2840,13 +2921,19 @@ fn resolve_sprite_size_like_sm(
         if is_solid {
             return (1.0, 1.0);
         }
-        let Some(meta) = texture_cache.texture_dims_with_ptr(texture_key_ptr, texture_name) else {
+        let Some(meta) =
+            texture_cache.texture_dims_cached(texture_key_ptr, texture_name, texture_key_stable)
+        else {
             return (0.0, 0.0);
         };
         let (mut tw, mut th) = (meta.w as f32, meta.h as f32);
         if cell.is_some() {
             let (gc, gr) = grid.unwrap_or_else(|| {
-                texture_cache.sprite_sheet_dims_with_ptr(texture_key_ptr, texture_name)
+                texture_cache.sprite_sheet_dims_cached(
+                    texture_key_ptr,
+                    texture_name,
+                    texture_key_stable,
+                )
             });
             let cols = gc.max(1);
             let rows = gr.max(1);
@@ -2860,6 +2947,7 @@ fn resolve_sprite_size_like_sm(
         is_solid,
         texture_name,
         texture_key_ptr,
+        texture_key_stable,
         uv_rect,
         cell,
         grid,
@@ -2904,6 +2992,7 @@ fn place_rect(parent: SmRect, align: [f32; 2], offset: [f32; 2], size: [SizeSpec
 fn calculate_uvs(
     texture: &str,
     texture_key_ptr: Option<*const str>,
+    texture_key_stable: bool,
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
     grid: Option<(u32, u32)>,
@@ -2922,8 +3011,9 @@ fn calculate_uvs(
         let dv = (v1 - v0).abs().max(1e-6);
         ([du, dv], [u0.min(u1), v0.min(v1)])
     } else if let Some((cx, cy)) = cell {
-        let (gc, gr) = grid
-            .unwrap_or_else(|| texture_cache.sprite_sheet_dims_with_ptr(texture_key_ptr, texture));
+        let (gc, gr) = grid.unwrap_or_else(|| {
+            texture_cache.sprite_sheet_dims_cached(texture_key_ptr, texture, texture_key_stable)
+        });
         let cols = gc.max(1);
         let rows = gr.max(1);
         let (col, row) = if cy == u32::MAX {
@@ -3004,6 +3094,7 @@ fn push_sprite<'a>(
     is_solid: bool,
     texture_id: &'a str,
     texture_key_ptr: Option<*const str>,
+    texture_key_stable: bool,
     tint: [f32; 4],
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
@@ -3058,6 +3149,7 @@ fn push_sprite<'a>(
         calculate_uvs(
             texture_id,
             texture_key_ptr,
+            texture_key_stable,
             uv_rect,
             cell,
             grid,
@@ -3135,7 +3227,11 @@ fn push_sprite<'a>(
             local_offset_rot_sin_cos,
             edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
         },
-        texture_handle: texture_cache.texture_handle_with_ptr(texture_key_ptr, texture_key),
+        texture_handle: texture_cache.texture_handle_cached(
+            texture_key_ptr,
+            texture_key,
+            texture_key_stable,
+        ),
         transform: Matrix4::IDENTITY,
         blend,
         z: 0,
@@ -4414,6 +4510,55 @@ mod tests {
     }
 
     #[test]
+    fn texture_lookup_cache_keeps_stable_ptr_tables_across_frames() {
+        let mut cache = TextureLookupCache::default();
+        const KEY: &str = "stable_tex";
+        let key_ptr = KEY as *const str;
+        let key_addr = TextureLookupCache::ptr_cache_key(key_ptr);
+        cache.generation = assets::texture_registry_generation();
+        cache
+            .dims
+            .insert(KEY.to_string(), assets::TexMeta { w: 128, h: 64 });
+        cache.sheets.insert(KEY.to_string(), (8, 4));
+        cache.handles.insert(KEY.to_string(), 23);
+
+        let Some(meta) = cache.texture_dims_cached(Some(key_ptr), KEY, true) else {
+            panic!("expected cached texture dims");
+        };
+        assert_eq!(meta.w, 128);
+        assert_eq!(meta.h, 64);
+        assert_eq!(
+            cache.sprite_sheet_dims_cached(Some(key_ptr), KEY, true),
+            (8, 4)
+        );
+        assert_eq!(cache.texture_handle_cached(Some(key_ptr), KEY, true), 23);
+        assert!(cache.frame_dims.is_empty());
+        assert!(cache.frame_sheets.is_empty());
+        assert!(cache.frame_handles.is_empty());
+        assert_eq!(
+            cache
+                .stable_dims
+                .get(&key_addr)
+                .map(|meta| (meta.w, meta.h)),
+            Some((128, 64))
+        );
+        assert_eq!(cache.stable_sheets.get(&key_addr), Some(&(8, 4)));
+        assert_eq!(cache.stable_handles.get(&key_addr), Some(&23));
+
+        cache.begin_frame();
+
+        assert_eq!(
+            cache
+                .stable_dims
+                .get(&key_addr)
+                .map(|meta| (meta.w, meta.h)),
+            Some((128, 64))
+        );
+        assert_eq!(cache.stable_sheets.get(&key_addr), Some(&(8, 4)));
+        assert_eq!(cache.stable_handles.get(&key_addr), Some(&23));
+    }
+
+    #[test]
     fn custom_texture_rect_does_not_change_native_sprite_size() {
         const KEY: &str = "compose_test/custom_rect_size.png";
         assets::register_texture_dims(KEY, 256, 128);
@@ -4424,6 +4569,7 @@ mod tests {
             false,
             KEY,
             None,
+            false,
             None,
             None,
             None,
@@ -4435,6 +4581,7 @@ mod tests {
             false,
             KEY,
             None,
+            false,
             Some([0.0, 0.0, 60.0, 60.0]),
             None,
             None,
@@ -4446,6 +4593,7 @@ mod tests {
             false,
             KEY,
             None,
+            false,
             Some([0.0, 0.0, 60.0, 60.0]),
             None,
             None,

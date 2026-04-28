@@ -476,6 +476,37 @@ fn bench_sfx_play_path() {
         checksum
     });
 
+    let (sync_tx, sync_rx) = mpsc::sync_channel::<SfxCommandSim>(128);
+    let bounded = bench(
+        "Mutex<HashMap<String, Arc>> + bounded try_send",
+        SFX_PLAY_ITERS,
+        || {
+            let mut checksum = 0u64;
+            for (idx, path) in paths.iter().enumerate() {
+                let data = {
+                    let cache = cache.lock().unwrap();
+                    Arc::clone(cache.get(*path).unwrap())
+                };
+                if sync_tx
+                    .try_send(SfxCommandSim {
+                        data,
+                        lane: idx as u8,
+                    })
+                    .is_err()
+                {
+                    checksum = checksum.wrapping_add(1);
+                }
+            }
+            while let Ok(cmd) = sync_rx.try_recv() {
+                checksum = checksum
+                    .wrapping_mul(131)
+                    .wrapping_add(cmd.data.len() as u64)
+                    .wrapping_add(cmd.lane as u64);
+            }
+            checksum
+        },
+    );
+
     let mut queue = Vec::with_capacity(8);
     let direct = bench("preloaded Arc + reused queue", SFX_PLAY_ITERS, || {
         queue.clear();
@@ -489,6 +520,8 @@ fn bench_sfx_play_path() {
     });
 
     print_result(&current);
+    print_result(&bounded);
+    print_ratio("bounded try_send vs current", &current, &bounded);
     print_result(&direct);
     print_ratio("preloaded queue vs current", &current, &direct);
     println!();
