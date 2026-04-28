@@ -407,22 +407,15 @@ type PtrTextureHandleLookupMap = HashMap<usize, renderer::TextureHandle, TextLay
 struct TextureLookupCache {
     generation: u64,
     dims: TextureMetaMap,
-    frame_dims: PtrTextureMetaMap,
     stable_dims: PtrTextureMetaMap,
     sheets: TextureSheetMap,
-    frame_sheets: PtrTextureSheetMap,
     stable_sheets: PtrTextureSheetMap,
     handles: TextureHandleLookupMap,
-    frame_handles: PtrTextureHandleLookupMap,
     stable_handles: PtrTextureHandleLookupMap,
 }
 
 impl TextureLookupCache {
     fn begin_frame(&mut self) {
-        self.frame_dims.clear();
-        self.frame_sheets.clear();
-        self.frame_handles.clear();
-
         let generation = assets::texture_registry_generation();
         if self.generation != generation {
             self.generation = generation;
@@ -451,24 +444,6 @@ impl TextureLookupCache {
     }
 
     #[inline(always)]
-    fn texture_dims_with_ptr(
-        &mut self,
-        key_ptr: Option<*const str>,
-        key: &str,
-    ) -> Option<assets::TexMeta> {
-        let Some(key_ptr) = key_ptr else {
-            return self.texture_dims(key);
-        };
-        let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&meta) = self.frame_dims.get(&key_ptr) {
-            return Some(meta);
-        }
-        let meta = self.texture_dims(key)?;
-        self.frame_dims.insert(key_ptr, meta);
-        Some(meta)
-    }
-
-    #[inline(always)]
     fn texture_dims_stable_ptr(
         &mut self,
         key_ptr: *const str,
@@ -493,7 +468,7 @@ impl TextureLookupCache {
         if stable_ptr && let Some(key_ptr) = key_ptr {
             return self.texture_dims_stable_ptr(key_ptr, key);
         }
-        self.texture_dims_with_ptr(key_ptr, key)
+        self.texture_dims(key)
     }
 
     #[inline(always)]
@@ -503,20 +478,6 @@ impl TextureLookupCache {
         }
         let dims = assets::sprite_sheet_dims(key);
         self.sheets.insert(key.to_owned(), dims);
-        dims
-    }
-
-    #[inline(always)]
-    fn sprite_sheet_dims_with_ptr(&mut self, key_ptr: Option<*const str>, key: &str) -> (u32, u32) {
-        let Some(key_ptr) = key_ptr else {
-            return self.sprite_sheet_dims(key);
-        };
-        let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&dims) = self.frame_sheets.get(&key_ptr) {
-            return dims;
-        }
-        let dims = self.sprite_sheet_dims(key);
-        self.frame_sheets.insert(key_ptr, dims);
         dims
     }
 
@@ -541,7 +502,7 @@ impl TextureLookupCache {
         if stable_ptr && let Some(key_ptr) = key_ptr {
             return self.sprite_sheet_dims_stable_ptr(key_ptr, key);
         }
-        self.sprite_sheet_dims_with_ptr(key_ptr, key)
+        self.sprite_sheet_dims(key)
     }
 
     #[inline(always)]
@@ -551,24 +512,6 @@ impl TextureLookupCache {
         }
         let handle = assets::texture_handle(key);
         self.handles.insert(key.to_owned(), handle);
-        handle
-    }
-
-    #[inline(always)]
-    fn texture_handle_with_ptr(
-        &mut self,
-        key_ptr: Option<*const str>,
-        key: &str,
-    ) -> renderer::TextureHandle {
-        let Some(key_ptr) = key_ptr else {
-            return self.texture_handle(key);
-        };
-        let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&handle) = self.frame_handles.get(&key_ptr) {
-            return handle;
-        }
-        let handle = self.texture_handle(key);
-        self.frame_handles.insert(key_ptr, handle);
         handle
     }
 
@@ -597,7 +540,7 @@ impl TextureLookupCache {
         if stable_ptr && let Some(key_ptr) = key_ptr {
             return self.texture_handle_stable_ptr(key_ptr, key);
         }
-        self.texture_handle_with_ptr(key_ptr, key)
+        self.texture_handle(key)
     }
 }
 
@@ -2509,8 +2452,7 @@ fn build_actor_recursive<'a>(
                     uv_tex_shift: *uv_tex_shift,
                     depth_test: *depth_test,
                 },
-                texture_handle: texture_cache
-                    .texture_handle_with_ptr(Some(str_ptr(texture.as_ref())), texture.as_ref()),
+                texture_handle: texture_cache.texture_handle(texture.as_ref()),
                 transform,
                 blend: *blend,
                 z: 0,
@@ -4515,11 +4457,10 @@ mod tests {
     }
 
     #[test]
-    fn texture_lookup_cache_clears_frame_ptr_tables_each_frame() {
+    fn texture_lookup_cache_uses_string_tables_for_dynamic_ptrs() {
         let mut cache = TextureLookupCache::default();
         let key = Arc::<str>::from("frame_tex");
         let key_ptr = key.as_ref() as *const str;
-        let key_addr = TextureLookupCache::ptr_cache_key(key_ptr);
         cache.generation = assets::texture_registry_generation();
         cache
             .dims
@@ -4527,32 +4468,22 @@ mod tests {
         cache.sheets.insert(key.to_string(), (4, 2));
         cache.handles.insert(key.to_string(), 11);
 
-        let Some(meta) = cache.texture_dims_with_ptr(Some(key_ptr), key.as_ref()) else {
+        let Some(meta) = cache.texture_dims_cached(Some(key_ptr), key.as_ref(), false) else {
             panic!("expected cached texture dims");
         };
         assert_eq!(meta.w, 64);
         assert_eq!(meta.h, 32);
         assert_eq!(
-            cache.sprite_sheet_dims_with_ptr(Some(key_ptr), key.as_ref()),
+            cache.sprite_sheet_dims_cached(Some(key_ptr), key.as_ref(), false),
             (4, 2)
         );
         assert_eq!(
-            cache.texture_handle_with_ptr(Some(key_ptr), key.as_ref()),
+            cache.texture_handle_cached(Some(key_ptr), key.as_ref(), false),
             11
         );
-        let Some(frame_meta) = cache.frame_dims.get(&key_addr) else {
-            panic!("expected frame-local texture dims");
-        };
-        assert_eq!(frame_meta.w, 64);
-        assert_eq!(frame_meta.h, 32);
-        assert_eq!(cache.frame_sheets.get(&key_addr), Some(&(4, 2)));
-        assert_eq!(cache.frame_handles.get(&key_addr), Some(&11));
 
         cache.begin_frame();
 
-        assert!(cache.frame_dims.is_empty());
-        assert!(cache.frame_sheets.is_empty());
-        assert!(cache.frame_handles.is_empty());
         let Some(meta) = cache.dims.get("frame_tex") else {
             panic!("expected persistent texture dims");
         };
@@ -4585,9 +4516,6 @@ mod tests {
             (8, 4)
         );
         assert_eq!(cache.texture_handle_cached(Some(key_ptr), KEY, true), 23);
-        assert!(cache.frame_dims.is_empty());
-        assert!(cache.frame_sheets.is_empty());
-        assert!(cache.frame_handles.is_empty());
         assert_eq!(
             cache
                 .stable_dims
