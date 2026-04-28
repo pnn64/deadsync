@@ -1505,6 +1505,8 @@ impl From<&SpriteSource> for SpriteSourceSnapshot {
     fn from(value: &SpriteSource) -> Self {
         match value {
             SpriteSource::TextureStatic(key) => Self::Texture((*key).to_string()),
+            SpriteSource::TextureStaticHandle { key, .. } => Self::Texture((*key).to_string()),
+            SpriteSource::TextureHandle { key, .. } => Self::Texture(key.to_string()),
             SpriteSource::Texture(key) => Self::Texture(key.to_string()),
             SpriteSource::Solid => Self::Solid,
         }

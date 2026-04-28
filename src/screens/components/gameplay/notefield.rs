@@ -3660,7 +3660,7 @@ pub fn build_bundles(
                 let receptor_color = receptor_ns.receptor_pulse.color_for_beat(current_beat);
                 let alpha = receptor_color[3] * receptor_alpha;
                 if alpha > f32::EPSILON {
-                    actors.push(act!(sprite(receptor_slot.texture_key_shared()):
+                    actors.push(act!(sprite(receptor_slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(receptor_center[0], receptor_center[1]):
                         setsize(receptor_size[0], receptor_size[1]):
@@ -3763,7 +3763,7 @@ pub fn build_bundles(
                         actors.push(glow_actor);
                     }
                 } else if draw.blend_add {
-                    actors.push(act!(sprite(hold_slot.texture_key_shared()):
+                    actors.push(act!(sprite(hold_slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(center[0], center[1]):
                         setsize(hold_size[0], hold_size[1]):
@@ -3774,7 +3774,7 @@ pub fn build_bundles(
                         z(Z_HOLD_EXPLOSION)
                     ));
                     if let Some(glow_color) = glow {
-                        actors.push(act!(sprite(hold_slot.texture_key_shared()):
+                        actors.push(act!(sprite(hold_slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(center[0], center[1]):
                             setsize(hold_size[0], hold_size[1]):
@@ -3786,7 +3786,7 @@ pub fn build_bundles(
                         ));
                     }
                 } else {
-                    actors.push(act!(sprite(hold_slot.texture_key_shared()):
+                    actors.push(act!(sprite(hold_slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(center[0], center[1]):
                         setsize(hold_size[0], hold_size[1]):
@@ -3797,7 +3797,7 @@ pub fn build_bundles(
                         z(Z_HOLD_EXPLOSION)
                     ));
                     if let Some(glow_color) = glow {
-                        actors.push(act!(sprite(hold_slot.texture_key_shared()):
+                        actors.push(act!(sprite(hold_slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(center[0], center[1]):
                             setsize(hold_size[0], hold_size[1]):
@@ -3829,7 +3829,7 @@ pub fn build_bundles(
                     let width = glow_size[0] * zoom;
                     let height = glow_size[1] * zoom;
                     if behavior.blend_add {
-                        actors.push(act!(sprite(glow_slot.texture_key_shared()):
+                        actors.push(act!(sprite(glow_slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(width, height):
@@ -3841,7 +3841,7 @@ pub fn build_bundles(
                             z(Z_HOLD_GLOW)
                         ));
                     } else {
-                        actors.push(act!(sprite(glow_slot.texture_key_shared()):
+                        actors.push(act!(sprite(glow_slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(width, height):
@@ -3900,7 +3900,7 @@ pub fn build_bundles(
                 let glow = explosion_visual.glow;
                 let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
                 if explosion.animation.blend_add {
-                    actors.push(act!(sprite(slot.texture_key_shared()):
+                    actors.push(act!(sprite(slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(receptor_center[0], receptor_center[1]):
                         setsize(size[0], size[1]):
@@ -3918,7 +3918,7 @@ pub fn build_bundles(
                         z(Z_TAP_EXPLOSION)
                     ));
                     if glow_strength > f32::EPSILON {
-                        actors.push(act!(sprite(slot.texture_key_shared()):
+                        actors.push(act!(sprite(slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(size[0], size[1]):
@@ -3932,7 +3932,7 @@ pub fn build_bundles(
                         ));
                     }
                 } else {
-                    actors.push(act!(sprite(slot.texture_key_shared()):
+                    actors.push(act!(sprite(slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(receptor_center[0], receptor_center[1]):
                         setsize(size[0], size[1]):
@@ -3950,7 +3950,7 @@ pub fn build_bundles(
                         z(Z_TAP_EXPLOSION)
                     ));
                     if glow_strength > f32::EPSILON {
-                        actors.push(act!(sprite(slot.texture_key_shared()):
+                        actors.push(act!(sprite(slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(size[0], size[1]):
@@ -4000,7 +4000,7 @@ pub fn build_bundles(
             let glow = explosion_visual.glow;
             let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
             if explosion.animation.blend_add {
-                actors.push(act!(sprite(slot.texture_key_shared()):
+                actors.push(act!(sprite(slot.texture_key_handle()):
                     align(0.5, 0.5):
                     xy(receptor_center[0], receptor_center[1]):
                     setsize(size[0], size[1]):
@@ -4017,7 +4017,7 @@ pub fn build_bundles(
                     z(Z_MINE_EXPLOSION)
                 ));
                 if glow_strength > f32::EPSILON {
-                    actors.push(act!(sprite(slot.texture_key_shared()):
+                    actors.push(act!(sprite(slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(receptor_center[0], receptor_center[1]):
                         setsize(size[0], size[1]):
@@ -4030,7 +4030,7 @@ pub fn build_bundles(
                     ));
                 }
             } else {
-                actors.push(act!(sprite(slot.texture_key_shared()):
+                actors.push(act!(sprite(slot.texture_key_handle()):
                     align(0.5, 0.5):
                     xy(receptor_center[0], receptor_center[1]):
                     setsize(size[0], size[1]):
@@ -4047,7 +4047,7 @@ pub fn build_bundles(
                     z(Z_MINE_EXPLOSION)
                 ));
                 if glow_strength > f32::EPSILON {
-                    actors.push(act!(sprite(slot.texture_key_shared()):
+                    actors.push(act!(sprite(slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(receptor_center[0], receptor_center[1]):
                         setsize(size[0], size[1]):
@@ -4460,7 +4460,7 @@ pub fn build_bundles(
                                         Some(v) => v.max(segment_bottom),
                                     });
                                     actors.push(actor_with_world_z(
-                                        act!(sprite(body_slot.texture_key_shared()):
+                                        act!(sprite(body_slot.texture_key_handle()):
                                             align(0.5, 0.5):
                                             xy(segment_center_x, segment_center_screen):
                                             setsize(body_width, segment_size):
@@ -4479,7 +4479,7 @@ pub fn build_bundles(
                                     ));
                                     if segment_glow > f32::EPSILON {
                                         actors.push(actor_with_world_z(
-                                            act!(sprite(body_slot.texture_key_shared()):
+                                            act!(sprite(body_slot.texture_key_handle()):
                                                 align(0.5, 0.5):
                                                 xy(segment_center_x, segment_center_screen):
                                                 setsize(body_width, segment_size):
@@ -4748,7 +4748,7 @@ pub fn build_bundles(
                                             Some([bottom_row[0].pos, bottom_row[1].pos]);
                                     } else {
                                         actors.push(actor_with_world_z(
-                                            act!(sprite(body_slot.texture_key_shared()):
+                                            act!(sprite(body_slot.texture_key_handle()):
                                                 align(0.5, 0.5):
                                                 xy(slice_center[0], slice_center[1]):
                                                 setsize(body_width, slice_height):
@@ -4767,7 +4767,7 @@ pub fn build_bundles(
                                         ));
                                         if slice_glow > f32::EPSILON {
                                             actors.push(actor_with_world_z(
-                                                act!(sprite(body_slot.texture_key_shared()):
+                                                act!(sprite(body_slot.texture_key_handle()):
                                                     align(0.5, 0.5):
                                                     xy(slice_center[0], slice_center[1]):
                                                     setsize(body_width, slice_height):
@@ -5017,7 +5017,7 @@ pub fn build_bundles(
                             let cap_rotation = cap_path_rotation
                                 + top_cap_rotation_deg(lane_reverse, body_flipped);
                             actors.push(actor_with_world_z(
-                                act!(sprite(cap_slot.texture_key_shared()):
+                                act!(sprite(cap_slot.texture_key_handle()):
                                     align(0.5, 0.5):
                                     xy(cap_center_xy[0], cap_center_xy[1]):
                                     setsize(cap_width, cap_draw_height):
@@ -5036,7 +5036,7 @@ pub fn build_bundles(
                             ));
                             if cap_glow > f32::EPSILON {
                                 actors.push(actor_with_world_z(
-                                    act!(sprite(cap_slot.texture_key_shared()):
+                                    act!(sprite(cap_slot.texture_key_handle()):
                                         align(0.5, 0.5):
                                         xy(cap_center_xy[0], cap_center_xy[1]):
                                         setsize(cap_width, cap_draw_height):
@@ -5276,7 +5276,7 @@ pub fn build_bundles(
                         } else {
                             let cap_world_z = world_z_for_adjusted_travel(cap_center_travel);
                             actors.push(actor_with_world_z(
-                                act!(sprite(cap_slot.texture_key_shared()):
+                                act!(sprite(cap_slot.texture_key_handle()):
                                     align(0.5, 0.5):
                                     xy(cap_center_xy[0], cap_center_xy[1]):
                                     setsize(cap_width, cap_draw_height):
@@ -5295,7 +5295,7 @@ pub fn build_bundles(
                             ));
                             if cap_glow > f32::EPSILON {
                                 actors.push(actor_with_world_z(
-                                    act!(sprite(cap_slot.texture_key_shared()):
+                                    act!(sprite(cap_slot.texture_key_handle()):
                                         align(0.5, 0.5):
                                         xy(cap_center_xy[0], cap_center_xy[1]):
                                         setsize(cap_width, cap_draw_height):
@@ -5420,7 +5420,7 @@ pub fn build_bundles(
                         let sprite_center =
                             offset_center(head_center, local_offset, local_offset_rot_sin_cos);
                         actors.push(actor_with_world_z(
-                            act!(sprite(head_slot.texture_key_shared()):
+                            act!(sprite(head_slot.texture_key_handle()):
                                 align(0.5, 0.5):
                                 xy(sprite_center[0], sprite_center[1]):
                                 setsize(size[0], size[1]):
@@ -5437,7 +5437,7 @@ pub fn build_bundles(
                         let sprite_center =
                             offset_center(head_center, local_offset, local_offset_rot_sin_cos);
                         actors.push(actor_with_world_z(
-                            act!(sprite(head_slot.texture_key_shared()):
+                            act!(sprite(head_slot.texture_key_handle()):
                                 align(0.5, 0.5):
                                 xy(sprite_center[0], sprite_center[1]):
                                 setsize(size[0], size[1]):
@@ -5523,7 +5523,7 @@ pub fn build_bundles(
                             let sprite_center =
                                 offset_center(head_center, local_offset, local_offset_rot_sin_cos);
                             actors.push(actor_with_world_z(
-                                act!(sprite(note_slot.texture_key_shared()):
+                                act!(sprite(note_slot.texture_key_handle()):
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
                                     setsize(size[0], size[1]):
@@ -5540,7 +5540,7 @@ pub fn build_bundles(
                             let sprite_center =
                                 offset_center(head_center, local_offset, local_offset_rot_sin_cos);
                             actors.push(actor_with_world_z(
-                                act!(sprite(note_slot.texture_key_shared()):
+                                act!(sprite(note_slot.texture_key_handle()):
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
                                     setsize(size[0], size[1]):
@@ -5593,7 +5593,7 @@ pub fn build_bundles(
                         actors.push(actor_with_world_z(model_actor, head_world_z));
                     } else {
                         actors.push(actor_with_world_z(
-                            act!(sprite(note_slot.texture_key_shared()):
+                            act!(sprite(note_slot.texture_key_handle()):
                                 align(0.5, 0.5):
                                 xy(head_center[0], head_center[1]):
                                 setsize(size[0], size[1]):
@@ -5749,7 +5749,7 @@ pub fn build_bundles(
                                         gradient_slot.frame_index_from_phase(mine_fill_phase);
                                     let uv = gradient_slot.uv_for_frame_at(frame, elapsed);
                                     actors.push(actor_with_world_z(
-                                        act!(sprite(gradient_slot.texture_key_shared()):
+                                        act!(sprite(gradient_slot.texture_key_handle()):
                                             align(0.5, 0.5):
                                             xy(column_center_x, y_pos):
                                             setsize(width, height):
@@ -5807,7 +5807,7 @@ pub fn build_bundles(
                                         actors.push(actor_with_world_z(model_actor, note_world_z));
                                     } else {
                                         actors.push(actor_with_world_z(
-                                            act!(sprite(slot.texture_key_shared()):
+                                            act!(sprite(slot.texture_key_handle()):
                                                 align(0.5, 0.5):
                                                 xy(center[0], center[1]):
                                                 setsize(width, height):
@@ -5870,7 +5870,7 @@ pub fn build_bundles(
                                 actors.push(actor_with_world_z(model_actor, note_world_z));
                             } else {
                                 actors.push(actor_with_world_z(
-                                    act!(sprite(slot.texture_key_shared()):
+                                    act!(sprite(slot.texture_key_handle()):
                                         align(0.5, 0.5):
                                         xy(center[0], center[1]):
                                         setsize(size[0], size[1]):
@@ -5961,7 +5961,7 @@ pub fn build_bundles(
                                 actors.push(actor_with_world_z(model_actor, note_world_z));
                             } else {
                                 actors.push(actor_with_world_z(
-                                act!(sprite(head_slot.texture_key_shared()):
+                                act!(sprite(head_slot.texture_key_handle()):
                                     align(0.5, 0.5):
                                     xy(center[0], center[1]):
                                     setsize(note_size[0], note_size[1]):
@@ -6065,7 +6065,7 @@ pub fn build_bundles(
                                 );
                                 if draw.blend_add {
                                     actors.push(actor_with_world_z(
-                                    act!(sprite(note_slot.texture_key_shared()):
+                                    act!(sprite(note_slot.texture_key_handle()):
                                         align(0.5, 0.5):
                                         xy(sprite_center[0], sprite_center[1]):
                                         setsize(note_size[0], note_size[1]):
@@ -6080,7 +6080,7 @@ pub fn build_bundles(
                                 ));
                                 } else {
                                     actors.push(actor_with_world_z(
-                                    act!(sprite(note_slot.texture_key_shared()):
+                                    act!(sprite(note_slot.texture_key_handle()):
                                         align(0.5, 0.5):
                                         xy(sprite_center[0], sprite_center[1]):
                                         setsize(note_size[0], note_size[1]):
@@ -6132,7 +6132,7 @@ pub fn build_bundles(
                             actors.push(actor_with_world_z(model_actor, note_world_z));
                         } else {
                             actors.push(actor_with_world_z(
-                            act!(sprite(note_slot.texture_key_shared()):
+                            act!(sprite(note_slot.texture_key_handle()):
                                 align(0.5, 0.5):
                                 xy(center[0], center[1]):
                                 setsize(note_size[0], note_size[1]):

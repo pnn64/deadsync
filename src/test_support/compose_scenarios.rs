@@ -1274,6 +1274,14 @@ fn remap_actor_texture_case(actors: &mut [Actor]) {
                     *source =
                         SpriteSource::Texture(Arc::<str>::from(mixed_case_texture_key(texture)));
                 }
+                SpriteSource::TextureStaticHandle { key, .. } => {
+                    *source = SpriteSource::Texture(Arc::<str>::from(mixed_case_texture_key(key)));
+                }
+                SpriteSource::TextureHandle { key, .. } => {
+                    *source = SpriteSource::Texture(Arc::<str>::from(mixed_case_texture_key(
+                        key.as_ref(),
+                    )));
+                }
                 SpriteSource::Texture(texture) => {
                     *texture = Arc::<str>::from(mixed_case_texture_key(texture.as_ref()));
                 }

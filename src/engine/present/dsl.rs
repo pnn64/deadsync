@@ -5,12 +5,43 @@ use crate::engine::present::{anim, font, runtime};
 use glam::Mat4 as Matrix4;
 use smallvec::SmallVec;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 // PARITY COMMENT STANDARD:
 // PARITY[<Source>]: <mirrored behavior>. Ref: <file/symbol> when known.
 
 pub trait IntoTextureKey {
     fn into_texture_key(self) -> Arc<str>;
+
+    #[inline(always)]
+    fn into_sprite_source(self) -> SpriteSource
+    where
+        Self: Sized,
+    {
+        SpriteSource::Texture(self.into_texture_key())
+    }
+}
+
+pub struct TextureKeyHandle {
+    pub key: Arc<str>,
+    pub handle: crate::engine::gfx::TextureHandle,
+    pub generation: u64,
+}
+
+impl IntoTextureKey for TextureKeyHandle {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        self.key
+    }
+
+    #[inline(always)]
+    fn into_sprite_source(self) -> SpriteSource {
+        SpriteSource::TextureHandle {
+            key: self.key,
+            handle: self.handle,
+            generation: self.generation,
+        }
+    }
 }
 
 impl IntoTextureKey for Arc<str> {
@@ -76,7 +107,7 @@ fn sprite_native_dims(
 ) -> (f32, f32) {
     match source {
         SpriteSource::Solid => (1.0, 1.0),
-        SpriteSource::TextureStatic(key) => {
+        SpriteSource::TextureStatic(key) | SpriteSource::TextureStaticHandle { key, .. } => {
             let Some(meta) = assets::texture_dims(key) else {
                 return (0.0, 0.0);
             };
@@ -109,7 +140,7 @@ fn sprite_native_dims(
 
             (tw, th)
         }
-        SpriteSource::Texture(key) => {
+        SpriteSource::Texture(key) | SpriteSource::TextureHandle { key, .. } => {
             let Some(meta) = assets::texture_dims(key) else {
                 return (0.0, 0.0);
             };
@@ -244,12 +275,40 @@ impl SpriteBuilder {
 
     #[inline(always)]
     pub fn texture<T: IntoTextureKey>(tex: T) -> Self {
-        Self::with_source(SpriteSource::Texture(tex.into_texture_key()))
+        Self::with_source(tex.into_sprite_source())
     }
 
     #[inline(always)]
     pub fn static_texture(tex: &'static str) -> Self {
         Self::with_source(SpriteSource::TextureStatic(tex))
+    }
+
+    #[inline(always)]
+    pub fn static_texture_cached(
+        tex: &'static str,
+        cached_handle: &'static AtomicU64,
+        cached_generation: &'static AtomicU64,
+    ) -> Self {
+        let generation = assets::texture_registry_generation();
+        let handle = cached_handle.load(Ordering::Relaxed);
+        if handle != crate::engine::gfx::INVALID_TEXTURE_HANDLE
+            && cached_generation.load(Ordering::Relaxed) == generation
+        {
+            return Self::with_source(SpriteSource::TextureStaticHandle {
+                key: tex,
+                handle,
+                generation,
+            });
+        }
+
+        let handle = assets::texture_handle(tex);
+        cached_handle.store(handle, Ordering::Relaxed);
+        cached_generation.store(generation, Ordering::Relaxed);
+        Self::with_source(SpriteSource::TextureStaticHandle {
+            key: tex,
+            handle,
+            generation,
+        })
     }
 
     #[inline(always)]
@@ -1246,8 +1305,16 @@ macro_rules! __ui_valign_from_ident {
 #[macro_export]
 macro_rules! act {
     (sprite($tex:literal): $($tail:tt)+) => {{
+        static __TEXTURE_HANDLE: ::std::sync::atomic::AtomicU64 =
+            ::std::sync::atomic::AtomicU64::new($crate::engine::gfx::INVALID_TEXTURE_HANDLE);
+        static __TEXTURE_GENERATION: ::std::sync::atomic::AtomicU64 =
+            ::std::sync::atomic::AtomicU64::new(::core::u64::MAX);
         let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
-        let mut __mods = $crate::engine::present::dsl::SpriteBuilder::static_texture($tex);
+        let mut __mods = $crate::engine::present::dsl::SpriteBuilder::static_texture_cached(
+            $tex,
+            &__TEXTURE_HANDLE,
+            &__TEXTURE_GENERATION,
+        );
         let mut __cur: ::core::option::Option<$crate::engine::present::anim::SegmentBuilder> = None;
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}

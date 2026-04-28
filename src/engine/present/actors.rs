@@ -1,4 +1,6 @@
-use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, TMeshCacheKey, TexturedMeshVertex};
+use crate::engine::gfx::{
+    BlendMode, MeshMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
+};
 use crate::engine::present::anim;
 use glam::Mat4 as Matrix4;
 use std::sync::Arc;
@@ -31,6 +33,16 @@ pub enum SizeSpec {
 #[derive(Clone, Debug)]
 pub enum SpriteSource {
     TextureStatic(&'static str),
+    TextureStaticHandle {
+        key: &'static str,
+        handle: TextureHandle,
+        generation: u64,
+    },
+    TextureHandle {
+        key: Arc<str>,
+        handle: TextureHandle,
+        generation: u64,
+    },
     Texture(Arc<str>),
     Solid,
 }
@@ -45,6 +57,8 @@ impl SpriteSource {
     pub fn texture_key(&self) -> Option<&str> {
         match self {
             Self::TextureStatic(key) => Some(key),
+            Self::TextureStaticHandle { key, .. } => Some(key),
+            Self::TextureHandle { key, .. } => Some(key.as_ref()),
             Self::Texture(key) => Some(key.as_ref()),
             Self::Solid => None,
         }

@@ -2145,6 +2145,28 @@ fn has_shadow(len: [f32; 2]) -> bool {
     len[0] != 0.0 || len[1] != 0.0
 }
 
+#[inline(always)]
+fn sprite_source_handle(
+    source: &actors::SpriteSource,
+    generation: u64,
+) -> Option<renderer::TextureHandle> {
+    match source {
+        actors::SpriteSource::TextureStaticHandle {
+            handle,
+            generation: handle_generation,
+            ..
+        }
+        | actors::SpriteSource::TextureHandle {
+            handle,
+            generation: handle_generation,
+            ..
+        } if *handle != renderer::INVALID_TEXTURE_HANDLE && *handle_generation == generation => {
+            Some(*handle)
+        }
+        _ => None,
+    }
+}
+
 fn push_shadow_objects_for_range(
     out: &mut Vec<RenderObject>,
     start: usize,
@@ -2260,8 +2282,15 @@ fn build_actor_recursive<'a>(
                 actors::SpriteSource::TextureStatic(name) => {
                     (false, *name, Some(str_ptr(name)), true)
                 }
+                actors::SpriteSource::TextureStaticHandle { key, .. } => {
+                    (false, *key, Some(str_ptr(key)), true)
+                }
                 actors::SpriteSource::Texture(name) => {
                     let name = name.as_ref();
+                    (false, name, Some(str_ptr(name)), false)
+                }
+                actors::SpriteSource::TextureHandle { key, .. } => {
+                    let name = key.as_ref();
                     (false, name, Some(str_ptr(name)), false)
                 }
                 actors::SpriteSource::Solid => (true, "__white", Some(str_ptr("__white")), true),
@@ -2369,6 +2398,7 @@ fn build_actor_recursive<'a>(
                 *local_offset,
                 *local_offset_rot_sin_cos,
                 *texcoordvelocity,
+                sprite_source_handle(source, texture_cache.generation),
                 texture_cache,
                 total_elapsed,
             );
@@ -2826,6 +2856,7 @@ fn build_actor_recursive<'a>(
                             [0.0, 0.0],
                             [0.0, 1.0],
                             None,
+                            None,
                             texture_cache,
                             total_elapsed,
                         );
@@ -2870,6 +2901,7 @@ fn build_actor_recursive<'a>(
                             0.0,
                             [0.0, 0.0],
                             [0.0, 1.0],
+                            None,
                             None,
                             texture_cache,
                             total_elapsed,
@@ -3135,6 +3167,7 @@ fn push_sprite<'a>(
     local_offset: [f32; 2],
     local_offset_rot_sin_cos: [f32; 2],
     texcoordvelocity: Option<[f32; 2]>,
+    texture_handle: Option<renderer::TextureHandle>,
     texture_cache: &mut TextureLookupCache,
     total_elapsed: f32,
 ) {
@@ -3231,7 +3264,13 @@ fn push_sprite<'a>(
         std::mem::swap(&mut ft_eff, &mut fb_eff);
     }
 
-    let texture_key = if is_solid { "__white" } else { texture_id };
+    let texture_handle = match texture_handle {
+        Some(handle) => handle,
+        None => {
+            let texture_key = if is_solid { "__white" } else { texture_id };
+            texture_cache.texture_handle_cached(texture_key_ptr, texture_key, texture_key_stable)
+        }
+    };
 
     out.push(renderer::RenderObject {
         object_type: renderer::ObjectType::Sprite {
@@ -3245,11 +3284,7 @@ fn push_sprite<'a>(
             local_offset_rot_sin_cos,
             edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
         },
-        texture_handle: texture_cache.texture_handle_cached(
-            texture_key_ptr,
-            texture_key,
-            texture_key_stable,
-        ),
+        texture_handle,
         transform: Matrix4::IDENTITY,
         blend,
         z: 0,

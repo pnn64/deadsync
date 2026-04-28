@@ -18,7 +18,10 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::hash::Hasher;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{
+    Arc, Mutex, OnceLock,
+    atomic::{AtomicU64, Ordering},
+};
 use twox_hash::XxHash64;
 
 pub const NUM_QUANTIZATIONS: usize = 9;
@@ -62,6 +65,8 @@ pub enum SpriteSource {
     Atlas {
         texture_key: Arc<str>,
         tex_dims: (u32, u32),
+        cached_handle: AtomicU64,
+        cached_generation: AtomicU64,
     },
     Animated {
         texture_key: Arc<str>,
@@ -71,6 +76,8 @@ pub enum SpriteSource {
         frame_count: usize,
         rate: AnimationRate,
         frame_durations: Option<Arc<[f32]>>,
+        cached_handle: AtomicU64,
+        cached_generation: AtomicU64,
     },
 }
 
@@ -87,6 +94,44 @@ impl SpriteSource {
         match self {
             Self::Atlas { texture_key, .. } => texture_key.clone(),
             Self::Animated { texture_key, .. } => texture_key.clone(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn texture_key_handle(&self) -> crate::engine::present::dsl::TextureKeyHandle {
+        let (texture_key, cached_handle, cached_generation) = match self {
+            Self::Atlas {
+                texture_key,
+                cached_handle,
+                cached_generation,
+                ..
+            }
+            | Self::Animated {
+                texture_key,
+                cached_handle,
+                cached_generation,
+                ..
+            } => (texture_key, cached_handle, cached_generation),
+        };
+        let generation = assets::texture_registry_generation();
+        let handle = cached_handle.load(Ordering::Relaxed);
+        if handle != crate::engine::gfx::INVALID_TEXTURE_HANDLE
+            && cached_generation.load(Ordering::Relaxed) == generation
+        {
+            return crate::engine::present::dsl::TextureKeyHandle {
+                key: texture_key.clone(),
+                handle,
+                generation,
+            };
+        }
+
+        let handle = assets::texture_handle(texture_key.as_ref());
+        cached_handle.store(handle, Ordering::Relaxed);
+        cached_generation.store(generation, Ordering::Relaxed);
+        crate::engine::present::dsl::TextureKeyHandle {
+            key: texture_key.clone(),
+            handle,
+            generation,
         }
     }
 
@@ -301,6 +346,11 @@ impl SpriteSlot {
     #[inline(always)]
     pub fn texture_key_shared(&self) -> Arc<str> {
         self.source.texture_key_shared()
+    }
+
+    #[inline(always)]
+    pub fn texture_key_handle(&self) -> crate::engine::present::dsl::TextureKeyHandle {
+        self.source.texture_key_handle()
     }
 
     pub const fn size(&self) -> [i32; 2] {
@@ -1659,6 +1709,8 @@ fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {
         frame_count,
         rate: AnimationRate::FramesPerBeat(1.0),
         frame_durations: None,
+        cached_handle: AtomicU64::new(crate::engine::gfx::INVALID_TEXTURE_HANDLE),
+        cached_generation: AtomicU64::new(u64::MAX),
     });
 
     SpriteSlot {
@@ -3888,6 +3940,8 @@ fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
     let source = Arc::new(SpriteSource::Atlas {
         texture_key: key.into(),
         tex_dims: dims,
+        cached_handle: AtomicU64::new(crate::engine::gfx::INVALID_TEXTURE_HANDLE),
+        cached_generation: AtomicU64::new(u64::MAX),
     });
     Some(SpriteSlot {
         def: SpriteDefinition {
@@ -4243,6 +4297,7 @@ fn itg_apply_slot_state_properties(
         SpriteSource::Atlas {
             texture_key,
             tex_dims,
+            ..
         }
         | SpriteSource::Animated {
             texture_key,
@@ -4293,6 +4348,8 @@ fn itg_apply_slot_state_properties(
         frame_count: anim_frames,
         rate,
         frame_durations: Some(Arc::<[f32]>::from(durations)),
+        cached_handle: AtomicU64::new(crate::engine::gfx::INVALID_TEXTURE_HANDLE),
+        cached_generation: AtomicU64::new(u64::MAX),
     });
     let start_col = start_idx % cols;
     let start_row = start_idx / cols;
@@ -5607,6 +5664,8 @@ fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot
     let source = Arc::new(SpriteSource::Atlas {
         texture_key: key.into(),
         tex_dims: dims,
+        cached_handle: AtomicU64::new(crate::engine::gfx::INVALID_TEXTURE_HANDLE),
+        cached_generation: AtomicU64::new(u64::MAX),
     });
     Some(SpriteSlot {
         def: SpriteDefinition {
@@ -5682,6 +5741,8 @@ fn itg_slot_from_path_animated(
         frame_count: anim_frames,
         rate,
         frame_durations,
+        cached_handle: AtomicU64::new(crate::engine::gfx::INVALID_TEXTURE_HANDLE),
+        cached_generation: AtomicU64::new(u64::MAX),
     });
     Some(SpriteSlot {
         def: SpriteDefinition {
@@ -6072,6 +6133,8 @@ mod tests {
             source: Arc::new(SpriteSource::Atlas {
                 texture_key: Arc::from("test"),
                 tex_dims: (64, 64),
+                cached_handle: AtomicU64::new(crate::engine::gfx::INVALID_TEXTURE_HANDLE),
+                cached_generation: AtomicU64::new(u64::MAX),
             }),
             uv_velocity: [0.0, 0.0],
             uv_offset: [0.0, 0.0],
@@ -7056,6 +7119,8 @@ mod tests {
         slot.source = Arc::new(SpriteSource::Atlas {
             texture_key: Arc::<str>::from(key.as_str()),
             tex_dims: (2048, 2048),
+            cached_handle: AtomicU64::new(crate::engine::gfx::INVALID_TEXTURE_HANDLE),
+            cached_generation: AtomicU64::new(u64::MAX),
         });
         slot.model = None;
         let (cols, rows) = crate::assets::sprite_sheet_dims(&key);
