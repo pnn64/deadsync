@@ -98,6 +98,10 @@ struct TextureUploadQueue {
 }
 
 impl TextureUploadQueue {
+    fn contains(&self, key: &str) -> bool {
+        self.entries.contains_key(key)
+    }
+
     fn push(&mut self, key: String, image: Arc<RgbaImage>, sampler: SamplerDesc) {
         let bytes = image.as_raw().len();
         if let Some(old) = self.entries.insert(
@@ -195,6 +199,11 @@ impl AssetManager {
         self.texture_handles
             .get(key)
             .is_some_and(|handle| self.textures.contains_key(handle))
+    }
+
+    #[inline(always)]
+    pub(crate) fn has_pending_texture_upload(&self, key: &str) -> bool {
+        self.pending_texture_uploads.contains(key)
     }
 
     pub fn take_textures(&mut self) -> TextureHandleMap<GfxTexture> {
@@ -1011,6 +1020,9 @@ mod tests {
         );
 
         assert_eq!(queue.entries.len(), 2);
+        assert!(queue.contains("shared"));
+        assert!(queue.contains("other"));
+        assert!(!queue.contains("missing"));
         assert_eq!(queue.queued_bytes, (2 * 2 * 4 + 1 * 1 * 4) as usize);
 
         let budget = TextureUploadBudget {
@@ -1024,6 +1036,8 @@ mod tests {
         let (second_key, second) = queue.pop_next(budget, 1, first.bytes).unwrap();
         assert_eq!(second_key, "other");
         assert_eq!(second.bytes, 4);
+        assert!(!queue.contains("shared"));
+        assert!(!queue.contains("other"));
         assert!(
             queue
                 .pop_next(budget, 2, first.bytes + second.bytes)
@@ -1062,6 +1076,7 @@ mod tests {
         assets.queue_texture_upload("queued".to_string(), blank_rgba(2, 2));
 
         assert!(assets.has_texture_key("queued"));
+        assert!(assets.has_pending_texture_upload("queued"));
         assert!(
             assets
                 .pending_texture_uploads
@@ -1077,5 +1092,6 @@ mod tests {
                 .entries
                 .contains_key("queued")
         );
+        assert!(!assets.has_pending_texture_upload("queued"));
     }
 }

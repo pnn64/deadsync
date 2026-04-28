@@ -818,6 +818,9 @@ impl DynamicMedia {
         gameplay_time_sec: Option<f32>,
     ) {
         for (key, video) in &mut self.active_banner_videos {
+            if assets.has_pending_texture_upload(key) {
+                continue;
+            }
             let play_time = video.started_at.elapsed().as_secs_f32();
             if let Some(frame) = video.player.take_due_frame(play_time) {
                 assets.queue_texture_upload(key.clone(), frame);
@@ -826,6 +829,7 @@ impl DynamicMedia {
 
         if let Some(state) = self.current_dynamic_background.as_mut()
             && let Some(video) = state.video.as_mut()
+            && !assets.has_pending_texture_upload(&state.key)
         {
             let play_time = gameplay_time_sec.unwrap_or(0.0).max(0.0);
             if let Some(frame) = video.take_due_frame(play_time) {
@@ -835,6 +839,9 @@ impl DynamicMedia {
 
         let song_lua_play_time = gameplay_time_sec.unwrap_or(0.0).max(0.0);
         for (key, player) in &mut self.active_song_lua_videos {
+            if assets.has_pending_texture_upload(key) {
+                continue;
+            }
             if let Some(frame) = player.take_due_frame(song_lua_play_time) {
                 assets.queue_texture_upload(key.clone(), frame);
             }
