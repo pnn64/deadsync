@@ -4839,17 +4839,34 @@ fn build_song_lua_overlay_actor(
 
 fn song_lua_wrap_overlay_shadow(
     state: SongLuaOverlayState,
-    actor: Actor,
+    mut actor: Actor,
     x_scale: f32,
     y_scale: f32,
 ) -> Actor {
     if state.shadow_len[0].abs() <= f32::EPSILON && state.shadow_len[1].abs() <= f32::EPSILON {
         return actor;
     }
-    Actor::Shadow {
-        len: [state.shadow_len[0] * x_scale, state.shadow_len[1] * y_scale],
-        color: state.shadow_color,
-        child: Box::new(actor),
+    let len = [state.shadow_len[0] * x_scale, state.shadow_len[1] * y_scale];
+    match &mut actor {
+        Actor::Sprite {
+            shadow_len,
+            shadow_color,
+            ..
+        }
+        | Actor::Text {
+            shadow_len,
+            shadow_color,
+            ..
+        } if shadow_len[0].abs() <= f32::EPSILON && shadow_len[1].abs() <= f32::EPSILON => {
+            *shadow_len = len;
+            *shadow_color = state.shadow_color;
+            actor
+        }
+        _ => Actor::Shadow {
+            len,
+            color: state.shadow_color,
+            child: Box::new(actor),
+        },
     }
 }
 
