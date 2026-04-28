@@ -1424,6 +1424,17 @@ enum EvalGraphPane {
 }
 
 #[inline(always)]
+const fn eval_graph_default_for(show_fa_plus_pane: bool, show_hard_ex: bool) -> EvalGraphPane {
+    if show_hard_ex {
+        EvalGraphPane::HardEx
+    } else if show_fa_plus_pane {
+        EvalGraphPane::Ex
+    } else {
+        EvalGraphPane::Itg
+    }
+}
+
+#[inline(always)]
 const fn eval_graph_next(pane: EvalGraphPane) -> EvalGraphPane {
     match pane {
         EvalGraphPane::Itg => EvalGraphPane::Ex,
@@ -1544,7 +1555,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     let mut scatter_mesh_foot: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
-    let active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
+    let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let mut stage_duration_seconds: f32 = 0.0;
     let mut machine_records_by_hash: HashMap<String, Vec<scores::LeaderboardEntry>> =
         HashMap::new();
@@ -1961,6 +1972,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 active_pane[1] = score_info[1].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
                 });
+                active_graph[0] = score_info[0].as_ref().map_or(EvalGraphPane::Itg, |si| {
+                    eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
+                });
+                active_graph[1] = score_info[1].as_ref().map_or(EvalGraphPane::Itg, |si| {
+                    eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
+                });
             }
             profile::PlayStyle::Single | profile::PlayStyle::Double => {
                 let joined = profile::get_session_player_side();
@@ -1977,6 +1994,13 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 active_pane = match joined {
                     profile::PlayerSide::P1 => [primary, secondary],
                     profile::PlayerSide::P2 => [secondary, primary],
+                };
+                let primary_graph = score_info[0].as_ref().map_or(EvalGraphPane::Itg, |si| {
+                    eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
+                });
+                active_graph = match joined {
+                    profile::PlayerSide::P1 => [primary_graph, EvalGraphPane::Itg],
+                    profile::PlayerSide::P2 => [EvalGraphPane::Itg, primary_graph],
                 };
             }
         }
@@ -2025,7 +2049,7 @@ pub fn init_from_score_info(
     stage_duration_seconds: f32,
 ) -> State {
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
-    let active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
+    let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let play_style = profile::get_session_play_style();
     match play_style {
         profile::PlayStyle::Versus => {
@@ -2034,6 +2058,12 @@ pub fn init_from_score_info(
             });
             active_pane[1] = score_info[1].as_ref().map_or(EvalPane::Standard, |si| {
                 eval_pane_default_for(si.show_fa_plus_pane)
+            });
+            active_graph[0] = score_info[0].as_ref().map_or(EvalGraphPane::Itg, |si| {
+                eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
+            });
+            active_graph[1] = score_info[1].as_ref().map_or(EvalGraphPane::Itg, |si| {
+                eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
             });
         }
         profile::PlayStyle::Single | profile::PlayStyle::Double => {
@@ -2045,6 +2075,13 @@ pub fn init_from_score_info(
             active_pane = match joined {
                 profile::PlayerSide::P1 => [primary, secondary],
                 profile::PlayerSide::P2 => [secondary, primary],
+            };
+            let primary_graph = score_info[0].as_ref().map_or(EvalGraphPane::Itg, |si| {
+                eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
+            });
+            active_graph = match joined {
+                profile::PlayerSide::P1 => [primary_graph, EvalGraphPane::Itg],
+                profile::PlayerSide::P2 => [EvalGraphPane::Itg, primary_graph],
             };
         }
     }
