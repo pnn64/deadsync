@@ -380,10 +380,12 @@ pub(crate) fn bench_fonts() -> HashMap<&'static str, Font> {
 }
 
 fn bench_font() -> Font {
+    let texture_key = Arc::<str>::from(FONT_MAIN);
+    let stroke_key = Arc::<str>::from(FONT_STROKE);
     let mut glyph_map = HashMap::with_capacity(95);
     for code in 32u8..=126 {
         let ch = char::from(code);
-        glyph_map.insert(ch, bench_glyph(ch));
+        glyph_map.insert(ch, bench_glyph(ch, &texture_key, &stroke_key));
     }
 
     let mut stroke_texture_map = HashMap::with_capacity(1);
@@ -392,7 +394,7 @@ fn bench_font() -> Font {
     Font {
         glyph_map,
         ascii_glyphs: Box::new(std::array::from_fn(|_| None)),
-        default_glyph: Some(bench_glyph('?')),
+        default_glyph: Some(bench_glyph('?', &texture_key, &stroke_key)),
         line_spacing: 20,
         height: 18,
         fallback_font_name: None,
@@ -404,7 +406,7 @@ fn bench_font() -> Font {
     }
 }
 
-fn bench_glyph(ch: char) -> Glyph {
+fn bench_glyph(ch: char, texture_key: &Arc<str>, stroke_key: &Arc<str>) -> Glyph {
     let idx = (ch as u32).saturating_sub(32);
     let col = idx % 16;
     let row = idx / 16;
@@ -412,8 +414,8 @@ fn bench_glyph(ch: char) -> Glyph {
     let y = row as f32 * 32.0;
     let advance = if ch == ' ' { 8.0 } else { 14.0 };
     Glyph {
-        texture_key: Arc::<str>::from(FONT_MAIN),
-        stroke_texture_key: Some(Arc::<str>::from(FONT_STROKE)),
+        texture_key: Arc::clone(texture_key),
+        stroke_texture_key: Some(Arc::clone(stroke_key)),
         tex_rect: [x, y, x + 22.0, y + 30.0],
         uv_scale: [22.0 / 512.0, 30.0 / 256.0],
         uv_offset: [x / 512.0, y / 256.0],

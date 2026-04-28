@@ -2789,11 +2789,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     let mut shift_graph_for = |controller: profile::PlayerSide, dir: i32| {
         let controller_idx = side_idx(controller);
         let player_idx = player_idx_for_controller(controller);
-        let Some(si) = state
-            .score_info
-            .get(player_idx)
-            .and_then(|s| s.as_ref())
-        else {
+        let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
             return;
         };
 

@@ -14,7 +14,7 @@ use twox_hash::XxHash64;
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
-const MAX_RECYCLED_TEXT_MESH_VERTEX_BUFFERS: usize = 16;
+const MAX_RECYCLED_TEXT_MESH_VERTEX_BUFFERS: usize = 512;
 
 #[inline(always)]
 pub fn build_screen(
@@ -2540,7 +2540,12 @@ fn build_actor_recursive<'a>(
                             texture_cache,
                         );
                         if let Some(clip_world) = clip_world {
-                            clip_objects_range_to_world_rect(out, before, clip_world);
+                            clip_objects_range_to_world_rect(
+                                out,
+                                before,
+                                clip_world,
+                                &mut scratch.recycled_text_mesh_vertices,
+                            );
                         }
                         if needs_stroke {
                             let stroke_start = out.len();
@@ -2554,7 +2559,12 @@ fn build_actor_recursive<'a>(
                                 texture_cache,
                             );
                             if let Some(clip_world) = clip_world {
-                                clip_objects_range_to_world_rect(out, stroke_start, clip_world);
+                                clip_objects_range_to_world_rect(
+                                    out,
+                                    stroke_start,
+                                    clip_world,
+                                    &mut scratch.recycled_text_mesh_vertices,
+                                );
                             }
                             for obj in out.iter_mut().skip(stroke_start) {
                                 obj.z = layer;
@@ -2589,7 +2599,12 @@ fn build_actor_recursive<'a>(
                             texture_cache,
                         );
                         if let Some(clip_world) = clip_world {
-                            clip_objects_range_to_world_rect(out, before, clip_world);
+                            clip_objects_range_to_world_rect(
+                                out,
+                                before,
+                                clip_world,
+                                recycled_vertices,
+                            );
                         }
                         if needs_stroke {
                             let stroke_start = out.len();
@@ -2625,7 +2640,12 @@ fn build_actor_recursive<'a>(
                                 );
                             }
                             if let Some(clip_world) = clip_world {
-                                clip_objects_range_to_world_rect(out, stroke_start, clip_world);
+                                clip_objects_range_to_world_rect(
+                                    out,
+                                    stroke_start,
+                                    clip_world,
+                                    recycled_vertices,
+                                );
                             }
                             for obj in out.iter_mut().skip(stroke_start) {
                                 obj.z = layer;
@@ -3317,7 +3337,8 @@ fn clip_objects_range_to_world_masks(
         return;
     }
     if let [mask] = masks {
-        clip_objects_range_to_world_rect(objects, start, *mask);
+        let mut recycled_vertices = Vec::new();
+        clip_objects_range_to_world_rect(objects, start, *mask, &mut recycled_vertices);
         return;
     }
     let len = objects.len();
@@ -3371,7 +3392,7 @@ fn clip_object_to_world_masks(obj: &mut RenderObject, masks: &[WorldRect]) -> bo
     let mut best_obj: Option<ClippedSpriteObject> = None;
     let mut best_area = -1.0_f32;
     for &mask in masks {
-        let Some(candidate) = clipped_sprite_object_to_world_rect(obj, mask) else {
+        let Some(candidate) = clipped_sprite_object_to_world_rect(obj, mask, None) else {
             continue;
         };
         let area = object_world_area(&candidate.object_type, &candidate.transform);
@@ -3393,6 +3414,7 @@ fn clip_objects_range_to_world_rect(
     objects: &mut Vec<RenderObject>,
     start: usize,
     clip: WorldRect,
+    recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
 ) {
     if start >= objects.len() {
         return;
@@ -3407,7 +3429,7 @@ fn clip_objects_range_to_world_rect(
     for read in start..len {
         let keep = {
             let obj = &mut objects[read];
-            clip_sprite_object_to_world_rect(obj, clip)
+            clip_sprite_object_to_world_rect_with_recycled(obj, clip, Some(&mut *recycled_vertices))
         };
         if keep {
             if write != read {
@@ -3419,8 +3441,17 @@ fn clip_objects_range_to_world_rect(
     objects.truncate(write);
 }
 
+#[cfg(test)]
 fn clip_sprite_object_to_world_rect(obj: &mut RenderObject, clip: WorldRect) -> bool {
-    let Some(clipped) = clipped_sprite_object_to_world_rect(obj, clip) else {
+    clip_sprite_object_to_world_rect_with_recycled(obj, clip, None)
+}
+
+fn clip_sprite_object_to_world_rect_with_recycled(
+    obj: &mut RenderObject,
+    clip: WorldRect,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+) -> bool {
+    let Some(clipped) = clipped_sprite_object_to_world_rect(obj, clip, recycled_vertices) else {
         return false;
     };
     obj.object_type = clipped.object_type;
@@ -3431,6 +3462,7 @@ fn clip_sprite_object_to_world_rect(obj: &mut RenderObject, clip: WorldRect) -> 
 fn clipped_sprite_object_to_world_rect(
     obj: &RenderObject,
     clip: WorldRect,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> Option<ClippedSpriteObject> {
     if clip.left >= clip.right || clip.bottom >= clip.top {
         return None;
@@ -3571,6 +3603,7 @@ fn clipped_sprite_object_to_world_rect(
                 *uv_offset,
                 *uv_tex_shift,
                 clip,
+                recycled_vertices,
             )
         }
         renderer::ObjectType::Mesh { .. } => Some(ClippedSpriteObject {
@@ -3730,6 +3763,22 @@ fn baked_tmesh_uv(
     ]
 }
 
+#[inline(always)]
+fn clipped_text_mesh_out<'a>(
+    out: &'a mut Option<Vec<renderer::TexturedMeshVertex>>,
+    recycled_vertices: &mut Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+    source_len: usize,
+) -> &'a mut Vec<renderer::TexturedMeshVertex> {
+    out.get_or_insert_with(|| {
+        let mut vertices = recycled_vertices
+            .take()
+            .map(take_recycled_text_mesh_vertices)
+            .unwrap_or_default();
+        vertices.reserve(source_len.min(48));
+        vertices
+    })
+}
+
 fn clip_textured_mesh_to_world_rect(
     tint: [f32; 4],
     vertices: &[renderer::TexturedMeshVertex],
@@ -3738,27 +3787,65 @@ fn clip_textured_mesh_to_world_rect(
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
     clip: WorldRect,
+    mut recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> Option<ClippedSpriteObject> {
     if vertices.len() < 3 {
         return None;
     }
 
-    let mut out = Vec::with_capacity(vertices.len());
+    let mut out: Option<Vec<renderer::TexturedMeshVertex>> = None;
     for tri in vertices.chunks_exact(3) {
+        let p0 = world_xy_3d(&transform, tri[0].pos);
+        let p1 = world_xy_3d(&transform, tri[1].pos);
+        let p2 = world_xy_3d(&transform, tri[2].pos);
+        let left = p0[0].min(p1[0]).min(p2[0]);
+        let right = p0[0].max(p1[0]).max(p2[0]);
+        let bottom = p0[1].min(p1[1]).min(p2[1]);
+        let top = p0[1].max(p1[1]).max(p2[1]);
+        if right < clip.left || left > clip.right || top < clip.bottom || bottom > clip.top {
+            continue;
+        }
+
+        let uv0 = baked_tmesh_uv(&tri[0], uv_scale, uv_offset, uv_tex_shift);
+        let uv1 = baked_tmesh_uv(&tri[1], uv_scale, uv_offset, uv_tex_shift);
+        let uv2 = baked_tmesh_uv(&tri[2], uv_scale, uv_offset, uv_tex_shift);
+        if left >= clip.left && right <= clip.right && bottom >= clip.bottom && top <= clip.top {
+            let out = clipped_text_mesh_out(&mut out, &mut recycled_vertices, vertices.len());
+            out.push(renderer::TexturedMeshVertex {
+                pos: [p0[0], p0[1], 0.0],
+                uv: uv0,
+                tex_matrix_scale: [1.0, 1.0],
+                color: tri[0].color,
+            });
+            out.push(renderer::TexturedMeshVertex {
+                pos: [p1[0], p1[1], 0.0],
+                uv: uv1,
+                tex_matrix_scale: [1.0, 1.0],
+                color: tri[1].color,
+            });
+            out.push(renderer::TexturedMeshVertex {
+                pos: [p2[0], p2[1], 0.0],
+                uv: uv2,
+                tex_matrix_scale: [1.0, 1.0],
+                color: tri[2].color,
+            });
+            continue;
+        }
+
         let poly = [
             ClipVertex {
-                pos: world_xy_3d(&transform, tri[0].pos),
-                uv: baked_tmesh_uv(&tri[0], uv_scale, uv_offset, uv_tex_shift),
+                pos: p0,
+                uv: uv0,
                 color: tri[0].color,
             },
             ClipVertex {
-                pos: world_xy_3d(&transform, tri[1].pos),
-                uv: baked_tmesh_uv(&tri[1], uv_scale, uv_offset, uv_tex_shift),
+                pos: p1,
+                uv: uv1,
                 color: tri[1].color,
             },
             ClipVertex {
-                pos: world_xy_3d(&transform, tri[2].pos),
-                uv: baked_tmesh_uv(&tri[2], uv_scale, uv_offset, uv_tex_shift),
+                pos: p2,
+                uv: uv2,
                 color: tri[2].color,
             },
         ];
@@ -3766,6 +3853,7 @@ fn clip_textured_mesh_to_world_rect(
         if clipped.len() < 3 {
             continue;
         }
+        let out = clipped_text_mesh_out(&mut out, &mut recycled_vertices, vertices.len());
 
         let base = clipped[0];
         let mut i = 1usize;
@@ -3782,6 +3870,7 @@ fn clip_textured_mesh_to_world_rect(
         }
     }
 
+    let out = out?;
     if out.is_empty() {
         return None;
     }

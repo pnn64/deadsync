@@ -2506,6 +2506,11 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
             draw_left += 1;
         }
 
+        let texture_key_arc = Arc::<str>::from(texture_key.as_str());
+        let stroke_texture_key_arc = stroke_texture_map
+            .get(texture_key.as_str())
+            .map(|key| Arc::<str>::from(key.as_str()));
+
         for i in 0..total_frames {
             let base_w_ini = if let Some(&w) = settings.glyph_widths.get(&i) {
                 w
@@ -2580,10 +2585,8 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
             ];
 
             let glyph = Glyph {
-                texture_key: Arc::<str>::from(texture_key.as_str()),
-                stroke_texture_key: stroke_texture_map
-                    .get(texture_key.as_str())
-                    .map(|key| Arc::<str>::from(key.as_str())),
+                texture_key: Arc::clone(&texture_key_arc),
+                stroke_texture_key: stroke_texture_key_arc.clone(),
                 tex_rect,
                 uv_scale,
                 uv_offset,

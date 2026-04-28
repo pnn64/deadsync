@@ -420,7 +420,12 @@ pub fn is_itl_song_folder_unlocked_for_side(song_folder: &str, side: profile::Pl
         .unwrap()
         .loaded_profiles
         .get(&profile_id)
-        .map(|data| data.unlock_folders.get(song_folder).copied().unwrap_or(false))
+        .map(|data| {
+            data.unlock_folders
+                .get(song_folder)
+                .copied()
+                .unwrap_or(false)
+        })
         .unwrap_or(false)
 }
 
