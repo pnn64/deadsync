@@ -4823,39 +4823,13 @@ fn song_lua_display_bpm_pair(song: &SongData, chart: Option<&ChartData>) -> [f32
         .unwrap_or([60.0, 60.0])
 }
 
-fn step_stats_notefield_width(
-    noteskin: Option<&Noteskin>,
-    cols_per_player: usize,
-    field_zoom: f32,
-    spacing_mult: f32,
-) -> Option<f32> {
-    let ns = noteskin?;
-    let cols = cols_per_player
-        .min(ns.column_xs.len())
-        .min(ns.receptor_off.len());
-    if cols == 0 {
+fn step_stats_notefield_width(cols_per_player: usize) -> Option<f32> {
+    if cols_per_player == 0 {
         return None;
     }
-
-    let mut min_x = f32::INFINITY;
-    let mut max_x = f32::NEG_INFINITY;
-    for x in ns.column_xs.iter().take(cols) {
-        let xf = *x as f32 * spacing_mult;
-        min_x = min_x.min(xf);
-        max_x = max_x.max(xf);
-    }
-
-    let zoom = field_zoom.max(0.0);
-    let target_arrow_px = 64.0 * zoom;
-    let size = ns.receptor_off[0].size();
-    let w = size[0].max(0) as f32;
-    let h = size[1].max(0) as f32;
-    let arrow_w = if h > 0.0 && target_arrow_px > 0.0 {
-        w * (target_arrow_px / h)
-    } else {
-        w * zoom
-    };
-    Some(((max_x - min_x) * zoom) + arrow_w)
+    // Simply Love GetNotefieldWidth() parity: this is a style width, not the
+    // rendered field width. Mini and Spacing must not move step statistics.
+    Some(cols_per_player as f32 * 64.0)
 }
 
 fn upper_density_graph_width(play_style: profile::PlayStyle) -> f32 {
@@ -5726,14 +5700,9 @@ pub fn init(
     let density_graph_graph_w = if density_graph_enabled {
         let mut sidepane_width = sw * 0.5_f32;
         if !is_ultrawide && note_field_is_centered && wide {
-            let nf_width = step_stats_notefield_width(
-                noteskin[0].as_ref().map(Arc::as_ref),
-                cols_per_player,
-                field_zoom[0],
-                spacing_multiplier_for_percent(player_profiles[0].spacing_percent),
-            )
-            .unwrap_or(256.0_f32)
-            .max(1.0_f32);
+            let nf_width = step_stats_notefield_width(cols_per_player)
+                .unwrap_or(256.0_f32)
+                .max(1.0_f32);
             sidepane_width = ((sw - nf_width) * 0.5_f32).max(1.0_f32);
         }
         if is_ultrawide && num_players > 1 {
@@ -7942,8 +7911,9 @@ mod tests {
         row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
         single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
-        stage_music_cut, step_calories, suppress_final_bad_rescore_visual, tick_mode_status_line,
-        tick_visual_effects, turn_option_bits, update_lane_count, visible_notefield_time_ns,
+        stage_music_cut, step_calories, step_stats_notefield_width,
+        suppress_final_bad_rescore_visual, tick_mode_status_line, tick_visual_effects,
+        turn_option_bits, update_lane_count, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEvent, InputSource, VirtualAction};
     use crate::engine::present::color;
@@ -7962,6 +7932,13 @@ mod tests {
     use std::time::{Duration, Instant};
 
     static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    #[test]
+    fn step_stats_notefield_width_matches_sl_style_widths() {
+        assert_eq!(step_stats_notefield_width(4), Some(256.0));
+        assert_eq!(step_stats_notefield_width(8), Some(512.0));
+        assert_eq!(step_stats_notefield_width(0), None);
+    }
 
     struct SessionRestore {
         play_style: profile::PlayStyle,

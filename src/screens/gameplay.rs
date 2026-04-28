@@ -39,6 +39,7 @@ use std::time::Instant;
 
 const TEXT_CACHE_LIMIT: usize = 8192;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
+const INTRO_TEXT_GETWIDTH_PAD: f32 = 0.25;
 
 use crate::game::gameplay::{
     self as gameplay_core, CourseDisplayCarry, CourseDisplayTotals, GameplayAction, GameplayExit,
@@ -227,6 +228,45 @@ fn local_lobby_side_is_active(side: profile::PlayerSide) -> bool {
         profile::PlayerSide::P1 => p1_joined,
         profile::PlayerSide::P2 => p2_joined,
     }
+}
+
+fn intro_text_width(asset_manager: &AssetManager, text: &str) -> f32 {
+    let font_key = current_machine_font_key(FontRole::Header);
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager
+            .with_font(font_key, |f| {
+                font::measure_line_width_logical(f, text, all_fonts) as f32
+            })
+            .unwrap_or(0.0)
+            .max(0.0)
+    })
+}
+
+fn intro_text_target_x(
+    state: &State,
+    asset_manager: &AssetManager,
+    text: &str,
+    play_style: profile::PlayStyle,
+    player_side: profile::PlayerSide,
+    center_1player_notefield: bool,
+) -> f32 {
+    let centered_notefield = state.num_players == 1
+        && (play_style == profile::PlayStyle::Double
+            || (play_style == profile::PlayStyle::Single && center_1player_notefield));
+    if !centered_notefield || state.cols_per_player == 0 {
+        return screen_center_x();
+    }
+
+    // Simply Love ScreenGameplay in/default.lua: when one human player's
+    // notefield is centered, move the Stage/Event text outside GetNotefieldWidth().
+    let side_sign = match player_side {
+        profile::PlayerSide::P1 => -1.0,
+        profile::PlayerSide::P2 => 1.0,
+    };
+    let notefield_width = state.cols_per_player as f32 * 64.0;
+    screen_center_x()
+        + (notefield_width * 0.5 + intro_text_width(asset_manager, text) * INTRO_TEXT_GETWIDTH_PAD)
+            * side_sign
 }
 
 fn gameplay_player_index_for_side(state: &State, side: profile::PlayerSide) -> Option<usize> {
@@ -794,6 +834,12 @@ pub fn prewarm_text_layout(
             cache.prewarm_text(fonts, "miso", text.as_ref(), None);
         }
     }
+    cache.prewarm_text(
+        fonts,
+        current_machine_font_key(FontRole::Header),
+        state.stage_intro_text.as_ref(),
+        None,
+    );
     cache.prewarm_text(fonts, "miso", "Assist Tick", None);
     cache.prewarm_text(fonts, "miso", "Hit Tick", None);
     cache.prewarm_text(fonts, "miso", "AutoSync Song", None);
@@ -834,11 +880,21 @@ pub fn prewarm_text_layout(
 }
 
 // --- TRANSITIONS ---
-pub fn in_transition(state: Option<&State>) -> (Vec<Actor>, f32) {
+pub fn in_transition(state: Option<&State>, asset_manager: &AssetManager) -> (Vec<Actor>, f32) {
     let text = state
         .map(|gs| gs.stage_intro_text.clone())
         .unwrap_or_else(|| Arc::from("EVENT"));
     let intro_color = state.map_or(color::decorative_rgba(0), |gs| gs.player_color);
+    let text_target_x = state.map_or(screen_center_x(), |gs| {
+        intro_text_target_x(
+            gs,
+            asset_manager,
+            text.as_ref(),
+            profile::get_session_play_style(),
+            profile::get_session_player_side(),
+            crate::config::get().center_1player_notefield,
+        )
+    });
     let mut mirrored_splode = act!(sprite("gameplayin_splode.png"):
         align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
         diffuse(intro_color[0], intro_color[1], intro_color[2], 0.8):
@@ -887,7 +943,7 @@ pub fn in_transition(state: Option<&State>) -> (Vec<Actor>, f32) {
             z(1102):
             accelerate(0.5): alpha(1.0):
             sleep(0.66):
-            accelerate(0.33): zoom(0.4): y(screen_height() - 30.0):
+            accelerate(0.33): zoom(0.4): xy(text_target_x, screen_height() - 30.0):
             sleep((TRANSITION_IN_DURATION - INTRO_TEXT_SETTLE_SECONDS).max(0.0))
         ),
     ];
@@ -7044,9 +7100,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     if !state.stage_intro_text.is_empty()
         && state.total_elapsed_in_screen >= INTRO_TEXT_SETTLE_SECONDS
     {
+        let text_x = intro_text_target_x(
+            state,
+            asset_manager,
+            state.stage_intro_text.as_ref(),
+            play_style,
+            player_side,
+            cfg.center_1player_notefield,
+        );
         actors.push(act!(text:
             font(current_machine_font_key(FontRole::Header)): settext(state.stage_intro_text.clone()):
-            align(0.5, 0.5): xy(screen_center_x(), screen_height() - 30.0):
+            align(0.5, 0.5): xy(text_x, screen_height() - 30.0):
             zoom(0.4):
             shadowlength(1.0):
             diffuse(1.0, 1.0, 1.0, 1.0):

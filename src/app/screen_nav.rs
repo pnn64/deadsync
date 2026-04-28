@@ -518,9 +518,10 @@ impl App {
     pub(super) fn get_in_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
         match screen {
             CurrentScreen::Menu => menu::in_transition(),
-            CurrentScreen::Gameplay => {
-                gameplay::in_transition(self.state.screens.gameplay_state.as_ref())
-            }
+            CurrentScreen::Gameplay => gameplay::in_transition(
+                self.state.screens.gameplay_state.as_ref(),
+                &self.asset_manager,
+            ),
             CurrentScreen::Options => options::in_transition(),
             CurrentScreen::Credits => credits::in_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),

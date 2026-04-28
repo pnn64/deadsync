@@ -5,7 +5,7 @@ use deadsync::engine::present::{anim, compose, font};
 use deadsync::test_support::compose_scenarios;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::hash::BuildHasherDefault;
 use std::hint::black_box;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -36,6 +36,9 @@ const SHADOW_BUILD_ITERS: usize = 12_000;
 const SFX_PLAY_ITERS: usize = 80_000;
 const INPUT_LOCK_ITERS: usize = 500_000;
 const VIDEO_FRAME_ITERS: usize = 800;
+const VIDEO_QUEUE_ITERS: usize = 1_200;
+const AUDIO_CLOCK_ITERS: usize = 600_000;
+const CLIP_RECYCLE_ITERS: usize = 18_000;
 
 struct CountingAlloc {
     alloc_calls: AtomicU64,
@@ -209,6 +212,25 @@ struct SfxCommandSim {
     lane: u8,
 }
 
+#[derive(Clone, Copy)]
+struct MusicMapSegSim {
+    stream_frame_start: i64,
+    frames: i64,
+    music_start_sec: f64,
+    music_sec_per_frame: f64,
+}
+
+#[derive(Default)]
+struct PlaybackPosMapSim {
+    queue: VecDeque<MusicMapSegSim>,
+    backlog_frames: i64,
+}
+
+struct QueuedVideoFrameSim {
+    pts_sec: f32,
+    bytes: Vec<u8>,
+}
+
 thread_local! {
     static INPUT_MAP_CACHE_SIM: RefCell<(u64, u64)> = RefCell::new((0, 0));
     static INPUT_DEBOUNCE_STATE_SIM: RefCell<u64> = const { RefCell::new(0) };
@@ -326,7 +348,10 @@ fn main() {
     bench_shadow_build();
     bench_sfx_play_path();
     bench_input_locks();
+    bench_audio_clock_map();
     bench_video_frame_alloc();
+    bench_video_queue_handoff();
+    bench_clip_vertex_recycle();
     bench_sfx_mix();
     bench_transient_tmesh();
     bench_active_sfx_growth();
@@ -527,6 +552,38 @@ fn bench_text_layout_cache_churn() {
         },
     );
 
+    let mut prune_scenario = compose_scenarios::build_scenario("perf-text-plain")
+        .expect("perf-text-plain scenario should exist");
+    let mut prune_cache = compose::TextLayoutCache::pruning(64);
+    let mut prune_scratch = compose::ComposeScratch::default();
+    let mut prune_frame = 0usize;
+    let pruning = bench(
+        "rotating shared text, prune capped 64",
+        COMPOSE_TEXT_CACHE_ITERS,
+        || {
+            let text_count =
+                retarget_text_contents(&mut prune_scenario.actors, &text_pool, prune_frame);
+            prune_frame = prune_frame.wrapping_add(1);
+            prune_cache.begin_frame_stats();
+            let render = compose::build_screen_cached_with_scratch(
+                black_box(&prune_scenario.actors),
+                prune_scenario.clear_color,
+                &prune_scenario.metrics,
+                &prune_scenario.fonts,
+                prune_scenario.total_elapsed,
+                &mut prune_cache,
+                &mut prune_scratch,
+            );
+            let stats = prune_cache.frame_stats();
+            checksum_gfx_render(black_box(&render))
+                .wrapping_add(text_count as u64)
+                .wrapping_add((u64::from(stats.shared_hits)) << 8)
+                .wrapping_add((u64::from(stats.misses)) << 24)
+                .wrapping_add((u64::from(stats.prunes)) << 32)
+                .wrapping_add((u64::from(stats.built_glyphs)) << 40)
+        },
+    );
+
     print_result(&stable);
     print_result(&churn);
     print_ratio(
@@ -534,6 +591,8 @@ fn bench_text_layout_cache_churn() {
         &churn,
         &stable,
     );
+    print_result(&pruning);
+    print_ratio("pruning vs saturating capped cache", &churn, &pruning);
     println!();
 }
 
@@ -734,6 +793,59 @@ fn bench_input_locks() {
     println!();
 }
 
+fn bench_audio_clock_map() {
+    println!("audio playback position map lookup");
+    let seed = make_music_map_segments(256);
+    let stream_span = seed
+        .last()
+        .map(|seg| seg.stream_frame_start + seg.frames)
+        .unwrap_or(1) as f64;
+
+    let map = Mutex::new(playback_map_from_segments(&seed));
+    let empty_pending = Vec::new();
+    let mut stream_frame = 0.0;
+    let double_lock = bench("double Mutex lock, empty drain", AUDIO_CLOCK_ITERS, || {
+        let mut checksum = 0u64;
+        for _ in 0..4 {
+            stream_frame = (stream_frame + 735.0) % stream_span;
+            checksum =
+                checksum.wrapping_add(lookup_music_double_lock(&map, &empty_pending, stream_frame));
+        }
+        checksum
+    });
+
+    let map = Mutex::new(playback_map_from_segments(&seed));
+    let mut stream_frame = 0.0;
+    let single_lock = bench("single Mutex lock, empty drain", AUDIO_CLOCK_ITERS, || {
+        let mut checksum = 0u64;
+        for _ in 0..4 {
+            stream_frame = (stream_frame + 735.0) % stream_span;
+            checksum =
+                checksum.wrapping_add(lookup_music_single_lock(&map, &empty_pending, stream_frame));
+        }
+        checksum
+    });
+
+    let mut map = playback_map_from_segments(&seed);
+    let mut stream_frame = 0.0;
+    let owned = bench("owned map, no Mutex", AUDIO_CLOCK_ITERS, || {
+        let mut checksum = 0u64;
+        for _ in 0..4 {
+            stream_frame = (stream_frame + 735.0) % stream_span;
+            checksum =
+                checksum.wrapping_add(lookup_music_owned(&mut map, &empty_pending, stream_frame));
+        }
+        checksum
+    });
+
+    print_result(&double_lock);
+    print_result(&single_lock);
+    print_ratio("single lock vs double lock", &double_lock, &single_lock);
+    print_result(&owned);
+    print_ratio("owned map vs double lock", &double_lock, &owned);
+    println!();
+}
+
 fn bench_video_frame_alloc() {
     println!("video decoded frame buffer");
     let frame_bytes = 1280 * 720 * 4;
@@ -755,6 +867,108 @@ fn bench_video_frame_alloc() {
     print_result(&allocate);
     print_result(&reuse);
     print_ratio("reused buffer vs allocate", &allocate, &reuse);
+    println!();
+}
+
+fn bench_video_queue_handoff() {
+    println!("video decoded frame queue handoff");
+    let frame_bytes = 640 * 360 * 4;
+    let max_frames = 4usize;
+    let frames_per_iter = 8usize;
+
+    let queue = Mutex::new(VecDeque::<QueuedVideoFrameSim>::with_capacity(max_frames));
+    let mut frame_index = 0u64;
+    let allocate = bench("alloc Vec + Mutex<VecDeque>", VIDEO_QUEUE_ITERS, || {
+        let mut checksum = 0u64;
+        for _ in 0..frames_per_iter {
+            let byte = frame_index as u8;
+            let mut bytes = vec![0u8; frame_bytes];
+            stamp_video_frame(&mut bytes, byte);
+            checksum =
+                checksum.wrapping_add(push_pop_video_frame(&queue, max_frames, frame_index, bytes));
+            frame_index = frame_index.wrapping_add(1);
+        }
+        checksum
+    });
+
+    let queue = Mutex::new(VecDeque::<QueuedVideoFrameSim>::with_capacity(max_frames));
+    let pool = Mutex::new(Vec::<Vec<u8>>::with_capacity(max_frames));
+    let mut frame_index = 0u64;
+    let pooled = bench("pooled Vec + Mutex<VecDeque>", VIDEO_QUEUE_ITERS, || {
+        let mut checksum = 0u64;
+        for _ in 0..frames_per_iter {
+            let mut bytes = {
+                let mut pool = pool.lock().unwrap();
+                pool.pop().unwrap_or_else(|| vec![0u8; frame_bytes])
+            };
+            if bytes.len() != frame_bytes {
+                bytes.resize(frame_bytes, 0);
+            }
+            stamp_video_frame(&mut bytes, frame_index as u8);
+            checksum = checksum.wrapping_add(push_pop_video_frame_pooled(
+                &queue,
+                &pool,
+                max_frames,
+                frame_index,
+                bytes,
+            ));
+            frame_index = frame_index.wrapping_add(1);
+        }
+        checksum
+    });
+
+    let mut queue = VecDeque::<QueuedVideoFrameSim>::with_capacity(max_frames);
+    let mut pool = Vec::<Vec<u8>>::with_capacity(max_frames);
+    let mut frame_index = 0u64;
+    let owned_ring = bench("pooled Vec + owned VecDeque", VIDEO_QUEUE_ITERS, || {
+        let mut checksum = 0u64;
+        for _ in 0..frames_per_iter {
+            let mut bytes = pool.pop().unwrap_or_else(|| vec![0u8; frame_bytes]);
+            if bytes.len() != frame_bytes {
+                bytes.resize(frame_bytes, 0);
+            }
+            stamp_video_frame(&mut bytes, frame_index as u8);
+            checksum = checksum.wrapping_add(push_pop_video_frame_owned(
+                &mut queue,
+                &mut pool,
+                max_frames,
+                frame_index,
+                bytes,
+            ));
+            frame_index = frame_index.wrapping_add(1);
+        }
+        checksum
+    });
+
+    print_result(&allocate);
+    print_result(&pooled);
+    print_ratio("pooled Vec vs allocate", &allocate, &pooled);
+    print_result(&owned_ring);
+    print_ratio("owned queue vs allocate", &allocate, &owned_ring);
+    println!();
+}
+
+fn bench_clip_vertex_recycle() {
+    println!("clipped transient vertex buffer recycle");
+    let meshes = make_clip_meshes(96, 24);
+
+    let local = bench(
+        "single-mask local recycled Vecs",
+        CLIP_RECYCLE_ITERS,
+        || clip_meshes_local_pool(black_box(&meshes)),
+    );
+
+    let mut pool = Vec::<Vec<TexturedMeshVertex>>::new();
+    let mut outputs = Vec::<Vec<TexturedMeshVertex>>::with_capacity(meshes.len());
+    let reused = bench(
+        "scratch recycled Vecs across frames",
+        CLIP_RECYCLE_ITERS,
+        || clip_meshes_reused_pool(black_box(&meshes), &mut pool, &mut outputs),
+    );
+
+    print_result(&local);
+    print_result(&reused);
+    print_ratio("scratch recycle vs local pool", &local, &reused);
     println!();
 }
 
@@ -1639,6 +1853,327 @@ fn checksum_sfx_commands(queue: &[SfxCommandSim]) -> u64 {
             .wrapping_add(cmd.lane as u64);
     }
     out
+}
+
+impl PlaybackPosMapSim {
+    fn insert(&mut self, seg: MusicMapSegSim) {
+        if seg.frames <= 0
+            || !seg.music_start_sec.is_finite()
+            || !seg.music_sec_per_frame.is_finite()
+        {
+            return;
+        }
+        if let Some(last) = self.queue.back_mut() {
+            let contiguous_stream = last.stream_frame_start + last.frames == seg.stream_frame_start;
+            let ratio_match = (last.music_sec_per_frame - seg.music_sec_per_frame).abs() <= 1e-9;
+            let expected_music_start =
+                last.music_start_sec + last.music_sec_per_frame * last.frames as f64;
+            let music_contiguous = (expected_music_start - seg.music_start_sec).abs()
+                <= seg.music_sec_per_frame.abs().max(1e-9);
+            if contiguous_stream && ratio_match && music_contiguous {
+                last.frames += seg.frames;
+                self.backlog_frames = self.backlog_frames.saturating_add(seg.frames);
+                return;
+            }
+        }
+        self.backlog_frames = self.backlog_frames.saturating_add(seg.frames);
+        self.queue.push_back(seg);
+    }
+
+    fn search(&self, stream_frame: f64) -> Option<(f64, f64)> {
+        if self.queue.is_empty() || !stream_frame.is_finite() {
+            return None;
+        }
+        let mut closest = None;
+        let mut closest_dist = f64::INFINITY;
+        for seg in &self.queue {
+            let start = seg.stream_frame_start as f64;
+            let end = start + seg.frames as f64;
+            if stream_frame >= start && stream_frame < end {
+                let diff = stream_frame - start;
+                return Some((
+                    seg.music_start_sec + diff * seg.music_sec_per_frame,
+                    seg.music_sec_per_frame,
+                ));
+            }
+            let start_dist = (stream_frame - start).abs();
+            if start_dist < closest_dist {
+                closest_dist = start_dist;
+                closest = Some((
+                    seg.music_start_sec + (stream_frame - start) * seg.music_sec_per_frame,
+                    seg.music_sec_per_frame,
+                ));
+            }
+            let end_music = seg.music_start_sec + seg.music_sec_per_frame * seg.frames as f64;
+            let end_dist = (stream_frame - end).abs();
+            if end_dist < closest_dist {
+                closest_dist = end_dist;
+                closest = Some((
+                    end_music + (stream_frame - end) * seg.music_sec_per_frame,
+                    seg.music_sec_per_frame,
+                ));
+            }
+        }
+        closest
+    }
+}
+
+fn make_music_map_segments(count: usize) -> Vec<MusicMapSegSim> {
+    let mut out = Vec::with_capacity(count);
+    let mut stream_frame_start = 0i64;
+    let mut music_start_sec = 0.0f64;
+    for i in 0..count {
+        let frames = 256 + (i % 5) as i64 * 64;
+        let music_sec_per_frame = if i % 23 == 0 {
+            1.25 / 48_000.0
+        } else {
+            1.0 / 48_000.0
+        };
+        out.push(MusicMapSegSim {
+            stream_frame_start,
+            frames,
+            music_start_sec,
+            music_sec_per_frame,
+        });
+        stream_frame_start += frames;
+        music_start_sec += frames as f64 * music_sec_per_frame;
+    }
+    out
+}
+
+fn playback_map_from_segments(segments: &[MusicMapSegSim]) -> PlaybackPosMapSim {
+    let mut map = PlaybackPosMapSim::default();
+    map.queue.reserve(segments.len());
+    for &seg in segments {
+        map.insert(seg);
+    }
+    map
+}
+
+fn checksum_music_pos(pos: Option<(f64, f64)>) -> u64 {
+    pos.map_or(0, |(music_sec, sec_per_frame)| {
+        music_sec
+            .to_bits()
+            .wrapping_add(sec_per_frame.to_bits().rotate_left(17))
+    })
+}
+
+fn lookup_music_double_lock(
+    map: &Mutex<PlaybackPosMapSim>,
+    pending: &[MusicMapSegSim],
+    stream_frame: f64,
+) -> u64 {
+    {
+        let mut map = map.lock().unwrap();
+        for &seg in pending {
+            map.insert(seg);
+        }
+    }
+    let map = map.lock().unwrap();
+    checksum_music_pos(map.search(stream_frame))
+}
+
+fn lookup_music_single_lock(
+    map: &Mutex<PlaybackPosMapSim>,
+    pending: &[MusicMapSegSim],
+    stream_frame: f64,
+) -> u64 {
+    let mut map = map.lock().unwrap();
+    for &seg in pending {
+        map.insert(seg);
+    }
+    checksum_music_pos(map.search(stream_frame))
+}
+
+fn lookup_music_owned(
+    map: &mut PlaybackPosMapSim,
+    pending: &[MusicMapSegSim],
+    stream_frame: f64,
+) -> u64 {
+    for &seg in pending {
+        map.insert(seg);
+    }
+    checksum_music_pos(map.search(stream_frame))
+}
+
+fn stamp_video_frame(bytes: &mut [u8], byte: u8) {
+    if bytes.is_empty() {
+        return;
+    }
+    let mid = bytes.len() / 2;
+    bytes[0] = byte;
+    bytes[mid] = byte.wrapping_mul(3);
+    let last = bytes.len() - 1;
+    bytes[last] = byte.wrapping_mul(7);
+}
+
+fn push_pop_video_frame(
+    queue: &Mutex<VecDeque<QueuedVideoFrameSim>>,
+    max_frames: usize,
+    frame_index: u64,
+    bytes: Vec<u8>,
+) -> u64 {
+    let pts_sec = frame_index as f32 * (1.0 / 60.0);
+    let target = pts_sec;
+    let mut queue = queue.lock().unwrap();
+    while queue.len() >= max_frames {
+        let _ = queue.pop_front();
+    }
+    queue.push_back(QueuedVideoFrameSim { pts_sec, bytes });
+    let mut checksum = 0u64;
+    while let Some(frame) = queue.front() {
+        if frame.pts_sec > target {
+            break;
+        }
+        let frame = queue.pop_front().expect("front checked");
+        checksum = checksum.wrapping_add(checksum_bytes(&frame.bytes));
+    }
+    checksum
+}
+
+fn push_pop_video_frame_pooled(
+    queue: &Mutex<VecDeque<QueuedVideoFrameSim>>,
+    pool: &Mutex<Vec<Vec<u8>>>,
+    max_frames: usize,
+    frame_index: u64,
+    bytes: Vec<u8>,
+) -> u64 {
+    let pts_sec = frame_index as f32 * (1.0 / 60.0);
+    let target = pts_sec;
+    let mut recycled = Vec::new();
+    let mut checksum = 0u64;
+    {
+        let mut queue = queue.lock().unwrap();
+        while queue.len() >= max_frames {
+            if let Some(frame) = queue.pop_front() {
+                recycled.push(frame.bytes);
+            }
+        }
+        queue.push_back(QueuedVideoFrameSim { pts_sec, bytes });
+        while let Some(frame) = queue.front() {
+            if frame.pts_sec > target {
+                break;
+            }
+            let frame = queue.pop_front().expect("front checked");
+            checksum = checksum.wrapping_add(checksum_bytes(&frame.bytes));
+            recycled.push(frame.bytes);
+        }
+    }
+    let mut pool = pool.lock().unwrap();
+    for bytes in recycled {
+        if pool.len() < max_frames {
+            pool.push(bytes);
+        }
+    }
+    checksum
+}
+
+fn push_pop_video_frame_owned(
+    queue: &mut VecDeque<QueuedVideoFrameSim>,
+    pool: &mut Vec<Vec<u8>>,
+    max_frames: usize,
+    frame_index: u64,
+    bytes: Vec<u8>,
+) -> u64 {
+    let pts_sec = frame_index as f32 * (1.0 / 60.0);
+    let target = pts_sec;
+    while queue.len() >= max_frames {
+        if let Some(frame) = queue.pop_front()
+            && pool.len() < max_frames
+        {
+            pool.push(frame.bytes);
+        }
+    }
+    queue.push_back(QueuedVideoFrameSim { pts_sec, bytes });
+    let mut checksum = 0u64;
+    while let Some(frame) = queue.front() {
+        if frame.pts_sec > target {
+            break;
+        }
+        let frame = queue.pop_front().expect("front checked");
+        checksum = checksum.wrapping_add(checksum_bytes(&frame.bytes));
+        if pool.len() < max_frames {
+            pool.push(frame.bytes);
+        }
+    }
+    checksum
+}
+
+fn make_clip_meshes(mesh_count: usize, verts_per_mesh: usize) -> Vec<Vec<TexturedMeshVertex>> {
+    let mut meshes = Vec::with_capacity(mesh_count);
+    for mesh in 0..mesh_count {
+        let mut vertices = Vec::with_capacity(verts_per_mesh);
+        for i in 0..verts_per_mesh {
+            let x = ((mesh * 17 + i * 3) % 127) as f32 - 32.0;
+            let y = ((mesh * 11 + i * 5) % 113) as f32 - 28.0;
+            vertices.push(TexturedMeshVertex {
+                pos: [x, y, 0.0],
+                uv: [i as f32 * 0.01, mesh as f32 * 0.01],
+                tex_matrix_scale: [1.0, 1.0],
+                color: [1.0, 0.5, 0.25, 1.0],
+            });
+        }
+        meshes.push(vertices);
+    }
+    meshes
+}
+
+fn clip_meshes_local_pool(meshes: &[Vec<TexturedMeshVertex>]) -> u64 {
+    let mut pool = Vec::<Vec<TexturedMeshVertex>>::new();
+    let mut outputs = Vec::<Vec<TexturedMeshVertex>>::with_capacity(meshes.len());
+    clip_meshes_into(meshes, &mut pool, &mut outputs)
+}
+
+fn clip_meshes_reused_pool(
+    meshes: &[Vec<TexturedMeshVertex>],
+    pool: &mut Vec<Vec<TexturedMeshVertex>>,
+    outputs: &mut Vec<Vec<TexturedMeshVertex>>,
+) -> u64 {
+    recycle_clip_outputs(outputs, pool);
+    clip_meshes_into(meshes, pool, outputs)
+}
+
+fn recycle_clip_outputs(
+    outputs: &mut Vec<Vec<TexturedMeshVertex>>,
+    pool: &mut Vec<Vec<TexturedMeshVertex>>,
+) {
+    for mut vertices in outputs.drain(..) {
+        vertices.clear();
+        if pool.len() < 512 {
+            pool.push(vertices);
+        }
+    }
+}
+
+fn clip_meshes_into(
+    meshes: &[Vec<TexturedMeshVertex>],
+    pool: &mut Vec<Vec<TexturedMeshVertex>>,
+    outputs: &mut Vec<Vec<TexturedMeshVertex>>,
+) -> u64 {
+    let mut checksum = 0u64;
+    for mesh in meshes {
+        let mut out = pool.pop().unwrap_or_default();
+        out.clear();
+        out.reserve(mesh.len().min(48));
+        for vertex in mesh {
+            if vertex.pos[0] >= -24.0
+                && vertex.pos[0] <= 72.0
+                && vertex.pos[1] >= -16.0
+                && vertex.pos[1] <= 80.0
+            {
+                let mut clipped = *vertex;
+                clipped.pos[0] = clipped.pos[0].clamp(-24.0, 72.0);
+                clipped.pos[1] = clipped.pos[1].clamp(-16.0, 80.0);
+                out.push(clipped);
+            }
+        }
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(out.len() as u64)
+            .wrapping_add(out.capacity() as u64);
+        outputs.push(out);
+    }
+    checksum
 }
 
 fn cached_input_map(keymap: &RwLock<u64>, generation: &AtomicU64) -> u64 {
