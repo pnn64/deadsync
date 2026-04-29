@@ -18,6 +18,9 @@ pub use self::keybinds::{
     clear_keymap_binding, update_keymap_binding_unique_gamepad,
     update_keymap_binding_unique_keyboard,
 };
+pub(crate) use self::keybinds::{
+    editable_key_binding_slot_indices, protected_default_key_for_action,
+};
 pub use self::load::{bootstrap_log_to_file, load};
 pub use self::null_or_die_cfg::null_or_die_bias_cfg;
 pub use self::runtime::{

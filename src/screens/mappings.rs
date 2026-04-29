@@ -983,11 +983,7 @@ fn editable_slot_indices_for_action(
     keymap: &crate::engine::input::Keymap,
     action: VirtualAction,
 ) -> (usize, usize) {
-    if keymap.first_key_binding(action).is_some() {
-        (1, 2)
-    } else {
-        (0, 1)
-    }
+    crate::config::editable_key_binding_slot_indices(keymap, action)
 }
 
 pub fn get_actors(
@@ -1310,8 +1306,9 @@ pub fn get_actors(
                 p1_default_text,
                 p2_default_text,
             ) = with_keymap(|keymap| {
-                // Actions with a default key use [default, primary, secondary].
-                // Actions without a default use [primary, secondary].
+                // Actions whose protected default is still present use
+                // [default, primary, secondary]. Others use
+                // [primary, secondary].
                 let p1_slots = p1_act_opt.map(|act| editable_slot_indices_for_action(keymap, act));
                 let p2_slots = p2_act_opt.map(|act| editable_slot_indices_for_action(keymap, act));
                 let p1_primary_text = p1_act_opt
@@ -1328,11 +1325,11 @@ pub fn get_actors(
                     .map_or_else(|| "------".to_string(), format_binding_for_display);
 
                 let p1_default_text = p1_act_opt
-                    .and_then(|act| keymap.first_key_binding(act))
+                    .and_then(|act| crate::config::protected_default_key_for_action(keymap, act))
                     .map(|code| format!("{code:?}"))
                     .unwrap_or_else(|| "------".to_string());
                 let p2_default_text = p2_act_opt
-                    .and_then(|act| keymap.first_key_binding(act))
+                    .and_then(|act| crate::config::protected_default_key_for_action(keymap, act))
                     .map(|code| format!("{code:?}"))
                     .unwrap_or_else(|| "------".to_string());
 
