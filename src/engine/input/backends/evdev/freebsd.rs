@@ -145,7 +145,7 @@ enum ProbeResult {
 #[derive(Default)]
 struct CapabilityBits(Vec<u64>);
 
-static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(true);
+static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(false);
 static KEYBOARD_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(true);
 static KEYBOARD_BACKEND_ACTIVE: AtomicBool = AtomicBool::new(false);
 

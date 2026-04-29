@@ -929,7 +929,10 @@ impl ShellState {
             tab_held: false,
             backquote_held: false,
             tab_acceleration_enabled: cfg.tab_acceleration,
-            window_focused: true,
+            // Default to unfocused so background input backends (Win32 RawInput,
+            // evdev, IOHID) drop globally-observed key events until the window
+            // is created and proven focused.
+            window_focused: false,
             window_occluded: false,
             surface_active: cfg.display_width > 0 && cfg.display_height > 0,
             screenshot_pending: false,
@@ -2622,6 +2625,41 @@ impl App {
             self.state.shell.window_focused,
             self.state.shell.surface_active,
         )
+    }
+
+    /// Apply a window focus change to all subsystems that care about it.
+    ///
+    /// Used by both the `WindowEvent::Focused` handler and the initial focus
+    /// seed performed in `init_graphics` (and on renderer-switch window
+    /// recreation). Always pushes the new focus state to the raw input
+    /// backends so their gating flag stays in sync with the shell, and only
+    /// runs the change-only side effects (capture sync, modifier reset,
+    /// debounce/queue clear, redraw) when the shell focus actually toggled.
+    pub(super) fn apply_window_focus_change(
+        &mut self,
+        focused: bool,
+        now: Instant,
+        window: Option<&Arc<Window>>,
+    ) {
+        input::set_raw_keyboard_window_focused(focused);
+        if !self.state.shell.set_window_focus(focused, now) {
+            return;
+        }
+        self.sync_gameplay_input_capture();
+        debug!(
+            "Window focus changed: focused={} screen={:?}",
+            focused, self.state.screens.current_screen
+        );
+        if !focused {
+            self.state.shell.shift_held = false;
+            self.state.shell.ctrl_held = false;
+            self.state.shell.tab_held = false;
+            self.state.shell.backquote_held = false;
+            input::clear_debounce_state();
+            self.clear_gameplay_input_events();
+        } else if let Some(w) = window {
+            self.request_redraw(w, "focus");
+        }
     }
 
     #[inline(always)]
@@ -7440,25 +7478,7 @@ impl ApplicationHandler<UserEvent> for App {
                 }
             }
             WindowEvent::Focused(focused) => {
-                input::set_raw_keyboard_window_focused(focused);
-                if self.state.shell.set_window_focus(focused, Instant::now()) {
-                    self.sync_gameplay_input_capture();
-                    debug!(
-                        "Window focus changed: focused={} screen={:?}",
-                        focused, self.state.screens.current_screen
-                    );
-                    if !focused {
-                        self.state.shell.shift_held = false;
-                        self.state.shell.ctrl_held = false;
-                        self.state.shell.tab_held = false;
-                        self.state.shell.backquote_held = false;
-                        input::clear_debounce_state();
-                        self.clear_gameplay_input_events();
-                    }
-                    if focused {
-                        self.request_redraw(&window, "focus");
-                    }
-                }
+                self.apply_window_focus_change(focused, Instant::now(), Some(&window));
             }
             WindowEvent::Occluded(occluded) => {
                 if self
@@ -7479,6 +7499,9 @@ impl ApplicationHandler<UserEvent> for App {
             WindowEvent::KeyboardInput {
                 event: key_event, ..
             } => {
+                if !self.accepts_live_input() {
+                    return;
+                }
                 if key_event.state == winit::event::ElementState::Pressed
                     && let Some(text) = key_event.text.as_deref()
                 {
@@ -7579,7 +7602,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Spawn background input backend threads; all input stays decoupled from frame rate.
     let proxy: EventLoopProxy<UserEvent> = event_loop.create_proxy();
-    input::set_raw_keyboard_window_focused(true);
+    // Raw input backends default to "unfocused" until init_graphics seeds the
+    // real focus state from the created window. This prevents global keyboard
+    // input (e.g. Win32 RawInput RIDEV_INPUTSINK, evdev, IOHID) from being
+    // routed into the game while it is launched into the background.
     app.sync_gameplay_input_capture();
     #[cfg(windows)]
     {
