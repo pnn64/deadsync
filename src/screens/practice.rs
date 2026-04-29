@@ -394,11 +394,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 }
 
 fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
-    let notefield = if matches!(state.mode, Mode::Editing) {
+    let mut notefield = if matches!(state.mode, Mode::Editing) {
         practice_notefield_view(state)
     } else {
         gameplay_screen::NotefieldViewOverride::default()
     };
+    notefield.hide_display_mods = true;
     gameplay_screen::ActorViewOverride {
         notefield,
         hide_gameplay_hud: true,

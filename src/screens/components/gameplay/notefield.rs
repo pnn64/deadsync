@@ -947,6 +947,7 @@ pub struct ViewOverride {
     pub center_receptors_y: bool,
     pub receptor_y: Option<f32>,
     pub edit_beat_bars: bool,
+    pub hide_display_mods: bool,
 }
 
 pub struct BuiltNotefield {
@@ -6618,7 +6619,7 @@ pub fn build_bundles_with_view(
     // Simply Love: ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua
     // shows the current mod string for 5s, then decelerates out over 0.5s.
     // Arrow Cloud/zmod add a CMod warning below this block for ITL no-CMod charts.
-    {
+    if !view.hide_display_mods {
         // Simply Love DisplayMods.lua uses sleep(5), but ScreenGameplay in/default.lua
         // keeps a full-screen intro cover up for 2.0s. Since deadsync's gameplay
         // in-transition cover is shorter, subtract the exact missing cover time so
