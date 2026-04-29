@@ -78,6 +78,7 @@ bitflags! {
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct ResultsExtrasMask: u8 {
         const TRACK_EARLY_JUDGMENTS = 1 << 0;
+        const SCALE_SCATTERPLOT     = 1 << 1;
     }
 }
 

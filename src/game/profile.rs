@@ -634,6 +634,10 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         i32::from(options.track_early_judgments)
     ));
     content.push_str(&format!(
+        "ScaleScatterplot={}\n",
+        i32::from(options.scale_scatterplot)
+    ));
+    content.push_str(&format!(
         "CustomFantasticWindow={}\n",
         i32::from(options.custom_fantastic_window)
     ));
@@ -939,6 +943,11 @@ fn load_player_options(
         .get(section, "TrackEarlyJudgments")
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.track_early_judgments, |v| v != 0);
+    options.scale_scatterplot = profile_conf
+        .get(section, "ScaleScatterplot")
+        .or_else(|| profile_conf.get(section, "ScatterplotGreatMax"))
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.scale_scatterplot, |v| v != 0);
     options.custom_fantastic_window = profile_conf
         .get(section, "CustomFantasticWindow")
         .and_then(|s| s.parse::<u8>().ok())
@@ -1858,6 +1867,44 @@ pub const fn clamp_custom_fantastic_window_ms(ms: u8) -> u8 {
     }
 }
 
+/// Selectable scatter-plot scale boundary used by `ScatterPlotConfig`
+/// in `screens::evaluation`. Mirrors the standard judgment tiers plus
+/// FA+ W0 so the plot floor can be tightened down to the Fantastic+
+/// window when desired.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScatterWindow {
+    FantasticPlus,
+    Fantastic,
+    Excellent,
+    Great,
+    Decent,
+    WayOff,
+}
+
+impl ScatterWindow {
+    /// Resolve the window edge in milliseconds against the active
+    /// timing profile (FA+ W0 is layered on top of the standard W1..W5
+    /// in deadsync, so it has its own constant).
+    #[inline]
+    pub fn ms(self) -> f32 {
+        let tw = crate::game::timing::effective_windows_ms();
+        match self {
+            ScatterWindow::FantasticPlus => crate::game::timing::FA_PLUS_W0_MS,
+            ScatterWindow::Fantastic => tw[0],
+            ScatterWindow::Excellent => tw[1],
+            ScatterWindow::Great => tw[2],
+            ScatterWindow::Decent => tw[3],
+            ScatterWindow::WayOff => tw[4],
+        }
+    }
+}
+
+impl Default for ScatterWindow {
+    fn default() -> Self {
+        ScatterWindow::WayOff
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TimingWindowsOption {
     #[default]
@@ -2492,6 +2539,7 @@ pub struct PlayerOptionsData {
     pub fa_plus_10ms_blue_window: bool,
     pub split_15_10ms: bool,
     pub track_early_judgments: bool,
+    pub scale_scatterplot: bool,
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
     pub judgment_tilt: bool,
@@ -2585,6 +2633,7 @@ fn default_player_options() -> PlayerOptionsData {
         fa_plus_10ms_blue_window: false,
         split_15_10ms: false,
         track_early_judgments: false,
+        scale_scatterplot: false,
         custom_fantastic_window: false,
         custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
         judgment_tilt: false,
@@ -2715,6 +2764,11 @@ pub struct Profile {
     pub split_15_10ms: bool,
     // Track and display per-column early judgment counts on evaluation (zmod/Arrow Cloud semantics).
     pub track_early_judgments: bool,
+    // Constrain the evaluation scatter plot's vertical scale to a Great
+    // upper cap and a Fantastic lower floor (zmod's `ScaleGraph`-style
+    // toggle). Off uses the original behavior of an Excellent floor with
+    // no upper cap.
+    pub scale_scatterplot: bool,
     // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
@@ -2876,6 +2930,7 @@ impl Default for Profile {
             fa_plus_10ms_blue_window: player_options.fa_plus_10ms_blue_window,
             split_15_10ms: player_options.split_15_10ms,
             track_early_judgments: player_options.track_early_judgments,
+            scale_scatterplot: player_options.scale_scatterplot,
             custom_fantastic_window: player_options.custom_fantastic_window,
             custom_fantastic_window_ms: player_options.custom_fantastic_window_ms,
             judgment_tilt: player_options.judgment_tilt,
@@ -3030,6 +3085,7 @@ impl Profile {
             fa_plus_10ms_blue_window: self.fa_plus_10ms_blue_window,
             split_15_10ms: self.split_15_10ms,
             track_early_judgments: self.track_early_judgments,
+            scale_scatterplot: self.scale_scatterplot,
             custom_fantastic_window: self.custom_fantastic_window,
             custom_fantastic_window_ms: self.custom_fantastic_window_ms,
             judgment_tilt: self.judgment_tilt,
@@ -3125,6 +3181,7 @@ impl Profile {
         self.fa_plus_10ms_blue_window = options.fa_plus_10ms_blue_window;
         self.split_15_10ms = options.split_15_10ms;
         self.track_early_judgments = options.track_early_judgments;
+        self.scale_scatterplot = options.scale_scatterplot;
         self.custom_fantastic_window = options.custom_fantastic_window;
         self.custom_fantastic_window_ms = options.custom_fantastic_window_ms;
         self.judgment_tilt = options.judgment_tilt;

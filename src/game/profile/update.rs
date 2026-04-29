@@ -766,6 +766,18 @@ pub fn update_track_early_judgments_for_side(side: PlayerSide, enabled: bool) {
     save_profile_ini_for_side(side);
 }
 
+pub fn update_scale_scatterplot_for_side(side: PlayerSide, enabled: bool) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.scale_scatterplot == enabled {
+            return;
+        }
+        profile.scale_scatterplot = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_split_15_10ms_for_side(side: PlayerSide, enabled: bool) {
     {
         let mut profiles = lock_profiles();

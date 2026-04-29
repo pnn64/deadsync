@@ -903,21 +903,22 @@ pub(super) fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
-    let bit = if choice_index < 1 {
-        ResultsExtrasMask::from_bits_truncate(1u8 << (choice_index as u8))
-    } else {
-        ResultsExtrasMask::empty()
+    let bit = match choice_index {
+        0 => ResultsExtrasMask::TRACK_EARLY_JUDGMENTS,
+        1 => ResultsExtrasMask::SCALE_SCATTERPLOT,
+        _ => return,
     };
-    if bit.is_empty() {
-        return;
-    }
 
     state.option_masks[idx].results_extras.toggle(bit);
 
     let track_early_judgments = state.option_masks[idx]
         .results_extras
         .contains(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
+    let scale_scatterplot = state.option_masks[idx]
+        .results_extras
+        .contains(ResultsExtrasMask::SCALE_SCATTERPLOT);
     state.player_profiles[idx].track_early_judgments = track_early_judgments;
+    state.player_profiles[idx].scale_scatterplot = scale_scatterplot;
 
     let play_style = crate::game::profile::get_session_play_style();
     let should_persist = play_style == crate::game::profile::PlayStyle::Versus
@@ -929,6 +930,7 @@ pub(super) fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
             crate::game::profile::PlayerSide::P2
         };
         crate::game::profile::update_track_early_judgments_for_side(side, track_early_judgments);
+        crate::game::profile::update_scale_scatterplot_for_side(side, scale_scatterplot);
     }
 
     audio::play_sfx("assets/sounds/change_value.ogg");
