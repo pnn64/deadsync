@@ -45,6 +45,9 @@ const RELOAD_BAR_H: f32 = 30.0;
 /* -------------------------- hold-to-scroll timing ------------------------- */
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(300);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
+const MAX_FPS_HOLD_FAST_AFTER: Duration = Duration::from_millis(700);
+const MAX_FPS_HOLD_FASTER_AFTER: Duration = Duration::from_millis(1200);
+const MAX_FPS_HOLD_FASTEST_AFTER: Duration = Duration::from_millis(1800);
 
 /* ----------------------------- cursor tweening ----------------------------- */
 // Simply Love metrics.ini uses 0.1 for both [ScreenOptions] TweenSeconds and CursorTweenSeconds.
@@ -1373,7 +1376,7 @@ const ADVANCED_SONG_PARSING_THREADS_ROW_INDEX: usize = 3;
 
 const MAX_FPS_MIN: u16 = 5;
 const MAX_FPS_MAX: u16 = 1000;
-const MAX_FPS_STEP: u16 = 5;
+const MAX_FPS_STEP: u16 = 1;
 const MAX_FPS_DEFAULT: u16 = 60;
 const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
 
@@ -3773,10 +3776,6 @@ fn build_max_fps_choices() -> Vec<u16> {
     out
 }
 
-fn max_fps_choice_labels(values: &[u16]) -> Vec<String> {
-    values.iter().map(ToString::to_string).collect()
-}
-
 #[inline(always)]
 const fn clamped_max_fps(max_fps: u16) -> u16 {
     if max_fps < MAX_FPS_MIN {
@@ -3801,6 +3800,15 @@ fn max_fps_choice_index(values: &[u16], max_fps: u16) -> usize {
 
 fn max_fps_from_choice(values: &[u16], idx: usize) -> u16 {
     values.get(idx).copied().unwrap_or(MAX_FPS_DEFAULT)
+}
+
+fn selected_max_fps_label(state: &State) -> String {
+    let idx = state
+        .sub_choice_indices_graphics
+        .get(MAX_FPS_VALUE_ROW_INDEX)
+        .copied()
+        .unwrap_or(0);
+    max_fps_from_choice(&state.max_fps_choices, idx).to_string()
 }
 
 #[inline(always)]
@@ -3868,6 +3876,59 @@ fn set_max_fps_value_choice_index(state: &mut State, idx: usize) {
     {
         *slot = clamped;
     }
+}
+
+fn adjust_max_fps_value_choice(state: &mut State, delta: isize, wrap: NavWrap) -> bool {
+    let n = state.max_fps_choices.len() as isize;
+    if n == 0 {
+        return false;
+    }
+    let current = state
+        .sub_cursor_indices_graphics
+        .get(MAX_FPS_VALUE_ROW_INDEX)
+        .copied()
+        .unwrap_or(0)
+        .min(state.max_fps_choices.len().saturating_sub(1)) as isize;
+    let raw = current + delta;
+    let new_index = match wrap {
+        NavWrap::Wrap => raw.rem_euclid(n) as usize,
+        NavWrap::Clamp => raw.clamp(0, n - 1) as usize,
+    };
+    if new_index == current as usize {
+        return false;
+    }
+    set_max_fps_value_choice_index(state, new_index);
+    true
+}
+
+fn current_submenu_row_id(state: &State) -> Option<(SubmenuKind, SubRowId)> {
+    let kind = match state.view {
+        OptionsView::Submenu(kind) => kind,
+        OptionsView::Main => return None,
+    };
+    let row_idx = submenu_visible_row_to_actual(state, kind, state.sub_selected)?;
+    submenu_rows(kind).get(row_idx).map(|row| (kind, row.id))
+}
+
+#[inline(always)]
+fn on_max_fps_value_row(state: &State) -> bool {
+    matches!(
+        current_submenu_row_id(state),
+        Some((SubmenuKind::Graphics, SubRowId::MaxFpsValue))
+    )
+}
+
+fn max_fps_hold_delta(delta: isize, held_for: Duration) -> isize {
+    let multiplier = if held_for >= MAX_FPS_HOLD_FASTEST_AFTER {
+        50
+    } else if held_for >= MAX_FPS_HOLD_FASTER_AFTER {
+        25
+    } else if held_for >= MAX_FPS_HOLD_FAST_AFTER {
+        10
+    } else {
+        5
+    };
+    delta * multiplier
 }
 
 #[inline(always)]
@@ -4789,12 +4850,7 @@ fn row_choices(
                 .collect();
         }
         if row.id == SubRowId::MaxFpsValue {
-            return state
-                .max_fps_labels
-                .iter()
-                .cloned()
-                .map(Cow::Owned)
-                .collect();
+            return vec![Cow::Owned(selected_max_fps_label(state))];
         }
         if row.id == SubRowId::DisplayMode {
             return state
@@ -5979,7 +6035,6 @@ pub struct State {
     software_thread_choices: Vec<u8>,
     software_thread_labels: Vec<String>,
     max_fps_choices: Vec<u16>,
-    max_fps_labels: Vec<String>,
     resolution_choices: Vec<(u32, u32)>,
     refresh_rate_choices: Vec<u32>, // New: stored in millihertz
     // Hardware info
@@ -6012,7 +6067,6 @@ pub fn init() -> State {
     let software_thread_choices = build_software_thread_choices();
     let software_thread_labels = software_thread_choice_labels(&software_thread_choices);
     let max_fps_choices = build_max_fps_choices();
-    let max_fps_labels = max_fps_choice_labels(&max_fps_choices);
     let sound_device_options = build_sound_device_options();
     #[cfg(target_os = "linux")]
     let linux_backend_choices = build_linux_backend_choices();
@@ -6143,7 +6197,6 @@ pub fn init() -> State {
         software_thread_choices,
         software_thread_labels,
         max_fps_choices,
-        max_fps_labels,
         resolution_choices: Vec::new(),
         refresh_rate_choices: Vec::new(),
         monitor_specs: Vec::new(),
@@ -7783,11 +7836,16 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             && now.duration_since(last_adjusted) >= NAV_REPEAT_SCROLL_INTERVAL
             && matches!(state.view, OptionsView::Submenu(_))
         {
+            let repeat_delta = if on_max_fps_value_row(state) {
+                max_fps_hold_delta(delta_lr, now.duration_since(held_since))
+            } else {
+                delta_lr
+            };
             if pending_action.is_none() {
                 pending_action =
-                    apply_submenu_choice_delta(state, asset_manager, delta_lr, NavWrap::Clamp);
+                    apply_submenu_choice_delta(state, asset_manager, repeat_delta, NavWrap::Clamp);
             } else {
-                apply_submenu_choice_delta(state, asset_manager, delta_lr, NavWrap::Clamp);
+                apply_submenu_choice_delta(state, asset_manager, repeat_delta, NavWrap::Clamp);
             }
             state.nav_lr_last_adjusted_at = Some(now);
         }
@@ -8127,6 +8185,13 @@ fn apply_submenu_choice_delta(
                 }
                 _ => {}
             }
+        }
+        if matches!(kind, SubmenuKind::Graphics) && row.id == SubRowId::MaxFpsValue {
+            if adjust_max_fps_value_choice(state, delta, wrap) {
+                audio::play_sfx("assets/sounds/change_value.ogg");
+                clear_render_cache(state);
+            }
+            return None;
         }
     }
 
@@ -10880,7 +10945,7 @@ mod tests {
     use super::*;
     use crate::assets::AssetManager;
     use crate::engine::input::{InputEvent, InputSource, VirtualAction};
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
 
     fn press(
         state: &mut State,
@@ -10920,6 +10985,25 @@ mod tests {
         assert_eq!(selected_aspect_label(&state), "4:3");
         assert_eq!(selected_resolution(&state), (1024, 768));
         assert!(state.resolution_choices.contains(&(1024, 768)));
+    }
+
+    #[test]
+    fn max_fps_choices_are_single_fps_steps() {
+        let choices = build_max_fps_choices();
+
+        assert_eq!(choices.first().copied(), Some(MAX_FPS_MIN));
+        assert_eq!(choices.get(1).copied(), Some(MAX_FPS_MIN + 1));
+        assert!(choices.contains(&60));
+        assert!(choices.contains(&600));
+        assert_eq!(choices.last().copied(), Some(MAX_FPS_MAX));
+    }
+
+    #[test]
+    fn max_fps_hold_delta_accelerates() {
+        assert_eq!(max_fps_hold_delta(1, Duration::from_millis(300)), 5);
+        assert_eq!(max_fps_hold_delta(1, Duration::from_millis(700)), 10);
+        assert_eq!(max_fps_hold_delta(1, Duration::from_millis(1200)), 25);
+        assert_eq!(max_fps_hold_delta(-1, Duration::from_millis(1800)), -50);
     }
 
     #[test]
