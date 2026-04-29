@@ -1332,12 +1332,18 @@ fn build_pack_banner(
     } else {
         0.25
     };
-    let song_x = layout.sidepane_center_x
-        + song_banner_local_x(layout, wide, player_side, state.num_players)
-            * layout.banner_data_zoom;
-    let song_w = STEP_STATS_BANNER_W * STEP_STATS_SONG_BANNER_ZOOM * layout.banner_data_zoom;
-    let pack_w = STEP_STATS_BANNER_W * final_size * layout.banner_data_zoom;
-    let x = song_x - song_w * 0.5 + pack_w * 0.5;
+    // Arrow Cloud Banner2.lua parity for non-double Step Statistics. The
+    // doubles-specific renderer handles its separate left-edge alignment.
+    let final_offset = if layout.note_field_is_centered {
+        -115.0
+    } else {
+        -160.0
+    };
+    let side_sign = match player_side {
+        profile::PlayerSide::P1 => 1.0,
+        profile::PlayerSide::P2 => -1.0,
+    };
+    let x = layout.sidepane_center_x + final_offset * side_sign * layout.banner_data_zoom;
     let y = layout.sidepane_center_y + (20.0 * layout.banner_data_zoom);
 
     actors.push(act!(sprite(pack_key):
