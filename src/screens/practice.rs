@@ -25,7 +25,8 @@ const EDIT_MENU_ROW_HEIGHT: f32 = 34.0;
 const EDIT_MENU_ROW_BG_HEIGHT: f32 = 30.0;
 const EDIT_MENU_TEXT_ZOOM: f32 = 1.35;
 const EDIT_HELP_HEADER_ZOOM: f32 = 0.26;
-const EDIT_HELP_RULE_Y_OFFSET: f32 = 5.0;
+const EDIT_HELP_MENU_Y: f32 = 150.0;
+const EDIT_HELP_MISC_Y: f32 = 224.0;
 const EDIT_FIELD_ZOOM_AT_480P: f32 = 0.5;
 const EDIT_FIELD_HEIGHT_AT_480P: f32 = 360.0;
 const EDIT_SNAP_CURSOR_ZOOM: f32 = 0.5;
@@ -66,7 +67,7 @@ pub struct State {
     selection_end: Option<f32>,
     shift_anchor: Option<f32>,
     snap_index: usize,
-    scroll_speed_index: usize,
+    edit_scroll_speed_index: usize,
     shift_held: bool,
     ctrl_held: bool,
     cursor_hold_dir: Option<CursorHoldDir>,
@@ -139,9 +140,7 @@ const SNAP_BEATS: [f32; 9] = [
 
 pub fn init(mut gameplay: gameplay_screen::State) -> State {
     gameplay_core::disable_score_for_practice(&mut gameplay);
-    gameplay_core::seek_practice_display(&mut gameplay, 0.0);
-    let scroll_speed_index = edit_scroll_speed_index(gameplay.scroll_speed[0]);
-    State {
+    let mut state = State {
         gameplay,
         mode: Mode::Editing,
         menu: None,
@@ -150,7 +149,7 @@ pub fn init(mut gameplay: gameplay_screen::State) -> State {
         selection_end: None,
         shift_anchor: None,
         snap_index: 0,
-        scroll_speed_index,
+        edit_scroll_speed_index: 0,
         shift_held: false,
         ctrl_held: false,
         cursor_hold_dir: None,
@@ -159,12 +158,14 @@ pub fn init(mut gameplay: gameplay_screen::State) -> State {
         cursor_hold_delay_left: 0.0,
         cursor_hold_repeat_left: EDIT_CURSOR_REPEAT_INTERVAL_SECONDS,
         flash: None,
-    }
+    };
+    set_cursor(&mut state, MIN_CURSOR_BEAT);
+    state
 }
 
 pub fn on_enter(state: &mut State) {
     audio::stop_music();
-    gameplay_core::seek_practice_display(&mut state.gameplay, 0.0);
+    set_cursor(state, state.cursor_beat);
 }
 
 pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
@@ -394,7 +395,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
 fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
     let notefield = if matches!(state.mode, Mode::Editing) {
-        practice_notefield_view()
+        practice_notefield_view(state)
     } else {
         gameplay_screen::NotefieldViewOverride::default()
     };
@@ -404,9 +405,10 @@ fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
     }
 }
 
-fn practice_notefield_view() -> gameplay_screen::NotefieldViewOverride {
+fn practice_notefield_view(state: &State) -> gameplay_screen::NotefieldViewOverride {
     gameplay_screen::NotefieldViewOverride {
         field_zoom: Some(practice_edit_field_zoom()),
+        scroll_speed: Some(practice_edit_scroll_speed(state)),
         force_center_1player: true,
         receptor_y: Some(practice_edit_cursor_y()),
         edit_beat_bars: true,
@@ -420,6 +422,10 @@ fn practice_edit_field_zoom() -> f32 {
 
 fn practice_edit_cursor_y() -> f32 {
     screen_center_y() - screen_height() / 480.0 * EDIT_FIELD_HEIGHT_AT_480P * 0.5
+}
+
+fn practice_edit_scroll_speed(state: &State) -> ScrollSpeedSetting {
+    ScrollSpeedSetting::XMod(EDIT_SCROLL_SPEEDS[state.edit_scroll_speed_index])
 }
 
 fn practice_marker_bar_height() -> f32 {
@@ -776,29 +782,13 @@ fn change_snap(state: &mut State, delta: isize) {
     audio::play_sfx(EDIT_SNAP_SOUND);
 }
 
-fn edit_scroll_speed_index(speed: ScrollSpeedSetting) -> usize {
-    let ScrollSpeedSetting::XMod(value) = speed else {
-        return 0;
-    };
-    EDIT_SCROLL_SPEEDS
-        .iter()
-        .position(|speed| (*speed - value).abs() <= 0.001)
-        .unwrap_or(0)
-}
-
 fn change_edit_scroll_speed(state: &mut State, delta: isize) {
     let last = EDIT_SCROLL_SPEEDS.len() as isize - 1;
-    let next = (state.scroll_speed_index as isize + delta).clamp(0, last) as usize;
-    if next == state.scroll_speed_index {
+    let next = (state.edit_scroll_speed_index as isize + delta).clamp(0, last) as usize;
+    if next == state.edit_scroll_speed_index {
         return;
     }
-    state.scroll_speed_index = next;
-
-    let speed = ScrollSpeedSetting::XMod(EDIT_SCROLL_SPEEDS[next]);
-    for player in 0..state.gameplay.num_players {
-        state.gameplay.scroll_speed[player] = speed;
-    }
-    set_cursor(state, state.cursor_beat);
+    state.edit_scroll_speed_index = next;
     state.flash = Some(("Zoom changed", 0.75));
     audio::play_sfx(EDIT_MARKER_SOUND);
 }
@@ -1051,7 +1041,8 @@ fn marker_y_for_beat(
     let field_zoom = practice_edit_field_zoom();
     let timing = &state.gameplay.timing_players[player_idx];
     let current_time_ns = state.gameplay.current_music_time_visible_ns[player_idx];
-    let travel = match state.gameplay.scroll_speed[player_idx] {
+    let scroll_speed = practice_edit_scroll_speed(state);
+    let travel = match scroll_speed {
         ScrollSpeedSetting::CMod(c_bpm) => {
             let rate = if state.gameplay.music_rate.is_finite() && state.gameplay.music_rate > 0.0 {
                 state.gameplay.music_rate
@@ -1066,7 +1057,7 @@ fn marker_y_for_beat(
         ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
             let current_beat = state.gameplay.current_beat_visible[player_idx];
             let speed_multiplier = timing.get_speed_multiplier_ns(current_beat, current_time_ns);
-            let player_multiplier = state.gameplay.scroll_speed[player_idx].beat_multiplier(
+            let player_multiplier = scroll_speed.beat_multiplier(
                 state.gameplay.scroll_reference_bpm,
                 state.gameplay.music_rate,
             );
@@ -1143,19 +1134,19 @@ fn append_snap_cursor_heart(actors: &mut Vec<Actor>, x: f32, y: f32, zoom: f32, 
 }
 
 fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
-    let pc = state.gameplay.player_color;
+    let pc = practice_player_color(state);
     actors.push(act!(text:
-        font("miso"):
+        font(current_machine_font_key(FontRole::Header)):
         settext("PRACTICE MODE"):
-        align(1.0, 0.0):
+        align(1.0, 0.5):
         xy(screen_width() - 35.0, 10.0):
-        zoom(0.8):
+        zoom(EDIT_HELP_HEADER_ZOOM):
         diffuse(pc[0], pc[1], pc[2], 1.0):
         z(3000)
     ));
     actors.push(act!(quad:
-        align(1.0, 0.0):
-        xy(screen_width() - 4.0, 22.0):
+        align(1.0, 0.5):
+        xy(screen_width(), 10.0):
         zoomto(30.0, 1.0):
         diffuse(1.0, 1.0, 1.0, 0.75):
         z(2999)
@@ -1173,14 +1164,14 @@ fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
         actors,
         "Available Menus",
         "Escape\\Enter:\n     Main Menu\nF1:\n     Open Help Menu",
-        130.0,
+        EDIT_HELP_MENU_Y,
         pc,
     );
     append_help_section(
         actors,
         "Misc.",
         "Space:\n     Set area marker\nShift+Navigate:\n     Select area",
-        176.0,
+        EDIT_HELP_MISC_Y,
         pc,
     );
     actors.push(act!(text:
@@ -1206,6 +1197,10 @@ fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
             z(3001)
         ));
     }
+}
+
+fn practice_player_color(state: &State) -> [f32; 4] {
+    color::simply_love_rgba(state.gameplay.active_color_index)
 }
 
 fn edit_info_text(state: &State) -> String {
@@ -1373,7 +1368,7 @@ fn append_help_section(
     actors.push(act!(text:
         font(current_machine_font_key(FontRole::Header)):
         settext(label):
-        align(0.0, 0.0):
+        align(0.0, 0.5):
         xy(35.0, y + 10.0):
         zoom(EDIT_HELP_HEADER_ZOOM):
         diffuse(player_color[0], player_color[1], player_color[2], 1.0):
@@ -1381,7 +1376,7 @@ fn append_help_section(
     ));
     actors.push(act!(quad:
         align(0.0, 0.5):
-        xy(0.0, y + 10.0 + EDIT_HELP_RULE_Y_OFFSET):
+        xy(0.0, y + 10.0):
         zoomto(30.0, 1.0):
         diffuse(1.0, 1.0, 1.0, 0.75):
         z(2999)

@@ -31,6 +31,7 @@ use crate::game::{
     gameplay::{ActiveHold, LaneIndexRun, PlayerRuntime, SongTimeNs, State},
     profile, scores,
     scroll::ScrollSpeedSetting,
+    timing::{TimeSignatureSegment, beat_to_note_row, default_time_signature, note_row_to_beat},
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
@@ -160,19 +161,24 @@ const BEAT_PI_HEIGHT: f32 = 2.0;
 const CENTER_LINE_Y: f32 = 160.0;
 const FADE_DIST_Y: f32 = 40.0;
 
+#[derive(Clone, Copy)]
+struct EditBeatBarInfo {
+    frame: u32,
+    measure_index: Option<i64>,
+}
+
 fn append_edit_measure_number(
     actors: &mut Vec<Actor>,
     edit_beat_bars: bool,
-    beat_unit: i64,
+    measure_index: Option<i64>,
     x: f32,
     y: f32,
     field_zoom: f32,
 ) {
-    if !edit_beat_bars || beat_unit.rem_euclid(16) != 0 {
+    let Some(measure) = measure_index else {
         return;
-    }
-    let measure = beat_unit.div_euclid(16);
-    if measure < 0 {
+    };
+    if !edit_beat_bars || measure < 0 {
         return;
     }
     actors.push(act!(text:
@@ -191,7 +197,7 @@ fn append_edit_measure_number(
 fn append_beat_bar(
     actors: &mut Vec<Actor>,
     edit_beat_bars: bool,
-    beat_unit: i64,
+    edit_bar_frame: u32,
     x_center: f32,
     y: f32,
     width: f32,
@@ -201,7 +207,14 @@ fn append_beat_bar(
 ) {
     if edit_beat_bars {
         append_edit_beat_bar(
-            actors, beat_unit, x_center, y, width, field_zoom, thickness, alpha,
+            actors,
+            edit_bar_frame,
+            x_center,
+            y,
+            width,
+            field_zoom,
+            thickness,
+            alpha,
         );
     } else {
         actors.push(act!(quad:
@@ -215,7 +228,7 @@ fn append_beat_bar(
 
 fn append_edit_beat_bar(
     actors: &mut Vec<Actor>,
-    beat_unit: i64,
+    frame: u32,
     x_center: f32,
     y: f32,
     width: f32,
@@ -223,7 +236,7 @@ fn append_edit_beat_bar(
     thickness: f32,
     alpha: f32,
 ) {
-    match edit_beat_bar_frame(beat_unit) {
+    match frame {
         0 | 1 => append_edit_bar_segment(actors, x_center, y, width, thickness, alpha),
         2 => append_dashed_edit_bar(
             actors,
@@ -293,17 +306,140 @@ fn append_dashed_edit_bar(
     }
 }
 
-fn edit_beat_bar_frame(beat_unit: i64) -> u32 {
-    let i = beat_unit.rem_euclid(16);
-    if i == 0 {
+fn valid_edit_time_signature(sig: TimeSignatureSegment) -> TimeSignatureSegment {
+    if sig.numerator > 0 && sig.denominator > 0 {
+        sig
+    } else {
+        default_time_signature()
+    }
+}
+
+fn edit_time_signature_at(segments: &[TimeSignatureSegment], index: usize) -> TimeSignatureSegment {
+    if segments.is_empty() {
+        default_time_signature()
+    } else {
+        valid_edit_time_signature(segments[index])
+    }
+}
+
+fn edit_time_signature_count(segments: &[TimeSignatureSegment]) -> usize {
+    segments.len().max(1)
+}
+
+fn edit_bar_step_rows(sig: TimeSignatureSegment) -> i32 {
+    (beat_to_note_row(sig.denominator as f32 / 4.0) / 4).max(1)
+}
+
+fn edit_measure_frequency(sig: TimeSignatureSegment) -> i32 {
+    sig.numerator.saturating_mul(4).max(1)
+}
+
+fn edit_measure_bars_in_segment(start_row: i32, end_row: i32, sig: TimeSignatureSegment) -> i64 {
+    if end_row <= start_row {
+        return 0;
+    }
+    let step = i64::from(edit_bar_step_rows(sig));
+    let freq = i64::from(edit_measure_frequency(sig));
+    let bars = (i64::from(end_row) - i64::from(start_row) - 1) / step + 1;
+    (bars - 1) / freq + 1
+}
+
+fn edit_measure_index_before_segment(
+    segments: &[TimeSignatureSegment],
+    segment_index: usize,
+) -> i64 {
+    let mut measure_index = 0;
+    for i in 0..segment_index {
+        let sig = edit_time_signature_at(segments, i);
+        let next_sig = edit_time_signature_at(segments, i + 1);
+        measure_index += edit_measure_bars_in_segment(
+            beat_to_note_row(sig.beat),
+            beat_to_note_row(next_sig.beat),
+            sig,
+        );
+    }
+    measure_index
+}
+
+fn edit_time_signature_index_at_row(segments: &[TimeSignatureSegment], row: i32) -> usize {
+    if segments.is_empty() {
+        return 0;
+    }
+
+    let mut index = 0;
+    for (i, sig) in segments.iter().enumerate() {
+        if beat_to_note_row(sig.beat) <= row {
+            index = i;
+        } else {
+            break;
+        }
+    }
+    index
+}
+
+fn edit_beat_bar_info_for_row(
+    row: i32,
+    segments: &[TimeSignatureSegment],
+) -> Option<EditBeatBarInfo> {
+    if row < 0 {
+        return None;
+    }
+
+    let segment_index = edit_time_signature_index_at_row(segments, row);
+    let sig = edit_time_signature_at(segments, segment_index);
+    let segment_start_row = beat_to_note_row(sig.beat);
+    if row < segment_start_row {
+        return None;
+    }
+
+    let step_rows = edit_bar_step_rows(sig);
+    let local_rows = row - segment_start_row;
+    if local_rows % step_rows != 0 {
+        return None;
+    }
+
+    let bars_drawn = local_rows / step_rows;
+    let measure_frequency = edit_measure_frequency(sig);
+    let is_measure = bars_drawn % measure_frequency == 0;
+    let frame = if is_measure {
         0
-    } else if i % 4 == 0 {
+    } else if bars_drawn % 4 == 0 {
         1
-    } else if i % 2 == 0 {
+    } else if bars_drawn % 2 == 0 {
         2
     } else {
         3
+    };
+    let measure_index = is_measure.then(|| {
+        edit_measure_index_before_segment(segments, segment_index)
+            + i64::from(bars_drawn / measure_frequency)
+    });
+
+    Some(EditBeatBarInfo {
+        frame,
+        measure_index,
+    })
+}
+
+fn edit_bar_gcd(a: i32, b: i32) -> i32 {
+    let mut a = i64::from(a).abs();
+    let mut b = i64::from(b).abs();
+    while b != 0 {
+        let next = a % b;
+        a = b;
+        b = next;
     }
+    a.clamp(1, i64::from(i32::MAX)) as i32
+}
+
+fn edit_bar_candidate_step_rows(segments: &[TimeSignatureSegment]) -> i32 {
+    let mut step = edit_bar_step_rows(edit_time_signature_at(segments, 0));
+    for i in 0..edit_time_signature_count(segments) {
+        let sig = edit_time_signature_at(segments, i);
+        step = edit_bar_gcd(step, edit_bar_step_rows(sig));
+        step = edit_bar_gcd(step, beat_to_note_row(sig.beat));
+    }
+    step.max(1)
 }
 
 fn edit_bar_scroll_speed(
@@ -806,6 +942,7 @@ pub enum FieldPlacement {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ViewOverride {
     pub field_zoom: Option<f32>,
+    pub scroll_speed: Option<ScrollSpeedSetting>,
     pub force_center_1player: bool,
     pub center_receptors_y: bool,
     pub receptor_y: Option<f32>,
@@ -3163,7 +3300,9 @@ pub fn build_bundles_with_view(
     let field_zoom = view.field_zoom.unwrap_or(state.field_zoom[player_idx]);
     let draw_distance_before_targets = state.draw_distance_before_targets[player_idx];
     let draw_distance_after_targets = state.draw_distance_after_targets[player_idx];
-    let scroll_speed = effective_scroll_speed_for_player(state, player_idx);
+    let scroll_speed = view
+        .scroll_speed
+        .unwrap_or_else(|| effective_scroll_speed_for_player(state, player_idx));
     let col_start = player_idx * state.cols_per_player;
     let col_end = (col_start + state.cols_per_player)
         .min(state.num_cols)
@@ -3626,6 +3765,12 @@ pub fn build_bundles_with_view(
         if show_measure_lines {
             let edit_bar_speed =
                 edit_bar_scroll_speed(scroll_speed, state.scroll_reference_bpm, state.music_rate);
+            let time_signatures = state
+                .gameplay_charts
+                .get(player_idx)
+                .map(|chart| chart.timing_segments.time_signatures.as_slice())
+                .unwrap_or(&[]);
+            let edit_candidate_step_rows = edit_bar_candidate_step_rows(time_signatures);
             let (alpha_measure, alpha_quarter, alpha_eighth, alpha_sixteenth, line_step) =
                 if view.edit_beat_bars {
                     (
@@ -3633,7 +3778,7 @@ pub fn build_bundles_with_view(
                         1.0,
                         scaled_edit_bar_alpha(edit_bar_speed, 1.0, 2.0),
                         scaled_edit_bar_alpha(edit_bar_speed, 2.0, 4.0),
-                        0.25,
+                        note_row_to_beat(edit_candidate_step_rows),
                     )
                 } else {
                     match profile.measure_lines {
@@ -3681,33 +3826,29 @@ pub fn build_bundles_with_view(
             let thickness = (2.0 * field_zoom).max(1.0);
             let y_min = -400.0;
             let y_max = screen_height() + 400.0;
-            let line_alpha = |u: i64| -> f32 {
-                if view.edit_beat_bars {
-                    let i = u.rem_euclid(16);
-                    if i == 0 {
-                        alpha_measure
-                    } else if i % 4 == 0 {
-                        alpha_quarter
-                    } else if i % 2 == 0 {
-                        alpha_eighth
-                    } else {
-                        alpha_sixteenth
-                    }
-                } else {
-                    match u.rem_euclid(8) {
-                        0 => alpha_measure,
-                        2 | 4 | 6 => alpha_quarter,
-                        _ => alpha_eighth,
-                    }
+            let edit_row_for_unit = |u: i64| -> Option<i32> {
+                u.checked_mul(i64::from(edit_candidate_step_rows))
+                    .and_then(|row| i32::try_from(row).ok())
+            };
+            let edit_line_alpha = |frame: u32| -> f32 {
+                match frame {
+                    0 => alpha_measure,
+                    1 => alpha_quarter,
+                    2 => alpha_eighth,
+                    _ => alpha_sixteenth,
                 }
             };
-            let line_thickness = |u: i64| -> f32 {
-                if !view.edit_beat_bars {
-                    return thickness;
+            let line_alpha = |u: i64| -> f32 {
+                match u.rem_euclid(8) {
+                    0 => alpha_measure,
+                    2 | 4 | 6 => alpha_quarter,
+                    _ => alpha_eighth,
                 }
-                match u.rem_euclid(16) {
+            };
+            let edit_line_thickness = |frame: u32| -> f32 {
+                match frame {
                     0 => (3.0 * field_zoom).max(1.0),
-                    i if i % 4 == 0 => (2.0 * field_zoom).max(1.0),
+                    1 => (2.0 * field_zoom).max(1.0),
                     _ => (1.0 * field_zoom).max(1.0),
                 }
             };
@@ -3732,9 +3873,22 @@ pub fn build_bundles_with_view(
                     if view.edit_beat_bars && u < 0 {
                         break;
                     }
-                    let alpha = line_alpha(u);
-
-                    let beat = (u as f32) * line_step;
+                    let (beat, edit_info) = if view.edit_beat_bars {
+                        let Some(row) = edit_row_for_unit(u) else {
+                            break;
+                        };
+                        (
+                            note_row_to_beat(row),
+                            edit_beat_bar_info_for_row(row, time_signatures),
+                        )
+                    } else {
+                        ((u as f32) * line_step, None)
+                    };
+                    let alpha = if view.edit_beat_bars {
+                        edit_info.map_or(0.0, |info| edit_line_alpha(info.frame))
+                    } else {
+                        line_alpha(u)
+                    };
                     let y = compute_lane_y_dynamic(0, beat, receptor_y, dir);
                     if !y.is_finite() {
                         break;
@@ -3743,21 +3897,27 @@ pub fn build_bundles_with_view(
                         break;
                     }
                     if alpha > 0.0 {
+                        let edit_bar_frame = edit_info.map_or(0, |info| info.frame);
+                        let line_thickness = if view.edit_beat_bars {
+                            edit_line_thickness(edit_bar_frame)
+                        } else {
+                            thickness
+                        };
                         append_beat_bar(
                             &mut actors,
                             view.edit_beat_bars,
-                            u,
+                            edit_bar_frame,
                             x_center,
                             y,
                             w,
                             field_zoom,
-                            line_thickness(u),
+                            line_thickness,
                             alpha,
                         );
                         append_edit_measure_number(
                             &mut actors,
                             view.edit_beat_bars,
-                            u,
+                            edit_info.and_then(|info| info.measure_index),
                             x_center - w * 0.5,
                             y,
                             field_zoom,
@@ -3767,7 +3927,7 @@ pub fn build_bundles_with_view(
                     iters += 1;
                 }
 
-                // Walk forward from next half-beat to avoid duplicating the start line.
+                // Walk forward from the next beat-bar candidate to avoid duplicating the start line.
                 let mut u = if view.edit_beat_bars {
                     beat_units_start.max(0) + 1
                 } else {
@@ -3775,9 +3935,22 @@ pub fn build_bundles_with_view(
                 };
                 let mut iters = 0;
                 while iters < 2000 {
-                    let alpha = line_alpha(u);
-
-                    let beat = (u as f32) * line_step;
+                    let (beat, edit_info) = if view.edit_beat_bars {
+                        let Some(row) = edit_row_for_unit(u) else {
+                            break;
+                        };
+                        (
+                            note_row_to_beat(row),
+                            edit_beat_bar_info_for_row(row, time_signatures),
+                        )
+                    } else {
+                        ((u as f32) * line_step, None)
+                    };
+                    let alpha = if view.edit_beat_bars {
+                        edit_info.map_or(0.0, |info| edit_line_alpha(info.frame))
+                    } else {
+                        line_alpha(u)
+                    };
                     let y = compute_lane_y_dynamic(0, beat, receptor_y, dir);
                     if !y.is_finite() {
                         break;
@@ -3786,21 +3959,27 @@ pub fn build_bundles_with_view(
                         break;
                     }
                     if alpha > 0.0 {
+                        let edit_bar_frame = edit_info.map_or(0, |info| info.frame);
+                        let line_thickness = if view.edit_beat_bars {
+                            edit_line_thickness(edit_bar_frame)
+                        } else {
+                            thickness
+                        };
                         append_beat_bar(
                             &mut actors,
                             view.edit_beat_bars,
-                            u,
+                            edit_bar_frame,
                             x_center,
                             y,
                             w,
                             field_zoom,
-                            line_thickness(u),
+                            line_thickness,
                             alpha,
                         );
                         append_edit_measure_number(
                             &mut actors,
                             view.edit_beat_bars,
-                            u,
+                            edit_info.and_then(|info| info.measure_index),
                             x_center - w * 0.5,
                             y,
                             field_zoom,
@@ -7604,6 +7783,7 @@ mod tests {
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
     use crate::game::profile;
+    use crate::game::timing::{TimeSignatureSegment, beat_to_note_row};
 
     fn fantastic_judgment(window: TimingWindow, time_error_ms: f32) -> Judgment {
         Judgment {
@@ -7616,6 +7796,57 @@ mod tests {
             window: Some(window),
             miss_because_held: false,
         }
+    }
+
+    #[test]
+    fn edit_beat_bar_labels_default_measure_indices() {
+        assert_eq!(
+            super::edit_beat_bar_info_for_row(beat_to_note_row(0.0), &[])
+                .and_then(|info| info.measure_index),
+            Some(0)
+        );
+        assert_eq!(
+            super::edit_beat_bar_info_for_row(beat_to_note_row(1.0), &[])
+                .and_then(|info| info.measure_index),
+            None
+        );
+        assert_eq!(
+            super::edit_beat_bar_info_for_row(beat_to_note_row(4.0), &[])
+                .and_then(|info| info.measure_index),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn edit_beat_bar_labels_follow_time_signature_segments() {
+        let segments = [
+            TimeSignatureSegment {
+                beat: 0.0,
+                numerator: 3,
+                denominator: 4,
+            },
+            TimeSignatureSegment {
+                beat: 6.0,
+                numerator: 4,
+                denominator: 4,
+            },
+        ];
+
+        assert_eq!(
+            super::edit_beat_bar_info_for_row(beat_to_note_row(0.0), &segments)
+                .and_then(|info| info.measure_index),
+            Some(0)
+        );
+        assert_eq!(
+            super::edit_beat_bar_info_for_row(beat_to_note_row(3.0), &segments)
+                .and_then(|info| info.measure_index),
+            Some(1)
+        );
+        assert_eq!(
+            super::edit_beat_bar_info_for_row(beat_to_note_row(6.0), &segments)
+                .and_then(|info| info.measure_index),
+            Some(2)
+        );
     }
 
     #[test]

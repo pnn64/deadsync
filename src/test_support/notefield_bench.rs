@@ -345,6 +345,7 @@ fn bench_chart_bundle() -> (GameplayChartData, u32, u32, u32, u32) {
         speeds: Vec::new(),
         scrolls: Vec::new(),
         fakes: Vec::new(),
+        ..TimingSegments::default()
     };
     let timing = TimingData::from_segments(0.0, 0.0, &timing_segments, &row_to_beat);
     let holds = parsed_notes

@@ -263,7 +263,14 @@ pub struct ScrollSegment {
     pub ratio: f32,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy)]
+pub struct TimeSignatureSegment {
+    pub beat: f32,
+    pub numerator: i32,
+    pub denominator: i32,
+}
+
+#[derive(Debug, Clone)]
 pub struct TimingSegments {
     pub beat0_offset_adjust: f32,
     pub bpms: Vec<(f32, f32)>,
@@ -273,6 +280,35 @@ pub struct TimingSegments {
     pub speeds: Vec<SpeedSegment>,
     pub scrolls: Vec<ScrollSegment>,
     pub fakes: Vec<FakeSegment>,
+    pub time_signatures: Vec<TimeSignatureSegment>,
+}
+
+impl Default for TimingSegments {
+    fn default() -> Self {
+        Self {
+            beat0_offset_adjust: 0.0,
+            bpms: Vec::new(),
+            stops: Vec::new(),
+            delays: Vec::new(),
+            warps: Vec::new(),
+            speeds: Vec::new(),
+            scrolls: Vec::new(),
+            fakes: Vec::new(),
+            time_signatures: default_time_signatures(),
+        }
+    }
+}
+
+pub fn default_time_signature() -> TimeSignatureSegment {
+    TimeSignatureSegment {
+        beat: 0.0,
+        numerator: 4,
+        denominator: 4,
+    }
+}
+
+pub fn default_time_signatures() -> Vec<TimeSignatureSegment> {
+    vec![default_time_signature()]
 }
 
 impl From<&rssp_timing::TimingSegments> for TimingSegments {
@@ -335,6 +371,7 @@ impl From<&rssp_timing::TimingSegments> for TimingSegments {
                     length: *length,
                 })
                 .collect(),
+            time_signatures: default_time_signatures(),
         }
     }
 }
