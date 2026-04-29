@@ -198,6 +198,17 @@ fn choose_itl_wheel_score(
 }
 
 #[inline(always)]
+const fn itl_wheel_mode_for_sides(
+    mode: SelectMusicItlWheelMode,
+    joined_sides: usize,
+) -> SelectMusicItlWheelMode {
+    match (mode, joined_sides >= 2) {
+        (SelectMusicItlWheelMode::PointsAndScore, true) => SelectMusicItlWheelMode::Score,
+        _ => mode,
+    }
+}
+
+#[inline(always)]
 const fn should_fetch_online_itl_score(is_selected_slot: bool, allow_online_fetch: bool) -> bool {
     is_selected_slot && allow_online_fetch
 }
@@ -353,6 +364,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let itl_points_color = [1.0, 1.0, 1.0, 1.0];
     let joined_sides = usize::from(profile::is_session_side_joined(profile::PlayerSide::P1))
         + usize::from(profile::is_session_side_joined(profile::PlayerSide::P2));
+    let itl_wheel_mode = itl_wheel_mode_for_sides(p.itl_wheel_mode, joined_sides);
     let is_double_style = target_chart_type.to_ascii_lowercase().contains("double");
     let selected_chart_hash_for_side = |side: profile::PlayerSide| {
         let Some(MusicWheelEntry::Song(info)) = p.entries.get(p.selected_index) else {
@@ -762,7 +774,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     }
 
                     for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
-                        if matches!(p.itl_wheel_mode, SelectMusicItlWheelMode::Off) {
+                        if matches!(itl_wheel_mode, SelectMusicItlWheelMode::Off) {
                             continue;
                         }
                         if !profile::is_session_side_joined(side) {
@@ -787,7 +799,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         else {
                             continue;
                         };
-                        match p.itl_wheel_mode {
+                        match itl_wheel_mode {
                             SelectMusicItlWheelMode::Off => {}
                             SelectMusicItlWheelMode::Score => {
                                 slot_children.push(act!(text:
@@ -1079,7 +1091,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 
 #[cfg(test)]
 mod tests {
-    use super::{choose_itl_wheel_score, itl_rank_color, should_fetch_online_itl_score};
+    use super::{
+        choose_itl_wheel_score, itl_rank_color, itl_wheel_mode_for_sides,
+        should_fetch_online_itl_score,
+    };
+    use crate::config::SelectMusicItlWheelMode;
     use crate::engine::present::color;
     use crate::game::scores::CachedItlScore;
 
@@ -1122,6 +1138,22 @@ mod tests {
         assert_eq!(
             choose_itl_wheel_score(local, Some(9912), None),
             Some((9912, None))
+        );
+    }
+
+    #[test]
+    fn points_score_wheel_falls_back_to_score_for_versus() {
+        assert_eq!(
+            itl_wheel_mode_for_sides(SelectMusicItlWheelMode::PointsAndScore, 2),
+            SelectMusicItlWheelMode::Score
+        );
+        assert_eq!(
+            itl_wheel_mode_for_sides(SelectMusicItlWheelMode::PointsAndScore, 1),
+            SelectMusicItlWheelMode::PointsAndScore
+        );
+        assert_eq!(
+            itl_wheel_mode_for_sides(SelectMusicItlWheelMode::Off, 2),
+            SelectMusicItlWheelMode::Off
         );
     }
 
