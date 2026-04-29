@@ -50,6 +50,7 @@ pub enum Action {
     SyncSong,
     SyncPack,
     PlayReplay,
+    PracticeMode,
     ShowLeaderboard,
     ShowSetSummary,
 }
@@ -195,6 +196,11 @@ pub const ITEM_PLAY_REPLAY: Item = Item {
     top_label: TextContent::Static("Machine Data"),
     bottom_label: TextContent::Static("Play Replay"),
     action: Action::PlayReplay,
+};
+pub const ITEM_PRACTICE_MODE: Item = Item {
+    top_label: TextContent::Static("Having a hard time?"),
+    bottom_label: TextContent::Static("Practice Mode"),
+    action: Action::PracticeMode,
 };
 pub const ITEM_SHOW_LEADERBOARD: Item = Item {
     top_label: TextContent::Static("GrooveStats"),

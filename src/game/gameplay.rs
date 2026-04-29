@@ -4748,6 +4748,39 @@ fn visible_notefield_time_ns(music_time_ns: SongTimeNs, visual_delay_seconds: f3
     song_time_ns_add_seconds(music_time_ns, -visual_delay_seconds)
 }
 
+fn set_current_music_time_ns(state: &mut State, music_time_ns: SongTimeNs) {
+    state.current_music_time_ns = music_time_ns;
+    let display_time_ns = state.display_clock.reset(music_time_ns);
+    state.current_music_time_display = song_time_ns_to_seconds(display_time_ns);
+
+    let beat_info = state
+        .timing
+        .get_beat_info_from_time_ns_cached(music_time_ns, &mut state.beat_info_cache);
+    state.current_beat = beat_info.beat;
+    state.current_beat_display = state.timing.get_beat_for_time_ns(display_time_ns);
+    state.is_in_freeze = beat_info.is_in_freeze;
+    state.is_in_delay = beat_info.is_in_delay;
+
+    for player in 0..state.num_players {
+        let delay = state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
+        let visible_time_ns = visible_notefield_time_ns(music_time_ns, delay);
+        state.current_music_time_visible_ns[player] = visible_time_ns;
+        state.current_music_time_visible[player] = song_time_ns_to_seconds(visible_time_ns);
+        state.current_beat_visible[player] =
+            state.timing_players[player].get_beat_for_time_ns(visible_time_ns);
+    }
+
+    state.next_background_change_ix = state
+        .song
+        .background_changes
+        .iter()
+        .take_while(|change| change.start_beat <= state.current_beat)
+        .count();
+    refresh_active_attack_masks(state, 0.0);
+    let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
+    refresh_live_notefield_options(state, current_bpm);
+}
+
 fn start_stage_music_audio(state: &State) {
     let Some(music_path) = state.charts[0].music_path.as_ref() else {
         return;
@@ -4764,23 +4797,164 @@ fn start_stage_music_audio(state: &State) {
 
 pub fn start_stage_music(state: &mut State) {
     let start_time = -state.audio_lead_in_seconds.max(0.0);
-    state.current_music_time_ns = song_time_ns_from_seconds(start_time);
-    let display_time_ns = state.display_clock.reset(state.current_music_time_ns);
-    state.current_music_time_display = song_time_ns_to_seconds(display_time_ns);
-    state.current_beat = state
-        .timing
-        .get_beat_for_time_ns(state.current_music_time_ns);
-    state.current_beat_display = state.timing.get_beat_for_time_ns(display_time_ns);
-    for player in 0..state.num_players {
-        let delay = state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
-        let visible_time_ns = visible_notefield_time_ns(state.current_music_time_ns, delay);
-        state.current_music_time_visible_ns[player] = visible_time_ns;
-        state.current_music_time_visible[player] = song_time_ns_to_seconds(visible_time_ns);
-        state.current_beat_visible[player] =
-            state.timing_players[player].get_beat_for_time_ns(visible_time_ns);
-    }
+    set_current_music_time_ns(state, song_time_ns_from_seconds(start_time));
     state.total_elapsed_in_screen = 0.0;
     start_stage_music_audio(state);
+}
+
+#[inline(always)]
+pub fn music_time_for_beat(state: &State, beat: f32) -> f32 {
+    state.timing.get_time_for_beat(beat)
+}
+
+#[inline(always)]
+pub fn beat_for_music_time(state: &State, music_time: f32) -> f32 {
+    state.timing.get_beat_for_time(music_time)
+}
+
+#[inline(always)]
+pub fn current_music_time_seconds(state: &State) -> f32 {
+    song_time_ns_to_seconds(state.current_music_time_ns)
+}
+
+pub fn seek_practice_display(state: &mut State, music_time: f32) {
+    set_current_music_time_ns(state, song_time_ns_from_seconds(music_time));
+}
+
+pub fn disable_score_for_practice(state: &mut State) {
+    state.score_valid.fill(false);
+    state.replay_capture_enabled = false;
+    state.replay_mode = false;
+    state.replay_status_text = Some(Arc::from("Practice Mode"));
+}
+
+fn first_note_index_at_or_after_time(state: &State, player: usize, time_ns: SongTimeNs) -> usize {
+    let (start, end) = player_note_range(state, player);
+    start + state.note_time_cache_ns[start..end].partition_point(|&t| t < time_ns)
+}
+
+fn first_row_entry_at_or_after_time(state: &State, player: usize, time_ns: SongTimeNs) -> usize {
+    let (start, end) = state.row_entry_ranges[player];
+    start + state.row_entries[start..end].partition_point(|row| row.time_ns < time_ns)
+}
+
+fn reset_practice_note_results(state: &mut State) {
+    for note in &mut state.notes {
+        note.result = None;
+        note.early_result = None;
+        note.mine_result = None;
+        if let Some(hold) = note.hold.as_mut() {
+            hold.result = None;
+            hold.life = 1.0;
+            hold.let_go_started_at = None;
+            hold.let_go_starting_life = 1.0;
+            hold.last_held_row_index = note.row_index;
+            hold.last_held_beat = note.beat;
+        }
+    }
+
+    for row_ix in 0..state.row_entries.len() {
+        let row_index = state.row_entries[row_ix].row_index;
+        let nonmine_note_indices = state.row_entries[row_ix].nonmine_note_indices.clone();
+        state.row_entries[row_ix] = build_row_entry(
+            row_index,
+            nonmine_note_indices,
+            &state.notes,
+            &state.note_time_cache_ns,
+        );
+    }
+}
+
+pub fn reset_practice_playback(state: &mut State, judge_start_music_time: f32) {
+    let judge_start_ns = song_time_ns_from_seconds(judge_start_music_time);
+    reset_practice_note_results(state);
+    disable_score_for_practice(state);
+
+    state.song_completed_naturally = false;
+    state.autoplay_used = false;
+    state.hold_judgments = [None; MAX_COLS];
+    state.tap_explosions = std::array::from_fn(|_| None);
+    state.mine_explosions = std::array::from_fn(|_| None);
+    state.active_holds = std::array::from_fn(|_| None);
+    state.receptor_glow_timers.fill(0.0);
+    state.receptor_glow_press_timers.fill(0.0);
+    state.receptor_glow_lift_start_alpha.fill(0.0);
+    state.receptor_glow_lift_start_zoom.fill(0.0);
+    state.receptor_bop_timers.fill(0.0);
+    state.decaying_hold_indices.clear();
+    state.hold_decay_active.fill(false);
+    state.tap_miss_held_window.fill(false);
+    state.pending_missed_hold_feedback.fill(false);
+    state.pending_missed_hold_indices.clear();
+    state.prev_inputs.fill(false);
+    state.keyboard_lane_counts.fill(0);
+    state.gamepad_lane_counts.fill(0);
+    state.lane_pressed_since_ns.fill(None);
+    state.pending_edges.clear();
+    state.replay_edges.clear();
+    state.replay_cursor = 0;
+    state.hold_to_exit_key = None;
+    state.hold_to_exit_start = None;
+    state.hold_to_exit_aborted_at = None;
+    state.exit_transition = None;
+    state.live_window_counts = [Default::default(); MAX_PLAYERS];
+    state.live_window_counts_10ms_blue = [Default::default(); MAX_PLAYERS];
+    state.live_window_counts_display_blue = [Default::default(); MAX_PLAYERS];
+
+    for player in 0..state.num_players {
+        state.players[player] = init_player_runtime();
+        let life = state.players[player].life;
+        state.players[player]
+            .life_history
+            .push((judge_start_music_time, life));
+
+        let note_cursor = first_note_index_at_or_after_time(state, player, judge_start_ns);
+        state.next_tap_miss_cursor[player] = note_cursor;
+        state.autoplay_cursor[player] = note_cursor;
+        state.judged_row_cursor[player] =
+            first_row_entry_at_or_after_time(state, player, judge_start_ns);
+
+        let mine_cursor = state.mine_note_time_ns[player].partition_point(|&t| t < judge_start_ns);
+        let (_, note_end) = player_note_range(state, player);
+        state.next_mine_ix_cursor[player] = mine_cursor;
+        state.next_mine_avoid_cursor[player] = state.mine_note_ix[player]
+            .get(mine_cursor)
+            .copied()
+            .unwrap_or(note_end);
+    }
+
+    let song_row = assist_row_no_offset(state, judge_start_music_time);
+    state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
+    state.assist_last_crossed_row = song_row;
+    state.total_elapsed_in_screen = 0.0;
+}
+
+pub fn start_practice_music(
+    state: &mut State,
+    playback_music_time: f32,
+    judge_start_music_time: f32,
+) {
+    reset_practice_playback(state, judge_start_music_time);
+    set_current_music_time_ns(state, song_time_ns_from_seconds(playback_music_time));
+
+    let Some(music_path) = state.charts[0].music_path.as_ref() else {
+        return;
+    };
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    audio::play_music(
+        music_path.clone(),
+        audio::Cut {
+            start_sec: f64::from(playback_music_time),
+            length_sec: f64::INFINITY,
+            ..Default::default()
+        },
+        false,
+        rate,
+    );
 }
 
 fn get_reference_bpm_from_display_tag(

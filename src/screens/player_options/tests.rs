@@ -1079,6 +1079,58 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn practice_exit_starts_practice_from_player_options() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        state.return_screen = Screen::Practice;
+
+        let exit_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::Exit)
+            .expect("Exit should be in Main pane");
+        state.pane_mut().selected_row[P1] = exit_row;
+
+        let active = session_active_players();
+        let action = handle_start_event(&mut state, &asset_manager, active, P1);
+        assert!(
+            matches!(action, Some(ScreenAction::Navigate(Screen::Practice))),
+            "practice-launched player options should start Practice, not Gameplay"
+        );
+    }
+
+    #[test]
+    fn practice_choose_different_returns_to_select_music() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        state.return_screen = Screen::Practice;
+
+        let exit_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::Exit)
+            .expect("Exit should be in Main pane");
+        state.pane_mut().selected_row[P1] = exit_row;
+        state
+            .pane_mut()
+            .row_map
+            .get_mut(RowId::WhatComesNext)
+            .unwrap()
+            .selected_choice_index[P1] = 1;
+
+        let active = session_active_players();
+        let action = handle_start_event(&mut state, &asset_manager, active, P1);
+        assert!(
+            matches!(action, Some(ScreenAction::Navigate(Screen::SelectMusic))),
+            "choose different song from practice options should return to the wheel"
+        );
+    }
+
+    #[test]
     fn dispatch_on_bitmask_via_delta_is_no_op() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();

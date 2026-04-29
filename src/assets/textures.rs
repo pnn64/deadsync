@@ -1023,6 +1023,10 @@ impl AssetManager {
                 "feet-diagram.png".to_string(),
                 "feet-diagram.png".to_string(),
             ),
+            (
+                "practice/snap_display_icon_9x1 (doubleres).png".to_string(),
+                "practice/snap_display_icon_9x1 (doubleres).png".to_string(),
+            ),
         ];
 
         for p in [

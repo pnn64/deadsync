@@ -160,6 +160,169 @@ const BEAT_PI_HEIGHT: f32 = 2.0;
 const CENTER_LINE_Y: f32 = 160.0;
 const FADE_DIST_Y: f32 = 40.0;
 
+fn append_edit_measure_number(
+    actors: &mut Vec<Actor>,
+    edit_beat_bars: bool,
+    beat_unit: i64,
+    x: f32,
+    y: f32,
+    field_zoom: f32,
+) {
+    if !edit_beat_bars || beat_unit.rem_euclid(16) != 0 {
+        return;
+    }
+    let measure = beat_unit.div_euclid(16);
+    if measure < 0 {
+        return;
+    }
+    actors.push(act!(text:
+        font("miso"):
+        settext(measure.to_string()):
+        align(1.0, 0.5):
+        horizalign(right):
+        xy(x, y):
+        zoom((field_zoom * 0.9).clamp(0.35, 0.75)):
+        shadowlength(2.0):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(Z_MEASURE_LINES + 1)
+    ));
+}
+
+fn append_beat_bar(
+    actors: &mut Vec<Actor>,
+    edit_beat_bars: bool,
+    beat_unit: i64,
+    x_center: f32,
+    y: f32,
+    width: f32,
+    field_zoom: f32,
+    thickness: f32,
+    alpha: f32,
+) {
+    if edit_beat_bars {
+        append_edit_beat_bar(
+            actors, beat_unit, x_center, y, width, field_zoom, thickness, alpha,
+        );
+    } else {
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy(x_center, y):
+            zoomto(width, thickness):
+            diffuse(1.0, 1.0, 1.0, alpha):
+            z(Z_MEASURE_LINES)
+        ));
+    }
+}
+
+fn append_edit_beat_bar(
+    actors: &mut Vec<Actor>,
+    beat_unit: i64,
+    x_center: f32,
+    y: f32,
+    width: f32,
+    field_zoom: f32,
+    thickness: f32,
+    alpha: f32,
+) {
+    match edit_beat_bar_frame(beat_unit) {
+        0 | 1 => append_edit_bar_segment(actors, x_center, y, width, thickness, alpha),
+        2 => append_dashed_edit_bar(
+            actors,
+            x_center,
+            y,
+            width,
+            thickness,
+            12.0 * field_zoom,
+            8.0 * field_zoom,
+            alpha,
+        ),
+        _ => append_dashed_edit_bar(
+            actors,
+            x_center,
+            y,
+            width,
+            thickness,
+            4.0 * field_zoom,
+            6.0 * field_zoom,
+            alpha,
+        ),
+    }
+}
+
+fn append_edit_bar_segment(
+    actors: &mut Vec<Actor>,
+    x_center: f32,
+    y: f32,
+    width: f32,
+    thickness: f32,
+    alpha: f32,
+) {
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(x_center, y):
+        zoomto(width, thickness):
+        diffuse(1.0, 1.0, 1.0, alpha):
+        z(Z_MEASURE_LINES)
+    ));
+}
+
+fn append_dashed_edit_bar(
+    actors: &mut Vec<Actor>,
+    x_center: f32,
+    y: f32,
+    width: f32,
+    thickness: f32,
+    dash: f32,
+    gap: f32,
+    alpha: f32,
+) {
+    let dash = dash.max(1.0);
+    let step = (dash + gap).max(dash + 1.0);
+    let left = x_center - width * 0.5;
+    let right = x_center + width * 0.5;
+    let mut x = left;
+    while x < right {
+        let seg_w = dash.min(right - x);
+        actors.push(act!(quad:
+            align(0.0, 0.5):
+            xy(x, y):
+            zoomto(seg_w, thickness):
+            diffuse(1.0, 1.0, 1.0, alpha):
+            z(Z_MEASURE_LINES)
+        ));
+        x += step;
+    }
+}
+
+fn edit_beat_bar_frame(beat_unit: i64) -> u32 {
+    let i = beat_unit.rem_euclid(16);
+    if i == 0 {
+        0
+    } else if i % 4 == 0 {
+        1
+    } else if i % 2 == 0 {
+        2
+    } else {
+        3
+    }
+}
+
+fn edit_bar_scroll_speed(
+    scroll_speed: ScrollSpeedSetting,
+    reference_bpm: f32,
+    music_rate: f32,
+) -> f32 {
+    match scroll_speed {
+        ScrollSpeedSetting::XMod(multiplier) => multiplier,
+        ScrollSpeedSetting::MMod(_) => scroll_speed.beat_multiplier(reference_bpm, music_rate),
+        ScrollSpeedSetting::CMod(_) => 4.0,
+    }
+    .max(0.0)
+}
+
+fn scaled_edit_bar_alpha(scroll_speed: f32, visible_at: f32, full_at: f32) -> f32 {
+    ((scroll_speed - visible_at) / (full_at - visible_at)).clamp(0.0, 1.0)
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct TornadoBounds {
     min_x: f32,
@@ -638,6 +801,15 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
 pub enum FieldPlacement {
     P1,
     P2,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ViewOverride {
+    pub field_zoom: Option<f32>,
+    pub force_center_1player: bool,
+    pub center_receptors_y: bool,
+    pub receptor_y: Option<f32>,
+    pub edit_beat_bars: bool,
 }
 
 pub struct BuiltNotefield {
@@ -2949,6 +3121,26 @@ pub fn build_bundles(
     center_1player_notefield: bool,
     capture_requests: ProxyCaptureRequests,
 ) -> BuiltNotefield {
+    build_bundles_with_view(
+        state,
+        profile,
+        placement,
+        play_style,
+        center_1player_notefield,
+        capture_requests,
+        ViewOverride::default(),
+    )
+}
+
+pub fn build_bundles_with_view(
+    state: &State,
+    profile: &profile::Profile,
+    placement: FieldPlacement,
+    play_style: profile::PlayStyle,
+    center_1player_notefield: bool,
+    capture_requests: ProxyCaptureRequests,
+    view: ViewOverride,
+) -> BuiltNotefield {
     let hold_judgment_texture = resolved_hold_judgment_texture(profile);
 
     // --- Playfield Positioning (1:1 with Simply Love) ---
@@ -2966,8 +3158,9 @@ pub fn build_bundles(
         return BuiltNotefield::empty(screen_center_x());
     }
     // Use the cached field_zoom from gameplay state so visual layout and
-    // scroll math share the exact same scaling as gameplay.
-    let field_zoom = state.field_zoom[player_idx];
+    // scroll math share the exact same scaling as gameplay. Practice edit
+    // mode overrides this to match ScreenEdit's half-scale edit field.
+    let field_zoom = view.field_zoom.unwrap_or(state.field_zoom[player_idx]);
     let draw_distance_before_targets = state.draw_distance_before_targets[player_idx];
     let draw_distance_after_targets = state.draw_distance_after_targets[player_idx];
     let scroll_speed = effective_scroll_speed_for_player(state, player_idx);
@@ -2986,11 +3179,15 @@ pub fn build_bundles(
         }
         mask
     };
-    let measure_line_extra = match profile.measure_lines {
-        crate::game::profile::MeasureLines::Off => 0,
-        crate::game::profile::MeasureLines::Measure => 18,
-        crate::game::profile::MeasureLines::Quarter => 30,
-        crate::game::profile::MeasureLines::Eighth => 42,
+    let measure_line_extra = if view.edit_beat_bars {
+        72
+    } else {
+        match profile.measure_lines {
+            crate::game::profile::MeasureLines::Off => 0,
+            crate::game::profile::MeasureLines::Measure => 18,
+            crate::game::profile::MeasureLines::Quarter => 30,
+            crate::game::profile::MeasureLines::Eighth => 42,
+        }
     };
     let actor_cap = (num_cols * 10).max(28)
         + measure_line_extra
@@ -3064,13 +3261,29 @@ pub fn build_bundles(
     } else {
         playfield_center_x
     };
-    let receptor_y_normal = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + notefield_offset_y;
-    let receptor_y_reverse =
-        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE + notefield_offset_y;
+    let receptor_y_override = view.receptor_y.map(|y| y + notefield_offset_y);
+    let receptor_y_normal = if let Some(y) = receptor_y_override {
+        y
+    } else if view.center_receptors_y {
+        screen_center_y() + notefield_offset_y
+    } else {
+        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + notefield_offset_y
+    };
+    let receptor_y_reverse = if let Some(y) = receptor_y_override {
+        y
+    } else if view.center_receptors_y {
+        screen_center_y() + notefield_offset_y
+    } else {
+        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE + notefield_offset_y
+    };
     let scroll = effective_scroll_effects_for_player(state, player_idx);
     let perspective = effective_perspective_effects_for_player(state, player_idx);
-    let centered_percent = scroll.centered.clamp(0.0, 1.0);
-    let receptor_y_centered = screen_center_y() + notefield_offset_y;
+    let centered_percent = if view.receptor_y.is_some() || view.center_receptors_y {
+        1.0
+    } else {
+        scroll.centered.clamp(0.0, 1.0)
+    };
+    let receptor_y_centered = receptor_y_override.unwrap_or(screen_center_y() + notefield_offset_y);
     let column_reverse_percent: [f32; MAX_COLS] = from_fn(|i| {
         if i >= num_cols {
             return 0.0;
@@ -3089,7 +3302,7 @@ pub fn build_bundles(
         }
         scroll_receptor_y(
             column_reverse_percent[i],
-            scroll.centered,
+            centered_percent,
             receptor_y_normal,
             receptor_y_reverse,
             receptor_y_centered,
@@ -3403,17 +3616,33 @@ pub fn build_bundles(
                 };
                 lane_y_from_travel(local_col, receptor_y_lane, dir, travel_offset)
             };
-        // Measure Lines (Zmod parity: NoteField:SetBeatBarsAlpha)
-        if !matches!(
-            profile.measure_lines,
-            crate::game::profile::MeasureLines::Off
-        ) {
-            let (alpha_measure, alpha_quarter, alpha_eighth) = match profile.measure_lines {
-                crate::game::profile::MeasureLines::Off => (0.0, 0.0, 0.0),
-                crate::game::profile::MeasureLines::Measure => (0.75, 0.0, 0.0),
-                crate::game::profile::MeasureLines::Quarter => (0.75, 0.5, 0.0),
-                crate::game::profile::MeasureLines::Eighth => (0.75, 0.5, 0.125),
-            };
+        // Measure Lines (Zmod parity: NoteField:SetBeatBarsAlpha).
+        // ScreenEdit/Practice always draws editor beat bars at 16th-note spacing.
+        let show_measure_lines = view.edit_beat_bars
+            || !matches!(
+                profile.measure_lines,
+                crate::game::profile::MeasureLines::Off
+            );
+        if show_measure_lines {
+            let edit_bar_speed =
+                edit_bar_scroll_speed(scroll_speed, state.scroll_reference_bpm, state.music_rate);
+            let (alpha_measure, alpha_quarter, alpha_eighth, alpha_sixteenth, line_step) =
+                if view.edit_beat_bars {
+                    (
+                        1.0,
+                        1.0,
+                        scaled_edit_bar_alpha(edit_bar_speed, 1.0, 2.0),
+                        scaled_edit_bar_alpha(edit_bar_speed, 2.0, 4.0),
+                        0.25,
+                    )
+                } else {
+                    match profile.measure_lines {
+                        crate::game::profile::MeasureLines::Off => (0.0, 0.0, 0.0, 0.0, 0.5),
+                        crate::game::profile::MeasureLines::Measure => (0.75, 0.0, 0.0, 0.0, 0.5),
+                        crate::game::profile::MeasureLines::Quarter => (0.75, 0.5, 0.0, 0.0, 0.5),
+                        crate::game::profile::MeasureLines::Eighth => (0.75, 0.5, 0.125, 0.0, 0.5),
+                    }
+                };
 
             let mut pos_min_x: f32 = f32::INFINITY;
             let mut pos_max_x: f32 = f32::NEG_INFINITY;
@@ -3448,20 +3677,40 @@ pub fn build_bundles(
                 }
             }
 
-            let beat_units_start = (current_beat * 2.0).floor() as i64;
+            let beat_units_start = (current_beat / line_step).floor() as i64;
             let thickness = (2.0 * field_zoom).max(1.0);
             let y_min = -400.0;
             let y_max = screen_height() + 400.0;
-            let alpha_lut = [
-                alpha_measure,
-                alpha_eighth,
-                alpha_quarter,
-                alpha_eighth,
-                alpha_quarter,
-                alpha_eighth,
-                alpha_quarter,
-                alpha_eighth,
-            ];
+            let line_alpha = |u: i64| -> f32 {
+                if view.edit_beat_bars {
+                    let i = u.rem_euclid(16);
+                    if i == 0 {
+                        alpha_measure
+                    } else if i % 4 == 0 {
+                        alpha_quarter
+                    } else if i % 2 == 0 {
+                        alpha_eighth
+                    } else {
+                        alpha_sixteenth
+                    }
+                } else {
+                    match u.rem_euclid(8) {
+                        0 => alpha_measure,
+                        2 | 4 | 6 => alpha_quarter,
+                        _ => alpha_eighth,
+                    }
+                }
+            };
+            let line_thickness = |u: i64| -> f32 {
+                if !view.edit_beat_bars {
+                    return thickness;
+                }
+                match u.rem_euclid(16) {
+                    0 => (3.0 * field_zoom).max(1.0),
+                    i if i % 4 == 0 => (2.0 * field_zoom).max(1.0),
+                    _ => (1.0 * field_zoom).max(1.0),
+                }
+            };
 
             let mut draw_group = |min_x: f32, max_x: f32, receptor_y: f32, dir: f32| {
                 let center_x_offset = 0.5 * (min_x + max_x) * field_zoom;
@@ -3473,12 +3722,19 @@ pub fn build_bundles(
                 let x_center = playfield_center_x + center_x_offset;
 
                 // Walk backward from current beat.
-                let mut u = beat_units_start;
+                let mut u = if view.edit_beat_bars {
+                    beat_units_start.max(0)
+                } else {
+                    beat_units_start
+                };
                 let mut iters = 0;
                 while iters < 2000 {
-                    let alpha = alpha_lut[u.rem_euclid(8) as usize];
+                    if view.edit_beat_bars && u < 0 {
+                        break;
+                    }
+                    let alpha = line_alpha(u);
 
-                    let beat = (u as f32) * 0.5;
+                    let beat = (u as f32) * line_step;
                     let y = compute_lane_y_dynamic(0, beat, receptor_y, dir);
                     if !y.is_finite() {
                         break;
@@ -3487,24 +3743,41 @@ pub fn build_bundles(
                         break;
                     }
                     if alpha > 0.0 {
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(x_center, y):
-                            zoomto(w, thickness):
-                            diffuse(1.0, 1.0, 1.0, alpha):
-                            z(Z_MEASURE_LINES)
-                        ));
+                        append_beat_bar(
+                            &mut actors,
+                            view.edit_beat_bars,
+                            u,
+                            x_center,
+                            y,
+                            w,
+                            field_zoom,
+                            line_thickness(u),
+                            alpha,
+                        );
+                        append_edit_measure_number(
+                            &mut actors,
+                            view.edit_beat_bars,
+                            u,
+                            x_center - w * 0.5,
+                            y,
+                            field_zoom,
+                        );
                     }
                     u -= 1;
                     iters += 1;
                 }
 
                 // Walk forward from next half-beat to avoid duplicating the start line.
-                let mut u = beat_units_start + 1;
+                let mut u = if view.edit_beat_bars {
+                    beat_units_start.max(0) + 1
+                } else {
+                    beat_units_start + 1
+                };
                 let mut iters = 0;
                 while iters < 2000 {
-                    let alpha = alpha_lut[u.rem_euclid(8) as usize];
+                    let alpha = line_alpha(u);
 
-                    let beat = (u as f32) * 0.5;
+                    let beat = (u as f32) * line_step;
                     let y = compute_lane_y_dynamic(0, beat, receptor_y, dir);
                     if !y.is_finite() {
                         break;
@@ -3513,12 +3786,25 @@ pub fn build_bundles(
                         break;
                     }
                     if alpha > 0.0 {
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(x_center, y):
-                            zoomto(w, thickness):
-                            diffuse(1.0, 1.0, 1.0, alpha):
-                            z(Z_MEASURE_LINES)
-                        ));
+                        append_beat_bar(
+                            &mut actors,
+                            view.edit_beat_bars,
+                            u,
+                            x_center,
+                            y,
+                            w,
+                            field_zoom,
+                            line_thickness(u),
+                            alpha,
+                        );
+                        append_edit_measure_number(
+                            &mut actors,
+                            view.edit_beat_bars,
+                            u,
+                            x_center - w * 0.5,
+                            y,
+                            field_zoom,
+                        );
                     }
                     u += 1;
                     iters += 1;
@@ -7297,9 +7583,9 @@ mod tests {
     use super::{
         MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
-        append_mini_part, append_perspective_parts, append_spacing_part, append_turn_parts,
-        bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
-        hallway_judgment_zoom, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
+        append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
+        calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, hallway_judgment_zoom,
+        hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
         hold_window_for_display_run, hud_layout_ys, hud_y, judgment_actor_zoom,
         lane_hold_window_bounds_by_time_ns, let_go_head_beat,
         maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size,
