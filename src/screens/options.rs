@@ -57,6 +57,9 @@ const CURSOR_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 const ROW_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 const INLINE_SPACING: f32 = 15.75;
+const SUBMENU_VALUE_ZOOM: f32 = 0.835;
+const VISUAL_STYLE_VALUE_ZOOM: f32 = 0.72;
+const VISUAL_STYLE_INLINE_SPACING: f32 = 2.5;
 
 // Match Simply Love operator menu ranges (±1000 ms) for these calibrations.
 const GLOBAL_OFFSET_MIN_MS: i32 = -1000;
@@ -102,6 +105,8 @@ struct SubmenuRowLayout {
     x_positions: Arc<[f32]>,
     centers: Arc<[f32]>,
     text_h: f32,
+    value_zoom: f32,
+    inline_spacing: f32,
     inline_row: bool,
 }
 
@@ -428,15 +433,15 @@ fn desc_wrap_extra_pad_unscaled() -> f32 {
 }
 
 #[inline(always)]
-fn submenu_inline_widths_fit(widths: &[f32]) -> bool {
+fn submenu_inline_widths_fit(widths: &[f32], spacing: f32) -> bool {
     if widths.is_empty() {
         return false;
     }
     if is_wide() {
         return true;
     }
-    let total_w = widths.iter().copied().sum::<f32>()
-        + INLINE_SPACING * (widths.len().saturating_sub(1) as f32);
+    let total_w =
+        widths.iter().copied().sum::<f32>() + spacing * (widths.len().saturating_sub(1) as f32);
     let item_col_w = (list_w_unscaled() - SUB_LABEL_COL_W).max(0.0);
     let inline_w = (item_col_w - SUB_INLINE_ITEMS_LEFT_PAD).max(0.0);
     total_w <= inline_w
@@ -506,6 +511,7 @@ pub const ITEMS: &[Item] = &[
         name: lookup_key("Options", "MachineOptions"),
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsHelp", "MachineOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "VisualStyle")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectProfile")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectColor")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectStyle")),
@@ -514,7 +520,6 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsMachine", "NameEntry")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "GameoverScreen")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuMusic")),
-            HelpEntry::Bullet(lookup_key("OptionsMachine", "VisualStyle")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "KeyboardFeatures")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "VideoBGs")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "WriteCurrentScreen")),
@@ -1059,17 +1064,17 @@ const LANGUAGE_CHOICES: &[Choice] = &[
 ];
 
 const VISUAL_STYLE_CHOICES: &[Choice] = &[
-    literal_choice("Hearts"),
-    literal_choice("Arrows"),
-    literal_choice("Bears"),
-    literal_choice("Ducks"),
-    literal_choice("Cats"),
-    literal_choice("Spooky"),
-    literal_choice("Gay"),
-    literal_choice("Stars"),
-    literal_choice("Thonk"),
-    literal_choice("Technique"),
-    literal_choice("SRPG9"),
+    literal_choice("❤"),
+    literal_choice("↖"),
+    literal_choice("🐻"),
+    literal_choice("🦆"),
+    literal_choice("😺"),
+    literal_choice("🎃"),
+    literal_choice("🌈"),
+    literal_choice("⭐"),
+    literal_choice("🤔"),
+    literal_choice("🌀"),
+    literal_choice("💪"),
 ];
 
 #[cfg(target_os = "windows")]
@@ -1853,6 +1858,12 @@ pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
 
 pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
+        id: SubRowId::VisualStyle,
+        label: lookup_key("OptionsMachine", "VisualStyle"),
+        choices: VISUAL_STYLE_CHOICES,
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SelectProfile,
         label: lookup_key("OptionsMachine", "SelectProfile"),
         choices: &[
@@ -1962,12 +1973,6 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::VisualStyle,
-        label: lookup_key("OptionsMachine", "VisualStyle"),
-        choices: VISUAL_STYLE_CHOICES,
-        inline: false,
-    },
-    SubRow {
         id: SubRowId::Replays,
         label: lookup_key("OptionsMachine", "Replays"),
         choices: &[
@@ -2006,6 +2011,14 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
 ];
 
 pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        id: ItemId::MchVisualStyle,
+        name: lookup_key("OptionsMachine", "VisualStyle"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "VisualStyleHelp",
+        ))],
+    },
     Item {
         id: ItemId::MchSelectProfile,
         name: lookup_key("OptionsMachine", "SelectProfile"),
@@ -2100,14 +2113,6 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "MenuMusicHelp",
-        ))],
-    },
-    Item {
-        id: ItemId::MchVisualStyle,
-        name: lookup_key("OptionsMachine", "VisualStyle"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsMachineHelp",
-            "VisualStyleHelp",
         ))],
     },
     Item {
@@ -5044,7 +5049,17 @@ fn build_submenu_row_layout(
     if choice_texts.is_empty() {
         return None;
     }
-    let value_zoom = 0.835_f32;
+    let is_visual_style = row.id == SubRowId::VisualStyle;
+    let value_zoom = if is_visual_style {
+        VISUAL_STYLE_VALUE_ZOOM
+    } else {
+        SUBMENU_VALUE_ZOOM
+    };
+    let inline_spacing = if is_visual_style {
+        VISUAL_STYLE_INLINE_SPACING
+    } else {
+        INLINE_SPACING
+    };
     let texts: Vec<Arc<str>> = choice_texts
         .iter()
         .map(|text| Arc::<str>::from(text.as_ref()))
@@ -5072,7 +5087,7 @@ fn build_submenu_row_layout(
                 .map(|text| (text.chars().count().max(1) as f32) * 8.0 * value_zoom),
         );
     }
-    let inline_row = row.inline && submenu_inline_widths_fit(&widths);
+    let inline_row = row.inline && submenu_inline_widths_fit(&widths, inline_spacing);
     let mut x_positions: Vec<f32> = Vec::new();
     let mut centers: Vec<f32> = Vec::new();
     if inline_row {
@@ -5082,7 +5097,7 @@ fn build_submenu_row_layout(
         for &draw_w in &widths {
             x_positions.push(x);
             centers.push(draw_w.mul_add(0.5, x));
-            x += draw_w + INLINE_SPACING;
+            x += draw_w + inline_spacing;
         }
     }
     Some(SubmenuRowLayout {
@@ -5091,6 +5106,8 @@ fn build_submenu_row_layout(
         x_positions: Arc::from(x_positions),
         centers: Arc::from(centers),
         text_h,
+        value_zoom,
+        inline_spacing,
         inline_row,
     })
 }
@@ -9736,7 +9753,7 @@ fn measure_text_box(asset_manager: &AssetManager, text: &str, zoom: f32) -> (f32
 }
 
 #[inline(always)]
-fn ring_size_for_text(draw_w: f32, text_h: f32) -> (f32, f32) {
+fn ring_size_for_text(draw_w: f32, text_h: f32, spacing: f32) -> (f32, f32) {
     let pad_y = widescale(6.0, 8.0);
     let min_pad_x = widescale(2.0, 3.0);
     let max_pad_x = widescale(22.0, 28.0);
@@ -9748,7 +9765,7 @@ fn ring_size_for_text(draw_w: f32, text_h: f32) -> (f32, f32) {
     }
     size_t = size_t.clamp(0.0, 1.0);
     let mut pad_x = (max_pad_x - min_pad_x).mul_add(size_t, min_pad_x);
-    let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
+    let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
     if pad_x > max_pad_by_spacing {
         pad_x = max_pad_by_spacing;
     }
@@ -9980,7 +9997,7 @@ fn submenu_cursor_dest(
     }
     let selected_row = state.sub_selected.min(total_rows - 1);
     let row_mid_y = row_mid_y_for_cursor(state, selected_row, total_rows, selected_row, s, list_y);
-    let value_zoom = 0.835_f32;
+    let value_zoom = SUBMENU_VALUE_ZOOM;
     let label_bg_w = SUB_LABEL_COL_W * s;
     let item_col_left = list_x + label_bg_w;
     let item_col_w = list_w - label_bg_w;
@@ -9990,7 +10007,7 @@ fn submenu_cursor_dest(
     if selected_row == total_rows - 1 {
         let exit_label = tr("Common", "Exit");
         let (draw_w, text_h) = measure_text_box(asset_manager, &exit_label, value_zoom);
-        let (ring_w, ring_h) = ring_size_for_text(draw_w, text_h);
+        let (ring_w, ring_h) = ring_size_for_text(draw_w, text_h, INLINE_SPACING);
         return Some((single_center_x, row_mid_y, ring_w, ring_h));
     }
     let row_idx = submenu_visible_row_to_actual(state, kind, selected_row)?;
@@ -10012,7 +10029,7 @@ fn submenu_cursor_dest(
     } else {
         single_center_x
     };
-    let (ring_w, ring_h) = ring_size_for_text(draw_w, layout.text_h);
+    let (ring_w, ring_h) = ring_size_for_text(draw_w, layout.text_h, layout.inline_spacing);
     Some((center_x, row_mid_y, ring_w, ring_h))
 }
 
@@ -10603,7 +10620,7 @@ pub fn get_actors(
                             submenu_row_layout(state, asset_manager, kind, actual_row_idx)
                             && !layout.texts.is_empty()
                         {
-                            let value_zoom = 0.835_f32;
+                            let value_zoom = layout.value_zoom;
                             let selected_choice = choice_indices
                                 .get(actual_row_idx)
                                 .copied()
@@ -10812,7 +10829,7 @@ pub fn get_actors(
                         // Exit row: centered "Exit" text in the items column.
                         let exit_label = tr("Common", "Exit");
                         let label = exit_label.clone();
-                        let value_zoom = 0.835_f32;
+                        let value_zoom = SUBMENU_VALUE_ZOOM;
                         let mut choice_color = if is_active { col_white } else { sl_gray };
                         choice_color[3] *= row_alpha;
                         let center_x = calc_row_center_x(row_idx);
