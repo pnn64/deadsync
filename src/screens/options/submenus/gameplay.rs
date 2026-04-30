@@ -111,7 +111,9 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-pub(in crate::screens::options) const fn breakdown_style_choice_index(style: BreakdownStyle) -> usize {
+pub(in crate::screens::options) const fn breakdown_style_choice_index(
+    style: BreakdownStyle,
+) -> usize {
     match style {
         BreakdownStyle::Sl => 0,
         BreakdownStyle::Sn => 1,
@@ -125,7 +127,9 @@ pub(in crate::screens::options) const fn breakdown_style_from_choice(idx: usize)
     }
 }
 
-pub(in crate::screens::options) const fn sync_graph_mode_choice_index(mode: SyncGraphMode) -> usize {
+pub(in crate::screens::options) const fn sync_graph_mode_choice_index(
+    mode: SyncGraphMode,
+) -> usize {
     match mode {
         SyncGraphMode::Frequency => 0,
         SyncGraphMode::BeatIndex => 1,
@@ -150,4 +154,3 @@ pub(in crate::screens::options) const fn sync_confidence_from_choice(idx: usize)
     let capped = if idx > 20 { 20 } else { idx };
     capped as u8 * 5
 }
-

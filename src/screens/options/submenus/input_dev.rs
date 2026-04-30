@@ -170,4 +170,3 @@ pub(in crate::screens::options) const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
-

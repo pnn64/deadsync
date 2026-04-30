@@ -1,9 +1,6 @@
 use crate::act;
 use crate::assets::{self, AssetManager, visual_styles};
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::display::{self, MonitorSpec};
-use crate::engine::gfx::{BackendType, PresentModePolicy};
-use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel, MachineFont,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
@@ -11,9 +8,12 @@ use crate::config::{
     SelectMusicWheelStyle, SimpleIni, SyncGraphMode, VisualStyle, dirs,
 };
 use crate::engine::audio;
+use crate::engine::display::{self, MonitorSpec};
+use crate::engine::gfx::{BackendType, PresentModePolicy};
 #[cfg(target_os = "windows")]
 use crate::engine::input::WindowsPadBackend;
 use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading};
 use crate::game::{course, profile, scores};
 use crate::screens::input as screen_input;
@@ -37,34 +37,48 @@ use crate::screens::components::shared::{screen_bar, visual_style_bg};
 
 // Submodules — wildcard re-exports let sibling modules reach every item via
 // `use super::*`.
-mod submenus;       use submenus::*;
-mod constants;      use constants::*;
-mod format;         use format::*;
-mod row;            use row::*;
-mod item;           use item::*;
-mod state;          use state::*;
-mod visibility;     use visibility::*;
-mod reload;         use reload::*;
-mod score_import;   use score_import::*;
-mod pack_sync;      use pack_sync::*;
+mod submenus;
+use submenus::*;
+mod constants;
+use constants::*;
+mod format;
+use format::*;
+mod row;
+use row::*;
+mod item;
+use item::*;
+mod state;
+use state::*;
+mod visibility;
+use visibility::*;
+mod reload;
+use reload::*;
+mod score_import;
+use score_import::*;
+mod pack_sync;
+use pack_sync::*;
+mod layout;
 mod transitions;
-mod layout;         use layout::*;
-mod update;         use update::*;
-mod input;          use input::*;
-mod render;         use render::*;
+use layout::*;
+mod update;
+use update::*;
+mod input;
+use input::*;
+mod render;
+use render::*;
 
 // Public API re-exports
-pub use state::{State, init};
 pub use input::handle_input;
-pub use update::{
-    update, sync_video_renderer, sync_display_mode, sync_display_resolution,
-    sync_show_stats_mode, sync_translated_titles, sync_max_fps, sync_vsync,
-    sync_present_mode_policy, open_input_submenu, sync_high_dpi,
-};
-pub use render::{get_actors, clear_description_layout_cache, clear_render_cache};
-pub use transitions::{in_transition, out_transition};
 pub use layout::clear_submenu_row_layout_cache;
+pub use render::{clear_description_layout_cache, clear_render_cache, get_actors};
+pub use state::{State, init};
 pub use submenus::update_monitor_specs;
+pub use transitions::{in_transition, out_transition};
+pub use update::{
+    open_input_submenu, sync_display_mode, sync_display_resolution, sync_high_dpi, sync_max_fps,
+    sync_present_mode_policy, sync_show_stats_mode, sync_translated_titles, sync_video_renderer,
+    sync_vsync, update,
+};
 
 #[cfg(test)]
 mod tests;

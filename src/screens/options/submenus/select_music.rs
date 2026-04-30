@@ -407,7 +407,8 @@ pub(in crate::screens::options) const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usiz
 pub(in crate::screens::options) const SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX: usize = 20;
 pub(in crate::screens::options) const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 21;
 
-pub(in crate::screens::options) const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
+pub(in crate::screens::options) const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] =
+    [5, 10, 15, 25, 30, 45, 100];
 
 pub(in crate::screens::options) fn bg_brightness_choice_index(brightness: f32) -> usize {
     ((brightness.clamp(0.0, 1.0) * 10.0).round() as i32).clamp(0, 10) as usize
@@ -438,7 +439,12 @@ pub(in crate::screens::options) fn music_wheel_scroll_speed_from_choice(idx: usi
 }
 
 #[inline(always)]
-pub(in crate::screens::options) const fn scorebox_cycle_mask(itg: bool, ex: bool, hard_ex: bool, tournaments: bool) -> u8 {
+pub(in crate::screens::options) const fn scorebox_cycle_mask(
+    itg: bool,
+    ex: bool,
+    hard_ex: bool,
+    tournaments: bool,
+) -> u8 {
     (itg as u8) | ((ex as u8) << 1) | ((hard_ex as u8) << 2) | ((tournaments as u8) << 3)
 }
 
@@ -489,7 +495,9 @@ pub(in crate::screens::options) const fn scorebox_cycle_bit_from_choice(idx: usi
 }
 
 #[inline(always)]
-pub(in crate::screens::options) const fn scorebox_cycle_mask_from_config(cfg: &config::Config) -> u8 {
+pub(in crate::screens::options) const fn scorebox_cycle_mask_from_config(
+    cfg: &config::Config,
+) -> u8 {
     scorebox_cycle_mask(
         cfg.select_music_scorebox_cycle_itg,
         cfg.select_music_scorebox_cycle_ex,
@@ -506,7 +514,10 @@ pub(in crate::screens::options) fn apply_scorebox_cycle_mask(mask: u8) {
     config::update_select_music_scorebox_cycle_tournaments((mask & (1u8 << 3)) != 0);
 }
 
-pub(in crate::screens::options) fn toggle_select_music_scorebox_cycle_option(state: &mut State, choice_idx: usize) {
+pub(in crate::screens::options) fn toggle_select_music_scorebox_cycle_option(
+    state: &mut State,
+    choice_idx: usize,
+) {
     let bit = scorebox_cycle_bit_from_choice(choice_idx);
     if bit == 0 {
         return;
@@ -550,7 +561,10 @@ pub(in crate::screens::options) fn auto_screenshot_enabled_mask() -> u8 {
     config::get().auto_screenshot_eval
 }
 
-pub(in crate::screens::options) fn toggle_auto_screenshot_option(state: &mut State, choice_idx: usize) {
+pub(in crate::screens::options) fn toggle_auto_screenshot_option(
+    state: &mut State,
+    choice_idx: usize,
+) {
     let bit = auto_screenshot_bit_from_choice(choice_idx);
     if bit == 0 {
         return;
@@ -579,7 +593,9 @@ pub(in crate::screens::options) fn toggle_auto_screenshot_option(state: &mut Sta
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
-pub(in crate::screens::options) const fn select_music_pattern_info_choice_index(mode: SelectMusicPatternInfoMode) -> usize {
+pub(in crate::screens::options) const fn select_music_pattern_info_choice_index(
+    mode: SelectMusicPatternInfoMode,
+) -> usize {
     match mode {
         SelectMusicPatternInfoMode::Auto => 0,
         SelectMusicPatternInfoMode::Tech => 1,
@@ -587,7 +603,9 @@ pub(in crate::screens::options) const fn select_music_pattern_info_choice_index(
     }
 }
 
-pub(in crate::screens::options) const fn select_music_pattern_info_from_choice(idx: usize) -> SelectMusicPatternInfoMode {
+pub(in crate::screens::options) const fn select_music_pattern_info_from_choice(
+    idx: usize,
+) -> SelectMusicPatternInfoMode {
     match idx {
         1 => SelectMusicPatternInfoMode::Tech,
         2 => SelectMusicPatternInfoMode::Stamina,
@@ -596,12 +614,18 @@ pub(in crate::screens::options) const fn select_music_pattern_info_from_choice(i
 }
 
 #[inline(always)]
-pub(in crate::screens::options) const fn select_music_chart_info_mask(peak_nps: bool, matrix_rating: bool) -> u8 {
+pub(in crate::screens::options) const fn select_music_chart_info_mask(
+    peak_nps: bool,
+    matrix_rating: bool,
+) -> u8 {
     (peak_nps as u8) | ((matrix_rating as u8) << 1)
 }
 
 #[inline(always)]
-pub(in crate::screens::options) const fn select_music_chart_info_cursor_index(peak_nps: bool, matrix_rating: bool) -> usize {
+pub(in crate::screens::options) const fn select_music_chart_info_cursor_index(
+    peak_nps: bool,
+    matrix_rating: bool,
+) -> usize {
     if peak_nps {
         0
     } else if matrix_rating {
@@ -621,7 +645,9 @@ pub(in crate::screens::options) const fn select_music_chart_info_bit_from_choice
 }
 
 #[inline(always)]
-pub(in crate::screens::options) const fn select_music_chart_info_mask_from_config(cfg: &config::Config) -> u8 {
+pub(in crate::screens::options) const fn select_music_chart_info_mask_from_config(
+    cfg: &config::Config,
+) -> u8 {
     select_music_chart_info_mask(
         cfg.select_music_chart_info_peak_nps,
         cfg.select_music_chart_info_matrix_rating,
@@ -634,7 +660,10 @@ pub(in crate::screens::options) fn apply_select_music_chart_info_mask(mask: u8) 
     config::update_select_music_chart_info_matrix_rating((mask & (1u8 << 1)) != 0);
 }
 
-pub(in crate::screens::options) fn toggle_select_music_chart_info_option(state: &mut State, choice_idx: usize) {
+pub(in crate::screens::options) fn toggle_select_music_chart_info_option(
+    state: &mut State,
+    choice_idx: usize,
+) {
     let bit = select_music_chart_info_bit_from_choice(choice_idx);
     if bit == 0 {
         return;
@@ -672,7 +701,9 @@ pub(in crate::screens::options) fn select_music_chart_info_enabled_mask() -> u8 
     if mask == 0 { 1 } else { mask }
 }
 
-pub(in crate::screens::options) const fn select_music_itl_wheel_choice_index(mode: SelectMusicItlWheelMode) -> usize {
+pub(in crate::screens::options) const fn select_music_itl_wheel_choice_index(
+    mode: SelectMusicItlWheelMode,
+) -> usize {
     match mode {
         SelectMusicItlWheelMode::Off => 0,
         SelectMusicItlWheelMode::Score => 1,
@@ -680,7 +711,9 @@ pub(in crate::screens::options) const fn select_music_itl_wheel_choice_index(mod
     }
 }
 
-pub(in crate::screens::options) const fn select_music_itl_rank_choice_index(mode: SelectMusicItlRankMode) -> usize {
+pub(in crate::screens::options) const fn select_music_itl_rank_choice_index(
+    mode: SelectMusicItlRankMode,
+) -> usize {
     match mode {
         SelectMusicItlRankMode::None => 0,
         SelectMusicItlRankMode::Chart => 1,
@@ -688,7 +721,9 @@ pub(in crate::screens::options) const fn select_music_itl_rank_choice_index(mode
     }
 }
 
-pub(in crate::screens::options) const fn select_music_itl_rank_from_choice(idx: usize) -> SelectMusicItlRankMode {
+pub(in crate::screens::options) const fn select_music_itl_rank_from_choice(
+    idx: usize,
+) -> SelectMusicItlRankMode {
     match idx {
         1 => SelectMusicItlRankMode::Chart,
         2 => SelectMusicItlRankMode::Overall,
@@ -696,7 +731,9 @@ pub(in crate::screens::options) const fn select_music_itl_rank_from_choice(idx: 
     }
 }
 
-pub(in crate::screens::options) const fn select_music_itl_wheel_from_choice(idx: usize) -> SelectMusicItlWheelMode {
+pub(in crate::screens::options) const fn select_music_itl_wheel_from_choice(
+    idx: usize,
+) -> SelectMusicItlWheelMode {
     match idx {
         1 => SelectMusicItlWheelMode::Score,
         2 => SelectMusicItlWheelMode::PointsAndScore,
@@ -704,14 +741,18 @@ pub(in crate::screens::options) const fn select_music_itl_wheel_from_choice(idx:
     }
 }
 
-pub(in crate::screens::options) const fn select_music_wheel_style_choice_index(style: SelectMusicWheelStyle) -> usize {
+pub(in crate::screens::options) const fn select_music_wheel_style_choice_index(
+    style: SelectMusicWheelStyle,
+) -> usize {
     match style {
         SelectMusicWheelStyle::Itg => 0,
         SelectMusicWheelStyle::Iidx => 1,
     }
 }
 
-pub(in crate::screens::options) const fn select_music_wheel_style_from_choice(idx: usize) -> SelectMusicWheelStyle {
+pub(in crate::screens::options) const fn select_music_wheel_style_from_choice(
+    idx: usize,
+) -> SelectMusicWheelStyle {
     match idx {
         1 => SelectMusicWheelStyle::Iidx,
         _ => SelectMusicWheelStyle::Itg,
@@ -743,10 +784,11 @@ pub(in crate::screens::options) const fn select_music_scorebox_placement_choice_
     }
 }
 
-pub(in crate::screens::options) const fn select_music_scorebox_placement_from_choice(idx: usize) -> SelectMusicScoreboxPlacement {
+pub(in crate::screens::options) const fn select_music_scorebox_placement_from_choice(
+    idx: usize,
+) -> SelectMusicScoreboxPlacement {
     match idx {
         1 => SelectMusicScoreboxPlacement::StepPane,
         _ => SelectMusicScoreboxPlacement::Auto,
     }
 }
-

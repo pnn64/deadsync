@@ -75,7 +75,9 @@ pub(super) struct ScoreImportConfirmState {
 }
 
 #[inline(always)]
-pub(super) const fn score_import_endpoint_from_choice_index(idx: usize) -> scores::ScoreImportEndpoint {
+pub(super) const fn score_import_endpoint_from_choice_index(
+    idx: usize,
+) -> scores::ScoreImportEndpoint {
     match idx {
         1 => scores::ScoreImportEndpoint::BoogieStats,
         2 => scores::ScoreImportEndpoint::ArrowCloud,

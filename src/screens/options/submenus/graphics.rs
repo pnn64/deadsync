@@ -381,7 +381,9 @@ pub(in crate::screens::options) const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] 
     (800, 600),
 ];
 
-pub(in crate::screens::options) fn build_display_mode_choices(monitor_specs: &[MonitorSpec]) -> Vec<String> {
+pub(in crate::screens::options) fn build_display_mode_choices(
+    monitor_specs: &[MonitorSpec],
+) -> Vec<String> {
     if monitor_specs.is_empty() {
         return vec![
             tr("OptionsGraphics", "Screen1Fallback").to_string(),
@@ -395,7 +397,6 @@ pub(in crate::screens::options) fn build_display_mode_choices(monitor_specs: &[M
     out.push(tr("OptionsGraphics", "Windowed").to_string());
     out
 }
-
 
 pub(in crate::screens::options) fn backend_to_renderer_choice_index(backend: BackendType) -> usize {
     VIDEO_RENDERER_OPTIONS
@@ -445,7 +446,10 @@ pub(in crate::screens::options) fn software_thread_choice_labels(values: &[u8]) 
         .collect()
 }
 
-pub(in crate::screens::options) fn software_thread_choice_index(values: &[u8], thread_count: u8) -> usize {
+pub(in crate::screens::options) fn software_thread_choice_index(
+    values: &[u8],
+    thread_count: u8,
+) -> usize {
     values
         .iter()
         .position(|&v| v == thread_count)
@@ -569,7 +573,9 @@ pub(in crate::screens::options) fn max_fps_from_choice(values: &[u16], idx: usiz
 }
 
 #[inline(always)]
-pub(in crate::screens::options) const fn present_mode_choice_index(mode: PresentModePolicy) -> usize {
+pub(in crate::screens::options) const fn present_mode_choice_index(
+    mode: PresentModePolicy,
+) -> usize {
     match mode {
         PresentModePolicy::Mailbox => 0,
         PresentModePolicy::Immediate => 1,
@@ -584,7 +590,9 @@ pub(in crate::screens::options) const fn present_mode_from_choice(idx: usize) ->
     }
 }
 
-pub(in crate::screens::options) fn selected_present_mode_policy(state: &State) -> PresentModePolicy {
+pub(in crate::screens::options) fn selected_present_mode_policy(
+    state: &State,
+) -> PresentModePolicy {
     state
         .sub_choice_indices_graphics
         .get(PRESENT_MODE_ROW_INDEX)
@@ -673,14 +681,18 @@ pub(in crate::screens::options) fn graphics_show_high_dpi(state: &State) -> bool
     cfg!(target_os = "macos") && selected_video_renderer(state) == BackendType::OpenGL
 }
 
-pub(in crate::screens::options) const fn fullscreen_type_to_choice_index(fullscreen_type: FullscreenType) -> usize {
+pub(in crate::screens::options) const fn fullscreen_type_to_choice_index(
+    fullscreen_type: FullscreenType,
+) -> usize {
     match fullscreen_type {
         FullscreenType::Exclusive => 0,
         FullscreenType::Borderless => 1,
     }
 }
 
-pub(in crate::screens::options) const fn choice_index_to_fullscreen_type(idx: usize) -> FullscreenType {
+pub(in crate::screens::options) const fn choice_index_to_fullscreen_type(
+    idx: usize,
+) -> FullscreenType {
     match idx {
         1 => FullscreenType::Borderless,
         _ => FullscreenType::Exclusive,
@@ -911,7 +923,11 @@ pub(in crate::screens::options) fn inferred_aspect_choice(width: u32, height: u3
     best_idx
 }
 
-pub(in crate::screens::options) fn sync_display_aspect_ratio(state: &mut State, width: u32, height: u32) {
+pub(in crate::screens::options) fn sync_display_aspect_ratio(
+    state: &mut State,
+    width: u32,
+    height: u32,
+) {
     let idx = inferred_aspect_choice(width, height);
     if let Some(slot) = state
         .sub_choice_indices_graphics
@@ -927,7 +943,11 @@ pub(in crate::screens::options) fn sync_display_aspect_ratio(state: &mut State, 
     }
 }
 
-pub(in crate::screens::options) fn push_unique_resolution(target: &mut Vec<(u32, u32)>, width: u32, height: u32) {
+pub(in crate::screens::options) fn push_unique_resolution(
+    target: &mut Vec<(u32, u32)>,
+    width: u32,
+    height: u32,
+) {
     if !target.iter().any(|&(w, h)| w == width && h == height) {
         target.push((width, height));
     }
@@ -1042,7 +1062,11 @@ pub(in crate::screens::options) fn rebuild_refresh_rate_choices(state: &mut Stat
     }
 }
 
-pub(in crate::screens::options) fn rebuild_resolution_choices(state: &mut State, width: u32, height: u32) {
+pub(in crate::screens::options) fn rebuild_resolution_choices(
+    state: &mut State,
+    width: u32,
+    height: u32,
+) {
     let aspect_label = selected_aspect_label(state);
     let mon_idx = selected_display_monitor(state);
 
@@ -1087,4 +1111,3 @@ pub(in crate::screens::options) fn rebuild_resolution_choices(state: &mut State,
     // Rebuild refresh rates since available rates depend on resolution.
     rebuild_refresh_rate_choices(state);
 }
-

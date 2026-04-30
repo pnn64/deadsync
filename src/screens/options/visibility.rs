@@ -80,7 +80,11 @@ pub(super) const fn submenu_title(kind: SubmenuKind) -> &'static str {
     }
 }
 
-pub(super) fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow]) -> Vec<usize> {
+pub(super) fn submenu_visible_row_indices(
+    state: &State,
+    kind: SubmenuKind,
+    rows: &[SubRow],
+) -> Vec<usize> {
     match kind {
         SubmenuKind::Graphics => {
             let show_sw = graphics_show_software_threads(state);
@@ -247,7 +251,10 @@ pub(super) fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usiz
     }
 }
 
-pub(super) const fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mut Vec<usize> {
+pub(super) const fn submenu_choice_indices_mut(
+    state: &mut State,
+    kind: SubmenuKind,
+) -> &mut Vec<usize> {
     match kind {
         SubmenuKind::System => &mut state.sub_choice_indices_system,
         SubmenuKind::Graphics => &mut state.sub_choice_indices_graphics,
@@ -291,7 +298,10 @@ pub(super) fn submenu_cursor_indices(state: &State, kind: SubmenuKind) -> &[usiz
     }
 }
 
-pub(super) const fn submenu_cursor_indices_mut(state: &mut State, kind: SubmenuKind) -> &mut Vec<usize> {
+pub(super) const fn submenu_cursor_indices_mut(
+    state: &mut State,
+    kind: SubmenuKind,
+) -> &mut Vec<usize> {
     match kind {
         SubmenuKind::System => &mut state.sub_cursor_indices_system,
         SubmenuKind::Graphics => &mut state.sub_cursor_indices_graphics,

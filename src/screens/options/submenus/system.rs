@@ -115,7 +115,9 @@ pub(in crate::screens::options) fn discover_system_noteskin_choices() -> Vec<Str
     names
 }
 
-pub(in crate::screens::options) const fn translated_titles_choice_index(translated_titles: bool) -> usize {
+pub(in crate::screens::options) const fn translated_titles_choice_index(
+    translated_titles: bool,
+) -> usize {
     if translated_titles { 0 } else { 1 }
 }
 
@@ -123,7 +125,9 @@ pub(in crate::screens::options) const fn translated_titles_from_choice(idx: usiz
     idx == 0
 }
 
-pub(in crate::screens::options) const fn language_choice_index(flag: config::LanguageFlag) -> usize {
+pub(in crate::screens::options) const fn language_choice_index(
+    flag: config::LanguageFlag,
+) -> usize {
     match flag {
         config::LanguageFlag::Auto | config::LanguageFlag::English => 0,
         config::LanguageFlag::German => 1,
@@ -139,7 +143,9 @@ pub(in crate::screens::options) const fn language_choice_index(flag: config::Lan
     }
 }
 
-pub(in crate::screens::options) const fn language_flag_from_choice(idx: usize) -> config::LanguageFlag {
+pub(in crate::screens::options) const fn language_flag_from_choice(
+    idx: usize,
+) -> config::LanguageFlag {
     match idx {
         1 => config::LanguageFlag::German,
         2 => config::LanguageFlag::Spanish,
@@ -154,4 +160,3 @@ pub(in crate::screens::options) const fn language_flag_from_choice(idx: usize) -
         _ => config::LanguageFlag::English,
     }
 }
-

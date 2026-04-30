@@ -651,7 +651,10 @@ pub(super) fn undo_three_key_selection(state: &mut State, asset_manager: &AssetM
     }
 }
 
-pub(super) fn activate_current_selection(state: &mut State, asset_manager: &AssetManager) -> ScreenAction {
+pub(super) fn activate_current_selection(
+    state: &mut State,
+    asset_manager: &AssetManager,
+) -> ScreenAction {
     match state.view {
         OptionsView::Main => {
             let total = ITEMS.len();

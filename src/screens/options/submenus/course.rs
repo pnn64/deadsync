@@ -81,4 +81,3 @@ pub(in crate::screens::options) const COURSE_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
-

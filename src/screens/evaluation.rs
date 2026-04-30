@@ -4079,19 +4079,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if lines.is_empty() {
                 continue;
             }
-            let pane_left = if side == profile::PlayerSide::P1 {
-                screen_center_x() - 305.0
+            let submit_center_x = if side == profile::PlayerSide::P1 {
+                screen_width() * 0.25
             } else {
-                screen_center_x() + 5.0
-            };
-            let pane_right = if side == profile::PlayerSide::P1 {
-                if play_style == profile::PlayStyle::Versus {
-                    screen_center_x() - 5.0
-                } else {
-                    screen_center_x() + 305.0
-                }
-            } else {
-                screen_center_x() + 305.0
+                screen_width() * 0.75
             };
             let base_y = screen_height() - 15.0;
             let frame = ((state.screen_elapsed.max(0.0) * SUBMIT_FOOTER_SPRITE_FPS) as u32)
@@ -4158,11 +4149,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     FooterFrag::Sprite { .. } => SUBMIT_FOOTER_SPRITE_PX,
                 })
                 .sum();
-            let mut cursor = if side == profile::PlayerSide::P1 {
-                pane_left
-            } else {
-                pane_right - total_w
-            };
+            let mut cursor = submit_center_x - total_w * 0.5;
             for frag in frags {
                 match frag {
                     FooterFrag::Text { text, width } => {

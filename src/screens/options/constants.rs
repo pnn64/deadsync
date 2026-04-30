@@ -62,7 +62,8 @@ pub(super) const OPTIONS_BLOCK_W_169: f32 = 792.0;
 pub(super) const DESC_W_43: f32 = 287.0; // ScreenOptionsService overlay.lua: WideScale(287,292)
 pub(super) const DESC_W_169: f32 = 292.0;
 // derive description height from visible rows so it never includes a trailing gap
-pub(super) const DESC_H: f32 = (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
+pub(super) const DESC_H: f32 =
+    (VISIBLE_ROWS as f32) * ROW_H + ((VISIBLE_ROWS - 1) as f32) * ROW_GAP;
 
 /// Left margin for row labels (in content-space pixels).
 pub(super) const TEXT_LEFT_PAD: f32 = 40.66;

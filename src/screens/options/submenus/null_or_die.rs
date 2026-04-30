@@ -232,29 +232,36 @@ pub(in crate::screens::options) const NULL_OR_DIE_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-
-pub(in crate::screens::options) const fn null_or_die_kernel_target_choice_index(target: KernelTarget) -> usize {
+pub(in crate::screens::options) const fn null_or_die_kernel_target_choice_index(
+    target: KernelTarget,
+) -> usize {
     match target {
         KernelTarget::Digest => 0,
         KernelTarget::Accumulator => 1,
     }
 }
 
-pub(in crate::screens::options) const fn null_or_die_kernel_target_from_choice(idx: usize) -> KernelTarget {
+pub(in crate::screens::options) const fn null_or_die_kernel_target_from_choice(
+    idx: usize,
+) -> KernelTarget {
     match idx {
         1 => KernelTarget::Accumulator,
         _ => KernelTarget::Digest,
     }
 }
 
-pub(in crate::screens::options) const fn null_or_die_kernel_type_choice_index(kind: BiasKernel) -> usize {
+pub(in crate::screens::options) const fn null_or_die_kernel_type_choice_index(
+    kind: BiasKernel,
+) -> usize {
     match kind {
         BiasKernel::Rising => 0,
         BiasKernel::Loudest => 1,
     }
 }
 
-pub(in crate::screens::options) const fn null_or_die_kernel_type_from_choice(idx: usize) -> BiasKernel {
+pub(in crate::screens::options) const fn null_or_die_kernel_type_from_choice(
+    idx: usize,
+) -> BiasKernel {
     match idx {
         1 => BiasKernel::Loudest,
         _ => BiasKernel::Rising,

@@ -3,11 +3,7 @@ use crate::assets::AssetManager;
 use crate::engine::input::{InputEvent, InputSource, VirtualAction};
 use std::time::{Duration, Instant};
 
-fn press(
-    state: &mut State,
-    asset_manager: &AssetManager,
-    action: VirtualAction,
-) -> ScreenAction {
+fn press(state: &mut State, asset_manager: &AssetManager, action: VirtualAction) -> ScreenAction {
     let now = Instant::now();
     handle_input(
         state,

@@ -115,17 +115,20 @@ pub(in crate::screens::options) const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
 
 pub(in crate::screens::options) const ADVANCED_SONG_PARSING_THREADS_ROW_INDEX: usize = 3;
 
-pub(in crate::screens::options) const fn default_fail_type_choice_index(fail_type: DefaultFailType) -> usize {
+pub(in crate::screens::options) const fn default_fail_type_choice_index(
+    fail_type: DefaultFailType,
+) -> usize {
     match fail_type {
         DefaultFailType::Immediate => 0,
         DefaultFailType::ImmediateContinue => 1,
     }
 }
 
-pub(in crate::screens::options) const fn default_fail_type_from_choice(idx: usize) -> DefaultFailType {
+pub(in crate::screens::options) const fn default_fail_type_from_choice(
+    idx: usize,
+) -> DefaultFailType {
     match idx {
         0 => DefaultFailType::Immediate,
         _ => DefaultFailType::ImmediateContinue,
     }
 }
-

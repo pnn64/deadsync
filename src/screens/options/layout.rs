@@ -519,7 +519,12 @@ pub(super) fn row_dest_for_index(
     }
 }
 
-pub(super) fn init_row_tweens(total_rows: usize, selected: usize, s: f32, list_y: f32) -> Vec<RowTween> {
+pub(super) fn init_row_tweens(
+    total_rows: usize,
+    selected: usize,
+    s: f32,
+    list_y: f32,
+) -> Vec<RowTween> {
     let mut out: Vec<RowTween> = Vec::with_capacity(total_rows);
     for row_idx in 0..total_rows {
         let (y, a) = row_dest_for_index(total_rows, selected, row_idx, s, list_y);

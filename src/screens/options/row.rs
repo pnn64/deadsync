@@ -191,7 +191,12 @@ pub(super) const fn literal_choice(s: &'static str) -> Choice {
     Choice::Literal(s)
 }
 
-pub(super) fn set_choice_by_id(choice_indices: &mut Vec<usize>, rows: &[SubRow], id: SubRowId, idx: usize) {
+pub(super) fn set_choice_by_id(
+    choice_indices: &mut Vec<usize>,
+    rows: &[SubRow],
+    id: SubRowId,
+    idx: usize,
+) {
     if let Some(pos) = rows.iter().position(|r| r.id == id)
         && let Some(slot) = choice_indices.get_mut(pos)
     {

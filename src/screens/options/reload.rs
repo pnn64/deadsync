@@ -163,7 +163,10 @@ pub(super) fn reload_detail_lines(reload: &ReloadUiState) -> (String, String) {
     (reload.line2.clone(), reload.line3.clone())
 }
 
-pub(super) fn build_reload_overlay_actors(reload: &ReloadUiState, active_color_index: i32) -> Vec<Actor> {
+pub(super) fn build_reload_overlay_actors(
+    reload: &ReloadUiState,
+    active_color_index: i32,
+) -> Vec<Actor> {
     let (done, total, progress) = reload_progress(reload);
     let elapsed = reload.started_at.elapsed().as_secs_f32().max(0.0);
     let count_text = if total == 0 {

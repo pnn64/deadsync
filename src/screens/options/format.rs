@@ -1,4 +1,3 @@
-
 #[inline(always)]
 pub(super) fn format_ms(value: i32) -> String {
     // Positive values omit a '+' and compact to the Simply Love "Nms" style.

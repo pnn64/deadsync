@@ -41,4 +41,3 @@ pub(in crate::screens::options) const SYNC_PACK_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
-

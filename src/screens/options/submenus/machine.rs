@@ -306,7 +306,9 @@ pub(in crate::screens::options) const MACHINE_PREFERRED_STYLE_ROW_INDEX: usize =
 pub(in crate::screens::options) const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
 pub(in crate::screens::options) const MACHINE_PREFERRED_MODE_ROW_INDEX: usize = 5;
 
-pub(in crate::screens::options) const fn machine_preferred_style_choice_index(style: MachinePreferredPlayStyle) -> usize {
+pub(in crate::screens::options) const fn machine_preferred_style_choice_index(
+    style: MachinePreferredPlayStyle,
+) -> usize {
     match style {
         MachinePreferredPlayStyle::Single => 0,
         MachinePreferredPlayStyle::Versus => 1,
@@ -314,7 +316,9 @@ pub(in crate::screens::options) const fn machine_preferred_style_choice_index(st
     }
 }
 
-pub(in crate::screens::options) const fn machine_preferred_style_from_choice(idx: usize) -> MachinePreferredPlayStyle {
+pub(in crate::screens::options) const fn machine_preferred_style_from_choice(
+    idx: usize,
+) -> MachinePreferredPlayStyle {
     match idx {
         1 => MachinePreferredPlayStyle::Versus,
         2 => MachinePreferredPlayStyle::Double,
@@ -322,14 +326,18 @@ pub(in crate::screens::options) const fn machine_preferred_style_from_choice(idx
     }
 }
 
-pub(in crate::screens::options) const fn machine_preferred_mode_choice_index(mode: MachinePreferredPlayMode) -> usize {
+pub(in crate::screens::options) const fn machine_preferred_mode_choice_index(
+    mode: MachinePreferredPlayMode,
+) -> usize {
     match mode {
         MachinePreferredPlayMode::Regular => 0,
         MachinePreferredPlayMode::Marathon => 1,
     }
 }
 
-pub(in crate::screens::options) const fn machine_preferred_mode_from_choice(idx: usize) -> MachinePreferredPlayMode {
+pub(in crate::screens::options) const fn machine_preferred_mode_from_choice(
+    idx: usize,
+) -> MachinePreferredPlayMode {
     match idx {
         1 => MachinePreferredPlayMode::Marathon,
         _ => MachinePreferredPlayMode::Regular,
@@ -415,4 +423,3 @@ pub(in crate::screens::options) const fn log_level_from_choice(idx: usize) -> Lo
         _ => LogLevel::Trace,
     }
 }
-

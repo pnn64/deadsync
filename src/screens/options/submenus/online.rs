@@ -202,4 +202,3 @@ pub(in crate::screens::options) const ONLINE_SCORING_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
-

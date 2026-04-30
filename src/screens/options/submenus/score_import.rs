@@ -90,4 +90,3 @@ pub(in crate::screens::options) const SCORE_IMPORT_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
-
