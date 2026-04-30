@@ -58,8 +58,8 @@ const ROW_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 const INLINE_SPACING: f32 = 15.75;
 const SUBMENU_VALUE_ZOOM: f32 = 0.835;
-const VISUAL_STYLE_VALUE_ZOOM: f32 = 0.72;
-const VISUAL_STYLE_INLINE_SPACING: f32 = 2.5;
+const VISUAL_STYLE_VALUE_ZOOM: f32 = 0.75;
+const VISUAL_STYLE_INLINE_SPACING: f32 = 13.0;
 
 // Match Simply Love operator menu ranges (±1000 ms) for these calibrations.
 const GLOBAL_OFFSET_MIN_MS: i32 = -1000;
