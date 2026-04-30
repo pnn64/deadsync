@@ -986,7 +986,9 @@ fn closest_lane_note_ns(
     let mut best_row_index = 0usize;
     for &note_index in &note_indices[search_start_idx..search_end_idx] {
         let note = &notes[note_index];
-        if note.result.is_some() || !note.can_be_judged || note.is_fake {
+        let mine_already_judged =
+            matches!(note.note_type, NoteType::Mine) && note.mine_result.is_some();
+        if note.result.is_some() || mine_already_judged || !note.can_be_judged || note.is_fake {
             continue;
         }
         let row_distance = current_row_index.abs_diff(note.row_index);
@@ -10831,6 +10833,39 @@ mod tests {
         assert_eq!(note_index, 0);
         assert!((song_time_ns_to_seconds(abs_err_ns.abs()) - 0.010).abs() <= 1e-6);
     }
+
+    #[test]
+    fn closest_lane_note_skips_already_judged_mines() {
+        let mut notes = vec![
+            test_note(0, 48, NoteType::Mine),
+            test_note(0, 60, NoteType::Tap),
+        ];
+        notes[0].mine_result = Some(MineResult::Hit);
+        let note_indices = [0usize, 1];
+        let note_times_ns = [
+            song_time_ns_from_seconds(1.000),
+            song_time_ns_from_seconds(1.120),
+        ];
+        let (start_idx, end_idx) = lane_note_window_bounds_ns(
+            &note_indices,
+            &note_times_ns,
+            song_time_ns_from_seconds(0.9),
+            song_time_ns_from_seconds(1.2),
+        );
+        let (note_index, _) = closest_lane_note_ns(
+            &note_indices,
+            &notes,
+            &note_times_ns,
+            song_time_ns_from_seconds(1.030),
+            50,
+            start_idx,
+            end_idx,
+        )
+        .expect("expected the unjudged tap to remain hittable");
+
+        assert_eq!(note_index, 1);
+    }
+
     #[test]
     fn input_queue_cap_scales_with_fields() {
         assert_eq!(input_queue_cap(0), GAMEPLAY_INPUT_BACKLOG_WARN);
