@@ -7189,7 +7189,7 @@ fn record_song_lua_sound_path(lua: &Lua, song_dir: &Path, args: &MultiValue) -> 
         return Ok(());
     }
 
-    let key = file_path_string(path.as_path());
+    let key = path.to_string_lossy().into_owned();
     let paths = song_lua_sound_paths_table(lua)?;
     for existing in paths.sequence_values::<String>() {
         if existing? == key {
@@ -9482,7 +9482,7 @@ fn create_player_stage_stats_table(
                     .get::<Option<i64>>("__songlua_possible_dance_points")?
                     .unwrap_or(1)
                     .max(1);
-                Ok(actual as f32 / possible as f32)
+                Ok(actual as f64 / possible as f64)
             }
         })?,
     )?;
@@ -12680,7 +12680,7 @@ fn run_actor_update_functions(lua: &Lua, root: &Value) -> mlua::Result<()> {
     let Value::Table(root) = root else {
         return Ok(());
     };
-    run_actor_update_functions_for_table(lua, root, 1.0 / 60.0)
+    run_actor_update_functions_for_table(lua, root, 1.0_f64 / 60.0)
 }
 
 fn run_actor_draw_functions(lua: &Lua, root: &Value) {
@@ -12802,9 +12802,9 @@ fn run_song_meter_stream_startup_command(lua: &Lua, actor: &Table) -> mlua::Resu
     run_actor_startup_commands_for_table(lua, &stream)
 }
 
-fn actor_update_rate(actor: &Table) -> mlua::Result<f32> {
+fn actor_update_rate(actor: &Table) -> mlua::Result<f64> {
     let rate = actor
-        .get::<Option<f32>>("__songlua_update_rate")?
+        .get::<Option<f64>>("__songlua_update_rate")?
         .unwrap_or(1.0);
     Ok(if rate.is_finite() && rate > 0.0 {
         rate
@@ -12816,16 +12816,11 @@ fn actor_update_rate(actor: &Table) -> mlua::Result<f32> {
 fn run_actor_update_functions_for_table(
     lua: &Lua,
     actor: &Table,
-    parent_delta_seconds: f32,
+    parent_delta_seconds: f64,
 ) -> mlua::Result<()> {
     let delta_seconds = parent_delta_seconds * actor_update_rate(actor)?;
     if let Some(update) = actor.get::<Option<Function>>("__songlua_update_function")? {
-        call_actor_function(
-            lua,
-            actor,
-            &update,
-            Some(Value::Number(delta_seconds as f64)),
-        )?;
+        call_actor_function(lua, actor, &update, Some(Value::Number(delta_seconds)))?;
         drain_actor_command_queue(lua, actor)?;
     }
     for child in actor.sequence_values::<Value>() {
@@ -13172,6 +13167,7 @@ fn read_overlay_actor(
             message_commands.push(SongLuaOverlayMessageCommand { message, blocks });
         }
     }
+    flush_actor_capture(actor).map_err(|err| err.to_string())?;
     let startup_sound_blocks: Vec<_> = read_actor_capture_blocks(actor)?
         .into_iter()
         .filter(|block| block.delta.sound_play == Some(true))
@@ -26796,12 +26792,7 @@ return Def.ActorFrame{}
         .unwrap();
         assert_eq!(
             compiled.sound_paths,
-            vec![
-                song_dir.join("effect.ogg"),
-                song_dir.join("music.wav"),
-                song_dir.join("effect.ogg"),
-                song_dir.join("music.wav")
-            ]
+            vec![song_dir.join("effect.ogg"), song_dir.join("music.wav")]
         );
     }
 

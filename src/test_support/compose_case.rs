@@ -759,22 +759,27 @@ fn font_snapshot(font: &Font) -> FontSnapshot {
 }
 
 fn font_runtime(font: &FontSnapshot, name_map: &HashMap<String, &'static str>) -> Font {
-    let glyph_map = font
-        .glyphs
-        .iter()
-        .filter_map(|entry| {
-            char::from_u32(entry.codepoint).map(|ch| (ch, glyph_runtime(&entry.glyph)))
-        })
-        .collect::<HashMap<_, _>>();
+    let mut texture_keys = HashMap::<String, Arc<str>>::new();
     let stroke_texture_map = font
         .stroke_texture_map
         .iter()
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect::<HashMap<_, _>>();
+    let glyph_map = font
+        .glyphs
+        .iter()
+        .filter_map(|entry| {
+            char::from_u32(entry.codepoint)
+                .map(|ch| (ch, glyph_runtime(&entry.glyph, &mut texture_keys)))
+        })
+        .collect::<HashMap<_, _>>();
     let mut runtime = Font {
         glyph_map,
         ascii_glyphs: Box::new(std::array::from_fn(|_| None)),
-        default_glyph: font.default_glyph.as_ref().map(glyph_runtime),
+        default_glyph: font
+            .default_glyph
+            .as_ref()
+            .map(|glyph| glyph_runtime(glyph, &mut texture_keys)),
         line_spacing: font.line_spacing,
         height: font.height,
         fallback_font_name: font
@@ -795,15 +800,24 @@ fn font_runtime(font: &FontSnapshot, name_map: &HashMap<String, &'static str>) -
         glyph.stroke_texture_key = runtime
             .stroke_texture_map
             .get(glyph.texture_key.as_ref())
-            .map(|key| Arc::<str>::from(key.as_str()));
+            .map(|key| intern_texture_key(&mut texture_keys, key));
     }
     if let Some(glyph) = runtime.default_glyph.as_mut() {
         glyph.stroke_texture_key = runtime
             .stroke_texture_map
             .get(glyph.texture_key.as_ref())
-            .map(|key| Arc::<str>::from(key.as_str()));
+            .map(|key| intern_texture_key(&mut texture_keys, key));
     }
     runtime
+}
+
+fn intern_texture_key(keys: &mut HashMap<String, Arc<str>>, key: &str) -> Arc<str> {
+    if let Some(existing) = keys.get(key) {
+        return existing.clone();
+    }
+    let interned = Arc::<str>::from(key);
+    keys.insert(key.to_string(), interned.clone());
+    interned
 }
 
 fn glyph_snapshot(glyph: &Glyph) -> GlyphSnapshot {
@@ -818,9 +832,9 @@ fn glyph_snapshot(glyph: &Glyph) -> GlyphSnapshot {
     }
 }
 
-fn glyph_runtime(glyph: &GlyphSnapshot) -> Glyph {
+fn glyph_runtime(glyph: &GlyphSnapshot, texture_keys: &mut HashMap<String, Arc<str>>) -> Glyph {
     Glyph {
-        texture_key: Arc::<str>::from(glyph.texture_key.as_ref()),
+        texture_key: intern_texture_key(texture_keys, &glyph.texture_key),
         stroke_texture_key: None,
         tex_rect: glyph.tex_rect,
         uv_scale: glyph.uv_scale,

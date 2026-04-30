@@ -370,10 +370,15 @@ pub(super) fn finish_start_without_action(
 }
 
 #[inline(always)]
-fn all_active_players_on_last_row(state: &State, active: [bool; PLAYER_SLOTS]) -> bool {
-    let last_row = state.pane().row_map.len().saturating_sub(1);
-    active_player_indices(active)
-        .all(|player_idx| state.pane().selected_row[player_idx] == last_row)
+fn all_active_players_on_row(
+    state: &State,
+    active: [bool; PLAYER_SLOTS],
+    row_index: usize,
+) -> bool {
+    active_player_indices(active).all(|player_idx| {
+        state.pane().selected_row[player_idx]
+            == row_index.min(state.pane().row_map.len().saturating_sub(1))
+    })
 }
 
 pub(super) fn handle_nav_event(
@@ -667,18 +672,12 @@ pub(super) fn handle_start_event(
     if super::choice::dispatch_behavior_toggle(state, player_idx, id) {
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    // ITG ScreenOptions only exits once every active player is on the last row.
-    if row_index == num_rows.saturating_sub(1) && !all_active_players_on_last_row(state, active) {
+    // ITG ScreenOptions only exits once every active player is on Exit.
+    if id == RowId::Exit && !all_active_players_on_row(state, active, row_index) {
         return None;
     }
-    if row_index == num_rows.saturating_sub(1)
-        && let Some(what_comes_next_row) = state
-            .pane()
-            .row_map
-            .display_order()
-            .get(num_rows.saturating_sub(2))
-            .and_then(|&id| state.pane().row_map.get(id))
-        && what_comes_next_row.id == RowId::WhatComesNext
+    if id == RowId::Exit
+        && let Some(what_comes_next_row) = state.pane().row_map.get(RowId::WhatComesNext)
     {
         let choice_idx = what_comes_next_row.selected_choice_index[player_idx];
         if let Some(choice) = what_comes_next_row.choices.get(choice_idx) {
