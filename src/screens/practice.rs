@@ -21,9 +21,10 @@ const BEAT_EPSILON: f32 = 0.000_1;
 const MARKER_Z: f32 = 2985.0;
 const EDIT_FIELD_CURSOR_TEX: &str = "practice/snap_display_icon_9x1 (doubleres).png";
 const EDIT_FIELD_CURSOR_Z: f32 = MARKER_Z + 1.0;
-const EDIT_MENU_ROW_HEIGHT: f32 = 34.0;
+const EDIT_MENU_ROW_HEIGHT: f32 = 32.0;
 const EDIT_MENU_ROW_BG_HEIGHT: f32 = 30.0;
-const EDIT_MENU_TEXT_ZOOM: f32 = 1.35;
+const EDIT_MENU_TITLE_X_OFFSET: f32 = 200.0;
+const EDIT_MENU_TEXT_ZOOM: f32 = 1.0;
 const EDIT_HELP_HEADER_ZOOM: f32 = 0.26;
 const EDIT_HELP_MENU_Y: f32 = 150.0;
 const EDIT_HELP_MISC_Y: f32 = 224.0;
@@ -1321,7 +1322,7 @@ fn append_menu_row(
     selected_color: [f32; 4],
 ) {
     let y = menu_row_y(idx, row_count);
-    let bg_x = screen_center_x() - widescale(30.0, 40.0);
+    let bg_x = screen_center_x();
     let bg_w = widescale(543.0, 720.0);
     let (bg, fg) = if !enabled {
         ([0.015, 0.015, 0.015, 0.95], [0.65, 0.0, 0.0, 1.0])
@@ -1341,7 +1342,7 @@ fn append_menu_row(
         font("miso"):
         settext(label):
         align(0.0, 0.5):
-        xy(screen_center_x() - widescale(240.0, 320.0), y):
+        xy(screen_center_x() - EDIT_MENU_TITLE_X_OFFSET, y):
         zoom(EDIT_MENU_TEXT_ZOOM):
         diffuse(fg[0], fg[1], fg[2], fg[3]):
         shadowlength(1.0):
