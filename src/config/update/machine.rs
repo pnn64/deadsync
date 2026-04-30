@@ -289,17 +289,6 @@ pub fn update_enable_arrowcloud(enabled: bool) {
     save_without_keymaps();
 }
 
-pub fn update_submit_groovestats_fails(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.submit_groovestats_fails == enabled {
-            return;
-        }
-        cfg.submit_groovestats_fails = enabled;
-    }
-    save_without_keymaps();
-}
-
 pub fn update_submit_arrowcloud_fails(enabled: bool) {
     {
         let mut cfg = lock_config();

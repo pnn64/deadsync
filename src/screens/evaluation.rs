@@ -1674,7 +1674,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 p.fail_time.is_some(),
             );
             let expected_groovestats_submit = cfg.enable_groovestats
-                && (passed || (failed && cfg.submit_groovestats_fails))
+                && passed
                 && groovestats.valid
                 && prof.groovestats_is_pad_player
                 && !prof.groovestats_api_key.trim().is_empty();

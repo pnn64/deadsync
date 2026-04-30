@@ -922,12 +922,6 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
-        SubRowId::GsSubmitFails,
-        yes_no_choice_index(cfg.submit_groovestats_fails),
-    );
-    set_choice_by_id(
-        &mut state.sub_choice_indices_groovestats,
-        GROOVESTATS_OPTIONS_ROWS,
         SubRowId::AutoPopulateScores,
         yes_no_choice_index(cfg.auto_populate_gs_scores),
     );

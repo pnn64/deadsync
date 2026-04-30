@@ -113,7 +113,6 @@ pub enum SubRowId {
     // GrooveStats Options
     EnableGrooveStats,
     EnableBoogieStats,
-    GsSubmitFails,
     AutoPopulateScores,
     AutoDownloadUnlocks,
     SeparateUnlocksByPlayer,

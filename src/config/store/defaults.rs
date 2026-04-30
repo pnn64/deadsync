@@ -63,11 +63,6 @@ fn push_default_options(content: &mut String, default: &Config) {
         "SubmitArrowCloudFails",
         default.submit_arrowcloud_fails,
     );
-    push_bool(
-        content,
-        "SubmitGrooveStatsFails",
-        default.submit_groovestats_fails,
-    );
     push_bool(content, "FastLoad", default.fastload);
     push_line(content, "FullscreenType", default.fullscreen_type.as_str());
     push_line(content, "Game", default.game_flag.as_str());

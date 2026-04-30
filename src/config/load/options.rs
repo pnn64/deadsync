@@ -68,10 +68,6 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "EnableBoogieStats")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.enable_boogiestats, |v| v != 0);
-    cfg.submit_groovestats_fails = conf
-        .get("Options", "SubmitGrooveStatsFails")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.submit_groovestats_fails, |v| v != 0);
     cfg.submit_arrowcloud_fails = conf
         .get("Options", "SubmitArrowCloudFails")
         .and_then(|v| v.parse::<u8>().ok())

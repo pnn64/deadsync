@@ -565,8 +565,6 @@ pub(super) fn apply_submenu_choice_delta(
         } else if row.id == SubRowId::EnableBoogieStats {
             config::update_enable_boogiestats(yes_no_from_choice(new_index));
             crate::game::online::init();
-        } else if row.id == SubRowId::GsSubmitFails {
-            config::update_submit_groovestats_fails(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::AutoPopulateScores {
             config::update_auto_populate_gs_scores(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::AutoDownloadUnlocks {

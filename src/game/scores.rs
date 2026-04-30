@@ -2440,9 +2440,6 @@ fn submit_record_banner(
     player: &GrooveStatsSubmitPlayerJob,
     response: &GrooveStatsSubmitApiPlayer,
 ) -> Option<GrooveStatsSubmitRecordBanner> {
-    if player.is_fail {
-        return None;
-    }
     if !submit_result_improved(response.result.as_str()) {
         return None;
     }

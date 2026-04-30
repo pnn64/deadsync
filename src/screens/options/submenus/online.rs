@@ -20,15 +20,6 @@ pub(in crate::screens::options) const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::GsSubmitFails,
-        label: lookup_key("OptionsGrooveStats", "GsSubmitFails"),
-        choices: &[
-            localized_choice("Common", "No"),
-            localized_choice("Common", "Yes"),
-        ],
-        inline: true,
-    },
-    SubRow {
         id: SubRowId::AutoPopulateScores,
         label: lookup_key("OptionsGrooveStats", "AutoPopulateScores"),
         choices: &[
@@ -114,14 +105,6 @@ pub(in crate::screens::options) const GROOVESTATS_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGrooveStatsHelp",
             "EnableBoogieStatsHelp",
-        ))],
-    },
-    Item {
-        id: ItemId::GsSubmitFails,
-        name: lookup_key("OptionsGrooveStats", "GsSubmitFails"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsGrooveStatsHelp",
-            "GsSubmitFailsHelp",
         ))],
     },
     Item {

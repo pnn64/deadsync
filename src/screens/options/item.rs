@@ -142,7 +142,6 @@ pub enum ItemId {
     // GrooveStats Options submenu
     GsEnable,
     GsEnableBoogie,
-    GsSubmitFails,
     GsAutoPopulate,
     GsAutoDownloadUnlocks,
     GsSeparateUnlocks,
