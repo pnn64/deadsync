@@ -13,7 +13,7 @@ use self::input_routing::{GameplayQueuedEvent, gameplay_raw_key_event};
 use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
-use crate::assets::{AssetManager, TextureUploadBudget};
+use crate::assets::{AssetManager, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode, dirs};
 use crate::engine::display;
 use crate::engine::gfx::{
@@ -5909,7 +5909,8 @@ impl App {
         if target_menu_music {
             if !prev_menu_music {
                 commands.push(Command::PlayMusic {
-                    path: dirs::app_dirs().resolve_asset_path("assets/music/in_two (loop).ogg"),
+                    path: dirs::app_dirs()
+                        .resolve_asset_path(visual_styles::menu_music_asset_path()),
                     looped: true,
                     volume: 1.0,
                 });
