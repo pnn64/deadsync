@@ -1,7 +1,7 @@
 use crate::engine::gfx::{
     BlendMode, ClockDomainTrace, DrawStats, FastU64Map, PresentModePolicy, PresentModeTrace,
     PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey,
-    Texture as RendererTexture, TextureHandleMap,
+    Texture as RendererTexture, TextureHandleMap, TexturedMeshVertex,
     draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use crate::engine::space::ortho_for_window;
@@ -84,15 +84,6 @@ struct InstanceRaw {
     local_offset: [f32; 2],
     local_offset_rot_sin_cos: [f32; 2],
     edge_fade: [f32; 4],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct TexturedMeshVertexRaw {
-    pos: [f32; 3],
-    uv: [f32; 2],
-    color: [f32; 4],
-    tex_matrix_scale: [f32; 2],
 }
 
 #[repr(C)]
@@ -490,7 +481,7 @@ fn init(
     let tmesh_vertex_capacity = 1024usize;
     let tmesh_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("wgpu textured-mesh vertex buffer"),
-        size: (tmesh_vertex_capacity * mem::size_of::<TexturedMeshVertexRaw>()) as u64,
+        size: (tmesh_vertex_capacity * mem::size_of::<TexturedMeshVertex>()) as u64,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -919,27 +910,17 @@ fn ensure_cached_tmesh(
         return entry.vertex_count == vertices.len() as u32;
     }
 
-    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertexRaw>();
+    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertex>();
     if bytes > WGPU_TMESH_CACHE_MAX_BYTES
         || cached_tmesh_bytes.saturating_add(bytes) > WGPU_TMESH_CACHE_MAX_BYTES
     {
         return false;
     }
 
-    let mut raw = Vec::with_capacity(vertices.len());
-    for v in vertices {
-        raw.push(TexturedMeshVertexRaw {
-            pos: v.pos,
-            uv: v.uv,
-            color: v.color,
-            tex_matrix_scale: v.tex_matrix_scale,
-        });
-    }
-
     let buffer = Arc::new(
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("wgpu cached textured-mesh vertex buffer"),
-            contents: cast_slice(raw.as_slice()),
+            contents: cast_slice(vertices),
             usage: wgpu::BufferUsages::VERTEX,
         }),
     );
@@ -947,7 +928,7 @@ fn ensure_cached_tmesh(
         cache_key,
         CachedTMeshGeom {
             buffer,
-            vertex_count: raw.len() as u32,
+            vertex_count: vertices.len() as u32,
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
@@ -1554,7 +1535,7 @@ fn ensure_tmesh_vertex_capacity(state: &mut State, needed: usize) {
     let new_cap = needed.next_power_of_two().max(1024);
     state.tmesh_vertex_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("wgpu textured-mesh vertex buffer"),
-        size: (new_cap * mem::size_of::<TexturedMeshVertexRaw>()) as u64,
+        size: (new_cap * mem::size_of::<TexturedMeshVertex>()) as u64,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -2206,7 +2187,7 @@ const fn mesh_vertex_layout() -> wgpu::VertexBufferLayout<'static> {
 
 const fn textured_mesh_vertex_layout() -> wgpu::VertexBufferLayout<'static> {
     wgpu::VertexBufferLayout {
-        array_stride: mem::size_of::<TexturedMeshVertexRaw>() as u64,
+        array_stride: mem::size_of::<TexturedMeshVertex>() as u64,
         step_mode: wgpu::VertexStepMode::Vertex,
         attributes: &TMESH_ATTRS,
     }

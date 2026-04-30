@@ -248,6 +248,13 @@ impl App {
         self.state.shell.current_frame_vpf = 0;
 
         window.set_visible(true);
+        // Seed window focus from the OS now that the window is visible. If the
+        // game launched into the background, `has_focus()` returns false and the
+        // raw input backends keep dropping global keystrokes. If it launched
+        // focused, this propagates true through `apply_window_focus_change` and
+        // wakes the rest of the input pipeline.
+        let focused_now = window.has_focus();
+        self.apply_window_focus_change(focused_now, Instant::now(), Some(&window));
         self.request_redraw(&window, "init_graphics");
 
         self.window = Some(window);
@@ -299,6 +306,10 @@ impl App {
         }
         self.backend = None;
         self.window = None;
+        // The window is gone; mark unfocused so the global raw-input backends
+        // stop forwarding keystrokes during the tear-down/init gap. The new
+        // window's focus will be seeded by `init_graphics` below.
+        self.apply_window_focus_change(false, Instant::now(), None);
         self.state.shell.pending_window_position = old_window_pos;
 
         self.backend_type = target;

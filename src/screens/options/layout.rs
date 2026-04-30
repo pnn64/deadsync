@@ -73,12 +73,7 @@ pub(super) fn row_choices(
                 .collect();
         }
         if row.id == SubRowId::MaxFpsValue {
-            return state
-                .max_fps_labels
-                .iter()
-                .cloned()
-                .map(Cow::Owned)
-                .collect();
+            return vec![Cow::Owned(selected_max_fps_label(state))];
         }
         if row.id == SubRowId::DisplayMode {
             return state

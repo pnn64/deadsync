@@ -163,6 +163,10 @@ mod tests {
             source: Arc::new(SpriteSource::Atlas {
                 texture_key: Arc::from("test"),
                 tex_dims: (64, 64),
+                cached_handle: std::sync::atomic::AtomicU64::new(
+                    crate::engine::gfx::INVALID_TEXTURE_HANDLE,
+                ),
+                cached_generation: std::sync::atomic::AtomicU64::new(u64::MAX),
             }),
             uv_velocity: [0.0, 0.0],
             uv_offset: [0.0, 0.0],

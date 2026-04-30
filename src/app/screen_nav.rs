@@ -493,6 +493,7 @@ impl App {
                 menu::out_transition(self.state.screens.menu_state.active_color_index)
             }
             CurrentScreen::Gameplay => gameplay::out_transition(),
+            CurrentScreen::Practice => gameplay::out_transition(),
             CurrentScreen::Options => options::out_transition(),
             CurrentScreen::Credits => credits::out_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::out_transition(),
@@ -518,9 +519,18 @@ impl App {
     pub(super) fn get_in_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
         match screen {
             CurrentScreen::Menu => menu::in_transition(),
-            CurrentScreen::Gameplay => {
-                gameplay::in_transition(self.state.screens.gameplay_state.as_ref())
-            }
+            CurrentScreen::Gameplay => gameplay::in_transition(
+                self.state.screens.gameplay_state.as_ref(),
+                &self.asset_manager,
+            ),
+            CurrentScreen::Practice => gameplay::in_transition(
+                self.state
+                    .screens
+                    .practice_state
+                    .as_ref()
+                    .map(|state| &state.gameplay),
+                &self.asset_manager,
+            ),
             CurrentScreen::Options => options::in_transition(),
             CurrentScreen::Credits => credits::in_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),

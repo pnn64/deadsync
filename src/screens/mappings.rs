@@ -224,6 +224,8 @@ pub struct State {
     capture_row: Option<usize>,
     capture_slot: Option<ActiveSlot>,
     capture_pulse_t: f32,
+    capture_ignore_until: Option<Instant>,
+    capture_keyboard_arming_key: Option<KeyCode>,
     three_key_focus: ThreeKeyFocus,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo_row: i8,
@@ -250,6 +252,8 @@ pub fn init() -> State {
         capture_row: None,
         capture_slot: None,
         capture_pulse_t: 0.0,
+        capture_ignore_until: None,
+        capture_keyboard_arming_key: None,
         three_key_focus: ThreeKeyFocus::Row,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo_row: 0,
@@ -338,11 +342,23 @@ fn set_active_slot(state: &mut State, new_slot: ActiveSlot) {
 }
 
 #[inline(always)]
-fn begin_capture(state: &mut State) {
+fn capture_debounce_window() -> Duration {
+    const MAX_DEBOUNCE_SECONDS: f32 = 0.2;
+    Duration::from_secs_f32(
+        crate::config::get()
+            .input_debounce_seconds
+            .clamp(0.0, MAX_DEBOUNCE_SECONDS),
+    )
+}
+
+#[inline(always)]
+fn begin_capture(state: &mut State, timestamp: Instant) {
     state.capture_active = true;
     state.capture_row = Some(state.selected_row);
     state.capture_slot = Some(state.active_slot);
     state.capture_pulse_t = 0.0;
+    state.capture_ignore_until = Some(timestamp + capture_debounce_window());
+    state.capture_keyboard_arming_key = None;
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.nav_key_last_scrolled_at = None;
@@ -351,11 +367,26 @@ fn begin_capture(state: &mut State) {
 }
 
 #[inline(always)]
+fn begin_keyboard_capture(state: &mut State, keycode: KeyCode, timestamp: Instant) {
+    begin_capture(state, timestamp);
+    state.capture_keyboard_arming_key = Some(keycode);
+}
+
+#[inline(always)]
+fn capture_debounce_active(state: &State, timestamp: Instant) -> bool {
+    state
+        .capture_ignore_until
+        .is_some_and(|until| timestamp < until)
+}
+
+#[inline(always)]
 fn cancel_capture(state: &mut State) {
     state.capture_active = false;
     state.capture_row = None;
     state.capture_slot = None;
     state.capture_pulse_t = 0.0;
+    state.capture_ignore_until = None;
+    state.capture_keyboard_arming_key = None;
     state.three_key_focus = ThreeKeyFocus::Row;
     state.menu_lr_undo_row = 0;
     state.menu_lr_undo_slot = None;
@@ -569,7 +600,17 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
     // handle reserved raw navigation keys first and then fall back to the
     // currently mapped menu actions for whichever player owns the key.
     if state.capture_active {
+        if state.capture_keyboard_arming_key == Some(code) {
+            if !is_pressed {
+                state.capture_keyboard_arming_key = None;
+                state.capture_ignore_until = Some(key_event.timestamp + capture_debounce_window());
+            }
+            return ScreenAction::None;
+        }
         if !is_pressed {
+            return ScreenAction::None;
+        }
+        if capture_debounce_active(state, key_event.timestamp) {
             return ScreenAction::None;
         }
         // Match ITGmania's mapper behavior: function keys remain reserved,
@@ -654,7 +695,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
                     return ScreenAction::Navigate(Screen::Options);
                 }
                 if state.selected_row < NUM_MAPPING_ROWS {
-                    begin_capture(state);
+                    begin_keyboard_capture(state, code, key_event.timestamp);
                     audio::play_sfx("assets/sounds/change_value.ogg");
                 }
             }
@@ -666,7 +707,12 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         }
         _ => {
             if let Some(action) = mapped_raw_nav_action(key_event) {
-                return handle_input(state, &input_event_from_raw(action, key_event));
+                let was_capture_active = state.capture_active;
+                let action = handle_input(state, &input_event_from_raw(action, key_event));
+                if !was_capture_active && state.capture_active {
+                    state.capture_keyboard_arming_key = Some(code);
+                }
+                return action;
             }
         }
     }
@@ -685,34 +731,48 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     // Only react to press edges; releases and pure axis motion are ignored.
     let binding_opt = match *pad_event {
         PadEvent::RawButton {
-            id, code, pressed, ..
+            id,
+            timestamp,
+            code,
+            pressed,
+            ..
         } => {
             if !pressed {
                 return;
             }
             let dev = usize::from(id);
             let code_u32 = code.into_u32();
-            Some(InputBinding::GamepadCode(GamepadCodeBinding {
-                code_u32,
-                device: Some(dev),
-                uuid: None,
-            }))
+            Some((
+                InputBinding::GamepadCode(GamepadCodeBinding {
+                    code_u32,
+                    device: Some(dev),
+                    uuid: None,
+                }),
+                timestamp,
+            ))
         }
         PadEvent::Dir {
-            id, dir, pressed, ..
+            id,
+            timestamp,
+            dir,
+            pressed,
+            ..
         } => {
             if !pressed {
                 return;
             }
             let dev = usize::from(id);
-            Some(InputBinding::PadDirOn { device: dev, dir })
+            Some((InputBinding::PadDirOn { device: dev, dir }, timestamp))
         }
         PadEvent::RawAxis { .. } => None,
     };
 
-    let Some(binding) = binding_opt else {
+    let Some((binding, timestamp)) = binding_opt else {
         return;
     };
+    if capture_debounce_active(state, timestamp) {
+        return;
+    }
 
     if let (Some(row_idx), Some(slot)) = (state.capture_row, state.capture_slot) {
         let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
@@ -824,7 +884,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                             ScreenAction::None
                         }
                     } else if state.selected_row < NUM_MAPPING_ROWS {
-                        begin_capture(state);
+                        begin_capture(state, ev.emitted_at);
                         audio::play_sfx("assets/sounds/change_value.ogg");
                         ScreenAction::None
                     } else {
@@ -910,7 +970,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
             // Begin capture on the currently focused slot in this row.
             if state.selected_row < NUM_MAPPING_ROWS {
-                begin_capture(state);
+                begin_capture(state, ev.emitted_at);
                 audio::play_sfx("assets/sounds/change_value.ogg");
             }
         }
@@ -983,11 +1043,7 @@ fn editable_slot_indices_for_action(
     keymap: &crate::engine::input::Keymap,
     action: VirtualAction,
 ) -> (usize, usize) {
-    if keymap.first_key_binding(action).is_some() {
-        (1, 2)
-    } else {
-        (0, 1)
-    }
+    crate::config::editable_key_binding_slot_indices(keymap, action)
 }
 
 pub fn get_actors(
@@ -1310,8 +1366,9 @@ pub fn get_actors(
                 p1_default_text,
                 p2_default_text,
             ) = with_keymap(|keymap| {
-                // Actions with a default key use [default, primary, secondary].
-                // Actions without a default use [primary, secondary].
+                // Actions whose protected default is still present use
+                // [default, primary, secondary]. Others use
+                // [primary, secondary].
                 let p1_slots = p1_act_opt.map(|act| editable_slot_indices_for_action(keymap, act));
                 let p2_slots = p2_act_opt.map(|act| editable_slot_indices_for_action(keymap, act));
                 let p1_primary_text = p1_act_opt
@@ -1328,11 +1385,11 @@ pub fn get_actors(
                     .map_or_else(|| "------".to_string(), format_binding_for_display);
 
                 let p1_default_text = p1_act_opt
-                    .and_then(|act| keymap.first_key_binding(act))
+                    .and_then(|act| crate::config::protected_default_key_for_action(keymap, act))
                     .map(|code| format!("{code:?}"))
                     .unwrap_or_else(|| "------".to_string());
                 let p2_default_text = p2_act_opt
-                    .and_then(|act| keymap.first_key_binding(act))
+                    .and_then(|act| crate::config::protected_default_key_for_action(keymap, act))
                     .map(|code| format!("{code:?}"))
                     .unwrap_or_else(|| "------".to_string());
 
@@ -1710,11 +1767,14 @@ pub fn get_actors(
 
 #[cfg(test)]
 mod tests {
-    use super::{ActiveSlot, handle_input, init, invalid_capture_key, keymap_raw_nav_action};
+    use super::{
+        ActiveSlot, handle_input, handle_raw_key_event, init, invalid_capture_key,
+        keymap_raw_nav_action,
+    };
     use crate::engine::input::{
         InputBinding, InputEvent, InputSource, Keymap, RawKeyboardEvent, VirtualAction,
     };
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
     use winit::keyboard::KeyCode;
 
     fn input_event(action: VirtualAction, pressed: bool, source: InputSource) -> InputEvent {
@@ -1727,6 +1787,16 @@ mod tests {
             timestamp_host_nanos: 0,
             stored_at: now,
             emitted_at: now,
+        }
+    }
+
+    fn raw_key(code: KeyCode, pressed: bool, timestamp: Instant) -> RawKeyboardEvent {
+        RawKeyboardEvent {
+            code,
+            pressed,
+            repeat: false,
+            timestamp,
+            host_nanos: 0,
         }
     }
 
@@ -1770,6 +1840,36 @@ mod tests {
         assert!(state.capture_active);
         assert_eq!(state.capture_row, Some(1));
         assert_eq!(state.capture_slot, Some(ActiveSlot::P1Secondary));
+    }
+
+    #[test]
+    fn capture_ignores_keyboard_arming_key_until_release() {
+        let mut state = init();
+        let t0 = Instant::now();
+
+        handle_raw_key_event(&mut state, &raw_key(KeyCode::Enter, true, t0));
+        assert!(state.capture_active);
+        assert_eq!(state.capture_keyboard_arming_key, Some(KeyCode::Enter));
+
+        handle_raw_key_event(
+            &mut state,
+            &raw_key(KeyCode::Enter, true, t0 + Duration::from_millis(1)),
+        );
+        assert!(state.capture_active);
+        assert_eq!(state.capture_keyboard_arming_key, Some(KeyCode::Enter));
+
+        handle_raw_key_event(
+            &mut state,
+            &raw_key(KeyCode::Enter, false, t0 + Duration::from_millis(2)),
+        );
+        assert!(state.capture_active);
+        assert_eq!(state.capture_keyboard_arming_key, None);
+
+        handle_raw_key_event(
+            &mut state,
+            &raw_key(KeyCode::Enter, true, t0 + Duration::from_millis(3)),
+        );
+        assert!(state.capture_active);
     }
 
     #[test]

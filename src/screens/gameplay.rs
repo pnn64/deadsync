@@ -39,6 +39,15 @@ use std::time::Instant;
 
 const TEXT_CACHE_LIMIT: usize = 8192;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
+const INTRO_TEXT_GETWIDTH_PAD: f32 = 0.25;
+
+pub use crate::screens::components::gameplay::notefield::ViewOverride as NotefieldViewOverride;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ActorViewOverride {
+    pub notefield: NotefieldViewOverride,
+    pub hide_gameplay_hud: bool,
+}
 
 use crate::game::gameplay::{
     self as gameplay_core, CourseDisplayCarry, CourseDisplayTotals, GameplayAction, GameplayExit,
@@ -227,6 +236,45 @@ fn local_lobby_side_is_active(side: profile::PlayerSide) -> bool {
         profile::PlayerSide::P1 => p1_joined,
         profile::PlayerSide::P2 => p2_joined,
     }
+}
+
+fn intro_text_width(asset_manager: &AssetManager, text: &str) -> f32 {
+    let font_key = current_machine_font_key(FontRole::Header);
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager
+            .with_font(font_key, |f| {
+                font::measure_line_width_logical(f, text, all_fonts) as f32
+            })
+            .unwrap_or(0.0)
+            .max(0.0)
+    })
+}
+
+fn intro_text_target_x(
+    state: &State,
+    asset_manager: &AssetManager,
+    text: &str,
+    play_style: profile::PlayStyle,
+    player_side: profile::PlayerSide,
+    center_1player_notefield: bool,
+) -> f32 {
+    let centered_notefield = state.num_players == 1
+        && (play_style == profile::PlayStyle::Double
+            || (play_style == profile::PlayStyle::Single && center_1player_notefield));
+    if !centered_notefield || state.cols_per_player == 0 {
+        return screen_center_x();
+    }
+
+    // Simply Love ScreenGameplay in/default.lua: when one human player's
+    // notefield is centered, move the Stage/Event text outside GetNotefieldWidth().
+    let side_sign = match player_side {
+        profile::PlayerSide::P1 => -1.0,
+        profile::PlayerSide::P2 => 1.0,
+    };
+    let notefield_width = state.cols_per_player as f32 * 64.0;
+    screen_center_x()
+        + (notefield_width * 0.5 + intro_text_width(asset_manager, text) * INTRO_TEXT_GETWIDTH_PAD)
+            * side_sign
 }
 
 fn gameplay_player_index_for_side(state: &State, side: profile::PlayerSide) -> Option<usize> {
@@ -794,6 +842,12 @@ pub fn prewarm_text_layout(
             cache.prewarm_text(fonts, "miso", text.as_ref(), None);
         }
     }
+    cache.prewarm_text(
+        fonts,
+        current_machine_font_key(FontRole::Header),
+        state.stage_intro_text.as_ref(),
+        None,
+    );
     cache.prewarm_text(fonts, "miso", "Assist Tick", None);
     cache.prewarm_text(fonts, "miso", "Hit Tick", None);
     cache.prewarm_text(fonts, "miso", "AutoSync Song", None);
@@ -834,11 +888,21 @@ pub fn prewarm_text_layout(
 }
 
 // --- TRANSITIONS ---
-pub fn in_transition(state: Option<&State>) -> (Vec<Actor>, f32) {
+pub fn in_transition(state: Option<&State>, asset_manager: &AssetManager) -> (Vec<Actor>, f32) {
     let text = state
         .map(|gs| gs.stage_intro_text.clone())
         .unwrap_or_else(|| Arc::from("EVENT"));
     let intro_color = state.map_or(color::decorative_rgba(0), |gs| gs.player_color);
+    let text_target_x = state.map_or(screen_center_x(), |gs| {
+        intro_text_target_x(
+            gs,
+            asset_manager,
+            text.as_ref(),
+            profile::get_session_play_style(),
+            profile::get_session_player_side(),
+            crate::config::get().center_1player_notefield,
+        )
+    });
     let mut mirrored_splode = act!(sprite("gameplayin_splode.png"):
         align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
         diffuse(intro_color[0], intro_color[1], intro_color[2], 0.8):
@@ -887,7 +951,7 @@ pub fn in_transition(state: Option<&State>) -> (Vec<Actor>, f32) {
             z(1102):
             accelerate(0.5): alpha(1.0):
             sleep(0.66):
-            accelerate(0.33): zoom(0.4): y(screen_height() - 30.0):
+            accelerate(0.33): zoom(0.4): xy(text_target_x, screen_height() - 30.0):
             sleep((TRANSITION_IN_DURATION - INTRO_TEXT_SETTLE_SECONDS).max(0.0))
         ),
     ];
@@ -1766,25 +1830,38 @@ fn song_lua_overlay_compose_state(
     child
 }
 
-fn song_lua_overlay_states_from(
+fn song_lua_overlay_local_states_from(
     now: f32,
     overlays: &[SongLuaOverlayActor],
     overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
     overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
+) -> Vec<SongLuaOverlayState> {
+    overlays
+        .iter()
+        .enumerate()
+        .map(|(idx, overlay)| {
+            song_lua_overlay_render_state_from(
+                now,
+                idx,
+                overlay,
+                overlay_events,
+                overlay_eases,
+                overlay_ease_ranges,
+            )
+        })
+        .collect()
+}
+
+fn song_lua_overlay_states_from_local(
+    overlays: &[SongLuaOverlayActor],
+    local_states: &[SongLuaOverlayState],
     screen_width: f32,
     screen_height: f32,
 ) -> Vec<SongLuaOverlayState> {
     let mut out = Vec::with_capacity(overlays.len());
     for (idx, overlay) in overlays.iter().enumerate() {
-        let local = song_lua_overlay_render_state_from(
-            now,
-            idx,
-            overlay,
-            overlay_events,
-            overlay_eases,
-            overlay_ease_ranges,
-        );
+        let local = local_states.get(idx).copied().unwrap_or_default();
         let composed = overlay
             .parent_index
             .and_then(|parent_index| {
@@ -1807,8 +1884,52 @@ fn song_lua_overlay_states_from(
     out
 }
 
-fn song_lua_overlay_states(state: &State) -> Vec<SongLuaOverlayState> {
-    song_lua_overlay_states_from(
+fn song_lua_overlay_state_sets_from(
+    now: f32,
+    overlays: &[SongLuaOverlayActor],
+    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
+    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
+    overlay_ease_ranges: &[std::ops::Range<usize>],
+    screen_width: f32,
+    screen_height: f32,
+) -> (Vec<SongLuaOverlayState>, Vec<SongLuaOverlayState>) {
+    let local_states = song_lua_overlay_local_states_from(
+        now,
+        overlays,
+        overlay_events,
+        overlay_eases,
+        overlay_ease_ranges,
+    );
+    let overlay_states =
+        song_lua_overlay_states_from_local(overlays, &local_states, screen_width, screen_height);
+    (local_states, overlay_states)
+}
+
+fn song_lua_overlay_states_from(
+    now: f32,
+    overlays: &[SongLuaOverlayActor],
+    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
+    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
+    overlay_ease_ranges: &[std::ops::Range<usize>],
+    screen_width: f32,
+    screen_height: f32,
+) -> Vec<SongLuaOverlayState> {
+    let (_, overlay_states) = song_lua_overlay_state_sets_from(
+        now,
+        overlays,
+        overlay_events,
+        overlay_eases,
+        overlay_ease_ranges,
+        screen_width,
+        screen_height,
+    );
+    overlay_states
+}
+
+fn song_lua_overlay_state_sets(
+    state: &State,
+) -> (Vec<SongLuaOverlayState>, Vec<SongLuaOverlayState>) {
+    song_lua_overlay_state_sets_from(
         state.current_music_time_display,
         &state.song_lua_overlays,
         &state.song_lua_overlay_events,
@@ -2016,6 +2137,8 @@ struct SongLuaScreenProxyRequests {
 
 fn song_lua_screen_proxy_sources<'a>(
     actors: &'a [Actor],
+    p1_player_source: Option<&'a [Actor]>,
+    p2_player_source: Option<&'a [Actor]>,
     p1_actor_range: Option<(usize, usize)>,
     p2_actor_range: Option<(usize, usize)>,
     p1_sources: [Option<&'a [Actor]>; 3],
@@ -2026,13 +2149,15 @@ fn song_lua_screen_proxy_sources<'a>(
     SongLuaScreenProxySources {
         players: [
             SongLuaPlayerProxySources {
-                player: p1_actor_range.map(|(start, end)| &actors[start..end]),
+                player: p1_player_source
+                    .or_else(|| p1_actor_range.map(|(start, end)| &actors[start..end])),
                 note_field: p1_sources[0],
                 judgment: p1_sources[1],
                 combo: p1_sources[2],
             },
             SongLuaPlayerProxySources {
-                player: p2_actor_range.map(|(start, end)| &actors[start..end]),
+                player: p2_player_source
+                    .or_else(|| p2_actor_range.map(|(start, end)| &actors[start..end])),
                 note_field: p2_sources[0],
                 judgment: p2_sources[1],
                 combo: p2_sources[2],
@@ -2290,17 +2415,86 @@ fn song_lua_push_order(
     }
 }
 
+fn song_lua_capture_root_state(state: SongLuaOverlayState) -> SongLuaOverlayState {
+    SongLuaOverlayState {
+        draw_order: state.draw_order,
+        draw_by_z_position: state.draw_by_z_position,
+        glow: state.glow,
+        fov: state.fov,
+        vanishpoint: state.vanishpoint,
+        diffuse: state.diffuse,
+        visible: state.visible,
+        mask_source: state.mask_source,
+        mask_dest: state.mask_dest,
+        depth_test: state.depth_test,
+        blend: state.blend,
+        ..SongLuaOverlayState::default()
+    }
+}
+
+fn song_lua_capture_overlay_states(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    local_overlay_states: &[SongLuaOverlayState],
+    capture_index: usize,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+) -> Vec<SongLuaOverlayState> {
+    let mut out = vec![SongLuaOverlayState::default(); overlays.len()];
+    let Some(capture_state) = overlay_states.get(capture_index).copied() else {
+        return out;
+    };
+    // AFTs capture in texture space; placement transforms apply to the sprite
+    // that consumes the texture, not to the captured children.
+    out[capture_index] = song_lua_capture_root_state(capture_state);
+    for (idx, overlay) in overlays.iter().enumerate() {
+        if idx == capture_index
+            || song_lua_overlay_aft_ancestor(overlays, idx) != Some(capture_index)
+        {
+            continue;
+        }
+        let local = local_overlay_states.get(idx).copied().unwrap_or_default();
+        out[idx] = overlay
+            .parent_index
+            .and_then(|parent_index| {
+                out.get(parent_index)
+                    .copied()
+                    .zip(overlays.get(parent_index))
+            })
+            .map(|(parent, parent_overlay)| {
+                song_lua_overlay_compose_state(
+                    &parent_overlay.kind,
+                    parent,
+                    local,
+                    overlay_space_width,
+                    overlay_space_height,
+                )
+            })
+            .unwrap_or(local);
+    }
+    out
+}
+
 fn song_lua_capture_children(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
+    local_overlay_states: &[SongLuaOverlayState],
     asset_manager: &AssetManager,
     capture_index: usize,
     proxy_sources: &SongLuaScreenProxySources<'_>,
     overlay_space_width: f32,
     overlay_space_height: f32,
 ) -> Vec<Actor> {
+    let capture_states = song_lua_capture_overlay_states(
+        overlays,
+        overlay_states,
+        local_overlay_states,
+        capture_index,
+        overlay_space_width,
+        overlay_space_height,
+    );
     let mut out = Vec::new();
-    for (draw_idx, idx) in song_lua_overlay_order(overlays, overlay_states, Some(capture_index))
+    for (draw_idx, idx) in song_lua_overlay_order(overlays, &capture_states, Some(capture_index))
         .into_iter()
         .enumerate()
     {
@@ -2318,7 +2512,7 @@ fn song_lua_capture_children(
         ) {
             continue;
         }
-        let overlay_state = overlay_states.get(idx).copied().unwrap_or_default();
+        let overlay_state = capture_states.get(idx).copied().unwrap_or_default();
         let actor = match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
                 song_lua_proxy_source(target, proxy_sources).and_then(|source| {
@@ -2334,7 +2528,7 @@ fn song_lua_capture_children(
             _ => build_song_lua_overlay_actor(
                 overlay,
                 overlay_state,
-                song_lua_overlay_camera_state(overlays, overlay_states, overlay.parent_index),
+                song_lua_overlay_camera_state(overlays, &capture_states, overlay.parent_index),
                 asset_manager,
                 draw_idx.min(i16::MAX as usize) as i16,
                 overlay_space_width,
@@ -2597,6 +2791,8 @@ fn song_lua_style_capture_actor(
             animate,
             state_delay,
             scale,
+            shadow_len,
+            shadow_color,
             effect,
         } => Actor::Sprite {
             align,
@@ -2633,6 +2829,8 @@ fn song_lua_style_capture_actor(
             animate,
             state_delay,
             scale,
+            shadow_len,
+            shadow_color: song_lua_capture_tint(shadow_color, tint),
             effect,
         },
         Actor::Text {
@@ -2661,6 +2859,8 @@ fn song_lua_style_capture_actor(
             clip,
             mask_dest,
             blend: actor_blend,
+            shadow_len,
+            shadow_color,
             effect,
         } => Actor::Text {
             align,
@@ -2688,6 +2888,8 @@ fn song_lua_style_capture_actor(
             clip,
             mask_dest,
             blend: blend.unwrap_or(actor_blend),
+            shadow_len,
+            shadow_color: song_lua_capture_tint(shadow_color, tint),
             effect,
         },
         Actor::Mesh {
@@ -4457,6 +4659,8 @@ fn build_song_lua_overlay_actor(
                     clip: None,
                     mask_dest: state.mask_dest,
                     blend: overlay_blend,
+                    shadow_len: [0.0, 0.0],
+                    shadow_color: [0.0, 0.0, 0.0, 0.5],
                     effect: EffectState::default(),
                 },
                 glow,
@@ -4829,17 +5033,34 @@ fn build_song_lua_overlay_actor(
 
 fn song_lua_wrap_overlay_shadow(
     state: SongLuaOverlayState,
-    actor: Actor,
+    mut actor: Actor,
     x_scale: f32,
     y_scale: f32,
 ) -> Actor {
     if state.shadow_len[0].abs() <= f32::EPSILON && state.shadow_len[1].abs() <= f32::EPSILON {
         return actor;
     }
-    Actor::Shadow {
-        len: [state.shadow_len[0] * x_scale, state.shadow_len[1] * y_scale],
-        color: state.shadow_color,
-        child: Box::new(actor),
+    let len = [state.shadow_len[0] * x_scale, state.shadow_len[1] * y_scale];
+    match &mut actor {
+        Actor::Sprite {
+            shadow_len,
+            shadow_color,
+            ..
+        }
+        | Actor::Text {
+            shadow_len,
+            shadow_color,
+            ..
+        } if shadow_len[0].abs() <= f32::EPSILON && shadow_len[1].abs() <= f32::EPSILON => {
+            *shadow_len = len;
+            *shadow_color = state.shadow_color;
+            actor
+        }
+        _ => Actor::Shadow {
+            len,
+            color: state.shadow_color,
+            child: Box::new(actor),
+        },
     }
 }
 
@@ -4925,6 +5146,8 @@ fn song_lua_overlay_glow_actor(
                 animate: *animate,
                 state_delay: *state_delay,
                 scale: *scale,
+                shadow_len: [0.0, 0.0],
+                shadow_color: [0.0, 0.0, 0.0, 0.5],
                 effect: *effect,
             })
         }
@@ -5005,6 +5228,8 @@ fn song_lua_overlay_glow_actor(
                 clip: *clip,
                 mask_dest: *mask_dest,
                 blend: BlendMode::Add,
+                shadow_len: [0.0, 0.0],
+                shadow_color: [0.0, 0.0, 0.0, 0.5],
                 effect: *effect,
             })
         }
@@ -5143,6 +5368,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             animate,
             state_delay,
             scale,
+            shadow_len,
+            shadow_color,
             effect,
         } => {
             offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
@@ -5181,6 +5408,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 animate,
                 state_delay,
                 scale,
+                shadow_len,
+                shadow_color,
                 effect,
             }
         }
@@ -5210,6 +5439,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             clip,
             mask_dest,
             blend,
+            shadow_len,
+            shadow_color,
             effect,
         } => {
             offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
@@ -5240,6 +5471,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 clip,
                 mask_dest,
                 blend,
+                shadow_len,
+                shadow_color,
                 effect,
             }
         }
@@ -5537,8 +5770,22 @@ fn apply_song_lua_player_transform(
     }
 }
 
+fn song_lua_player_target_x(
+    explicit_x: Option<f32>,
+    player_state_x: f32,
+    layout_center_x: f32,
+    notefield_view: notefield::ViewOverride,
+) -> f32 {
+    explicit_x.unwrap_or(if notefield_view.force_center_1player {
+        layout_center_x
+    } else {
+        player_state_x
+    })
+}
+
 fn build_song_lua_layer_actors(
     overlays: &[SongLuaOverlayActor],
+    local_overlay_states: &[SongLuaOverlayState],
     overlay_states: &[SongLuaOverlayState],
     song_foreground_state: SongLuaOverlayState,
     proxy_sources: &SongLuaScreenProxySources<'_>,
@@ -5589,6 +5836,7 @@ fn build_song_lua_layer_actors(
                         let source = song_lua_capture_children(
                             overlays,
                             overlay_states,
+                            local_overlay_states,
                             asset_manager,
                             capture_index,
                             proxy_sources,
@@ -5633,6 +5881,31 @@ fn build_song_lua_layer_actors(
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+    get_actors_with_view(state, asset_manager, ActorViewOverride::default())
+}
+
+pub fn get_actors_with_notefield_view(
+    state: &State,
+    asset_manager: &AssetManager,
+    notefield_view: NotefieldViewOverride,
+) -> Vec<Actor> {
+    get_actors_with_view(
+        state,
+        asset_manager,
+        ActorViewOverride {
+            notefield: notefield_view,
+            hide_gameplay_hud: false,
+        },
+    )
+}
+
+pub fn get_actors_with_view(
+    state: &State,
+    asset_manager: &AssetManager,
+    view: ActorViewOverride,
+) -> Vec<Actor> {
+    let notefield_view = view.notefield;
+    let hide_gameplay_hud = view.hide_gameplay_hud;
     let cfg = crate::config::get();
     let hud_snapshot = profile::gameplay_hud_snapshot();
     let mut actors = Vec::with_capacity(96);
@@ -5640,9 +5913,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let player_side = hud_snapshot.player_side;
     let is_p2_single =
         play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2;
+    let center_1player_notefield =
+        cfg.center_1player_notefield || notefield_view.force_center_1player;
     let centered_single_notefield = play_style == profile::PlayStyle::Single
         && state.num_players == 1
-        && cfg.center_1player_notefield;
+        && center_1player_notefield;
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
     let player_color = if is_p2_single {
@@ -5650,7 +5925,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         state.player_color
     };
-    let overlay_states = song_lua_overlay_states(state);
+    let (local_overlay_states, overlay_states) = song_lua_overlay_state_sets(state);
     let proxy_requests = song_lua_proxy_requests(&state.song_lua_overlays, &overlay_states);
     let mut underlay_proxy_source = proxy_requests.underlay.then_some(Vec::new());
     let mut overlay_proxy_source = proxy_requests.overlay.then_some(Vec::new());
@@ -5661,7 +5936,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
-        let overlay_states = song_lua_overlay_states_from(
+        let (local_overlay_states, overlay_states) = song_lua_overlay_state_sets_from(
             state.current_music_time_display,
             &layer.overlays,
             &layer.overlay_events,
@@ -5677,6 +5952,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         );
         actors.extend(build_song_lua_layer_actors(
             &layer.overlays,
+            &local_overlay_states,
             &overlay_states,
             song_foreground_state,
             &SongLuaScreenProxySources::default(),
@@ -5734,7 +6010,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     // ITGmania/Simply Love parity: ScreenSyncOverlay status text.
-    {
+    if !hide_gameplay_hud {
         let overlay_start = actors.len();
         let status_line_count = if let Some((status_text, line_count)) = sync_overlay_text(state) {
             actors.push(act!(text:
@@ -5794,7 +6070,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     // Hold START/BACK prompt (Simply Love parity: ScreenGameplay debug text).
-    {
+    if !hide_gameplay_hud {
         let overlay_start = actors.len();
         const HOLD_FADE_IN_S: f32 = 1.0 / 8.0;
         const ABORT_FADE_OUT_S: f32 = 0.5;
@@ -5852,18 +6128,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         song_lua_capture_new_actors(&mut overlay_proxy_source, &actors, overlay_start);
     }
 
-    let overlay_start = actors.len();
-    let lobby_snapshot = crate::game::online::lobbies::snapshot();
-    if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
-        actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
-            screen_name: "ScreenGameplay",
-            joined,
-            z: 995,
-            show_song_info: false,
-            status_text: gameplay_lobby_hud_status_text(state),
-        }));
+    if !hide_gameplay_hud {
+        let overlay_start = actors.len();
+        let lobby_snapshot = crate::game::online::lobbies::snapshot();
+        if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
+            actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
+                screen_name: "ScreenGameplay",
+                joined,
+                z: 995,
+                show_song_info: false,
+                status_text: gameplay_lobby_hud_status_text(state),
+            }));
+        }
+        song_lua_capture_new_actors(&mut overlay_proxy_source, &actors, overlay_start);
     }
-    song_lua_capture_new_actors(&mut overlay_proxy_source, &actors, overlay_start);
 
     // Fade-to-black when giving up / backing out (Simply Love parity).
     let overlay_start = actors.len();
@@ -5927,17 +6205,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             field_actors,
             judgment_actors,
             combo_actors,
-        } = notefield::build_bundles(
+        } = notefield::build_bundles_with_view(
             state,
             profile,
             placement,
             play_style,
-            cfg.center_1player_notefield,
+            center_1player_notefield,
             notefield::ProxyCaptureRequests {
                 note_field: requests.note_field,
                 judgment: requests.judgment,
                 combo: requests.combo,
             },
+            notefield_view,
         );
         let player_actor = &state.song_lua_player_actors[player_idx];
         let player_state = song_lua_player_render_state(state, player_idx);
@@ -5952,7 +6231,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let zoom_x = player_scale_x * state.song_lua_player_zoom_x[player_idx];
         let zoom_y = player_scale_y * state.song_lua_player_zoom_y[player_idx];
         let zoom_z = player_scale_z * state.song_lua_player_zoom_z[player_idx];
-        let target_x = state.song_lua_player_x[player_idx].unwrap_or(player_state.x);
+        let target_x = song_lua_player_target_x(
+            state.song_lua_player_x[player_idx],
+            player_state.x,
+            layout_center_x,
+            notefield_view,
+        );
         let target_y = state.song_lua_player_y[player_idx].unwrap_or(player_state.y);
         let z_shift = song_lua_player_layer_z(
             song_lua_active,
@@ -5966,41 +6250,53 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             SongLuaOverlayBlendMode::Multiply => Some(BlendMode::Multiply),
             SongLuaOverlayBlendMode::Subtract => Some(BlendMode::Subtract),
         };
+        let render_source_bundle = |bundle| {
+            apply_song_lua_player_transform(
+                bundle,
+                z_shift,
+                player_state.diffuse,
+                player_blend,
+                layout_center_x,
+                target_x,
+                target_y,
+                rotation_x,
+                rotation_z,
+                rotation_y,
+                skew_x,
+                skew_y,
+                zoom_x,
+                zoom_y,
+                zoom_z,
+            )
+        };
+        let player_source = requests
+            .player
+            .then(|| render_source_bundle(actors.clone()));
         let render_bundle = |bundle| {
             if !player_state.visible {
                 Vec::new()
             } else {
-                apply_song_lua_player_transform(
-                    bundle,
-                    z_shift,
-                    player_state.diffuse,
-                    player_blend,
-                    layout_center_x,
-                    target_x,
-                    target_y,
-                    rotation_x,
-                    rotation_z,
-                    rotation_y,
-                    skew_x,
-                    skew_y,
-                    zoom_x,
-                    zoom_y,
-                    zoom_z,
-                )
+                render_source_bundle(bundle)
             }
         };
         let player = render_bundle(actors);
         let proxy_sources = [
-            requests.note_field.then(|| render_bundle(field_actors)),
-            requests.judgment.then(|| render_bundle(judgment_actors)),
-            requests.combo.then(|| render_bundle(combo_actors)),
+            requests
+                .note_field
+                .then(|| render_source_bundle(field_actors)),
+            requests
+                .judgment
+                .then(|| render_source_bundle(judgment_actors)),
+            requests.combo.then(|| render_source_bundle(combo_actors)),
         ];
-        (player, layout_center_x, proxy_sources)
+        (player, layout_center_x, player_source, proxy_sources)
     };
 
     let (
         p1_actors,
         p2_actors,
+        p1_player_proxy_source,
+        p2_player_proxy_source,
         p1_proxy_sources,
         p2_proxy_sources,
         playfield_center_x,
@@ -6008,19 +6304,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     ): (
         Vec<Actor>,
         Option<Vec<Actor>>,
+        Option<Vec<Actor>>,
+        Option<Vec<Actor>>,
         [Option<Vec<Actor>>; 3],
         [Option<Vec<Actor>>; 3],
         f32,
         [(usize, f32); 2],
     ) = match play_style {
         profile::PlayStyle::Versus => {
-            let (p1, p1_x, p1_sources) = build_player_bundle(
+            let (p1, p1_x, p1_player_source, p1_sources) = build_player_bundle(
                 0,
                 &state.player_profiles[0],
                 notefield::FieldPlacement::P1,
                 proxy_requests.players[0],
             );
-            let (p2, p2_x, p2_sources) = build_player_bundle(
+            let (p2, p2_x, p2_player_source, p2_sources) = build_player_bundle(
                 1,
                 &state.player_profiles[1],
                 notefield::FieldPlacement::P2,
@@ -6029,6 +6327,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             (
                 p1,
                 Some(p2),
+                p1_player_source,
+                p2_player_source,
                 p1_sources,
                 p2_sources,
                 p1_x,
@@ -6041,7 +6341,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 notefield::FieldPlacement::P1
             };
-            let (nf, nf_x, nf_sources) = build_player_bundle(
+            let (nf, nf_x, nf_player_source, nf_sources) = build_player_bundle(
                 0,
                 &state.player_profiles[0],
                 placement,
@@ -6049,6 +6349,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             );
             (
                 nf,
+                None,
+                nf_player_source,
                 None,
                 nf_sources,
                 [None, None, None],
@@ -6059,18 +6361,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
     let replacement_proxy_sources = [
         SongLuaPlayerProxySources {
-            player: proxy_requests.players[0]
-                .player
-                .then_some(p1_actors.as_slice()),
+            player: p1_player_proxy_source.as_deref(),
             note_field: p1_proxy_sources[0].as_deref(),
             judgment: p1_proxy_sources[1].as_deref(),
             combo: p1_proxy_sources[2].as_deref(),
         },
         SongLuaPlayerProxySources {
-            player: proxy_requests.players[1]
-                .player
-                .then(|| p2_actors.as_deref())
-                .flatten(),
+            player: p2_player_proxy_source.as_deref(),
             note_field: p2_proxy_sources[0].as_deref(),
             judgment: p2_proxy_sources[1].as_deref(),
             combo: p2_proxy_sources[2].as_deref(),
@@ -6083,7 +6380,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     );
 
     // Danger overlay (Simply Love parity): red flashing in danger + green recovery, optional HideDanger.
-    {
+    if !hide_gameplay_hud {
         let underlay_start = actors.len();
         let sw = screen_width();
         let sh = screen_height();
@@ -6145,14 +6442,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Simply Love parity: BGAnimations/ScreenGameplay underlay/Shared/Header.lua.
     // This translucent top strip sits underneath the UpperNPSGraph and other HUD actors.
-    let underlay_start = actors.len();
-    actors.push(act!(quad:
-        align(0.5, 0.0): xy(screen_center_x(), 0.0):
-        zoomto(screen_width(), 80.0):
-        diffuse(0.0, 0.0, 0.0, 0.85):
-        z(83)
-    ));
-    song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_start);
+    if !hide_gameplay_hud {
+        let underlay_start = actors.len();
+        actors.push(act!(quad:
+            align(0.5, 0.0): xy(screen_center_x(), 0.0):
+            zoomto(screen_width(), 80.0):
+            diffuse(0.0, 0.0, 0.0, 0.85):
+            z(83)
+        ));
+        song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_start);
+    }
 
     actors.reserve(p1_actors.len() + p2_actors.as_ref().map_or(0, Vec::len) + 48);
     let mut p1_actor_range = None;
@@ -6169,569 +6468,578 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(p1_actors);
         p1_actor_range = Some((start, actors.len()));
     }
-    let underlay_tail_start = actors.len();
-    let clamped_width = screen_width().clamp(640.0, 854.0);
-    let score_x_p1 = screen_center_x() - clamped_width / 4.3;
-    let score_x_p2 = screen_center_x() + clamped_width / 2.75;
-    let diff_x_p1 = screen_center_x() - widescale(292.5, 342.5);
-    let diff_x_p2 = screen_center_x() + widescale(292.5, 342.5);
+    if !hide_gameplay_hud {
+        let underlay_tail_start = actors.len();
+        let clamped_width = screen_width().clamp(640.0, 854.0);
+        let score_x_p1 = screen_center_x() - clamped_width / 4.3;
+        let score_x_p2 = screen_center_x() + clamped_width / 2.75;
+        let diff_x_p1 = screen_center_x() - widescale(292.5, 342.5);
+        let diff_x_p2 = screen_center_x() + widescale(292.5, 342.5);
 
-    let mut players = [(0usize, profile::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
-    let player_count = match play_style {
-        profile::PlayStyle::Versus => {
-            players[0] = (
-                0,
-                profile::PlayerSide::P1,
-                per_player_fields[0].1,
-                diff_x_p1,
-                score_x_p1,
-                score_x_p2,
-            );
-            players[1] = (
-                1,
-                profile::PlayerSide::P2,
-                per_player_fields[1].1,
-                diff_x_p2,
-                score_x_p2,
-                score_x_p1,
-            );
-            2
-        }
-        _ if is_p2_single => {
-            players[0] = (
-                0,
-                profile::PlayerSide::P2,
-                per_player_fields[0].1,
-                diff_x_p2,
-                score_x_p2,
-                score_x_p1,
-            );
-            1
-        }
-        _ => {
-            players[0] = (
-                0,
-                profile::PlayerSide::P1,
-                per_player_fields[0].1,
-                diff_x_p1,
-                score_x_p1,
-                score_x_p2,
-            );
-            1
-        }
-    };
-
-    let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
-    let graph_center_shift = widescale(45.0, 95.0);
-
-    for &(player_idx, player_side, field_x, _, _, _) in &players[..player_count] {
-        if !state.player_profiles[player_idx].nps_graph_at_top {
-            continue;
-        }
-        let graph_w = state.density_graph_top_w[player_idx];
-        let graph_h = state.density_graph_top_h;
-        let graph_mesh_h = graph_h * state.density_graph_top_scale_y[player_idx].clamp(0.0, 1.0);
-        if graph_w <= 0.0 || graph_h <= 0.0 || graph_mesh_h <= 0.0 {
-            continue;
-        }
-        let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
-        let x = if note_field_is_centered {
-            screen_center_x() - graph_w * 0.5
-        } else if player_side == profile::PlayerSide::P1 {
-            screen_center_x() - graph_w - graph_center_shift
-        } else {
-            screen_center_x() + graph_center_shift
-        };
-        let y_bottom = 71.0;
-        let y_top = y_bottom - graph_h;
-        let y_mesh_top = y_bottom - graph_mesh_h;
-        let graph_bg_alpha = if state.player_profiles[player_idx].transparent_density_graph_bg {
-            0.5
-        } else {
-            1.0
-        };
-
-        actors.push(act!(quad:
-            align(0.0, 0.0): xy(x, y_top):
-            zoomto(graph_w, graph_h):
-            diffuse(30.0 / 255.0, 40.0 / 255.0, 47.0 / 255.0, graph_bg_alpha):
-            z(84)
-        ));
-
-        if let Some(mesh) = &state.density_graph.top_mesh[player_idx]
-            && !mesh.is_empty()
-        {
-            actors.push(Actor::Mesh {
-                align: [0.0, 0.0],
-                offset: [x, y_mesh_top],
-                size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_mesh_h)],
-                vertices: mesh.clone(),
-                mode: MeshMode::Triangles,
-                visible: true,
-                blend: BlendMode::Alpha,
-                z: 85,
-            });
-        }
-
-        let duration =
-            (state.density_graph_last_second - state.density_graph_first_second).max(0.001_f32);
-        let progress_w = (((state.current_music_time_display - state.density_graph_first_second)
-            / duration)
-            * graph_w)
-            .clamp(0.0, graph_w);
-        if progress_w > 0.0 {
-            actors.push(act!(quad:
-                align(0.0, 0.0): xy(x, y_top):
-                zoomto(progress_w, graph_h):
-                diffuse(0.0, 0.0, 0.0, 0.85):
-                z(86)
-            ));
-        }
-    }
-
-    for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in
-        &players[..player_count]
-    {
-        let chart = &state.charts[player_idx];
-        let difficulty_color = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
-        let meter_text = cached_meter_text(chart.meter);
-        let meter_detail_text =
-            color::difficulty_display_name_for_song(&chart.difficulty, &state.song.title, true);
-
-        // Difficulty Box
-        let y = 56.0;
-        let mut diff_children = Vec::with_capacity(if cfg.zmod_rating_box_text { 3 } else { 2 });
-        diff_children.push(act!(quad:
-            align(0.5, 0.5): xy(0.0, 0.0): zoomto(30.0, 30.0):
-            diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
-        ));
-        let meter_y = if cfg.zmod_rating_box_text { -4.0 } else { 0.0 };
-        diff_children.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)): settext(meter_text): align(0.5, 0.5): xy(0.0, meter_y):
-            zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-        if cfg.zmod_rating_box_text {
-            diff_children.push(act!(text:
-                font("miso"):
-                settext(meter_detail_text):
-                align(0.5, 0.5): xy(0.0, 9.5):
-                zoom(0.5):
-                diffuse(0.0, 0.0, 0.0, 1.0)
-            ));
-        }
-        actors.push(Actor::Frame {
-            align: [0.5, 0.5],
-            offset: [diff_x, y],
-            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            children: diff_children,
-            background: None,
-            z: 90,
-        });
-
-        // Score Display
-        let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
-        let nps_graph_at_top = state.player_profiles[player_idx].nps_graph_at_top;
-        let single_score_swapped = state.num_players == 1
-            && play_style != profile::PlayStyle::Double
-            && nps_graph_at_top
-            && !note_field_is_centered;
-        let score_x = if single_score_swapped {
-            score_x_other
-        } else {
-            score_x_normal
-        };
-        let hide_score_for_top_graph = state.num_players > 1 && nps_graph_at_top && !is_ultrawide;
-
-        if !state.player_profiles[player_idx].hide_score && !hide_score_for_top_graph {
-            let score_y = 56.0;
-            let show_ex_score = state.player_profiles[player_idx].show_ex_score;
-            let show_hard_ex_score =
-                show_ex_score && state.player_profiles[player_idx].show_hard_ex_score;
-            let (score_text, score_color) = if show_ex_score {
-                let ex_percent = crate::game::gameplay::display_ex_score_percent(state, player_idx);
-                (
-                    cached_score_2dp(ex_percent.max(0.0)),
-                    color::JUDGMENT_RGBA[0],
-                )
-            } else {
-                let score_percent =
-                    (crate::game::gameplay::display_itg_score_percent(state, player_idx) * 100.0)
-                        as f32;
-                (cached_score_2dp(score_percent as f64), [1.0, 1.0, 1.0, 1.0])
-            };
-
-            let is_p2_side = player_side == profile::PlayerSide::P2;
-            // Arrow Cloud parity: EX remains the "normal" score position/anchor.
-            // H.EX is placed at a different x on P2 so it appears to the left of EX.
-            actors.push(act!(text:
-                font(current_machine_font_key(FontRole::Numbers)): settext(score_text):
-                align(1.0, 1.0): xy(score_x, score_y):
-                zoom(0.5): horizalign(right):
-                diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
-                z(90)
-            ));
-
-            if show_hard_ex_score {
-                let hard_ex_percent =
-                    crate::game::gameplay::display_hard_ex_score_percent(state, player_idx);
-                let hex = color::HARD_EX_SCORE_RGBA;
-                let hard_ex_x = if single_score_swapped {
-                    let swapped_base = if is_p2_side {
-                        screen_center_x() - clamped_width / 4.3
-                    } else {
-                        screen_center_x() + clamped_width / 4.3
-                    };
-                    swapped_base + 115.0
-                } else if is_p2_side {
-                    // Arrow Cloud: HardEX uses /4.3 on P2 (while EX uses /2.75).
-                    screen_center_x() + clamped_width / 4.3
-                } else {
-                    score_x
-                };
-
-                if is_p2_side {
-                    actors.push(act!(text:
-                        font(current_machine_font_key(FontRole::Numbers)):
-                        settext(cached_score_2dp(hard_ex_percent.max(0.0))):
-                        align(1.0, 0.0): xy(hard_ex_x, score_y):
-                        zoom(0.25): horizalign(right):
-                        diffuse(hex[0], hex[1], hex[2], hex[3]):
-                        z(90)
-                    ));
-                } else {
-                    actors.push(act!(text:
-                        font(current_machine_font_key(FontRole::Numbers)):
-                        settext(cached_score_2dp(hard_ex_percent.max(0.0))):
-                        align(0.0, 0.0): xy(hard_ex_x, score_y):
-                        zoom(0.25): horizalign(left):
-                        diffuse(hex[0], hex[1], hex[2], hex[3]):
-                        z(90)
-                    ));
-                }
-            }
-        }
-    }
-    // Current BPM Display (1:1 with Simply Love)
-    {
-        let base_bpm = state.timing.get_bpm_for_beat(state.current_beat_display);
-        let rate = if state.music_rate.is_finite() {
-            state.music_rate as f64
-        } else {
-            1.0
-        };
-        let display_bpm = if base_bpm.is_finite() {
-            f64::from(base_bpm) * rate
-        } else {
-            0.0
-        };
-        let bpm_text = cached_bpm_text(display_bpm, cfg.show_bpm_decimal);
-        // Final world-space positions derived from analyzing the SM Lua transforms.
-        // The parent frame is bottom-aligned to y=52, and its children are positioned
-        // relative to that y-coordinate, with a zoom of 1.33 applied to the whole group.
-        let frame_origin_y = 51.0;
-        let frame_zoom = 1.33;
-        // The BPM text is at y=0 relative to the frame's origin. Its final position is just the origin.
-        let bpm_center_y = frame_origin_y;
-        // The Rate text is at y=12 relative to the frame's origin. Its offset is scaled by the frame's zoom.
-        let rate_center_y = 12.0f64.mul_add(frame_zoom, frame_origin_y);
-        let bpm_final_zoom = 1.0 * frame_zoom;
-        let rate_final_zoom = 0.5 * frame_zoom;
-        let mut bpm_x = screen_center_x();
-        let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-        if state.num_players == 1
-            && note_field_is_centered
-            && state.player_profiles[0].nps_graph_at_top
-        {
-            let side_shift = if player_side == profile::PlayerSide::P1 {
-                0.3
-            } else {
-                -0.3
-            };
-            bpm_x = screen_center_x() + screen_width() * side_shift;
-        }
-        actors.push(act!(text:
-            font("miso"): settext(bpm_text):
-            align(0.5, 0.5): xy(bpm_x, bpm_center_y):
-            zoom(bpm_final_zoom): horizalign(center): z(90)
-        ));
-        let rate = if state.music_rate.is_finite() {
-            state.music_rate
-        } else {
-            1.0
-        };
-        let rate_text = cached_rate_text(rate);
-        actors.push(act!(text:
-            font("miso"): settext(rate_text):
-            align(0.5, 0.5): xy(bpm_x, rate_center_y):
-            zoom(rate_final_zoom): horizalign(center): z(90)
-        ));
-    }
-    // Song Title Box (SongMeter)
-    {
-        let w = widescale(310.0, 417.0);
-        let h = 22.0;
-        let box_cx = screen_center_x();
-        let box_cy = 20.0;
-        let mut frame_children = Vec::with_capacity(4);
-        frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w, h): diffuse(1.0, 1.0, 1.0, 1.0): z(0) ));
-        frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w - 4.0, h - 4.0): diffuse(0.0, 0.0, 0.0, 1.0): z(1) ));
-        if state.song.total_length_seconds > 0 && state.current_music_time_display >= 0.0 {
-            let progress = (state.current_music_time_display
-                / state.song.total_length_seconds as f32)
-                .clamp(0.0, 1.0);
-            frame_children.push(act!(quad:
-                align(0.0, 0.5): xy(2.0, h / 2.0): zoomto((w - 4.0) * progress, h - 4.0):
-                diffuse(player_color[0], player_color[1], player_color[2], 1.0): z(2)
-            ));
-        }
-        let full_title = state.song_full_title.clone();
-        frame_children.push(act!(text:
-            font("miso"): settext(full_title): align(0.5, 0.5): xy(w / 2.0, h / 2.0):
-            zoom(0.8): maxwidth(screen_width() / 2.5 - 10.0): horizalign(center): z(3)
-        ));
-        actors.push(Actor::Frame {
-            align: [0.5, 0.5],
-            offset: [box_cx, box_cy],
-            size: [SizeSpec::Px(w), SizeSpec::Px(h)],
-            background: None,
-            z: 90,
-            children: frame_children,
-        });
-    }
-    // --- Life Meter ---
-    {
-        let player_life_color = |player_idx: usize| -> [f32; 4] {
-            match play_style {
-                profile::PlayStyle::Versus => {
-                    if player_idx == 0 {
-                        color::decorative_rgba(state.active_color_index)
-                    } else {
-                        color::decorative_rgba(state.active_color_index - 2)
-                    }
-                }
-                _ => {
-                    if is_p2_single {
-                        color::decorative_rgba(state.active_color_index - 2)
-                    } else {
-                        color::decorative_rgba(state.active_color_index)
-                    }
-                }
-            }
-        };
-        let rainbow_life_color = |elapsed: f32| -> [f32; 4] {
-            let phase = elapsed * 2.0;
-            let r = (phase + 0.0).sin() * 0.5 + 0.5;
-            let g = (phase + std::f32::consts::TAU / 3.0).sin() * 0.5 + 0.5;
-            let b = (phase + (2.0 * std::f32::consts::TAU) / 3.0).sin() * 0.5 + 0.5;
-            [r, g, b, 1.0]
-        };
-        let responsive_life_color = |life: f32| -> [f32; 4] {
-            let life = life.clamp(0.0, 1.0);
-            if life >= 0.9 {
-                [0.0, 1.0, ((life - 0.9) * 10.0).clamp(0.0, 1.0), 1.0]
-            } else if life >= 0.5 {
-                [((0.9 - life) * 2.5).clamp(0.0, 1.0), 1.0, 0.0, 1.0]
-            } else {
-                [1.0, ((life - 0.2) * (10.0 / 3.0)).clamp(0.0, 1.0), 0.0, 1.0]
-            }
-        };
-        let fill_life_color = |player_idx: usize, life: f32, dead: bool| -> [f32; 4] {
-            let profile = &state.player_profiles[player_idx];
-            let is_hot = !dead && life >= 1.0;
-            if is_hot {
-                if profile.rainbow_max {
-                    rainbow_life_color(state.total_elapsed_in_screen)
-                } else {
-                    [1.0, 1.0, 1.0, 1.0]
-                }
-            } else if profile.responsive_colors {
-                responsive_life_color(life)
-            } else {
-                player_life_color(player_idx)
-            }
-        };
-        let show_standard_life_percent = screen_width() / screen_height().max(1.0) >= (16.0 / 9.0);
-
-        let mut life_players = [(0usize, profile::PlayerSide::P1); 2];
-        let life_player_count = match play_style {
+        let mut players = [(0usize, profile::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
+        let player_count = match play_style {
             profile::PlayStyle::Versus => {
-                life_players[0] = (0, profile::PlayerSide::P1);
-                life_players[1] = (1, profile::PlayerSide::P2);
+                players[0] = (
+                    0,
+                    profile::PlayerSide::P1,
+                    per_player_fields[0].1,
+                    diff_x_p1,
+                    score_x_p1,
+                    score_x_p2,
+                );
+                players[1] = (
+                    1,
+                    profile::PlayerSide::P2,
+                    per_player_fields[1].1,
+                    diff_x_p2,
+                    score_x_p2,
+                    score_x_p1,
+                );
                 2
             }
             _ if is_p2_single => {
-                life_players[0] = (0, profile::PlayerSide::P2);
+                players[0] = (
+                    0,
+                    profile::PlayerSide::P2,
+                    per_player_fields[0].1,
+                    diff_x_p2,
+                    score_x_p2,
+                    score_x_p1,
+                );
                 1
             }
             _ => {
-                life_players[0] = (0, profile::PlayerSide::P1);
+                players[0] = (
+                    0,
+                    profile::PlayerSide::P1,
+                    per_player_fields[0].1,
+                    diff_x_p1,
+                    score_x_p1,
+                    score_x_p2,
+                );
                 1
             }
         };
 
-        for &(player_idx, side) in &life_players[..life_player_count] {
-            if state.player_profiles[player_idx].hide_lifebar {
+        let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
+        let graph_center_shift = widescale(45.0, 95.0);
+
+        for &(player_idx, player_side, field_x, _, _, _) in &players[..player_count] {
+            if !state.player_profiles[player_idx].nps_graph_at_top {
                 continue;
             }
-
-            // Latch-to-zero for rendering the very frame we die.
-            let dead =
-                state.players[player_idx].is_failing || state.players[player_idx].life <= 0.0;
-            let life_for_render = if dead {
-                0.0
+            let graph_w = state.density_graph_top_w[player_idx];
+            let graph_h = state.density_graph_top_h;
+            let graph_mesh_h =
+                graph_h * state.density_graph_top_scale_y[player_idx].clamp(0.0, 1.0);
+            if graph_w <= 0.0 || graph_h <= 0.0 || graph_mesh_h <= 0.0 {
+                continue;
+            }
+            let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
+            let x = if note_field_is_centered {
+                screen_center_x() - graph_w * 0.5
+            } else if player_side == profile::PlayerSide::P1 {
+                screen_center_x() - graph_w - graph_center_shift
             } else {
-                state.players[player_idx].life.clamp(0.0, 1.0)
+                screen_center_x() + graph_center_shift
             };
-            let is_hot = !dead && life_for_render >= 1.0;
-            let life_color = fill_life_color(player_idx, life_for_render, dead);
-            let life_percent = life_for_render * 100.0;
-            let life_percent_text = cached_life_percent_text(life_percent);
+            let y_bottom = 71.0;
+            let y_top = y_bottom - graph_h;
+            let y_mesh_top = y_bottom - graph_mesh_h;
+            let graph_bg_alpha = if state.player_profiles[player_idx].transparent_density_graph_bg {
+                0.5
+            } else {
+                1.0
+            };
 
-            match state.player_profiles[player_idx].lifemeter_type {
-                profile::LifeMeterType::Standard => {
-                    let w = 136.0;
-                    let h = 18.0;
-                    let meter_cy = 20.0;
-                    let meter_cx = screen_center_x()
-                        + match play_style {
-                            profile::PlayStyle::Versus => match side {
-                                profile::PlayerSide::P1 => -widescale(238.0, 288.0),
-                                profile::PlayerSide::P2 => widescale(238.0, 288.0),
-                            },
-                            _ => match side {
-                                profile::PlayerSide::P1 => -widescale(238.0, 288.0),
-                                profile::PlayerSide::P2 => widescale(238.0, 288.0),
-                            },
-                        };
+            actors.push(act!(quad:
+                align(0.0, 0.0): xy(x, y_top):
+                zoomto(graph_w, graph_h):
+                diffuse(30.0 / 255.0, 40.0 / 255.0, 47.0 / 255.0, graph_bg_alpha):
+                z(84)
+            ));
 
-                    // Frames/border
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0):
-                        diffuse(1.0, 1.0, 1.0, 1.0): z(90)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h):
-                        diffuse(0.0, 0.0, 0.0, 1.0): z(91)
-                    ));
+            if let Some(mesh) = &state.density_graph.top_mesh[player_idx]
+                && !mesh.is_empty()
+            {
+                actors.push(Actor::Mesh {
+                    align: [0.0, 0.0],
+                    offset: [x, y_mesh_top],
+                    size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_mesh_h)],
+                    vertices: mesh.clone(),
+                    mode: MeshMode::Triangles,
+                    visible: true,
+                    blend: BlendMode::Alpha,
+                    z: 85,
+                });
+            }
 
-                    let filled_width = w * life_for_render;
-                    // Never draw swoosh if dead OR nothing to fill.
-                    if filled_width > 0.0 && !dead {
-                        // Logic Parity:
-                        // velocity = -(songposition:GetCurBPS() * 0.5)
-                        // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
-                        let bps = state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
-                        let velocity_x = if state.is_in_freeze || state.is_in_delay {
-                            0.0
+            let duration =
+                (state.density_graph_last_second - state.density_graph_first_second).max(0.001_f32);
+            let progress_w = (((state.current_music_time_display
+                - state.density_graph_first_second)
+                / duration)
+                * graph_w)
+                .clamp(0.0, graph_w);
+            if progress_w > 0.0 {
+                actors.push(act!(quad:
+                    align(0.0, 0.0): xy(x, y_top):
+                    zoomto(progress_w, graph_h):
+                    diffuse(0.0, 0.0, 0.0, 0.85):
+                    z(86)
+                ));
+            }
+        }
+
+        for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in
+            &players[..player_count]
+        {
+            let chart = &state.charts[player_idx];
+            let difficulty_color =
+                color::difficulty_rgba(&chart.difficulty, state.active_color_index);
+            let meter_text = cached_meter_text(chart.meter);
+            let meter_detail_text =
+                color::difficulty_display_name_for_song(&chart.difficulty, &state.song.title, true);
+
+            // Difficulty Box
+            let y = 56.0;
+            let mut diff_children =
+                Vec::with_capacity(if cfg.zmod_rating_box_text { 3 } else { 2 });
+            diff_children.push(act!(quad:
+                align(0.5, 0.5): xy(0.0, 0.0): zoomto(30.0, 30.0):
+                diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
+            ));
+            let meter_y = if cfg.zmod_rating_box_text { -4.0 } else { 0.0 };
+            diff_children.push(act!(text:
+                font(current_machine_font_key(FontRole::Header)): settext(meter_text): align(0.5, 0.5): xy(0.0, meter_y):
+                zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0)
+            ));
+            if cfg.zmod_rating_box_text {
+                diff_children.push(act!(text:
+                    font("miso"):
+                    settext(meter_detail_text):
+                    align(0.5, 0.5): xy(0.0, 9.5):
+                    zoom(0.5):
+                    diffuse(0.0, 0.0, 0.0, 1.0)
+                ));
+            }
+            actors.push(Actor::Frame {
+                align: [0.5, 0.5],
+                offset: [diff_x, y],
+                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                children: diff_children,
+                background: None,
+                z: 90,
+            });
+
+            // Score Display
+            let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
+            let nps_graph_at_top = state.player_profiles[player_idx].nps_graph_at_top;
+            let single_score_swapped = state.num_players == 1
+                && play_style != profile::PlayStyle::Double
+                && nps_graph_at_top
+                && !note_field_is_centered;
+            let score_x = if single_score_swapped {
+                score_x_other
+            } else {
+                score_x_normal
+            };
+            let hide_score_for_top_graph =
+                state.num_players > 1 && nps_graph_at_top && !is_ultrawide;
+
+            if !state.player_profiles[player_idx].hide_score && !hide_score_for_top_graph {
+                let score_y = 56.0;
+                let show_ex_score = state.player_profiles[player_idx].show_ex_score;
+                let show_hard_ex_score =
+                    show_ex_score && state.player_profiles[player_idx].show_hard_ex_score;
+                let (score_text, score_color) = if show_ex_score {
+                    let ex_percent =
+                        crate::game::gameplay::display_ex_score_percent(state, player_idx);
+                    (
+                        cached_score_2dp(ex_percent.max(0.0)),
+                        color::JUDGMENT_RGBA[0],
+                    )
+                } else {
+                    let score_percent =
+                        (crate::game::gameplay::display_itg_score_percent(state, player_idx)
+                            * 100.0) as f32;
+                    (cached_score_2dp(score_percent as f64), [1.0, 1.0, 1.0, 1.0])
+                };
+
+                let is_p2_side = player_side == profile::PlayerSide::P2;
+                // Arrow Cloud parity: EX remains the "normal" score position/anchor.
+                // H.EX is placed at a different x on P2 so it appears to the left of EX.
+                actors.push(act!(text:
+                    font(current_machine_font_key(FontRole::Numbers)): settext(score_text):
+                    align(1.0, 1.0): xy(score_x, score_y):
+                    zoom(0.5): horizalign(right):
+                    diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
+                    z(90)
+                ));
+
+                if show_hard_ex_score {
+                    let hard_ex_percent =
+                        crate::game::gameplay::display_hard_ex_score_percent(state, player_idx);
+                    let hex = color::HARD_EX_SCORE_RGBA;
+                    let hard_ex_x = if single_score_swapped {
+                        let swapped_base = if is_p2_side {
+                            screen_center_x() - clamped_width / 4.3
                         } else {
-                            -(bps * 0.5)
+                            screen_center_x() + clamped_width / 4.3
                         };
+                        swapped_base + 115.0
+                    } else if is_p2_side {
+                        // Arrow Cloud: HardEX uses /4.3 on P2 (while EX uses /2.75).
+                        screen_center_x() + clamped_width / 4.3
+                    } else {
+                        score_x
+                    };
 
-                        let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
-
-                        // MeterSwoosh
-                        actors.push(act!(sprite("swoosh.png"):
-                            align(0.0, 0.5):
-                            xy(meter_cx - w / 2.0, meter_cy):
-                            zoomto(filled_width, h):
-                            diffusealpha(swoosh_alpha):
-                            texcoordvelocity(velocity_x, 0.0):
-                            z(93)
+                    if is_p2_side {
+                        actors.push(act!(text:
+                            font(current_machine_font_key(FontRole::Numbers)):
+                            settext(cached_score_2dp(hard_ex_percent.max(0.0))):
+                            align(1.0, 0.0): xy(hard_ex_x, score_y):
+                            zoom(0.25): horizalign(right):
+                            diffuse(hex[0], hex[1], hex[2], hex[3]):
+                            z(90)
                         ));
-
-                        // MeterFill
-                        actors.push(act!(quad:
-                            align(0.0, 0.5):
-                            xy(meter_cx - w / 2.0, meter_cy):
-                            zoomto(filled_width, h):
-                            diffuse(life_color[0], life_color[1], life_color[2], 1.0):
-                            z(92)
+                    } else {
+                        actors.push(act!(text:
+                            font(current_machine_font_key(FontRole::Numbers)):
+                            settext(cached_score_2dp(hard_ex_percent.max(0.0))):
+                            align(0.0, 0.0): xy(hard_ex_x, score_y):
+                            zoom(0.25): horizalign(left):
+                            diffuse(hex[0], hex[1], hex[2], hex[3]):
+                            z(90)
                         ));
                     }
-
-                    if state.player_profiles[player_idx].show_life_percent
-                        && show_standard_life_percent
-                        && !is_hot
-                    {
-                        let life_text_color = player_life_color(player_idx);
-                        let (outer_x, inner_x, text_x, align_x) = if side == profile::PlayerSide::P1
-                        {
-                            (meter_cx - 76.0, meter_cx - 77.0, meter_cx - 77.0, 1.0)
+                }
+            }
+        }
+        // Current BPM Display (1:1 with Simply Love)
+        {
+            let base_bpm = state.timing.get_bpm_for_beat(state.current_beat_display);
+            let rate = if state.music_rate.is_finite() {
+                state.music_rate as f64
+            } else {
+                1.0
+            };
+            let display_bpm = if base_bpm.is_finite() {
+                f64::from(base_bpm) * rate
+            } else {
+                0.0
+            };
+            let bpm_text = cached_bpm_text(display_bpm, cfg.show_bpm_decimal);
+            // Final world-space positions derived from analyzing the SM Lua transforms.
+            // The parent frame is bottom-aligned to y=52, and its children are positioned
+            // relative to that y-coordinate, with a zoom of 1.33 applied to the whole group.
+            let frame_origin_y = 51.0;
+            let frame_zoom = 1.33;
+            // The BPM text is at y=0 relative to the frame's origin. Its final position is just the origin.
+            let bpm_center_y = frame_origin_y;
+            // The Rate text is at y=12 relative to the frame's origin. Its offset is scaled by the frame's zoom.
+            let rate_center_y = 12.0f64.mul_add(frame_zoom, frame_origin_y);
+            let bpm_final_zoom = 1.0 * frame_zoom;
+            let rate_final_zoom = 0.5 * frame_zoom;
+            let mut bpm_x = screen_center_x();
+            let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
+            if state.num_players == 1
+                && note_field_is_centered
+                && state.player_profiles[0].nps_graph_at_top
+            {
+                let side_shift = if player_side == profile::PlayerSide::P1 {
+                    0.3
+                } else {
+                    -0.3
+                };
+                bpm_x = screen_center_x() + screen_width() * side_shift;
+            }
+            actors.push(act!(text:
+                font("miso"): settext(bpm_text):
+                align(0.5, 0.5): xy(bpm_x, bpm_center_y):
+                zoom(bpm_final_zoom): horizalign(center): z(90)
+            ));
+            let rate = if state.music_rate.is_finite() {
+                state.music_rate
+            } else {
+                1.0
+            };
+            let rate_text = cached_rate_text(rate);
+            actors.push(act!(text:
+                font("miso"): settext(rate_text):
+                align(0.5, 0.5): xy(bpm_x, rate_center_y):
+                zoom(rate_final_zoom): horizalign(center): z(90)
+            ));
+        }
+        // Song Title Box (SongMeter)
+        {
+            let w = widescale(310.0, 417.0);
+            let h = 22.0;
+            let box_cx = screen_center_x();
+            let box_cy = 20.0;
+            let mut frame_children = Vec::with_capacity(4);
+            frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w, h): diffuse(1.0, 1.0, 1.0, 1.0): z(0) ));
+            frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w - 4.0, h - 4.0): diffuse(0.0, 0.0, 0.0, 1.0): z(1) ));
+            if state.song.total_length_seconds > 0 && state.current_music_time_display >= 0.0 {
+                let progress = (state.current_music_time_display
+                    / state.song.total_length_seconds as f32)
+                    .clamp(0.0, 1.0);
+                frame_children.push(act!(quad:
+                    align(0.0, 0.5): xy(2.0, h / 2.0): zoomto((w - 4.0) * progress, h - 4.0):
+                    diffuse(player_color[0], player_color[1], player_color[2], 1.0): z(2)
+                ));
+            }
+            let full_title = state.song_full_title.clone();
+            frame_children.push(act!(text:
+                font("miso"): settext(full_title): align(0.5, 0.5): xy(w / 2.0, h / 2.0):
+                zoom(0.8): maxwidth(screen_width() / 2.5 - 10.0): horizalign(center): z(3)
+            ));
+            actors.push(Actor::Frame {
+                align: [0.5, 0.5],
+                offset: [box_cx, box_cy],
+                size: [SizeSpec::Px(w), SizeSpec::Px(h)],
+                background: None,
+                z: 90,
+                children: frame_children,
+            });
+        }
+        // --- Life Meter ---
+        {
+            let player_life_color = |player_idx: usize| -> [f32; 4] {
+                match play_style {
+                    profile::PlayStyle::Versus => {
+                        if player_idx == 0 {
+                            color::decorative_rgba(state.active_color_index)
                         } else {
-                            (meter_cx + 76.0, meter_cx + 77.0, meter_cx + 78.0, 0.0)
-                        };
+                            color::decorative_rgba(state.active_color_index - 2)
+                        }
+                    }
+                    _ => {
+                        if is_p2_single {
+                            color::decorative_rgba(state.active_color_index - 2)
+                        } else {
+                            color::decorative_rgba(state.active_color_index)
+                        }
+                    }
+                }
+            };
+            let rainbow_life_color = |elapsed: f32| -> [f32; 4] {
+                let phase = elapsed * 2.0;
+                let r = (phase + 0.0).sin() * 0.5 + 0.5;
+                let g = (phase + std::f32::consts::TAU / 3.0).sin() * 0.5 + 0.5;
+                let b = (phase + (2.0 * std::f32::consts::TAU) / 3.0).sin() * 0.5 + 0.5;
+                [r, g, b, 1.0]
+            };
+            let responsive_life_color = |life: f32| -> [f32; 4] {
+                let life = life.clamp(0.0, 1.0);
+                if life >= 0.9 {
+                    [0.0, 1.0, ((life - 0.9) * 10.0).clamp(0.0, 1.0), 1.0]
+                } else if life >= 0.5 {
+                    [((0.9 - life) * 2.5).clamp(0.0, 1.0), 1.0, 0.0, 1.0]
+                } else {
+                    [1.0, ((life - 0.2) * (10.0 / 3.0)).clamp(0.0, 1.0), 0.0, 1.0]
+                }
+            };
+            let fill_life_color = |player_idx: usize, life: f32, dead: bool| -> [f32; 4] {
+                let profile = &state.player_profiles[player_idx];
+                let is_hot = !dead && life >= 1.0;
+                if is_hot {
+                    if profile.rainbow_max {
+                        rainbow_life_color(state.total_elapsed_in_screen)
+                    } else {
+                        [1.0, 1.0, 1.0, 1.0]
+                    }
+                } else if profile.responsive_colors {
+                    responsive_life_color(life)
+                } else {
+                    player_life_color(player_idx)
+                }
+            };
+            let show_standard_life_percent =
+                screen_width() / screen_height().max(1.0) >= (16.0 / 9.0);
+
+            let mut life_players = [(0usize, profile::PlayerSide::P1); 2];
+            let life_player_count = match play_style {
+                profile::PlayStyle::Versus => {
+                    life_players[0] = (0, profile::PlayerSide::P1);
+                    life_players[1] = (1, profile::PlayerSide::P2);
+                    2
+                }
+                _ if is_p2_single => {
+                    life_players[0] = (0, profile::PlayerSide::P2);
+                    1
+                }
+                _ => {
+                    life_players[0] = (0, profile::PlayerSide::P1);
+                    1
+                }
+            };
+
+            for &(player_idx, side) in &life_players[..life_player_count] {
+                if state.player_profiles[player_idx].hide_lifebar {
+                    continue;
+                }
+
+                // Latch-to-zero for rendering the very frame we die.
+                let dead =
+                    state.players[player_idx].is_failing || state.players[player_idx].life <= 0.0;
+                let life_for_render = if dead {
+                    0.0
+                } else {
+                    state.players[player_idx].life.clamp(0.0, 1.0)
+                };
+                let is_hot = !dead && life_for_render >= 1.0;
+                let life_color = fill_life_color(player_idx, life_for_render, dead);
+                let life_percent = life_for_render * 100.0;
+                let life_percent_text = cached_life_percent_text(life_percent);
+
+                match state.player_profiles[player_idx].lifemeter_type {
+                    profile::LifeMeterType::Standard => {
+                        let w = 136.0;
+                        let h = 18.0;
+                        let meter_cy = 20.0;
+                        let meter_cx = screen_center_x()
+                            + match play_style {
+                                profile::PlayStyle::Versus => match side {
+                                    profile::PlayerSide::P1 => -widescale(238.0, 288.0),
+                                    profile::PlayerSide::P2 => widescale(238.0, 288.0),
+                                },
+                                _ => match side {
+                                    profile::PlayerSide::P1 => -widescale(238.0, 288.0),
+                                    profile::PlayerSide::P2 => widescale(238.0, 288.0),
+                                },
+                            };
+
+                        // Frames/border
                         actors.push(act!(quad:
+                            align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0):
+                            diffuse(1.0, 1.0, 1.0, 1.0): z(90)
+                        ));
+                        actors.push(act!(quad:
+                            align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h):
+                            diffuse(0.0, 0.0, 0.0, 1.0): z(91)
+                        ));
+
+                        let filled_width = w * life_for_render;
+                        // Never draw swoosh if dead OR nothing to fill.
+                        if filled_width > 0.0 && !dead {
+                            // Logic Parity:
+                            // velocity = -(songposition:GetCurBPS() * 0.5)
+                            // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
+                            let bps =
+                                state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
+                            let velocity_x = if state.is_in_freeze || state.is_in_delay {
+                                0.0
+                            } else {
+                                -(bps * 0.5)
+                            };
+
+                            let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
+
+                            // MeterSwoosh
+                            actors.push(act!(sprite("swoosh.png"):
+                                align(0.0, 0.5):
+                                xy(meter_cx - w / 2.0, meter_cy):
+                                zoomto(filled_width, h):
+                                diffusealpha(swoosh_alpha):
+                                texcoordvelocity(velocity_x, 0.0):
+                                z(93)
+                            ));
+
+                            // MeterFill
+                            actors.push(act!(quad:
+                                align(0.0, 0.5):
+                                xy(meter_cx - w / 2.0, meter_cy):
+                                zoomto(filled_width, h):
+                                diffuse(life_color[0], life_color[1], life_color[2], 1.0):
+                                z(92)
+                            ));
+                        }
+
+                        if state.player_profiles[player_idx].show_life_percent
+                            && show_standard_life_percent
+                            && !is_hot
+                        {
+                            let life_text_color = player_life_color(player_idx);
+                            let (outer_x, inner_x, text_x, align_x) =
+                                if side == profile::PlayerSide::P1 {
+                                    (meter_cx - 76.0, meter_cx - 77.0, meter_cx - 77.0, 1.0)
+                                } else {
+                                    (meter_cx + 76.0, meter_cx + 77.0, meter_cx + 78.0, 0.0)
+                                };
+                            actors.push(act!(quad:
                             align(align_x, 0.5): xy(outer_x, meter_cy):
                             zoomto(44.0, 18.0):
                             diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
                             z(94)
                         ));
-                        actors.push(act!(quad:
-                            align(align_x, 0.5): xy(inner_x, meter_cy):
-                            zoomto(42.0, 16.0):
-                            diffuse(0.0, 0.0, 0.0, 1.0):
-                            z(95)
-                        ));
-                        actors.push(act!(text:
+                            actors.push(act!(quad:
+                                align(align_x, 0.5): xy(inner_x, meter_cy):
+                                zoomto(42.0, 16.0):
+                                diffuse(0.0, 0.0, 0.0, 1.0):
+                                z(95)
+                            ));
+                            actors.push(act!(text:
                             font("miso"): settext(life_percent_text.clone()):
                             align(align_x, 0.5): xy(text_x, meter_cy):
                             zoom(1.0):
                             diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
                             z(96)
                         ));
+                        }
                     }
-                }
-                profile::LifeMeterType::Surround => {
-                    let sw = screen_width();
-                    let sh = screen_height();
-                    let w = sw * 0.5;
-                    let h = sh - 80.0;
-                    let y = 80.0;
-                    let croptop = 1.0 - life_for_render;
+                    profile::LifeMeterType::Surround => {
+                        let sw = screen_width();
+                        let sh = screen_height();
+                        let w = sw * 0.5;
+                        let h = sh - 80.0;
+                        let y = 80.0;
+                        let croptop = 1.0 - life_for_render;
 
-                    if play_style == profile::PlayStyle::Double {
-                        // Double: two quads flanking left/right, moving in unison.
-                        actors.push(act!(quad:
-                            align(0.0, 0.0): xy(0.0, y):
-                            zoomto(w, h):
-                            diffuse(0.2, 0.2, 0.2, 1.0):
-                            faderight(0.8):
-                            croptop(croptop):
-                            z(-98)
-                        ));
-                        actors.push(act!(quad:
-                            align(1.0, 0.0): xy(sw, y):
-                            zoomto(w, h):
-                            diffuse(0.2, 0.2, 0.2, 1.0):
-                            fadeleft(0.8):
-                            croptop(croptop):
-                            z(-98)
-                        ));
-                        // Only one player in Double style.
-                        break;
-                    }
-
-                    let mut surround_color = if state.player_profiles[player_idx].responsive_colors
-                    {
-                        let mut c = responsive_life_color(life_for_render);
-                        c[3] = 0.2;
-                        c
-                    } else {
-                        [0.2, 0.2, 0.2, 1.0]
-                    };
-                    if life_for_render >= 1.0 && state.player_profiles[player_idx].rainbow_max {
-                        let mut c = rainbow_life_color(state.total_elapsed_in_screen);
-                        c[3] = if state.player_profiles[player_idx].responsive_colors {
-                            0.2
-                        } else {
-                            1.0
-                        };
-                        surround_color = c;
-                    }
-
-                    match side {
-                        profile::PlayerSide::P1 => {
+                        if play_style == profile::PlayStyle::Double {
+                            // Double: two quads flanking left/right, moving in unison.
                             actors.push(act!(quad:
+                                align(0.0, 0.0): xy(0.0, y):
+                                zoomto(w, h):
+                                diffuse(0.2, 0.2, 0.2, 1.0):
+                                faderight(0.8):
+                                croptop(croptop):
+                                z(-98)
+                            ));
+                            actors.push(act!(quad:
+                                align(1.0, 0.0): xy(sw, y):
+                                zoomto(w, h):
+                                diffuse(0.2, 0.2, 0.2, 1.0):
+                                fadeleft(0.8):
+                                croptop(croptop):
+                                z(-98)
+                            ));
+                            // Only one player in Double style.
+                            break;
+                        }
+
+                        let mut surround_color =
+                            if state.player_profiles[player_idx].responsive_colors {
+                                let mut c = responsive_life_color(life_for_render);
+                                c[3] = 0.2;
+                                c
+                            } else {
+                                [0.2, 0.2, 0.2, 1.0]
+                            };
+                        if life_for_render >= 1.0 && state.player_profiles[player_idx].rainbow_max {
+                            let mut c = rainbow_life_color(state.total_elapsed_in_screen);
+                            c[3] = if state.player_profiles[player_idx].responsive_colors {
+                                0.2
+                            } else {
+                                1.0
+                            };
+                            surround_color = c;
+                        }
+
+                        match side {
+                            profile::PlayerSide::P1 => {
+                                actors.push(act!(quad:
                                 align(0.0, 0.0): xy(0.0, y):
                                 zoomto(w, h):
                                 diffuse(surround_color[0], surround_color[1], surround_color[2], surround_color[3]):
@@ -6739,9 +7047,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 croptop(croptop):
                                 z(-98)
                             ));
-                        }
-                        profile::PlayerSide::P2 => {
-                            actors.push(act!(quad:
+                            }
+                            profile::PlayerSide::P2 => {
+                                actors.push(act!(quad:
                                 align(1.0, 0.0): xy(sw, y):
                                 zoomto(w, h):
                                 diffuse(surround_color[0], surround_color[1], surround_color[2], surround_color[3]):
@@ -6749,228 +7057,239 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 croptop(croptop):
                                 z(-98)
                             ));
+                            }
                         }
                     }
-                }
-                profile::LifeMeterType::Vertical => {
-                    let bar_w = 16.0;
-                    let bar_h = 250.0;
+                    profile::LifeMeterType::Vertical => {
+                        let bar_w = 16.0;
+                        let bar_h = 250.0;
 
-                    let x = {
-                        // SL: default to _screen.cx +/- SL_WideScale(302, 400).
-                        let mut x = screen_center_x()
-                            + match side {
-                                profile::PlayerSide::P1 => -widescale(302.0, 400.0),
-                                profile::PlayerSide::P2 => widescale(302.0, 400.0),
-                            };
-
-                        // SL: if double style, position next to notefield.
-                        if play_style == profile::PlayStyle::Double {
-                            let half_nf = notefield_width(player_idx) * 0.5;
-                            x = screen_center_x()
+                        let x = {
+                            // SL: default to _screen.cx +/- SL_WideScale(302, 400).
+                            let mut x = screen_center_x()
                                 + match side {
-                                    profile::PlayerSide::P1 => -(half_nf + 10.0),
-                                    profile::PlayerSide::P2 => half_nf + 10.0,
+                                    profile::PlayerSide::P1 => -widescale(302.0, 400.0),
+                                    profile::PlayerSide::P2 => widescale(302.0, 400.0),
                                 };
+
+                            // SL: if double style, position next to notefield.
+                            if play_style == profile::PlayStyle::Double {
+                                let half_nf = notefield_width(player_idx) * 0.5;
+                                x = screen_center_x()
+                                    + match side {
+                                        profile::PlayerSide::P1 => -(half_nf + 10.0),
+                                        profile::PlayerSide::P2 => half_nf + 10.0,
+                                    };
+                            }
+
+                            x
+                        };
+
+                        let cy = bar_h + 10.0;
+                        // Frames/border
+                        actors.push(act!(quad:
+                            align(0.5, 0.5): xy(x, cy): zoomto(bar_w + 2.0, bar_h + 2.0):
+                            diffuse(1.0, 1.0, 1.0, 1.0): z(90)
+                        ));
+                        actors.push(act!(quad:
+                            align(0.5, 0.5): xy(x, cy): zoomto(bar_w, bar_h):
+                            diffuse(0.0, 0.0, 0.0, 1.0): z(91)
+                        ));
+
+                        let filled_h = bar_h * life_for_render;
+
+                        // MeterFill
+                        if filled_h > 0.0 {
+                            actors.push(act!(quad:
+                                align(0.0, 1.0):
+                                xy(x - bar_w * 0.5, cy + bar_h * 0.5):
+                                zoomto(bar_w, filled_h):
+                                diffuse(life_color[0], life_color[1], life_color[2], 1.0):
+                                z(92)
+                            ));
                         }
 
-                        x
-                    };
+                        // MeterSwoosh
+                        if filled_h > 0.0 && !dead {
+                            let bps =
+                                state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
+                            let velocity_x = if state.is_in_freeze || state.is_in_delay {
+                                0.0
+                            } else {
+                                -(bps * 0.5)
+                            };
+                            let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
 
-                    let cy = bar_h + 10.0;
-                    // Frames/border
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(x, cy): zoomto(bar_w + 2.0, bar_h + 2.0):
-                        diffuse(1.0, 1.0, 1.0, 1.0): z(90)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(x, cy): zoomto(bar_w, bar_h):
-                        diffuse(0.0, 0.0, 0.0, 1.0): z(91)
-                    ));
+                            actors.push(act!(sprite("swoosh.png"):
+                                align(0.5, 0.5):
+                                xy(x, (cy + bar_h * 0.5) - filled_h * 0.5):
+                                zoomto(filled_h, bar_w):
+                                diffusealpha(swoosh_alpha):
+                                rotationz(90.0):
+                                texcoordvelocity(velocity_x, 0.0):
+                                z(93)
+                            ));
+                        }
 
-                    let filled_h = bar_h * life_for_render;
-
-                    // MeterFill
-                    if filled_h > 0.0 {
-                        actors.push(act!(quad:
-                            align(0.0, 1.0):
-                            xy(x - bar_w * 0.5, cy + bar_h * 0.5):
-                            zoomto(bar_w, filled_h):
-                            diffuse(life_color[0], life_color[1], life_color[2], 1.0):
-                            z(92)
-                        ));
-                    }
-
-                    // MeterSwoosh
-                    if filled_h > 0.0 && !dead {
-                        let bps = state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
-                        let velocity_x = if state.is_in_freeze || state.is_in_delay {
-                            0.0
-                        } else {
-                            -(bps * 0.5)
-                        };
-                        let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
-
-                        actors.push(act!(sprite("swoosh.png"):
-                            align(0.5, 0.5):
-                            xy(x, (cy + bar_h * 0.5) - filled_h * 0.5):
-                            zoomto(filled_h, bar_w):
-                            diffusealpha(swoosh_alpha):
-                            rotationz(90.0):
-                            texcoordvelocity(velocity_x, 0.0):
-                            z(93)
-                        ));
-                    }
-
-                    if state.player_profiles[player_idx].show_life_percent && !is_hot {
-                        let life_text_color = player_life_color(player_idx);
-                        let text_y = cy + bar_h * 0.5 - (bar_h * life_for_render);
-                        let (outer_x, inner_x, text_x, align_x) = if side == profile::PlayerSide::P1
-                        {
-                            (x + 10.0, x + 11.0, x + 12.0, 0.0)
-                        } else {
-                            (x - 11.0, x - 12.0, x - 13.0, 1.0)
-                        };
-                        actors.push(act!(quad:
+                        if state.player_profiles[player_idx].show_life_percent && !is_hot {
+                            let life_text_color = player_life_color(player_idx);
+                            let text_y = cy + bar_h * 0.5 - (bar_h * life_for_render);
+                            let (outer_x, inner_x, text_x, align_x) =
+                                if side == profile::PlayerSide::P1 {
+                                    (x + 10.0, x + 11.0, x + 12.0, 0.0)
+                                } else {
+                                    (x - 11.0, x - 12.0, x - 13.0, 1.0)
+                                };
+                            actors.push(act!(quad:
                             align(align_x, 0.5): xy(outer_x, text_y):
                             zoomto(44.0, 18.0):
                             diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
                             z(94)
                         ));
-                        actors.push(act!(quad:
-                            align(align_x, 0.5): xy(inner_x, text_y):
-                            zoomto(42.0, 16.0):
-                            diffuse(0.0, 0.0, 0.0, 1.0):
-                            z(95)
-                        ));
-                        actors.push(act!(text:
+                            actors.push(act!(quad:
+                                align(align_x, 0.5): xy(inner_x, text_y):
+                                zoomto(42.0, 16.0):
+                                diffuse(0.0, 0.0, 0.0, 1.0):
+                                z(95)
+                            ));
+                            actors.push(act!(text:
                             font("miso"): settext(life_percent_text.clone()):
                             align(align_x, 0.5): xy(text_x, text_y):
                             zoom(1.0):
                             diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
                             z(96)
                         ));
+                        }
                     }
                 }
             }
         }
-    }
-    // Simply Love parity: keep Stage/Event text visible at the footer after intro animation ends.
-    if !state.stage_intro_text.is_empty()
-        && state.total_elapsed_in_screen >= INTRO_TEXT_SETTLE_SECONDS
-    {
-        actors.push(act!(text:
+        // Simply Love parity: keep Stage/Event text visible at the footer after intro animation ends.
+        if !state.stage_intro_text.is_empty()
+            && state.total_elapsed_in_screen >= INTRO_TEXT_SETTLE_SECONDS
+        {
+            let text_x = intro_text_target_x(
+                state,
+                asset_manager,
+                state.stage_intro_text.as_ref(),
+                play_style,
+                player_side,
+                cfg.center_1player_notefield,
+            );
+            actors.push(act!(text:
             font(current_machine_font_key(FontRole::Header)): settext(state.stage_intro_text.clone()):
-            align(0.5, 0.5): xy(screen_center_x(), screen_height() - 30.0):
+            align(0.5, 0.5): xy(text_x, screen_height() - 30.0):
             zoom(0.4):
             shadowlength(1.0):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(110)
         ));
-    }
-    let p1_avatar = hud_snapshot
-        .p1
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
-    let p2_avatar = hud_snapshot
-        .p2
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
+        }
+        let p1_avatar = hud_snapshot
+            .p1
+            .avatar_texture_key
+            .as_deref()
+            .map(|texture_key| AvatarParams { texture_key });
+        let p2_avatar = hud_snapshot
+            .p2
+            .avatar_texture_key
+            .as_deref()
+            .map(|texture_key| AvatarParams { texture_key });
 
-    let p1_joined = hud_snapshot.p1.joined;
-    let p2_joined = hud_snapshot.p2.joined;
-    let p1_guest = hud_snapshot.p1.guest;
-    let p2_guest = hud_snapshot.p2.guest;
+        let p1_joined = hud_snapshot.p1.joined;
+        let p2_joined = hud_snapshot.p2.joined;
+        let p1_guest = hud_snapshot.p1.guest;
+        let p2_guest = hud_snapshot.p2.guest;
 
-    let insert_card_text = tr("Common", "InsertCard");
-    let (p1_footer_text, p1_footer_avatar) = if p1_joined {
-        (
-            Some(if p1_guest {
-                &*insert_card_text
-            } else {
-                hud_snapshot.p1.display_name.as_str()
-            }),
-            if p1_guest { None } else { p1_avatar },
-        )
-    } else {
-        (None, None)
-    };
-    let (p2_footer_text, p2_footer_avatar) = if p2_joined {
-        (
-            Some(if p2_guest {
-                &*insert_card_text
-            } else {
-                hud_snapshot.p2.display_name.as_str()
-            }),
-            if p2_guest { None } else { p2_avatar },
-        )
-    } else {
-        (None, None)
-    };
-
-    let (footer_left, footer_right, left_avatar, right_avatar) =
-        if play_style == profile::PlayStyle::Versus {
+        let insert_card_text = tr("Common", "InsertCard");
+        let (p1_footer_text, p1_footer_avatar) = if p1_joined {
             (
-                p1_footer_text,
-                p2_footer_text,
-                p1_footer_avatar,
-                p2_footer_avatar,
+                Some(if p1_guest {
+                    &*insert_card_text
+                } else {
+                    hud_snapshot.p1.display_name.as_str()
+                }),
+                if p1_guest { None } else { p1_avatar },
             )
         } else {
-            match player_side {
-                profile::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
-                profile::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
+            (None, None)
+        };
+        let (p2_footer_text, p2_footer_avatar) = if p2_joined {
+            (
+                Some(if p2_guest {
+                    &*insert_card_text
+                } else {
+                    hud_snapshot.p2.display_name.as_str()
+                }),
+                if p2_guest { None } else { p2_avatar },
+            )
+        } else {
+            (None, None)
+        };
+
+        let (footer_left, footer_right, left_avatar, right_avatar) =
+            if play_style == profile::PlayStyle::Versus {
+                (
+                    p1_footer_text,
+                    p2_footer_text,
+                    p1_footer_avatar,
+                    p2_footer_avatar,
+                )
+            } else {
+                match player_side {
+                    profile::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
+                    profile::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
+                }
+            };
+        actors.push(screen_bar::build(ScreenBarParams {
+            title: "",
+            title_placement: screen_bar::ScreenBarTitlePlacement::Center,
+            position: screen_bar::ScreenBarPosition::Bottom,
+            transparent: true,
+            fg_color: [1.0; 4],
+            left_text: footer_left,
+            center_text: None,
+            right_text: footer_right,
+            left_avatar,
+            right_avatar,
+        }));
+        let show_step_stats = match play_style {
+            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                state.player_profiles.first().is_some_and(|p| {
+                    p.data_visualizations == profile::DataVisualizations::StepStatistics
+                })
+            }
+            profile::PlayStyle::Versus => {
+                state.player_profiles.first().is_some_and(|p| {
+                    p.data_visualizations == profile::DataVisualizations::StepStatistics
+                }) || state.player_profiles.get(1).is_some_and(|p| {
+                    p.data_visualizations == profile::DataVisualizations::StepStatistics
+                })
             }
         };
-    actors.push(screen_bar::build(ScreenBarParams {
-        title: "",
-        title_placement: screen_bar::ScreenBarTitlePlacement::Center,
-        position: screen_bar::ScreenBarPosition::Bottom,
-        transparent: true,
-        fg_color: [1.0; 4],
-        left_text: footer_left,
-        center_text: None,
-        right_text: footer_right,
-        left_avatar,
-        right_avatar,
-    }));
-    let show_step_stats = match play_style {
-        profile::PlayStyle::Single | profile::PlayStyle::Double => state
-            .player_profiles
-            .first()
-            .is_some_and(|p| p.data_visualizations == profile::DataVisualizations::StepStatistics),
-        profile::PlayStyle::Versus => {
-            state.player_profiles.first().is_some_and(|p| {
-                p.data_visualizations == profile::DataVisualizations::StepStatistics
-            }) || state.player_profiles.get(1).is_some_and(|p| {
-                p.data_visualizations == profile::DataVisualizations::StepStatistics
-            })
+        if show_step_stats {
+            if state.num_cols <= 4 && play_style != profile::PlayStyle::Versus {
+                actors.extend(gameplay_stats::build(
+                    state,
+                    asset_manager,
+                    playfield_center_x,
+                    player_side,
+                ));
+            } else if play_style == profile::PlayStyle::Versus {
+                actors.extend(gameplay_stats::build_versus_step_stats(
+                    state,
+                    asset_manager,
+                ));
+            } else if play_style == profile::PlayStyle::Double {
+                actors.extend(gameplay_stats::build_double_step_stats(
+                    state,
+                    asset_manager,
+                    playfield_center_x,
+                ));
+            }
         }
-    };
-    if show_step_stats {
-        if state.num_cols <= 4 && play_style != profile::PlayStyle::Versus {
-            actors.extend(gameplay_stats::build(
-                state,
-                asset_manager,
-                playfield_center_x,
-                player_side,
-            ));
-        } else if play_style == profile::PlayStyle::Versus {
-            actors.extend(gameplay_stats::build_versus_step_stats(
-                state,
-                asset_manager,
-            ));
-        } else if play_style == profile::PlayStyle::Double {
-            actors.extend(gameplay_stats::build_double_step_stats(
-                state,
-                asset_manager,
-                playfield_center_x,
-            ));
-        }
+        song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_tail_start);
     }
-    song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_tail_start);
     let song_foreground_state = song_lua_song_foreground_state(state);
     let p1_proxy_slices = [
         p1_proxy_sources[0].as_deref(),
@@ -6982,11 +7301,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         p2_proxy_sources[1].as_deref(),
         p2_proxy_sources[2].as_deref(),
     ];
+    let p1_player_proxy_slice = p1_player_proxy_source.as_deref();
+    let p2_player_proxy_slice = p2_player_proxy_source.as_deref();
     let underlay_proxy_slice = underlay_proxy_source.as_deref();
     let overlay_proxy_slice = overlay_proxy_source.as_deref();
     let main_layer_actors = {
         let proxy_sources = song_lua_screen_proxy_sources(
             &actors,
+            p1_player_proxy_slice,
+            p2_player_proxy_slice,
             p1_actor_range,
             p2_actor_range,
             p1_proxy_slices,
@@ -6996,6 +7319,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         );
         build_song_lua_layer_actors(
             &state.song_lua_overlays,
+            &local_overlay_states,
             &overlay_states,
             song_foreground_state,
             &proxy_sources,
@@ -7015,7 +7339,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
-        let layer_states = song_lua_overlay_states_from(
+        let (layer_local_states, layer_states) = song_lua_overlay_state_sets_from(
             state.current_music_time_display,
             &layer.overlays,
             &layer.overlay_events,
@@ -7032,6 +7356,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let layer_actors = {
             let proxy_sources = song_lua_screen_proxy_sources(
                 &actors,
+                p1_player_proxy_slice,
+                p2_player_proxy_slice,
                 p1_actor_range,
                 p2_actor_range,
                 p1_proxy_slices,
@@ -7041,6 +7367,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             );
             build_song_lua_layer_actors(
                 &layer.overlays,
+                &layer_local_states,
                 &layer_states,
                 song_foreground_state,
                 &proxy_sources,
@@ -7069,6 +7396,37 @@ mod tests {
 
     fn ensure_i18n() {
         crate::assets::i18n::init("en");
+    }
+
+    #[test]
+    fn forced_center_view_uses_layout_player_x() {
+        let view = notefield::ViewOverride {
+            force_center_1player: true,
+            ..notefield::ViewOverride::default()
+        };
+
+        assert_eq!(song_lua_player_target_x(None, 320.0, 800.0, view), 800.0);
+    }
+
+    #[test]
+    fn forced_center_view_preserves_explicit_player_x() {
+        let view = notefield::ViewOverride {
+            force_center_1player: true,
+            ..notefield::ViewOverride::default()
+        };
+
+        assert_eq!(
+            song_lua_player_target_x(Some(640.0), 320.0, 800.0, view),
+            640.0
+        );
+    }
+
+    #[test]
+    fn default_view_uses_player_state_x() {
+        assert_eq!(
+            song_lua_player_target_x(None, 320.0, 800.0, notefield::ViewOverride::default()),
+            320.0
+        );
     }
 
     fn test_proxy_overlay(player_index: usize) -> SongLuaOverlayActor {
@@ -7327,6 +7685,63 @@ mod tests {
         );
         assert_eq!(composed.x, 247.0);
         assert_eq!(composed.y, 240.0);
+    }
+
+    #[test]
+    fn song_lua_aft_capture_uses_local_proxy_origin() {
+        let root = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorFrame,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState {
+                x: 427.0,
+                y: 240.0,
+                ..SongLuaOverlayState::default()
+            },
+            message_commands: Vec::new(),
+        };
+        let mut capture = test_capture_overlay("cap");
+        capture.parent_index = Some(0);
+        let overlays = vec![
+            root,
+            capture,
+            test_capture_proxy_child(1, SongLuaProxyTarget::Player { player_index: 0 }),
+        ];
+        let local_states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let overlay_states =
+            song_lua_overlay_states_from_local(&overlays, &local_states, 854.0, 480.0);
+        assert_eq!(overlay_states[2].x, 427.0);
+        assert_eq!(overlay_states[2].y, 240.0);
+
+        let source = vec![test_source_actor()];
+        let proxy_sources = SongLuaScreenProxySources {
+            players: [
+                SongLuaPlayerProxySources {
+                    player: Some(source.as_slice()),
+                    ..SongLuaPlayerProxySources::default()
+                },
+                SongLuaPlayerProxySources::default(),
+            ],
+            ..SongLuaScreenProxySources::default()
+        };
+        let actors = song_lua_capture_children(
+            &overlays,
+            &overlay_states,
+            &local_states,
+            &AssetManager::new(),
+            1,
+            &proxy_sources,
+            854.0,
+            480.0,
+        );
+
+        match actors.as_slice() {
+            [Actor::Frame { offset, .. }] => assert_eq!(*offset, [0.0, 0.0]),
+            other => panic!("expected one capture proxy frame, got {other:?}"),
+        }
     }
 
     #[test]

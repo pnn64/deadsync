@@ -1,5 +1,6 @@
 use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
+#[cfg(test)]
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -231,6 +232,7 @@ fn debounce_due_at(state: DebounceState, windows: DebounceWindows) -> Option<Ins
     None
 }
 
+#[cfg(test)]
 pub(super) fn debounce_input_edge_in_store(
     states: &Mutex<DebounceStore>,
     slot: usize,
@@ -241,8 +243,30 @@ pub(super) fn debounce_input_edge_in_store(
     timestamp_host_nanos: u64,
     windows: DebounceWindows,
 ) -> DebounceEdges {
-    let now = Instant::now();
     let mut states = states.lock().unwrap();
+    debounce_input_edge_in_store_mut(
+        &mut states,
+        slot,
+        action_mask,
+        source,
+        pressed,
+        timestamp,
+        timestamp_host_nanos,
+        windows,
+    )
+}
+
+pub(super) fn debounce_input_edge_in_store_mut(
+    states: &mut DebounceStore,
+    slot: usize,
+    action_mask: u32,
+    source: InputSource,
+    pressed: bool,
+    timestamp: Instant,
+    timestamp_host_nanos: u64,
+    windows: DebounceWindows,
+) -> DebounceEdges {
+    let now = Instant::now();
     states.ensure_slot(slot);
     let was_empty = states.slots[slot].state.is_none();
     let old_due_at = states.slots[slot].due_at;
@@ -291,15 +315,25 @@ pub(super) fn debounce_input_edge_in_store(
     edges
 }
 
+#[cfg(test)]
 pub(super) fn emit_due_debounce_edges_from(
     states: &Mutex<DebounceStore>,
     now: Instant,
     windows: DebounceWindows,
     mut emit: impl FnMut(DebouncedEdge),
 ) -> bool {
+    let mut states = states.lock().unwrap();
+    emit_due_debounce_edges_from_mut(&mut states, now, windows, &mut emit)
+}
+
+pub(super) fn emit_due_debounce_edges_from_mut(
+    states: &mut DebounceStore,
+    now: Instant,
+    windows: DebounceWindows,
+    mut emit: impl FnMut(DebouncedEdge),
+) -> bool {
     // ITGmania Update() parity: delayed edges are surfaced later, but they still
     // carry the original raw timestamp that caused the debounce holdoff.
-    let mut states = states.lock().unwrap();
     let mut flushed = false;
 
     while let Some(Reverse(next)) = states.due_slots.peek().copied() {

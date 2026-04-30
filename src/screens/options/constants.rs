@@ -8,6 +8,9 @@ pub(super) const RELOAD_BAR_H: f32 = 30.0;
 /* -------------------------- hold-to-scroll timing ------------------------- */
 pub(super) const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(300);
 pub(super) const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
+pub(super) const MAX_FPS_HOLD_FAST_AFTER: Duration = Duration::from_millis(700);
+pub(super) const MAX_FPS_HOLD_FASTER_AFTER: Duration = Duration::from_millis(1200);
+pub(super) const MAX_FPS_HOLD_FASTEST_AFTER: Duration = Duration::from_millis(1800);
 
 /* ----------------------------- cursor tweening ----------------------------- */
 // Simply Love metrics.ini uses 0.1 for both [ScreenOptions] TweenSeconds and CursorTweenSeconds.

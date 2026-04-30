@@ -3,13 +3,14 @@ use super::*;
 #[cfg(test)]
 pub(super) mod tests {
     use super::{
-        BitmaskBinding, BitmaskInit, CursorInit, ErrorBarMask, FaPlusMask, GameplayExtrasMask,
-        GameplayExtrasMoreMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask,
-        NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, P1, P2, PlayerOptionMasks, Row,
-        RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event,
-        handle_start_event, hud_offset_choices, is_row_visible, judgment_tilt_intensity_visible,
-        repeat_held_arcade_start, row_visibility, session_active_players,
-        sync_profile_scroll_speed,
+        BitmaskBinding, BitmaskInit, ChoiceBinding, CursorInit, CycleInit, ErrorBarMask,
+        FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
+        HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL,
+        NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row, RowBehavior, RowId, RowMap,
+        ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event,
+        hud_offset_choices, init_cycle_row_from_binding, init_numeric_row_from_binding,
+        is_row_visible, judgment_tilt_intensity_visible, repeat_held_arcade_start, row_visibility,
+        session_active_players, sync_profile_scroll_speed,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -832,6 +833,7 @@ pub(super) mod tests {
                 super::Outcome::persisted_with_visibility()
             },
             persist_for_side: profile::update_judgment_tilt_for_side,
+            init: None,
         };
         let tilt_row = Row {
             id: RowId::JudgmentTilt,
@@ -1073,6 +1075,58 @@ pub(super) mod tests {
         assert!(
             matches!(action, Some(ScreenAction::Navigate(Screen::Gameplay))),
             "once both players are on Exit, either player should be able to leave the screen"
+        );
+    }
+
+    #[test]
+    fn practice_exit_starts_practice_from_player_options() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        state.return_screen = Screen::Practice;
+
+        let exit_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::Exit)
+            .expect("Exit should be in Main pane");
+        state.pane_mut().selected_row[P1] = exit_row;
+
+        let active = session_active_players();
+        let action = handle_start_event(&mut state, &asset_manager, active, P1);
+        assert!(
+            matches!(action, Some(ScreenAction::Navigate(Screen::Practice))),
+            "practice-launched player options should start Practice, not Gameplay"
+        );
+    }
+
+    #[test]
+    fn practice_choose_different_returns_to_select_music() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        state.return_screen = Screen::Practice;
+
+        let exit_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::Exit)
+            .expect("Exit should be in Main pane");
+        state.pane_mut().selected_row[P1] = exit_row;
+        state
+            .pane_mut()
+            .row_map
+            .get_mut(RowId::WhatComesNext)
+            .unwrap()
+            .selected_choice_index[P1] = 1;
+
+        let active = session_active_players();
+        let action = handle_start_event(&mut state, &asset_manager, active, P1);
+        assert!(
+            matches!(action, Some(ScreenAction::Navigate(Screen::SelectMusic))),
+            "choose different song from practice options should return to the wheel"
         );
     }
 
@@ -1339,6 +1393,420 @@ pub(super) mod tests {
             row.selected_choice_index,
             [target, target],
             "WhatComesNext (mirror_across_players=true) must sync both player slots on inline focus commit"
+        );
+    }
+
+    fn cycle_test_row(choices: &[&str], initial: [usize; 2]) -> Row {
+        Row {
+            id: RowId::Perspective,
+            behavior: RowBehavior::Exit,
+            name: lookup_key("PlayerOptions", "Perspective"),
+            choices: choices.iter().map(ToString::to_string).collect(),
+            selected_choice_index: initial,
+            help: Vec::new(),
+            choice_difficulty_indices: None,
+            mirror_across_players: false,
+        }
+    }
+
+    fn numeric_test_row(choices: &[&str], initial: [usize; 2]) -> Row {
+        Row {
+            id: RowId::Spacing,
+            behavior: RowBehavior::Exit,
+            name: lookup_key("PlayerOptions", "Spacing"),
+            choices: choices.iter().map(ToString::to_string).collect(),
+            selected_choice_index: initial,
+            help: Vec::new(),
+            choice_difficulty_indices: None,
+            mirror_across_players: false,
+        }
+    }
+
+    #[test]
+    fn init_cycle_row_from_binding_uses_init_function() {
+        let binding: ChoiceBinding<usize> = ChoiceBinding::<usize> {
+            apply: |_, _| super::Outcome::NONE,
+            persist_for_side: |_, _| {},
+            init: Some(CycleInit {
+                from_profile: |_| 2,
+            }),
+        };
+        let mut row = cycle_test_row(&["A", "B", "C", "D"], [0, 0]);
+        let applied = init_cycle_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        assert!(applied, "binding has init; helper must apply it");
+        assert_eq!(row.selected_choice_index[P1], 2);
+        assert_eq!(row.selected_choice_index[P2], 0, "P2 untouched");
+    }
+
+    #[test]
+    fn init_cycle_row_from_binding_clamps_to_choices_length() {
+        let binding: ChoiceBinding<usize> = ChoiceBinding::<usize> {
+            apply: |_, _| super::Outcome::NONE,
+            persist_for_side: |_, _| {},
+            init: Some(CycleInit {
+                from_profile: |_| 99,
+            }),
+        };
+        let mut row = cycle_test_row(&["A", "B", "C"], [0, 0]);
+        init_cycle_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        assert_eq!(
+            row.selected_choice_index[P1], 2,
+            "out-of-range init must clamp to choices.len()-1"
+        );
+    }
+
+    #[test]
+    fn init_cycle_row_from_binding_returns_false_without_init() {
+        let binding: ChoiceBinding<usize> = ChoiceBinding::<usize> {
+            apply: |_, _| super::Outcome::NONE,
+            persist_for_side: |_, _| {},
+            init: None,
+        };
+        let mut row = cycle_test_row(&["A", "B", "C"], [1, 1]);
+        let applied = init_cycle_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        assert!(!applied, "no init contract => helper reports no-op");
+        assert_eq!(
+            row.selected_choice_index,
+            [1, 1],
+            "selection must be untouched when no init is wired"
+        );
+    }
+
+    #[test]
+    fn init_numeric_row_from_binding_finds_matching_choice() {
+        let binding = NumericBinding {
+            parse: super::parse_i32_percent,
+            apply: |_, _| super::Outcome::NONE,
+            persist_for_side: |_, _| {},
+            init: Some(NumericInit {
+                from_profile: |_| 50,
+                format: |v| format!("{v}%"),
+            }),
+        };
+        let mut row = numeric_test_row(&["0%", "25%", "50%", "75%", "100%"], [0, 0]);
+        let applied = init_numeric_row_from_binding(&mut row, &binding, &Profile::default(), P2);
+        assert!(applied);
+        assert_eq!(row.selected_choice_index[P2], 2);
+        assert_eq!(row.selected_choice_index[P1], 0, "P1 untouched");
+    }
+
+    #[test]
+    fn init_numeric_row_from_binding_preserves_selection_on_no_match() {
+        let binding = NumericBinding {
+            parse: super::parse_i32_percent,
+            apply: |_, _| super::Outcome::NONE,
+            persist_for_side: |_, _| {},
+            init: Some(NumericInit {
+                from_profile: |_| 33,
+                format: |v| format!("{v}%"),
+            }),
+        };
+        let mut row = numeric_test_row(&["0%", "50%", "100%"], [1, 1]);
+        let applied = init_numeric_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        assert!(
+            applied,
+            "binding has init; helper applied it (even if no-op)"
+        );
+        assert_eq!(
+            row.selected_choice_index,
+            [1, 1],
+            "no matching choice => selection preserved"
+        );
+    }
+
+    #[test]
+    fn init_numeric_row_from_binding_returns_false_without_init() {
+        let binding = NumericBinding {
+            parse: super::parse_i32_percent,
+            apply: |_, _| super::Outcome::NONE,
+            persist_for_side: |_, _| {},
+            init: None,
+        };
+        let mut row = numeric_test_row(&["0%", "50%", "100%"], [1, 1]);
+        let applied = init_numeric_row_from_binding(&mut row, &binding, &Profile::default(), P1);
+        assert!(!applied);
+        assert_eq!(row.selected_choice_index, [1, 1]);
+    }
+
+    /// End-to-end check that the cycle/numeric init dispatchers in
+    /// `apply_profile_defaults` produce the same `selected_choice_index`
+    /// values that the legacy hand-written if-let blocks did, for every
+    /// Main pane row migrated to the binding-driven contract.
+    ///
+    /// Sets a non-default value on each migrated profile field so a stale
+    /// `[0, 0]` result would fail the assertion.
+    #[test]
+    fn apply_profile_defaults_initializes_main_pane_rows_via_contracts() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+
+        // Mutate every profile field whose Main pane row was migrated to the
+        // CycleInit / NumericInit contract.
+        let p = &mut state.player_profiles[P1];
+        p.perspective = profile::Perspective::Distant;
+        p.combo_font = profile::ComboFont::Wendy;
+        p.background_filter = profile::BackgroundFilter::from_i32(42);
+        p.spacing_percent = 95;
+        p.judgment_offset_x = -25;
+        p.judgment_offset_y = 30;
+        p.combo_offset_x = 12;
+        p.combo_offset_y = -8;
+        p.note_field_offset_x = 17;
+        p.note_field_offset_y = -22;
+        p.visual_delay_ms = 35;
+        p.global_offset_shift_ms = -45;
+
+        let profile = state.player_profiles[P1].clone();
+        let noteskin_names = super::discover_noteskin_names();
+        let mut row_map = super::build_rows(
+            &state.song,
+            &state.speed_mod[P1],
+            state.chart_steps_index,
+            [0; 2],
+            state.music_rate,
+            super::OptionsPane::Main,
+            &noteskin_names,
+            Screen::SelectMusic,
+            state.fixed_stepchart.as_ref(),
+        );
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+
+        // Cycle rows: assert the selected variant matches the profile value.
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::Perspective,
+            &super::PERSPECTIVE_VARIANTS,
+            profile.perspective,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::ComboFont,
+            &super::COMBO_FONT_VARIANTS,
+            profile.combo_font,
+        );
+
+        // Numeric rows: assert the choice string at the cursor matches the
+        // formatted profile value (the same lookup the dispatcher does).
+        assert_choice_at_cursor(&row_map, RowId::BackgroundFilter, "42%");
+        assert_choice_at_cursor(&row_map, RowId::Spacing, "95%");
+        assert_choice_at_cursor(&row_map, RowId::JudgmentOffsetX, "-25");
+        assert_choice_at_cursor(&row_map, RowId::JudgmentOffsetY, "30");
+        assert_choice_at_cursor(&row_map, RowId::ComboOffsetX, "12");
+        assert_choice_at_cursor(&row_map, RowId::ComboOffsetY, "-8");
+        assert_choice_at_cursor(&row_map, RowId::NoteFieldOffsetX, "17");
+        assert_choice_at_cursor(&row_map, RowId::NoteFieldOffsetY, "-22");
+        assert_choice_at_cursor(&row_map, RowId::VisualDelay, "35ms");
+        assert_choice_at_cursor(&row_map, RowId::GlobalOffsetShift, "-45ms");
+    }
+
+    /// Numeric values outside the row's choice range (clamped by the binding's
+    /// `from_profile` closure) must still land on a valid in-range choice,
+    /// matching the legacy behaviour. Picks the largest representable value
+    /// for each row's clamp range; the cursor must end up on the choice that
+    /// formats to the clamped value.
+    #[test]
+    fn apply_profile_defaults_clamps_numeric_values_to_range() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+
+        let p = &mut state.player_profiles[P1];
+        p.judgment_offset_x = 10_000; // clamps to HUD_OFFSET_MAX
+        p.note_field_offset_x = -10; // clamps to 0 (range 0..50)
+        p.visual_delay_ms = -10_000; // clamps to -100
+        p.spacing_percent = 100_000; // clamps to SPACING_PERCENT_MAX
+
+        let profile = state.player_profiles[P1].clone();
+        let noteskin_names = super::discover_noteskin_names();
+        let mut row_map = super::build_rows(
+            &state.song,
+            &state.speed_mod[P1],
+            state.chart_steps_index,
+            [0; 2],
+            state.music_rate,
+            super::OptionsPane::Main,
+            &noteskin_names,
+            Screen::SelectMusic,
+            state.fixed_stepchart.as_ref(),
+        );
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+
+        assert_choice_at_cursor(
+            &row_map,
+            RowId::JudgmentOffsetX,
+            &HUD_OFFSET_MAX.to_string(),
+        );
+        assert_choice_at_cursor(&row_map, RowId::NoteFieldOffsetX, "0");
+        assert_choice_at_cursor(&row_map, RowId::VisualDelay, "-100ms");
+        assert_choice_at_cursor(
+            &row_map,
+            RowId::Spacing,
+            &format!("{}%", super::SPACING_PERCENT_MAX),
+        );
+    }
+
+    #[test]
+    fn apply_profile_defaults_initializes_advanced_pane_rows_via_contracts() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+
+        let p = &mut state.player_profiles[P1];
+        p.turn_option = super::TURN_OPTION_VARIANTS[1];
+        p.lifemeter_type = super::LIFE_METER_TYPE_VARIANTS[1];
+        p.data_visualizations = super::DATA_VISUALIZATIONS_VARIANTS[1];
+        p.target_score = super::TARGET_SCORE_VARIANTS[1];
+        p.mini_indicator_score_type = super::MINI_INDICATOR_SCORE_TYPE_VARIANTS[1];
+        p.combo_colors = super::COMBO_COLORS_VARIANTS[1];
+        p.combo_mode = super::COMBO_MODE_VARIANTS[1];
+        p.error_bar_trim = super::ERROR_BAR_TRIM_VARIANTS[1];
+        p.measure_counter = super::MEASURE_COUNTER_VARIANTS[1];
+        p.measure_lines = super::MEASURE_LINES_VARIANTS[1];
+        p.timing_windows = super::TIMING_WINDOWS_VARIANTS[1];
+        p.transparent_density_graph_bg = true;
+        p.carry_combo_between_songs = true;
+        p.judgment_tilt = true;
+        p.judgment_back = true;
+        p.error_ms_display = true;
+        p.rescore_early_hits = true;
+        p.custom_fantastic_window = true;
+        p.error_bar_offset_x = -25;
+        p.error_bar_offset_y = 30;
+
+        let profile = state.player_profiles[P1].clone();
+        let noteskin_names = super::discover_noteskin_names();
+        let mut row_map = super::build_rows(
+            &state.song,
+            &state.speed_mod[P1],
+            state.chart_steps_index,
+            [0; 2],
+            state.music_rate,
+            super::OptionsPane::Advanced,
+            &noteskin_names,
+            Screen::SelectMusic,
+            state.fixed_stepchart.as_ref(),
+        );
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::Turn,
+            &super::TURN_OPTION_VARIANTS,
+            profile.turn_option,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::LifeMeterType,
+            &super::LIFE_METER_TYPE_VARIANTS,
+            profile.lifemeter_type,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::DataVisualizations,
+            &super::DATA_VISUALIZATIONS_VARIANTS,
+            profile.data_visualizations,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::TargetScore,
+            &super::TARGET_SCORE_VARIANTS,
+            profile.target_score,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::IndicatorScoreType,
+            &super::MINI_INDICATOR_SCORE_TYPE_VARIANTS,
+            profile.mini_indicator_score_type,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::ComboColors,
+            &super::COMBO_COLORS_VARIANTS,
+            profile.combo_colors,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::ComboColorMode,
+            &super::COMBO_MODE_VARIANTS,
+            profile.combo_mode,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::ErrorBarTrim,
+            &super::ERROR_BAR_TRIM_VARIANTS,
+            profile.error_bar_trim,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::MeasureCounter,
+            &super::MEASURE_COUNTER_VARIANTS,
+            profile.measure_counter,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::MeasureLines,
+            &super::MEASURE_LINES_VARIANTS,
+            profile.measure_lines,
+        );
+        assert_variant_at_cursor(
+            &row_map,
+            RowId::TimingWindows,
+            &super::TIMING_WINDOWS_VARIANTS,
+            profile.timing_windows,
+        );
+
+        for id in [
+            RowId::DensityGraphBackground,
+            RowId::CarryCombo,
+            RowId::JudgmentTilt,
+            RowId::JudgmentBehindArrows,
+            RowId::OffsetIndicator,
+            RowId::RescoreEarlyHits,
+            RowId::CustomBlueFantasticWindow,
+        ] {
+            let row = row_map
+                .get(id)
+                .unwrap_or_else(|| panic!("Row {id:?} missing"));
+            assert_eq!(
+                row.selected_choice_index[P1], 1,
+                "bool row {id:?} should be at index 1 (true)"
+            );
+        }
+
+        assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetX, "-25");
+        assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetY, "30");
+    }
+
+    fn assert_choice_at_cursor(row_map: &RowMap, id: RowId, expected: &str) {
+        let row = row_map
+            .get(id)
+            .unwrap_or_else(|| panic!("Row {id:?} missing from Main pane row map"));
+        let idx = row.selected_choice_index[P1];
+        let actual = row.choices.get(idx).map(String::as_str).unwrap_or("<oob>");
+        assert_eq!(
+            actual, expected,
+            "Row {id:?}: cursor at {idx} points to {actual:?}, expected {expected:?}"
+        );
+    }
+
+    fn assert_variant_at_cursor<T: Copy + PartialEq + std::fmt::Debug>(
+        row_map: &RowMap,
+        id: RowId,
+        variants: &[T],
+        expected: T,
+    ) {
+        let row = row_map
+            .get(id)
+            .unwrap_or_else(|| panic!("Row {id:?} missing from Main pane row map"));
+        let idx = row.selected_choice_index[P1];
+        let actual = variants
+            .get(idx)
+            .copied()
+            .unwrap_or_else(|| panic!("Row {id:?}: cursor {idx} out of variant range"));
+        assert_eq!(
+            actual, expected,
+            "Row {id:?}: variant at cursor {idx} = {actual:?}, expected {expected:?}"
         );
     }
 }

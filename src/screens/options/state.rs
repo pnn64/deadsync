@@ -174,7 +174,6 @@ pub struct State {
     pub(super) software_thread_choices: Vec<u8>,
     pub(super) software_thread_labels: Vec<String>,
     pub(super) max_fps_choices: Vec<u16>,
-    pub(super) max_fps_labels: Vec<String>,
     pub(super) resolution_choices: Vec<(u32, u32)>,
     pub(super) refresh_rate_choices: Vec<u32>, // New: stored in millihertz
     // Hardware info
@@ -207,7 +206,6 @@ pub fn init() -> State {
     let software_thread_choices = build_software_thread_choices();
     let software_thread_labels = software_thread_choice_labels(&software_thread_choices);
     let max_fps_choices = build_max_fps_choices();
-    let max_fps_labels = max_fps_choice_labels(&max_fps_choices);
     let sound_device_options = build_sound_device_options();
     #[cfg(target_os = "linux")]
     let linux_backend_choices = build_linux_backend_choices();
@@ -338,7 +336,6 @@ pub fn init() -> State {
         software_thread_choices,
         software_thread_labels,
         max_fps_choices,
-        max_fps_labels,
         resolution_choices: Vec::new(),
         refresh_rate_choices: Vec::new(),
         monitor_specs: Vec::new(),

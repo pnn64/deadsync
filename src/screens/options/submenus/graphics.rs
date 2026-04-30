@@ -370,7 +370,7 @@ pub(in crate::screens::options) const MAX_FPS_VALUE_ROW_INDEX: usize = 10;
 
 pub(in crate::screens::options) const MAX_FPS_MIN: u16 = 5;
 pub(in crate::screens::options) const MAX_FPS_MAX: u16 = 1000;
-pub(in crate::screens::options) const MAX_FPS_STEP: u16 = 5;
+pub(in crate::screens::options) const MAX_FPS_STEP: u16 = 1;
 pub(in crate::screens::options) const MAX_FPS_DEFAULT: u16 = 60;
 
 pub(in crate::screens::options) const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
@@ -474,8 +474,72 @@ pub(in crate::screens::options) fn build_max_fps_choices() -> Vec<u16> {
     out
 }
 
-pub(in crate::screens::options) fn max_fps_choice_labels(values: &[u16]) -> Vec<String> {
-    values.iter().map(ToString::to_string).collect()
+pub(in crate::screens::options) fn selected_max_fps_label(state: &State) -> String {
+    let idx = state
+        .sub_choice_indices_graphics
+        .get(MAX_FPS_VALUE_ROW_INDEX)
+        .copied()
+        .unwrap_or(0);
+    max_fps_from_choice(&state.max_fps_choices, idx).to_string()
+}
+
+pub(in crate::screens::options) fn adjust_max_fps_value_choice(
+    state: &mut State,
+    delta: isize,
+    wrap: NavWrap,
+) -> bool {
+    let n = state.max_fps_choices.len() as isize;
+    if n == 0 {
+        return false;
+    }
+    let current = state
+        .sub_cursor_indices_graphics
+        .get(MAX_FPS_VALUE_ROW_INDEX)
+        .copied()
+        .unwrap_or(0)
+        .min(state.max_fps_choices.len().saturating_sub(1)) as isize;
+    let raw = current + delta;
+    let new_index = match wrap {
+        NavWrap::Wrap => raw.rem_euclid(n) as usize,
+        NavWrap::Clamp => raw.clamp(0, n - 1) as usize,
+    };
+    if new_index == current as usize {
+        return false;
+    }
+    set_max_fps_value_choice_index(state, new_index);
+    true
+}
+
+pub(in crate::screens::options) fn current_submenu_row_id(
+    state: &State,
+) -> Option<(SubmenuKind, SubRowId)> {
+    let kind = match state.view {
+        OptionsView::Submenu(kind) => kind,
+        OptionsView::Main => return None,
+    };
+    let row_idx = submenu_visible_row_to_actual(state, kind, state.sub_selected)?;
+    submenu_rows(kind).get(row_idx).map(|row| (kind, row.id))
+}
+
+#[inline(always)]
+pub(in crate::screens::options) fn on_max_fps_value_row(state: &State) -> bool {
+    matches!(
+        current_submenu_row_id(state),
+        Some((SubmenuKind::Graphics, SubRowId::MaxFpsValue))
+    )
+}
+
+pub(in crate::screens::options) fn max_fps_hold_delta(delta: isize, held_for: Duration) -> isize {
+    let multiplier = if held_for >= MAX_FPS_HOLD_FASTEST_AFTER {
+        50
+    } else if held_for >= MAX_FPS_HOLD_FASTER_AFTER {
+        25
+    } else if held_for >= MAX_FPS_HOLD_FAST_AFTER {
+        10
+    } else {
+        5
+    };
+    delta * multiplier
 }
 
 #[inline(always)]

@@ -56,6 +56,7 @@ pub fn fixture() -> DensityGraphBenchFixture {
             speeds: Vec::new(),
             scrolls: Vec::new(),
             fakes: Vec::new(),
+            ..TimingSegments::default()
         },
         &[],
     );

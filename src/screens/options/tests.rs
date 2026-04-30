@@ -1,7 +1,7 @@
 use super::*;
 use crate::assets::AssetManager;
 use crate::engine::input::{InputEvent, InputSource, VirtualAction};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 fn press(
     state: &mut State,
@@ -41,6 +41,25 @@ fn sync_display_resolution_selects_loaded_4_3_mode() {
     assert_eq!(selected_aspect_label(&state), "4:3");
     assert_eq!(selected_resolution(&state), (1024, 768));
     assert!(state.resolution_choices.contains(&(1024, 768)));
+}
+
+#[test]
+fn max_fps_choices_are_single_fps_steps() {
+    let choices = build_max_fps_choices();
+
+    assert_eq!(choices.first().copied(), Some(MAX_FPS_MIN));
+    assert_eq!(choices.get(1).copied(), Some(MAX_FPS_MIN + 1));
+    assert!(choices.contains(&60));
+    assert!(choices.contains(&600));
+    assert_eq!(choices.last().copied(), Some(MAX_FPS_MAX));
+}
+
+#[test]
+fn max_fps_hold_delta_accelerates() {
+    assert_eq!(max_fps_hold_delta(1, Duration::from_millis(300)), 5);
+    assert_eq!(max_fps_hold_delta(1, Duration::from_millis(700)), 10);
+    assert_eq!(max_fps_hold_delta(1, Duration::from_millis(1200)), 25);
+    assert_eq!(max_fps_hold_delta(-1, Duration::from_millis(1800)), -50);
 }
 
 #[test]

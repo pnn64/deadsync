@@ -80,6 +80,33 @@ fn default_keymap_local() -> Keymap {
 }
 
 #[inline(always)]
+const fn default_key_for_action(action: VirtualAction) -> Option<KeyCode> {
+    use VirtualAction as A;
+    match action {
+        A::p1_up => Some(KeyCode::ArrowUp),
+        A::p1_down => Some(KeyCode::ArrowDown),
+        A::p1_left => Some(KeyCode::ArrowLeft),
+        A::p1_right => Some(KeyCode::ArrowRight),
+        A::p1_select => Some(KeyCode::Slash),
+        A::p1_start => Some(KeyCode::Enter),
+        A::p1_back => Some(KeyCode::Escape),
+        A::p2_up => Some(KeyCode::Numpad8),
+        A::p2_down => Some(KeyCode::Numpad2),
+        A::p2_left => Some(KeyCode::Numpad4),
+        A::p2_right => Some(KeyCode::Numpad6),
+        A::p2_select => Some(KeyCode::NumpadDecimal),
+        A::p2_start => Some(KeyCode::NumpadEnter),
+        A::p2_back => Some(KeyCode::Numpad0),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn default_binding_for_action(action: VirtualAction) -> Option<InputBinding> {
+    default_key_for_action(action).map(InputBinding::Key)
+}
+
+#[inline(always)]
 fn parse_action_key_lower(k: &str) -> Option<VirtualAction> {
     use VirtualAction::{
         p1_back, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
@@ -565,8 +592,16 @@ pub(crate) fn load_keymap_from_ini_local(conf: &SimpleIni) -> Keymap {
 }
 
 #[inline(always)]
-fn first_editable_binding_slot(bindings: &[InputBinding]) -> usize {
-    if matches!(bindings.first(), Some(InputBinding::Key(_))) {
+fn bindings_start_with_default(action: VirtualAction, bindings: &[InputBinding]) -> bool {
+    matches!(
+        (default_binding_for_action(action), bindings.first()),
+        (Some(default_binding), Some(first_binding)) if default_binding == *first_binding
+    )
+}
+
+#[inline(always)]
+fn first_editable_binding_slot(action: VirtualAction, bindings: &[InputBinding]) -> usize {
+    if bindings_start_with_default(action, bindings) {
         1
     } else {
         0
@@ -583,6 +618,31 @@ fn requested_to_actual_binding_slot(requested_index: usize, first_editable: usiz
 }
 
 #[inline(always)]
+pub(crate) fn editable_key_binding_slot_indices(
+    keymap: &Keymap,
+    action: VirtualAction,
+) -> (usize, usize) {
+    if keymap.binding_at(action, 0) == default_binding_for_action(action) {
+        (1, 2)
+    } else {
+        (0, 1)
+    }
+}
+
+#[inline(always)]
+pub(crate) fn protected_default_key_for_action(
+    keymap: &Keymap,
+    action: VirtualAction,
+) -> Option<KeyCode> {
+    let default_key = default_key_for_action(action)?;
+    if keymap.binding_at(action, 0) == Some(InputBinding::Key(default_key)) {
+        Some(default_key)
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
 fn load_action_bindings(keymap: &Keymap, action: VirtualAction) -> Vec<InputBinding> {
     let mut bindings = Vec::new();
     let mut i = 0;
@@ -594,8 +654,18 @@ fn load_action_bindings(keymap: &Keymap, action: VirtualAction) -> Vec<InputBind
 }
 
 #[inline(always)]
-fn remove_matching_keyboard_binding(bindings: &mut Vec<InputBinding>, keycode: KeyCode) {
-    bindings.retain(|binding| !matches!(binding, InputBinding::Key(code) if *code == keycode));
+fn remove_matching_keyboard_binding(
+    bindings: &mut Vec<InputBinding>,
+    keycode: KeyCode,
+    keep_first: bool,
+) {
+    let mut slot = 0;
+    bindings.retain(|binding| {
+        let keep = (keep_first && slot == 0)
+            || !matches!(binding, InputBinding::Key(code) if *code == keycode);
+        slot += 1;
+        keep
+    });
 }
 
 #[inline(always)]
@@ -619,15 +689,25 @@ fn keymap_contains_binding(keymap: &Keymap, binding: InputBinding) -> bool {
 
 #[inline(always)]
 fn restore_available_default_bindings(keymap: &mut Keymap) {
-    let defaults = default_keymap_local();
     for act in ALL_VIRTUAL_ACTIONS {
-        let Some(default_binding) = defaults.binding_at(act, 0) else {
+        let Some(default_binding) = default_binding_for_action(act) else {
             continue;
         };
+        let mut bindings = load_action_bindings(keymap, act);
+        if let Some(slot) = bindings
+            .iter()
+            .position(|binding| *binding == default_binding)
+        {
+            if slot != 0 {
+                bindings.remove(slot);
+                bindings.insert(0, default_binding);
+                keymap.bind(act, &bindings);
+            }
+            continue;
+        }
         if keymap_contains_binding(keymap, default_binding) {
             continue;
         }
-        let mut bindings = load_action_bindings(keymap, act);
         bindings.insert(0, default_binding);
         keymap.bind(act, &bindings);
     }
@@ -635,10 +715,7 @@ fn restore_available_default_bindings(keymap: &mut Keymap) {
 
 #[inline(always)]
 fn set_binding_at_slot(bindings: &mut Vec<InputBinding>, slot_index: usize, binding: InputBinding) {
-    debug_assert!(
-        bindings.len() >= slot_index,
-        "binding slot insertion should not skip intermediate slots"
-    );
+    let slot_index = slot_index.min(bindings.len());
     if bindings.len() <= slot_index {
         bindings.push(binding);
     } else {
@@ -656,20 +733,30 @@ fn updated_keymap_unique_keyboard(
 
     for act in ALL_VIRTUAL_ACTIONS {
         let mut bindings = load_action_bindings(current, act);
-        let first_editable = first_editable_binding_slot(&bindings);
+        let binding = InputBinding::Key(keycode);
+        let keep_default = act == action
+            && bindings_start_with_default(act, &bindings)
+            && bindings.first() == Some(&binding);
 
         // Remove this key from every slot so one physical key cannot fan out
         // to multiple actions.
-        remove_matching_keyboard_binding(&mut bindings, keycode);
+        remove_matching_keyboard_binding(&mut bindings, keycode, keep_default);
 
         if act == action {
+            let first_editable = first_editable_binding_slot(act, &bindings);
             let mut effective_index = requested_to_actual_binding_slot(index, first_editable);
             // If Secondary requested but there is no Primary yet, collapse to
             // the first editable slot.
             if effective_index > first_editable && bindings.len() <= first_editable {
                 effective_index = first_editable;
             }
-            set_binding_at_slot(&mut bindings, effective_index, InputBinding::Key(keycode));
+            if keep_default {
+                if effective_index >= first_editable && effective_index < bindings.len() {
+                    bindings.remove(effective_index);
+                }
+            } else {
+                set_binding_at_slot(&mut bindings, effective_index, binding);
+            }
         }
 
         new_map.bind(act, &bindings);
@@ -689,13 +776,13 @@ fn updated_keymap_unique_gamepad(
 
     for act in ALL_VIRTUAL_ACTIONS {
         let mut bindings = load_action_bindings(current, act);
-        let first_editable = first_editable_binding_slot(&bindings);
 
         // Remove this binding from every slot so one physical control cannot
         // remain assigned elsewhere.
         remove_matching_input_binding(&mut bindings, binding);
 
         if act == action {
+            let first_editable = first_editable_binding_slot(act, &bindings);
             let mut effective_index = requested_to_actual_binding_slot(index, first_editable);
             // If Secondary requested but there is no Primary yet, collapse to
             // the first editable slot.
@@ -719,7 +806,7 @@ fn cleared_keymap(current: &Keymap, action: VirtualAction, index: usize) -> (Key
     for act in ALL_VIRTUAL_ACTIONS {
         let mut bindings = load_action_bindings(current, act);
         if act == action {
-            let first_editable = first_editable_binding_slot(&bindings);
+            let first_editable = first_editable_binding_slot(act, &bindings);
             let effective_index = requested_to_actual_binding_slot(index, first_editable);
             if effective_index < bindings.len() {
                 bindings.remove(effective_index);
@@ -824,5 +911,69 @@ mod tests {
             Some(InputBinding::Key(KeyCode::Enter))
         );
         assert_eq!(restored.binding_at(VirtualAction::p1_start, 1), None);
+    }
+
+    #[test]
+    fn rebinding_protected_default_does_not_skip_slots() {
+        let rebound = updated_keymap_unique_keyboard(
+            &default_keymap_local(),
+            VirtualAction::p1_start,
+            1,
+            KeyCode::Enter,
+        );
+
+        assert_eq!(
+            rebound.binding_at(VirtualAction::p1_start, 0),
+            Some(InputBinding::Key(KeyCode::Enter))
+        );
+        assert_eq!(rebound.binding_at(VirtualAction::p1_start, 1), None);
+    }
+
+    #[test]
+    fn rebinding_protected_default_clears_editable_slot() {
+        let with_primary = updated_keymap_unique_keyboard(
+            &default_keymap_local(),
+            VirtualAction::p1_start,
+            1,
+            KeyCode::KeyZ,
+        );
+        let rebound = updated_keymap_unique_keyboard(
+            &with_primary,
+            VirtualAction::p1_start,
+            1,
+            KeyCode::Enter,
+        );
+
+        assert_eq!(
+            rebound.binding_at(VirtualAction::p1_start, 0),
+            Some(InputBinding::Key(KeyCode::Enter))
+        );
+        assert_eq!(rebound.binding_at(VirtualAction::p1_start, 1), None);
+    }
+
+    #[test]
+    fn no_default_action_replaces_primary_slot() {
+        let mapped = updated_keymap_unique_keyboard(
+            &default_keymap_local(),
+            VirtualAction::p1_menu_up,
+            1,
+            KeyCode::KeyI,
+        );
+        let remapped =
+            updated_keymap_unique_keyboard(&mapped, VirtualAction::p1_menu_up, 1, KeyCode::KeyO);
+
+        assert_eq!(
+            remapped.binding_at(VirtualAction::p1_menu_up, 0),
+            Some(InputBinding::Key(KeyCode::KeyO))
+        );
+        assert_eq!(remapped.binding_at(VirtualAction::p1_menu_up, 1), None);
+        assert_eq!(
+            editable_key_binding_slot_indices(&remapped, VirtualAction::p1_menu_up),
+            (0, 1)
+        );
+        assert_eq!(
+            protected_default_key_for_action(&remapped, VirtualAction::p1_menu_up),
+            None
+        );
     }
 }

@@ -3729,6 +3729,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     }
     standalone.push(select_music_menu::ITEM_SONG_SEARCH);
     if has_song_selected {
+        standalone.push(select_music_menu::ITEM_PRACTICE_MODE);
         standalone.push(select_music_menu::ITEM_SHOW_LEADERBOARD);
         standalone.push(select_music_menu::ITEM_TOGGLE_FAVORITE);
     }
@@ -4913,6 +4914,8 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             animate: false,
             state_delay: 0.0,
             scale: [1.0, 1.0],
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         });
     }
@@ -5574,7 +5577,7 @@ fn lobby_song_path(song: &SongData) -> Option<String> {
     Some(format!("{group_dir}/{song_dir}"))
 }
 
-fn song_pack_and_dir_name(song: &SongData) -> Option<(&str, &str)> {
+pub(crate) fn song_pack_and_dir_name(song: &SongData) -> Option<(&str, &str)> {
     let song_dir = song.simfile_path.parent()?.file_name()?.to_str()?;
     let pack_dir = song
         .simfile_path
@@ -6824,6 +6827,10 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
             hide_select_music_menu(state);
             show_replay_overlay(state);
             ScreenAction::None
+        }
+        select_music_menu::Action::PracticeMode => {
+            hide_select_music_menu(state);
+            ScreenAction::Navigate(Screen::Practice)
         }
         select_music_menu::Action::ShowLeaderboard => {
             hide_select_music_menu(state);

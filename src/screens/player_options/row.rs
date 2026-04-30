@@ -130,6 +130,11 @@ pub struct NumericBinding {
     pub parse: fn(&str) -> Option<i32>,
     pub apply: fn(&mut Profile, i32) -> Outcome,
     pub persist_for_side: fn(PlayerSide, i32),
+    /// Opt-in init contract. When `Some`, the row's initial cursor position is
+    /// derived directly from a `Profile` via `init_numeric_row_from_binding`.
+    /// `None` means the row's selection is initialized elsewhere (today: a
+    /// hand-written block in `apply_profile_defaults`).
+    pub init: Option<NumericInit>,
 }
 
 /// How a cycle row writes its currently selected index back to the persisted
@@ -148,6 +153,11 @@ pub enum CycleBinding {
 pub struct ChoiceBinding<T: Copy + 'static> {
     pub apply: fn(&mut Profile, T) -> Outcome,
     pub persist_for_side: fn(PlayerSide, T),
+    /// Opt-in init contract. When `Some`, the row's initial cursor position is
+    /// derived directly from a `Profile` via `init_cycle_row_from_binding`.
+    /// `None` means the row's selection is initialized elsewhere (today: a
+    /// hand-written block in `apply_profile_defaults`).
+    pub init: Option<CycleInit>,
 }
 
 /// # Adding a new mask row
@@ -248,6 +258,82 @@ pub fn init_bitmask_row_from_binding(
     true
 }
 
+/// Opt-in init contract for a `CycleBinding` row. The function returns the
+/// initial cursor index for a row given the current `Profile`. The helper
+/// `init_cycle_row_from_binding` clamps the returned index to
+/// `row.choices.len() - 1`, so implementations can return a raw
+/// `position(...).unwrap_or(0)` without separate clamping.
+///
+/// **Scope:** only `CycleBinding::Bool` and `CycleBinding::Index` rows.
+/// `CustomBinding` rows whose init logic depends on translated strings or
+/// runtime asset lookups (e.g. `NoteSkin`, `JudgmentFont`, `MineSkin`,
+/// `ReceptorSkin`, `TapExplosionSkin`, `HoldJudgment`) are intentionally not
+/// covered by this contract; they continue to be initialized in
+/// `apply_profile_defaults`.
+#[derive(Clone, Copy, Debug)]
+pub struct CycleInit {
+    pub from_profile: fn(&Profile) -> usize,
+}
+
+/// Opt-in init contract for a `NumericBinding` row. `from_profile` reads the
+/// row's `i32` value from the profile; `format` renders that value the same
+/// way the row's `choices` were generated (e.g. `|v| format!("{v}%")`,
+/// `|v| format!("{v}ms")`, `|v| v.to_string()`), so the rendered string can
+/// be looked up in `Row::choices`.
+///
+/// **Scope:** only `NumericBinding` rows. Numeric profile fields whose row
+/// does not exist (or whose init depends on runtime asset state) remain in
+/// `apply_profile_defaults`.
+#[derive(Clone, Copy, Debug)]
+pub struct NumericInit {
+    pub from_profile: fn(&Profile) -> i32,
+    pub format: fn(i32) -> String,
+}
+
+/// Apply a `ChoiceBinding`'s init contract to a row: compute the desired
+/// cursor index from the profile and clamp it to the row's choices length.
+/// Returns `true` when the binding had an `init` contract and was applied;
+/// `false` when the binding has no init.
+pub fn init_cycle_row_from_binding<T: Copy + 'static>(
+    row: &mut Row,
+    binding: &ChoiceBinding<T>,
+    profile: &Profile,
+    player_idx: usize,
+) -> bool {
+    let Some(init) = binding.init.as_ref() else {
+        return false;
+    };
+    let max = row.choices.len().saturating_sub(1);
+    row.selected_choice_index[player_idx] = (init.from_profile)(profile).min(max);
+    true
+}
+
+/// Apply a `NumericBinding`'s init contract to a row: read the profile value,
+/// format it via `init.format`, and place the cursor on the matching entry in
+/// `Row::choices`. If no entry matches the formatted value, the row's
+/// existing selection is left unchanged — this matches the legacy behaviour
+/// of `apply_profile_defaults` for numeric rows (e.g. `Mini`, `Spacing`,
+/// `NoteFieldOffsetX/Y`, `JudgmentOffsetX/Y`), which all do
+/// `if let Some(idx) = row.choices.iter().position(...) { row.selected_choice_index[idx] = ... }`.
+/// Returns `true` when the binding had an `init` contract and was applied
+/// (even if the format produced no match); `false` when the binding has no
+/// init.
+pub fn init_numeric_row_from_binding(
+    row: &mut Row,
+    binding: &NumericBinding,
+    profile: &Profile,
+    player_idx: usize,
+) -> bool {
+    let Some(init) = binding.init.as_ref() else {
+        return false;
+    };
+    let needle = (init.format)((init.from_profile)(profile));
+    if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
+        row.selected_choice_index[player_idx] = idx;
+    }
+    true
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct CustomBinding {
     pub apply: fn(&mut State, usize, RowId, isize, NavWrap) -> Outcome,
@@ -284,6 +370,9 @@ pub(super) fn parse_i32_percent(s: &str) -> Option<i32> {
 /// `[Enum; N]` variant table. Cuts per-binding boilerplate down to its data.
 macro_rules! index_binding {
     ($table:expr, $default:expr, $field:ident, $persist:expr, $vis:expr) => {
+        index_binding!($table, $default, $field, $persist, $vis, None)
+    };
+    ($table:expr, $default:expr, $field:ident, $persist:expr, $vis:expr, $init:expr) => {
         $crate::screens::player_options::row::ChoiceBinding::<usize> {
             apply: |p, i| {
                 p.$field = $table.get(i).copied().unwrap_or($default);
@@ -294,6 +383,7 @@ macro_rules! index_binding {
                 }
             },
             persist_for_side: |s, i| $persist(s, $table.get(i).copied().unwrap_or($default)),
+            init: $init,
         }
     };
 }
@@ -406,6 +496,135 @@ pub struct Row {
     /// slot. Also consulted by inline-nav focus commit. Use for rows whose
     /// state is conceptually shared across players (e.g. `WhatComesNext`).
     pub mirror_across_players: bool,
+}
+
+/// Expand a help `LookupKey` into the pre-split `Vec<String>` shape that
+/// `Row::help` expects.
+#[inline]
+pub(super) fn expand_help(help: LookupKey) -> Vec<String> {
+    help.get().split("\\n").map(|s| s.to_string()).collect()
+}
+
+impl Row {
+    /// Construct a `RowBehavior::Numeric` row with the standard defaults
+    /// (`selected_choice_index = [0; PLAYER_SLOTS]`,
+    /// `choice_difficulty_indices = None`, `mirror_across_players = false`).
+    /// Override defaults via the chain methods below.
+    pub fn numeric(
+        id: RowId,
+        name: LookupKey,
+        help: LookupKey,
+        binding: NumericBinding,
+        choices: Vec<String>,
+    ) -> Self {
+        Self::base(id, RowBehavior::Numeric(binding), name, help, choices)
+    }
+
+    /// Construct a `RowBehavior::Cycle` row.
+    pub fn cycle(
+        id: RowId,
+        name: LookupKey,
+        help: LookupKey,
+        binding: CycleBinding,
+        choices: Vec<String>,
+    ) -> Self {
+        Self::base(id, RowBehavior::Cycle(binding), name, help, choices)
+    }
+
+    /// Construct a `RowBehavior::Bitmask` row.
+    pub fn bitmask(
+        id: RowId,
+        name: LookupKey,
+        help: LookupKey,
+        binding: BitmaskBinding,
+        choices: Vec<String>,
+    ) -> Self {
+        Self::base(id, RowBehavior::Bitmask(binding), name, help, choices)
+    }
+
+    /// Construct a `RowBehavior::Custom` row. See the `CustomBinding` shape
+    /// in `row.rs` for the apply-fn signature.
+    pub fn custom(
+        id: RowId,
+        name: LookupKey,
+        help: LookupKey,
+        binding: CustomBinding,
+        choices: Vec<String>,
+    ) -> Self {
+        Self::base(id, RowBehavior::Custom(binding), name, help, choices)
+    }
+
+    /// Construct an Exit row. All three pane Exit rows are byte-identical;
+    /// this no-arg constructor centralizes the boilerplate.
+    pub fn exit() -> Self {
+        Self::base(
+            RowId::Exit,
+            RowBehavior::Exit,
+            lookup_key("Common", "Exit"),
+            // Exit rows historically have an empty help line, not a
+            // translated string. Preserve that by skipping `expand_help`.
+            lookup_key("Common", "Exit"),
+            vec![tr("Common", "Exit").to_string()],
+        )
+        .with_help_lines(vec![String::new()])
+    }
+
+    /// Set every slot's initial cursor to the same index. Used when a row
+    /// has a meaningful "default position" (e.g. the zero offset for HUD
+    /// offset rows).
+    pub fn with_initial_choice_index(mut self, idx: usize) -> Self {
+        self.selected_choice_index = [idx; PLAYER_SLOTS];
+        self
+    }
+
+    /// Set per-player initial cursor positions. Used by Stepchart, where
+    /// each player's initial difficulty selection is independent.
+    pub fn with_initial_choice_indices(mut self, idxs: [usize; PLAYER_SLOTS]) -> Self {
+        self.selected_choice_index = idxs;
+        self
+    }
+
+    /// Attach a `choice_difficulty_indices` lookup table. Currently used
+    /// only by Stepchart to map UI choices back to underlying difficulty
+    /// indices.
+    pub fn with_choice_difficulty_indices(mut self, idxs: Vec<usize>) -> Self {
+        self.choice_difficulty_indices = Some(idxs);
+        self
+    }
+
+    /// Mark the row as mirrored across all player slots. Used by
+    /// `WhatComesNext` so a change on one player propagates to all.
+    pub fn with_mirror_across_players(mut self) -> Self {
+        self.mirror_across_players = true;
+        self
+    }
+
+    /// Escape hatch for rows whose help text is not a translated string
+    /// (currently only the Exit row's empty placeholder line). Prefer the
+    /// `help: LookupKey` parameter on the public constructors.
+    fn with_help_lines(mut self, lines: Vec<String>) -> Self {
+        self.help = lines;
+        self
+    }
+
+    fn base(
+        id: RowId,
+        behavior: RowBehavior,
+        name: LookupKey,
+        help: LookupKey,
+        choices: Vec<String>,
+    ) -> Self {
+        Self {
+            id,
+            behavior,
+            name,
+            choices,
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: expand_help(help),
+            choice_difficulty_indices: None,
+            mirror_across_players: false,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

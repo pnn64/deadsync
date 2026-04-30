@@ -145,7 +145,7 @@ enum ProbeResult {
 #[derive(Default)]
 struct CapabilityBits(Vec<u64>);
 
-static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(true);
+static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(false);
 static KEYBOARD_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(true);
 static KEYBOARD_BACKEND_ACTIVE: AtomicBool = AtomicBool::new(false);
 
@@ -633,8 +633,14 @@ fn run_inner(
         )
     };
     let mut pollfds = Vec::with_capacity(17);
+    let mut hotplug = Vec::with_capacity(16);
+    let mut remove = Vec::with_capacity(16);
+    let mut key_remove = Vec::with_capacity(16);
 
     loop {
+        hotplug.clear();
+        remove.clear();
+        key_remove.clear();
         pollfds.clear();
         let watch_offset = if let Some(watch) = &watch {
             pollfds.push(PollFd {
@@ -672,7 +678,6 @@ fn run_inner(
         }
         let receipt = receipt_time();
 
-        let mut hotplug = Vec::new();
         if watch_offset == 1 {
             let revents = pollfds[0].revents;
             if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
@@ -681,11 +686,10 @@ fn run_inner(
             if (revents & POLLIN) != 0
                 && let Some(watch) = &watch
             {
-                hotplug = watch.collect_events();
+                watch.collect_events(&mut hotplug);
             }
         }
 
-        let mut remove = Vec::new();
         for i in 0..devs.len() {
             let revents = pollfds[i + watch_offset].revents;
             if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
@@ -769,7 +773,6 @@ fn run_inner(
             }
         }
 
-        let mut key_remove = Vec::new();
         for i in 0..key_devs.len() {
             let revents = pollfds[i + key_offset].revents;
             if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
@@ -836,7 +839,7 @@ fn run_inner(
             key_devs.swap_remove(idx);
         }
         publish_keyboard_backend_state(&key_devs);
-        for event in hotplug {
+        for event in hotplug.drain(..) {
             match event {
                 DevdEvent::Create(path) => {
                     add_dev_if_new(path.clone(), &mut devs, &mut next_id, false, &mut emit_sys);

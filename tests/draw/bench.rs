@@ -1,8 +1,8 @@
 use deadsync::engine::gfx::draw_prep::{
     self, DrawOp, DrawScratch, PrepareStats, SpriteInstanceRaw, TexturedMeshInstanceRaw,
-    TexturedMeshSource, TexturedMeshVertexRaw,
+    TexturedMeshSource,
 };
-use deadsync::engine::gfx::{BlendMode, MeshMode, MeshVertex, RenderList};
+use deadsync::engine::gfx::{BlendMode, MeshMode, MeshVertex, RenderList, TexturedMeshVertex};
 use deadsync::engine::present::compose;
 use deadsync::test_support::{compose_case, compose_scenarios};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -87,7 +87,7 @@ struct PlanSnapshot {
     cached_upload_vertices: u64,
     sprite_instances: Vec<SpriteInstanceRaw>,
     mesh_vertices: Vec<MeshVertex>,
-    tmesh_vertices: Vec<TexturedMeshVertexRaw>,
+    tmesh_vertices: Vec<TexturedMeshVertex>,
     tmesh_instances: Vec<TexturedMeshInstanceRaw>,
     ops: Vec<PlanOpSnapshot>,
 }

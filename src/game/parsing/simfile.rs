@@ -8,8 +8,9 @@ use crate::game::{
         SongForegroundChange, SongForegroundLuaChange, get_song_cache,
     },
     timing::{
-        DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment, TimingData,
-        TimingSegments, WarpSegment,
+        DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment,
+        TimeSignatureSegment, TimingData, TimingSegments, WarpSegment, beat_to_note_row,
+        default_time_signatures,
     },
 };
 use log::{debug, info, warn};
@@ -36,7 +37,7 @@ pub use scan::{
 };
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
-const SONG_CACHE_VERSION: u8 = 6;
+const SONG_CACHE_VERSION: u8 = 7;
 const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
@@ -273,6 +274,7 @@ struct CachedTimingSegments {
     speeds: Vec<CachedSpeedSegment>,
     scrolls: Vec<(f32, f32)>,
     fakes: Vec<(f32, f32)>,
+    time_signatures: Vec<(f32, i32, i32)>,
 }
 
 impl From<&TimingSegments> for CachedTimingSegments {
@@ -310,12 +312,26 @@ impl From<&TimingSegments> for CachedTimingSegments {
                 .iter()
                 .map(|seg| (seg.beat, seg.length))
                 .collect(),
+            time_signatures: segments
+                .time_signatures
+                .iter()
+                .map(|seg| (seg.beat, seg.numerator, seg.denominator))
+                .collect(),
         }
     }
 }
 
 impl From<CachedTimingSegments> for TimingSegments {
     fn from(segments: CachedTimingSegments) -> Self {
+        let time_signatures: Vec<TimeSignatureSegment> = segments
+            .time_signatures
+            .into_iter()
+            .map(|(beat, numerator, denominator)| TimeSignatureSegment {
+                beat,
+                numerator,
+                denominator,
+            })
+            .collect();
         Self {
             beat0_offset_adjust: segments.beat0_offset_adjust,
             bpms: segments.bpms,
@@ -349,6 +365,11 @@ impl From<CachedTimingSegments> for TimingSegments {
                 .into_iter()
                 .map(|(beat, length)| FakeSegment { beat, length })
                 .collect(),
+            time_signatures: if time_signatures.is_empty() {
+                default_time_signatures()
+            } else {
+                time_signatures
+            },
         }
     }
 }
@@ -468,6 +489,51 @@ fn parse_chart_display_bpm(tag: Option<&str>) -> Option<CachedChartDisplayBpm> {
     } else {
         None
     }
+}
+
+fn parse_time_signatures(tag: Option<&str>) -> Vec<TimeSignatureSegment> {
+    let Some(s) = tag.map(str::trim).filter(|s| !s.is_empty()) else {
+        return default_time_signatures();
+    };
+
+    let mut out = Vec::new();
+    for segment in s.split(',') {
+        let mut parts = segment.trim().split('=');
+        let (Some(beat), Some(numerator), Some(denominator)) =
+            (parts.next(), parts.next(), parts.next())
+        else {
+            continue;
+        };
+        let (Ok(beat), Ok(numerator), Ok(denominator)) = (
+            beat.trim().parse::<f32>(),
+            numerator.trim().parse::<i32>(),
+            denominator.trim().parse::<i32>(),
+        ) else {
+            continue;
+        };
+        if beat.is_finite() && numerator > 0 && denominator > 0 {
+            out.push(TimeSignatureSegment {
+                beat,
+                numerator,
+                denominator,
+            });
+        }
+    }
+
+    if out.is_empty() {
+        return default_time_signatures();
+    }
+
+    out.sort_by(|a, b| {
+        beat_to_note_row(a.beat)
+            .cmp(&beat_to_note_row(b.beat))
+            .then_with(|| a.beat.total_cmp(&b.beat))
+    });
+    out.dedup_by(|a, b| beat_to_note_row(a.beat) == beat_to_note_row(b.beat));
+    if out.first().is_none_or(|seg| beat_to_note_row(seg.beat) > 0) {
+        out.insert(0, default_time_signatures()[0]);
+    }
+    out
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
@@ -2107,6 +2173,9 @@ fn parse_and_process_song_file(
         .ok_or_else(|| "Could not determine simfile directory".to_string())?;
     let song_music_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.music_path)
         .or_else(|| rssp::assets::resolve_music_path_like_itg(simfile_dir, &summary.music_path));
+    let global_time_signatures = summary.normalized_time_signatures.clone();
+    let allow_steps_timing =
+        rssp::timing::steps_timing_allowed(summary.ssc_version, summary.timing_format);
     let charts: Vec<SerializableChartData> = summary
         .charts
         .into_iter()
@@ -2114,7 +2183,21 @@ fn parse_and_process_song_file(
             let lanes = step_type_lanes(&c.step_type_str);
             let parsed_notes =
                 crate::game::parsing::notes::parse_chart_notes(&c.minimized_note_data, lanes);
-            let timing_segments = TimingSegments::from(c.timing_segments.as_ref());
+            let chart_time_signatures = c
+                .chart_time_signatures
+                .as_deref()
+                .filter(|s| !s.trim().is_empty());
+            let global_time_signatures = (!global_time_signatures.trim().is_empty())
+                .then_some(global_time_signatures.as_str());
+            let time_signature_tag = if allow_steps_timing && c.chart_has_own_timing {
+                chart_time_signatures
+            } else if allow_steps_timing {
+                chart_time_signatures.or(global_time_signatures)
+            } else {
+                global_time_signatures
+            };
+            let mut timing_segments = TimingSegments::from(c.timing_segments.as_ref());
+            timing_segments.time_signatures = parse_time_signatures(time_signature_tag);
             let stamina_counts = build_stamina_counts(&c);
             debug!(
                 "  Chart '{}' [{}] loaded with {} bytes of note data.",

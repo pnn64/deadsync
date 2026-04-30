@@ -16,6 +16,9 @@ const OUT_FRAMES_PER_CALL: usize = 256;
 const PLANAR_INPUT_CAP_FRAMES: usize = 4096;
 const PLANAR_COMPACT_THRESHOLD_FRAMES: usize = 2048;
 const SILENCE_CHUNK_FRAMES: usize = 2048;
+const MIN_MUSIC_RATE: f32 = 0.05;
+const MAX_MUSIC_RATE: f32 = 8.0;
+const RESAMPLE_MAX_RELATIVE_RATIO: f64 = 64.0;
 
 fn push_music_block_with_map(
     sample_ring: &internal::SpscRingI16,
@@ -170,7 +173,40 @@ fn write_resampler_output(
         out_tmp.clear();
         return 0;
     }
-    let produced_frames = produced_frames.min(out[0].len());
+    if out.len() == 2 && out_ch == 2 {
+        let produced_frames = produced_frames.min(out[0].len()).min(out[1].len());
+        let produced_samples = produced_frames * 2;
+        if out_tmp.len() < produced_samples {
+            out_tmp.resize(produced_samples, 0);
+        } else {
+            out_tmp.truncate(produced_samples);
+        }
+        for frame in 0..produced_frames {
+            let base = frame * 2;
+            out_tmp[base] = (out[0][frame] * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
+            out_tmp[base + 1] = (out[1][frame] * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
+        }
+        return produced_frames;
+    }
+    if out.len() == 1 && out_ch == 2 {
+        let produced_frames = produced_frames.min(out[0].len());
+        let produced_samples = produced_frames * 2;
+        if out_tmp.len() < produced_samples {
+            out_tmp.resize(produced_samples, 0);
+        } else {
+            out_tmp.truncate(produced_samples);
+        }
+        for frame in 0..produced_frames {
+            let sample = (out[0][frame] * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
+            let base = frame * 2;
+            out_tmp[base] = sample;
+            out_tmp[base + 1] = sample;
+        }
+        return produced_frames;
+    }
+    let produced_frames = produced_frames
+        .min(out[0].len())
+        .min(out.iter().map(Vec::len).min().unwrap_or(0));
     let produced_samples = produced_frames.saturating_mul(out_ch);
     if out_tmp.len() < produced_samples {
         out_tmp.resize(produced_samples, 0);
@@ -185,6 +221,46 @@ fn write_resampler_output(
         }
     }
     produced_frames
+}
+
+fn write_channel_mapped_i16(
+    input: &[i16],
+    in_ch: usize,
+    out_ch: usize,
+    out_tmp: &mut Vec<i16>,
+) -> usize {
+    if input.is_empty() || in_ch == 0 || out_ch == 0 {
+        out_tmp.clear();
+        return 0;
+    }
+    let frames = input.len() / in_ch;
+    let produced_samples = frames * out_ch;
+    if out_tmp.len() < produced_samples {
+        out_tmp.resize(produced_samples, 0);
+    } else {
+        out_tmp.truncate(produced_samples);
+    }
+    if in_ch == out_ch {
+        out_tmp.copy_from_slice(&input[..produced_samples]);
+        return frames;
+    }
+    if in_ch == 1 && out_ch == 2 {
+        for frame in 0..frames {
+            let sample = input[frame];
+            let base = frame * 2;
+            out_tmp[base] = sample;
+            out_tmp[base + 1] = sample;
+        }
+        return frames;
+    }
+    for frame in 0..frames {
+        let in_base = frame * in_ch;
+        let out_base = frame * out_ch;
+        for channel in 0..out_ch {
+            out_tmp[out_base + channel] = input[in_base + channel % in_ch];
+        }
+    }
+    frames
 }
 
 #[inline(always)]
@@ -286,15 +362,8 @@ fn volume_for_frame(position: u64, full_volume_frame: u64, silence_frame: u64) -
     volume.clamp(0.0, 1.0) as f32
 }
 
-fn apply_fade_envelope(
-    samples: &mut [i16],
-    channels: usize,
-    start_frame: u64,
-    fade: Option<(u64, u64)>,
-) {
-    let Some((full_volume_frame, silence_frame)) = fade else {
-        return;
-    };
+fn apply_fade_envelope(samples: &mut [i16], channels: usize, start_frame: u64, fade: (u64, u64)) {
+    let (full_volume_frame, silence_frame) = fade;
     if samples.is_empty() || channels == 0 || full_volume_frame == silence_frame {
         return;
     }
@@ -371,24 +440,53 @@ fn music_decoder_thread_loop(
         }
     }
 
+    let mut resampler: Option<SincFixedOut<f32>> = None;
+    let mut resampler_rate = f32::NAN;
+    let mut resample_out: Option<Vec<Vec<f32>>> = None;
+    let mut resample_in: Option<Vec<Vec<f32>>> = None;
+    let mut in_planar: Option<PlanarAccum> = None;
+    let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
+    let mut pkt_buf = Vec::new();
+
     'main_loop: loop {
         let mut current_rate_f32 = f32::from_bits(rate_bits.load(Ordering::Relaxed));
         if !current_rate_f32.is_finite() || current_rate_f32 <= 0.0 {
             current_rate_f32 = 1.0;
-        }
-        let passthrough_audio = in_ch == out_ch && in_hz == out_hz;
-        let mut ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
-        let mut resampler = if passthrough_audio && (current_rate_f32 - 1.0).abs() <= f32::EPSILON {
-            None
         } else {
-            Some(SincFixedOut::<f32>::new(
+            current_rate_f32 = current_rate_f32.clamp(MIN_MUSIC_RATE, MAX_MUSIC_RATE);
+        }
+        let direct_audio = in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= f32::EPSILON;
+        let mut ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
+        if direct_audio {
+            resampler = None;
+            resampler_rate = f32::NAN;
+            resample_in = None;
+            resample_out = None;
+            in_planar = None;
+        } else if resampler.is_some()
+            && resample_in.is_some()
+            && resample_out.is_some()
+            && in_planar.is_some()
+            && resampler_rate == current_rate_f32
+        {
+            let resampler = resampler.as_mut().expect("resampler exists");
+            resampler.reset();
+            resampler.set_resample_ratio(ratio, false)?;
+            in_planar.as_mut().expect("planar input exists").clear();
+        } else {
+            let new_resampler = SincFixedOut::<f32>::new(
                 ratio,
-                1.0,
+                RESAMPLE_MAX_RELATIVE_RATIO,
                 resampler_params(),
                 OUT_FRAMES_PER_CALL,
                 in_ch,
-            )?)
-        };
+            )?;
+            resample_in = Some(new_resampler.input_buffer_allocate(true));
+            resample_out = Some(new_resampler.output_buffer_allocate(true));
+            in_planar = Some(PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
+            resampler = Some(new_resampler);
+            resampler_rate = current_rate_f32;
+        }
 
         let start_frame_f = (cut.start_sec * f64::from(in_hz)).max(0.0);
         let start_floor = start_frame_f.floor() as u64;
@@ -467,17 +565,8 @@ fn music_decoder_thread_loop(
             false
         }
 
-        let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
-        let mut resample_out = resampler
-            .as_ref()
-            .map(|resampler| resampler.output_buffer_allocate(true));
-        let mut resample_in = resampler
-            .as_ref()
-            .map(|resampler| resampler.input_buffer_allocate(true));
-        let mut in_planar = resampler
-            .as_ref()
-            .map(|_| PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
-        let mut pkt_buf = Vec::new();
+        out_tmp.clear();
+        pkt_buf.clear();
 
         loop {
             if stop.load(Ordering::Relaxed) {
@@ -507,30 +596,46 @@ fn music_decoder_thread_loop(
                 1.0
             };
             if (desired_rate - current_rate_f32).abs() > 0.0005 {
-                desired_rate = desired_rate.clamp(0.05, 8.0);
+                desired_rate = desired_rate.clamp(MIN_MUSIC_RATE, MAX_MUSIC_RATE);
                 current_rate_f32 = desired_rate;
                 ratio = (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32);
-                let new_resampler = SincFixedOut::<f32>::new(
-                    ratio,
-                    1.0,
-                    resampler_params(),
-                    OUT_FRAMES_PER_CALL,
-                    in_ch,
-                )?;
-                resample_in = Some(new_resampler.input_buffer_allocate(true));
-                resample_out = Some(new_resampler.output_buffer_allocate(true));
-                resampler = Some(new_resampler);
-                if in_planar.is_none() {
-                    in_planar = Some(PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
+                if in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= f32::EPSILON {
+                    resampler = None;
+                    resampler_rate = f32::NAN;
+                    resample_in = None;
+                    resample_out = None;
+                    in_planar = None;
+                } else {
+                    let mut reuse_resampler = false;
+                    if let Some(existing) = &mut resampler {
+                        existing.reset();
+                        reuse_resampler = existing.set_resample_ratio(ratio, false).is_ok();
+                    }
+                    if !reuse_resampler {
+                        let new_resampler = SincFixedOut::<f32>::new(
+                            ratio,
+                            RESAMPLE_MAX_RELATIVE_RATIO,
+                            resampler_params(),
+                            OUT_FRAMES_PER_CALL,
+                            in_ch,
+                        )?;
+                        resample_in = Some(new_resampler.input_buffer_allocate(true));
+                        resample_out = Some(new_resampler.output_buffer_allocate(true));
+                        resampler = Some(new_resampler);
+                    }
+                    resampler_rate = current_rate_f32;
+                    if in_planar.is_none() {
+                        in_planar = Some(PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
+                    }
                 }
             }
             if resampler.is_none() {
                 let music_sec_per_frame = 1.0 / f64::from(out_hz.max(1));
                 let mut direct = slice;
                 if preroll_out_frames > 0 {
-                    let frames = direct.len() / out_ch;
+                    let frames = direct.len() / in_ch;
                     let drop_frames = (preroll_out_frames as usize).min(frames);
-                    let drop_samples = drop_frames * out_ch;
+                    let drop_samples = drop_frames * in_ch;
                     if drop_samples > 0 {
                         direct = &direct[drop_samples..];
                         preroll_out_frames = preroll_out_frames.saturating_sub(drop_frames as u64);
@@ -538,13 +643,13 @@ fn music_decoder_thread_loop(
                     }
                 }
                 let mut finished = false;
-                let frames = direct.len() / out_ch;
+                let frames = direct.len() / in_ch;
                 if let Some(left) = &mut frames_left_out {
                     if *left == 0 {
                         direct = &[];
                         finished = true;
                     } else if (frames as u64) > *left {
-                        direct = &direct[..(*left as usize) * out_ch];
+                        direct = &direct[..(*left as usize) * in_ch];
                         *left = 0;
                         finished = true;
                     } else {
@@ -552,27 +657,33 @@ fn music_decoder_thread_loop(
                     }
                 }
                 if !direct.is_empty() {
-                    let frames = (direct.len() / out_ch) as u64;
-                    if fade_spec.is_some() {
-                        out_tmp.clear();
-                        out_tmp.extend_from_slice(direct);
-                        apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
+                    let frames = (direct.len() / in_ch) as u64;
+                    if in_ch == out_ch && fade_spec.is_none() {
                         frames_emitted_total = frames_emitted_total.saturating_add(frames);
                         next_music_output_sec = push_music_block_with_map(
                             &ring,
                             &queued_music_map,
-                            &out_tmp,
+                            direct,
                             out_ch,
                             next_music_output_sec,
                             music_sec_per_frame,
                             &stop,
                         )?;
                     } else {
+                        out_tmp.clear();
+                        if in_ch == out_ch {
+                            out_tmp.extend_from_slice(direct);
+                        } else {
+                            write_channel_mapped_i16(direct, in_ch, out_ch, &mut out_tmp);
+                        }
+                        if let Some(fade) = fade_spec {
+                            apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade);
+                        }
                         frames_emitted_total = frames_emitted_total.saturating_add(frames);
                         next_music_output_sec = push_music_block_with_map(
                             &ring,
                             &queued_music_map,
-                            direct,
+                            &out_tmp,
                             out_ch,
                             next_music_output_sec,
                             music_sec_per_frame,
@@ -630,7 +741,9 @@ fn music_decoder_thread_loop(
                 }
                 let finished = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
                 if !out_tmp.is_empty() {
-                    apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
+                    if let Some(fade) = fade_spec {
+                        apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade);
+                    }
                     frames_emitted_total =
                         frames_emitted_total.saturating_add((out_tmp.len() / out_ch) as u64);
                     next_music_output_sec = push_music_block_with_map(
@@ -694,7 +807,9 @@ fn music_decoder_thread_loop(
                     }
                     let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
                     if !out_tmp.is_empty() {
-                        apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
+                        if let Some(fade) = fade_spec {
+                            apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade);
+                        }
                         frames_emitted_total =
                             frames_emitted_total.saturating_add((out_tmp.len() / out_ch) as u64);
                         next_music_output_sec = push_music_block_with_map(
@@ -723,7 +838,9 @@ fn music_decoder_thread_loop(
                 let music_sec_per_frame = f64::from(current_rate_f32) / f64::from(out_hz.max(1));
                 let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
                 if !out_tmp.is_empty() {
-                    apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
+                    if let Some(fade) = fade_spec {
+                        apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade);
+                    }
                     next_music_output_sec = push_music_block_with_map(
                         &ring,
                         &queued_music_map,
@@ -756,7 +873,7 @@ fn music_decoder_thread_loop(
 
 pub(super) fn load_and_resample_sfx(
     path: &str,
-) -> Result<Arc<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Arc<[i16]>, Box<dyn std::error::Error + Send + Sync>> {
     let opened = decode::open_file(Path::new(path))?;
     let mut reader = opened.reader;
     let in_ch = opened.channels;
@@ -764,15 +881,21 @@ pub(super) fn load_and_resample_sfx(
     let out_ch = ENGINE.device_channels;
     let out_hz = ENGINE.device_sample_rate;
 
-    if in_ch == out_ch && in_hz == out_hz {
+    if in_hz == out_hz {
         let mut pkt_buf = Vec::new();
         let mut decoded_data = Vec::new();
+        let mut out_tmp = Vec::new();
         while reader.read_dec_packet_into(&mut pkt_buf)? {
             if !pkt_buf.is_empty() {
-                decoded_data.extend_from_slice(&pkt_buf);
+                if in_ch == out_ch {
+                    decoded_data.extend_from_slice(&pkt_buf);
+                } else {
+                    write_channel_mapped_i16(&pkt_buf, in_ch, out_ch, &mut out_tmp);
+                    decoded_data.extend_from_slice(&out_tmp);
+                }
             }
         }
-        return Ok(Arc::new(decoded_data));
+        return Ok(Arc::from(decoded_data.into_boxed_slice()));
     }
 
     let ratio = f64::from(out_hz) / f64::from(in_hz);
@@ -848,5 +971,5 @@ pub(super) fn load_and_resample_sfx(
         write_resampler_output(&resample_out, produced_frames, out_ch, &mut out_tmp);
         resampled_data.extend_from_slice(&out_tmp);
     }
-    Ok(Arc::new(resampled_data))
+    Ok(Arc::from(resampled_data.into_boxed_slice()))
 }

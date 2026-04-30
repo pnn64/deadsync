@@ -199,7 +199,7 @@ fn axis_changed(last_axis: &mut Vec<AxisState>, code: u32, value: i64) -> bool {
     true
 }
 
-static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(true);
+static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(false);
 static KEYBOARD_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(true);
 
 #[inline(always)]

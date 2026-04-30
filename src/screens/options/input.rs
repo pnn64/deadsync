@@ -127,6 +127,13 @@ pub(super) fn apply_submenu_choice_delta(
             }
             return None;
         }
+        if matches!(kind, SubmenuKind::Graphics) && row.id == SubRowId::MaxFpsValue {
+            if adjust_max_fps_value_choice(state, delta, wrap) {
+                audio::play_sfx("assets/sounds/change_value.ogg");
+                clear_render_cache(state);
+            }
+            return None;
+        }
         if matches!(kind, SubmenuKind::Graphics) && row.id == SubRowId::VisualDelay {
             if adjust_ms_value(
                 &mut state.visual_delay_ms,

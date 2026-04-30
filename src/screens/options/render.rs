@@ -248,7 +248,8 @@ pub(super) fn submenu_cursor_dest(
         item_col_w.mul_add(0.5, item_col_left) + SUB_SINGLE_VALUE_CENTER_OFFSET * s;
 
     if selected_row == total_rows - 1 {
-        let (draw_w, text_h) = measure_text_box(asset_manager, "Exit", value_zoom);
+        let exit_label = tr("Common", "Exit");
+        let (draw_w, text_h) = measure_text_box(asset_manager, &exit_label, value_zoom);
         let (ring_w, ring_h) = ring_size_for_text(draw_w, text_h);
         return Some((single_center_x, row_mid_y, ring_w, ring_h));
     }

@@ -464,11 +464,16 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             && now.duration_since(last_adjusted) >= NAV_REPEAT_SCROLL_INTERVAL
             && matches!(state.view, OptionsView::Submenu(_))
         {
+            let repeat_delta = if on_max_fps_value_row(state) {
+                max_fps_hold_delta(delta_lr, now.duration_since(held_since))
+            } else {
+                delta_lr
+            };
             if pending_action.is_none() {
                 pending_action =
-                    apply_submenu_choice_delta(state, asset_manager, delta_lr, NavWrap::Clamp);
+                    apply_submenu_choice_delta(state, asset_manager, repeat_delta, NavWrap::Clamp);
             } else {
-                apply_submenu_choice_delta(state, asset_manager, delta_lr, NavWrap::Clamp);
+                apply_submenu_choice_delta(state, asset_manager, repeat_delta, NavWrap::Clamp);
             }
             state.nav_lr_last_adjusted_at = Some(now);
         }

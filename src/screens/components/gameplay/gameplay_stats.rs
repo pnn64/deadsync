@@ -22,6 +22,9 @@ use std::sync::{Arc, LazyLock};
 const TEXT_CACHE_LIMIT: usize = 8192;
 const COUNT_PREWARM_CAP: u32 = 2048;
 const TIME_PREWARM_CAP_S: u32 = 600;
+const STEP_STATS_BANNER_W: f32 = 418.0;
+const STEP_STATS_BANNER_H: f32 = 164.0;
+const STEP_STATS_SONG_BANNER_ZOOM: f32 = 0.4;
 
 thread_local! {
     static PADDED_NUM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
@@ -885,14 +888,14 @@ pub fn build_double_step_stats(
     ));
 
     // Banner.lua (double): xy(GetNotefieldWidth() - 140, -200)
+    let song_banner_x = pane_cx + ((notefield_width - 140.0) * banner_data_zoom);
     if let Some(banner_path) = &state.song.banner_path {
         let banner_key = banner_path.to_string_lossy().into_owned();
-        let banner_x = pane_cx + ((notefield_width - 140.0) * banner_data_zoom);
         let banner_y = pane_cy + (-200.0 * banner_data_zoom);
         actors.push(act!(sprite(banner_key):
-            align(0.5, 0.5): xy(banner_x, banner_y):
-            setsize(418.0, 164.0):
-            zoom(0.4 * banner_data_zoom):
+            align(0.5, 0.5): xy(song_banner_x, banner_y):
+            setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H):
+            zoom(STEP_STATS_SONG_BANNER_ZOOM * banner_data_zoom):
             z(-50)
         ));
     }
@@ -900,16 +903,14 @@ pub fn build_double_step_stats(
     // Banner2.lua (zmod pack banner): static (no animation) at the final position.
     if let Some(pack_banner_path) = state.pack_banner_path.as_ref() {
         let pack_key = pack_banner_path.to_string_lossy().into_owned();
-        let (final_offset, final_size) = if note_field_is_centered {
-            (-115.0, 0.2)
-        } else {
-            (-160.0, 0.25)
-        };
-        let x = pane_cx + (final_offset * banner_data_zoom);
+        let final_size = if note_field_is_centered { 0.2 } else { 0.25 };
+        let song_w = STEP_STATS_BANNER_W * STEP_STATS_SONG_BANNER_ZOOM * banner_data_zoom;
+        let pack_w = STEP_STATS_BANNER_W * final_size * banner_data_zoom;
+        let x = song_banner_x - song_w * 0.5 + pack_w * 0.5;
         let y = pane_cy + (20.0 * banner_data_zoom);
         actors.push(act!(sprite(pack_key):
             align(0.5, 0.5): xy(x, y):
-            setsize(418.0, 164.0):
+            setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H):
             zoom(final_size * banner_data_zoom):
             z(-49)
         ));
@@ -1278,26 +1279,37 @@ fn build_banner(
 ) {
     if let Some(banner_path) = &state.song.banner_path {
         let banner_key = banner_path.to_string_lossy().into_owned();
-        let mut local_banner_x = 70.0;
-        if layout.note_field_is_centered && wide {
-            local_banner_x = 72.0;
-        }
-        if player_side == profile::PlayerSide::P2 {
-            local_banner_x *= -1.0;
-        }
-        if layout.is_ultrawide && state.num_players > 1 {
-            local_banner_x *= -1.0;
-        }
+        let local_banner_x = song_banner_local_x(layout, wide, player_side, state.num_players);
         let local_banner_y = -200.0;
         let banner_x = layout.sidepane_center_x + (local_banner_x * layout.banner_data_zoom);
         let banner_y = layout.sidepane_center_y + (local_banner_y * layout.banner_data_zoom);
-        let final_zoom = 0.4 * layout.banner_data_zoom;
+        let final_zoom = STEP_STATS_SONG_BANNER_ZOOM * layout.banner_data_zoom;
         actors.push(act!(sprite(banner_key):
             align(0.5, 0.5): xy(banner_x, banner_y):
-            setsize(418.0, 164.0): zoom(final_zoom):
+            setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H): zoom(final_zoom):
             z(-50)
         ));
     }
+}
+
+fn song_banner_local_x(
+    layout: StepStatsPaneLayout,
+    wide: bool,
+    player_side: profile::PlayerSide,
+    num_players: usize,
+) -> f32 {
+    let mut x = if layout.note_field_is_centered && wide {
+        72.0
+    } else {
+        70.0
+    };
+    if player_side == profile::PlayerSide::P2 {
+        x *= -1.0;
+    }
+    if layout.is_ultrawide && num_players > 1 {
+        x *= -1.0;
+    }
+    x
 }
 
 fn build_pack_banner(
@@ -1315,23 +1327,29 @@ fn build_pack_banner(
     };
     let pack_key = pack_banner_path.to_string_lossy().into_owned();
 
-    let x_sign = match player_side {
+    let final_size = if layout.note_field_is_centered {
+        0.2
+    } else {
+        0.25
+    };
+    // Arrow Cloud Banner2.lua parity for non-double Step Statistics. The
+    // doubles-specific renderer handles its separate left-edge alignment.
+    let final_offset = if layout.note_field_is_centered {
+        -115.0
+    } else {
+        -160.0
+    };
+    let side_sign = match player_side {
         profile::PlayerSide::P1 => 1.0,
         profile::PlayerSide::P2 => -1.0,
     };
-
-    let (final_offset, final_size) = if layout.note_field_is_centered {
-        (-115.0, 0.2)
-    } else {
-        (-160.0, 0.25)
-    };
-    let x = layout.sidepane_center_x + (final_offset * x_sign * layout.banner_data_zoom);
+    let x = layout.sidepane_center_x + final_offset * side_sign * layout.banner_data_zoom;
     let y = layout.sidepane_center_y + (20.0 * layout.banner_data_zoom);
 
     actors.push(act!(sprite(pack_key):
         align(0.5, 0.5):
         xy(x, y):
-        setsize(418.0, 164.0):
+        setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H):
         zoom(final_size * layout.banner_data_zoom):
         z(-49)
     ));
@@ -1582,37 +1600,13 @@ fn build_holds_mines_rolls_pane_at(
 }
 
 fn notefield_width(state: &State) -> Option<f32> {
-    let ns = state.noteskin[0].as_ref()?;
-    let field_zoom = state.field_zoom[0];
-    let spacing_mult =
-        gameplay::spacing_multiplier_for_percent(state.player_profiles[0].spacing_percent);
-    let cols = state
-        .cols_per_player
-        .min(ns.column_xs.len())
-        .min(ns.receptor_off.len());
-    if cols == 0 {
+    if state.cols_per_player == 0 {
         return None;
     }
-
-    let mut min_x = f32::INFINITY;
-    let mut max_x = f32::NEG_INFINITY;
-    for x in ns.column_xs.iter().take(cols) {
-        let xf = *x as f32 * spacing_mult;
-        min_x = min_x.min(xf);
-        max_x = max_x.max(xf);
-    }
-
-    let target_arrow_px = 64.0 * field_zoom.max(0.0);
-    let size = ns.receptor_off[0].size();
-    let w = size[0].max(0) as f32;
-    let h = size[1].max(0) as f32;
-    let arrow_w = if h > 0.0 && target_arrow_px > 0.0 {
-        w * (target_arrow_px / h)
-    } else {
-        w * field_zoom.max(0.0)
-    };
-
-    Some(((max_x - min_x) * field_zoom.max(0.0)) + arrow_w)
+    // Simply Love GetNotefieldWidth() parity: dance single/versus are 256
+    // and double is 512. This is independent of Mini, Spacing, and noteskin
+    // render scale, so step-stat panes do not drift with visual modifiers.
+    Some(state.cols_per_player as f32 * 64.0)
 }
 
 fn build_holds_mines_rolls_pane(

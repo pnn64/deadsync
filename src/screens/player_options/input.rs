@@ -690,10 +690,14 @@ pub(super) fn handle_start_event(
             let choice_str = choice.as_str();
             if choice_str == gameplay.as_ref() {
                 audio::play_sfx("assets/sounds/start.ogg");
-                return Some(ScreenAction::Navigate(Screen::Gameplay));
+                return Some(ScreenAction::Navigate(play_screen_for_return(
+                    state.return_screen,
+                )));
             } else if choice_str == choose_different {
                 audio::play_sfx("assets/sounds/start.ogg");
-                return Some(ScreenAction::Navigate(state.return_screen));
+                return Some(ScreenAction::Navigate(choose_different_screen(
+                    state.return_screen,
+                )));
             } else if choice_str == advanced.as_ref() {
                 switch_to_pane(state, OptionsPane::Advanced);
             } else if choice_str == uncommon.as_ref() {
@@ -704,6 +708,22 @@ pub(super) fn handle_start_event(
         }
     }
     finish_start_without_action(state, active, player_idx, should_focus_exit)
+}
+
+const fn play_screen_for_return(return_screen: Screen) -> Screen {
+    if matches!(return_screen, Screen::Practice) {
+        Screen::Practice
+    } else {
+        Screen::Gameplay
+    }
+}
+
+const fn choose_different_screen(return_screen: Screen) -> Screen {
+    if matches!(return_screen, Screen::Practice) {
+        Screen::SelectMusic
+    } else {
+        return_screen
+    }
 }
 
 pub fn handle_input(
