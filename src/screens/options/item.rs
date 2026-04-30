@@ -88,7 +88,9 @@ pub enum ItemId {
     // Sound Options submenu
     SndDevice,
     SndOutputMode,
+    #[cfg(target_os = "linux")]
     SndLinuxBackend,
+    #[cfg(target_os = "linux")]
     SndAlsaExclusive,
     SndSampleRate,
     SndMasterVolume,
