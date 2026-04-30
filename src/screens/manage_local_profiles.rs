@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
+use crate::assets::visual_styles;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
@@ -1271,7 +1272,7 @@ fn push_row(
         } else {
             colors.white
         };
-        ui.push(act!(sprite("heart.png"):
+        ui.push(act!(sprite(visual_styles::select_color_texture_key()):
             align(0.0, 0.5):
             xy(heart_x, row_mid_y):
             zoom(HEART_ZOOM):

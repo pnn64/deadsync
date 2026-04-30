@@ -1,6 +1,7 @@
 pub(crate) mod dynamic;
 pub mod i18n;
 mod textures;
+pub mod visual_styles;
 
 use crate::config::dirs;
 use crate::engine::gfx::{

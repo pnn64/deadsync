@@ -337,7 +337,8 @@ fn ensure_textures() {
             (CROWN_TEX, 128, 128),
             ("init_arrow.png", 64, 64),
             ("dance.png", 1360, 164),
-            ("heart.png", 668, 566),
+            (assets::visual_styles::HEARTS_SELECT_COLOR, 668, 566),
+            (assets::visual_styles::HEARTS_SHARED_BACKGROUND, 2048, 2048),
             ("logo.png", 752, 634),
         ] {
             assets::register_texture_dims(key, w, h);

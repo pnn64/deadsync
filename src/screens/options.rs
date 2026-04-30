@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{self, AssetManager};
+use crate::assets::{self, AssetManager, visual_styles};
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::display::{self, MonitorSpec};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
@@ -210,7 +210,7 @@ const SUB_INLINE_ITEMS_LEFT_PAD: f32 = 13.0;
 const SUB_SINGLE_VALUE_CENTER_OFFSET: f32 = -43.0;
 
 /// Heart sprite zoom for the options list rows.
-/// This is a StepMania-style "zoom" factor applied to the native heart.png size.
+/// This is a StepMania-style "zoom" factor applied to the native SelectColor icon.
 const HEART_ZOOM: f32 = 0.026;
 
 /// Typed identifier for each top-level Options menu row and submenu item.
@@ -10264,7 +10264,7 @@ pub fn get_actors(
                         col_white
                     };
                     heart_tint[3] *= row_alpha;
-                    ui_actors.push(act!(sprite("heart.png"):
+                    ui_actors.push(act!(sprite(visual_styles::select_color_texture_key()):
                         align(0.0, 0.5):
                         xy(heart_x, row_mid_y):
                         zoom(HEART_ZOOM):
@@ -10348,7 +10348,7 @@ pub fn get_actors(
                             col_white
                         };
                         heart_tint[3] *= row_alpha;
-                        ui_actors.push(act!(sprite("heart.png"):
+                        ui_actors.push(act!(sprite(visual_styles::select_color_texture_key()):
                             align(0.0, 0.5):
                             xy(heart_x, row_mid_y):
                             zoom(HEART_ZOOM):

@@ -1,10 +1,10 @@
 use super::technique_bg;
 use crate::act;
+use crate::assets::visual_styles;
 use crate::config::{self, MenuBackgroundStyle};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_height, screen_width};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 // Shared UI elapsed clock advanced by `app` using post-Tab-acceleration dt so
@@ -29,18 +29,11 @@ const UV_VEL: [[f32; 2]; 10] = [
     [0.05, 0.03],
     [0.03, 0.04],
 ];
-const VARIANTS: [usize; 10] = [0, 1, 2, 0, 1, 0, 2, 0, 1, 2];
-const DEFAULT_DIMS: (f32, f32) = (668.0, 566.0);
-const BW_BIG: f32 = 668.0;
-const BW_NORMAL: f32 = 543.0;
-const BW_SMALL: f32 = 400.0;
-const PHI: f32 = 0.618_034;
+const SHARED_BG_ZOOM: f32 = 1.3;
+const SHARED_BG_UV_SPAN: f32 = 1.0;
 
-#[derive(Clone)]
-struct HeartsState {
-    tex_key: Arc<str>,
-    variant_size: [[f32; 2]; 3],
-}
+#[derive(Clone, Copy)]
+struct HeartsState;
 
 #[derive(Clone)]
 pub struct State {
@@ -67,29 +60,12 @@ impl Default for HeartsState {
 }
 
 impl HeartsState {
-    fn new() -> Self {
-        Self::with_texture("heart.png")
-    }
-
-    fn with_texture(tex_key: &'static str) -> Self {
-        let (w, h) = DEFAULT_DIMS;
-        let aspect = h / w;
-        let scale_k = (w * 0.6) / BW_BIG;
-        let var_w = [BW_NORMAL * scale_k, BW_BIG * scale_k, BW_SMALL * scale_k];
-        let variant_size = [
-            [var_w[0], var_w[0] * aspect],
-            [var_w[1], var_w[1] * aspect],
-            [var_w[2], var_w[2] * aspect],
-        ];
-
-        Self {
-            tex_key: Arc::<str>::from(tex_key),
-            variant_size,
-        }
+    const fn new() -> Self {
+        Self
     }
 
     fn build_at_elapsed(&self, params: &Params, elapsed_s: f32) -> Vec<Actor> {
-        let mut actors = Vec::with_capacity(41);
+        let mut actors = Vec::with_capacity(11);
         let w = screen_width();
         let h = screen_height();
         actors.push(act!(quad:
@@ -100,47 +76,12 @@ impl HeartsState {
             z(-100)
         ));
 
-        let speed_scale_px = w.max(h) * 1.3;
         for i in 0..10 {
-            let variant = VARIANTS[i];
-            let [heart_w, heart_h] = self.variant_size[variant];
-            let half_w = heart_w * 0.5;
-            let half_h = heart_h * 0.5;
             let mut rgba = color::decorative_rgba(params.active_color_index + COLOR_ADD[i]);
             rgba[3] = DIFFUSE_ALPHA[i] * params.alpha_mul;
+            let uv = scrolled_uv_rect(UV_VEL[i], elapsed_s);
 
-            let vx_px = -2.0 * UV_VEL[i][0] * speed_scale_px;
-            let vy_px = -2.0 * UV_VEL[i][1] * speed_scale_px;
-            let start_x = (i as f32).mul_add(w * 0.1, XY[i]) % w;
-            let start_y = XY[i].mul_add(0.5, (i as f32) * (h * 0.1) * PHI) % h;
-            let x0 = (start_x + vx_px * elapsed_s).rem_euclid(w);
-            let y0 = (start_y + vy_px * elapsed_s).rem_euclid(h);
-
-            let wrap_x = if x0 < half_w {
-                Some(x0 + w)
-            } else if x0 > w - half_w {
-                Some(x0 - w)
-            } else {
-                None
-            };
-            let wrap_y = if y0 < half_h {
-                Some(y0 + h)
-            } else if y0 > h - half_h {
-                Some(y0 - h)
-            } else {
-                None
-            };
-
-            push_heart(&mut actors, &self.tex_key, x0, y0, heart_w, heart_h, rgba);
-            if let Some(wx) = wrap_x {
-                push_heart(&mut actors, &self.tex_key, wx, y0, heart_w, heart_h, rgba);
-            }
-            if let Some(wy) = wrap_y {
-                push_heart(&mut actors, &self.tex_key, x0, wy, heart_w, heart_h, rgba);
-            }
-            if let (Some(wx), Some(wy)) = (wrap_x, wrap_y) {
-                push_heart(&mut actors, &self.tex_key, wx, wy, heart_w, heart_h, rgba);
-            }
+            push_shared_bg(&mut actors, XY[i], XY[i], rgba, uv);
         }
 
         actors
@@ -151,13 +92,6 @@ impl State {
     pub fn new() -> Self {
         Self {
             hearts: HeartsState::new(),
-            technique: technique_bg::State::new(),
-        }
-    }
-
-    pub fn with_texture(tex_key: &'static str) -> Self {
-        Self {
-            hearts: HeartsState::with_texture(tex_key),
             technique: technique_bg::State::new(),
         }
     }
@@ -181,22 +115,21 @@ impl State {
     }
 }
 
-fn push_heart(
-    out: &mut Vec<Actor>,
-    tex_key: &Arc<str>,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-    rgba: [f32; 4],
-) {
-    out.push(act!(sprite(tex_key.as_ref()):
-        align(0.5, 0.5):
+fn push_shared_bg(out: &mut Vec<Actor>, x: f32, y: f32, rgba: [f32; 4], uv: [f32; 4]) {
+    out.push(act!(sprite(visual_styles::shared_background_texture_key()):
         xy(x, y):
-        zoomto(w, h):
+        zoom(SHARED_BG_ZOOM):
+        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
         diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
         z(-99)
     ));
+}
+
+#[inline(always)]
+fn scrolled_uv_rect(velocity: [f32; 2], elapsed_s: f32) -> [f32; 4] {
+    let u0 = (velocity[0] * elapsed_s).rem_euclid(1.0);
+    let v0 = (velocity[1] * elapsed_s).rem_euclid(1.0);
+    [u0, v0, u0 + SHARED_BG_UV_SPAN, v0 + SHARED_BG_UV_SPAN]
 }
 
 fn menu_background_style() -> MenuBackgroundStyle {
@@ -244,24 +177,41 @@ mod tests {
         }
     }
 
-    fn first_heart_xy(actors: &[Actor]) -> [f32; 2] {
-        let Some(Actor::Sprite { offset, source, .. }) = actors.get(1) else {
-            panic!("missing first heart sprite");
+    fn first_bg_sprite(actors: &[Actor]) -> ([f32; 2], [f32; 4]) {
+        let Some(Actor::Sprite {
+            offset,
+            source,
+            uv_rect,
+            ..
+        }) = actors.get(1)
+        else {
+            panic!("missing first background sprite");
         };
-        assert_eq!(source.texture_key(), Some("heart.png"));
-        *offset
+        assert_eq!(
+            source.texture_key(),
+            Some(visual_styles::HEARTS_SHARED_BACKGROUND)
+        );
+        (
+            *offset,
+            uv_rect.expect("shared background should scroll UVs"),
+        )
     }
 
     #[test]
     fn build_reads_shared_elapsed_clock() {
         set_global_elapsed_for_test(2.5);
         let state = HeartsState::new();
-        let shared_xy = first_heart_xy(&state.build_at_elapsed(&params(), global_elapsed_s()));
-        let explicit_xy = first_heart_xy(&state.build_at_elapsed(&params(), 2.5));
+        let shared = first_bg_sprite(&state.build_at_elapsed(&params(), global_elapsed_s()));
+        let explicit = first_bg_sprite(&state.build_at_elapsed(&params(), 2.5));
         assert!(
-            (shared_xy[0] - explicit_xy[0]).abs() < EPS
-                && (shared_xy[1] - explicit_xy[1]).abs() < EPS,
-            "shared={shared_xy:?} explicit={explicit_xy:?}"
+            (shared.0[0] - explicit.0[0]).abs() < EPS
+                && (shared.0[1] - explicit.0[1]).abs() < EPS
+                && shared
+                    .1
+                    .iter()
+                    .zip(explicit.1)
+                    .all(|(a, b)| (*a - b).abs() < EPS),
+            "shared={shared:?} explicit={explicit:?}"
         );
     }
 

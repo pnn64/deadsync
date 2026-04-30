@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{self, AssetManager};
+use crate::assets::{self, AssetManager, visual_styles};
 use crate::config::dirs;
 use crate::engine::audio;
 use crate::engine::gfx::BlendMode;
@@ -1269,7 +1269,7 @@ fn push_scroller_frame(
                 diffuse(bg[0], bg[1], bg[2], bg[3] * inner_alpha):
                 z(103)
             ));
-            out.push(act!(sprite("heart.png"):
+            out.push(act!(sprite(visual_styles::select_color_texture_key()):
                 align(0.0, 0.0):
                 xy(avatar_x + AVATAR_HEART_X, avatar_y + AVATAR_HEART_Y):
                 zoom(AVATAR_HEART_ZOOM):

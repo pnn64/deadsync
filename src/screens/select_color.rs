@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::i18n::tr;
+use crate::assets::visual_styles;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 // Screen navigation handled in app
@@ -17,10 +18,10 @@ use crate::screens::{Screen, ScreenAction};
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 
-// Native art size of heart.png (for aspect-correct sizing)
-const HEART_NATIVE_W: f32 = 668.0;
-const HEART_NATIVE_H: f32 = 566.0;
-const HEART_ASPECT: f32 = HEART_NATIVE_W / HEART_NATIVE_H;
+// Native art size of Simply Love's Hearts SelectColor.png.
+const SELECT_ICON_NATIVE_W: f32 = 668.0;
+const SELECT_ICON_NATIVE_H: f32 = 566.0;
+const SELECT_ICON_ASPECT: f32 = SELECT_ICON_NATIVE_W / SELECT_ICON_NATIVE_H;
 
 // Wheel tuning (baseline behavior)
 // Simply Love uses `finishtweening(); linear(0.2)` when a new scroll input arrives.
@@ -347,7 +348,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
         // correct aspect (don’t stretch tall)
         let base_h = 168.0; // overall heart height (tweak)
-        let base_w = base_h * HEART_ASPECT;
+        let base_w = base_h * SELECT_ICON_ASPECT;
 
         // Soft fade near edges so hearts slide on/off
         let start_fade = (max_off_all - 1.0).max(0.0); // begin fade
@@ -374,7 +375,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         let rot_deg = lerp(0.0, rot_deg_final, form_p);
         let zoom = lerp(1.0, zoom_final, form_p);
 
-        wheel_actors.push(act!(sprite("heart.png"):
+        wheel_actors.push(act!(sprite(visual_styles::select_color_texture_key()):
             align(0.5, 0.5):
             xy(x, y):
             rotationz(rot_deg):
