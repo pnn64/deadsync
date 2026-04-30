@@ -18,11 +18,6 @@ use crate::screens::{Screen, ScreenAction};
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 
-// Native art size of Simply Love's Hearts SelectColor.png.
-const SELECT_ICON_NATIVE_W: f32 = 668.0;
-const SELECT_ICON_NATIVE_H: f32 = 566.0;
-const SELECT_ICON_ASPECT: f32 = SELECT_ICON_NATIVE_W / SELECT_ICON_NATIVE_H;
-
 // Wheel tuning (baseline behavior)
 // Simply Love uses `finishtweening(); linear(0.2)` when a new scroll input arrives.
 // This keeps rapid presses responsive by canceling in-flight scrolls instead of queueing.
@@ -69,17 +64,18 @@ pub struct State {
 }
 
 pub fn init() -> State {
-    let scroll = color::DEFAULT_COLOR_INDEX as f32;
+    let active_color_index = crate::config::get().simply_love_color;
+    let scroll = active_color_index as f32;
     State {
-        active_color_index: color::DEFAULT_COLOR_INDEX,
+        active_color_index,
         scroll,
         scroll_from: scroll,
         scroll_to: scroll,
         scroll_t: SCROLL_TWEEN_DURATION, // start "finished"
         exit_requested: false,
         bg: heart_bg::State::new(),
-        bg_from_index: color::DEFAULT_COLOR_INDEX,
-        bg_to_index: color::DEFAULT_COLOR_INDEX,
+        bg_from_index: active_color_index,
+        bg_to_index: active_color_index,
         bg_fade_t: BG_FADE_DURATION, // start "finished"
     }
 }
@@ -283,6 +279,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     } else {
         0.0
     };
+    let visual_style = visual_styles::current_style();
+    let select_color_texture = visual_styles::select_color_texture_key();
+    let select_color_aspect = visual_styles::select_color_aspect(visual_style);
 
     let x_spacing = w_screen / (num_slots as f32 - 1.0);
 
@@ -346,9 +345,8 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         // depth so near-center draws on top
         let z_layer = WHEEL_Z_BASE - (a.round() as i16);
 
-        // correct aspect (don’t stretch tall)
-        let base_h = 168.0; // overall heart height (tweak)
-        let base_w = base_h * SELECT_ICON_ASPECT;
+        let base_h = 168.0;
+        let base_w = base_h * select_color_aspect;
 
         // Soft fade near edges so hearts slide on/off
         let start_fade = (max_off_all - 1.0).max(0.0); // begin fade
@@ -375,7 +373,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         let rot_deg = lerp(0.0, rot_deg_final, form_p);
         let zoom = lerp(1.0, zoom_final, form_p);
 
-        wheel_actors.push(act!(sprite(visual_styles::select_color_texture_key()):
+        wheel_actors.push(act!(sprite(select_color_texture):
             align(0.5, 0.5):
             xy(x, y):
             rotationz(rot_deg):

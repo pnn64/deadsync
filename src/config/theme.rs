@@ -190,21 +190,53 @@ impl FromStr for SelectMusicWheelStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MenuBackgroundStyle {
+pub enum VisualStyle {
     Hearts,
+    Arrows,
+    Bears,
+    Ducks,
+    Cats,
+    Spooky,
+    Gay,
+    Stars,
+    Thonk,
     Technique,
+    Srpg9,
 }
 
-impl MenuBackgroundStyle {
+impl VisualStyle {
+    pub const ALL: [Self; 11] = [
+        Self::Hearts,
+        Self::Arrows,
+        Self::Bears,
+        Self::Ducks,
+        Self::Cats,
+        Self::Spooky,
+        Self::Gay,
+        Self::Stars,
+        Self::Thonk,
+        Self::Technique,
+        Self::Srpg9,
+    ];
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Hearts => "Hearts",
+            Self::Arrows => "Arrows",
+            Self::Bears => "Bears",
+            Self::Ducks => "Ducks",
+            Self::Cats => "Cats",
+            Self::Spooky => "Spooky",
+            Self::Gay => "Gay",
+            Self::Stars => "Stars",
+            Self::Thonk => "Thonk",
             Self::Technique => "Technique",
+            Self::Srpg9 => "SRPG9",
         }
     }
 }
 
-impl FromStr for MenuBackgroundStyle {
+impl FromStr for VisualStyle {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -216,7 +248,16 @@ impl FromStr for MenuBackgroundStyle {
         }
         match key.as_str() {
             "hearts" | "heart" | "default" => Ok(Self::Hearts),
+            "arrows" | "arrow" => Ok(Self::Arrows),
+            "bears" | "bear" => Ok(Self::Bears),
+            "ducks" | "duck" => Ok(Self::Ducks),
+            "cats" | "cat" => Ok(Self::Cats),
+            "spooky" => Ok(Self::Spooky),
+            "gay" => Ok(Self::Gay),
+            "stars" | "star" => Ok(Self::Stars),
+            "thonk" => Ok(Self::Thonk),
             "technique" => Ok(Self::Technique),
+            "srpg9" | "srpg" => Ok(Self::Srpg9),
             _ => Err(()),
         }
     }

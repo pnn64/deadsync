@@ -1269,10 +1269,13 @@ fn push_scroller_frame(
                 diffuse(bg[0], bg[1], bg[2], bg[3] * inner_alpha):
                 z(103)
             ));
-            out.push(act!(sprite(visual_styles::select_color_texture_key()):
+            let visual_style = visual_styles::current_style();
+            let texture = visual_styles::select_color_texture_key();
+            let zoom = AVATAR_HEART_ZOOM * visual_styles::select_color_zoom_scale(visual_style);
+            out.push(act!(sprite(texture):
                 align(0.0, 0.0):
                 xy(avatar_x + AVATAR_HEART_X, avatar_y + AVATAR_HEART_Y):
-                zoom(AVATAR_HEART_ZOOM):
+                zoom(zoom):
                 diffuse(1.0, 1.0, 1.0, 0.9 * inner_alpha):
                 z(104)
             ));

@@ -7,9 +7,9 @@ use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel, MachineFont,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, MenuBackgroundStyle, NewPackMode,
-    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SimpleIni, SyncGraphMode, dirs,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
+    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SelectMusicWheelStyle, SimpleIni, SyncGraphMode, VisualStyle, dirs,
 };
 use crate::engine::audio;
 #[cfg(target_os = "windows")]
@@ -285,7 +285,7 @@ pub enum ItemId {
     MchGameoverScreen,
     MchWriteCurrentScreen,
     MchMenuMusic,
-    MchMenuBackground,
+    MchVisualStyle,
     MchReplays,
     MchPerPlayerGlobalOffsets,
     MchKeyboardFeatures,
@@ -514,7 +514,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsMachine", "NameEntry")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "GameoverScreen")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuMusic")),
-            HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuBackground")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "VisualStyle")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "KeyboardFeatures")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "VideoBGs")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "WriteCurrentScreen")),
@@ -916,7 +916,7 @@ pub enum SubRowId {
     GameoverScreen,
     WriteCurrentScreen,
     MenuMusic,
-    MenuBackground,
+    VisualStyle,
     Replays,
     PerPlayerGlobalOffsets,
     KeyboardFeatures,
@@ -1056,6 +1056,20 @@ const LANGUAGE_CHOICES: &[Choice] = &[
     localized_choice("OptionsSystem", "RussianLanguage"),
     localized_choice("OptionsSystem", "SwedishLanguage"),
     localized_choice("OptionsSystem", "PseudoLanguage"),
+];
+
+const VISUAL_STYLE_CHOICES: &[Choice] = &[
+    literal_choice("Hearts"),
+    literal_choice("Arrows"),
+    literal_choice("Bears"),
+    literal_choice("Ducks"),
+    literal_choice("Cats"),
+    literal_choice("Spooky"),
+    literal_choice("Gay"),
+    literal_choice("Stars"),
+    literal_choice("Thonk"),
+    literal_choice("Technique"),
+    literal_choice("SRPG9"),
 ];
 
 #[cfg(target_os = "windows")]
@@ -1948,10 +1962,10 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::MenuBackground,
-        label: lookup_key("OptionsMachine", "MenuBackground"),
-        choices: &[literal_choice("❤"), literal_choice("🌀")],
-        inline: true,
+        id: SubRowId::VisualStyle,
+        label: lookup_key("OptionsMachine", "VisualStyle"),
+        choices: VISUAL_STYLE_CHOICES,
+        inline: false,
     },
     SubRow {
         id: SubRowId::Replays,
@@ -2089,11 +2103,11 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
-        id: ItemId::MchMenuBackground,
-        name: lookup_key("OptionsMachine", "MenuBackground"),
+        id: ItemId::MchVisualStyle,
+        name: lookup_key("OptionsMachine", "VisualStyle"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
-            "MenuBackgroundHelp",
+            "VisualStyleHelp",
         ))],
     },
     Item {
@@ -5902,17 +5916,35 @@ const fn machine_font_from_choice(idx: usize) -> MachineFont {
     }
 }
 
-const fn menu_background_style_choice_index(style: MenuBackgroundStyle) -> usize {
+const fn visual_style_choice_index(style: VisualStyle) -> usize {
     match style {
-        MenuBackgroundStyle::Hearts => 0,
-        MenuBackgroundStyle::Technique => 1,
+        VisualStyle::Hearts => 0,
+        VisualStyle::Arrows => 1,
+        VisualStyle::Bears => 2,
+        VisualStyle::Ducks => 3,
+        VisualStyle::Cats => 4,
+        VisualStyle::Spooky => 5,
+        VisualStyle::Gay => 6,
+        VisualStyle::Stars => 7,
+        VisualStyle::Thonk => 8,
+        VisualStyle::Technique => 9,
+        VisualStyle::Srpg9 => 10,
     }
 }
 
-const fn menu_background_style_from_choice(idx: usize) -> MenuBackgroundStyle {
+const fn visual_style_from_choice(idx: usize) -> VisualStyle {
     match idx {
-        1 => MenuBackgroundStyle::Technique,
-        _ => MenuBackgroundStyle::Hearts,
+        1 => VisualStyle::Arrows,
+        2 => VisualStyle::Bears,
+        3 => VisualStyle::Ducks,
+        4 => VisualStyle::Cats,
+        5 => VisualStyle::Spooky,
+        6 => VisualStyle::Gay,
+        7 => VisualStyle::Stars,
+        8 => VisualStyle::Thonk,
+        9 => VisualStyle::Technique,
+        10 => VisualStyle::Srpg9,
+        _ => VisualStyle::Hearts,
     }
 }
 
@@ -6078,7 +6110,7 @@ pub fn init() -> State {
     let mut state = State {
         selected: 0,
         prev_selected: 0,
-        active_color_index: color::DEFAULT_COLOR_INDEX, // <-- ADDED
+        active_color_index: cfg.simply_love_color,
         bg: heart_bg::State::new(),
 
         nav_key_held_direction: None,
@@ -6408,8 +6440,8 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        SubRowId::MenuBackground,
-        menu_background_style_choice_index(cfg.menu_background_style),
+        SubRowId::VisualStyle,
+        visual_style_choice_index(cfg.visual_style),
     );
     set_choice_by_id(
         &mut state.sub_choice_indices_machine,
@@ -8326,8 +8358,8 @@ fn apply_submenu_choice_delta(
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
             SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),
             SubRowId::MenuMusic => config::update_menu_music(enabled),
-            SubRowId::MenuBackground => {
-                config::update_menu_background_style(menu_background_style_from_choice(new_index))
+            SubRowId::VisualStyle => {
+                config::update_visual_style(visual_style_from_choice(new_index))
             }
             SubRowId::Replays => config::update_machine_enable_replays(enabled),
             SubRowId::PerPlayerGlobalOffsets => {
@@ -10182,6 +10214,9 @@ pub fn get_actors(
     let sep_w = SEP_W * s;
     let desc_w = desc_w_unscaled() * s;
     let desc_h = DESC_H * s;
+    let visual_style = visual_styles::current_style();
+    let select_color_texture = visual_styles::select_color_texture_key();
+    let select_color_zoom = HEART_ZOOM * visual_styles::select_color_zoom_scale(visual_style);
 
     // Separator immediately to the RIGHT of the rows, aligned to the FIRST row top
     ui_actors.push(act!(quad:
@@ -10264,10 +10299,10 @@ pub fn get_actors(
                         col_white
                     };
                     heart_tint[3] *= row_alpha;
-                    ui_actors.push(act!(sprite(visual_styles::select_color_texture_key()):
+                    ui_actors.push(act!(sprite(select_color_texture):
                         align(0.0, 0.5):
                         xy(heart_x, row_mid_y):
-                        zoom(HEART_ZOOM):
+                        zoom(select_color_zoom):
                         diffuse(heart_tint[0], heart_tint[1], heart_tint[2], heart_tint[3])
                     ));
                 }
@@ -10348,10 +10383,10 @@ pub fn get_actors(
                             col_white
                         };
                         heart_tint[3] *= row_alpha;
-                        ui_actors.push(act!(sprite(visual_styles::select_color_texture_key()):
+                        ui_actors.push(act!(sprite(select_color_texture):
                             align(0.0, 0.5):
                             xy(heart_x, row_mid_y):
-                            zoom(HEART_ZOOM):
+                            zoom(select_color_zoom):
                             diffuse(heart_tint[0], heart_tint[1], heart_tint[2], heart_tint[3])
                         ));
                     }

@@ -74,12 +74,8 @@ impl TextureHints {
 
 #[inline(always)]
 fn needs_repeat_sampler(key: &str) -> bool {
-    matches!(
-        key,
-        "swoosh.png"
-            | "graphics/menu_bg_technique/square.png"
-            | visual_styles::HEARTS_SHARED_BACKGROUND
-    )
+    matches!(key, "swoosh.png" | "graphics/menu_bg_technique/square.png")
+        || visual_styles::is_shared_background_texture(key)
 }
 
 fn absolute_or_self(path: &Path) -> PathBuf {
@@ -907,14 +903,6 @@ impl AssetManager {
             ("circle.png".to_string(), "circle.png".to_string()),
             ("swoosh.png".to_string(), "swoosh.png".to_string()),
             (
-                visual_styles::HEARTS_SELECT_COLOR.to_string(),
-                "visual_styles/hearts/select_color.png".to_string(),
-            ),
-            (
-                visual_styles::HEARTS_SHARED_BACKGROUND.to_string(),
-                "visual_styles/hearts/shared_background.png".to_string(),
-            ),
-            (
                 "graphics/menu_bg_technique/arrow_tex.png".to_string(),
                 "menu_bg_technique/arrow_tex.png".to_string(),
             ),
@@ -1045,6 +1033,17 @@ impl AssetManager {
                 "practice/snap_display_icon_9x1 (doubleres).png".to_string(),
             ),
         ];
+
+        for asset in &visual_styles::ASSETS {
+            textures_to_load.push((
+                asset.select_color.to_string(),
+                asset.select_color.to_string(),
+            ));
+            textures_to_load.push((
+                asset.shared_background.to_string(),
+                asset.shared_background.to_string(),
+            ));
+        }
 
         for p in [
             "grades/star.png",

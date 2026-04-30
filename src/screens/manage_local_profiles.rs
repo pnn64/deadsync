@@ -1272,10 +1272,13 @@ fn push_row(
         } else {
             colors.white
         };
-        ui.push(act!(sprite(visual_styles::select_color_texture_key()):
+        let visual_style = visual_styles::current_style();
+        let texture = visual_styles::select_color_texture_key();
+        let zoom = HEART_ZOOM * visual_styles::select_color_zoom_scale(visual_style);
+        ui.push(act!(sprite(texture):
             align(0.0, 0.5):
             xy(heart_x, row_mid_y):
-            zoom(HEART_ZOOM):
+            zoom(zoom):
             diffuse(heart_tint[0], heart_tint[1], heart_tint[2], heart_tint[3])
         ));
     }

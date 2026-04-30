@@ -18,10 +18,11 @@ fn load_theme_presentation(conf: &SimpleIni, default: Config, cfg: &mut Config) 
         .get("Theme", "KeyboardFeatures")
         .and_then(|v| parse_bool_str(&v))
         .unwrap_or(default.keyboard_features);
-    cfg.menu_background_style = conf
-        .get("Theme", "MenuBackgroundStyle")
-        .and_then(|v| MenuBackgroundStyle::from_str(&v).ok())
-        .unwrap_or(default.menu_background_style);
+    cfg.visual_style = conf
+        .get("Theme", "VisualStyle")
+        .or_else(|| conf.get("Theme", "MenuBackgroundStyle"))
+        .and_then(|v| VisualStyle::from_str(&v).ok())
+        .unwrap_or(default.visual_style);
     cfg.show_video_backgrounds = conf
         .get("Theme", "VideoBackgrounds")
         .and_then(|v| parse_bool_str(&v))

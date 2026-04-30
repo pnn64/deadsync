@@ -1,10 +1,10 @@
 use super::technique_bg;
 use crate::act;
 use crate::assets::visual_styles;
-use crate::config::{self, MenuBackgroundStyle};
+use crate::config::{self, VisualStyle};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
-use crate::engine::space::{screen_height, screen_width};
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 // Shared UI elapsed clock advanced by `app` using post-Tab-acceleration dt so
@@ -101,7 +101,8 @@ impl State {
     }
 
     pub fn build_at_elapsed(&self, params: Params, elapsed_s: f32) -> Vec<Actor> {
-        if matches!(menu_background_style(), MenuBackgroundStyle::Technique)
+        let style = visual_style();
+        if matches!(style, VisualStyle::Technique)
             && let Some(actors) = self.technique.build_at_elapsed(
                 params.active_color_index,
                 params.backdrop_rgba,
@@ -110,6 +111,9 @@ impl State {
             )
         {
             return actors;
+        }
+        if matches!(style, VisualStyle::Srpg9) {
+            return build_srpg9_static(&params);
         }
         self.hearts.build_at_elapsed(&params, elapsed_s)
     }
@@ -125,6 +129,40 @@ fn push_shared_bg(out: &mut Vec<Actor>, x: f32, y: f32, rgba: [f32; 4], uv: [f32
     ));
 }
 
+fn build_srpg9_static(params: &Params) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(3);
+    let w = screen_width();
+    let h = screen_height();
+    actors.push(act!(quad:
+        align(0.0, 0.0):
+        xy(0.0, 0.0):
+        zoomto(w, h):
+        diffuse(params.backdrop_rgba[0], params.backdrop_rgba[1], params.backdrop_rgba[2], params.backdrop_rgba[3]):
+        z(-100)
+    ));
+
+    let mut tint = color::decorative_rgba(params.active_color_index);
+    tint[0] = (tint[0] * 3.0).min(1.0);
+    tint[1] = (tint[1] * 3.0).min(1.0);
+    tint[2] = (tint[2] * 3.0).min(1.0);
+    tint[3] = params.alpha_mul;
+    actors.push(act!(sprite(visual_styles::shared_background_texture_key()):
+        align(0.5, 0.5):
+        xy(screen_center_x(), screen_center_y()):
+        setsize((h * 16.0 / 9.0).max(w), h):
+        diffuse(tint[0], tint[1], tint[2], tint[3]):
+        z(-99)
+    ));
+    actors.push(act!(quad:
+        align(0.0, 0.0):
+        xy(0.0, 0.0):
+        zoomto(w, h):
+        diffuse(0.0, 0.0, 0.0, 0.5 * params.alpha_mul):
+        z(-98)
+    ));
+    actors
+}
+
 #[inline(always)]
 fn scrolled_uv_rect(velocity: [f32; 2], elapsed_s: f32) -> [f32; 4] {
     let u0 = (velocity[0] * elapsed_s).rem_euclid(1.0);
@@ -132,9 +170,8 @@ fn scrolled_uv_rect(velocity: [f32; 2], elapsed_s: f32) -> [f32; 4] {
     [u0, v0, u0 + SHARED_BG_UV_SPAN, v0 + SHARED_BG_UV_SPAN]
 }
 
-fn menu_background_style() -> MenuBackgroundStyle {
-    std::panic::catch_unwind(|| config::get().menu_background_style)
-        .unwrap_or(MenuBackgroundStyle::Hearts)
+fn visual_style() -> VisualStyle {
+    std::panic::catch_unwind(|| config::get().visual_style).unwrap_or(VisualStyle::Hearts)
 }
 
 #[inline]
@@ -189,7 +226,7 @@ mod tests {
         };
         assert_eq!(
             source.texture_key(),
-            Some(visual_styles::HEARTS_SHARED_BACKGROUND)
+            Some(visual_styles::for_style(VisualStyle::Hearts).shared_background)
         );
         (
             *offset,
