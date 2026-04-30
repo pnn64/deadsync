@@ -9,7 +9,7 @@ use crate::engine::present::color;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::shared::{heart_bg, screen_bar, transitions};
+use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 // Keyboard handling is centralized in app via virtual actions
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::screens::{Screen, ScreenAction};
@@ -56,7 +56,7 @@ pub struct State {
     scroll_to: f32,
     scroll_t: f32, // [0, SCROLL_TWEEN_DURATION]
     exit_requested: bool,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     /// Background fade: from -> to over `BG_FADE_DURATION`
     pub bg_from_index: i32,
     pub bg_to_index: i32,
@@ -73,7 +73,7 @@ pub fn init() -> State {
         scroll_to: scroll,
         scroll_t: SCROLL_TWEEN_DURATION, // start "finished"
         exit_requested: false,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         bg_from_index: active_color_index,
         bg_to_index: active_color_index,
         bg_fade_t: BG_FADE_DURATION, // start "finished"
@@ -116,7 +116,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let a = (state.bg_fade_t / BG_FADE_DURATION).clamp(0.0, 1.0);
     if a >= 1.0 || state.bg_from_index == state.bg_to_index {
         // No active fade: draw a single layer + normal backdrop
-        actors.extend(state.bg.build(heart_bg::Params {
+        actors.extend(state.bg.build(visual_style_bg::Params {
             active_color_index: state.bg_to_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
@@ -125,13 +125,13 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         let alpha_from = 1.0 - a;
         let alpha_to = a;
         // Bottom: previous color + full backdrop
-        actors.extend(state.bg.build(heart_bg::Params {
+        actors.extend(state.bg.build(visual_style_bg::Params {
             active_color_index: state.bg_from_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: alpha_from,
         }));
         // Top: new color + NO backdrop (avoid double darkening)
-        actors.extend(state.bg.build(heart_bg::Params {
+        actors.extend(state.bg.build(visual_style_bg::Params {
             active_color_index: state.bg_to_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 0.0],
             alpha_mul: alpha_to,

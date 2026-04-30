@@ -16,7 +16,7 @@ use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::shared::{heart_bg, transitions};
+use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::collections::HashMap;
@@ -251,7 +251,7 @@ pub fn init(
         speed_mod: [speed_mod_p1, speed_mod_p2],
         music_rate: session_music_rate,
         current_pane: OptionsPane::Main,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         nav_input: [PlayerNavInput::default(); PLAYER_SLOTS],
         start_input: [PlayerStartInput::default(); PLAYER_SLOTS],
         allow_per_player_global_offsets,

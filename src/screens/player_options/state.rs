@@ -237,7 +237,7 @@ pub struct State {
     pub speed_mod: [SpeedMod; PLAYER_SLOTS],
     pub music_rate: f32,
     pub current_pane: OptionsPane,
-    pub(super) bg: heart_bg::State,
+    pub(super) bg: visual_style_bg::State,
     pub nav_input: [PlayerNavInput; PLAYER_SLOTS],
     pub start_input: [PlayerStartInput; PLAYER_SLOTS],
     pub(super) allow_per_player_global_offsets: bool,

@@ -34,7 +34,7 @@ use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
-use crate::screens::components::shared::{heart_bg, screen_bar, transitions};
+use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use null_or_die::{BiasKernel, KernelTarget};
 
 /* ---------------------------- transitions ---------------------------- */
@@ -5989,7 +5989,7 @@ pub struct State {
     pub selected: usize,
     prev_selected: usize,
     pub active_color_index: i32, // <-- ADDED
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     nav_key_last_scrolled_at: Option<Instant>,
@@ -6128,7 +6128,7 @@ pub fn init() -> State {
         selected: 0,
         prev_selected: 0,
         active_color_index: cfg.simply_love_color,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
 
         nav_key_held_direction: None,
         nav_key_held_since: None,
@@ -10108,7 +10108,7 @@ pub fn get_actors(
     let is_fading_submenu = !matches!(state.submenu_transition, SubmenuTransition::None);
 
     /* -------------------------- HEART BACKGROUND -------------------------- */
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index, // <-- CHANGED
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         // Keep hearts always visible for actor-only fades (Options/Menu/Mappings);

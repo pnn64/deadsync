@@ -11,7 +11,7 @@ use crate::engine::space::{screen_center_x, screen_center_y};
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::shared::{heart_bg, screen_bar};
+use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 
 /* ------------------------------ layout ------------------------------- */
@@ -98,7 +98,7 @@ pub struct State {
     demo_time: f32,
     exit_requested: bool,
     exit_target: Option<Screen>,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
 }
 
 pub fn init() -> State {
@@ -110,7 +110,7 @@ pub fn init() -> State {
         demo_time: 0.0,
         exit_requested: false,
         exit_target: None,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
     }
 }
 
@@ -326,7 +326,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let exit_t = exit_anim_t(state.exit_requested);
 
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,

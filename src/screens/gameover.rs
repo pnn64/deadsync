@@ -9,7 +9,7 @@ use crate::engine::space::{screen_center_x, screen_center_y, screen_height, scre
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::stage_stats;
-use crate::screens::components::shared::{heart_bg, transitions};
+use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 
 /* ---------------------------- transitions ---------------------------- */
@@ -166,7 +166,7 @@ fn build_player_lines(
 
 pub struct State {
     pub active_color_index: i32,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     elapsed: f32,
     total_songs_played: [u32; 2],
 }
@@ -183,7 +183,7 @@ fn init_inner(scan_totals: bool) -> State {
 
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // overwritten by app
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         elapsed: 0.0,
         total_songs_played,
     }
@@ -227,7 +227,7 @@ pub fn get_actors(
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
 
     // Background (Simply Love: ScreenWithMenuElements background)
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,

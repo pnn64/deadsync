@@ -13,7 +13,6 @@ use crate::test_support::gameplay_stats_bench;
 use crate::test_support::gameplay_stats_double_bench;
 use crate::test_support::gameplay_stats_versus_bench;
 use crate::test_support::gs_scorebox_bench;
-use crate::test_support::heart_bg_bench;
 use crate::test_support::init_bench;
 use crate::test_support::menu_bench;
 use crate::test_support::music_wheel_bench;
@@ -21,6 +20,7 @@ use crate::test_support::notefield_bench;
 use crate::test_support::options_bench;
 use crate::test_support::pane_stats_bench;
 use crate::test_support::player_options_bench;
+use crate::test_support::visual_style_bg_bench;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
@@ -32,7 +32,7 @@ const SCENARIO_NAMES: [&str; 27] = [
     gameplay_stats_double_bench::SCENARIO_NAME,
     gameplay_stats_versus_bench::SCENARIO_NAME,
     gs_scorebox_bench::SCENARIO_NAME,
-    heart_bg_bench::SCENARIO_NAME,
+    visual_style_bg_bench::SCENARIO_NAME,
     init_bench::SCENARIO_NAME,
     "hud",
     "text",
@@ -115,7 +115,7 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
             Some(gameplay_stats_versus_scenario(metrics, fonts))
         }
         gs_scorebox_bench::SCENARIO_NAME => Some(gs_scorebox_scenario(metrics, fonts)),
-        heart_bg_bench::SCENARIO_NAME => Some(heart_bg_scenario(metrics, fonts)),
+        visual_style_bg_bench::SCENARIO_NAME => Some(visual_style_bg_scenario(metrics, fonts)),
         init_bench::SCENARIO_NAME => Some(init_scenario(metrics, fonts)),
         "hud" => Some(hud_scenario(metrics, fonts)),
         "text" => Some(text_scenario(metrics, fonts)),
@@ -241,10 +241,13 @@ fn gs_scorebox_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) ->
     }
 }
 
-fn heart_bg_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
-    let fixture = heart_bg_bench::fixture();
+fn visual_style_bg_scenario(
+    metrics: Metrics,
+    fonts: HashMap<&'static str, Font>,
+) -> ComposeScenario {
+    let fixture = visual_style_bg_bench::fixture();
     ComposeScenario {
-        name: heart_bg_bench::SCENARIO_NAME,
+        name: visual_style_bg_bench::SCENARIO_NAME,
         actors: fixture.build(),
         clear_color: [0.0, 0.0, 0.0, 1.0],
         metrics,

@@ -29,8 +29,8 @@ use crate::screens::components::{
         lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
     },
     shared::{
-        banner as shared_banner, gs_scorebox, heart_bg, lobby_hud, mode_pads, profile_boxes,
-        test_input, timers, transitions,
+        banner as shared_banner, gs_scorebox, lobby_hud, mode_pads, profile_boxes, test_input,
+        timers, transitions, visual_style_bg,
     },
 };
 use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, ScreenAction};
@@ -955,7 +955,7 @@ pub struct State {
     playlist_library: Vec<PlaylistCacheEntry>,
     active_playlist_id: Option<String>,
     expanded_pack_name: Option<String>,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
     pub(crate) banner_high_quality_requested: bool,
@@ -3141,7 +3141,7 @@ pub fn init() -> State {
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: last_pack_name,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
         banner_high_quality_requested: false,
@@ -3356,7 +3356,7 @@ pub fn init_placeholder() -> State {
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: None,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
         banner_high_quality_requested: false,
@@ -8375,7 +8375,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let allow_gs_fetch = allow_gs_fetch_for_selection(state);
     let cfg = config::get();
 
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,

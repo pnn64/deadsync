@@ -8,11 +8,11 @@ use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_height, screen_width};
 use crate::game::profile;
-use crate::screens::components::shared::heart_bg;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::transitions;
+use crate::screens::components::shared::visual_style_bg;
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::sync::Arc;
@@ -143,7 +143,7 @@ pub struct State {
     pub selected: usize,
     prev_selected: usize,
     pub active_color_index: i32,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     rows: Vec<Row>,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
@@ -161,7 +161,7 @@ pub fn init() -> State {
         selected: 0,
         prev_selected: 0,
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         rows,
         nav_key_held_direction: None,
         nav_key_held_since: None,
@@ -1463,7 +1463,7 @@ pub fn get_actors(
 ) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(220);
 
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,

@@ -16,7 +16,7 @@ use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::shared::{heart_bg, screen_bar};
+use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::collections::HashMap;
@@ -108,7 +108,7 @@ pub struct State {
     p2_selected_index: usize,
     exit_anim: bool,
     choices: Vec<Choice>,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     noteskin_cache: NoteskinCache,
     p1_preview_noteskin: Option<Arc<Noteskin>>,
     p2_preview_noteskin: Option<Arc<Noteskin>>,
@@ -416,7 +416,7 @@ pub fn init() -> State {
         p2_selected_index,
         exit_anim: false,
         choices,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         noteskin_cache,
         p1_preview_noteskin: None,
         p2_preview_noteskin: None,
@@ -1750,7 +1750,7 @@ pub fn get_actors(
 ) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(160);
 
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
