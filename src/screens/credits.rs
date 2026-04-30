@@ -4,7 +4,7 @@ use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_height, screen_width};
-use crate::screens::components::shared::{heart_bg, transitions};
+use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 
 /* ---------------------------- transitions ---------------------------- */
@@ -157,7 +157,7 @@ const TOTAL_SCROLL_ITEMS: f32 = CREDITS.len() as f32 + ITEM_PADDING_START + ITEM
 
 pub struct State {
     pub active_color_index: i32,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     enter_elapsed: f32,
     scroll_items: f32,
 }
@@ -165,7 +165,7 @@ pub struct State {
 pub fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         enter_elapsed: 0.0,
         scroll_items: 0.0,
     }
@@ -222,7 +222,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
     let screen_w = screen_width();
     let screen_h = screen_height();
 
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,

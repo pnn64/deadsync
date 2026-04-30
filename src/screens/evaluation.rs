@@ -12,7 +12,8 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::{
     evaluation::{self as eval_panes, eval_grades},
     shared::{
-        banner as shared_banner, heart_bg, lobby_hud, mode_pads, screen_bar, timers, transitions,
+        banner as shared_banner, lobby_hud, mode_pads, screen_bar, timers, transitions,
+        visual_style_bg,
     },
 };
 
@@ -1459,7 +1460,7 @@ fn eval_graph_shift(
 
 pub struct State {
     pub active_color_index: i32,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     pub screen_elapsed: f32,
     pub session_elapsed: f32, // To display the timer
     pub gameplay_elapsed: f32,
@@ -2018,7 +2019,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         screen_elapsed: 0.0,
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
@@ -2098,7 +2099,7 @@ pub fn init_from_score_info(
 
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         screen_elapsed: 0.0,
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
@@ -2886,7 +2887,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(20);
 
     // 1. Background
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,

@@ -102,13 +102,13 @@ pub fn update_keyboard_features(enabled: bool) {
     save_without_keymaps();
 }
 
-pub fn update_menu_background_style(style: MenuBackgroundStyle) {
+pub fn update_visual_style(style: VisualStyle) {
     {
         let mut cfg = lock_config();
-        if cfg.menu_background_style == style {
+        if cfg.visual_style == style {
             return;
         }
-        cfg.menu_background_style = style;
+        cfg.visual_style = style;
     }
     save_without_keymaps();
 }

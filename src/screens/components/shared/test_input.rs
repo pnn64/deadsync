@@ -1205,6 +1205,7 @@ mod tests {
         let now = Instant::now();
         InputEvent {
             action,
+            input_slot: 0,
             pressed: true,
             source: InputSource::Keyboard,
             timestamp: now,

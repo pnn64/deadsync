@@ -13,7 +13,7 @@ use self::input_routing::{GameplayQueuedEvent, gameplay_raw_key_event};
 use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
-use crate::assets::{AssetManager, TextureUploadBudget};
+use crate::assets::{AssetManager, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode, dirs};
 use crate::engine::display;
 use crate::engine::gfx::{
@@ -2857,7 +2857,7 @@ impl App {
             self.state.shell.backquote_held,
             self.state.shell.tab_acceleration_enabled,
         );
-        crate::screens::components::shared::heart_bg::tick_global(logic_dt);
+        crate::screens::components::shared::visual_style_bg::tick_global(logic_dt);
 
         self.sync_gameplay_input_capture();
         self.sync_input_fsr_view();
@@ -2984,6 +2984,7 @@ impl App {
         }
 
         self.sync_gameplay_background();
+        self.sync_theme_background_video();
         let actor_build_started = Instant::now();
         let (actors, clear_color) = self.get_current_actors();
         let actor_build_us = elapsed_us_since(actor_build_started);
@@ -3004,9 +3005,17 @@ impl App {
         };
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
-            let gameplay_time = screens.gameplay_state.as_ref().map(|state| {
-                crate::game::gameplay::song_time_ns_to_seconds(state.current_music_time_ns)
-            });
+            let gameplay_time = match current_screen {
+                CurrentScreen::Gameplay => screens.gameplay_state.as_ref().map(|state| {
+                    crate::game::gameplay::song_time_ns_to_seconds(state.current_music_time_ns)
+                }),
+                CurrentScreen::Practice => screens.practice_state.as_ref().map(|state| {
+                    crate::game::gameplay::song_time_ns_to_seconds(
+                        state.gameplay.current_music_time_ns,
+                    )
+                }),
+                _ => None,
+            };
             match current_screen {
                 CurrentScreen::SelectMusic => {
                     let state = &screens.select_music_state;
@@ -3088,8 +3097,11 @@ impl App {
                     );
                 }
             }
-            self.dynamic_media
-                .queue_video_frames(&mut self.asset_manager, gameplay_time);
+            self.dynamic_media.queue_video_frames(
+                &mut self.asset_manager,
+                gameplay_time,
+                total_elapsed,
+            );
             self.asset_manager.queue_pending_generated_textures();
             self.asset_manager.drain_texture_uploads(
                 backend,
@@ -4544,6 +4556,33 @@ impl App {
         }
     }
 
+    fn sync_theme_background_video(&mut self) {
+        if matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Gameplay | CurrentScreen::Practice
+        ) {
+            crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(None);
+            return;
+        }
+
+        let cfg = config::get();
+        let path = (cfg.visual_style == config::VisualStyle::Srpg9 && cfg.show_video_backgrounds)
+            .then(visual_styles::shared_background_video_asset_path)
+            .flatten()
+            .map(|path| dirs::app_dirs().resolve_asset_path(path));
+
+        let Some(backend) = self.backend.as_mut() else {
+            crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(None);
+            return;
+        };
+
+        let key = self
+            .dynamic_media
+            .set_background(&mut self.asset_manager, backend, path);
+        let srpg9_key = if key == "__black" { None } else { Some(key) };
+        crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(srpg9_key);
+    }
+
     fn append_gameplay_offset_prompt_actors(&self, actors: &mut Vec<Actor>) {
         if self.state.screens.current_screen != CurrentScreen::Gameplay
             || self.state.gameplay_offset_save_prompt.is_none()
@@ -5909,7 +5948,8 @@ impl App {
         if target_menu_music {
             if !prev_menu_music {
                 commands.push(Command::PlayMusic {
-                    path: dirs::app_dirs().resolve_asset_path("assets/music/in_two (loop).ogg"),
+                    path: dirs::app_dirs()
+                        .resolve_asset_path(visual_styles::menu_music_asset_path()),
                     looped: true,
                     volume: 1.0,
                 });

@@ -1,7 +1,6 @@
 pub mod banner;
 pub mod gamepad_overlay;
 pub mod gs_scorebox;
-pub mod heart_bg;
 pub mod loading_bar;
 pub mod lobby_hud;
 pub mod mode_pads;
@@ -15,3 +14,4 @@ mod technique_bg;
 pub mod test_input;
 pub mod timers;
 pub mod transitions;
+pub mod visual_style_bg;

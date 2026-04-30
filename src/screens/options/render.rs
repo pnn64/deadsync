@@ -18,7 +18,7 @@ pub(super) fn measure_text_box(asset_manager: &AssetManager, text: &str, zoom: f
 }
 
 #[inline(always)]
-pub(super) fn ring_size_for_text(draw_w: f32, text_h: f32) -> (f32, f32) {
+pub(super) fn ring_size_for_text(draw_w: f32, text_h: f32, spacing: f32) -> (f32, f32) {
     let pad_y = widescale(6.0, 8.0);
     let min_pad_x = widescale(2.0, 3.0);
     let max_pad_x = widescale(22.0, 28.0);
@@ -30,7 +30,7 @@ pub(super) fn ring_size_for_text(draw_w: f32, text_h: f32) -> (f32, f32) {
     }
     size_t = size_t.clamp(0.0, 1.0);
     let mut pad_x = (max_pad_x - min_pad_x).mul_add(size_t, min_pad_x);
-    let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
+    let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
     if pad_x > max_pad_by_spacing {
         pad_x = max_pad_by_spacing;
     }
@@ -240,7 +240,7 @@ pub(super) fn submenu_cursor_dest(
     }
     let selected_row = state.sub_selected.min(total_rows - 1);
     let row_mid_y = row_mid_y_for_cursor(state, selected_row, total_rows, selected_row, s, list_y);
-    let value_zoom = 0.835_f32;
+    let value_zoom = SUBMENU_VALUE_ZOOM;
     let label_bg_w = SUB_LABEL_COL_W * s;
     let item_col_left = list_x + label_bg_w;
     let item_col_w = list_w - label_bg_w;
@@ -250,7 +250,7 @@ pub(super) fn submenu_cursor_dest(
     if selected_row == total_rows - 1 {
         let exit_label = tr("Common", "Exit");
         let (draw_w, text_h) = measure_text_box(asset_manager, &exit_label, value_zoom);
-        let (ring_w, ring_h) = ring_size_for_text(draw_w, text_h);
+        let (ring_w, ring_h) = ring_size_for_text(draw_w, text_h, INLINE_SPACING);
         return Some((single_center_x, row_mid_y, ring_w, ring_h));
     }
     let row_idx = submenu_visible_row_to_actual(state, kind, selected_row)?;
@@ -272,7 +272,7 @@ pub(super) fn submenu_cursor_dest(
     } else {
         single_center_x
     };
-    let (ring_w, ring_h) = ring_size_for_text(draw_w, layout.text_h);
+    let (ring_w, ring_h) = ring_size_for_text(draw_w, layout.text_h, layout.inline_spacing);
     Some((center_x, row_mid_y, ring_w, ring_h))
 }
 
@@ -349,7 +349,7 @@ pub fn get_actors(
     let is_fading_submenu = !matches!(state.submenu_transition, SubmenuTransition::None);
 
     /* -------------------------- HEART BACKGROUND -------------------------- */
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index, // <-- CHANGED
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         // Keep hearts always visible for actor-only fades (Options/Menu/Mappings);
@@ -472,6 +472,9 @@ pub fn get_actors(
     let sep_w = SEP_W * s;
     let desc_w = desc_w_unscaled() * s;
     let desc_h = DESC_H * s;
+    let visual_style = visual_styles::current_style();
+    let select_color_texture = visual_styles::select_color_texture_key();
+    let select_color_zoom = HEART_ZOOM * visual_styles::select_color_zoom_scale(visual_style);
 
     // Separator immediately to the RIGHT of the rows, aligned to the FIRST row top
     ui_actors.push(act!(quad:
@@ -554,10 +557,10 @@ pub fn get_actors(
                         col_white
                     };
                     heart_tint[3] *= row_alpha;
-                    ui_actors.push(act!(sprite("heart.png"):
+                    ui_actors.push(act!(sprite(select_color_texture):
                         align(0.0, 0.5):
                         xy(heart_x, row_mid_y):
-                        zoom(HEART_ZOOM):
+                        zoom(select_color_zoom):
                         diffuse(heart_tint[0], heart_tint[1], heart_tint[2], heart_tint[3])
                     ));
                 }
@@ -638,10 +641,10 @@ pub fn get_actors(
                             col_white
                         };
                         heart_tint[3] *= row_alpha;
-                        ui_actors.push(act!(sprite("heart.png"):
+                        ui_actors.push(act!(sprite(select_color_texture):
                             align(0.0, 0.5):
                             xy(heart_x, row_mid_y):
-                            zoom(HEART_ZOOM):
+                            zoom(select_color_zoom):
                             diffuse(heart_tint[0], heart_tint[1], heart_tint[2], heart_tint[3])
                         ));
                     }
@@ -858,7 +861,7 @@ pub fn get_actors(
                             submenu_row_layout(state, asset_manager, kind, actual_row_idx)
                             && !layout.texts.is_empty()
                         {
-                            let value_zoom = 0.835_f32;
+                            let value_zoom = layout.value_zoom;
                             let selected_choice = choice_indices
                                 .get(actual_row_idx)
                                 .copied()
@@ -1067,7 +1070,7 @@ pub fn get_actors(
                         // Exit row: centered "Exit" text in the items column.
                         let exit_label = tr("Common", "Exit");
                         let label = exit_label.clone();
-                        let value_zoom = 0.835_f32;
+                        let value_zoom = SUBMENU_VALUE_ZOOM;
                         let mut choice_color = if is_active { col_white } else { sl_gray };
                         choice_color[3] *= row_alpha;
                         let center_x = calc_row_center_x(row_idx);

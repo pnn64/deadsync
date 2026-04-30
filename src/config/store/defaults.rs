@@ -278,11 +278,7 @@ fn push_default_keymaps(content: &mut String) {
 fn push_default_theme(content: &mut String, default: &Config) {
     push_section(content, "[Theme]");
     push_bool(content, "KeyboardFeatures", default.keyboard_features);
-    push_line(
-        content,
-        "MenuBackgroundStyle",
-        default.menu_background_style.as_str(),
-    );
+    push_line(content, "VisualStyle", default.visual_style.as_str());
     push_bool(content, "VideoBackgrounds", default.show_video_backgrounds);
     push_bool(
         content,

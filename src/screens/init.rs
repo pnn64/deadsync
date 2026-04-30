@@ -12,7 +12,7 @@ use crate::game::{
     course,
     parsing::{noteskin, simfile as song_loading},
 };
-use crate::screens::components::shared::{heart_bg, loading_bar};
+use crate::screens::components::shared::{loading_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use log::info;
 use std::cell::RefCell;
@@ -166,7 +166,7 @@ pub struct State {
     loader_started: bool,
     loading: Option<LoadingState>,
     pub active_color_index: i32,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
 }
 
 pub fn init() -> State {
@@ -176,7 +176,7 @@ pub fn init() -> State {
         loader_started: false,
         loading: None,
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
     }
 }
 
@@ -196,7 +196,7 @@ pub(crate) fn bench_loading_state() -> State {
         loader_started: true,
         loading: Some(loading),
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
     }
 }
 
@@ -744,7 +744,7 @@ fn get_actors_with_elapsed_overrides(
     let mut actors: Vec<Actor> = Vec::with_capacity(32 + ARROW_COUNT);
 
     /* 1) HEART BACKGROUND — visible immediately */
-    let bg_params = heart_bg::Params {
+    let bg_params = visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,

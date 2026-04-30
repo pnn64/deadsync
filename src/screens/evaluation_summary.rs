@@ -16,7 +16,7 @@ use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{
-    banner as shared_banner, heart_bg, screen_bar, transitions,
+    banner as shared_banner, screen_bar, transitions, visual_style_bg,
 };
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
@@ -32,7 +32,7 @@ const ROWS_PER_PAGE: usize = 4;
 
 pub struct State {
     pub active_color_index: i32,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     pub page: usize,
     pub elapsed: f32,
     pub return_to: Screen,
@@ -47,7 +47,7 @@ pub fn init() -> State {
 pub fn init_for_return(return_to: Screen) -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         page: 1,
         elapsed: 0.0,
         return_to,
@@ -581,7 +581,7 @@ pub fn get_actors(
     let mut actors: Vec<Actor> = Vec::with_capacity(32);
 
     // Background
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,

@@ -13,7 +13,7 @@ use crate::game::song::get_song_cache;
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::menu::menu_list::{self};
 use crate::screens::components::menu::menu_splash;
-use crate::screens::components::shared::{heart_bg, screen_bar, transitions};
+use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::cell::{Cell, RefCell};
@@ -95,7 +95,7 @@ pub struct State {
     pub active_color_index: i32,
     pub rainbow_mode: bool,
     pub started_by_p2: bool,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     i18n_revision: Cell<u64>,
     info_text_cache: RefCell<Option<Arc<str>>>,
     groovestats_text_cache: RefCell<Option<StatusTextCache<GrooveStatusKey, 3>>>,
@@ -110,7 +110,7 @@ pub fn init() -> State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // was 0
         rainbow_mode: false,
         started_by_p2: false,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         i18n_revision: Cell::new(i18n::revision()),
         info_text_cache: RefCell::new(None),
         groovestats_text_cache: RefCell::new(None),
@@ -372,7 +372,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     } else {
         [0.0, 0.0, 0.0, 1.0]
     };
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: backdrop,
         alpha_mul: 1.0,

@@ -4,6 +4,7 @@ use super::{
     manage_local_profiles, mappings, menu, options, player_options, profile_load, sandbox,
     select_color, select_course, select_mode, select_music, select_profile, select_style,
 };
+use crate::assets::visual_styles;
 use crate::config;
 use crate::config::dirs;
 use crate::engine::present::{actors::Actor, color};
@@ -183,7 +184,7 @@ impl App {
         if target_menu_music {
             if !prev_menu_music {
                 crate::engine::audio::play_music(
-                    dirs::app_dirs().resolve_asset_path("assets/music/in_two (loop).ogg"),
+                    dirs::app_dirs().resolve_asset_path(visual_styles::menu_music_asset_path()),
                     crate::engine::audio::Cut::default(),
                     true,
                     1.0,

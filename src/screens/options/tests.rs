@@ -14,6 +14,7 @@ fn press(
         asset_manager,
         &InputEvent {
             action,
+            input_slot: 0,
             pressed: true,
             source: InputSource::Keyboard,
             timestamp: now,

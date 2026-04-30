@@ -29,8 +29,8 @@ use crate::screens::components::{
         lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
     },
     shared::{
-        banner as shared_banner, gs_scorebox, heart_bg, lobby_hud, mode_pads, profile_boxes,
-        test_input, timers, transitions,
+        banner as shared_banner, gs_scorebox, lobby_hud, mode_pads, profile_boxes, test_input,
+        timers, transitions, visual_style_bg,
     },
 };
 use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, ScreenAction};
@@ -955,7 +955,7 @@ pub struct State {
     playlist_library: Vec<PlaylistCacheEntry>,
     active_playlist_id: Option<String>,
     expanded_pack_name: Option<String>,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
     pub(crate) banner_high_quality_requested: bool,
@@ -3141,7 +3141,7 @@ pub fn init() -> State {
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: last_pack_name,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
         banner_high_quality_requested: false,
@@ -3356,7 +3356,7 @@ pub fn init_placeholder() -> State {
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: None,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
         banner_high_quality_requested: false,
@@ -4821,6 +4821,15 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
     } else {
         None
     };
+    let ready_prompt_text = if overlay.phase == SyncOverlayPhase::Ready {
+        Some(build_sync_save_prompt_text(overlay))
+    } else {
+        None
+    };
+    let ready_prompt_line_count = ready_prompt_text
+        .as_deref()
+        .map(|s| s.lines().count().max(1))
+        .unwrap_or(0);
 
     actors.push(act!(quad:
         align(0.0, 0.0):
@@ -5005,12 +5014,24 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             .map(Arc::from)
             .unwrap_or_else(|| tr("SelectMusic", "UnknownSyncError")),
     };
-    let status_y =
-        if matches!(overlay.phase, SyncOverlayPhase::Ready) && ready_offset_line.is_some() {
-            ready_prompt_y - SYNC_READY_LINE_STEP * 1.5
+    let status_y = if matches!(overlay.phase, SyncOverlayPhase::Ready) {
+        // Anchor the prompt's bottom edge to the same position it had with the
+        // default 2-line prompt, then stack the optional offset line and the
+        // status line above it with a one-line gap.  This keeps the YES/NO
+        // buttons clear of the prompt and prevents the status line from
+        // overlapping the prompt when a low-confidence warning expands it.
+        let prompt_bottom = ready_prompt_y + SYNC_READY_LINE_STEP * 0.5;
+        let half_prompt = (ready_prompt_line_count.max(1) as f32 - 1.0) * 0.5;
+        let prompt_top = prompt_bottom - half_prompt * 2.0 * SYNC_READY_LINE_STEP;
+        let above_prompt = prompt_top - SYNC_READY_LINE_STEP;
+        if ready_offset_line.is_some() {
+            above_prompt - SYNC_READY_LINE_STEP
         } else {
-            graph_y + graph_h + 18.0
-        };
+            above_prompt
+        }
+    } else {
+        graph_y + graph_h + 18.0
+    };
     actors.push(act!(text:
         font("miso"):
         settext(status_text):
@@ -5033,12 +5054,11 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             } else {
                 choice_no_x
             };
-            let prompt = build_sync_save_prompt_text(overlay);
-            let prompt_y = if ready_offset_line.is_some() {
-                ready_prompt_y + SYNC_READY_LINE_STEP
-            } else {
-                ready_prompt_y
-            };
+            let prompt = ready_prompt_text.clone().unwrap_or_default();
+            let prompt_bottom = ready_prompt_y + SYNC_READY_LINE_STEP * 0.5;
+            let half_prompt = (ready_prompt_line_count.max(1) as f32 - 1.0) * 0.5;
+            let prompt_y = prompt_bottom - half_prompt * SYNC_READY_LINE_STEP;
+            let prompt_top = prompt_y - half_prompt * SYNC_READY_LINE_STEP;
 
             actors.push(act!(quad:
                 align(0.5, 0.5):
@@ -5052,7 +5072,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
                     font("miso"):
                     settext(line.clone()):
                     align(0.5, 0.5):
-                    xy(pane_cx, ready_prompt_y - SYNC_READY_LINE_STEP * 0.5):
+                    xy(pane_cx, prompt_top - SYNC_READY_LINE_STEP):
                     zoom(SYNC_READY_TEXT_ZOOM):
                     maxwidth(pane_w - 90.0):
                     diffuse(1.0, 1.0, 1.0, 1.0):
@@ -6254,7 +6274,7 @@ fn build_sync_save_prompt_text(overlay: &SyncOverlayStateData) -> String {
         sync_low_confidence_warning(overlay.final_confidence, sync_confidence_threshold())
     {
         prompt.push_str(&warning);
-        prompt.push_str("\n\n");
+        prompt.push('\n');
     }
     prompt.push_str(&tr("SelectMusic", "SyncSaveQuestion"));
     prompt.push('\n');
@@ -8355,7 +8375,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let allow_gs_fetch = allow_gs_fetch_for_selection(state);
     let cfg = config::get();
 
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,

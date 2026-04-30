@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::i18n::tr;
+use crate::assets::visual_styles;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 // Screen navigation handled in app
@@ -8,7 +9,7 @@ use crate::engine::present::color;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::shared::{heart_bg, screen_bar, transitions};
+use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 // Keyboard handling is centralized in app via virtual actions
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::screens::{Screen, ScreenAction};
@@ -16,11 +17,6 @@ use crate::screens::{Screen, ScreenAction};
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
-
-// Native art size of heart.png (for aspect-correct sizing)
-const HEART_NATIVE_W: f32 = 668.0;
-const HEART_NATIVE_H: f32 = 566.0;
-const HEART_ASPECT: f32 = HEART_NATIVE_W / HEART_NATIVE_H;
 
 // Wheel tuning (baseline behavior)
 // Simply Love uses `finishtweening(); linear(0.2)` when a new scroll input arrives.
@@ -60,7 +56,7 @@ pub struct State {
     scroll_to: f32,
     scroll_t: f32, // [0, SCROLL_TWEEN_DURATION]
     exit_requested: bool,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     /// Background fade: from -> to over `BG_FADE_DURATION`
     pub bg_from_index: i32,
     pub bg_to_index: i32,
@@ -68,17 +64,18 @@ pub struct State {
 }
 
 pub fn init() -> State {
-    let scroll = color::DEFAULT_COLOR_INDEX as f32;
+    let active_color_index = crate::config::get().simply_love_color;
+    let scroll = active_color_index as f32;
     State {
-        active_color_index: color::DEFAULT_COLOR_INDEX,
+        active_color_index,
         scroll,
         scroll_from: scroll,
         scroll_to: scroll,
         scroll_t: SCROLL_TWEEN_DURATION, // start "finished"
         exit_requested: false,
-        bg: heart_bg::State::new(),
-        bg_from_index: color::DEFAULT_COLOR_INDEX,
-        bg_to_index: color::DEFAULT_COLOR_INDEX,
+        bg: visual_style_bg::State::new(),
+        bg_from_index: active_color_index,
+        bg_to_index: active_color_index,
         bg_fade_t: BG_FADE_DURATION, // start "finished"
     }
 }
@@ -119,7 +116,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let a = (state.bg_fade_t / BG_FADE_DURATION).clamp(0.0, 1.0);
     if a >= 1.0 || state.bg_from_index == state.bg_to_index {
         // No active fade: draw a single layer + normal backdrop
-        actors.extend(state.bg.build(heart_bg::Params {
+        actors.extend(state.bg.build(visual_style_bg::Params {
             active_color_index: state.bg_to_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: 1.0,
@@ -128,13 +125,13 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         let alpha_from = 1.0 - a;
         let alpha_to = a;
         // Bottom: previous color + full backdrop
-        actors.extend(state.bg.build(heart_bg::Params {
+        actors.extend(state.bg.build(visual_style_bg::Params {
             active_color_index: state.bg_from_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
             alpha_mul: alpha_from,
         }));
         // Top: new color + NO backdrop (avoid double darkening)
-        actors.extend(state.bg.build(heart_bg::Params {
+        actors.extend(state.bg.build(visual_style_bg::Params {
             active_color_index: state.bg_to_index,
             backdrop_rgba: [0.0, 0.0, 0.0, 0.0],
             alpha_mul: alpha_to,
@@ -282,6 +279,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     } else {
         0.0
     };
+    let visual_style = visual_styles::current_style();
+    let select_color_texture = visual_styles::select_color_texture_key();
+    let select_color_aspect = visual_styles::select_color_aspect(visual_style);
 
     let x_spacing = w_screen / (num_slots as f32 - 1.0);
 
@@ -345,9 +345,8 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         // depth so near-center draws on top
         let z_layer = WHEEL_Z_BASE - (a.round() as i16);
 
-        // correct aspect (don’t stretch tall)
-        let base_h = 168.0; // overall heart height (tweak)
-        let base_w = base_h * HEART_ASPECT;
+        let base_h = 168.0;
+        let base_w = base_h * select_color_aspect;
 
         // Soft fade near edges so hearts slide on/off
         let start_fade = (max_off_all - 1.0).max(0.0); // begin fade
@@ -374,7 +373,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         let rot_deg = lerp(0.0, rot_deg_final, form_p);
         let zoom = lerp(1.0, zoom_final, form_p);
 
-        wheel_actors.push(act!(sprite("heart.png"):
+        wheel_actors.push(act!(sprite(select_color_texture):
             align(0.5, 0.5):
             xy(x, y):
             rotationz(rot_deg):

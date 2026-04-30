@@ -20,6 +20,9 @@ pub(super) const CURSOR_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 pub(super) const ROW_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 pub(super) const INLINE_SPACING: f32 = 15.75;
+pub(super) const SUBMENU_VALUE_ZOOM: f32 = 0.835;
+pub(super) const VISUAL_STYLE_VALUE_ZOOM: f32 = 0.75;
+pub(super) const VISUAL_STYLE_INLINE_SPACING: f32 = 13.0;
 
 // Match Simply Love operator menu ranges (±1000 ms) for these calibrations.
 pub(super) const GLOBAL_OFFSET_MIN_MS: i32 = -1000;
@@ -78,7 +81,7 @@ pub(super) const SUB_INLINE_ITEMS_LEFT_PAD: f32 = 13.0;
 pub(super) const SUB_SINGLE_VALUE_CENTER_OFFSET: f32 = -43.0;
 
 /// Heart sprite zoom for the options list rows.
-/// This is a StepMania-style "zoom" factor applied to the native heart.png size.
+/// This is a StepMania-style "zoom" factor applied to the native SelectColor icon.
 pub(super) const HEART_ZOOM: f32 = 0.026;
 
 /// Description pane layout (mirrors Simply Love's `ScreenOptionsService` overlay).

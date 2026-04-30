@@ -49,6 +49,7 @@ fn press(state: &mut options::State, asset_manager: &AssetManager, action: Virtu
     let now = Instant::now();
     let ev = InputEvent {
         action,
+        input_slot: 0,
         pressed: true,
         source: InputSource::Keyboard,
         timestamp: now,

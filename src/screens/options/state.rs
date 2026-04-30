@@ -79,7 +79,7 @@ pub struct State {
     pub selected: usize,
     pub(super) prev_selected: usize,
     pub active_color_index: i32, // <-- ADDED
-    pub(super) bg: heart_bg::State,
+    pub(super) bg: visual_style_bg::State,
     pub(super) nav_key_held_direction: Option<NavDirection>,
     pub(super) nav_key_held_since: Option<Instant>,
     pub(super) nav_key_last_scrolled_at: Option<Instant>,
@@ -217,8 +217,8 @@ pub fn init() -> State {
     let mut state = State {
         selected: 0,
         prev_selected: 0,
-        active_color_index: color::DEFAULT_COLOR_INDEX, // <-- ADDED
-        bg: heart_bg::State::new(),
+        active_color_index: cfg.simply_love_color,
+        bg: visual_style_bg::State::new(),
 
         nav_key_held_direction: None,
         nav_key_held_since: None,
@@ -547,8 +547,8 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
-        SubRowId::MenuBackground,
-        menu_background_style_choice_index(cfg.menu_background_style),
+        SubRowId::VisualStyle,
+        visual_style_choice_index(cfg.visual_style),
     );
     set_choice_by_id(
         &mut state.sub_choice_indices_machine,

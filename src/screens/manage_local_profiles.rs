@@ -1,17 +1,18 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
+use crate::assets::visual_styles;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_height, screen_width};
 use crate::game::profile;
-use crate::screens::components::shared::heart_bg;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::transitions;
+use crate::screens::components::shared::visual_style_bg;
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::sync::Arc;
@@ -142,7 +143,7 @@ pub struct State {
     pub selected: usize,
     prev_selected: usize,
     pub active_color_index: i32,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     rows: Vec<Row>,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
@@ -160,7 +161,7 @@ pub fn init() -> State {
         selected: 0,
         prev_selected: 0,
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         rows,
         nav_key_held_direction: None,
         nav_key_held_since: None,
@@ -597,22 +598,29 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
     if screen_input::dedicated_three_key_nav_enabled() {
         match ev.action {
-            VirtualAction::p1_left | VirtualAction::p1_menu_left if !ev.pressed => {
+            VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left
+                if !ev.pressed =>
+            {
                 state.menu_lr_undo = 0;
                 on_nav_release(state, NavDirection::Up);
                 return ScreenAction::None;
             }
-            VirtualAction::p1_right | VirtualAction::p1_menu_right if !ev.pressed => {
+            VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right
+                if !ev.pressed =>
+            {
                 state.menu_lr_undo = 0;
                 on_nav_release(state, NavDirection::Down);
                 return ScreenAction::None;
             }
             _ => {}
         }
-        if let Some((side, nav)) = three_key_action {
-            if side != profile::PlayerSide::P1 {
-                return ScreenAction::None;
-            }
+        if let Some((_, nav)) = three_key_action {
             if state.name_entry.is_some() {
                 match nav {
                     screen_input::ThreeKeyMenuAction::Confirm => confirm_name_entry(state),
@@ -685,8 +693,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
     if state.name_entry.is_some() {
         match ev.action {
-            VirtualAction::p1_start if ev.pressed => confirm_name_entry(state),
-            VirtualAction::p1_back if ev.pressed => cancel_name_entry(state),
+            VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {
+                confirm_name_entry(state)
+            }
+            VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
+                cancel_name_entry(state)
+            }
             _ => {}
         }
         return ScreenAction::None;
@@ -694,8 +706,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     if state.delete_confirm.is_some() {
         match ev.action {
-            VirtualAction::p1_start if ev.pressed => confirm_delete(state),
-            VirtualAction::p1_back if ev.pressed => cancel_delete_confirm(state),
+            VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {
+                confirm_delete(state)
+            }
+            VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
+                cancel_delete_confirm(state)
+            }
             _ => {}
         }
         return ScreenAction::None;
@@ -703,24 +719,43 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     if state.profile_menu.is_some() {
         match ev.action {
-            VirtualAction::p1_back if ev.pressed => cancel_profile_menu(state),
-            VirtualAction::p1_up | VirtualAction::p1_menu_up if ev.pressed => {
+            VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
+                cancel_profile_menu(state)
+            }
+            VirtualAction::p1_up
+            | VirtualAction::p1_menu_up
+            | VirtualAction::p2_up
+            | VirtualAction::p2_menu_up
+                if ev.pressed =>
+            {
                 move_profile_menu_selected(state, NavDirection::Up);
                 audio::play_sfx("assets/sounds/change.ogg");
             }
-            VirtualAction::p1_down | VirtualAction::p1_menu_down if ev.pressed => {
+            VirtualAction::p1_down
+            | VirtualAction::p1_menu_down
+            | VirtualAction::p2_down
+            | VirtualAction::p2_menu_down
+                if ev.pressed =>
+            {
                 move_profile_menu_selected(state, NavDirection::Down);
                 audio::play_sfx("assets/sounds/change.ogg");
             }
-            VirtualAction::p1_start if ev.pressed => confirm_profile_menu(state),
+            VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {
+                confirm_profile_menu(state)
+            }
             _ => {}
         }
         return ScreenAction::None;
     }
 
     match ev.action {
-        VirtualAction::p1_back if ev.pressed => return ScreenAction::Navigate(Screen::Options),
-        VirtualAction::p1_up | VirtualAction::p1_menu_up => {
+        VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
+            return ScreenAction::Navigate(Screen::Options);
+        }
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up => {
             if ev.pressed {
                 move_selected(state, NavDirection::Up, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Up);
@@ -728,7 +763,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 on_nav_release(state, NavDirection::Up);
             }
         }
-        VirtualAction::p1_down | VirtualAction::p1_menu_down => {
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down => {
             if ev.pressed {
                 move_selected(state, NavDirection::Down, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Down);
@@ -736,7 +774,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 on_nav_release(state, NavDirection::Down);
             }
         }
-        VirtualAction::p1_start if ev.pressed => {
+        VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {
             return activate_selected_row(state);
         }
         _ => {}
@@ -1234,10 +1272,13 @@ fn push_row(
         } else {
             colors.white
         };
-        ui.push(act!(sprite("heart.png"):
+        let visual_style = visual_styles::current_style();
+        let texture = visual_styles::select_color_texture_key();
+        let zoom = HEART_ZOOM * visual_styles::select_color_zoom_scale(visual_style);
+        ui.push(act!(sprite(texture):
             align(0.0, 0.5):
             xy(heart_x, row_mid_y):
-            zoom(HEART_ZOOM):
+            zoom(zoom):
             diffuse(heart_tint[0], heart_tint[1], heart_tint[2], heart_tint[3])
         ));
     }
@@ -1422,7 +1463,7 @@ pub fn get_actors(
 ) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(220);
 
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
@@ -1476,4 +1517,86 @@ pub fn get_actors(
     }
     actors.extend(ui);
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::input::InputSource;
+
+    fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed,
+            source: InputSource::Keyboard,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
+
+    fn press(state: &mut State, action: VirtualAction) -> ScreenAction {
+        handle_input(state, &input_event(action, true))
+    }
+
+    fn state_with_profile_row() -> State {
+        let mut state = init();
+        state.rows = vec![
+            Row {
+                kind: RowKind::CreateNew,
+            },
+            Row {
+                kind: RowKind::Profile {
+                    id: "test-profile".to_string(),
+                    display_name: "Test Profile".to_string(),
+                },
+            },
+            Row {
+                kind: RowKind::Exit,
+            },
+        ];
+        state.selected = 0;
+        state.prev_selected = 0;
+        state
+    }
+
+    #[test]
+    fn p2_can_navigate_profile_list() {
+        let mut state = state_with_profile_row();
+
+        press(&mut state, VirtualAction::p2_down);
+        assert_eq!(state.selected, 1);
+
+        press(&mut state, VirtualAction::p2_down);
+        assert_eq!(state.selected, 2);
+
+        assert!(matches!(
+            press(&mut state, VirtualAction::p2_start),
+            ScreenAction::Navigate(Screen::Options)
+        ));
+    }
+
+    #[test]
+    fn p2_can_navigate_profile_action_menu() {
+        let mut state = state_with_profile_row();
+
+        press(&mut state, VirtualAction::p2_down);
+        press(&mut state, VirtualAction::p2_start);
+        assert_eq!(
+            state.profile_menu.as_ref().map(|m| m.selected_action),
+            Some(0)
+        );
+
+        press(&mut state, VirtualAction::p2_down);
+        assert_eq!(
+            state.profile_menu.as_ref().map(|m| m.selected_action),
+            Some(1)
+        );
+
+        press(&mut state, VirtualAction::p2_back);
+        assert!(state.profile_menu.is_none());
+    }
 }

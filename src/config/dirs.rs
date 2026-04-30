@@ -105,16 +105,32 @@ impl AppDirs {
     /// Resolves a relative asset path (e.g. `"assets/sounds/change.ogg"`) by
     /// checking the data dir overlay first. In platform-native mode, if the
     /// file or directory exists at `{data_dir}/{path}`, returns that absolute
-    /// path; otherwise returns the original path (which resolves to
-    /// `{exe_dir}/{path}` via CWD).
+    /// path. Otherwise, returns the first existing bundled path found from the
+    /// current working directory, the workspace `deadsync/` directory, or the
+    /// executable directory. If no candidate exists, returns the original path.
     pub fn resolve_asset_path(&self, path: &str) -> PathBuf {
+        let original = PathBuf::from(path);
+        if original.is_absolute() {
+            return original;
+        }
         if !self.portable {
             let candidate = self.data_dir.join(path);
             if candidate.exists() {
                 return candidate;
             }
         }
-        PathBuf::from(path)
+        if let Ok(cwd) = std::env::current_dir() {
+            for candidate in [cwd.join(path), cwd.join("deadsync").join(path)] {
+                if candidate.exists() {
+                    return candidate;
+                }
+            }
+        }
+        let candidate = self.exe_dir.join(path);
+        if candidate.exists() {
+            return candidate;
+        }
+        original
     }
 
     /// Strips the data-dir or exe-dir `assets/` prefix from an absolute path,

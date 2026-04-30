@@ -2,6 +2,12 @@ use super::super::*;
 
 pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
+        id: SubRowId::VisualStyle,
+        label: lookup_key("OptionsMachine", "VisualStyle"),
+        choices: VISUAL_STYLE_CHOICES,
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SelectProfile,
         label: lookup_key("OptionsMachine", "SelectProfile"),
         choices: &[
@@ -111,12 +117,6 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::MenuBackground,
-        label: lookup_key("OptionsMachine", "MenuBackground"),
-        choices: &[literal_choice("❤"), literal_choice("🌀")],
-        inline: true,
-    },
-    SubRow {
         id: SubRowId::Replays,
         label: lookup_key("OptionsMachine", "Replays"),
         choices: &[
@@ -155,6 +155,14 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
 ];
 
 pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        id: ItemId::MchVisualStyle,
+        name: lookup_key("OptionsMachine", "VisualStyle"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "VisualStyleHelp",
+        ))],
+    },
     Item {
         id: ItemId::MchSelectProfile,
         name: lookup_key("OptionsMachine", "SelectProfile"),
@@ -252,14 +260,6 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
-        id: ItemId::MchMenuBackground,
-        name: lookup_key("OptionsMachine", "MenuBackground"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsMachineHelp",
-            "MenuBackgroundHelp",
-        ))],
-    },
-    Item {
         id: ItemId::MchReplays,
         name: lookup_key("OptionsMachine", "Replays"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -350,19 +350,51 @@ pub(in crate::screens::options) const fn machine_font_from_choice(idx: usize) ->
     }
 }
 
-pub(in crate::screens::options) const fn menu_background_style_choice_index(style: MenuBackgroundStyle) -> usize {
+pub(in crate::screens::options) const fn visual_style_choice_index(style: VisualStyle) -> usize {
     match style {
-        MenuBackgroundStyle::Hearts => 0,
-        MenuBackgroundStyle::Technique => 1,
+        VisualStyle::Hearts => 0,
+        VisualStyle::Arrows => 1,
+        VisualStyle::Bears => 2,
+        VisualStyle::Ducks => 3,
+        VisualStyle::Cats => 4,
+        VisualStyle::Spooky => 5,
+        VisualStyle::Gay => 6,
+        VisualStyle::Stars => 7,
+        VisualStyle::Thonk => 8,
+        VisualStyle::Technique => 9,
+        VisualStyle::Srpg9 => 10,
     }
 }
 
-pub(in crate::screens::options) const fn menu_background_style_from_choice(idx: usize) -> MenuBackgroundStyle {
+pub(in crate::screens::options) const fn visual_style_from_choice(idx: usize) -> VisualStyle {
     match idx {
-        1 => MenuBackgroundStyle::Technique,
-        _ => MenuBackgroundStyle::Hearts,
+        1 => VisualStyle::Arrows,
+        2 => VisualStyle::Bears,
+        3 => VisualStyle::Ducks,
+        4 => VisualStyle::Cats,
+        5 => VisualStyle::Spooky,
+        6 => VisualStyle::Gay,
+        7 => VisualStyle::Stars,
+        8 => VisualStyle::Thonk,
+        9 => VisualStyle::Technique,
+        10 => VisualStyle::Srpg9,
+        _ => VisualStyle::Hearts,
     }
 }
+
+pub(in crate::screens::options) const VISUAL_STYLE_CHOICES: &[Choice] = &[
+    literal_choice("❤"),
+    literal_choice("↖"),
+    literal_choice("🐻"),
+    literal_choice("🦆"),
+    literal_choice("😺"),
+    literal_choice("🎃"),
+    literal_choice("🌈"),
+    literal_choice("⭐"),
+    literal_choice("🤔"),
+    literal_choice("🌀"),
+    literal_choice("💪"),
+];
 
 pub(in crate::screens::options) const fn log_level_choice_index(level: LogLevel) -> usize {
     match level {

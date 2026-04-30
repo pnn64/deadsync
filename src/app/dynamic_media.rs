@@ -816,6 +816,7 @@ impl DynamicMedia {
         &mut self,
         assets: &mut AssetManager,
         gameplay_time_sec: Option<f32>,
+        ui_time_sec: f32,
     ) {
         for (key, video) in &mut self.active_banner_videos {
             if assets.has_pending_texture_upload(key) {
@@ -831,7 +832,7 @@ impl DynamicMedia {
             && let Some(video) = state.video.as_mut()
             && !assets.has_pending_texture_upload(&state.key)
         {
-            let play_time = gameplay_time_sec.unwrap_or(0.0).max(0.0);
+            let play_time = gameplay_time_sec.unwrap_or(ui_time_sec).max(0.0);
             if let Some(frame) = video.take_due_frame(play_time) {
                 assets.queue_texture_upload(state.key.clone(), frame);
             }

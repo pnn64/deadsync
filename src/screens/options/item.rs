@@ -72,7 +72,7 @@ pub enum ItemId {
     MchGameoverScreen,
     MchWriteCurrentScreen,
     MchMenuMusic,
-    MchMenuBackground,
+    MchVisualStyle,
     MchReplays,
     MchPerPlayerGlobalOffsets,
     MchKeyboardFeatures,
@@ -205,15 +205,15 @@ pub(super) fn desc_wrap_extra_pad_unscaled() -> f32 {
 }
 
 #[inline(always)]
-pub(super) fn submenu_inline_widths_fit(widths: &[f32]) -> bool {
+pub(super) fn submenu_inline_widths_fit(widths: &[f32], spacing: f32) -> bool {
     if widths.is_empty() {
         return false;
     }
     if is_wide() {
         return true;
     }
-    let total_w = widths.iter().copied().sum::<f32>()
-        + INLINE_SPACING * (widths.len().saturating_sub(1) as f32);
+    let total_w =
+        widths.iter().copied().sum::<f32>() + spacing * (widths.len().saturating_sub(1) as f32);
     let item_col_w = (list_w_unscaled() - SUB_LABEL_COL_W).max(0.0);
     let inline_w = (item_col_w - SUB_INLINE_ITEMS_LEFT_PAD).max(0.0);
     total_w <= inline_w
@@ -283,6 +283,7 @@ pub const ITEMS: &[Item] = &[
         name: lookup_key("Options", "MachineOptions"),
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsHelp", "MachineOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "VisualStyle")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectProfile")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectColor")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectStyle")),
@@ -291,7 +292,6 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsMachine", "NameEntry")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "GameoverScreen")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuMusic")),
-            HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuBackground")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "KeyboardFeatures")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "VideoBGs")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "WriteCurrentScreen")),

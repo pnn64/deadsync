@@ -64,7 +64,7 @@ pub enum SubRowId {
     GameoverScreen,
     WriteCurrentScreen,
     MenuMusic,
-    MenuBackground,
+    VisualStyle,
     Replays,
     PerPlayerGlobalOffsets,
     KeyboardFeatures,

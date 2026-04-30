@@ -397,9 +397,12 @@ pub enum InputSource {
     Gamepad,
 }
 
+pub const INPUT_SLOT_INVALID: u32 = u32::MAX;
+
 #[derive(Clone, Copy, Debug)]
 pub struct InputEdge {
     pub lane: Lane,
+    pub input_slot: u32,
     pub pressed: bool,
     pub source: InputSource,
     pub record_replay: bool,
@@ -1055,6 +1058,7 @@ impl Keymap {
 #[derive(Clone, Copy, Debug)]
 pub struct InputEvent {
     pub action: VirtualAction,
+    pub input_slot: u32,
     pub pressed: bool,
     pub source: InputSource,
     // Timestamp of the raw input edge before debounce filtering.
@@ -1071,6 +1075,7 @@ pub struct InputEvent {
 #[inline(always)]
 fn input_event(
     action: VirtualAction,
+    input_slot: u32,
     pressed: bool,
     source: InputSource,
     timestamp: Instant,
@@ -1080,6 +1085,7 @@ fn input_event(
 ) -> InputEvent {
     InputEvent {
         action,
+        input_slot,
         pressed,
         source,
         timestamp,
@@ -1267,6 +1273,7 @@ fn emit_input_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(InputEv
     emit_normalized_actions(edge.action_mask, edge.pressed, |action, pressed| {
         emit(input_event(
             action,
+            edge.input_slot,
             pressed,
             edge.source,
             edge.timestamp,
@@ -1336,6 +1343,7 @@ pub fn map_keycode_event_with_host(
     emit_normalized_actions(binding.mask, pressed, |action, pressed| {
         emit(input_event(
             action,
+            binding.slot,
             pressed,
             InputSource::Keyboard,
             timestamp,
@@ -1492,6 +1500,7 @@ mod tests {
         assert_eq!(actual.len(), expected.len(), "event count");
         for (actual, expected) in actual.iter().zip(expected.iter()) {
             assert_eq!(actual.action, expected.action);
+            assert_eq!(actual.input_slot, expected.input_slot);
             assert_eq!(actual.pressed, expected.pressed);
             assert_eq!(actual.source, expected.source);
             assert_eq!(actual.timestamp, expected.timestamp);
@@ -1520,6 +1529,7 @@ mod tests {
         });
         let expected = [input_event(
             VirtualAction::p1_left,
+            0,
             true,
             InputSource::Keyboard,
             timestamp,
@@ -1592,6 +1602,7 @@ mod tests {
         });
         let expected = [input_event(
             VirtualAction::p1_left,
+            0,
             true,
             InputSource::Keyboard,
             timestamp,
@@ -1622,6 +1633,7 @@ mod tests {
         let expected = [
             input_event(
                 VirtualAction::p1_left,
+                0,
                 false,
                 InputSource::Keyboard,
                 timestamp,
@@ -1631,6 +1643,7 @@ mod tests {
             ),
             input_event(
                 VirtualAction::p1_menu_left,
+                0,
                 false,
                 InputSource::Keyboard,
                 timestamp,

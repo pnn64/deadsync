@@ -11,7 +11,7 @@ use crate::engine::present::color;
 use crate::engine::present::font;
 use crate::engine::space::{screen_height, screen_width, widescale};
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
-use crate::screens::components::shared::{heart_bg, screen_bar, transitions};
+use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::time::{Duration, Instant};
@@ -202,7 +202,7 @@ enum ThreeKeyFocus {
 
 pub struct State {
     pub active_color_index: i32,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     /// 0..NUM_MAPPING_ROWS-1 = mapping rows, `NUM_MAPPING_ROWS` = Exit.
     selected_row: usize,
     prev_selected_row: usize,
@@ -235,7 +235,7 @@ pub struct State {
 pub fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         selected_row: 0,
         prev_selected_row: 0,
         active_slot: ActiveSlot::P1Primary,
@@ -474,6 +474,7 @@ fn mapped_raw_nav_action(key_event: &RawKeyboardEvent) -> Option<VirtualAction> 
 fn input_event_from_raw(action: VirtualAction, key_event: &RawKeyboardEvent) -> InputEvent {
     InputEvent {
         action,
+        input_slot: 0,
         pressed: key_event.pressed,
         source: InputSource::Keyboard,
         timestamp: key_event.timestamp,
@@ -1054,7 +1055,7 @@ pub fn get_actors(
     let mut actors: Vec<Actor> = Vec::with_capacity(256);
 
     /* -------------------------- HEART BACKGROUND -------------------------- */
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         // Keep hearts always visible for actor-only fades; UI rows fade separately.
@@ -1781,6 +1782,7 @@ mod tests {
         let now = Instant::now();
         InputEvent {
             action,
+            input_slot: 0,
             pressed,
             source,
             timestamp: now,

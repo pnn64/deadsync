@@ -4,8 +4,8 @@ use deadsync::engine::present::{actors::Actor, compose};
 use deadsync::test_support::{
     compose_case, compose_scenarios, density_graph_bench, density_graph_life_bench, gameplay_bench,
     gameplay_stats_bench, gameplay_stats_double_bench, gameplay_stats_versus_bench,
-    gs_scorebox_bench, heart_bg_bench, init_bench, menu_bench, music_wheel_bench, notefield_bench,
-    options_bench, pane_stats_bench, player_options_bench,
+    gs_scorebox_bench, init_bench, menu_bench, music_wheel_bench, notefield_bench, options_bench,
+    pane_stats_bench, player_options_bench, visual_style_bg_bench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -424,8 +424,8 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     || fixture.build(),
                 )
             }
-            heart_bg_bench::SCENARIO_NAME => {
-                let fixture = heart_bg_bench::fixture();
+            visual_style_bg_bench::SCENARIO_NAME => {
+                let fixture = visual_style_bg_bench::fixture();
                 benchmark_actor_builder(
                     scenario.name,
                     scenario.clear_color,
@@ -522,7 +522,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     || fixture.build(args.cache_mode.retains_actor_data()),
                 )
             }
-            _ => Err("actors phase currently only supports --scenario music-wheel, density-graph, density-graph-life, gameplay, gameplay-stats, gameplay-stats-double, gameplay-stats-versus, gs-scorebox, heart-bg, init, menu, notefield, options, pane-stats, or player-options".into()),
+            _ => Err("actors phase currently only supports --scenario music-wheel, density-graph, density-graph-life, gameplay, gameplay-stats, gameplay-stats-double, gameplay-stats-versus, gs-scorebox, visual-style-bg, init, menu, notefield, options, pane-stats, or player-options".into()),
         },
         Phase::Compose => benchmark_compose(
             scenario.name,
@@ -576,7 +576,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
 fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Error>> {
     if matches!(args.phase, Phase::Actors) {
         return Err(
-            "actors phase does not support --case; use --scenario music-wheel, density-graph, density-graph-life, gameplay, gameplay-stats, gs-scorebox, heart-bg, init, menu, notefield, options, or pane-stats".into(),
+            "actors phase does not support --case; use --scenario music-wheel, density-graph, density-graph-life, gameplay, gameplay-stats, gs-scorebox, visual-style-bg, init, menu, notefield, options, or pane-stats".into(),
         );
     }
     let case = compose_case::read_case(Path::new(case_path))?;
@@ -1413,6 +1413,6 @@ fn next_value(
 
 fn print_help() {
     println!(
-        "compose_bench [--scenario all|hud|text|text-ci|resolve-ci|mask|perf-text-plain|perf-text-clip-inside|perf-text-clip-partial|perf-text-attr|perf-shadow-text|perf-sort-z|perf-texture-lookup|heart-bg|init|menu|music-wheel|gameplay|gameplay-stats|gs-scorebox] [--case PATH] [--phase actors|compose|resolve|compose-resolve] [--iters N] [--warmup N] [--cache fresh|retained|scratch] [--write-case PATH] [--write-actors-output PATH] [--write-output PATH] [--write-resolved-output PATH]"
+        "compose_bench [--scenario all|hud|text|text-ci|resolve-ci|mask|perf-text-plain|perf-text-clip-inside|perf-text-clip-partial|perf-text-attr|perf-shadow-text|perf-sort-z|perf-texture-lookup|visual-style-bg|init|menu|music-wheel|gameplay|gameplay-stats|gs-scorebox] [--case PATH] [--phase actors|compose|resolve|compose-resolve] [--iters N] [--warmup N] [--cache fresh|retained|scratch] [--write-case PATH] [--write-actors-output PATH] [--write-output PATH] [--write-resolved-output PATH]"
     );
 }

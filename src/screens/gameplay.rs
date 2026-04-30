@@ -9096,7 +9096,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_overlay_wraps_runtime_actors_with_shadow() {
+    fn song_lua_overlay_applies_runtime_actor_shadow() {
         let quad = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::Quad,
             name: None,
@@ -9126,15 +9126,17 @@ mod tests {
         .expect("shadowed quad should render");
 
         match quad_actor {
-            Actor::Shadow { len, color, child } => {
-                assert_eq!(len, [3.0, -4.0]);
-                assert_eq!(color, [0.1, 0.2, 0.3, 0.4]);
-                match *child {
-                    Actor::Sprite { z, .. } => assert_eq!(z, 787),
-                    other => panic!("expected shadowed quad sprite child, got {other:?}"),
-                }
+            Actor::Sprite {
+                z,
+                shadow_len,
+                shadow_color,
+                ..
+            } => {
+                assert_eq!(z, 787);
+                assert_eq!(shadow_len, [3.0, -4.0]);
+                assert_eq!(shadow_color, [0.1, 0.2, 0.3, 0.4]);
             }
-            other => panic!("expected shadow wrapper, got {other:?}"),
+            other => panic!("expected shadowed quad sprite, got {other:?}"),
         }
     }
 

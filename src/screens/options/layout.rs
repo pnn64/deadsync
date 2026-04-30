@@ -28,6 +28,8 @@ pub(super) struct SubmenuRowLayout {
     pub(super) x_positions: Arc<[f32]>,
     pub(super) centers: Arc<[f32]>,
     pub(super) text_h: f32,
+    pub(super) value_zoom: f32,
+    pub(super) inline_spacing: f32,
     pub(super) inline_row: bool,
 }
 
@@ -253,7 +255,17 @@ pub(super) fn build_submenu_row_layout(
     if choice_texts.is_empty() {
         return None;
     }
-    let value_zoom = 0.835_f32;
+    let is_visual_style = row.id == SubRowId::VisualStyle;
+    let value_zoom = if is_visual_style {
+        VISUAL_STYLE_VALUE_ZOOM
+    } else {
+        SUBMENU_VALUE_ZOOM
+    };
+    let inline_spacing = if is_visual_style {
+        VISUAL_STYLE_INLINE_SPACING
+    } else {
+        INLINE_SPACING
+    };
     let texts: Vec<Arc<str>> = choice_texts
         .iter()
         .map(|text| Arc::<str>::from(text.as_ref()))
@@ -281,7 +293,7 @@ pub(super) fn build_submenu_row_layout(
                 .map(|text| (text.chars().count().max(1) as f32) * 8.0 * value_zoom),
         );
     }
-    let inline_row = row.inline && submenu_inline_widths_fit(&widths);
+    let inline_row = row.inline && submenu_inline_widths_fit(&widths, inline_spacing);
     let mut x_positions: Vec<f32> = Vec::new();
     let mut centers: Vec<f32> = Vec::new();
     if inline_row {
@@ -291,7 +303,7 @@ pub(super) fn build_submenu_row_layout(
         for &draw_w in &widths {
             x_positions.push(x);
             centers.push(draw_w.mul_add(0.5, x));
-            x += draw_w + INLINE_SPACING;
+            x += draw_w + inline_spacing;
         }
     }
     Some(SubmenuRowLayout {
@@ -300,6 +312,8 @@ pub(super) fn build_submenu_row_layout(
         x_positions: Arc::from(x_positions),
         centers: Arc::from(centers),
         text_h,
+        value_zoom,
+        inline_spacing,
         inline_row,
     })
 }
