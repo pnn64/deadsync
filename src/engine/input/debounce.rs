@@ -116,6 +116,7 @@ impl DebounceStore {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct DebouncedEdge {
     pub(super) action_mask: u32,
+    pub(super) input_slot: u32,
     pub(super) pressed: bool,
     pub(super) source: InputSource,
     pub(super) timestamp: Instant,
@@ -150,9 +151,15 @@ impl DebounceWindows {
 }
 
 #[inline(always)]
-fn debounced_edge(state: DebounceState, pressed: bool, emitted_at: Instant) -> DebouncedEdge {
+fn debounced_edge(
+    state: DebounceState,
+    input_slot: u32,
+    pressed: bool,
+    emitted_at: Instant,
+) -> DebouncedEdge {
     DebouncedEdge {
         action_mask: state.action_mask,
+        input_slot,
         pressed,
         source: state.source,
         timestamp: state.last_raw_change_time,
@@ -165,6 +172,7 @@ fn debounced_edge(state: DebounceState, pressed: bool, emitted_at: Instant) -> D
 #[inline(always)]
 pub(super) fn debounce_emit_if_due(
     state: &mut DebounceState,
+    input_slot: u32,
     now: Instant,
     windows: DebounceWindows,
 ) -> Option<DebouncedEdge> {
@@ -178,7 +186,7 @@ pub(super) fn debounce_emit_if_due(
     }
     state.last_report_time = now;
     state.held_reported = state.held_raw;
-    Some(debounced_edge(*state, state.held_reported, now))
+    Some(debounced_edge(*state, input_slot, state.held_reported, now))
 }
 
 #[inline(always)]
@@ -190,12 +198,13 @@ pub(super) fn debounce_step(
     timestamp: Instant,
     timestamp_host_nanos: u64,
     now: Instant,
+    input_slot: u32,
     windows: DebounceWindows,
 ) -> DebounceEdges {
     // ITGmania InputFilter parity: flush any now-due delayed edge before storing
     // the new raw state, so a delayed release can still report just ahead of a
     // later repress instead of being silently lost.
-    let first = debounce_emit_if_due(state, now, windows);
+    let first = debounce_emit_if_due(state, input_slot, now, windows);
     if state.held_raw != pressed {
         state.action_mask = action_mask;
         state.source = source;
@@ -204,7 +213,7 @@ pub(super) fn debounce_step(
         state.last_raw_change_host_nanos = timestamp_host_nanos;
         state.last_raw_store_time = now;
     }
-    let second = debounce_emit_if_due(state, now, windows);
+    let second = debounce_emit_if_due(state, input_slot, now, windows);
     DebounceEdges { first, second }
 }
 
@@ -268,6 +277,7 @@ pub(super) fn debounce_input_edge_in_store_mut(
 ) -> DebounceEdges {
     let now = Instant::now();
     states.ensure_slot(slot);
+    let input_slot = slot.min(u32::MAX as usize) as u32;
     let was_empty = states.slots[slot].state.is_none();
     let old_due_at = states.slots[slot].due_at;
 
@@ -291,6 +301,7 @@ pub(super) fn debounce_input_edge_in_store_mut(
             timestamp,
             timestamp_host_nanos,
             now,
+            input_slot,
             windows,
         );
         let prune = should_prune_debounce_state(state, now, windows);
@@ -355,7 +366,8 @@ pub(super) fn emit_due_debounce_edges_from_mut(
                 continue;
             };
             let old_due_at = slot_state.due_at;
-            let edge = debounce_emit_if_due(&mut state, now, windows);
+            let input_slot = next.slot.min(u32::MAX as usize) as u32;
+            let edge = debounce_emit_if_due(&mut state, input_slot, now, windows);
             let remove = should_prune_debounce_state(state, now, windows);
             let new_due_at = if remove {
                 slot_state.state = None;
@@ -384,6 +396,7 @@ mod tests {
     use super::*;
 
     const TEST_MASK: u32 = 1 << 3;
+    const TEST_SLOT: u32 = 7;
 
     fn base_state(now: Instant, window: Duration) -> DebounceState {
         DebounceState {
@@ -410,6 +423,7 @@ mod tests {
     ) {
         let edge = edge.expect("expected debounced edge");
         assert_eq!(edge.action_mask, action_mask);
+        assert_eq!(edge.input_slot, TEST_SLOT);
         assert_eq!(edge.source, source);
         assert_eq!(edge.pressed, pressed);
         assert_eq!(edge.timestamp, timestamp);
@@ -446,6 +460,7 @@ mod tests {
             t0,
             t0_host,
             t0,
+            TEST_SLOT,
             windows,
         );
         assert!(press.first.is_none());
@@ -470,13 +485,19 @@ mod tests {
             release_ts,
             release_host,
             release_ts,
+            TEST_SLOT,
             windows,
         );
         assert!(release.first.is_none());
         assert!(release.second.is_none());
 
         assert_edge(
-            debounce_emit_if_due(&mut state, t0 + Duration::from_millis(21), windows),
+            debounce_emit_if_due(
+                &mut state,
+                TEST_SLOT,
+                t0 + Duration::from_millis(21),
+                windows,
+            ),
             TEST_MASK,
             InputSource::Keyboard,
             false,
@@ -502,6 +523,7 @@ mod tests {
             t0,
             100,
             t0,
+            TEST_SLOT,
             windows,
         );
         assert!(press.first.is_none());
@@ -516,6 +538,7 @@ mod tests {
             release_ts,
             101,
             release_ts,
+            TEST_SLOT,
             windows,
         );
         assert!(release.first.is_none());
@@ -530,13 +553,19 @@ mod tests {
             repress_ts,
             105,
             repress_ts,
+            TEST_SLOT,
             windows,
         );
         assert!(repress.first.is_none());
         assert!(repress.second.is_none());
 
         assert_eq!(
-            debounce_emit_if_due(&mut state, t0 + Duration::from_millis(25), windows),
+            debounce_emit_if_due(
+                &mut state,
+                TEST_SLOT,
+                t0 + Duration::from_millis(25),
+                windows,
+            ),
             None
         );
     }
@@ -556,6 +585,7 @@ mod tests {
             t0,
             100,
             t0,
+            TEST_SLOT,
             windows,
         );
         assert!(press.first.is_none());
@@ -570,6 +600,7 @@ mod tests {
             release_ts,
             101,
             release_ts,
+            TEST_SLOT,
             windows,
         );
         assert!(release.first.is_none());
@@ -584,6 +615,7 @@ mod tests {
             repress_ts,
             130,
             repress_ts,
+            TEST_SLOT,
             windows,
         );
         assert_edge(
@@ -599,7 +631,12 @@ mod tests {
         assert!(repress.second.is_none());
 
         assert_edge(
-            debounce_emit_if_due(&mut state, t0 + Duration::from_millis(50), windows),
+            debounce_emit_if_due(
+                &mut state,
+                TEST_SLOT,
+                t0 + Duration::from_millis(50),
+                windows,
+            ),
             TEST_MASK,
             InputSource::Keyboard,
             true,

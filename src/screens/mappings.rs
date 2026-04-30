@@ -474,6 +474,7 @@ fn mapped_raw_nav_action(key_event: &RawKeyboardEvent) -> Option<VirtualAction> 
 fn input_event_from_raw(action: VirtualAction, key_event: &RawKeyboardEvent) -> InputEvent {
     InputEvent {
         action,
+        input_slot: 0,
         pressed: key_event.pressed,
         source: InputSource::Keyboard,
         timestamp: key_event.timestamp,
@@ -1781,6 +1782,7 @@ mod tests {
         let now = Instant::now();
         InputEvent {
             action,
+            input_slot: 0,
             pressed,
             source,
             timestamp: now,

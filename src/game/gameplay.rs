@@ -120,7 +120,7 @@ use self::holds::{
 #[cfg(test)]
 use self::input::{
     active_hold_counts_as_pressed, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
-    lane_release_finished, update_lane_count,
+    lane_release_finished, update_lane_input_slot,
 };
 pub use self::input::{
     handle_input, queue_input_edge, receptor_glow_visual_for_col, replay_capture_enabled,
@@ -177,6 +177,7 @@ pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
 pub const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
 pub const MAX_COLS: usize = 8;
 pub const MAX_PLAYERS: usize = 2;
+const MAX_ACTIVE_INPUT_SLOTS: usize = 128;
 // Match Simply Love ITG / FA+: repeated negative life events add a 5-hit lock
 // back up to a 10-hit ceiling before life can regenerate again.
 const REGEN_COMBO_AFTER_MISS: u32 = 5;
@@ -3305,6 +3306,19 @@ pub struct ReplayInputEdge {
     pub event_music_time_ns: SongTimeNs,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ActiveInputSlot {
+    source: InputSource,
+    input_slot: u32,
+    lane_mask: u8,
+}
+
+const EMPTY_ACTIVE_INPUT_SLOT: ActiveInputSlot = ActiveInputSlot {
+    source: InputSource::Keyboard,
+    input_slot: 0,
+    lane_mask: 0,
+};
+
 #[derive(Clone, Copy, Debug)]
 pub struct ReplayOffsetSnapshot {
     pub beat0_time_ns: SongTimeNs,
@@ -3646,8 +3660,9 @@ pub struct State {
     offset_adjust_held_since: [Option<Instant>; 2],
     offset_adjust_last_at: [Option<Instant>; 2],
     prev_inputs: [bool; MAX_COLS],
-    keyboard_lane_counts: [u8; MAX_COLS],
-    gamepad_lane_counts: [u8; MAX_COLS],
+    input_slots: [ActiveInputSlot; MAX_ACTIVE_INPUT_SLOTS],
+    input_slot_count: usize,
+    input_lane_counts: [u16; MAX_COLS],
     lane_pressed_since_ns: [Option<SongTimeNs>; MAX_COLS],
     pending_edges: VecDeque<InputEdge>,
     autoplay_rng: TurnRng,
@@ -4889,8 +4904,8 @@ pub fn reset_practice_playback(state: &mut State, judge_start_music_time: f32) {
     state.pending_missed_hold_feedback.fill(false);
     state.pending_missed_hold_indices.clear();
     state.prev_inputs.fill(false);
-    state.keyboard_lane_counts.fill(0);
-    state.gamepad_lane_counts.fill(0);
+    state.input_slot_count = 0;
+    state.input_lane_counts.fill(0);
     state.lane_pressed_since_ns.fill(None);
     state.pending_edges.clear();
     state.replay_edges.clear();
@@ -6185,8 +6200,9 @@ pub fn init(
         offset_adjust_held_since: [None; 2],
         offset_adjust_last_at: [None; 2],
         prev_inputs: [false; MAX_COLS],
-        keyboard_lane_counts: [0; MAX_COLS],
-        gamepad_lane_counts: [0; MAX_COLS],
+        input_slots: [EMPTY_ACTIVE_INPUT_SLOT; MAX_ACTIVE_INPUT_SLOTS],
+        input_slot_count: 0,
+        input_lane_counts: [0; MAX_COLS],
         lane_pressed_since_ns: [None; MAX_COLS],
         pending_edges: VecDeque::with_capacity(pending_edges_capacity),
         autoplay_rng: TurnRng::new(song_seed ^ 0xA17F_0FF5_EED5_1EED),
@@ -8089,9 +8105,9 @@ mod tests {
         single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
         stage_music_cut, step_calories, step_stats_notefield_width,
         suppress_final_bad_rescore_visual, tick_mode_status_line, tick_visual_effects,
-        turn_option_bits, update_lane_count, visible_notefield_time_ns,
+        turn_option_bits, update_lane_input_slot, visible_notefield_time_ns,
     };
-    use crate::engine::input::{InputEvent, InputSource, VirtualAction};
+    use crate::engine::input::{InputEvent, InputSource, Lane, VirtualAction};
     use crate::engine::present::color;
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
     use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
@@ -8400,6 +8416,7 @@ mod tests {
         let now = Instant::now();
         InputEvent {
             action,
+            input_slot: 0,
             pressed,
             source,
             timestamp: now,
@@ -8708,67 +8725,84 @@ mod tests {
 
     #[test]
     fn lane_press_counts_hold_until_last_alias_release() {
-        let mut keyboard = 0u8;
-        let mut gamepad = 0u8;
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
 
         let mut transitions = Vec::new();
-        for (source, pressed) in [
-            (InputSource::Keyboard, true),
-            (InputSource::Keyboard, true),
-            (InputSource::Keyboard, false),
-            (InputSource::Keyboard, false),
-            (InputSource::Gamepad, true),
-            (InputSource::Keyboard, true),
-            (InputSource::Gamepad, false),
-            (InputSource::Keyboard, false),
+        for (source, slot, pressed) in [
+            (InputSource::Keyboard, 10, true),
+            (InputSource::Keyboard, 11, true),
+            (InputSource::Keyboard, 10, false),
+            (InputSource::Keyboard, 11, false),
+            (InputSource::Gamepad, 7, true),
+            (InputSource::Keyboard, 12, true),
+            (InputSource::Gamepad, 7, false),
+            (InputSource::Keyboard, 12, false),
         ] {
-            let was_down = keyboard != 0 || gamepad != 0;
-            match source {
-                InputSource::Keyboard => update_lane_count(&mut keyboard, pressed),
-                InputSource::Gamepad => update_lane_count(&mut gamepad, pressed),
-            }
-            transitions.push((was_down, keyboard != 0 || gamepad != 0));
+            let update = update_lane_input_slot(&mut state, Lane::Left, source, slot, pressed);
+            transitions.push((update.was_down, update.is_down, update.slot_was_down));
         }
 
         assert_eq!(
             transitions,
             vec![
-                (false, true),
-                (true, true),
-                (true, true),
-                (true, false),
-                (false, true),
-                (true, true),
-                (true, true),
-                (true, false),
+                (false, true, false),
+                (true, true, false),
+                (true, true, true),
+                (true, false, true),
+                (false, true, false),
+                (true, true, false),
+                (true, true, true),
+                (true, false, true),
             ]
         );
+        assert_eq!(state.input_slot_count, 0);
+        assert_eq!(state.input_lane_counts[Lane::Left.index()], 0);
     }
 
     #[test]
     fn physical_edges_still_judge_while_lane_is_logically_held() {
-        let mut keyboard = 0u8;
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
 
         let mut tap_edges = Vec::new();
         let mut lift_edges = Vec::new();
         let mut glow_edges = Vec::new();
-        for pressed in [true, true, false, false] {
-            let was_down = keyboard != 0;
-            update_lane_count(&mut keyboard, pressed);
-            let is_down = keyboard != 0;
-            tap_edges.push(lane_edge_judges_tap(pressed));
-            lift_edges.push(lane_edge_judges_lift(pressed, was_down));
+        for (slot, pressed) in [
+            (10, true),
+            (10, true),
+            (11, true),
+            (10, false),
+            (10, false),
+            (11, false),
+        ] {
+            let update = update_lane_input_slot(
+                &mut state,
+                Lane::Left,
+                InputSource::Keyboard,
+                slot,
+                pressed,
+            );
+            tap_edges.push(lane_edge_judges_tap(pressed, update.slot_was_down));
+            lift_edges.push(lane_edge_judges_lift(pressed, update.slot_was_down));
             glow_edges.push((
-                lane_press_started(pressed, was_down, is_down),
-                lane_release_finished(pressed, was_down, is_down),
+                lane_press_started(pressed, update.was_down, update.is_down),
+                lane_release_finished(pressed, update.was_down, update.is_down),
             ));
         }
 
-        assert_eq!(tap_edges, vec![true, true, false, false]);
-        assert_eq!(lift_edges, vec![false, false, true, true]);
+        assert_eq!(tap_edges, vec![true, false, true, false, false, false]);
+        assert_eq!(lift_edges, vec![false, false, false, true, false, true]);
         assert_eq!(
             glow_edges,
-            vec![(true, false), (false, false), (false, false), (false, true)]
+            vec![
+                (true, false),
+                (false, false),
+                (false, false),
+                (false, false),
+                (false, false),
+                (false, true)
+            ]
         );
     }
 

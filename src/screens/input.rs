@@ -327,6 +327,7 @@ mod tests {
     fn input_event(action: VirtualAction, pressed: bool, timestamp: Instant) -> InputEvent {
         InputEvent {
             action,
+            input_slot: 0,
             pressed,
             source: InputSource::Keyboard,
             timestamp,

@@ -1,3 +1,4 @@
+use crate::engine::input::INPUT_SLOT_INVALID;
 use crate::game::note::NoteType;
 
 use super::input::{lane_from_column, push_input_edge};
@@ -152,6 +153,7 @@ pub(super) fn run_replay(state: &mut State) {
             state,
             edge.source,
             lane,
+            INPUT_SLOT_INVALID,
             edge.pressed,
             edge.event_music_time_ns,
             false,
