@@ -4753,6 +4753,9 @@ mod tests {
                 y: 240.0,
                 size: Some([100.0, 50.0]),
                 zoom: 0.5,
+                zoom_x: 0.5,
+                zoom_y: 0.5,
+                zoom_z: 0.5,
                 ..SongLuaOverlayState::default()
             },
             None,
