@@ -5,7 +5,7 @@ use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 
-pub fn build(top_title: &str) -> [Actor; 2] {
+pub fn build(top_title: &str, stage_number: Option<usize>) -> [Actor; 2] {
     let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
     let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
     let p1_avatar = p1_profile
@@ -25,6 +25,8 @@ pub fn build(top_title: &str) -> [Actor; 2] {
     let insert_card = tr("Common", "InsertCard");
     let press_start = tr("Common", "PressStart");
     let event_mode = tr("Common", "EventMode");
+
+    let stage_text = stage_number.map(|n| format!("Stage {n}"));
 
     let (footer_left, left_avatar) = if p1_joined {
         (
@@ -60,7 +62,7 @@ pub fn build(top_title: &str) -> [Actor; 2] {
             fg_color: [1.0; 4],
             left_text: None,
             center_text: None,
-            right_text: None,
+            right_text: stage_text.as_deref(),
             left_avatar: None,
             right_avatar: None,
         }),
