@@ -1,4 +1,5 @@
 use super::*;
+use crate::assets::{FontRole, current_machine_font_key};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpeedModType {
@@ -125,10 +126,27 @@ pub(super) fn tilt_intensity_choices() -> Vec<String> {
     out
 }
 
-pub(super) fn tilt_cutoff_choices() -> Vec<String> {
-    (TILT_CUTOFF_MIN..=TILT_CUTOFF_MAX)
-        .map(|i| format!("{} ms", i))
-        .collect()
+#[inline(always)]
+pub(super) fn fmt_tilt_threshold_ms(ms: u32) -> String {
+    format!("{ms}ms")
+}
+
+pub(super) fn tilt_threshold_choices() -> Vec<String> {
+    let mut out = Vec::with_capacity((TILT_THRESHOLD_MAX_MS - TILT_THRESHOLD_MIN_MS + 1) as usize);
+    for ms in TILT_THRESHOLD_MIN_MS..=TILT_THRESHOLD_MAX_MS {
+        out.push(fmt_tilt_threshold_ms(ms));
+    }
+    out
+}
+
+pub(super) fn parse_tilt_threshold_ms(choice: &str) -> Option<u32> {
+    choice
+        .trim()
+        .trim_end_matches("ms")
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .map(crate::game::profile::clamp_tilt_threshold_ms)
 }
 
 pub(super) fn custom_fantastic_window_choices() -> Vec<String> {
@@ -308,7 +326,7 @@ pub(super) fn speed_mod_helper_scaled_text(
 pub(super) fn measure_wendy_text_width(asset_manager: &AssetManager, text: &str) -> f32 {
     let mut out_w = 1.0_f32;
     asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font("wendy", |metrics_font| {
+        asset_manager.with_font(current_machine_font_key(FontRole::Header), |metrics_font| {
             let w = crate::engine::present::font::measure_line_width_logical(
                 metrics_font,
                 text,

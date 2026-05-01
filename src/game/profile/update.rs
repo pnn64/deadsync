@@ -2,9 +2,12 @@ use super::{
     AccelEffectsMask, AppearanceEffectsMask, AttackMode, BackgroundFilter, ComboColors, ComboFont,
     ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
     HideLightType, HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType,
-    MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorScoreType, NoteSkin, Perspective,
-    PlayStyle, PlayerSide, RemoveMask, ScrollOption, ScrollSpeedSetting, TargetScoreSetting,
-    TimingWindowsOption, TurnOption, VisualEffectsMask, clamp_custom_fantastic_window_ms,
+    MINI_PERCENT_MAX, MINI_PERCENT_MIN, MeasureCounter, MeasureLines, MiniIndicator,
+    MiniIndicatorScoreType, NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN,
+    NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoteSkin, Perspective, PlayStyle, PlayerSide,
+    RemoveMask, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN, ScrollOption, ScrollSpeedSetting,
+    TargetScoreSetting, TimingWindowsOption, TurnOption, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN,
+    VisualEffectsMask, clamp_custom_fantastic_window_ms, clamp_tilt_threshold_ms,
     error_bar_style_from_mask, error_bar_text_from_mask, lock_profiles, sanitize_player_initials,
     save_profile_ini_for_side, save_profile_stats_for_side, session_side_is_guest, side_ix,
 };
@@ -520,7 +523,7 @@ pub fn update_tap_explosion_noteskin_for_side(side: PlayerSide, setting: Option<
 }
 
 pub fn update_notefield_offset_x_for_side(side: PlayerSide, offset: i32) {
-    let clamped = offset.clamp(0, 50);
+    let clamped = offset.clamp(NOTE_FIELD_OFFSET_X_MIN, NOTE_FIELD_OFFSET_X_MAX);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -533,7 +536,7 @@ pub fn update_notefield_offset_x_for_side(side: PlayerSide, offset: i32) {
 }
 
 pub fn update_notefield_offset_y_for_side(side: PlayerSide, offset: i32) {
-    let clamped = offset.clamp(-50, 50);
+    let clamped = offset.clamp(NOTE_FIELD_OFFSET_Y_MIN, NOTE_FIELD_OFFSET_Y_MAX);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -625,7 +628,7 @@ pub fn update_error_bar_offset_y_for_side(side: PlayerSide, offset: i32) {
 
 pub fn update_mini_percent_for_side(side: PlayerSide, percent: i32) {
     // Mirror Simply Love's range: -100% to +150%.
-    let clamped = percent.clamp(-100, 150);
+    let clamped = percent.clamp(MINI_PERCENT_MIN, MINI_PERCENT_MAX);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -633,6 +636,20 @@ pub fn update_mini_percent_for_side(side: PlayerSide, percent: i32) {
             return;
         }
         profile.mini_percent = clamped;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_spacing_percent_for_side(side: PlayerSide, percent: i32) {
+    // Mirror zmod's range: -100% to +100%, step 1.
+    let clamped = percent.clamp(SPACING_PERCENT_MIN, SPACING_PERCENT_MAX);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.spacing_percent == clamped {
+            return;
+        }
+        profile.spacing_percent = clamped;
     }
     save_profile_ini_for_side(side);
 }
@@ -651,7 +668,7 @@ pub fn update_perspective_for_side(side: PlayerSide, perspective: Perspective) {
 
 pub fn update_visual_delay_ms_for_side(side: PlayerSide, ms: i32) {
     // Mirror Simply Love's range: -100ms to +100ms.
-    let clamped = ms.clamp(-100, 100);
+    let clamped = ms.clamp(VISUAL_DELAY_MS_MIN, VISUAL_DELAY_MS_MAX);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -665,7 +682,7 @@ pub fn update_visual_delay_ms_for_side(side: PlayerSide, ms: i32) {
 
 pub fn update_global_offset_shift_ms_for_side(side: PlayerSide, ms: i32) {
     // Keep the personal timing shift in the same small-calibration range as visual delay.
-    let clamped = ms.clamp(-100, 100);
+    let clamped = ms.clamp(VISUAL_DELAY_MS_MIN, VISUAL_DELAY_MS_MAX);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -745,6 +762,18 @@ pub fn update_track_early_judgments_for_side(side: PlayerSide, enabled: bool) {
             return;
         }
         profile.track_early_judgments = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_scale_scatterplot_for_side(side: PlayerSide, enabled: bool) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.scale_scatterplot == enabled {
+            return;
+        }
+        profile.scale_scatterplot = enabled;
     }
     save_profile_ini_for_side(side);
 }
@@ -897,18 +926,18 @@ pub fn update_tilt_multiplier_for_side(side: PlayerSide, multiplier: f32) {
     save_profile_ini_for_side(side);
 }
 
-pub fn update_tilt_cutoff_for_side(side: PlayerSide, cutoff_ms: u32) {
+pub fn update_tilt_thresholds_for_side(side: PlayerSide, min_ms: u32, max_ms: u32) {
+    let min_ms = clamp_tilt_threshold_ms(min_ms);
+    let max_ms = clamp_tilt_threshold_ms(max_ms).max(min_ms);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
-
-        if profile.tilt_cutoff_ms == cutoff_ms {
+        if profile.tilt_min_threshold_ms == min_ms && profile.tilt_max_threshold_ms == max_ms {
             return;
         }
-
-        profile.tilt_cutoff_ms = cutoff_ms;
+        profile.tilt_min_threshold_ms = min_ms;
+        profile.tilt_max_threshold_ms = max_ms;
     }
-
     save_profile_ini_for_side(side);
 }
 

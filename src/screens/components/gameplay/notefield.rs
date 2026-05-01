@@ -18,8 +18,9 @@ use crate::game::gameplay::{
     effective_accel_effects_for_player, effective_appearance_effects_for_player,
     effective_mini_percent_for_player, effective_perspective_effects_for_player,
     effective_scroll_effects_for_player, effective_scroll_speed_for_player,
-    effective_visibility_effects_for_player, effective_visual_effects_for_player,
-    receptor_glow_visual_for_col, row_hides_completed_note, scroll_receptor_y,
+    effective_spacing_multiplier_for_player, effective_visibility_effects_for_player,
+    effective_visual_effects_for_player, receptor_glow_visual_for_col, row_hides_completed_note,
+    scroll_receptor_y,
 };
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldResult, MineResult, NoteType};
@@ -30,6 +31,7 @@ use crate::game::{
     gameplay::{ActiveHold, LaneIndexRun, PlayerRuntime, SongTimeNs, State},
     profile, scores,
     scroll::ScrollSpeedSetting,
+    timing::{TimeSignatureSegment, beat_to_note_row, default_time_signature, note_row_to_beat},
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
@@ -100,6 +102,27 @@ const RUN_TIMER_PREWARM_CAP_S: i32 = 600;
 // Visual Feedback
 const SHOW_COMBO_AT: u32 = 4; // From Simply Love metrics
 
+#[inline(always)]
+fn judgment_tilt_rotation_deg(profile: &profile::Profile, judgment: &Judgment) -> f32 {
+    if !profile.judgment_tilt || judgment.grade == JudgeGrade::Miss {
+        return 0.0;
+    }
+    let offset_ms = judgment.time_error_ms;
+    if !offset_ms.is_finite() || !profile.tilt_multiplier.is_finite() {
+        return 0.0;
+    }
+    let min_ms = profile.tilt_min_threshold_ms as f32;
+    let max_ms = profile
+        .tilt_max_threshold_ms
+        .max(profile.tilt_min_threshold_ms) as f32;
+    let active_ms = offset_ms.abs().min(max_ms) - min_ms;
+    if active_ms <= 0.0 {
+        return 0.0;
+    }
+    let dir = if offset_ms < 0.0 { 1.0 } else { -1.0 };
+    dir * active_ms * 0.3 * profile.tilt_multiplier
+}
+
 // Z-order layers for key gameplay visuals (higher draws on top)
 const Z_RECEPTOR: i32 = 100;
 const Z_HOLD_BODY: i32 = 110;
@@ -158,6 +181,304 @@ const BEAT_OFFSET_HEIGHT: f32 = 15.0;
 const BEAT_PI_HEIGHT: f32 = 2.0;
 const CENTER_LINE_Y: f32 = 160.0;
 const FADE_DIST_Y: f32 = 40.0;
+
+#[derive(Clone, Copy)]
+struct EditBeatBarInfo {
+    frame: u32,
+    measure_index: Option<i64>,
+}
+
+fn append_edit_measure_number(
+    actors: &mut Vec<Actor>,
+    edit_beat_bars: bool,
+    measure_index: Option<i64>,
+    x: f32,
+    y: f32,
+    field_zoom: f32,
+) {
+    let Some(measure) = measure_index else {
+        return;
+    };
+    if !edit_beat_bars || measure < 0 {
+        return;
+    }
+    actors.push(act!(text:
+        font("miso"):
+        settext(measure.to_string()):
+        align(1.0, 0.5):
+        horizalign(right):
+        xy(x, y):
+        zoom((field_zoom * 0.9).clamp(0.35, 0.75)):
+        shadowlength(2.0):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(Z_MEASURE_LINES + 1)
+    ));
+}
+
+fn append_beat_bar(
+    actors: &mut Vec<Actor>,
+    edit_beat_bars: bool,
+    edit_bar_frame: u32,
+    x_center: f32,
+    y: f32,
+    width: f32,
+    field_zoom: f32,
+    thickness: f32,
+    alpha: f32,
+) {
+    if edit_beat_bars {
+        append_edit_beat_bar(
+            actors,
+            edit_bar_frame,
+            x_center,
+            y,
+            width,
+            field_zoom,
+            thickness,
+            alpha,
+        );
+    } else {
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy(x_center, y):
+            zoomto(width, thickness):
+            diffuse(1.0, 1.0, 1.0, alpha):
+            z(Z_MEASURE_LINES)
+        ));
+    }
+}
+
+fn append_edit_beat_bar(
+    actors: &mut Vec<Actor>,
+    frame: u32,
+    x_center: f32,
+    y: f32,
+    width: f32,
+    field_zoom: f32,
+    thickness: f32,
+    alpha: f32,
+) {
+    match frame {
+        0 | 1 => append_edit_bar_segment(actors, x_center, y, width, thickness, alpha),
+        2 => append_dashed_edit_bar(
+            actors,
+            x_center,
+            y,
+            width,
+            thickness,
+            12.0 * field_zoom,
+            8.0 * field_zoom,
+            alpha,
+        ),
+        _ => append_dashed_edit_bar(
+            actors,
+            x_center,
+            y,
+            width,
+            thickness,
+            4.0 * field_zoom,
+            6.0 * field_zoom,
+            alpha,
+        ),
+    }
+}
+
+fn append_edit_bar_segment(
+    actors: &mut Vec<Actor>,
+    x_center: f32,
+    y: f32,
+    width: f32,
+    thickness: f32,
+    alpha: f32,
+) {
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(x_center, y):
+        zoomto(width, thickness):
+        diffuse(1.0, 1.0, 1.0, alpha):
+        z(Z_MEASURE_LINES)
+    ));
+}
+
+fn append_dashed_edit_bar(
+    actors: &mut Vec<Actor>,
+    x_center: f32,
+    y: f32,
+    width: f32,
+    thickness: f32,
+    dash: f32,
+    gap: f32,
+    alpha: f32,
+) {
+    let dash = dash.max(1.0);
+    let step = (dash + gap).max(dash + 1.0);
+    let left = x_center - width * 0.5;
+    let right = x_center + width * 0.5;
+    let mut x = left;
+    while x < right {
+        let seg_w = dash.min(right - x);
+        actors.push(act!(quad:
+            align(0.0, 0.5):
+            xy(x, y):
+            zoomto(seg_w, thickness):
+            diffuse(1.0, 1.0, 1.0, alpha):
+            z(Z_MEASURE_LINES)
+        ));
+        x += step;
+    }
+}
+
+fn valid_edit_time_signature(sig: TimeSignatureSegment) -> TimeSignatureSegment {
+    if sig.numerator > 0 && sig.denominator > 0 {
+        sig
+    } else {
+        default_time_signature()
+    }
+}
+
+fn edit_time_signature_at(segments: &[TimeSignatureSegment], index: usize) -> TimeSignatureSegment {
+    if segments.is_empty() {
+        default_time_signature()
+    } else {
+        valid_edit_time_signature(segments[index])
+    }
+}
+
+fn edit_time_signature_count(segments: &[TimeSignatureSegment]) -> usize {
+    segments.len().max(1)
+}
+
+fn edit_bar_step_rows(sig: TimeSignatureSegment) -> i32 {
+    (beat_to_note_row(sig.denominator as f32 / 4.0) / 4).max(1)
+}
+
+fn edit_measure_frequency(sig: TimeSignatureSegment) -> i32 {
+    sig.numerator.saturating_mul(4).max(1)
+}
+
+fn edit_measure_bars_in_segment(start_row: i32, end_row: i32, sig: TimeSignatureSegment) -> i64 {
+    if end_row <= start_row {
+        return 0;
+    }
+    let step = i64::from(edit_bar_step_rows(sig));
+    let freq = i64::from(edit_measure_frequency(sig));
+    let bars = (i64::from(end_row) - i64::from(start_row) - 1) / step + 1;
+    (bars - 1) / freq + 1
+}
+
+fn edit_measure_index_before_segment(
+    segments: &[TimeSignatureSegment],
+    segment_index: usize,
+) -> i64 {
+    let mut measure_index = 0;
+    for i in 0..segment_index {
+        let sig = edit_time_signature_at(segments, i);
+        let next_sig = edit_time_signature_at(segments, i + 1);
+        measure_index += edit_measure_bars_in_segment(
+            beat_to_note_row(sig.beat),
+            beat_to_note_row(next_sig.beat),
+            sig,
+        );
+    }
+    measure_index
+}
+
+fn edit_time_signature_index_at_row(segments: &[TimeSignatureSegment], row: i32) -> usize {
+    if segments.is_empty() {
+        return 0;
+    }
+
+    let mut index = 0;
+    for (i, sig) in segments.iter().enumerate() {
+        if beat_to_note_row(sig.beat) <= row {
+            index = i;
+        } else {
+            break;
+        }
+    }
+    index
+}
+
+fn edit_beat_bar_info_for_row(
+    row: i32,
+    segments: &[TimeSignatureSegment],
+) -> Option<EditBeatBarInfo> {
+    if row < 0 {
+        return None;
+    }
+
+    let segment_index = edit_time_signature_index_at_row(segments, row);
+    let sig = edit_time_signature_at(segments, segment_index);
+    let segment_start_row = beat_to_note_row(sig.beat);
+    if row < segment_start_row {
+        return None;
+    }
+
+    let step_rows = edit_bar_step_rows(sig);
+    let local_rows = row - segment_start_row;
+    if local_rows % step_rows != 0 {
+        return None;
+    }
+
+    let bars_drawn = local_rows / step_rows;
+    let measure_frequency = edit_measure_frequency(sig);
+    let is_measure = bars_drawn % measure_frequency == 0;
+    let frame = if is_measure {
+        0
+    } else if bars_drawn % 4 == 0 {
+        1
+    } else if bars_drawn % 2 == 0 {
+        2
+    } else {
+        3
+    };
+    let measure_index = is_measure.then(|| {
+        edit_measure_index_before_segment(segments, segment_index)
+            + i64::from(bars_drawn / measure_frequency)
+    });
+
+    Some(EditBeatBarInfo {
+        frame,
+        measure_index,
+    })
+}
+
+fn edit_bar_gcd(a: i32, b: i32) -> i32 {
+    let mut a = i64::from(a).abs();
+    let mut b = i64::from(b).abs();
+    while b != 0 {
+        let next = a % b;
+        a = b;
+        b = next;
+    }
+    a.clamp(1, i64::from(i32::MAX)) as i32
+}
+
+fn edit_bar_candidate_step_rows(segments: &[TimeSignatureSegment]) -> i32 {
+    let mut step = edit_bar_step_rows(edit_time_signature_at(segments, 0));
+    for i in 0..edit_time_signature_count(segments) {
+        let sig = edit_time_signature_at(segments, i);
+        step = edit_bar_gcd(step, edit_bar_step_rows(sig));
+        step = edit_bar_gcd(step, beat_to_note_row(sig.beat));
+    }
+    step.max(1)
+}
+
+fn edit_bar_scroll_speed(
+    scroll_speed: ScrollSpeedSetting,
+    reference_bpm: f32,
+    music_rate: f32,
+) -> f32 {
+    match scroll_speed {
+        ScrollSpeedSetting::XMod(multiplier) => multiplier,
+        ScrollSpeedSetting::MMod(_) => scroll_speed.beat_multiplier(reference_bpm, music_rate),
+        ScrollSpeedSetting::CMod(_) => 4.0,
+    }
+    .max(0.0)
+}
+
+fn scaled_edit_bar_alpha(scroll_speed: f32, visible_at: f32, full_at: f32) -> f32 {
+    ((scroll_speed - visible_at) / (full_at - visible_at)).clamp(0.0, 1.0)
+}
 
 #[derive(Clone, Copy, Debug, Default)]
 struct TornadoBounds {
@@ -220,6 +541,7 @@ struct GameplayModsTextKey {
     turn_bits: u16,
     attack_mode: u8,
     mini_percent: i16,
+    spacing_percent: i16,
     visual_delay_ms: i16,
     accel: [i16; 5],
     visual: [i16; 9],
@@ -379,6 +701,13 @@ fn append_mod_part(parts: &mut Vec<String>, percent: i16, name: &str) {
 fn append_mini_part(parts: &mut Vec<String>, mini_percent: i16) {
     if mini_percent != 0 {
         parts.push(format!("{mini_percent}% Mini"));
+    }
+}
+
+#[inline(always)]
+fn append_spacing_part(parts: &mut Vec<String>, spacing_percent: i16) {
+    if spacing_percent != 0 {
+        parts.push(format!("{spacing_percent}% Spacing"));
     }
 }
 
@@ -579,6 +908,9 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
         turn_bits: turn_option_bits(profile.turn_option) | chart_attack.turn_bits,
         attack_mode: profile.attack_mode as u8,
         mini_percent: clamp_rounded_i16(display_mini),
+        spacing_percent: profile
+            .spacing_percent
+            .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
         visual_delay_ms: profile
             .visual_delay_ms
             .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
@@ -626,6 +958,17 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
 pub enum FieldPlacement {
     P1,
     P2,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ViewOverride {
+    pub field_zoom: Option<f32>,
+    pub scroll_speed: Option<ScrollSpeedSetting>,
+    pub force_center_1player: bool,
+    pub center_receptors_y: bool,
+    pub receptor_y: Option<f32>,
+    pub edit_beat_bars: bool,
+    pub hide_display_mods: bool,
 }
 
 pub struct BuiltNotefield {
@@ -1416,6 +1759,7 @@ pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
             append_mod_part(&mut parts, percent, name);
         }
         append_mini_part(&mut parts, key.mini_percent);
+        append_spacing_part(&mut parts, key.spacing_percent);
         for (percent, name) in
             key.appearance
                 .into_iter()
@@ -2936,6 +3280,26 @@ pub fn build_bundles(
     center_1player_notefield: bool,
     capture_requests: ProxyCaptureRequests,
 ) -> BuiltNotefield {
+    build_bundles_with_view(
+        state,
+        profile,
+        placement,
+        play_style,
+        center_1player_notefield,
+        capture_requests,
+        ViewOverride::default(),
+    )
+}
+
+pub fn build_bundles_with_view(
+    state: &State,
+    profile: &profile::Profile,
+    placement: FieldPlacement,
+    play_style: profile::PlayStyle,
+    center_1player_notefield: bool,
+    capture_requests: ProxyCaptureRequests,
+    view: ViewOverride,
+) -> BuiltNotefield {
     let hold_judgment_texture = resolved_hold_judgment_texture(profile);
 
     // --- Playfield Positioning (1:1 with Simply Love) ---
@@ -2953,11 +3317,14 @@ pub fn build_bundles(
         return BuiltNotefield::empty(screen_center_x());
     }
     // Use the cached field_zoom from gameplay state so visual layout and
-    // scroll math share the exact same scaling as gameplay.
-    let field_zoom = state.field_zoom[player_idx];
+    // scroll math share the exact same scaling as gameplay. Practice edit
+    // mode overrides this to match ScreenEdit's half-scale edit field.
+    let field_zoom = view.field_zoom.unwrap_or(state.field_zoom[player_idx]);
     let draw_distance_before_targets = state.draw_distance_before_targets[player_idx];
     let draw_distance_after_targets = state.draw_distance_after_targets[player_idx];
-    let scroll_speed = effective_scroll_speed_for_player(state, player_idx);
+    let scroll_speed = view
+        .scroll_speed
+        .unwrap_or_else(|| effective_scroll_speed_for_player(state, player_idx));
     let col_start = player_idx * state.cols_per_player;
     let col_end = (col_start + state.cols_per_player)
         .min(state.num_cols)
@@ -2973,11 +3340,15 @@ pub fn build_bundles(
         }
         mask
     };
-    let measure_line_extra = match profile.measure_lines {
-        crate::game::profile::MeasureLines::Off => 0,
-        crate::game::profile::MeasureLines::Measure => 18,
-        crate::game::profile::MeasureLines::Quarter => 30,
-        crate::game::profile::MeasureLines::Eighth => 42,
+    let measure_line_extra = if view.edit_beat_bars {
+        72
+    } else {
+        match profile.measure_lines {
+            crate::game::profile::MeasureLines::Off => 0,
+            crate::game::profile::MeasureLines::Measure => 18,
+            crate::game::profile::MeasureLines::Quarter => 30,
+            crate::game::profile::MeasureLines::Eighth => 42,
+        }
     };
     let actor_cap = (num_cols * 10).max(28)
         + measure_line_extra
@@ -3051,13 +3422,29 @@ pub fn build_bundles(
     } else {
         playfield_center_x
     };
-    let receptor_y_normal = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + notefield_offset_y;
-    let receptor_y_reverse =
-        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE + notefield_offset_y;
+    let receptor_y_override = view.receptor_y.map(|y| y + notefield_offset_y);
+    let receptor_y_normal = if let Some(y) = receptor_y_override {
+        y
+    } else if view.center_receptors_y {
+        screen_center_y() + notefield_offset_y
+    } else {
+        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + notefield_offset_y
+    };
+    let receptor_y_reverse = if let Some(y) = receptor_y_override {
+        y
+    } else if view.center_receptors_y {
+        screen_center_y() + notefield_offset_y
+    } else {
+        screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE + notefield_offset_y
+    };
     let scroll = effective_scroll_effects_for_player(state, player_idx);
     let perspective = effective_perspective_effects_for_player(state, player_idx);
-    let centered_percent = scroll.centered.clamp(0.0, 1.0);
-    let receptor_y_centered = screen_center_y() + notefield_offset_y;
+    let centered_percent = if view.receptor_y.is_some() || view.center_receptors_y {
+        1.0
+    } else {
+        scroll.centered.clamp(0.0, 1.0)
+    };
+    let receptor_y_centered = receptor_y_override.unwrap_or(screen_center_y() + notefield_offset_y);
     let column_reverse_percent: [f32; MAX_COLS] = from_fn(|i| {
         if i >= num_cols {
             return 0.0;
@@ -3076,7 +3463,7 @@ pub fn build_bundles(
         }
         scroll_receptor_y(
             column_reverse_percent[i],
-            scroll.centered,
+            centered_percent,
             receptor_y_normal,
             receptor_y_reverse,
             receptor_y_centered,
@@ -3090,6 +3477,7 @@ pub fn build_bundles(
     let visibility = effective_visibility_effects_for_player(state, player_idx);
     let mini_percent = effective_mini_percent_for_player(state, player_idx);
     let mini = effective_mini_value(profile, visual, mini_percent);
+    let spacing_mult = effective_spacing_multiplier_for_player(state, player_idx);
     let reverse_scroll = state.reverse_scroll[player_idx];
     let hud_reverse = column_reverse_percent[0] >= 0.999_9;
     let judgment_y_base = hud_y(
@@ -3195,7 +3583,7 @@ pub fn build_bundles(
         let beat_push = beat_factor(current_beat);
         let mut col_offsets = [0.0_f32; MAX_COLS];
         for (i, col_offset) in col_offsets.iter_mut().take(num_cols).enumerate() {
-            *col_offset = ns.column_xs[i] as f32 * field_zoom;
+            *col_offset = ns.column_xs[i] as f32 * spacing_mult * field_zoom;
         }
         let mut invert_distances = [0.0_f32; MAX_COLS];
         compute_invert_distances(&col_offsets[..num_cols], &mut invert_distances[..num_cols]);
@@ -3389,17 +3777,39 @@ pub fn build_bundles(
                 };
                 lane_y_from_travel(local_col, receptor_y_lane, dir, travel_offset)
             };
-        // Measure Lines (Zmod parity: NoteField:SetBeatBarsAlpha)
-        if !matches!(
-            profile.measure_lines,
-            crate::game::profile::MeasureLines::Off
-        ) {
-            let (alpha_measure, alpha_quarter, alpha_eighth) = match profile.measure_lines {
-                crate::game::profile::MeasureLines::Off => (0.0, 0.0, 0.0),
-                crate::game::profile::MeasureLines::Measure => (0.75, 0.0, 0.0),
-                crate::game::profile::MeasureLines::Quarter => (0.75, 0.5, 0.0),
-                crate::game::profile::MeasureLines::Eighth => (0.75, 0.5, 0.125),
-            };
+        // Measure Lines (Zmod parity: NoteField:SetBeatBarsAlpha).
+        // ScreenEdit/Practice always draws editor beat bars at 16th-note spacing.
+        let show_measure_lines = view.edit_beat_bars
+            || !matches!(
+                profile.measure_lines,
+                crate::game::profile::MeasureLines::Off
+            );
+        if show_measure_lines {
+            let edit_bar_speed =
+                edit_bar_scroll_speed(scroll_speed, state.scroll_reference_bpm, state.music_rate);
+            let time_signatures = state
+                .gameplay_charts
+                .get(player_idx)
+                .map(|chart| chart.timing_segments.time_signatures.as_slice())
+                .unwrap_or(&[]);
+            let edit_candidate_step_rows = edit_bar_candidate_step_rows(time_signatures);
+            let (alpha_measure, alpha_quarter, alpha_eighth, alpha_sixteenth, line_step) =
+                if view.edit_beat_bars {
+                    (
+                        1.0,
+                        1.0,
+                        scaled_edit_bar_alpha(edit_bar_speed, 1.0, 2.0),
+                        scaled_edit_bar_alpha(edit_bar_speed, 2.0, 4.0),
+                        note_row_to_beat(edit_candidate_step_rows),
+                    )
+                } else {
+                    match profile.measure_lines {
+                        crate::game::profile::MeasureLines::Off => (0.0, 0.0, 0.0, 0.0, 0.5),
+                        crate::game::profile::MeasureLines::Measure => (0.75, 0.0, 0.0, 0.0, 0.5),
+                        crate::game::profile::MeasureLines::Quarter => (0.75, 0.5, 0.0, 0.0, 0.5),
+                        crate::game::profile::MeasureLines::Eighth => (0.75, 0.5, 0.125, 0.0, 0.5),
+                    }
+                };
 
             let mut pos_min_x: f32 = f32::INFINITY;
             let mut pos_max_x: f32 = f32::NEG_INFINITY;
@@ -3412,7 +3822,7 @@ pub fn build_bundles(
             let mut neg_any = false;
 
             for i in 0..num_cols {
-                let x = ns.column_xs[i] as f32;
+                let x = ns.column_xs[i] as f32 * spacing_mult;
                 if column_dirs[i] >= 0.0 {
                     if pos_any {
                         pos_min_x = pos_min_x.min(x);
@@ -3434,20 +3844,36 @@ pub fn build_bundles(
                 }
             }
 
-            let beat_units_start = (current_beat * 2.0).floor() as i64;
+            let beat_units_start = (current_beat / line_step).floor() as i64;
             let thickness = (2.0 * field_zoom).max(1.0);
             let y_min = -400.0;
             let y_max = screen_height() + 400.0;
-            let alpha_lut = [
-                alpha_measure,
-                alpha_eighth,
-                alpha_quarter,
-                alpha_eighth,
-                alpha_quarter,
-                alpha_eighth,
-                alpha_quarter,
-                alpha_eighth,
-            ];
+            let edit_row_for_unit = |u: i64| -> Option<i32> {
+                u.checked_mul(i64::from(edit_candidate_step_rows))
+                    .and_then(|row| i32::try_from(row).ok())
+            };
+            let edit_line_alpha = |frame: u32| -> f32 {
+                match frame {
+                    0 => alpha_measure,
+                    1 => alpha_quarter,
+                    2 => alpha_eighth,
+                    _ => alpha_sixteenth,
+                }
+            };
+            let line_alpha = |u: i64| -> f32 {
+                match u.rem_euclid(8) {
+                    0 => alpha_measure,
+                    2 | 4 | 6 => alpha_quarter,
+                    _ => alpha_eighth,
+                }
+            };
+            let edit_line_thickness = |frame: u32| -> f32 {
+                match frame {
+                    0 => (3.0 * field_zoom).max(1.0),
+                    1 => (2.0 * field_zoom).max(1.0),
+                    _ => (1.0 * field_zoom).max(1.0),
+                }
+            };
 
             let mut draw_group = |min_x: f32, max_x: f32, receptor_y: f32, dir: f32| {
                 let center_x_offset = 0.5 * (min_x + max_x) * field_zoom;
@@ -3459,12 +3885,32 @@ pub fn build_bundles(
                 let x_center = playfield_center_x + center_x_offset;
 
                 // Walk backward from current beat.
-                let mut u = beat_units_start;
+                let mut u = if view.edit_beat_bars {
+                    beat_units_start.max(0)
+                } else {
+                    beat_units_start
+                };
                 let mut iters = 0;
                 while iters < 2000 {
-                    let alpha = alpha_lut[u.rem_euclid(8) as usize];
-
-                    let beat = (u as f32) * 0.5;
+                    if view.edit_beat_bars && u < 0 {
+                        break;
+                    }
+                    let (beat, edit_info) = if view.edit_beat_bars {
+                        let Some(row) = edit_row_for_unit(u) else {
+                            break;
+                        };
+                        (
+                            note_row_to_beat(row),
+                            edit_beat_bar_info_for_row(row, time_signatures),
+                        )
+                    } else {
+                        ((u as f32) * line_step, None)
+                    };
+                    let alpha = if view.edit_beat_bars {
+                        edit_info.map_or(0.0, |info| edit_line_alpha(info.frame))
+                    } else {
+                        line_alpha(u)
+                    };
                     let y = compute_lane_y_dynamic(0, beat, receptor_y, dir);
                     if !y.is_finite() {
                         break;
@@ -3473,24 +3919,60 @@ pub fn build_bundles(
                         break;
                     }
                     if alpha > 0.0 {
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(x_center, y):
-                            zoomto(w, thickness):
-                            diffuse(1.0, 1.0, 1.0, alpha):
-                            z(Z_MEASURE_LINES)
-                        ));
+                        let edit_bar_frame = edit_info.map_or(0, |info| info.frame);
+                        let line_thickness = if view.edit_beat_bars {
+                            edit_line_thickness(edit_bar_frame)
+                        } else {
+                            thickness
+                        };
+                        append_beat_bar(
+                            &mut actors,
+                            view.edit_beat_bars,
+                            edit_bar_frame,
+                            x_center,
+                            y,
+                            w,
+                            field_zoom,
+                            line_thickness,
+                            alpha,
+                        );
+                        append_edit_measure_number(
+                            &mut actors,
+                            view.edit_beat_bars,
+                            edit_info.and_then(|info| info.measure_index),
+                            x_center - w * 0.5,
+                            y,
+                            field_zoom,
+                        );
                     }
                     u -= 1;
                     iters += 1;
                 }
 
-                // Walk forward from next half-beat to avoid duplicating the start line.
-                let mut u = beat_units_start + 1;
+                // Walk forward from the next beat-bar candidate to avoid duplicating the start line.
+                let mut u = if view.edit_beat_bars {
+                    beat_units_start.max(0) + 1
+                } else {
+                    beat_units_start + 1
+                };
                 let mut iters = 0;
                 while iters < 2000 {
-                    let alpha = alpha_lut[u.rem_euclid(8) as usize];
-
-                    let beat = (u as f32) * 0.5;
+                    let (beat, edit_info) = if view.edit_beat_bars {
+                        let Some(row) = edit_row_for_unit(u) else {
+                            break;
+                        };
+                        (
+                            note_row_to_beat(row),
+                            edit_beat_bar_info_for_row(row, time_signatures),
+                        )
+                    } else {
+                        ((u as f32) * line_step, None)
+                    };
+                    let alpha = if view.edit_beat_bars {
+                        edit_info.map_or(0.0, |info| edit_line_alpha(info.frame))
+                    } else {
+                        line_alpha(u)
+                    };
                     let y = compute_lane_y_dynamic(0, beat, receptor_y, dir);
                     if !y.is_finite() {
                         break;
@@ -3499,12 +3981,31 @@ pub fn build_bundles(
                         break;
                     }
                     if alpha > 0.0 {
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(x_center, y):
-                            zoomto(w, thickness):
-                            diffuse(1.0, 1.0, 1.0, alpha):
-                            z(Z_MEASURE_LINES)
-                        ));
+                        let edit_bar_frame = edit_info.map_or(0, |info| info.frame);
+                        let line_thickness = if view.edit_beat_bars {
+                            edit_line_thickness(edit_bar_frame)
+                        } else {
+                            thickness
+                        };
+                        append_beat_bar(
+                            &mut actors,
+                            view.edit_beat_bars,
+                            edit_bar_frame,
+                            x_center,
+                            y,
+                            w,
+                            field_zoom,
+                            line_thickness,
+                            alpha,
+                        );
+                        append_edit_measure_number(
+                            &mut actors,
+                            view.edit_beat_bars,
+                            edit_info.and_then(|info| info.measure_index),
+                            x_center - w * 0.5,
+                            y,
+                            field_zoom,
+                        );
                     }
                     u += 1;
                     iters += 1;
@@ -3542,7 +4043,7 @@ pub fn build_bundles(
                             let local_col = last_col.column.saturating_sub(col_start);
                             if local_col < num_cols {
                                 let x = playfield_center_x
-                                    + ns.column_xs[local_col] as f32 * field_zoom;
+                                    + ns.column_xs[local_col] as f32 * spacing_mult * field_zoom;
                                 let y = if column_dirs[local_col] < 0.0 {
                                     COLUMN_CUE_TEXT_REVERSE_Y
                                         + COLUMN_CUE_Y_OFFSET
@@ -3562,7 +4063,8 @@ pub fn build_bundles(
                         if local_col >= num_cols {
                             continue;
                         }
-                        let x = playfield_center_x + ns.column_xs[local_col] as f32 * field_zoom;
+                        let x = playfield_center_x
+                            + ns.column_xs[local_col] as f32 * spacing_mult * field_zoom;
                         let alpha = COLUMN_CUE_BASE_ALPHA * alpha_mul;
                         let color = if col_cue.is_mine {
                             [1.0, 0.0, 0.0, alpha]
@@ -3645,7 +4147,7 @@ pub fn build_bundles(
                 let receptor_color = receptor_ns.receptor_pulse.color_for_beat(current_beat);
                 let alpha = receptor_color[3] * receptor_alpha;
                 if alpha > f32::EPSILON {
-                    actors.push(act!(sprite(receptor_slot.texture_key_shared()):
+                    actors.push(act!(sprite(receptor_slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(receptor_center[0], receptor_center[1]):
                         setsize(receptor_size[0], receptor_size[1]):
@@ -3748,7 +4250,7 @@ pub fn build_bundles(
                         actors.push(glow_actor);
                     }
                 } else if draw.blend_add {
-                    actors.push(act!(sprite(hold_slot.texture_key_shared()):
+                    actors.push(act!(sprite(hold_slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(center[0], center[1]):
                         setsize(hold_size[0], hold_size[1]):
@@ -3759,7 +4261,7 @@ pub fn build_bundles(
                         z(Z_HOLD_EXPLOSION)
                     ));
                     if let Some(glow_color) = glow {
-                        actors.push(act!(sprite(hold_slot.texture_key_shared()):
+                        actors.push(act!(sprite(hold_slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(center[0], center[1]):
                             setsize(hold_size[0], hold_size[1]):
@@ -3771,7 +4273,7 @@ pub fn build_bundles(
                         ));
                     }
                 } else {
-                    actors.push(act!(sprite(hold_slot.texture_key_shared()):
+                    actors.push(act!(sprite(hold_slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(center[0], center[1]):
                         setsize(hold_size[0], hold_size[1]):
@@ -3782,7 +4284,7 @@ pub fn build_bundles(
                         z(Z_HOLD_EXPLOSION)
                     ));
                     if let Some(glow_color) = glow {
-                        actors.push(act!(sprite(hold_slot.texture_key_shared()):
+                        actors.push(act!(sprite(hold_slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(center[0], center[1]):
                             setsize(hold_size[0], hold_size[1]):
@@ -3814,7 +4316,7 @@ pub fn build_bundles(
                     let width = glow_size[0] * zoom;
                     let height = glow_size[1] * zoom;
                     if behavior.blend_add {
-                        actors.push(act!(sprite(glow_slot.texture_key_shared()):
+                        actors.push(act!(sprite(glow_slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(width, height):
@@ -3826,7 +4328,7 @@ pub fn build_bundles(
                             z(Z_HOLD_GLOW)
                         ));
                     } else {
-                        actors.push(act!(sprite(glow_slot.texture_key_shared()):
+                        actors.push(act!(sprite(glow_slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(width, height):
@@ -3885,7 +4387,7 @@ pub fn build_bundles(
                 let glow = explosion_visual.glow;
                 let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
                 if explosion.animation.blend_add {
-                    actors.push(act!(sprite(slot.texture_key_shared()):
+                    actors.push(act!(sprite(slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(receptor_center[0], receptor_center[1]):
                         setsize(size[0], size[1]):
@@ -3903,7 +4405,7 @@ pub fn build_bundles(
                         z(Z_TAP_EXPLOSION)
                     ));
                     if glow_strength > f32::EPSILON {
-                        actors.push(act!(sprite(slot.texture_key_shared()):
+                        actors.push(act!(sprite(slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(size[0], size[1]):
@@ -3917,7 +4419,7 @@ pub fn build_bundles(
                         ));
                     }
                 } else {
-                    actors.push(act!(sprite(slot.texture_key_shared()):
+                    actors.push(act!(sprite(slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(receptor_center[0], receptor_center[1]):
                         setsize(size[0], size[1]):
@@ -3935,7 +4437,7 @@ pub fn build_bundles(
                         z(Z_TAP_EXPLOSION)
                     ));
                     if glow_strength > f32::EPSILON {
-                        actors.push(act!(sprite(slot.texture_key_shared()):
+                        actors.push(act!(sprite(slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(size[0], size[1]):
@@ -3985,7 +4487,7 @@ pub fn build_bundles(
             let glow = explosion_visual.glow;
             let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
             if explosion.animation.blend_add {
-                actors.push(act!(sprite(slot.texture_key_shared()):
+                actors.push(act!(sprite(slot.texture_key_handle()):
                     align(0.5, 0.5):
                     xy(receptor_center[0], receptor_center[1]):
                     setsize(size[0], size[1]):
@@ -4002,7 +4504,7 @@ pub fn build_bundles(
                     z(Z_MINE_EXPLOSION)
                 ));
                 if glow_strength > f32::EPSILON {
-                    actors.push(act!(sprite(slot.texture_key_shared()):
+                    actors.push(act!(sprite(slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(receptor_center[0], receptor_center[1]):
                         setsize(size[0], size[1]):
@@ -4015,7 +4517,7 @@ pub fn build_bundles(
                     ));
                 }
             } else {
-                actors.push(act!(sprite(slot.texture_key_shared()):
+                actors.push(act!(sprite(slot.texture_key_handle()):
                     align(0.5, 0.5):
                     xy(receptor_center[0], receptor_center[1]):
                     setsize(size[0], size[1]):
@@ -4032,7 +4534,7 @@ pub fn build_bundles(
                     z(Z_MINE_EXPLOSION)
                 ));
                 if glow_strength > f32::EPSILON {
-                    actors.push(act!(sprite(slot.texture_key_shared()):
+                    actors.push(act!(sprite(slot.texture_key_handle()):
                         align(0.5, 0.5):
                         xy(receptor_center[0], receptor_center[1]):
                         setsize(size[0], size[1]):
@@ -4445,7 +4947,7 @@ pub fn build_bundles(
                                         Some(v) => v.max(segment_bottom),
                                     });
                                     actors.push(actor_with_world_z(
-                                        act!(sprite(body_slot.texture_key_shared()):
+                                        act!(sprite(body_slot.texture_key_handle()):
                                             align(0.5, 0.5):
                                             xy(segment_center_x, segment_center_screen):
                                             setsize(body_width, segment_size):
@@ -4464,7 +4966,7 @@ pub fn build_bundles(
                                     ));
                                     if segment_glow > f32::EPSILON {
                                         actors.push(actor_with_world_z(
-                                            act!(sprite(body_slot.texture_key_shared()):
+                                            act!(sprite(body_slot.texture_key_handle()):
                                                 align(0.5, 0.5):
                                                 xy(segment_center_x, segment_center_screen):
                                                 setsize(body_width, segment_size):
@@ -4733,7 +5235,7 @@ pub fn build_bundles(
                                             Some([bottom_row[0].pos, bottom_row[1].pos]);
                                     } else {
                                         actors.push(actor_with_world_z(
-                                            act!(sprite(body_slot.texture_key_shared()):
+                                            act!(sprite(body_slot.texture_key_handle()):
                                                 align(0.5, 0.5):
                                                 xy(slice_center[0], slice_center[1]):
                                                 setsize(body_width, slice_height):
@@ -4752,7 +5254,7 @@ pub fn build_bundles(
                                         ));
                                         if slice_glow > f32::EPSILON {
                                             actors.push(actor_with_world_z(
-                                                act!(sprite(body_slot.texture_key_shared()):
+                                                act!(sprite(body_slot.texture_key_handle()):
                                                     align(0.5, 0.5):
                                                     xy(slice_center[0], slice_center[1]):
                                                     setsize(body_width, slice_height):
@@ -5002,7 +5504,7 @@ pub fn build_bundles(
                             let cap_rotation = cap_path_rotation
                                 + top_cap_rotation_deg(lane_reverse, body_flipped);
                             actors.push(actor_with_world_z(
-                                act!(sprite(cap_slot.texture_key_shared()):
+                                act!(sprite(cap_slot.texture_key_handle()):
                                     align(0.5, 0.5):
                                     xy(cap_center_xy[0], cap_center_xy[1]):
                                     setsize(cap_width, cap_draw_height):
@@ -5021,7 +5523,7 @@ pub fn build_bundles(
                             ));
                             if cap_glow > f32::EPSILON {
                                 actors.push(actor_with_world_z(
-                                    act!(sprite(cap_slot.texture_key_shared()):
+                                    act!(sprite(cap_slot.texture_key_handle()):
                                         align(0.5, 0.5):
                                         xy(cap_center_xy[0], cap_center_xy[1]):
                                         setsize(cap_width, cap_draw_height):
@@ -5261,7 +5763,7 @@ pub fn build_bundles(
                         } else {
                             let cap_world_z = world_z_for_adjusted_travel(cap_center_travel);
                             actors.push(actor_with_world_z(
-                                act!(sprite(cap_slot.texture_key_shared()):
+                                act!(sprite(cap_slot.texture_key_handle()):
                                     align(0.5, 0.5):
                                     xy(cap_center_xy[0], cap_center_xy[1]):
                                     setsize(cap_width, cap_draw_height):
@@ -5280,7 +5782,7 @@ pub fn build_bundles(
                             ));
                             if cap_glow > f32::EPSILON {
                                 actors.push(actor_with_world_z(
-                                    act!(sprite(cap_slot.texture_key_shared()):
+                                    act!(sprite(cap_slot.texture_key_handle()):
                                         align(0.5, 0.5):
                                         xy(cap_center_xy[0], cap_center_xy[1]):
                                         setsize(cap_width, cap_draw_height):
@@ -5405,7 +5907,7 @@ pub fn build_bundles(
                         let sprite_center =
                             offset_center(head_center, local_offset, local_offset_rot_sin_cos);
                         actors.push(actor_with_world_z(
-                            act!(sprite(head_slot.texture_key_shared()):
+                            act!(sprite(head_slot.texture_key_handle()):
                                 align(0.5, 0.5):
                                 xy(sprite_center[0], sprite_center[1]):
                                 setsize(size[0], size[1]):
@@ -5422,7 +5924,7 @@ pub fn build_bundles(
                         let sprite_center =
                             offset_center(head_center, local_offset, local_offset_rot_sin_cos);
                         actors.push(actor_with_world_z(
-                            act!(sprite(head_slot.texture_key_shared()):
+                            act!(sprite(head_slot.texture_key_handle()):
                                 align(0.5, 0.5):
                                 xy(sprite_center[0], sprite_center[1]):
                                 setsize(size[0], size[1]):
@@ -5508,7 +6010,7 @@ pub fn build_bundles(
                             let sprite_center =
                                 offset_center(head_center, local_offset, local_offset_rot_sin_cos);
                             actors.push(actor_with_world_z(
-                                act!(sprite(note_slot.texture_key_shared()):
+                                act!(sprite(note_slot.texture_key_handle()):
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
                                     setsize(size[0], size[1]):
@@ -5525,7 +6027,7 @@ pub fn build_bundles(
                             let sprite_center =
                                 offset_center(head_center, local_offset, local_offset_rot_sin_cos);
                             actors.push(actor_with_world_z(
-                                act!(sprite(note_slot.texture_key_shared()):
+                                act!(sprite(note_slot.texture_key_handle()):
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
                                     setsize(size[0], size[1]):
@@ -5578,7 +6080,7 @@ pub fn build_bundles(
                         actors.push(actor_with_world_z(model_actor, head_world_z));
                     } else {
                         actors.push(actor_with_world_z(
-                            act!(sprite(note_slot.texture_key_shared()):
+                            act!(sprite(note_slot.texture_key_handle()):
                                 align(0.5, 0.5):
                                 xy(head_center[0], head_center[1]):
                                 setsize(size[0], size[1]):
@@ -5734,7 +6236,7 @@ pub fn build_bundles(
                                         gradient_slot.frame_index_from_phase(mine_fill_phase);
                                     let uv = gradient_slot.uv_for_frame_at(frame, elapsed);
                                     actors.push(actor_with_world_z(
-                                        act!(sprite(gradient_slot.texture_key_shared()):
+                                        act!(sprite(gradient_slot.texture_key_handle()):
                                             align(0.5, 0.5):
                                             xy(column_center_x, y_pos):
                                             setsize(width, height):
@@ -5792,7 +6294,7 @@ pub fn build_bundles(
                                         actors.push(actor_with_world_z(model_actor, note_world_z));
                                     } else {
                                         actors.push(actor_with_world_z(
-                                            act!(sprite(slot.texture_key_shared()):
+                                            act!(sprite(slot.texture_key_handle()):
                                                 align(0.5, 0.5):
                                                 xy(center[0], center[1]):
                                                 setsize(width, height):
@@ -5855,7 +6357,7 @@ pub fn build_bundles(
                                 actors.push(actor_with_world_z(model_actor, note_world_z));
                             } else {
                                 actors.push(actor_with_world_z(
-                                    act!(sprite(slot.texture_key_shared()):
+                                    act!(sprite(slot.texture_key_handle()):
                                         align(0.5, 0.5):
                                         xy(center[0], center[1]):
                                         setsize(size[0], size[1]):
@@ -5946,7 +6448,7 @@ pub fn build_bundles(
                                 actors.push(actor_with_world_z(model_actor, note_world_z));
                             } else {
                                 actors.push(actor_with_world_z(
-                                act!(sprite(head_slot.texture_key_shared()):
+                                act!(sprite(head_slot.texture_key_handle()):
                                     align(0.5, 0.5):
                                     xy(center[0], center[1]):
                                     setsize(note_size[0], note_size[1]):
@@ -6050,7 +6552,7 @@ pub fn build_bundles(
                                 );
                                 if draw.blend_add {
                                     actors.push(actor_with_world_z(
-                                    act!(sprite(note_slot.texture_key_shared()):
+                                    act!(sprite(note_slot.texture_key_handle()):
                                         align(0.5, 0.5):
                                         xy(sprite_center[0], sprite_center[1]):
                                         setsize(note_size[0], note_size[1]):
@@ -6065,7 +6567,7 @@ pub fn build_bundles(
                                 ));
                                 } else {
                                     actors.push(actor_with_world_z(
-                                    act!(sprite(note_slot.texture_key_shared()):
+                                    act!(sprite(note_slot.texture_key_handle()):
                                         align(0.5, 0.5):
                                         xy(sprite_center[0], sprite_center[1]):
                                         setsize(note_size[0], note_size[1]):
@@ -6117,7 +6619,7 @@ pub fn build_bundles(
                             actors.push(actor_with_world_z(model_actor, note_world_z));
                         } else {
                             actors.push(actor_with_world_z(
-                            act!(sprite(note_slot.texture_key_shared()):
+                            act!(sprite(note_slot.texture_key_handle()):
                                 align(0.5, 0.5):
                                 xy(center[0], center[1]):
                                 setsize(note_size[0], note_size[1]):
@@ -6138,7 +6640,7 @@ pub fn build_bundles(
     // Simply Love: ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua
     // shows the current mod string for 5s, then decelerates out over 0.5s.
     // Arrow Cloud/zmod add a CMod warning below this block for ITL no-CMod charts.
-    {
+    if !view.hide_display_mods {
         // Simply Love DisplayMods.lua uses sleep(5), but ScreenGameplay in/default.lua
         // keeps a full-screen intro cover up for 2.0s. Since deadsync's gameplay
         // in-transition cover is shorter, subtract the exact missing cover time so
@@ -7126,15 +7628,7 @@ pub fn build_bundles(
                 let columns = frame_cols.max(1) as usize;
                 let col_index = if columns > 1 { frame_offset } else { 0 };
                 let linear_index = (frame_row * columns + col_index) as u32;
-                let rot_deg = if profile.judgment_tilt
-                    && judgment.grade != JudgeGrade::Miss
-                    && offset_sec.abs() >= (profile.tilt_cutoff_ms as f32 / 1000.0) {
-                    let abs_sec = offset_sec.abs().min(0.050);
-                    let dir = if offset_sec < 0.0 { 1.0 } else { -1.0 };
-                    dir * abs_sec * 300.0 * profile.tilt_multiplier
-                } else {
-                    0.0
-                };
+                let rot_deg = judgment_tilt_rotation_deg(profile, judgment);
                 push_hud_capture(
                     &mut hud_actors,
                     &mut judgment_actors,
@@ -7198,7 +7692,7 @@ pub fn build_bundles(
             let column_offset = state.noteskin[player_idx]
                 .as_ref()
                 .and_then(|ns| ns.column_xs.get(i))
-                .map(|&x| x as f32)
+                .map(|&x| x as f32 * spacing_mult)
                 .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
             push_hud_capture(
                 &mut hud_actors,
@@ -7288,7 +7782,7 @@ mod tests {
         calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, hallway_judgment_zoom,
         hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
         hold_window_for_display_run, hud_layout_ys, hud_y, judgment_actor_zoom,
-        lane_hold_window_bounds_by_time_ns, let_go_head_beat,
+        judgment_tilt_rotation_deg, lane_hold_window_bounds_by_time_ns, let_go_head_beat,
         maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size,
         note_window_for_display_run, note_world_z, note_x_extra, offset_center,
         predictive_itg_percents, push_transform_parts, receptor_row_center, tap_judgment_rows,
@@ -7305,6 +7799,7 @@ mod tests {
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
     use crate::game::profile;
+    use crate::game::timing::{TimeSignatureSegment, beat_to_note_row};
 
     fn fantastic_judgment(window: TimingWindow, time_error_ms: f32) -> Judgment {
         Judgment {
@@ -7317,6 +7812,57 @@ mod tests {
             window: Some(window),
             miss_because_held: false,
         }
+    }
+
+    #[test]
+    fn edit_beat_bar_labels_default_measure_indices() {
+        assert_eq!(
+            super::edit_beat_bar_info_for_row(beat_to_note_row(0.0), &[])
+                .and_then(|info| info.measure_index),
+            Some(0)
+        );
+        assert_eq!(
+            super::edit_beat_bar_info_for_row(beat_to_note_row(1.0), &[])
+                .and_then(|info| info.measure_index),
+            None
+        );
+        assert_eq!(
+            super::edit_beat_bar_info_for_row(beat_to_note_row(4.0), &[])
+                .and_then(|info| info.measure_index),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn edit_beat_bar_labels_follow_time_signature_segments() {
+        let segments = [
+            TimeSignatureSegment {
+                beat: 0.0,
+                numerator: 3,
+                denominator: 4,
+            },
+            TimeSignatureSegment {
+                beat: 6.0,
+                numerator: 4,
+                denominator: 4,
+            },
+        ];
+
+        assert_eq!(
+            super::edit_beat_bar_info_for_row(beat_to_note_row(0.0), &segments)
+                .and_then(|info| info.measure_index),
+            Some(0)
+        );
+        assert_eq!(
+            super::edit_beat_bar_info_for_row(beat_to_note_row(3.0), &segments)
+                .and_then(|info| info.measure_index),
+            Some(1)
+        );
+        assert_eq!(
+            super::edit_beat_bar_info_for_row(beat_to_note_row(6.0), &segments)
+                .and_then(|info| info.measure_index),
+            Some(2)
+        );
     }
 
     #[test]
@@ -7970,6 +8516,49 @@ mod tests {
         assert!((judgment_actor_zoom(0.35, true) - 0.825).abs() <= 1e-6);
         assert!((judgment_actor_zoom(1.5, true) - 0.35).abs() <= 1e-6);
         assert!((judgment_actor_zoom(-1.0, true) - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn judgment_tilt_thresholds_deadzone_and_cap() {
+        let profile = profile::Profile {
+            judgment_tilt: true,
+            tilt_min_threshold_ms: 5,
+            tilt_max_threshold_ms: 20,
+            ..profile::Profile::default()
+        };
+        assert_eq!(
+            judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 5.0)),
+            0.0
+        );
+        assert!(
+            (judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 10.0))
+                + 1.5)
+                .abs()
+                <= 1e-6
+        );
+        assert!(
+            (judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 40.0))
+                + 4.5)
+                .abs()
+                <= 1e-6
+        );
+    }
+
+    #[test]
+    fn judgment_tilt_keeps_early_late_direction() {
+        let profile = profile::Profile {
+            judgment_tilt: true,
+            tilt_min_threshold_ms: 0,
+            tilt_max_threshold_ms: 50,
+            ..profile::Profile::default()
+        };
+        assert!(
+            judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, -10.0))
+                > 0.0
+        );
+        assert!(
+            judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 10.0)) < 0.0
+        );
     }
 
     #[test]

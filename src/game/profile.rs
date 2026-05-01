@@ -23,6 +23,42 @@ pub const PLAYER_INITIALS_MAX_LEN: usize = 4;
 pub const HUD_OFFSET_MIN: i32 = -250;
 pub const HUD_OFFSET_MAX: i32 = 250;
 
+/// Min/max for the per-player Spacing modifier (zmod parity, step 1).
+pub const SPACING_PERCENT_MIN: i32 = -100;
+pub const SPACING_PERCENT_MAX: i32 = 100;
+
+/// Min/max for the Mini player option (Simply Love parity).
+pub const MINI_PERCENT_MIN: i32 = -100;
+pub const MINI_PERCENT_MAX: i32 = 150;
+
+/// Min/max for judgment tilt thresholds, in milliseconds.
+pub const TILT_THRESHOLD_MIN_MS: u32 = 0;
+pub const TILT_THRESHOLD_MAX_MS: u32 = 100;
+pub const TILT_MIN_THRESHOLD_DEFAULT_MS: u32 = 0;
+pub const TILT_MAX_THRESHOLD_DEFAULT_MS: u32 = 50;
+
+#[inline(always)]
+pub const fn clamp_tilt_threshold_ms(ms: u32) -> u32 {
+    if ms > TILT_THRESHOLD_MAX_MS {
+        TILT_THRESHOLD_MAX_MS
+    } else {
+        ms
+    }
+}
+
+/// Min/max for the per-player NoteField horizontal offset.
+pub const NOTE_FIELD_OFFSET_X_MIN: i32 = 0;
+pub const NOTE_FIELD_OFFSET_X_MAX: i32 = 50;
+
+/// Min/max for the per-player NoteField vertical offset.
+pub const NOTE_FIELD_OFFSET_Y_MIN: i32 = -50;
+pub const NOTE_FIELD_OFFSET_Y_MAX: i32 = 50;
+
+/// Min/max (in milliseconds) for the per-player visual-delay calibration
+/// (Simply Love parity). Also used as the range for the global offset shift.
+pub const VISUAL_DELAY_MS_MIN: i32 = -100;
+pub const VISUAL_DELAY_MS_MAX: i32 = 100;
+
 #[inline(always)]
 const fn clamp_weight_pounds(weight_pounds: i32) -> i32 {
     if weight_pounds == 0 {
@@ -613,6 +649,10 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         i32::from(options.track_early_judgments)
     ));
     content.push_str(&format!(
+        "ScaleScatterplot={}\n",
+        i32::from(options.scale_scatterplot)
+    ));
+    content.push_str(&format!(
         "CustomFantasticWindow={}\n",
         i32::from(options.custom_fantastic_window)
     ));
@@ -647,7 +687,14 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         i32::from(options.show_life_percent)
     ));
     content.push_str(&format!("TiltMultiplier={}\n", options.tilt_multiplier));
-    content.push_str(&format!("TiltCutoffMs={}\n", options.tilt_cutoff_ms));
+    content.push_str(&format!(
+        "TiltMinThresholdMs={}\n",
+        options.tilt_min_threshold_ms
+    ));
+    content.push_str(&format!(
+        "TiltMaxThresholdMs={}\n",
+        options.tilt_max_threshold_ms
+    ));
     content.push_str(&format!("ErrorBar={}\n", options.error_bar));
     content.push_str(&format!(
         "ErrorBarText={}\n",
@@ -757,6 +804,7 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
             .map_or("", NoteSkin::as_str)
     ));
     content.push_str(&format!("MiniPercent={}\n", options.mini_percent));
+    content.push_str(&format!("Spacing={}\n", options.spacing_percent));
     content.push_str(&format!("Perspective={}\n", options.perspective));
     content.push_str(&format!(
         "NoteFieldOffsetX={}\n",
@@ -840,6 +888,10 @@ fn load_player_options(
         .get(section, "MiniPercent")
         .and_then(|s| s.parse::<i32>().ok())
         .unwrap_or(options.mini_percent);
+    options.spacing_percent = profile_conf
+        .get(section, "Spacing")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.spacing_percent);
     options.perspective = profile_conf
         .get(section, "Perspective")
         .and_then(|s| Perspective::from_str(&s).ok())
@@ -914,6 +966,11 @@ fn load_player_options(
         .get(section, "TrackEarlyJudgments")
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.track_early_judgments, |v| v != 0);
+    options.scale_scatterplot = profile_conf
+        .get(section, "ScaleScatterplot")
+        .or_else(|| profile_conf.get(section, "ScatterplotGreatMax"))
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.scale_scatterplot, |v| v != 0);
     options.custom_fantastic_window = profile_conf
         .get(section, "CustomFantasticWindow")
         .and_then(|s| s.parse::<u8>().ok())
@@ -960,10 +1017,20 @@ fn load_player_options(
         .and_then(|s| s.parse::<f32>().ok())
         .filter(|v| v.is_finite())
         .unwrap_or(options.tilt_multiplier);
-    options.tilt_cutoff_ms = profile_conf
-        .get(section, "TiltCutoffMs")
-        .and_then(|s| s.parse::<u32>().ok())
-        .unwrap_or(options.tilt_cutoff_ms);
+    options.tilt_min_threshold_ms = profile_conf
+        .get(section, "TiltMinThresholdMs")
+        .or_else(|| profile_conf.get(section, "TiltCutoffMs"))
+        .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+        .map(clamp_tilt_threshold_ms)
+        .unwrap_or(options.tilt_min_threshold_ms);
+    options.tilt_max_threshold_ms = profile_conf
+        .get(section, "TiltMaxThresholdMs")
+        .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+        .map(clamp_tilt_threshold_ms)
+        .unwrap_or(options.tilt_max_threshold_ms);
+    if options.tilt_max_threshold_ms < options.tilt_min_threshold_ms {
+        options.tilt_max_threshold_ms = options.tilt_min_threshold_ms;
+    }
     options.error_bar = profile_conf
         .get(section, "ErrorBar")
         .and_then(|s| ErrorBarStyle::from_str(&s).ok())
@@ -1837,6 +1904,44 @@ pub const fn clamp_custom_fantastic_window_ms(ms: u8) -> u8 {
     }
 }
 
+/// Selectable scatter-plot scale boundary used by `ScatterPlotConfig`
+/// in `screens::evaluation`. Mirrors the standard judgment tiers plus
+/// FA+ W0 so the plot floor can be tightened down to the Fantastic+
+/// window when desired.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScatterWindow {
+    FantasticPlus,
+    Fantastic,
+    Excellent,
+    Great,
+    Decent,
+    WayOff,
+}
+
+impl ScatterWindow {
+    /// Resolve the window edge in milliseconds against the active
+    /// timing profile (FA+ W0 is layered on top of the standard W1..W5
+    /// in deadsync, so it has its own constant).
+    #[inline]
+    pub fn ms(self) -> f32 {
+        let tw = crate::game::timing::effective_windows_ms();
+        match self {
+            ScatterWindow::FantasticPlus => crate::game::timing::FA_PLUS_W0_MS,
+            ScatterWindow::Fantastic => tw[0],
+            ScatterWindow::Excellent => tw[1],
+            ScatterWindow::Great => tw[2],
+            ScatterWindow::Decent => tw[3],
+            ScatterWindow::WayOff => tw[4],
+        }
+    }
+}
+
+impl Default for ScatterWindow {
+    fn default() -> Self {
+        ScatterWindow::WayOff
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TimingWindowsOption {
     #[default]
@@ -2471,6 +2576,7 @@ pub struct PlayerOptionsData {
     pub fa_plus_10ms_blue_window: bool,
     pub split_15_10ms: bool,
     pub track_early_judgments: bool,
+    pub scale_scatterplot: bool,
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
     pub judgment_tilt: bool,
@@ -2482,7 +2588,8 @@ pub struct PlayerOptionsData {
     pub responsive_colors: bool,
     pub show_life_percent: bool,
     pub tilt_multiplier: f32,
-    pub tilt_cutoff_ms: u32,
+    pub tilt_min_threshold_ms: u32,
+    pub tilt_max_threshold_ms: u32,
     pub error_bar_active_mask: ErrorBarMask,
     pub error_bar: ErrorBarStyle,
     pub error_bar_text: bool,
@@ -2515,6 +2622,7 @@ pub struct PlayerOptionsData {
     pub mini_indicator: MiniIndicator,
     pub mini_indicator_score_type: MiniIndicatorScoreType,
     pub mini_percent: i32,
+    pub spacing_percent: i32,
     pub perspective: Perspective,
     pub note_field_offset_x: i32,
     pub note_field_offset_y: i32,
@@ -2564,6 +2672,7 @@ fn default_player_options() -> PlayerOptionsData {
         fa_plus_10ms_blue_window: false,
         split_15_10ms: false,
         track_early_judgments: false,
+        scale_scatterplot: false,
         custom_fantastic_window: false,
         custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
         judgment_tilt: false,
@@ -2575,7 +2684,8 @@ fn default_player_options() -> PlayerOptionsData {
         responsive_colors: false,
         show_life_percent: false,
         tilt_multiplier: 1.0,
-        tilt_cutoff_ms: 0,
+        tilt_min_threshold_ms: TILT_MIN_THRESHOLD_DEFAULT_MS,
+        tilt_max_threshold_ms: TILT_MAX_THRESHOLD_DEFAULT_MS,
         error_bar_active_mask: error_bar_mask_from_style(ErrorBarStyle::default(), false),
         error_bar: ErrorBarStyle::default(),
         error_bar_text: false,
@@ -2608,6 +2718,7 @@ fn default_player_options() -> PlayerOptionsData {
         mini_indicator: MiniIndicator::None,
         mini_indicator_score_type: MiniIndicatorScoreType::Itg,
         mini_percent: 0,
+        spacing_percent: 0,
         perspective: Perspective::default(),
         note_field_offset_x: 0,
         note_field_offset_y: 0,
@@ -2694,6 +2805,11 @@ pub struct Profile {
     pub split_15_10ms: bool,
     // Track and display per-column early judgment counts on evaluation (zmod/Arrow Cloud semantics).
     pub track_early_judgments: bool,
+    // Constrain the evaluation scatter plot's vertical scale to a Great
+    // upper cap and a Fantastic lower floor (zmod's `ScaleGraph`-style
+    // toggle). Off uses the original behavior of an Excellent floor with
+    // no upper cap.
+    pub scale_scatterplot: bool,
     // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
@@ -2710,7 +2826,8 @@ pub struct Profile {
     pub responsive_colors: bool,
     pub show_life_percent: bool,
     pub tilt_multiplier: f32,
-    pub tilt_cutoff_ms: u32,
+    pub tilt_min_threshold_ms: u32,
+    pub tilt_max_threshold_ms: u32,
     // Error bar (zmod semantics): each bit toggles one submodule in the
     // SelectMultiple row (Colorful/Monochrome/Text/Highlight/Average).
     pub error_bar_active_mask: ErrorBarMask,
@@ -2750,6 +2867,10 @@ pub struct Profile {
     // Mini modifier as a percentage, mirroring Simply Love semantics.
     // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
     pub mini_percent: i32,
+    /// Horizontal spacing between note columns as a percentage (zmod parity).
+    /// 0 = noteskin default, +N% scales lateral column offsets by
+    /// `1 + N/100`. Range -100..=100 (capped on read to stay sane).
+    pub spacing_percent: i32,
     pub perspective: Perspective,
     // NoteField positional offsets (Simply Love semantics).
     // X is non-negative and interpreted relative to player side:
@@ -2852,6 +2973,7 @@ impl Default for Profile {
             fa_plus_10ms_blue_window: player_options.fa_plus_10ms_blue_window,
             split_15_10ms: player_options.split_15_10ms,
             track_early_judgments: player_options.track_early_judgments,
+            scale_scatterplot: player_options.scale_scatterplot,
             custom_fantastic_window: player_options.custom_fantastic_window,
             custom_fantastic_window_ms: player_options.custom_fantastic_window_ms,
             judgment_tilt: player_options.judgment_tilt,
@@ -2863,7 +2985,8 @@ impl Default for Profile {
             responsive_colors: player_options.responsive_colors,
             show_life_percent: player_options.show_life_percent,
             tilt_multiplier: player_options.tilt_multiplier,
-            tilt_cutoff_ms: player_options.tilt_cutoff_ms,
+            tilt_min_threshold_ms: player_options.tilt_min_threshold_ms,
+            tilt_max_threshold_ms: player_options.tilt_max_threshold_ms,
             error_bar: player_options.error_bar,
             error_bar_active_mask: player_options.error_bar_active_mask,
             error_bar_text: player_options.error_bar_text,
@@ -2896,6 +3019,7 @@ impl Default for Profile {
             mini_indicator: player_options.mini_indicator,
             mini_indicator_score_type: player_options.mini_indicator_score_type,
             mini_percent: player_options.mini_percent,
+            spacing_percent: player_options.spacing_percent,
             perspective: player_options.perspective,
             note_field_offset_x: player_options.note_field_offset_x,
             note_field_offset_y: player_options.note_field_offset_y,
@@ -3006,6 +3130,7 @@ impl Profile {
             fa_plus_10ms_blue_window: self.fa_plus_10ms_blue_window,
             split_15_10ms: self.split_15_10ms,
             track_early_judgments: self.track_early_judgments,
+            scale_scatterplot: self.scale_scatterplot,
             custom_fantastic_window: self.custom_fantastic_window,
             custom_fantastic_window_ms: self.custom_fantastic_window_ms,
             judgment_tilt: self.judgment_tilt,
@@ -3017,7 +3142,8 @@ impl Profile {
             responsive_colors: self.responsive_colors,
             show_life_percent: self.show_life_percent,
             tilt_multiplier: self.tilt_multiplier,
-            tilt_cutoff_ms: self.tilt_cutoff_ms,
+            tilt_min_threshold_ms: self.tilt_min_threshold_ms,
+            tilt_max_threshold_ms: self.tilt_max_threshold_ms,
             error_bar_active_mask: self.error_bar_active_mask,
             error_bar: self.error_bar,
             error_bar_text: self.error_bar_text,
@@ -3050,6 +3176,7 @@ impl Profile {
             mini_indicator: self.mini_indicator,
             mini_indicator_score_type: self.mini_indicator_score_type,
             mini_percent: self.mini_percent,
+            spacing_percent: self.spacing_percent,
             perspective: self.perspective,
             note_field_offset_x: self.note_field_offset_x,
             note_field_offset_y: self.note_field_offset_y,
@@ -3101,6 +3228,7 @@ impl Profile {
         self.fa_plus_10ms_blue_window = options.fa_plus_10ms_blue_window;
         self.split_15_10ms = options.split_15_10ms;
         self.track_early_judgments = options.track_early_judgments;
+        self.scale_scatterplot = options.scale_scatterplot;
         self.custom_fantastic_window = options.custom_fantastic_window;
         self.custom_fantastic_window_ms = options.custom_fantastic_window_ms;
         self.judgment_tilt = options.judgment_tilt;
@@ -3112,7 +3240,8 @@ impl Profile {
         self.responsive_colors = options.responsive_colors;
         self.show_life_percent = options.show_life_percent;
         self.tilt_multiplier = options.tilt_multiplier;
-        self.tilt_cutoff_ms = options.tilt_cutoff_ms;
+        self.tilt_min_threshold_ms = options.tilt_min_threshold_ms;
+        self.tilt_max_threshold_ms = options.tilt_max_threshold_ms;
         self.error_bar_active_mask = options.error_bar_active_mask;
         self.error_bar = options.error_bar;
         self.error_bar_text = options.error_bar_text;
@@ -3145,6 +3274,7 @@ impl Profile {
         self.mini_indicator = options.mini_indicator;
         self.mini_indicator_score_type = options.mini_indicator_score_type;
         self.mini_percent = options.mini_percent;
+        self.spacing_percent = options.spacing_percent;
         self.perspective = options.perspective;
         self.note_field_offset_x = options.note_field_offset_x;
         self.note_field_offset_y = options.note_field_offset_y;

@@ -4,12 +4,14 @@ use super::*;
 pub(super) struct RowVisibility {
     pub(super) show_measure_counter_children: bool,
     pub(super) show_judgment_offsets: bool,
-    pub(super) show_judgment_tilt_intensity: bool,
-    pub(super) show_judgment_tilt_cutoff: bool,
+    pub(super) show_judgment_tilt_options: bool,
     pub(super) show_combo_offsets: bool,
     pub(super) show_error_bar_children: bool,
     pub(super) show_custom_fantastic_window_ms: bool,
     pub(super) show_density_graph_background: bool,
+    pub(super) show_target_score: bool,
+    pub(super) show_early_dw_options: bool,
+    pub(super) show_fa_plus_window_options: bool,
     pub(super) show_combo_rows: bool,
     pub(super) show_lifebar_rows: bool,
     pub(super) show_indicator_score_type: bool,
@@ -24,11 +26,11 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     if id == RowId::JudgmentOffsetX || id == RowId::JudgmentOffsetY {
         return visibility.show_judgment_offsets;
     }
-    if id == RowId::JudgmentTiltIntensity {
-        return visibility.show_judgment_tilt_intensity;
-    }
-    if id == RowId::JudgmentTiltCutoff {
-        return visibility.show_judgment_tilt_cutoff;
+    if id == RowId::JudgmentTiltIntensity
+        || id == RowId::JudgmentTiltMinThreshold
+        || id == RowId::JudgmentTiltMaxThreshold
+    {
+        return visibility.show_judgment_tilt_options;
     }
     if id == RowId::ComboOffsetX || id == RowId::ComboOffsetY {
         return visibility.show_combo_offsets;
@@ -45,6 +47,15 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     }
     if id == RowId::DensityGraphBackground {
         return visibility.show_density_graph_background;
+    }
+    if id == RowId::TargetScore {
+        return visibility.show_target_score;
+    }
+    if id == RowId::EarlyDecentWayOffOptions {
+        return visibility.show_early_dw_options;
+    }
+    if id == RowId::FAPlusWindowOptions {
+        return visibility.show_fa_plus_window_options;
     }
     if id == RowId::ComboColors || id == RowId::ComboColorMode || id == RowId::CarryCombo {
         return visibility.show_combo_rows;
@@ -69,10 +80,10 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     if id == RowId::JudgmentOffsetX || id == RowId::JudgmentOffsetY {
         return Some(RowId::JudgmentFont);
     }
-    if id == RowId::JudgmentTiltIntensity {
-        return Some(RowId::JudgmentTilt);
-    }
-    if id == RowId::JudgmentTiltCutoff {
+    if id == RowId::JudgmentTiltIntensity
+        || id == RowId::JudgmentTiltMinThreshold
+        || id == RowId::JudgmentTiltMaxThreshold
+    {
         return Some(RowId::JudgmentTilt);
     }
     if id == RowId::ComboOffsetX || id == RowId::ComboOffsetY {
@@ -101,6 +112,12 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     }
     if id == RowId::IndicatorScoreType {
         return Some(RowId::MiniIndicator);
+    }
+    if id == RowId::EarlyDecentWayOffOptions {
+        return Some(RowId::RescoreEarlyHits);
+    }
+    if id == RowId::FAPlusWindowOptions {
+        return Some(RowId::FAPlusOptions);
     }
     None
 }
@@ -142,7 +159,7 @@ pub(super) fn judgment_offsets_visible(row_map: &RowMap, active: [bool; PLAYER_S
 }
 
 #[inline(always)]
-pub(super) fn judgment_tilt_intensity_visible(
+pub(super) fn judgment_tilt_options_visible(
     row_map: &RowMap,
     active: [bool; PLAYER_SLOTS],
 ) -> bool {
@@ -158,29 +175,6 @@ pub(super) fn judgment_tilt_intensity_visible(
             return true;
         }
     }
-    !any_active
-}
-
-pub(super) fn judgment_tilt_cutoff_visible(
-    row_map: &RowMap,
-    active: [bool; PLAYER_SLOTS],
-) -> bool {
-    let Some(row) = row_map.get(RowId::JudgmentTilt) else {
-        return true;
-    };
-
-    let max_choice = row.choices.len().saturating_sub(1);
-    let mut any_active = false;
-
-    for player_idx in active_player_indices(active) {
-        any_active = true;
-        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
-
-        if choice_idx != 0 {
-            return true;
-        }
-    }
-
     !any_active
 }
 
@@ -253,6 +247,77 @@ pub(super) fn density_graph_background_visible(
     !any_active
 }
 
+#[inline(always)]
+fn selected_choice(row_map: &RowMap, id: RowId, player_idx: usize) -> Option<usize> {
+    let row = row_map.get(id)?;
+    let max_choice = row.choices.len().saturating_sub(1);
+    Some(row.selected_choice_index[player_idx].min(max_choice))
+}
+
+pub(super) fn target_score_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    let has_trigger_row = row_map.get(RowId::DataVisualizations).is_some()
+        || row_map.get(RowId::MiniIndicator).is_some()
+        || row_map.get(RowId::ActionOnMissedTarget).is_some();
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        if selected_choice(row_map, RowId::DataVisualizations, player_idx)
+            .and_then(|idx| DATA_VISUALIZATIONS_VARIANTS.get(idx))
+            .is_some_and(|&v| v == crate::game::profile::DataVisualizations::TargetScoreGraph)
+        {
+            return true;
+        }
+        if selected_choice(row_map, RowId::MiniIndicator, player_idx)
+            .and_then(|idx| MINI_INDICATOR_VARIANTS.get(idx))
+            .is_some_and(|&v| v == crate::game::profile::MiniIndicator::Pacemaker)
+        {
+            return true;
+        }
+        if selected_choice(row_map, RowId::ActionOnMissedTarget, player_idx)
+            .is_some_and(|idx| idx != 0)
+        {
+            return true;
+        }
+    }
+    !any_active || !has_trigger_row
+}
+
+pub(super) fn early_dw_options_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    if row_map.get(RowId::RescoreEarlyHits).is_none() {
+        return true;
+    }
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        if selected_choice(row_map, RowId::RescoreEarlyHits, player_idx).is_some_and(|idx| idx != 0)
+        {
+            return true;
+        }
+    }
+    !any_active
+}
+
+pub(super) fn fa_plus_window_options_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+    option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
+) -> bool {
+    if row_map.get(RowId::FAPlusOptions).is_none() {
+        return true;
+    }
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        if option_masks[player_idx]
+            .fa_plus
+            .contains(FaPlusMask::WINDOW)
+        {
+            return true;
+        }
+    }
+    !any_active
+}
+
 pub(super) fn combo_rows_visible(
     active: [bool; PLAYER_SLOTS],
     option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
@@ -310,12 +375,14 @@ pub(super) fn row_visibility(
     RowVisibility {
         show_measure_counter_children: measure_counter_children_visible(row_map, active),
         show_judgment_offsets: judgment_offsets_visible(row_map, active),
-        show_judgment_tilt_intensity: judgment_tilt_intensity_visible(row_map, active),
-        show_judgment_tilt_cutoff: judgment_tilt_cutoff_visible(row_map, active),
+        show_judgment_tilt_options: judgment_tilt_options_visible(row_map, active),
         show_combo_offsets: combo_offsets_visible(row_map, active),
         show_error_bar_children: error_bar_children_visible(active, option_masks),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(row_map, active),
         show_density_graph_background: density_graph_background_visible(row_map, active),
+        show_target_score: target_score_visible(row_map, active),
+        show_early_dw_options: early_dw_options_visible(row_map, active),
+        show_fa_plus_window_options: fa_plus_window_options_visible(row_map, active, option_masks),
         show_combo_rows: combo_rows_visible(active, option_masks),
         show_lifebar_rows: lifebar_rows_visible(active, option_masks),
         show_indicator_score_type: indicator_score_type_visible(row_map, active),
@@ -385,6 +452,7 @@ pub(super) fn next_visible_row(
     current_row: usize,
     dir: NavDirection,
     visibility: RowVisibility,
+    wrap: NavWrap,
 ) -> Option<usize> {
     if row_map.display_order().is_empty() {
         return None;
@@ -396,8 +464,26 @@ pub(super) fn next_visible_row(
     }
     for _ in 0..len {
         idx = match dir {
-            NavDirection::Up => (idx + len - 1) % len,
-            NavDirection::Down => (idx + 1) % len,
+            NavDirection::Up => {
+                if idx == 0 {
+                    match wrap {
+                        NavWrap::Wrap => len - 1,
+                        NavWrap::Clamp => return None,
+                    }
+                } else {
+                    idx - 1
+                }
+            }
+            NavDirection::Down => {
+                if idx + 1 >= len {
+                    match wrap {
+                        NavWrap::Wrap => 0,
+                        NavWrap::Clamp => return None,
+                    }
+                } else {
+                    idx + 1
+                }
+            }
             NavDirection::Left | NavDirection::Right => return Some(idx),
         };
         if is_row_visible(row_map, idx, visibility) {
