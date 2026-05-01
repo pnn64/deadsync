@@ -674,6 +674,76 @@ const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
     },
 };
 
+fn chosen_tilt_threshold_ms(
+    state: &mut State,
+    player_idx: usize,
+    row_id: RowId,
+    delta: isize,
+    wrap: NavWrap,
+) -> Option<u32> {
+    let new_index =
+        super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)?;
+    let choice = state
+        .pane()
+        .row_map
+        .get(row_id)
+        .and_then(|r| r.choices.get(new_index))?;
+    parse_tilt_threshold_ms(choice)
+}
+
+fn set_tilt_threshold_row(state: &mut State, player_idx: usize, row_id: RowId, ms: u32) {
+    let needle = fmt_tilt_threshold_ms(ms);
+    if let Some(row) = state.pane_mut().row_map.get_mut(row_id)
+        && let Some(idx) = row.choices.iter().position(|choice| choice == &needle)
+    {
+        row.selected_choice_index[player_idx] = idx;
+    }
+}
+
+const JUDGMENT_TILT_MIN_THRESHOLD: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(min_ms) = chosen_tilt_threshold_ms(state, player_idx, row_id, delta, wrap) else {
+            return Outcome::NONE;
+        };
+        let (min_ms, max_ms) = {
+            let profile = &mut state.player_profiles[player_idx];
+            let min_ms = gp::clamp_tilt_threshold_ms(min_ms);
+            let max_ms = gp::clamp_tilt_threshold_ms(profile.tilt_max_threshold_ms).max(min_ms);
+            profile.tilt_min_threshold_ms = min_ms;
+            profile.tilt_max_threshold_ms = max_ms;
+            (min_ms, max_ms)
+        };
+        set_tilt_threshold_row(state, player_idx, RowId::JudgmentTiltMaxThreshold, max_ms);
+        let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_tilt_thresholds_for_side(side, min_ms, max_ms);
+        }
+        Outcome::persisted()
+    },
+};
+
+const JUDGMENT_TILT_MAX_THRESHOLD: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(max_ms) = chosen_tilt_threshold_ms(state, player_idx, row_id, delta, wrap) else {
+            return Outcome::NONE;
+        };
+        let (min_ms, max_ms) = {
+            let profile = &mut state.player_profiles[player_idx];
+            let max_ms = gp::clamp_tilt_threshold_ms(max_ms);
+            let min_ms = gp::clamp_tilt_threshold_ms(profile.tilt_min_threshold_ms).min(max_ms);
+            profile.tilt_min_threshold_ms = min_ms;
+            profile.tilt_max_threshold_ms = max_ms;
+            (min_ms, max_ms)
+        };
+        set_tilt_threshold_row(state, player_idx, RowId::JudgmentTiltMinThreshold, min_ms);
+        let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+        if should_persist {
+            gp::update_tilt_thresholds_for_side(side, min_ms, max_ms);
+        }
+        Outcome::persisted()
+    },
+};
+
 const MEASURE_COUNTER_LOOKAHEAD: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
@@ -938,6 +1008,20 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         lookup_key("PlayerOptionsHelp", "JudgmentTiltIntensityHelp"),
         JUDGMENT_TILT_INTENSITY,
         tilt_intensity_choices(),
+    ));
+    b.push(Row::custom(
+        RowId::JudgmentTiltMinThreshold,
+        lookup_key("PlayerOptions", "JudgmentTiltMinThreshold"),
+        lookup_key("PlayerOptionsHelp", "JudgmentTiltMinThresholdHelp"),
+        JUDGMENT_TILT_MIN_THRESHOLD,
+        tilt_threshold_choices(),
+    ));
+    b.push(Row::custom(
+        RowId::JudgmentTiltMaxThreshold,
+        lookup_key("PlayerOptions", "JudgmentTiltMaxThreshold"),
+        lookup_key("PlayerOptionsHelp", "JudgmentTiltMaxThresholdHelp"),
+        JUDGMENT_TILT_MAX_THRESHOLD,
+        tilt_threshold_choices(),
     ));
     b.push(Row::cycle(
         RowId::JudgmentBehindArrows,

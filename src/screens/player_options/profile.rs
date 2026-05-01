@@ -126,6 +126,29 @@ pub(super) fn tilt_intensity_choices() -> Vec<String> {
     out
 }
 
+#[inline(always)]
+pub(super) fn fmt_tilt_threshold_ms(ms: u32) -> String {
+    format!("{ms}ms")
+}
+
+pub(super) fn tilt_threshold_choices() -> Vec<String> {
+    let mut out = Vec::with_capacity((TILT_THRESHOLD_MAX_MS - TILT_THRESHOLD_MIN_MS + 1) as usize);
+    for ms in TILT_THRESHOLD_MIN_MS..=TILT_THRESHOLD_MAX_MS {
+        out.push(fmt_tilt_threshold_ms(ms));
+    }
+    out
+}
+
+pub(super) fn parse_tilt_threshold_ms(choice: &str) -> Option<u32> {
+    choice
+        .trim()
+        .trim_end_matches("ms")
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .map(crate::game::profile::clamp_tilt_threshold_ms)
+}
+
 pub(super) fn custom_fantastic_window_choices() -> Vec<String> {
     let lo = crate::game::profile::CUSTOM_FANTASTIC_WINDOW_MIN_MS;
     let hi = crate::game::profile::CUSTOM_FANTASTIC_WINDOW_MAX_MS;

@@ -7,9 +7,9 @@ use super::{
     NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoteSkin, Perspective, PlayStyle, PlayerSide,
     RemoveMask, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN, ScrollOption, ScrollSpeedSetting,
     TargetScoreSetting, TimingWindowsOption, TurnOption, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN,
-    VisualEffectsMask, clamp_custom_fantastic_window_ms, error_bar_style_from_mask,
-    error_bar_text_from_mask, lock_profiles, sanitize_player_initials, save_profile_ini_for_side,
-    save_profile_stats_for_side, session_side_is_guest, side_ix,
+    VisualEffectsMask, clamp_custom_fantastic_window_ms, clamp_tilt_threshold_ms,
+    error_bar_style_from_mask, error_bar_text_from_mask, lock_profiles, sanitize_player_initials,
+    save_profile_ini_for_side, save_profile_stats_for_side, session_side_is_guest, side_ix,
 };
 use chrono::Local;
 use std::path::Path;
@@ -922,6 +922,21 @@ pub fn update_tilt_multiplier_for_side(side: PlayerSide, multiplier: f32) {
             return;
         }
         profile.tilt_multiplier = multiplier;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_tilt_thresholds_for_side(side: PlayerSide, min_ms: u32, max_ms: u32) {
+    let min_ms = clamp_tilt_threshold_ms(min_ms);
+    let max_ms = clamp_tilt_threshold_ms(max_ms).max(min_ms);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.tilt_min_threshold_ms == min_ms && profile.tilt_max_threshold_ms == max_ms {
+            return;
+        }
+        profile.tilt_min_threshold_ms = min_ms;
+        profile.tilt_max_threshold_ms = max_ms;
     }
     save_profile_ini_for_side(side);
 }

@@ -22,6 +22,10 @@ pub(super) const TILT_INTENSITY_MAX: f32 = 10.00;
 
 pub(super) const TILT_INTENSITY_STEP: f32 = 0.05;
 
+pub(super) const TILT_THRESHOLD_MIN_MS: u32 = crate::game::profile::TILT_THRESHOLD_MIN_MS;
+
+pub(super) const TILT_THRESHOLD_MAX_MS: u32 = crate::game::profile::TILT_THRESHOLD_MAX_MS;
+
 pub(super) const HUD_OFFSET_MIN: i32 = crate::game::profile::HUD_OFFSET_MIN;
 
 pub(super) const HUD_OFFSET_MAX: i32 = crate::game::profile::HUD_OFFSET_MAX;

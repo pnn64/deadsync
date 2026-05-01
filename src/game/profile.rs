@@ -31,6 +31,24 @@ pub const SPACING_PERCENT_MAX: i32 = 100;
 pub const MINI_PERCENT_MIN: i32 = -100;
 pub const MINI_PERCENT_MAX: i32 = 150;
 
+<<<<<<< judgment-cutoff-feature
+/// Min/max for judgment tilt thresholds, in milliseconds.
+pub const TILT_THRESHOLD_MIN_MS: u32 = 0;
+pub const TILT_THRESHOLD_MAX_MS: u32 = 100;
+pub const TILT_MIN_THRESHOLD_DEFAULT_MS: u32 = 0;
+pub const TILT_MAX_THRESHOLD_DEFAULT_MS: u32 = 50;
+
+#[inline(always)]
+pub const fn clamp_tilt_threshold_ms(ms: u32) -> u32 {
+    if ms > TILT_THRESHOLD_MAX_MS {
+        TILT_THRESHOLD_MAX_MS
+    } else {
+        ms
+    }
+}
+
+=======
+>>>>>>> main
 /// Min/max for the per-player NoteField horizontal offset.
 pub const NOTE_FIELD_OFFSET_X_MIN: i32 = 0;
 pub const NOTE_FIELD_OFFSET_X_MAX: i32 = 50;
@@ -672,6 +690,14 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         i32::from(options.show_life_percent)
     ));
     content.push_str(&format!("TiltMultiplier={}\n", options.tilt_multiplier));
+    content.push_str(&format!(
+        "TiltMinThresholdMs={}\n",
+        options.tilt_min_threshold_ms
+    ));
+    content.push_str(&format!(
+        "TiltMaxThresholdMs={}\n",
+        options.tilt_max_threshold_ms
+    ));
     content.push_str(&format!("ErrorBar={}\n", options.error_bar));
     content.push_str(&format!(
         "ErrorBarText={}\n",
@@ -994,6 +1020,20 @@ fn load_player_options(
         .and_then(|s| s.parse::<f32>().ok())
         .filter(|v| v.is_finite())
         .unwrap_or(options.tilt_multiplier);
+    options.tilt_min_threshold_ms = profile_conf
+        .get(section, "TiltMinThresholdMs")
+        .or_else(|| profile_conf.get(section, "TiltCutoffMs"))
+        .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+        .map(clamp_tilt_threshold_ms)
+        .unwrap_or(options.tilt_min_threshold_ms);
+    options.tilt_max_threshold_ms = profile_conf
+        .get(section, "TiltMaxThresholdMs")
+        .and_then(|s| s.trim().trim_end_matches("ms").trim().parse::<u32>().ok())
+        .map(clamp_tilt_threshold_ms)
+        .unwrap_or(options.tilt_max_threshold_ms);
+    if options.tilt_max_threshold_ms < options.tilt_min_threshold_ms {
+        options.tilt_max_threshold_ms = options.tilt_min_threshold_ms;
+    }
     options.error_bar = profile_conf
         .get(section, "ErrorBar")
         .and_then(|s| ErrorBarStyle::from_str(&s).ok())
@@ -2551,6 +2591,8 @@ pub struct PlayerOptionsData {
     pub responsive_colors: bool,
     pub show_life_percent: bool,
     pub tilt_multiplier: f32,
+    pub tilt_min_threshold_ms: u32,
+    pub tilt_max_threshold_ms: u32,
     pub error_bar_active_mask: ErrorBarMask,
     pub error_bar: ErrorBarStyle,
     pub error_bar_text: bool,
@@ -2645,6 +2687,8 @@ fn default_player_options() -> PlayerOptionsData {
         responsive_colors: false,
         show_life_percent: false,
         tilt_multiplier: 1.0,
+        tilt_min_threshold_ms: TILT_MIN_THRESHOLD_DEFAULT_MS,
+        tilt_max_threshold_ms: TILT_MAX_THRESHOLD_DEFAULT_MS,
         error_bar_active_mask: error_bar_mask_from_style(ErrorBarStyle::default(), false),
         error_bar: ErrorBarStyle::default(),
         error_bar_text: false,
@@ -2785,6 +2829,8 @@ pub struct Profile {
     pub responsive_colors: bool,
     pub show_life_percent: bool,
     pub tilt_multiplier: f32,
+    pub tilt_min_threshold_ms: u32,
+    pub tilt_max_threshold_ms: u32,
     // Error bar (zmod semantics): each bit toggles one submodule in the
     // SelectMultiple row (Colorful/Monochrome/Text/Highlight/Average).
     pub error_bar_active_mask: ErrorBarMask,
@@ -2942,6 +2988,8 @@ impl Default for Profile {
             responsive_colors: player_options.responsive_colors,
             show_life_percent: player_options.show_life_percent,
             tilt_multiplier: player_options.tilt_multiplier,
+            tilt_min_threshold_ms: player_options.tilt_min_threshold_ms,
+            tilt_max_threshold_ms: player_options.tilt_max_threshold_ms,
             error_bar: player_options.error_bar,
             error_bar_active_mask: player_options.error_bar_active_mask,
             error_bar_text: player_options.error_bar_text,
@@ -3097,6 +3145,8 @@ impl Profile {
             responsive_colors: self.responsive_colors,
             show_life_percent: self.show_life_percent,
             tilt_multiplier: self.tilt_multiplier,
+            tilt_min_threshold_ms: self.tilt_min_threshold_ms,
+            tilt_max_threshold_ms: self.tilt_max_threshold_ms,
             error_bar_active_mask: self.error_bar_active_mask,
             error_bar: self.error_bar,
             error_bar_text: self.error_bar_text,
@@ -3193,6 +3243,8 @@ impl Profile {
         self.responsive_colors = options.responsive_colors;
         self.show_life_percent = options.show_life_percent;
         self.tilt_multiplier = options.tilt_multiplier;
+        self.tilt_min_threshold_ms = options.tilt_min_threshold_ms;
+        self.tilt_max_threshold_ms = options.tilt_max_threshold_ms;
         self.error_bar_active_mask = options.error_bar_active_mask;
         self.error_bar = options.error_bar;
         self.error_bar_text = options.error_bar_text;

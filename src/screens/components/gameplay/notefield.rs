@@ -102,6 +102,27 @@ const RUN_TIMER_PREWARM_CAP_S: i32 = 600;
 // Visual Feedback
 const SHOW_COMBO_AT: u32 = 4; // From Simply Love metrics
 
+#[inline(always)]
+fn judgment_tilt_rotation_deg(profile: &profile::Profile, judgment: &Judgment) -> f32 {
+    if !profile.judgment_tilt || judgment.grade == JudgeGrade::Miss {
+        return 0.0;
+    }
+    let offset_ms = judgment.time_error_ms;
+    if !offset_ms.is_finite() || !profile.tilt_multiplier.is_finite() {
+        return 0.0;
+    }
+    let min_ms = profile.tilt_min_threshold_ms as f32;
+    let max_ms = profile
+        .tilt_max_threshold_ms
+        .max(profile.tilt_min_threshold_ms) as f32;
+    let active_ms = offset_ms.abs().min(max_ms) - min_ms;
+    if active_ms <= 0.0 {
+        return 0.0;
+    }
+    let dir = if offset_ms < 0.0 { 1.0 } else { -1.0 };
+    dir * active_ms * 0.3 * profile.tilt_multiplier
+}
+
 // Z-order layers for key gameplay visuals (higher draws on top)
 const Z_RECEPTOR: i32 = 100;
 const Z_HOLD_BODY: i32 = 110;
@@ -7607,13 +7628,7 @@ pub fn build_bundles_with_view(
                 let columns = frame_cols.max(1) as usize;
                 let col_index = if columns > 1 { frame_offset } else { 0 };
                 let linear_index = (frame_row * columns + col_index) as u32;
-                let rot_deg = if profile.judgment_tilt && judgment.grade != JudgeGrade::Miss {
-                    let abs_sec = offset_sec.abs().min(0.050);
-                    let dir = if offset_sec < 0.0 { 1.0 } else { -1.0 };
-                    dir * abs_sec * 300.0 * profile.tilt_multiplier
-                } else {
-                    0.0
-                };
+                let rot_deg = judgment_tilt_rotation_deg(profile, judgment);
                 push_hud_capture(
                     &mut hud_actors,
                     &mut judgment_actors,
@@ -7767,7 +7782,7 @@ mod tests {
         calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, hallway_judgment_zoom,
         hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
         hold_window_for_display_run, hud_layout_ys, hud_y, judgment_actor_zoom,
-        lane_hold_window_bounds_by_time_ns, let_go_head_beat,
+        judgment_tilt_rotation_deg, lane_hold_window_bounds_by_time_ns, let_go_head_beat,
         maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size,
         note_window_for_display_run, note_world_z, note_x_extra, offset_center,
         predictive_itg_percents, push_transform_parts, receptor_row_center, tap_judgment_rows,
@@ -8501,6 +8516,49 @@ mod tests {
         assert!((judgment_actor_zoom(0.35, true) - 0.825).abs() <= 1e-6);
         assert!((judgment_actor_zoom(1.5, true) - 0.35).abs() <= 1e-6);
         assert!((judgment_actor_zoom(-1.0, true) - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn judgment_tilt_thresholds_deadzone_and_cap() {
+        let profile = profile::Profile {
+            judgment_tilt: true,
+            tilt_min_threshold_ms: 5,
+            tilt_max_threshold_ms: 20,
+            ..profile::Profile::default()
+        };
+        assert_eq!(
+            judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 5.0)),
+            0.0
+        );
+        assert!(
+            (judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 10.0))
+                + 1.5)
+                .abs()
+                <= 1e-6
+        );
+        assert!(
+            (judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 40.0))
+                + 4.5)
+                .abs()
+                <= 1e-6
+        );
+    }
+
+    #[test]
+    fn judgment_tilt_keeps_early_late_direction() {
+        let profile = profile::Profile {
+            judgment_tilt: true,
+            tilt_min_threshold_ms: 0,
+            tilt_max_threshold_ms: 50,
+            ..profile::Profile::default()
+        };
+        assert!(
+            judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, -10.0))
+                > 0.0
+        );
+        assert!(
+            judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 10.0)) < 0.0
+        );
     }
 
     #[test]

@@ -4,7 +4,7 @@ use super::*;
 pub(super) struct RowVisibility {
     pub(super) show_measure_counter_children: bool,
     pub(super) show_judgment_offsets: bool,
-    pub(super) show_judgment_tilt_intensity: bool,
+    pub(super) show_judgment_tilt_options: bool,
     pub(super) show_combo_offsets: bool,
     pub(super) show_error_bar_children: bool,
     pub(super) show_custom_fantastic_window_ms: bool,
@@ -26,8 +26,11 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     if id == RowId::JudgmentOffsetX || id == RowId::JudgmentOffsetY {
         return visibility.show_judgment_offsets;
     }
-    if id == RowId::JudgmentTiltIntensity {
-        return visibility.show_judgment_tilt_intensity;
+    if id == RowId::JudgmentTiltIntensity
+        || id == RowId::JudgmentTiltMinThreshold
+        || id == RowId::JudgmentTiltMaxThreshold
+    {
+        return visibility.show_judgment_tilt_options;
     }
     if id == RowId::ComboOffsetX || id == RowId::ComboOffsetY {
         return visibility.show_combo_offsets;
@@ -77,7 +80,10 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     if id == RowId::JudgmentOffsetX || id == RowId::JudgmentOffsetY {
         return Some(RowId::JudgmentFont);
     }
-    if id == RowId::JudgmentTiltIntensity {
+    if id == RowId::JudgmentTiltIntensity
+        || id == RowId::JudgmentTiltMinThreshold
+        || id == RowId::JudgmentTiltMaxThreshold
+    {
         return Some(RowId::JudgmentTilt);
     }
     if id == RowId::ComboOffsetX || id == RowId::ComboOffsetY {
@@ -153,7 +159,7 @@ pub(super) fn judgment_offsets_visible(row_map: &RowMap, active: [bool; PLAYER_S
 }
 
 #[inline(always)]
-pub(super) fn judgment_tilt_intensity_visible(
+pub(super) fn judgment_tilt_options_visible(
     row_map: &RowMap,
     active: [bool; PLAYER_SLOTS],
 ) -> bool {
@@ -369,7 +375,7 @@ pub(super) fn row_visibility(
     RowVisibility {
         show_measure_counter_children: measure_counter_children_visible(row_map, active),
         show_judgment_offsets: judgment_offsets_visible(row_map, active),
-        show_judgment_tilt_intensity: judgment_tilt_intensity_visible(row_map, active),
+        show_judgment_tilt_options: judgment_tilt_options_visible(row_map, active),
         show_combo_offsets: combo_offsets_visible(row_map, active),
         show_error_bar_children: error_bar_children_visible(active, option_masks),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(row_map, active),

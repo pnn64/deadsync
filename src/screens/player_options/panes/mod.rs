@@ -212,6 +212,31 @@ pub(super) fn apply_profile_defaults(
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
     }
+    if let Some(row) = row_map.get_mut(RowId::JudgmentTiltMinThreshold) {
+        let threshold =
+            crate::game::profile::clamp_tilt_threshold_ms(profile.tilt_min_threshold_ms);
+        let needle = fmt_tilt_threshold_ms(threshold);
+        row.selected_choice_index[player_idx] = row
+            .choices
+            .iter()
+            .position(|c| c == &needle)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
+    }
+    if let Some(row) = row_map.get_mut(RowId::JudgmentTiltMaxThreshold) {
+        let min_threshold =
+            crate::game::profile::clamp_tilt_threshold_ms(profile.tilt_min_threshold_ms);
+        let threshold =
+            crate::game::profile::clamp_tilt_threshold_ms(profile.tilt_max_threshold_ms)
+                .max(min_threshold);
+        let needle = fmt_tilt_threshold_ms(threshold);
+        row.selected_choice_index[player_idx] = row
+            .choices
+            .iter()
+            .position(|c| c == &needle)
+            .unwrap_or(0)
+            .min(row.choices.len().saturating_sub(1));
+    }
     if let Some(row) = row_map.get_mut(RowId::MeasureCounterLookahead) {
         row.selected_choice_index[player_idx] = (profile.measure_counter_lookahead.min(4) as usize)
             .min(row.choices.len().saturating_sub(1));

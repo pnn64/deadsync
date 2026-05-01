@@ -48,6 +48,8 @@ pub enum RowId {
     CarryCombo,
     JudgmentTilt,
     JudgmentTiltIntensity,
+    JudgmentTiltMinThreshold,
+    JudgmentTiltMaxThreshold,
     JudgmentBehindArrows,
     OffsetIndicator,
     ErrorBar,
