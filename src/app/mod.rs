@@ -4408,6 +4408,7 @@ impl App {
             CurrentScreen::SelectMusic => select_music::get_actors(
                 &self.state.screens.select_music_state,
                 &self.asset_manager,
+                self.state.session.played_stages.len() + 1,
             ),
             CurrentScreen::SelectCourse => select_course::get_actors(
                 &self.state.screens.select_course_state,

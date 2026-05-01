@@ -7889,7 +7889,11 @@ fn sl_select_music_wheel_cascade_mask() -> Vec<Actor> {
     actors
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+pub fn get_actors(
+    state: &State,
+    asset_manager: &AssetManager,
+    stage_number: usize,
+) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let side = crate::game::profile::get_session_player_side();
     let play_style = crate::game::profile::get_session_play_style();
@@ -7921,7 +7925,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(screen_bars::build("SELECT MUSIC"));
+    actors.extend(screen_bars::build("SELECT MUSIC", Some(stage_number)));
 
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
     let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
