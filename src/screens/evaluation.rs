@@ -2468,14 +2468,79 @@ fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
     actors
 }
 
-#[inline(always)]
+/// Phases of the eval auto-screenshot state machine. Advances strictly forward
+/// as eval-screen state evolves; the screenshot is taken when we reach `Ready`.
+///
+/// ```text
+///   IntroPlaying
+///        v   (intro/rolling-numbers animation finishes)
+///   WaitingForGrooveStats
+///        v   (GS submit reaches a terminal status; the network layer
+///             times out / errors on its own, so no extra cap here)
+///   WaitingForItlOverlayDismissal
+///        v   (user dismisses the overlay; skipped entirely if no ITL
+///             overlay opened)
+///   Ready
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AutoScreenshotPhase {
+    IntroPlaying,
+    WaitingForGrooveStats,
+    WaitingForItlOverlayDismissal,
+    Ready,
+}
+
 pub(crate) fn auto_screenshot_ready(state: &State) -> bool {
-    state.screen_elapsed >= auto_screenshot_ready_seconds()
+    auto_screenshot_phase(state) == AutoScreenshotPhase::Ready
+}
+
+fn auto_screenshot_phase(state: &State) -> AutoScreenshotPhase {
+    let elapsed = state.screen_elapsed;
+
+    if elapsed < auto_screenshot_intro_done_seconds() {
+        return AutoScreenshotPhase::IntroPlaying;
+    }
+
+    if waiting_for_groovestats_submit(state) {
+        return AutoScreenshotPhase::WaitingForGrooveStats;
+    }
+
+    if state.itl_overlay_visible {
+        return AutoScreenshotPhase::WaitingForItlOverlayDismissal;
+    }
+
+    AutoScreenshotPhase::Ready
 }
 
 #[inline(always)]
-pub(crate) fn auto_screenshot_ready_seconds() -> f32 {
+fn auto_screenshot_intro_done_seconds() -> f32 {
     EVAL_STAGE_IN_TOTAL_SECONDS.max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
+}
+
+/// True if any player expected a GrooveStats submit and the response
+/// (terminal status or ITL progress) hasn't arrived yet.
+fn waiting_for_groovestats_submit(state: &State) -> bool {
+    for player_idx in 0..MAX_PLAYERS {
+        let Some(si) = state.score_info[player_idx].as_ref() else {
+            continue;
+        };
+        if !si.expected_groovestats_submit {
+            continue;
+        }
+        if state.itl_progress[player_idx].is_some() {
+            continue;
+        }
+        let status = scores::get_groovestats_submit_ui_status_for_side(
+            si.chart.short_hash.as_str(),
+            si.side,
+        )
+        .or(state.submit_groovestats_fallback[player_idx]);
+        match status {
+            None | Some(scores::GrooveStatsSubmitUiStatus::Submitting) => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
