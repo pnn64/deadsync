@@ -569,6 +569,9 @@ const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding {
             if p.track_early_judgments {
                 bits.insert(super::super::state::ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
             }
+            if p.scale_scatterplot {
+                bits.insert(super::super::state::ResultsExtrasMask::SCALE_SCATTERPLOT);
+            }
             bits.bits() as u32
         },
         get_active: |m| m.results_extras.bits() as u32,
@@ -1078,7 +1081,10 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         lookup_key("PlayerOptions", "ResultsExtras"),
         lookup_key("PlayerOptionsHelp", "ResultsExtrasHelp"),
         RESULTS_EXTRAS,
-        vec![tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string()],
+        vec![
+            tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string(),
+            tr("PlayerOptions", "ResultsExtrasScaleScatterplot").to_string(),
+        ],
     ));
     b.push(Row::cycle(
         RowId::TimingWindows,

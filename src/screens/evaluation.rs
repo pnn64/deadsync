@@ -41,6 +41,7 @@ use std::time::Instant;
 
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::game::profile;
+use crate::game::profile::ScatterWindow;
 use crate::screens::ScreenAction;
 // Keyboard handling is centralized in app via virtual actions
 use chrono::Local;
@@ -1603,20 +1604,59 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let histogram = timing_stats::build_histogram_ms(notes);
             let scatter_worst_window_ms = {
                 let tw = timing_stats::effective_windows_ms();
-                let abs = histogram.worst_observed_ms.max(0.0);
-                let mut idx: usize = if abs <= tw[0] {
+                let observed = histogram.worst_observed_ms.max(0.0);
+                let mut idx: usize = if observed <= tw[0] {
                     1
-                } else if abs <= tw[1] {
+                } else if observed <= tw[1] {
                     2
-                } else if abs <= tw[2] {
+                } else if observed <= tw[2] {
                     3
-                } else if abs <= tw[3] {
+                } else if observed <= tw[3] {
                     4
                 } else {
                     5
                 };
-                idx = idx.max(2);
-                tw[idx - 1]
+                if prof.scale_scatterplot {
+                    // zmod-style `ScaleGraph`: cap at Great so a single
+                    // Decent/Way Off doesn't squash the plot, and floor
+                    // at Fantastic so quad/quint runs can zoom past
+                    // Excellent. Snap-to-max-error and padding stay as
+                    // internal-only knobs for future use.
+                    const MAX_WINDOW: ScatterWindow = ScatterWindow::Great;
+                    const MIN_WINDOW: ScatterWindow = ScatterWindow::Fantastic;
+                    const SNAP_MAX_ERROR: bool = true;
+                    const PADDING_PCT: u8 = 5;
+
+                    let max_w = MAX_WINDOW.ms();
+                    let min_w = MIN_WINDOW.ms();
+                    let lo = min_w.min(max_w);
+                    let hi = min_w.max(max_w);
+                    let candidate = if SNAP_MAX_ERROR {
+                        observed * (1.0 + (PADDING_PCT as f32) / 100.0)
+                    } else {
+                        if idx == 1 {
+                            idx = 2;
+                        }
+                        let tier = tw[idx - 1];
+                        // FA+ W0 is layered on top of W1..W5 in deadsync,
+                        // so the tier-edge ladder above never lands on it.
+                        // Honor it explicitly when it's the configured
+                        // lower bound and the data fits.
+                        if MIN_WINDOW == ScatterWindow::FantasticPlus
+                            && observed <= ScatterWindow::FantasticPlus.ms()
+                        {
+                            ScatterWindow::FantasticPlus.ms().min(tier)
+                        } else {
+                            tier
+                        }
+                    };
+                    candidate.clamp(lo, hi)
+                } else {
+                    // Original deadsync behavior: Excellent floor with
+                    // no upper cap.
+                    idx = idx.max(2);
+                    tw[idx - 1]
+                }
             };
             let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
             let graph_last_second = gs.song.total_length_seconds as f32;
@@ -1876,16 +1916,13 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             if scoring_scatter == EvalGraphPane::HardEx {
                 scatter_mesh_hard_ex[player_idx] = {
                     const GRAPH_H: f32 = 64.0;
-                    let hard_ex_worst_window = si
-                        .scatter_worst_window_ms
-                        .min(timing_stats::effective_windows_ms()[1]);
                     let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                         &si.scatter,
                         si.graph_first_second,
                         si.graph_last_second,
                         graph_width,
                         GRAPH_H,
-                        hard_ex_worst_window,
+                        si.scatter_worst_window_ms,
                         crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::HardEx,
                     );
                     (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
