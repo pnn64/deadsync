@@ -3277,12 +3277,6 @@ pub fn init() -> State {
             } else {
                 state.p2_selected_steps_index = state.selected_steps_index;
             }
-            if state.selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
-                state.preferred_difficulty_index = state.selected_steps_index;
-            }
-            if state.p2_selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
-                state.p2_preferred_difficulty_index = state.p2_selected_steps_index;
-            }
         }
     }
 
@@ -5256,9 +5250,6 @@ fn refresh_after_reload(state: &mut State) {
             )
         {
             refreshed.selected_steps_index = index;
-            if index < color::FILE_DIFFICULTY_NAMES.len() {
-                refreshed.preferred_difficulty_index = index;
-            }
         }
 
         let mut restored_p2 = false;
@@ -5283,9 +5274,6 @@ fn refresh_after_reload(state: &mut State) {
             )
         {
             refreshed.p2_selected_steps_index = index;
-            if index < color::FILE_DIFFICULTY_NAMES.len() {
-                refreshed.p2_preferred_difficulty_index = index;
-            }
         }
     }
 
@@ -7871,17 +7859,11 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 best_steps_index(song, target_chart_type, state.preferred_difficulty_index)
             {
                 state.selected_steps_index = idx;
-                if idx < color::FILE_DIFFICULTY_NAMES.len() {
-                    state.preferred_difficulty_index = idx;
-                }
             }
             if let Some(idx) =
                 best_steps_index(song, target_chart_type, state.p2_preferred_difficulty_index)
             {
                 state.p2_selected_steps_index = idx;
-                if idx < color::FILE_DIFFICULTY_NAMES.len() {
-                    state.p2_preferred_difficulty_index = idx;
-                }
             }
         }
     }
@@ -10361,6 +10343,119 @@ mod tests {
         assert_eq!(
             select_music_lobby_lock_text_for(&joined, 1, Some(&local_song), None),
             None
+        );
+    }
+
+    // --- Regression tests for preferred_difficulty_index preservation ---
+
+    use crate::game::chart::{ChartData, StaminaCounts};
+
+    fn test_chart(difficulty: &str) -> ChartData {
+        ChartData {
+            chart_type: "dance-single".to_string(),
+            difficulty: difficulty.to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 9,
+            step_artist: String::new(),
+            music_path: None,
+            short_hash: format!("hash_{}", difficulty.to_lowercase()),
+            stats: rssp::stats::ArrowStats::default(),
+            tech_counts: rssp::TechCounts::default(),
+            mines_nonfake: 0,
+            stamina_counts: StaminaCounts::default(),
+            total_streams: 0,
+            matrix_rating: 0.0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: true,
+            has_chart_attacks: false,
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
+            display_bpm: None,
+            min_bpm: 120.0,
+            max_bpm: 120.0,
+        }
+    }
+
+    fn test_song_with_charts(title: &str, difficulties: &[&str]) -> Arc<SongData> {
+        let mut song = (*test_song(title)).clone();
+        song.charts = difficulties.iter().map(|d| test_chart(d)).collect();
+        Arc::new(song)
+    }
+
+    #[test]
+    fn best_steps_index_returns_exact_match_when_available() {
+        let song =
+            test_song_with_charts("full", &["Beginner", "Easy", "Medium", "Hard", "Challenge"]);
+        // Challenge = index 4
+        assert_eq!(super::best_steps_index(&song, "dance-single", 4), Some(4));
+    }
+
+    #[test]
+    fn best_steps_index_returns_nearest_when_preferred_missing() {
+        // Song has only Beginner(0), Easy(1), Hard(3) — no Medium(2) or Challenge(4)
+        let song = test_song_with_charts("partial", &["Beginner", "Easy", "Hard"]);
+        // Prefer Challenge(4) → nearest is Hard(3)
+        assert_eq!(super::best_steps_index(&song, "dance-single", 4), Some(3));
+        // Prefer Medium(2) → nearest is Easy(1) or Hard(3), both distance=1; first found wins
+        let result = super::best_steps_index(&song, "dance-single", 2);
+        assert!(result == Some(1) || result == Some(3));
+    }
+
+    #[test]
+    fn best_steps_index_fallback_does_not_corrupt_preference() {
+        // Regression: navigating to a song without the preferred difficulty
+        // must NOT overwrite preferred_difficulty_index.
+        let song_full =
+            test_song_with_charts("full", &["Beginner", "Easy", "Medium", "Hard", "Challenge"]);
+        let song_partial = test_song_with_charts("partial", &["Beginner", "Easy", "Hard"]);
+
+        // Simulate: user prefers Challenge (index 4)
+        let preferred_difficulty_index: usize = 4;
+        let mut selected_steps_index: usize = 4;
+
+        // Navigate to song_full — Challenge exists, exact match
+        if let Some(idx) =
+            super::best_steps_index(&song_full, "dance-single", preferred_difficulty_index)
+        {
+            selected_steps_index = idx;
+        }
+        assert_eq!(selected_steps_index, 4);
+        assert_eq!(preferred_difficulty_index, 4);
+
+        // Navigate to song_partial — Challenge missing, falls back to Hard(3)
+        if let Some(idx) =
+            super::best_steps_index(&song_partial, "dance-single", preferred_difficulty_index)
+        {
+            selected_steps_index = idx;
+        }
+        assert_eq!(selected_steps_index, 3, "selected should fall back to Hard");
+        assert_eq!(
+            preferred_difficulty_index, 4,
+            "preference must stay Challenge"
+        );
+
+        // Navigate back to song_full — should resolve to Challenge again, not Hard
+        if let Some(idx) =
+            super::best_steps_index(&song_full, "dance-single", preferred_difficulty_index)
+        {
+            selected_steps_index = idx;
+        }
+        assert_eq!(
+            selected_steps_index, 4,
+            "should return to Challenge, not stay on Hard"
         );
     }
 }
