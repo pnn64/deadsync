@@ -187,9 +187,7 @@ pub fn device_login_start(
 /// `POST /device-login/poll`.  Asks AC for the current status of a
 /// device-login session.  When `status == "consumed"`, the response
 /// carries the new api key.
-pub fn device_login_poll(
-    body: &DeviceLoginPollReq,
-) -> Result<DeviceLoginPollResp, NetworkError> {
+pub fn device_login_poll(body: &DeviceLoginPollReq) -> Result<DeviceLoginPollResp, NetworkError> {
     network::post_json(&format!("{DEVICE_LOGIN_BASE}/poll"), body)
 }
 
@@ -225,19 +223,34 @@ mod tests {
 
     #[test]
     fn classify_error_detects_timeout() {
-        assert_eq!(classify_error("request timed out"), ConnectionError::TimedOut);
-        assert_eq!(classify_error("Timeout reading body"), ConnectionError::TimedOut);
+        assert_eq!(
+            classify_error("request timed out"),
+            ConnectionError::TimedOut
+        );
+        assert_eq!(
+            classify_error("Timeout reading body"),
+            ConnectionError::TimedOut
+        );
     }
 
     #[test]
     fn classify_error_detects_host_blocked() {
-        assert_eq!(classify_error("403 forbidden"), ConnectionError::HostBlocked);
-        assert_eq!(classify_error("connection blocked by firewall"), ConnectionError::HostBlocked);
+        assert_eq!(
+            classify_error("403 forbidden"),
+            ConnectionError::HostBlocked
+        );
+        assert_eq!(
+            classify_error("connection blocked by firewall"),
+            ConnectionError::HostBlocked
+        );
     }
 
     #[test]
     fn classify_error_falls_back_to_cannot_connect() {
-        assert_eq!(classify_error("connection refused"), ConnectionError::CannotConnect);
+        assert_eq!(
+            classify_error("connection refused"),
+            ConnectionError::CannotConnect
+        );
     }
 
     #[test]
@@ -254,7 +267,10 @@ mod tests {
         assert_eq!(resp.short_code, "ABCD2345");
         assert_eq!(resp.poll_token, "tok-xyz");
         assert_eq!(resp.poll_interval_seconds, Some(3));
-        assert!(resp.verification_url.starts_with("https://arrowcloud.dance/device-login/"));
+        assert!(
+            resp.verification_url
+                .starts_with("https://arrowcloud.dance/device-login/")
+        );
     }
 
     #[test]

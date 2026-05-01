@@ -9,6 +9,7 @@ pub(super) struct RowVisibility {
     pub(super) show_error_bar_children: bool,
     pub(super) show_custom_fantastic_window_ms: bool,
     pub(super) show_density_graph_background: bool,
+    pub(super) show_target_score: bool,
     pub(super) show_combo_rows: bool,
     pub(super) show_lifebar_rows: bool,
     pub(super) show_indicator_score_type: bool,
@@ -41,6 +42,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     }
     if id == RowId::DensityGraphBackground {
         return visibility.show_density_graph_background;
+    }
+    if id == RowId::TargetScore {
+        return visibility.show_target_score;
     }
     if id == RowId::ComboColors || id == RowId::ComboColorMode || id == RowId::CarryCombo {
         return visibility.show_combo_rows;
@@ -223,6 +227,41 @@ pub(super) fn density_graph_background_visible(
     !any_active
 }
 
+#[inline(always)]
+fn selected_choice(row_map: &RowMap, id: RowId, player_idx: usize) -> Option<usize> {
+    let row = row_map.get(id)?;
+    let max_choice = row.choices.len().saturating_sub(1);
+    Some(row.selected_choice_index[player_idx].min(max_choice))
+}
+
+pub(super) fn target_score_visible(row_map: &RowMap, active: [bool; PLAYER_SLOTS]) -> bool {
+    let has_trigger_row = row_map.get(RowId::DataVisualizations).is_some()
+        || row_map.get(RowId::MiniIndicator).is_some()
+        || row_map.get(RowId::ActionOnMissedTarget).is_some();
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        if selected_choice(row_map, RowId::DataVisualizations, player_idx)
+            .and_then(|idx| DATA_VISUALIZATIONS_VARIANTS.get(idx))
+            .is_some_and(|&v| v == crate::game::profile::DataVisualizations::TargetScoreGraph)
+        {
+            return true;
+        }
+        if selected_choice(row_map, RowId::MiniIndicator, player_idx)
+            .and_then(|idx| MINI_INDICATOR_VARIANTS.get(idx))
+            .is_some_and(|&v| v == crate::game::profile::MiniIndicator::Pacemaker)
+        {
+            return true;
+        }
+        if selected_choice(row_map, RowId::ActionOnMissedTarget, player_idx)
+            .is_some_and(|idx| idx != 0)
+        {
+            return true;
+        }
+    }
+    !any_active || !has_trigger_row
+}
+
 pub(super) fn combo_rows_visible(
     active: [bool; PLAYER_SLOTS],
     option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
@@ -285,6 +324,7 @@ pub(super) fn row_visibility(
         show_error_bar_children: error_bar_children_visible(active, option_masks),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(row_map, active),
         show_density_graph_background: density_graph_background_visible(row_map, active),
+        show_target_score: target_score_visible(row_map, active),
         show_combo_rows: combo_rows_visible(active, option_masks),
         show_lifebar_rows: lifebar_rows_visible(active, option_masks),
         show_indicator_score_type: indicator_score_type_visible(row_map, active),

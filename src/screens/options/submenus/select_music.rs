@@ -396,8 +396,6 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
 pub(in crate::screens::options) const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 4;
 pub(in crate::screens::options) const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 2;
 
-
-
 pub(in crate::screens::options) const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] =
     [5, 10, 15, 25, 30, 45, 100];
 
@@ -705,4 +703,3 @@ impl ChoiceEnum for SelectMusicScoreboxPlacement {
     const ALL: &'static [Self] = &[Self::Auto, Self::StepPane];
     const DEFAULT: Self = Self::Auto;
 }
-

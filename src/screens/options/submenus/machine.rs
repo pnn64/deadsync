@@ -301,8 +301,6 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-
-
 impl ChoiceEnum for MachinePreferredPlayStyle {
     const ALL: &'static [Self] = &[Self::Single, Self::Versus, Self::Double];
     const DEFAULT: Self = Self::Single;
@@ -350,6 +348,12 @@ pub(in crate::screens::options) const VISUAL_STYLE_CHOICES: &[Choice] = &[
 ];
 
 impl ChoiceEnum for LogLevel {
-    const ALL: &'static [Self] = &[Self::Error, Self::Warn, Self::Info, Self::Debug, Self::Trace];
+    const ALL: &'static [Self] = &[
+        Self::Error,
+        Self::Warn,
+        Self::Info,
+        Self::Debug,
+        Self::Trace,
+    ];
     const DEFAULT: Self = Self::Trace;
 }

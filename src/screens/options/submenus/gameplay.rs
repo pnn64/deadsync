@@ -117,7 +117,11 @@ impl ChoiceEnum for BreakdownStyle {
 }
 
 impl ChoiceEnum for SyncGraphMode {
-    const ALL: &'static [Self] = &[Self::Frequency, Self::BeatIndex, Self::PostKernelFingerprint];
+    const ALL: &'static [Self] = &[
+        Self::Frequency,
+        Self::BeatIndex,
+        Self::PostKernelFingerprint,
+    ];
     const DEFAULT: Self = Self::PostKernelFingerprint;
 }
 

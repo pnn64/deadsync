@@ -303,7 +303,12 @@ pub(in crate::screens::options) fn sound_row_index(id: SubRowId) -> Option<usize
 
 pub(in crate::screens::options) fn selected_sound_device_choice(state: &State) -> usize {
     sound_row_index(SubRowId::SoundDevice)
-        .and_then(|idx| state.sub[SubmenuKind::Sound].choice_indices.get(idx).copied())
+        .and_then(|idx| {
+            state.sub[SubmenuKind::Sound]
+                .choice_indices
+                .get(idx)
+                .copied()
+        })
         .unwrap_or(0)
 }
 
@@ -373,7 +378,12 @@ pub(in crate::screens::options) fn selected_audio_output_mode(
     state: &State,
 ) -> config::AudioOutputMode {
     sound_row_index(SubRowId::AudioOutputMode)
-        .and_then(|idx| state.sub[SubmenuKind::Sound].choice_indices.get(idx).copied())
+        .and_then(|idx| {
+            state.sub[SubmenuKind::Sound]
+                .choice_indices
+                .get(idx)
+                .copied()
+        })
         .map(audio_output_mode_from_choice)
         .unwrap_or(config::AudioOutputMode::Auto)
 }
@@ -416,7 +426,12 @@ pub(in crate::screens::options) fn selected_linux_audio_backend(
     state: &State,
 ) -> config::LinuxAudioBackend {
     sound_row_index(SubRowId::LinuxAudioBackend)
-        .and_then(|idx| state.sub[SubmenuKind::Sound].choice_indices.get(idx).copied())
+        .and_then(|idx| {
+            state.sub[SubmenuKind::Sound]
+                .choice_indices
+                .get(idx)
+                .copied()
+        })
         .map(|idx| linux_audio_backend_from_choice(state, idx))
         .unwrap_or(config::LinuxAudioBackend::Auto)
 }
@@ -447,10 +462,16 @@ pub(in crate::screens::options) fn set_sound_choice_index(
     let Some(row_idx) = sound_row_index(id) else {
         return;
     };
-    if let Some(slot) = state.sub[SubmenuKind::Sound].choice_indices.get_mut(row_idx) {
+    if let Some(slot) = state.sub[SubmenuKind::Sound]
+        .choice_indices
+        .get_mut(row_idx)
+    {
         *slot = idx;
     }
-    if let Some(slot) = state.sub[SubmenuKind::Sound].cursor_indices.get_mut(row_idx) {
+    if let Some(slot) = state.sub[SubmenuKind::Sound]
+        .cursor_indices
+        .get_mut(row_idx)
+    {
         *slot = idx;
     }
 }

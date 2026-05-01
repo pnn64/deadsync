@@ -113,7 +113,11 @@ pub fn sync_max_fps(state: &mut State, max_fps: u16) {
 
 pub fn sync_vsync(state: &mut State, enabled: bool) {
     state.vsync_at_load = enabled;
-    if let Some(slot) = get_choice_by_id_mut(&mut state.sub[SubmenuKind::Graphics].choice_indices, GRAPHICS_OPTIONS_ROWS, SubRowId::VSync) {
+    if let Some(slot) = get_choice_by_id_mut(
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::VSync,
+    ) {
         *slot = yes_no_choice_index(enabled);
     }
     sync_submenu_cursor_indices(state);
@@ -275,7 +279,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     &state.sub[SubmenuKind::Graphics].choice_indices,
                     GRAPHICS_OPTIONS_ROWS,
                     SubRowId::VSync,
-                ).is_none_or(yes_no_from_choice);
+                )
+                .is_none_or(yes_no_from_choice);
                 (
                     Some(selected_video_renderer(state)),
                     Some(selected_display_mode(state)),

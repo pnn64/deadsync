@@ -80,7 +80,11 @@ pub(super) const fn submenu_title(kind: SubmenuKind) -> &'static str {
     }
 }
 
-pub(super) fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow]) -> Vec<usize> {
+pub(super) fn submenu_visible_row_indices(
+    state: &State,
+    kind: SubmenuKind,
+    rows: &[SubRow],
+) -> Vec<usize> {
     match kind {
         SubmenuKind::Graphics => {
             let show_sw = graphics_show_software_threads(state);
@@ -113,25 +117,29 @@ pub(super) fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows
                 &state.sub[SubmenuKind::SelectMusic].choice_indices,
                 SELECT_MUSIC_OPTIONS_ROWS,
                 SubRowId::ShowBanners,
-            ).unwrap_or_else(|| yes_no_choice_index(true));
+            )
+            .unwrap_or_else(|| yes_no_choice_index(true));
             let show_banners = yes_no_from_choice(show_banners);
             let show_breakdown = get_choice_by_id(
                 &state.sub[SubmenuKind::SelectMusic].choice_indices,
                 SELECT_MUSIC_OPTIONS_ROWS,
                 SubRowId::ShowBreakdown,
-            ).unwrap_or_else(|| yes_no_choice_index(true));
+            )
+            .unwrap_or_else(|| yes_no_choice_index(true));
             let show_breakdown = yes_no_from_choice(show_breakdown);
             let show_previews = get_choice_by_id(
                 &state.sub[SubmenuKind::SelectMusic].choice_indices,
                 SELECT_MUSIC_OPTIONS_ROWS,
                 SubRowId::MusicPreviews,
-            ).unwrap_or_else(|| yes_no_choice_index(true));
+            )
+            .unwrap_or_else(|| yes_no_choice_index(true));
             let show_previews = yes_no_from_choice(show_previews);
             let show_scorebox = get_choice_by_id(
                 &state.sub[SubmenuKind::SelectMusic].choice_indices,
                 SELECT_MUSIC_OPTIONS_ROWS,
                 SubRowId::ShowGsBox,
-            ).unwrap_or_else(|| yes_no_choice_index(true));
+            )
+            .unwrap_or_else(|| yes_no_choice_index(true));
             let show_scorebox = yes_no_from_choice(show_scorebox);
             rows.iter()
                 .enumerate()
@@ -157,13 +165,15 @@ pub(super) fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows
                 &state.sub[SubmenuKind::Machine].choice_indices,
                 MACHINE_OPTIONS_ROWS,
                 SubRowId::SelectStyle,
-            ).unwrap_or(1)
+            )
+            .unwrap_or(1)
                 == 0;
             let show_preferred_mode = get_choice_by_id(
                 &state.sub[SubmenuKind::Machine].choice_indices,
                 MACHINE_OPTIONS_ROWS,
                 SubRowId::SelectPlayMode,
-            ).unwrap_or(1)
+            )
+            .unwrap_or(1)
                 == 0;
             rows.iter()
                 .enumerate()

@@ -404,7 +404,8 @@ pub(in crate::screens::options) fn selected_video_renderer(state: &State) -> Bac
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::VideoRenderer,
-    ).unwrap_or(0);
+    )
+    .unwrap_or(0);
     renderer_choice_index_to_backend(choice_idx)
 }
 
@@ -567,19 +568,30 @@ impl ChoiceEnum for PresentModePolicy {
     const DEFAULT: Self = Self::Mailbox;
 }
 
-pub(in crate::screens::options) fn selected_present_mode_policy(state: &State) -> PresentModePolicy {
+pub(in crate::screens::options) fn selected_present_mode_policy(
+    state: &State,
+) -> PresentModePolicy {
     get_choice_by_id(
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::PresentMode,
-    ).map_or(state.present_mode_policy_at_load, PresentModePolicy::from_choice)
+    )
+    .map_or(
+        state.present_mode_policy_at_load,
+        PresentModePolicy::from_choice,
+    )
 }
 
 pub(in crate::screens::options) fn selected_high_dpi(state: &State) -> bool {
     GRAPHICS_OPTIONS_ROWS
         .iter()
         .position(|row| row.id == SubRowId::HighDpi)
-        .and_then(|idx| state.sub[SubmenuKind::Graphics].choice_indices.get(idx).copied())
+        .and_then(|idx| {
+            state.sub[SubmenuKind::Graphics]
+                .choice_indices
+                .get(idx)
+                .copied()
+        })
         .is_some_and(yes_no_from_choice)
 }
 
@@ -633,7 +645,8 @@ pub(in crate::screens::options) fn graphics_show_present_mode(state: &State) -> 
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::VSync,
-    ).is_some_and(|idx| !yes_no_from_choice(idx))
+    )
+    .is_some_and(|idx| !yes_no_from_choice(idx))
 }
 
 #[inline(always)]
@@ -647,7 +660,8 @@ pub(in crate::screens::options) fn max_fps_enabled(state: &State) -> bool {
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::MaxFps,
-    ).is_some_and(yes_no_from_choice)
+    )
+    .is_some_and(yes_no_from_choice)
 }
 
 #[inline(always)]
@@ -670,7 +684,8 @@ pub(in crate::screens::options) fn selected_fullscreen_type(state: &State) -> Fu
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::FullscreenType,
-    ).map_or(FullscreenType::Exclusive, FullscreenType::from_choice)
+    )
+    .map_or(FullscreenType::Exclusive, FullscreenType::from_choice)
 }
 
 pub(in crate::screens::options) fn selected_display_mode(state: &State) -> DisplayMode {
@@ -678,7 +693,8 @@ pub(in crate::screens::options) fn selected_display_mode(state: &State) -> Displ
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::DisplayMode,
-    ).unwrap_or(0);
+    )
+    .unwrap_or(0);
     let windowed_idx = state.display_mode_choices.len().saturating_sub(1);
     if windowed_idx == 0 || display_choice >= windowed_idx {
         DisplayMode::Windowed
@@ -692,7 +708,8 @@ pub(in crate::screens::options) fn selected_display_monitor(state: &State) -> us
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::DisplayMode,
-    ).unwrap_or(0);
+    )
+    .unwrap_or(0);
     let windowed_idx = state.display_mode_choices.len().saturating_sub(1);
     if windowed_idx == 0 || display_choice >= windowed_idx {
         0
@@ -706,7 +723,8 @@ pub(in crate::screens::options) fn selected_refresh_rate_millihertz(state: &Stat
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::RefreshRate,
-    ).unwrap_or(0);
+    )
+    .unwrap_or(0);
     state.refresh_rate_choices.get(idx).copied().unwrap_or(0)
 }
 
@@ -759,7 +777,8 @@ pub(in crate::screens::options) fn selected_max_fps(state: &State) -> u16 {
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::MaxFpsValue,
-    ).unwrap_or(0);
+    )
+    .unwrap_or(0);
     max_fps_from_choice(&state.max_fps_choices, idx)
 }
 
@@ -779,11 +798,10 @@ pub(in crate::screens::options) fn ensure_display_mode_choices(state: &mut State
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::DisplayMode,
     ) && let Some(cursor_idx) = get_choice_by_id_mut(
-            &mut state.sub[SubmenuKind::Graphics].cursor_indices,
-            GRAPHICS_OPTIONS_ROWS,
-            SubRowId::DisplayMode,
-        )
-    {
+        &mut state.sub[SubmenuKind::Graphics].cursor_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::DisplayMode,
+    ) {
         *cursor_idx = choice_idx;
     }
     // Also re-run logic that depends on the selected monitor.
@@ -851,7 +869,8 @@ pub(in crate::screens::options) fn selected_aspect_label(state: &State) -> &'sta
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::DisplayAspectRatio,
-    ).unwrap_or(0);
+    )
+    .unwrap_or(0);
     DISPLAY_ASPECT_RATIO_CHOICES
         .get(idx)
         .or(Some(&DISPLAY_ASPECT_RATIO_CHOICES[0]))
@@ -958,7 +977,8 @@ pub(in crate::screens::options) fn selected_resolution(state: &State) -> (u32, u
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::DisplayResolution,
-    ).unwrap_or(0);
+    )
+    .unwrap_or(0);
     state
         .resolution_choices
         .get(idx)

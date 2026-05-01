@@ -13,8 +13,8 @@ pub(super) struct SyncPackConfirmState {
 }
 
 pub(super) fn selected_sync_pack_selection(state: &State) -> SyncPackSelection {
-    let pack_idx = state
-        .sub[SubmenuKind::SyncPacks].choice_indices
+    let pack_idx = state.sub[SubmenuKind::SyncPacks]
+        .choice_indices
         .get(SYNC_PACK_ROW_PACK_INDEX)
         .copied()
         .unwrap_or(0)

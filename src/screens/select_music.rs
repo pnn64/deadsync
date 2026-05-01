@@ -8331,11 +8331,7 @@ fn sl_select_music_wheel_cascade_mask() -> Vec<Actor> {
     actors
 }
 
-pub fn get_actors(
-    state: &State,
-    asset_manager: &AssetManager,
-    stage_number: usize,
-) -> Vec<Actor> {
+pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usize) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let side = crate::game::profile::get_session_player_side();
     let play_style = crate::game::profile::get_session_play_style();

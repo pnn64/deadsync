@@ -404,7 +404,9 @@ pub fn init() -> State {
     if let Some(noteskin_row_idx) = SYSTEM_OPTIONS_ROWS
         .iter()
         .position(|row| row.id == SubRowId::DefaultNoteSkin)
-        && let Some(slot) = state.sub[SubmenuKind::System].choice_indices.get_mut(noteskin_row_idx)
+        && let Some(slot) = state.sub[SubmenuKind::System]
+            .choice_indices
+            .get_mut(noteskin_row_idx)
     {
         *slot = machine_noteskin_idx;
     }

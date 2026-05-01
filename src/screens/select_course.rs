@@ -1983,7 +1983,10 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(screen_bars::build(&tr("ScreenTitles", "SelectCourse"), None));
+    actors.extend(screen_bars::build(
+        &tr("ScreenTitles", "SelectCourse"),
+        None,
+    ));
     actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));

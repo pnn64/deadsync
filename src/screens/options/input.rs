@@ -396,9 +396,13 @@ pub(super) fn apply_submenu_choice_delta(
             let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
             config::update_null_or_die_pack_sync_threads(threads);
         } else if row.id == SubRowId::KernelTarget {
-            config::update_null_or_die_kernel_target(::null_or_die::KernelTarget::from_choice(new_index));
+            config::update_null_or_die_kernel_target(::null_or_die::KernelTarget::from_choice(
+                new_index,
+            ));
         } else if row.id == SubRowId::KernelType {
-            config::update_null_or_die_kernel_type(::null_or_die::BiasKernel::from_choice(new_index));
+            config::update_null_or_die_kernel_type(::null_or_die::BiasKernel::from_choice(
+                new_index,
+            ));
         } else if row.id == SubRowId::FullSpectrogram {
             config::update_null_or_die_full_spectrogram(yes_no_from_choice(new_index));
         }
@@ -517,9 +521,7 @@ pub(super) fn apply_submenu_choice_delta(
                 new_index,
             ));
         } else if row.id == SubRowId::MusicWheelStyle {
-            config::update_select_music_wheel_style(SelectMusicWheelStyle::from_choice(
-                new_index,
-            ));
+            config::update_select_music_wheel_style(SelectMusicWheelStyle::from_choice(new_index));
         } else if row.id == SubRowId::ShowCdTitles {
             config::update_show_select_music_cdtitles(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ShowWheelGrades {
@@ -527,7 +529,9 @@ pub(super) fn apply_submenu_choice_delta(
         } else if row.id == SubRowId::ShowWheelLamps {
             config::update_show_music_wheel_lamps(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ItlRank {
-            config::update_select_music_itl_rank_mode(SelectMusicItlRankMode::from_choice(new_index));
+            config::update_select_music_itl_rank_mode(SelectMusicItlRankMode::from_choice(
+                new_index,
+            ));
         } else if row.id == SubRowId::ItlWheelData {
             config::update_select_music_itl_wheel_mode(SelectMusicItlWheelMode::from_choice(
                 new_index,

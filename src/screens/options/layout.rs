@@ -597,11 +597,20 @@ pub(super) fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32,
 
         let parent_from = old_visible_rows
             .iter()
-            .position(|&idx| rows.get(idx).map_or(false, |r| r.id == SubRowId::VideoRenderer))
+            .position(|&idx| {
+                rows.get(idx)
+                    .map_or(false, |r| r.id == SubRowId::VideoRenderer)
+            })
             .and_then(|old_idx| old_tweens.get(old_idx))
             .map(|tw| (tw.y(), tw.a()))
             .unwrap_or_else(|| {
-                let renderer_vis_idx = visible_rows.iter().position(|&idx| rows.get(idx).map_or(false, |r| r.id == SubRowId::VideoRenderer)).unwrap_or(0);
+                let renderer_vis_idx = visible_rows
+                    .iter()
+                    .position(|&idx| {
+                        rows.get(idx)
+                            .map_or(false, |r| r.id == SubRowId::VideoRenderer)
+                    })
+                    .unwrap_or(0);
                 row_dest_for_index(total_rows, selected, renderer_vis_idx, s, list_y)
             });
         let old_exit_from = old_tweens
@@ -616,7 +625,10 @@ pub(super) fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32,
                 .position(|&old_actual| old_actual == actual_idx)
                 .and_then(|old_idx| old_tweens.get(old_idx).map(|tw| (tw.y(), tw.a())))
                 .or({
-                    if rows.get(actual_idx).map_or(false, |r| r.id == SubRowId::SoftwareRendererThreads) {
+                    if rows
+                        .get(actual_idx)
+                        .map_or(false, |r| r.id == SubRowId::SoftwareRendererThreads)
+                    {
                         Some((parent_from.0, 0.0))
                     } else {
                         None
@@ -776,13 +788,14 @@ pub(super) fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: 
         let mut mapped: Vec<RowTween> = Vec::with_capacity(total_rows);
         for (new_idx, actual_idx) in visible_rows.iter().copied().enumerate() {
             let (to_y, to_a) = row_dest_for_index(total_rows, selected, new_idx, s, list_y);
-            let parent_from = select_music_parent_row(rows, actual_idx).and_then(|parent_actual_idx| {
-                old_visible_rows
-                    .iter()
-                    .position(|&idx| idx == parent_actual_idx)
-                    .and_then(|old_idx| old_tweens.get(old_idx))
-                    .map(|tw| (tw.y(), 0.0))
-            });
+            let parent_from =
+                select_music_parent_row(rows, actual_idx).and_then(|parent_actual_idx| {
+                    old_visible_rows
+                        .iter()
+                        .position(|&idx| idx == parent_actual_idx)
+                        .and_then(|old_idx| old_tweens.get(old_idx))
+                        .map(|tw| (tw.y(), 0.0))
+                });
             let (from_y, from_a) = old_visible_rows
                 .iter()
                 .position(|&old_actual| old_actual == actual_idx)

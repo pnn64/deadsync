@@ -594,7 +594,7 @@ const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {
         {
             return Outcome::NONE;
         }
-        Outcome::persisted()
+        Outcome::persisted_with_visibility()
     },
 };
 

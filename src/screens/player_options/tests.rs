@@ -301,6 +301,83 @@ pub(super) mod tests {
         assert!(is_row_visible(&row_map, 1, visibility));
     }
 
+    fn target_score_visible_for(row_map: &RowMap) -> bool {
+        let visibility = row_visibility(
+            row_map,
+            [true, false],
+            [PlayerOptionMasks::default(), PlayerOptionMasks::default()],
+            false,
+        );
+        is_row_visible(row_map, 1, visibility)
+    }
+
+    #[test]
+    fn target_score_hides_until_score_dependent_option_is_active() {
+        ensure_i18n();
+        let mut row_map = test_row_map(vec![
+            test_row(
+                RowId::DataVisualizations,
+                lookup_key("PlayerOptions", "DataVisualizations"),
+                &["None", "Target Score Graph", "Step Statistics"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::TargetScore,
+                lookup_key("PlayerOptions", "TargetScore"),
+                &["S"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::ActionOnMissedTarget,
+                lookup_key("PlayerOptions", "TargetScoreMissPolicy"),
+                &["Nothing", "Fail", "Restart"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::MiniIndicator,
+                lookup_key("PlayerOptions", "MiniIndicator"),
+                &[
+                    "None",
+                    "Subtractive",
+                    "Predictive",
+                    "Pace",
+                    "Rival",
+                    "Pacemaker",
+                    "StreamProg",
+                ],
+                [0, 0],
+            ),
+        ]);
+
+        assert!(!target_score_visible_for(&row_map));
+
+        row_map
+            .get_mut(RowId::DataVisualizations)
+            .unwrap()
+            .selected_choice_index[P1] = 1;
+        assert!(target_score_visible_for(&row_map));
+
+        row_map
+            .get_mut(RowId::DataVisualizations)
+            .unwrap()
+            .selected_choice_index[P1] = 0;
+        row_map
+            .get_mut(RowId::ActionOnMissedTarget)
+            .unwrap()
+            .selected_choice_index[P1] = 1;
+        assert!(target_score_visible_for(&row_map));
+
+        row_map
+            .get_mut(RowId::ActionOnMissedTarget)
+            .unwrap()
+            .selected_choice_index[P1] = 0;
+        row_map
+            .get_mut(RowId::MiniIndicator)
+            .unwrap()
+            .selected_choice_index[P1] = 5;
+        assert!(target_score_visible_for(&row_map));
+    }
+
     #[test]
     fn init_active_masks_accumulate_across_panes() {
         // Regression: apply_profile_defaults gates 8 of its 17 returned masks
