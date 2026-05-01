@@ -8130,9 +8130,21 @@ mod tests {
 
     #[test]
     fn regression_state_passes_hot_state_audit() {
-        let profiles = [profile::Profile::default(), profile::Profile::default()];
-        let state = regression_state(profiles);
-        super::assert_valid_hot_state_for_tests(&state, 0.0, state.current_music_time_display);
+        with_session(
+            profile::PlayStyle::Double,
+            profile::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let profiles = [profile::Profile::default(), profile::Profile::default()];
+                let state = regression_state(profiles);
+                super::assert_valid_hot_state_for_tests(
+                    &state,
+                    0.0,
+                    state.current_music_time_display,
+                );
+            },
+        );
     }
 
     fn test_row_entry(
