@@ -2040,7 +2040,7 @@ pub fn draw(
         }
         if let Some((staging, width, height, format)) = screenshot_staging {
             let wait_started = Instant::now();
-            device.queue_wait_idle(state.queue)?;
+            device.wait_for_fences(&[fence], true, u64::MAX)?;
             stats.gpu_wait_us = stats
                 .gpu_wait_us
                 .saturating_add(elapsed_us_since(wait_started));
