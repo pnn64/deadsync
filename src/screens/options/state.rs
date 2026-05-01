@@ -33,6 +33,68 @@ pub enum SubmenuKind {
     ScoreImport,
 }
 
+impl SubmenuKind {
+    pub(super) const ALL: [Self; 17] = [
+        Self::System,
+        Self::Graphics,
+        Self::Input,
+        Self::InputBackend,
+        Self::OnlineScoring,
+        Self::NullOrDie,
+        Self::NullOrDieOptions,
+        Self::SyncPacks,
+        Self::Machine,
+        Self::Advanced,
+        Self::Course,
+        Self::Gameplay,
+        Self::Sound,
+        Self::SelectMusic,
+        Self::GrooveStats,
+        Self::ArrowCloud,
+        Self::ScoreImport,
+    ];
+    pub(super) const COUNT: usize = Self::ALL.len();
+
+    #[inline]
+    pub(super) const fn index(self) -> usize {
+        self as usize
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct SubmenuState {
+    pub(super) choice_indices: Vec<usize>,
+    pub(super) cursor_indices: Vec<usize>,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct SubmenuStates([SubmenuState; SubmenuKind::COUNT]);
+
+impl SubmenuStates {
+    pub(super) fn new(init: impl FnMut(usize) -> SubmenuState) -> Self {
+        Self(std::array::from_fn(init))
+    }
+
+    pub(super) fn iter_mut(&mut self) -> std::slice::IterMut<'_, SubmenuState> {
+        self.0.iter_mut()
+    }
+}
+
+impl std::ops::Index<SubmenuKind> for SubmenuStates {
+    type Output = SubmenuState;
+    #[inline]
+    fn index(&self, kind: SubmenuKind) -> &SubmenuState {
+        &self.0[kind.index()]
+    }
+}
+
+impl std::ops::IndexMut<SubmenuKind> for SubmenuStates {
+    #[inline]
+    fn index_mut(&mut self, kind: SubmenuKind) -> &mut SubmenuState {
+        &mut self.0[kind.index()]
+    }
+}
+
 #[inline(always)]
 pub(super) const fn is_launcher_submenu(kind: SubmenuKind) -> bool {
     matches!(
@@ -105,41 +167,8 @@ pub struct State {
     pub(super) sub_selected: usize,
     pub(super) sub_prev_selected: usize,
     pub(super) sub_inline_x: f32,
-    pub(super) sub_choice_indices_system: Vec<usize>,
-    pub(super) sub_choice_indices_graphics: Vec<usize>,
-    pub(super) sub_choice_indices_input: Vec<usize>,
-    pub(super) sub_choice_indices_input_backend: Vec<usize>,
-    pub(super) sub_choice_indices_online_scoring: Vec<usize>,
-    pub(super) sub_choice_indices_null_or_die: Vec<usize>,
-    pub(super) sub_choice_indices_null_or_die_options: Vec<usize>,
-    pub(super) sub_choice_indices_sync_packs: Vec<usize>,
-    pub(super) sub_choice_indices_machine: Vec<usize>,
-    pub(super) sub_choice_indices_advanced: Vec<usize>,
-    pub(super) sub_choice_indices_course: Vec<usize>,
-    pub(super) sub_choice_indices_gameplay: Vec<usize>,
-    pub(super) sub_choice_indices_sound: Vec<usize>,
-    pub(super) sub_choice_indices_select_music: Vec<usize>,
-    pub(super) sub_choice_indices_groovestats: Vec<usize>,
-    pub(super) sub_choice_indices_arrowcloud: Vec<usize>,
-    pub(super) sub_choice_indices_score_import: Vec<usize>,
+    pub(super) sub: SubmenuStates,
     pub(super) system_noteskin_choices: Vec<String>,
-    pub(super) sub_cursor_indices_system: Vec<usize>,
-    pub(super) sub_cursor_indices_graphics: Vec<usize>,
-    pub(super) sub_cursor_indices_input: Vec<usize>,
-    pub(super) sub_cursor_indices_input_backend: Vec<usize>,
-    pub(super) sub_cursor_indices_online_scoring: Vec<usize>,
-    pub(super) sub_cursor_indices_null_or_die: Vec<usize>,
-    pub(super) sub_cursor_indices_null_or_die_options: Vec<usize>,
-    pub(super) sub_cursor_indices_sync_packs: Vec<usize>,
-    pub(super) sub_cursor_indices_machine: Vec<usize>,
-    pub(super) sub_cursor_indices_advanced: Vec<usize>,
-    pub(super) sub_cursor_indices_course: Vec<usize>,
-    pub(super) sub_cursor_indices_gameplay: Vec<usize>,
-    pub(super) sub_cursor_indices_sound: Vec<usize>,
-    pub(super) sub_cursor_indices_select_music: Vec<usize>,
-    pub(super) sub_cursor_indices_groovestats: Vec<usize>,
-    pub(super) sub_cursor_indices_arrowcloud: Vec<usize>,
-    pub(super) sub_cursor_indices_score_import: Vec<usize>,
     pub(super) score_import_profiles: Vec<ScoreImportProfileConfig>,
     pub(super) score_import_profile_choices: Vec<String>,
     pub(super) score_import_profile_ids: Vec<Option<String>>,
@@ -244,41 +273,14 @@ pub fn init() -> State {
         sub_selected: 0,
         sub_prev_selected: 0,
         sub_inline_x: f32::NAN,
-        sub_choice_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
-        sub_choice_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
-        sub_choice_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
-        sub_choice_indices_input_backend: vec![0; INPUT_BACKEND_OPTIONS_ROWS.len()],
-        sub_choice_indices_online_scoring: vec![0; ONLINE_SCORING_OPTIONS_ROWS.len()],
-        sub_choice_indices_null_or_die: vec![0; NULL_OR_DIE_MENU_ROWS.len()],
-        sub_choice_indices_null_or_die_options: vec![0; NULL_OR_DIE_OPTIONS_ROWS.len()],
-        sub_choice_indices_sync_packs: vec![0; SYNC_PACK_OPTIONS_ROWS.len()],
-        sub_choice_indices_machine: vec![0; MACHINE_OPTIONS_ROWS.len()],
-        sub_choice_indices_advanced: vec![0; ADVANCED_OPTIONS_ROWS.len()],
-        sub_choice_indices_course: vec![0; COURSE_OPTIONS_ROWS.len()],
-        sub_choice_indices_gameplay: vec![0; GAMEPLAY_OPTIONS_ROWS.len()],
-        sub_choice_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
-        sub_choice_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
-        sub_choice_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
-        sub_choice_indices_arrowcloud: vec![0; ARROWCLOUD_OPTIONS_ROWS.len()],
-        sub_choice_indices_score_import: vec![0; SCORE_IMPORT_OPTIONS_ROWS.len()],
+        sub: SubmenuStates::new(|i| {
+            let len = submenu_rows(SubmenuKind::ALL[i]).len();
+            SubmenuState {
+                choice_indices: vec![0; len],
+                cursor_indices: vec![0; len],
+            }
+        }),
         system_noteskin_choices,
-        sub_cursor_indices_system: vec![0; SYSTEM_OPTIONS_ROWS.len()],
-        sub_cursor_indices_graphics: vec![0; GRAPHICS_OPTIONS_ROWS.len()],
-        sub_cursor_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
-        sub_cursor_indices_input_backend: vec![0; INPUT_BACKEND_OPTIONS_ROWS.len()],
-        sub_cursor_indices_online_scoring: vec![0; ONLINE_SCORING_OPTIONS_ROWS.len()],
-        sub_cursor_indices_null_or_die: vec![0; NULL_OR_DIE_MENU_ROWS.len()],
-        sub_cursor_indices_null_or_die_options: vec![0; NULL_OR_DIE_OPTIONS_ROWS.len()],
-        sub_cursor_indices_sync_packs: vec![0; SYNC_PACK_OPTIONS_ROWS.len()],
-        sub_cursor_indices_machine: vec![0; MACHINE_OPTIONS_ROWS.len()],
-        sub_cursor_indices_advanced: vec![0; ADVANCED_OPTIONS_ROWS.len()],
-        sub_cursor_indices_course: vec![0; COURSE_OPTIONS_ROWS.len()],
-        sub_cursor_indices_gameplay: vec![0; GAMEPLAY_OPTIONS_ROWS.len()],
-        sub_cursor_indices_sound: vec![0; SOUND_OPTIONS_ROWS.len()],
-        sub_cursor_indices_select_music: vec![0; SELECT_MUSIC_OPTIONS_ROWS.len()],
-        sub_cursor_indices_groovestats: vec![0; GROOVESTATS_OPTIONS_ROWS.len()],
-        sub_cursor_indices_arrowcloud: vec![0; ARROWCLOUD_OPTIONS_ROWS.len()],
-        sub_cursor_indices_score_import: vec![0; SCORE_IMPORT_OPTIONS_ROWS.len()],
         score_import_profiles: Vec::new(),
         score_import_profile_choices: vec![
             tr("OptionsScoreImport", "NoEligibleProfiles").to_string(),
@@ -370,31 +372,31 @@ pub fn init() -> State {
     sync_display_resolution(&mut state, cfg.display_width, cfg.display_height);
 
     set_choice_by_id(
-        &mut state.sub_choice_indices_system,
+        &mut state.sub[SubmenuKind::System].choice_indices,
         SYSTEM_OPTIONS_ROWS,
         SubRowId::Game,
         0,
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_system,
+        &mut state.sub[SubmenuKind::System].choice_indices,
         SYSTEM_OPTIONS_ROWS,
         SubRowId::Theme,
         0,
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_system,
+        &mut state.sub[SubmenuKind::System].choice_indices,
         SYSTEM_OPTIONS_ROWS,
         SubRowId::Language,
         language_choice_index(cfg.language_flag),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_system,
+        &mut state.sub[SubmenuKind::System].choice_indices,
         SYSTEM_OPTIONS_ROWS,
         SubRowId::LogLevel,
         log_level_choice_index(cfg.log_level),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_system,
+        &mut state.sub[SubmenuKind::System].choice_indices,
         SYSTEM_OPTIONS_ROWS,
         SubRowId::LogFile,
         usize::from(cfg.log_to_file),
@@ -402,44 +404,44 @@ pub fn init() -> State {
     if let Some(noteskin_row_idx) = SYSTEM_OPTIONS_ROWS
         .iter()
         .position(|row| row.id == SubRowId::DefaultNoteSkin)
-        && let Some(slot) = state.sub_choice_indices_system.get_mut(noteskin_row_idx)
+        && let Some(slot) = state.sub[SubmenuKind::System].choice_indices.get_mut(noteskin_row_idx)
     {
         *slot = machine_noteskin_idx;
     }
 
     set_choice_by_id(
-        &mut state.sub_choice_indices_graphics,
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::VSync,
         yes_no_choice_index(cfg.vsync),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_graphics,
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::PresentMode,
         present_mode_choice_index(cfg.present_mode_policy),
     );
     sync_max_fps(&mut state, cfg.max_fps);
     set_choice_by_id(
-        &mut state.sub_choice_indices_graphics,
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::ShowStats,
         cfg.show_stats_mode.min(3) as usize,
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_graphics,
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::ValidationLayers,
         yes_no_choice_index(cfg.gfx_debug),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_graphics,
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::HighDpi,
         yes_no_choice_index(cfg.high_dpi),
     );
     if let Some(slot) = state
-        .sub_choice_indices_graphics
+        .sub[SubmenuKind::Graphics].choice_indices
         .get_mut(SOFTWARE_THREADS_ROW_INDEX)
     {
         *slot = software_thread_choice_index(
@@ -449,188 +451,188 @@ pub fn init() -> State {
     }
     #[cfg(target_os = "windows")]
     set_choice_by_id(
-        &mut state.sub_choice_indices_input_backend,
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
         INPUT_BACKEND_OPTIONS_ROWS,
         SubRowId::GamepadBackend,
         windows_backend_choice_index(cfg.windows_gamepad_backend),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_input_backend,
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
         INPUT_BACKEND_OPTIONS_ROWS,
         SubRowId::UseFsrs,
         yes_no_choice_index(cfg.use_fsrs),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_input_backend,
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
         INPUT_BACKEND_OPTIONS_ROWS,
         SubRowId::MenuNavigation,
         usize::from(cfg.three_key_navigation),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_input_backend,
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
         INPUT_BACKEND_OPTIONS_ROWS,
         SubRowId::OptionsNavigation,
         usize::from(cfg.arcade_options_navigation),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_input_backend,
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
         INPUT_BACKEND_OPTIONS_ROWS,
         SubRowId::MenuButtons,
         usize::from(cfg.only_dedicated_menu_buttons),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::SelectProfile,
         usize::from(cfg.machine_show_select_profile),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::SelectColor,
         usize::from(cfg.machine_show_select_color),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::SelectStyle,
         usize::from(cfg.machine_show_select_style),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::PreferredStyle,
         machine_preferred_style_choice_index(cfg.machine_preferred_style),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::SelectPlayMode,
         usize::from(cfg.machine_show_select_play_mode),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::PreferredMode,
         machine_preferred_mode_choice_index(cfg.machine_preferred_play_mode),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::Font,
         machine_font_choice_index(cfg.machine_font),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::EvalSummary,
         usize::from(cfg.machine_show_eval_summary),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::NameEntry,
         usize::from(cfg.machine_show_name_entry),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::GameoverScreen,
         usize::from(cfg.machine_show_gameover),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::MenuMusic,
         usize::from(cfg.menu_music),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::VisualStyle,
         visual_style_choice_index(cfg.visual_style),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::Replays,
         usize::from(cfg.machine_enable_replays),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::PerPlayerGlobalOffsets,
         usize::from(cfg.machine_allow_per_player_global_offsets),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::KeyboardFeatures,
         usize::from(cfg.keyboard_features),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::VideoBgs,
         usize::from(cfg.show_video_backgrounds),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_machine,
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
         SubRowId::WriteCurrentScreen,
         usize::from(cfg.write_current_screen),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_advanced,
+        &mut state.sub[SubmenuKind::Advanced].choice_indices,
         ADVANCED_OPTIONS_ROWS,
         SubRowId::DefaultFailType,
         default_fail_type_choice_index(cfg.default_fail_type),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_advanced,
+        &mut state.sub[SubmenuKind::Advanced].choice_indices,
         ADVANCED_OPTIONS_ROWS,
         SubRowId::BannerCache,
         usize::from(cfg.banner_cache),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_advanced,
+        &mut state.sub[SubmenuKind::Advanced].choice_indices,
         ADVANCED_OPTIONS_ROWS,
         SubRowId::CdTitleCache,
         usize::from(cfg.cdtitle_cache),
     );
     if let Some(slot) = state
-        .sub_choice_indices_advanced
+        .sub[SubmenuKind::Advanced].choice_indices
         .get_mut(ADVANCED_SONG_PARSING_THREADS_ROW_INDEX)
     {
         *slot =
             software_thread_choice_index(&state.software_thread_choices, cfg.song_parsing_threads);
     }
     set_choice_by_id(
-        &mut state.sub_choice_indices_advanced,
+        &mut state.sub[SubmenuKind::Advanced].choice_indices,
         ADVANCED_OPTIONS_ROWS,
         SubRowId::CacheSongs,
         usize::from(cfg.cachesongs),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_advanced,
+        &mut state.sub[SubmenuKind::Advanced].choice_indices,
         ADVANCED_OPTIONS_ROWS,
         SubRowId::FastLoad,
         usize::from(cfg.fastload),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_null_or_die_options,
+        &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
         NULL_OR_DIE_OPTIONS_ROWS,
         SubRowId::SyncGraph,
         sync_graph_mode_choice_index(cfg.null_or_die_sync_graph),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_null_or_die_options,
+        &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
         NULL_OR_DIE_OPTIONS_ROWS,
         SubRowId::SyncConfidence,
         sync_confidence_choice_index(cfg.null_or_die_confidence_percent),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_null_or_die_options,
+        &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
         NULL_OR_DIE_OPTIONS_ROWS,
         SubRowId::PackSyncThreads,
         software_thread_choice_index(
@@ -639,98 +641,98 @@ pub fn init() -> State {
         ),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_null_or_die_options,
+        &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
         NULL_OR_DIE_OPTIONS_ROWS,
         SubRowId::KernelTarget,
         null_or_die_kernel_target_choice_index(cfg.null_or_die_kernel_target),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_null_or_die_options,
+        &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
         NULL_OR_DIE_OPTIONS_ROWS,
         SubRowId::KernelType,
         null_or_die_kernel_type_choice_index(cfg.null_or_die_kernel_type),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_null_or_die_options,
+        &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
         NULL_OR_DIE_OPTIONS_ROWS,
         SubRowId::FullSpectrogram,
         yes_no_choice_index(cfg.null_or_die_full_spectrogram),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_course,
+        &mut state.sub[SubmenuKind::Course].choice_indices,
         COURSE_OPTIONS_ROWS,
         SubRowId::ShowRandomCourses,
         yes_no_choice_index(cfg.show_random_courses),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_course,
+        &mut state.sub[SubmenuKind::Course].choice_indices,
         COURSE_OPTIONS_ROWS,
         SubRowId::ShowMostPlayed,
         yes_no_choice_index(cfg.show_most_played_courses),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_course,
+        &mut state.sub[SubmenuKind::Course].choice_indices,
         COURSE_OPTIONS_ROWS,
         SubRowId::ShowIndividualScores,
         yes_no_choice_index(cfg.show_course_individual_scores),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_course,
+        &mut state.sub[SubmenuKind::Course].choice_indices,
         COURSE_OPTIONS_ROWS,
         SubRowId::AutosubmitIndividual,
         yes_no_choice_index(cfg.autosubmit_course_scores_individually),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_gameplay,
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::BgBrightness,
         bg_brightness_choice_index(cfg.bg_brightness),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_gameplay,
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::CenteredP1Notefield,
         usize::from(cfg.center_1player_notefield),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_gameplay,
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::ZmodRatingBox,
         usize::from(cfg.zmod_rating_box_text),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_gameplay,
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::BpmDecimal,
         usize::from(cfg.show_bpm_decimal),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_gameplay,
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::AutoScreenshot,
         auto_screenshot_cursor_index(cfg.auto_screenshot_eval),
     );
 
     set_choice_by_id(
-        &mut state.sub_choice_indices_sound,
+        &mut state.sub[SubmenuKind::Sound].choice_indices,
         SOUND_OPTIONS_ROWS,
         SubRowId::MasterVolume,
         master_volume_choice_index(cfg.master_volume),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_sound,
+        &mut state.sub[SubmenuKind::Sound].choice_indices,
         SOUND_OPTIONS_ROWS,
         SubRowId::SfxVolume,
         master_volume_choice_index(cfg.sfx_volume),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_sound,
+        &mut state.sub[SubmenuKind::Sound].choice_indices,
         SOUND_OPTIONS_ROWS,
         SubRowId::AssistTickVolume,
         master_volume_choice_index(cfg.assist_tick_volume),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_sound,
+        &mut state.sub[SubmenuKind::Sound].choice_indices,
         SOUND_OPTIONS_ROWS,
         SubRowId::MusicVolume,
         master_volume_choice_index(cfg.music_volume),
@@ -756,103 +758,103 @@ pub fn init() -> State {
     let sound_rate_idx = sample_rate_choice_index(&state, cfg.audio_sample_rate_hz);
     set_sound_choice_index(&mut state, SubRowId::AudioSampleRate, sound_rate_idx);
     set_choice_by_id(
-        &mut state.sub_choice_indices_sound,
+        &mut state.sub[SubmenuKind::Sound].choice_indices,
         SOUND_OPTIONS_ROWS,
         SubRowId::MineSounds,
         usize::from(cfg.mine_hit_sound),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_sound,
+        &mut state.sub[SubmenuKind::Sound].choice_indices,
         SOUND_OPTIONS_ROWS,
         SubRowId::RateModPreservesPitch,
         usize::from(cfg.rate_mod_preserves_pitch),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowBanners,
         yes_no_choice_index(cfg.show_select_music_banners),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowVideoBanners,
         yes_no_choice_index(cfg.show_select_music_video_banners),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowBreakdown,
         yes_no_choice_index(cfg.show_select_music_breakdown),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::BreakdownStyle,
         breakdown_style_choice_index(cfg.select_music_breakdown_style),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowNativeLanguage,
         translated_titles_choice_index(cfg.translated_titles),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::MusicWheelSpeed,
         music_wheel_scroll_speed_choice_index(cfg.music_wheel_switch_speed),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::MusicWheelStyle,
         select_music_wheel_style_choice_index(cfg.select_music_wheel_style),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowCdTitles,
         yes_no_choice_index(cfg.show_select_music_cdtitles),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowWheelGrades,
         yes_no_choice_index(cfg.show_music_wheel_grades),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowWheelLamps,
         yes_no_choice_index(cfg.show_music_wheel_lamps),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ItlRank,
         select_music_itl_rank_choice_index(cfg.select_music_itl_rank_mode),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ItlWheelData,
         select_music_itl_wheel_choice_index(cfg.select_music_itl_wheel_mode),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::NewPackBadge,
         new_pack_mode_choice_index(cfg.select_music_new_pack_mode),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowPatternInfo,
         select_music_pattern_info_choice_index(cfg.select_music_pattern_info_mode),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ChartInfo,
         select_music_chart_info_cursor_index(
@@ -861,43 +863,43 @@ pub fn init() -> State {
         ),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::MusicPreviews,
         yes_no_choice_index(cfg.show_select_music_previews),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::PreviewMarker,
         yes_no_choice_index(cfg.show_select_music_preview_marker),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::LoopMusic,
         usize::from(cfg.select_music_preview_loop),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowGameplayTimer,
         yes_no_choice_index(cfg.show_select_music_gameplay_timer),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowGsBox,
         yes_no_choice_index(cfg.show_select_music_scorebox),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::GsBoxPlacement,
         select_music_scorebox_placement_choice_index(cfg.select_music_scorebox_placement),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::GsBoxLeaderboards,
         scorebox_cycle_cursor_index(
@@ -908,43 +910,43 @@ pub fn init() -> State {
         ),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_groovestats,
+        &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
         GROOVESTATS_OPTIONS_ROWS,
         SubRowId::EnableGrooveStats,
         yes_no_choice_index(cfg.enable_groovestats),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_groovestats,
+        &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
         GROOVESTATS_OPTIONS_ROWS,
         SubRowId::EnableBoogieStats,
         yes_no_choice_index(cfg.enable_boogiestats),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_groovestats,
+        &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
         GROOVESTATS_OPTIONS_ROWS,
         SubRowId::AutoPopulateScores,
         yes_no_choice_index(cfg.auto_populate_gs_scores),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_groovestats,
+        &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
         GROOVESTATS_OPTIONS_ROWS,
         SubRowId::AutoDownloadUnlocks,
         yes_no_choice_index(cfg.auto_download_unlocks),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_groovestats,
+        &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
         GROOVESTATS_OPTIONS_ROWS,
         SubRowId::SeparateUnlocksByPlayer,
         yes_no_choice_index(cfg.separate_unlocks_by_player),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_arrowcloud,
+        &mut state.sub[SubmenuKind::ArrowCloud].choice_indices,
         ARROWCLOUD_OPTIONS_ROWS,
         SubRowId::EnableArrowCloud,
         yes_no_choice_index(cfg.enable_arrowcloud),
     );
     set_choice_by_id(
-        &mut state.sub_choice_indices_arrowcloud,
+        &mut state.sub[SubmenuKind::ArrowCloud].choice_indices,
         ARROWCLOUD_OPTIONS_ROWS,
         SubRowId::ArrowCloudSubmitFails,
         yes_no_choice_index(cfg.submit_arrowcloud_fails),
@@ -952,7 +954,7 @@ pub fn init() -> State {
     refresh_score_import_options(&mut state);
     refresh_null_or_die_options(&mut state);
     set_choice_by_id(
-        &mut state.sub_choice_indices_score_import,
+        &mut state.sub[SubmenuKind::ScoreImport].choice_indices,
         SCORE_IMPORT_OPTIONS_ROWS,
         SubRowId::ScoreImportOnlyMissing,
         yes_no_choice_index(false),

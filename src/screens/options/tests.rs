@@ -78,7 +78,7 @@ fn p2_can_navigate_and_change_system_options() {
     press(&mut state, &asset_manager, VirtualAction::p2_down);
     assert_eq!(state.sub_selected, 3);
 
-    let before = state.sub_cursor_indices_system[3];
+    let before = state.sub[SubmenuKind::System].cursor_indices[3];
     press(&mut state, &asset_manager, VirtualAction::p2_right);
-    assert_eq!(state.sub_cursor_indices_system[3], before + 1);
+    assert_eq!(state.sub[SubmenuKind::System].cursor_indices[3], before + 1);
 }

@@ -80,11 +80,7 @@ pub(super) const fn submenu_title(kind: SubmenuKind) -> &'static str {
     }
 }
 
-pub(super) fn submenu_visible_row_indices(
-    state: &State,
-    kind: SubmenuKind,
-    rows: &[SubRow],
-) -> Vec<usize> {
+pub(super) fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows: &[SubRow]) -> Vec<usize> {
     match kind {
         SubmenuKind::Graphics => {
             let show_sw = graphics_show_software_threads(state);
@@ -114,25 +110,25 @@ pub(super) fn submenu_visible_row_indices(
         SubmenuKind::Advanced => rows.iter().enumerate().map(|(idx, _)| idx).collect(),
         SubmenuKind::SelectMusic => {
             let show_banners = state
-                .sub_choice_indices_select_music
+                .sub[SubmenuKind::SelectMusic].choice_indices
                 .get(SELECT_MUSIC_SHOW_BANNERS_ROW_INDEX)
                 .copied()
                 .unwrap_or_else(|| yes_no_choice_index(true));
             let show_banners = yes_no_from_choice(show_banners);
             let show_breakdown = state
-                .sub_choice_indices_select_music
+                .sub[SubmenuKind::SelectMusic].choice_indices
                 .get(SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX)
                 .copied()
                 .unwrap_or_else(|| yes_no_choice_index(true));
             let show_breakdown = yes_no_from_choice(show_breakdown);
             let show_previews = state
-                .sub_choice_indices_select_music
+                .sub[SubmenuKind::SelectMusic].choice_indices
                 .get(SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX)
                 .copied()
                 .unwrap_or_else(|| yes_no_choice_index(true));
             let show_previews = yes_no_from_choice(show_previews);
             let show_scorebox = state
-                .sub_choice_indices_select_music
+                .sub[SubmenuKind::SelectMusic].choice_indices
                 .get(SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX)
                 .copied()
                 .unwrap_or_else(|| yes_no_choice_index(true));
@@ -158,13 +154,13 @@ pub(super) fn submenu_visible_row_indices(
         }
         SubmenuKind::Machine => {
             let show_preferred_style = state
-                .sub_choice_indices_machine
+                .sub[SubmenuKind::Machine].choice_indices
                 .get(MACHINE_SELECT_STYLE_ROW_INDEX)
                 .copied()
                 .unwrap_or(1)
                 == 0;
             let show_preferred_mode = state
-                .sub_choice_indices_machine
+                .sub[SubmenuKind::Machine].choice_indices
                 .get(MACHINE_SELECT_PLAY_MODE_ROW_INDEX)
                 .copied()
                 .unwrap_or(1)
@@ -230,116 +226,23 @@ pub(super) const fn windows_backend_from_choice(idx: usize) -> WindowsPadBackend
 }
 
 pub(super) fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
-    match kind {
-        SubmenuKind::System => &state.sub_choice_indices_system,
-        SubmenuKind::Graphics => &state.sub_choice_indices_graphics,
-        SubmenuKind::Input => &state.sub_choice_indices_input,
-        SubmenuKind::InputBackend => &state.sub_choice_indices_input_backend,
-        SubmenuKind::OnlineScoring => &state.sub_choice_indices_online_scoring,
-        SubmenuKind::NullOrDie => &state.sub_choice_indices_null_or_die,
-        SubmenuKind::NullOrDieOptions => &state.sub_choice_indices_null_or_die_options,
-        SubmenuKind::SyncPacks => &state.sub_choice_indices_sync_packs,
-        SubmenuKind::Machine => &state.sub_choice_indices_machine,
-        SubmenuKind::Advanced => &state.sub_choice_indices_advanced,
-        SubmenuKind::Course => &state.sub_choice_indices_course,
-        SubmenuKind::Gameplay => &state.sub_choice_indices_gameplay,
-        SubmenuKind::Sound => &state.sub_choice_indices_sound,
-        SubmenuKind::SelectMusic => &state.sub_choice_indices_select_music,
-        SubmenuKind::GrooveStats => &state.sub_choice_indices_groovestats,
-        SubmenuKind::ArrowCloud => &state.sub_choice_indices_arrowcloud,
-        SubmenuKind::ScoreImport => &state.sub_choice_indices_score_import,
-    }
+    &state.sub[kind].choice_indices
 }
 
-pub(super) const fn submenu_choice_indices_mut(
-    state: &mut State,
-    kind: SubmenuKind,
-) -> &mut Vec<usize> {
-    match kind {
-        SubmenuKind::System => &mut state.sub_choice_indices_system,
-        SubmenuKind::Graphics => &mut state.sub_choice_indices_graphics,
-        SubmenuKind::Input => &mut state.sub_choice_indices_input,
-        SubmenuKind::InputBackend => &mut state.sub_choice_indices_input_backend,
-        SubmenuKind::OnlineScoring => &mut state.sub_choice_indices_online_scoring,
-        SubmenuKind::NullOrDie => &mut state.sub_choice_indices_null_or_die,
-        SubmenuKind::NullOrDieOptions => &mut state.sub_choice_indices_null_or_die_options,
-        SubmenuKind::SyncPacks => &mut state.sub_choice_indices_sync_packs,
-        SubmenuKind::Machine => &mut state.sub_choice_indices_machine,
-        SubmenuKind::Advanced => &mut state.sub_choice_indices_advanced,
-        SubmenuKind::Course => &mut state.sub_choice_indices_course,
-        SubmenuKind::Gameplay => &mut state.sub_choice_indices_gameplay,
-        SubmenuKind::Sound => &mut state.sub_choice_indices_sound,
-        SubmenuKind::SelectMusic => &mut state.sub_choice_indices_select_music,
-        SubmenuKind::GrooveStats => &mut state.sub_choice_indices_groovestats,
-        SubmenuKind::ArrowCloud => &mut state.sub_choice_indices_arrowcloud,
-        SubmenuKind::ScoreImport => &mut state.sub_choice_indices_score_import,
-    }
+pub(super) fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mut Vec<usize> {
+    &mut state.sub[kind].choice_indices
 }
 
 pub(super) fn submenu_cursor_indices(state: &State, kind: SubmenuKind) -> &[usize] {
-    match kind {
-        SubmenuKind::System => &state.sub_cursor_indices_system,
-        SubmenuKind::Graphics => &state.sub_cursor_indices_graphics,
-        SubmenuKind::Input => &state.sub_cursor_indices_input,
-        SubmenuKind::InputBackend => &state.sub_cursor_indices_input_backend,
-        SubmenuKind::OnlineScoring => &state.sub_cursor_indices_online_scoring,
-        SubmenuKind::NullOrDie => &state.sub_cursor_indices_null_or_die,
-        SubmenuKind::NullOrDieOptions => &state.sub_cursor_indices_null_or_die_options,
-        SubmenuKind::SyncPacks => &state.sub_cursor_indices_sync_packs,
-        SubmenuKind::Machine => &state.sub_cursor_indices_machine,
-        SubmenuKind::Advanced => &state.sub_cursor_indices_advanced,
-        SubmenuKind::Course => &state.sub_cursor_indices_course,
-        SubmenuKind::Gameplay => &state.sub_cursor_indices_gameplay,
-        SubmenuKind::Sound => &state.sub_cursor_indices_sound,
-        SubmenuKind::SelectMusic => &state.sub_cursor_indices_select_music,
-        SubmenuKind::GrooveStats => &state.sub_cursor_indices_groovestats,
-        SubmenuKind::ArrowCloud => &state.sub_cursor_indices_arrowcloud,
-        SubmenuKind::ScoreImport => &state.sub_cursor_indices_score_import,
-    }
+    &state.sub[kind].cursor_indices
 }
 
-pub(super) const fn submenu_cursor_indices_mut(
-    state: &mut State,
-    kind: SubmenuKind,
-) -> &mut Vec<usize> {
-    match kind {
-        SubmenuKind::System => &mut state.sub_cursor_indices_system,
-        SubmenuKind::Graphics => &mut state.sub_cursor_indices_graphics,
-        SubmenuKind::Input => &mut state.sub_cursor_indices_input,
-        SubmenuKind::InputBackend => &mut state.sub_cursor_indices_input_backend,
-        SubmenuKind::OnlineScoring => &mut state.sub_cursor_indices_online_scoring,
-        SubmenuKind::NullOrDie => &mut state.sub_cursor_indices_null_or_die,
-        SubmenuKind::NullOrDieOptions => &mut state.sub_cursor_indices_null_or_die_options,
-        SubmenuKind::SyncPacks => &mut state.sub_cursor_indices_sync_packs,
-        SubmenuKind::Machine => &mut state.sub_cursor_indices_machine,
-        SubmenuKind::Advanced => &mut state.sub_cursor_indices_advanced,
-        SubmenuKind::Course => &mut state.sub_cursor_indices_course,
-        SubmenuKind::Gameplay => &mut state.sub_cursor_indices_gameplay,
-        SubmenuKind::Sound => &mut state.sub_cursor_indices_sound,
-        SubmenuKind::SelectMusic => &mut state.sub_cursor_indices_select_music,
-        SubmenuKind::GrooveStats => &mut state.sub_cursor_indices_groovestats,
-        SubmenuKind::ArrowCloud => &mut state.sub_cursor_indices_arrowcloud,
-        SubmenuKind::ScoreImport => &mut state.sub_cursor_indices_score_import,
-    }
+pub(super) fn submenu_cursor_indices_mut(state: &mut State, kind: SubmenuKind) -> &mut Vec<usize> {
+    &mut state.sub[kind].cursor_indices
 }
 
 pub(super) fn sync_submenu_cursor_indices(state: &mut State) {
-    state.sub_cursor_indices_system = state.sub_choice_indices_system.clone();
-    state.sub_cursor_indices_graphics = state.sub_choice_indices_graphics.clone();
-    state.sub_cursor_indices_input = state.sub_choice_indices_input.clone();
-    state.sub_cursor_indices_input_backend = state.sub_choice_indices_input_backend.clone();
-    state.sub_cursor_indices_online_scoring = state.sub_choice_indices_online_scoring.clone();
-    state.sub_cursor_indices_null_or_die = state.sub_choice_indices_null_or_die.clone();
-    state.sub_cursor_indices_null_or_die_options =
-        state.sub_choice_indices_null_or_die_options.clone();
-    state.sub_cursor_indices_sync_packs = state.sub_choice_indices_sync_packs.clone();
-    state.sub_cursor_indices_machine = state.sub_choice_indices_machine.clone();
-    state.sub_cursor_indices_advanced = state.sub_choice_indices_advanced.clone();
-    state.sub_cursor_indices_course = state.sub_choice_indices_course.clone();
-    state.sub_cursor_indices_gameplay = state.sub_choice_indices_gameplay.clone();
-    state.sub_cursor_indices_sound = state.sub_choice_indices_sound.clone();
-    state.sub_cursor_indices_select_music = state.sub_choice_indices_select_music.clone();
-    state.sub_cursor_indices_groovestats = state.sub_choice_indices_groovestats.clone();
-    state.sub_cursor_indices_arrowcloud = state.sub_choice_indices_arrowcloud.clone();
-    state.sub_cursor_indices_score_import = state.sub_choice_indices_score_import.clone();
+    for s in state.sub.iter_mut() {
+        s.cursor_indices.clone_from(&s.choice_indices);
+    }
 }

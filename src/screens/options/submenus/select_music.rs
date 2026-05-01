@@ -532,13 +532,13 @@ pub(in crate::screens::options) fn toggle_select_music_scorebox_cycle_option(
 
     let clamped = choice_idx.min(SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES.saturating_sub(1));
     if let Some(slot) = state
-        .sub_choice_indices_select_music
+        .sub[SubmenuKind::SelectMusic].choice_indices
         .get_mut(SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX)
     {
         *slot = clamped;
     }
     if let Some(slot) = state
-        .sub_cursor_indices_select_music
+        .sub[SubmenuKind::SelectMusic].cursor_indices
         .get_mut(SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX)
     {
         *slot = clamped;
@@ -579,13 +579,13 @@ pub(in crate::screens::options) fn toggle_auto_screenshot_option(
 
     let clamped = choice_idx.min(config::AUTO_SS_NUM_FLAGS.saturating_sub(1));
     set_choice_by_id(
-        &mut state.sub_choice_indices_gameplay,
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::AutoScreenshot,
         clamped,
     );
     set_choice_by_id(
-        &mut state.sub_cursor_indices_gameplay,
+        &mut state.sub[SubmenuKind::Gameplay].cursor_indices,
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::AutoScreenshot,
         clamped,
@@ -681,13 +681,13 @@ pub(in crate::screens::options) fn toggle_select_music_chart_info_option(
 
     let clamped = choice_idx.min(SELECT_MUSIC_CHART_INFO_NUM_CHOICES.saturating_sub(1));
     if let Some(slot) = state
-        .sub_choice_indices_select_music
+        .sub[SubmenuKind::SelectMusic].choice_indices
         .get_mut(SELECT_MUSIC_CHART_INFO_ROW_INDEX)
     {
         *slot = clamped;
     }
     if let Some(slot) = state
-        .sub_cursor_indices_select_music
+        .sub[SubmenuKind::SelectMusic].cursor_indices
         .get_mut(SELECT_MUSIC_CHART_INFO_ROW_INDEX)
     {
         *slot = clamped;
