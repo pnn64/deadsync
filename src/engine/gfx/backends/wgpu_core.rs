@@ -1227,6 +1227,11 @@ pub fn draw(
     let screenshot_readback = if state.screenshot_requested {
         state.screenshot_requested = false;
         if state.config.usage.contains(wgpu::TextureUsages::COPY_SRC) {
+            let format = state.config.format;
+            debug!(
+                "wgpu screenshot: surface format={:?} size={}x{}",
+                format, state.config.width, state.config.height
+            );
             let width = state.config.width.max(1);
             let height = state.config.height.max(1);
             let bytes_per_row = 4 * width;
@@ -1611,7 +1616,21 @@ fn reconfigure_surface(state: &mut State) {
 }
 
 fn pick_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
-    // Avoid sRGB conversion to keep colors consistent across backends.
+    // Prefer 8-bit non-sRGB formats for consistent colors and correct screenshot
+    // readback. The screenshot path assumes 4 bytes/pixel RGBA or BGRA; formats
+    // like Rgb10a2 or Rgba16Float would produce garbled captures.
+    const PREFERRED: &[wgpu::TextureFormat] = &[
+        wgpu::TextureFormat::Bgra8Unorm,
+        wgpu::TextureFormat::Rgba8Unorm,
+        wgpu::TextureFormat::Bgra8UnormSrgb,
+        wgpu::TextureFormat::Rgba8UnormSrgb,
+    ];
+    for &pref in PREFERRED {
+        if caps.formats.contains(&pref) {
+            return pref;
+        }
+    }
+    // Fall back to the first non-sRGB, then the first format overall.
     caps.formats
         .iter()
         .copied()

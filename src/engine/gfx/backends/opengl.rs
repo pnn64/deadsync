@@ -66,14 +66,6 @@ impl GlApi {
             },
         }
     }
-
-    const fn screenshot_read_buffer(self) -> u32 {
-        match self {
-            Self::Desktop => glow::FRONT,
-            #[cfg(all(unix, not(target_os = "macos")))]
-            Self::Gles => glow::BACK,
-        }
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -125,6 +117,8 @@ pub struct State {
     cached_tmesh: FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     vsync_enabled: bool,
+    screenshot_requested: bool,
+    captured_frame: Option<RgbaImage>,
 }
 
 pub fn init(
@@ -441,6 +435,8 @@ pub fn init(
         cached_tmesh: FastU64Map::default(),
         cached_tmesh_bytes: 0,
         vsync_enabled,
+        screenshot_requested: false,
+        captured_frame: None,
     };
 
     info!("OpenGL backend initialized successfully.");
@@ -645,7 +641,9 @@ fn ensure_cached_tmesh(
 }
 
 #[inline(always)]
-pub const fn request_screenshot(_state: &mut State) {}
+pub fn request_screenshot(state: &mut State) {
+    state.screenshot_requested = true;
+}
 
 pub fn draw(
     state: &mut State,
@@ -1100,6 +1098,32 @@ pub fn draw(
     }
     stats.backend_record_us = elapsed_us_since(backend_record_started);
 
+    if state.screenshot_requested {
+        state.screenshot_requested = false;
+        state.captured_frame = None;
+        let (width, height) = state.window_size;
+        if width > 0 && height > 0 {
+            let byte_len = width as usize * height as usize * 4;
+            let mut pixels = vec![0u8; byte_len];
+            // SAFETY: reads RGBA bytes from the back buffer before swap.
+            unsafe {
+                state.gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
+                state.gl.read_buffer(glow::BACK);
+                state.gl.read_pixels(
+                    0,
+                    0,
+                    width as i32,
+                    height as i32,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    PixelPackData::Slice(Some(pixels.as_mut_slice())),
+                );
+            }
+            flip_rows_rgba_in_place(width as usize, height as usize, &mut pixels);
+            state.captured_frame = RgbaImage::from_raw(width, height, pixels);
+        }
+    }
+
     let present_started = Instant::now();
     state.gl_surface.swap_buffers(&state.gl_context)?;
     stats.present_us = elapsed_us_since(present_started);
@@ -1132,34 +1156,10 @@ pub fn draw(
 }
 
 pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
-    let (width, height) = state.window_size;
-    if width == 0 || height == 0 {
-        return Err(
-            std::io::Error::other("Cannot capture screenshot at zero-sized viewport").into(),
-        );
-    }
-
-    let byte_len = width as usize * height as usize * 4;
-    let mut pixels = vec![0u8; byte_len];
-    // SAFETY: the current OpenGL context writes RGBA bytes into the owned `pixels`
-    // buffer for the exact viewport rectangle requested.
-    unsafe {
-        state.gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
-        state.gl.read_buffer(state.api.screenshot_read_buffer());
-        state.gl.read_pixels(
-            0,
-            0,
-            width as i32,
-            height as i32,
-            glow::RGBA,
-            glow::UNSIGNED_BYTE,
-            PixelPackData::Slice(Some(pixels.as_mut_slice())),
-        );
-    }
-
-    flip_rows_rgba_in_place(width as usize, height as usize, &mut pixels);
-    RgbaImage::from_raw(width, height, pixels)
-        .ok_or_else(|| std::io::Error::other("Failed to build screenshot image").into())
+    state
+        .captured_frame
+        .take()
+        .ok_or_else(|| std::io::Error::other("No captured screenshot frame available").into())
 }
 
 #[inline(always)]
