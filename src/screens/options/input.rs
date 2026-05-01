@@ -278,7 +278,7 @@ pub(super) fn apply_submenu_choice_delta(
                 config::update_language_flag(flag);
                 assets::i18n::set_locale(&assets::i18n::resolve_locale(flag));
             }
-            SubRowId::LogLevel => config::update_log_level(log_level_from_choice(new_index)),
+            SubRowId::LogLevel => config::update_log_level(LogLevel::from_choice(new_index)),
             SubRowId::LogFile => config::update_log_to_file(new_index == 1),
             SubRowId::DefaultNoteSkin => {
                 if let Some(skin_name) = selected_choice.as_deref() {
@@ -347,19 +347,19 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::SelectColor => config::update_machine_show_select_color(enabled),
             SubRowId::SelectStyle => config::update_machine_show_select_style(enabled),
             SubRowId::PreferredStyle => config::update_machine_preferred_style(
-                machine_preferred_style_from_choice(new_index),
+                MachinePreferredPlayStyle::from_choice(new_index),
             ),
             SubRowId::SelectPlayMode => config::update_machine_show_select_play_mode(enabled),
             SubRowId::PreferredMode => config::update_machine_preferred_play_mode(
-                machine_preferred_mode_from_choice(new_index),
+                MachinePreferredPlayMode::from_choice(new_index),
             ),
-            SubRowId::Font => config::update_machine_font(machine_font_from_choice(new_index)),
+            SubRowId::Font => config::update_machine_font(MachineFont::from_choice(new_index)),
             SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
             SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),
             SubRowId::MenuMusic => config::update_menu_music(enabled),
             SubRowId::VisualStyle => {
-                config::update_visual_style(visual_style_from_choice(new_index))
+                config::update_visual_style(VisualStyle::from_choice(new_index))
             }
             SubRowId::Replays => config::update_machine_enable_replays(enabled),
             SubRowId::PerPlayerGlobalOffsets => {
@@ -373,7 +373,7 @@ pub(super) fn apply_submenu_choice_delta(
     } else if matches!(kind, SubmenuKind::Advanced) {
         let row = &rows[row_index];
         if row.id == SubRowId::DefaultFailType {
-            config::update_default_fail_type(default_fail_type_from_choice(new_index));
+            config::update_default_fail_type(DefaultFailType::from_choice(new_index));
         } else if row.id == SubRowId::BannerCache {
             config::update_banner_cache(new_index == 1);
         } else if row.id == SubRowId::CdTitleCache {
@@ -389,18 +389,16 @@ pub(super) fn apply_submenu_choice_delta(
     } else if matches!(kind, SubmenuKind::NullOrDieOptions) {
         let row = &rows[row_index];
         if row.id == SubRowId::SyncGraph {
-            config::update_null_or_die_sync_graph(sync_graph_mode_from_choice(new_index));
+            config::update_null_or_die_sync_graph(SyncGraphMode::from_choice(new_index));
         } else if row.id == SubRowId::SyncConfidence {
             config::update_null_or_die_confidence_percent(sync_confidence_from_choice(new_index));
         } else if row.id == SubRowId::PackSyncThreads {
             let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
             config::update_null_or_die_pack_sync_threads(threads);
         } else if row.id == SubRowId::KernelTarget {
-            config::update_null_or_die_kernel_target(null_or_die_kernel_target_from_choice(
-                new_index,
-            ));
+            config::update_null_or_die_kernel_target(::null_or_die::KernelTarget::from_choice(new_index));
         } else if row.id == SubRowId::KernelType {
-            config::update_null_or_die_kernel_type(null_or_die_kernel_type_from_choice(new_index));
+            config::update_null_or_die_kernel_type(::null_or_die::BiasKernel::from_choice(new_index));
         } else if row.id == SubRowId::FullSpectrogram {
             config::update_null_or_die_full_spectrogram(yes_no_from_choice(new_index));
         }
@@ -511,7 +509,7 @@ pub(super) fn apply_submenu_choice_delta(
         } else if row.id == SubRowId::ShowBreakdown {
             config::update_show_select_music_breakdown(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::BreakdownStyle {
-            config::update_select_music_breakdown_style(breakdown_style_from_choice(new_index));
+            config::update_select_music_breakdown_style(BreakdownStyle::from_choice(new_index));
         } else if row.id == SubRowId::ShowNativeLanguage {
             config::update_translated_titles(translated_titles_from_choice(new_index));
         } else if row.id == SubRowId::MusicWheelSpeed {
@@ -519,7 +517,7 @@ pub(super) fn apply_submenu_choice_delta(
                 new_index,
             ));
         } else if row.id == SubRowId::MusicWheelStyle {
-            config::update_select_music_wheel_style(select_music_wheel_style_from_choice(
+            config::update_select_music_wheel_style(SelectMusicWheelStyle::from_choice(
                 new_index,
             ));
         } else if row.id == SubRowId::ShowCdTitles {
@@ -529,15 +527,15 @@ pub(super) fn apply_submenu_choice_delta(
         } else if row.id == SubRowId::ShowWheelLamps {
             config::update_show_music_wheel_lamps(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ItlRank {
-            config::update_select_music_itl_rank_mode(select_music_itl_rank_from_choice(new_index));
+            config::update_select_music_itl_rank_mode(SelectMusicItlRankMode::from_choice(new_index));
         } else if row.id == SubRowId::ItlWheelData {
-            config::update_select_music_itl_wheel_mode(select_music_itl_wheel_from_choice(
+            config::update_select_music_itl_wheel_mode(SelectMusicItlWheelMode::from_choice(
                 new_index,
             ));
         } else if row.id == SubRowId::NewPackBadge {
-            config::update_select_music_new_pack_mode(new_pack_mode_from_choice(new_index));
+            config::update_select_music_new_pack_mode(NewPackMode::from_choice(new_index));
         } else if row.id == SubRowId::ShowPatternInfo {
-            config::update_select_music_pattern_info_mode(select_music_pattern_info_from_choice(
+            config::update_select_music_pattern_info_mode(SelectMusicPatternInfoMode::from_choice(
                 new_index,
             ));
         } else if row.id == SubRowId::MusicPreviews {
@@ -552,7 +550,7 @@ pub(super) fn apply_submenu_choice_delta(
             config::update_show_select_music_scorebox(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::GsBoxPlacement {
             config::update_select_music_scorebox_placement(
-                select_music_scorebox_placement_from_choice(new_index),
+                SelectMusicScoreboxPlacement::from_choice(new_index),
             );
         }
     } else if matches!(kind, SubmenuKind::GrooveStats) {
