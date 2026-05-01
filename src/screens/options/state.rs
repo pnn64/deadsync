@@ -440,10 +440,11 @@ pub fn init() -> State {
         SubRowId::HighDpi,
         yes_no_choice_index(cfg.high_dpi),
     );
-    if let Some(slot) = state
-        .sub[SubmenuKind::Graphics].choice_indices
-        .get_mut(SOFTWARE_THREADS_ROW_INDEX)
-    {
+    if let Some(slot) = get_choice_by_id_mut(
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::SoftwareRendererThreads,
+    ) {
         *slot = software_thread_choice_index(
             &state.software_thread_choices,
             cfg.software_renderer_threads,
@@ -600,10 +601,11 @@ pub fn init() -> State {
         SubRowId::CdTitleCache,
         usize::from(cfg.cdtitle_cache),
     );
-    if let Some(slot) = state
-        .sub[SubmenuKind::Advanced].choice_indices
-        .get_mut(ADVANCED_SONG_PARSING_THREADS_ROW_INDEX)
-    {
+    if let Some(slot) = get_choice_by_id_mut(
+        &mut state.sub[SubmenuKind::Advanced].choice_indices,
+        ADVANCED_OPTIONS_ROWS,
+        SubRowId::SongParsingThreads,
+    ) {
         *slot =
             software_thread_choice_index(&state.software_thread_choices, cfg.song_parsing_threads);
     }

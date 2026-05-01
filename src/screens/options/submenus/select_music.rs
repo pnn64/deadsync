@@ -396,16 +396,7 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
 pub(in crate::screens::options) const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 4;
 pub(in crate::screens::options) const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 2;
 
-pub(in crate::screens::options) const SELECT_MUSIC_SHOW_BANNERS_ROW_INDEX: usize = 0;
-pub(in crate::screens::options) const SELECT_MUSIC_SHOW_VIDEO_BANNERS_ROW_INDEX: usize = 1;
-pub(in crate::screens::options) const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 2;
-pub(in crate::screens::options) const SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX: usize = 3;
-pub(in crate::screens::options) const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 15;
-pub(in crate::screens::options) const SELECT_MUSIC_CHART_INFO_ROW_INDEX: usize = 14;
-pub(in crate::screens::options) const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 17;
-pub(in crate::screens::options) const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usize = 19;
-pub(in crate::screens::options) const SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX: usize = 20;
-pub(in crate::screens::options) const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 21;
+
 
 pub(in crate::screens::options) const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] =
     [5, 10, 15, 25, 30, 45, 100];
@@ -531,16 +522,18 @@ pub(in crate::screens::options) fn toggle_select_music_scorebox_cycle_option(
     apply_scorebox_cycle_mask(mask);
 
     let clamped = choice_idx.min(SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES.saturating_sub(1));
-    if let Some(slot) = state
-        .sub[SubmenuKind::SelectMusic].choice_indices
-        .get_mut(SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX)
-    {
+    if let Some(slot) = get_choice_by_id_mut(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::GsBoxLeaderboards,
+    ) {
         *slot = clamped;
     }
-    if let Some(slot) = state
-        .sub[SubmenuKind::SelectMusic].cursor_indices
-        .get_mut(SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX)
-    {
+    if let Some(slot) = get_choice_by_id_mut(
+        &mut state.sub[SubmenuKind::SelectMusic].cursor_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::GsBoxLeaderboards,
+    ) {
         *slot = clamped;
     }
     audio::play_sfx("assets/sounds/change_value.ogg");
@@ -680,16 +673,18 @@ pub(in crate::screens::options) fn toggle_select_music_chart_info_option(
     apply_select_music_chart_info_mask(mask);
 
     let clamped = choice_idx.min(SELECT_MUSIC_CHART_INFO_NUM_CHOICES.saturating_sub(1));
-    if let Some(slot) = state
-        .sub[SubmenuKind::SelectMusic].choice_indices
-        .get_mut(SELECT_MUSIC_CHART_INFO_ROW_INDEX)
-    {
+    if let Some(slot) = get_choice_by_id_mut(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::ChartInfo,
+    ) {
         *slot = clamped;
     }
-    if let Some(slot) = state
-        .sub[SubmenuKind::SelectMusic].cursor_indices
-        .get_mut(SELECT_MUSIC_CHART_INFO_ROW_INDEX)
-    {
+    if let Some(slot) = get_choice_by_id_mut(
+        &mut state.sub[SubmenuKind::SelectMusic].cursor_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::ChartInfo,
+    ) {
         *slot = clamped;
     }
     audio::play_sfx("assets/sounds/change_value.ogg");

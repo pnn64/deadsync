@@ -113,7 +113,6 @@ pub(in crate::screens::options) const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-pub(in crate::screens::options) const ADVANCED_SONG_PARSING_THREADS_ROW_INDEX: usize = 3;
 
 pub(in crate::screens::options) const fn default_fail_type_choice_index(
     fail_type: DefaultFailType,

@@ -205,6 +205,25 @@ pub(super) fn set_choice_by_id(
     }
 }
 
+/// Find the positional index of a row by its `SubRowId`.
+pub(super) fn row_position(rows: &[SubRow], id: SubRowId) -> Option<usize> {
+    rows.iter().position(|r| r.id == id)
+}
+
+/// Read the current choice index for a row identified by `SubRowId`.
+pub(super) fn get_choice_by_id(choices: &[usize], rows: &[SubRow], id: SubRowId) -> Option<usize> {
+    row_position(rows, id).and_then(|pos| choices.get(pos).copied())
+}
+
+/// Get a mutable reference to the choice index for a row identified by `SubRowId`.
+pub(super) fn get_choice_by_id_mut<'a>(
+    choices: &'a mut [usize],
+    rows: &[SubRow],
+    id: SubRowId,
+) -> Option<&'a mut usize> {
+    row_position(rows, id).and_then(move |pos| choices.get_mut(pos))
+}
+
 pub(super) const fn yes_no_choice_index(enabled: bool) -> usize {
     if enabled { 1 } else { 0 }
 }

@@ -109,42 +109,42 @@ pub(super) fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows
         }
         SubmenuKind::Advanced => rows.iter().enumerate().map(|(idx, _)| idx).collect(),
         SubmenuKind::SelectMusic => {
-            let show_banners = state
-                .sub[SubmenuKind::SelectMusic].choice_indices
-                .get(SELECT_MUSIC_SHOW_BANNERS_ROW_INDEX)
-                .copied()
-                .unwrap_or_else(|| yes_no_choice_index(true));
+            let show_banners = get_choice_by_id(
+                &state.sub[SubmenuKind::SelectMusic].choice_indices,
+                SELECT_MUSIC_OPTIONS_ROWS,
+                SubRowId::ShowBanners,
+            ).unwrap_or_else(|| yes_no_choice_index(true));
             let show_banners = yes_no_from_choice(show_banners);
-            let show_breakdown = state
-                .sub[SubmenuKind::SelectMusic].choice_indices
-                .get(SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX)
-                .copied()
-                .unwrap_or_else(|| yes_no_choice_index(true));
+            let show_breakdown = get_choice_by_id(
+                &state.sub[SubmenuKind::SelectMusic].choice_indices,
+                SELECT_MUSIC_OPTIONS_ROWS,
+                SubRowId::ShowBreakdown,
+            ).unwrap_or_else(|| yes_no_choice_index(true));
             let show_breakdown = yes_no_from_choice(show_breakdown);
-            let show_previews = state
-                .sub[SubmenuKind::SelectMusic].choice_indices
-                .get(SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX)
-                .copied()
-                .unwrap_or_else(|| yes_no_choice_index(true));
+            let show_previews = get_choice_by_id(
+                &state.sub[SubmenuKind::SelectMusic].choice_indices,
+                SELECT_MUSIC_OPTIONS_ROWS,
+                SubRowId::MusicPreviews,
+            ).unwrap_or_else(|| yes_no_choice_index(true));
             let show_previews = yes_no_from_choice(show_previews);
-            let show_scorebox = state
-                .sub[SubmenuKind::SelectMusic].choice_indices
-                .get(SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX)
-                .copied()
-                .unwrap_or_else(|| yes_no_choice_index(true));
+            let show_scorebox = get_choice_by_id(
+                &state.sub[SubmenuKind::SelectMusic].choice_indices,
+                SELECT_MUSIC_OPTIONS_ROWS,
+                SubRowId::ShowGsBox,
+            ).unwrap_or_else(|| yes_no_choice_index(true));
             let show_scorebox = yes_no_from_choice(show_scorebox);
             rows.iter()
                 .enumerate()
-                .filter_map(|(idx, _)| {
-                    if idx == SELECT_MUSIC_SHOW_VIDEO_BANNERS_ROW_INDEX && !show_banners {
+                .filter_map(|(idx, row)| {
+                    if row.id == SubRowId::ShowVideoBanners && !show_banners {
                         None
-                    } else if idx == SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX && !show_breakdown {
+                    } else if row.id == SubRowId::BreakdownStyle && !show_breakdown {
                         None
-                    } else if idx == SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX && !show_previews {
+                    } else if row.id == SubRowId::LoopMusic && !show_previews {
                         None
-                    } else if idx == SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX && !show_scorebox {
+                    } else if row.id == SubRowId::GsBoxPlacement && !show_scorebox {
                         None
-                    } else if idx == SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX && !show_scorebox {
+                    } else if row.id == SubRowId::GsBoxLeaderboards && !show_scorebox {
                         None
                     } else {
                         Some(idx)
@@ -153,24 +153,24 @@ pub(super) fn submenu_visible_row_indices(state: &State, kind: SubmenuKind, rows
                 .collect()
         }
         SubmenuKind::Machine => {
-            let show_preferred_style = state
-                .sub[SubmenuKind::Machine].choice_indices
-                .get(MACHINE_SELECT_STYLE_ROW_INDEX)
-                .copied()
-                .unwrap_or(1)
+            let show_preferred_style = get_choice_by_id(
+                &state.sub[SubmenuKind::Machine].choice_indices,
+                MACHINE_OPTIONS_ROWS,
+                SubRowId::SelectStyle,
+            ).unwrap_or(1)
                 == 0;
-            let show_preferred_mode = state
-                .sub[SubmenuKind::Machine].choice_indices
-                .get(MACHINE_SELECT_PLAY_MODE_ROW_INDEX)
-                .copied()
-                .unwrap_or(1)
+            let show_preferred_mode = get_choice_by_id(
+                &state.sub[SubmenuKind::Machine].choice_indices,
+                MACHINE_OPTIONS_ROWS,
+                SubRowId::SelectPlayMode,
+            ).unwrap_or(1)
                 == 0;
             rows.iter()
                 .enumerate()
-                .filter_map(|(idx, _)| {
-                    if idx == MACHINE_PREFERRED_STYLE_ROW_INDEX && !show_preferred_style {
+                .filter_map(|(idx, row)| {
+                    if row.id == SubRowId::PreferredStyle && !show_preferred_style {
                         None
-                    } else if idx == MACHINE_PREFERRED_MODE_ROW_INDEX && !show_preferred_mode {
+                    } else if row.id == SubRowId::PreferredMode && !show_preferred_mode {
                         None
                     } else {
                         Some(idx)

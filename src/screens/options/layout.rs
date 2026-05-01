@@ -597,11 +597,12 @@ pub(super) fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32,
 
         let parent_from = old_visible_rows
             .iter()
-            .position(|&idx| idx == VIDEO_RENDERER_ROW_INDEX)
+            .position(|&idx| rows.get(idx).map_or(false, |r| r.id == SubRowId::VideoRenderer))
             .and_then(|old_idx| old_tweens.get(old_idx))
             .map(|tw| (tw.y(), tw.a()))
             .unwrap_or_else(|| {
-                row_dest_for_index(total_rows, selected, VIDEO_RENDERER_ROW_INDEX, s, list_y)
+                let renderer_vis_idx = visible_rows.iter().position(|&idx| rows.get(idx).map_or(false, |r| r.id == SubRowId::VideoRenderer)).unwrap_or(0);
+                row_dest_for_index(total_rows, selected, renderer_vis_idx, s, list_y)
             });
         let old_exit_from = old_tweens
             .get(old_total_rows.saturating_sub(1))
@@ -615,7 +616,7 @@ pub(super) fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32,
                 .position(|&old_actual| old_actual == actual_idx)
                 .and_then(|old_idx| old_tweens.get(old_idx).map(|tw| (tw.y(), tw.a())))
                 .or({
-                    if actual_idx == SOFTWARE_THREADS_ROW_INDEX {
+                    if rows.get(actual_idx).map_or(false, |r| r.id == SubRowId::SoftwareRendererThreads) {
                         Some((parent_from.0, 0.0))
                     } else {
                         None
@@ -737,15 +738,17 @@ pub(super) fn update_advanced_row_tweens(state: &mut State, s: f32, list_y: f32,
     update_row_tweens(&mut state.row_tweens, total_rows, selected, s, list_y, dt);
 }
 
-const fn select_music_parent_row(actual_idx: usize) -> Option<usize> {
-    match actual_idx {
-        SELECT_MUSIC_SHOW_VIDEO_BANNERS_ROW_INDEX => Some(SELECT_MUSIC_SHOW_BANNERS_ROW_INDEX),
-        SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX => Some(SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX),
-        SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX => Some(SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX),
-        SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX => Some(SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX),
-        SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX => Some(SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX),
-        _ => None,
-    }
+fn select_music_parent_row(rows: &[SubRow], actual_idx: usize) -> Option<usize> {
+    let child_id = rows.get(actual_idx)?.id;
+    let parent_id = match child_id {
+        SubRowId::ShowVideoBanners => SubRowId::ShowBanners,
+        SubRowId::BreakdownStyle => SubRowId::ShowBreakdown,
+        SubRowId::LoopMusic => SubRowId::MusicPreviews,
+        SubRowId::GsBoxPlacement => SubRowId::ShowGsBox,
+        SubRowId::GsBoxLeaderboards => SubRowId::ShowGsBox,
+        _ => return None,
+    };
+    rows.iter().position(|r| r.id == parent_id)
 }
 
 pub(super) fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
@@ -773,7 +776,7 @@ pub(super) fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: 
         let mut mapped: Vec<RowTween> = Vec::with_capacity(total_rows);
         for (new_idx, actual_idx) in visible_rows.iter().copied().enumerate() {
             let (to_y, to_a) = row_dest_for_index(total_rows, selected, new_idx, s, list_y);
-            let parent_from = select_music_parent_row(actual_idx).and_then(|parent_actual_idx| {
+            let parent_from = select_music_parent_row(rows, actual_idx).and_then(|parent_actual_idx| {
                 old_visible_rows
                     .iter()
                     .position(|&idx| idx == parent_actual_idx)
