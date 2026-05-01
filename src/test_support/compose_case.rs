@@ -1643,9 +1643,13 @@ impl From<EffectStateSnapshot> for EffectState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{LazyLock, Mutex};
+
+    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     #[test]
     fn capture_roundtrip_keeps_output_hash() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let scenario = crate::test_support::compose_scenarios::build_scenario("hud")
             .expect("hud scenario should exist");
         let (case, output) = capture_case(
@@ -1671,6 +1675,7 @@ mod tests {
 
     #[test]
     fn render_snapshot_roundtrip_keeps_output_hash() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let scenario = crate::test_support::compose_scenarios::build_scenario("mask")
             .expect("mask scenario should exist");
         let (_, output) = capture_case(
