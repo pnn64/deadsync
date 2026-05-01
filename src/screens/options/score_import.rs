@@ -88,7 +88,7 @@ pub(super) const fn score_import_endpoint_from_choice_index(
 #[inline(always)]
 pub(super) fn score_import_selected_endpoint(state: &State) -> scores::ScoreImportEndpoint {
     let idx = state
-        .sub_choice_indices_score_import
+        .sub[SubmenuKind::ScoreImport].choice_indices
         .get(SCORE_IMPORT_ROW_ENDPOINT_INDEX)
         .copied()
         .unwrap_or(0);
@@ -222,13 +222,13 @@ pub(super) fn refresh_score_import_profile_options(state: &mut State) {
 
     let max_idx = state.score_import_profile_choices.len().saturating_sub(1);
     if let Some(slot) = state
-        .sub_choice_indices_score_import
+        .sub[SubmenuKind::ScoreImport].choice_indices
         .get_mut(SCORE_IMPORT_ROW_PROFILE_INDEX)
     {
         *slot = (*slot).min(max_idx);
     }
     if let Some(slot) = state
-        .sub_cursor_indices_score_import
+        .sub[SubmenuKind::ScoreImport].cursor_indices
         .get_mut(SCORE_IMPORT_ROW_PROFILE_INDEX)
     {
         *slot = (*slot).min(max_idx);
@@ -241,13 +241,13 @@ pub(super) fn refresh_score_import_pack_options(state: &mut State) {
     state.score_import_pack_filters = filters;
     let max_idx = state.score_import_pack_choices.len().saturating_sub(1);
     if let Some(slot) = state
-        .sub_choice_indices_score_import
+        .sub[SubmenuKind::ScoreImport].choice_indices
         .get_mut(SCORE_IMPORT_ROW_PACK_INDEX)
     {
         *slot = (*slot).min(max_idx);
     }
     if let Some(slot) = state
-        .sub_cursor_indices_score_import
+        .sub[SubmenuKind::ScoreImport].cursor_indices
         .get_mut(SCORE_IMPORT_ROW_PACK_INDEX)
     {
         *slot = (*slot).min(max_idx);
@@ -260,13 +260,13 @@ pub(super) fn refresh_sync_pack_options(state: &mut State) {
     state.sync_pack_filters = filters;
     let max_idx = state.sync_pack_choices.len().saturating_sub(1);
     if let Some(slot) = state
-        .sub_choice_indices_sync_packs
+        .sub[SubmenuKind::SyncPacks].choice_indices
         .get_mut(SYNC_PACK_ROW_PACK_INDEX)
     {
         *slot = (*slot).min(max_idx);
     }
     if let Some(slot) = state
-        .sub_cursor_indices_sync_packs
+        .sub[SubmenuKind::SyncPacks].cursor_indices
         .get_mut(SYNC_PACK_ROW_PACK_INDEX)
     {
         *slot = (*slot).min(max_idx);
@@ -285,7 +285,7 @@ pub(super) fn refresh_null_or_die_options(state: &mut State) {
 
 pub(super) fn selected_score_import_pack_group(state: &State) -> Option<String> {
     let pack_idx = state
-        .sub_choice_indices_score_import
+        .sub[SubmenuKind::ScoreImport].choice_indices
         .get(SCORE_IMPORT_ROW_PACK_INDEX)
         .copied()
         .unwrap_or(0)
@@ -299,7 +299,7 @@ pub(super) fn selected_score_import_pack_group(state: &State) -> Option<String> 
 
 pub(super) fn selected_score_import_profile(state: &State) -> Option<ScoreImportProfileConfig> {
     let profile_idx = state
-        .sub_choice_indices_score_import
+        .sub[SubmenuKind::ScoreImport].choice_indices
         .get(SCORE_IMPORT_ROW_PROFILE_INDEX)
         .copied()
         .unwrap_or(0)
@@ -319,7 +319,7 @@ pub(super) fn selected_score_import_profile(state: &State) -> Option<ScoreImport
 pub(super) fn score_import_only_missing_gs_scores(state: &State) -> bool {
     yes_no_from_choice(
         state
-            .sub_choice_indices_score_import
+            .sub[SubmenuKind::ScoreImport].choice_indices
             .get(SCORE_IMPORT_ROW_ONLY_MISSING_INDEX)
             .copied()
             .unwrap_or_else(|| yes_no_choice_index(false)),

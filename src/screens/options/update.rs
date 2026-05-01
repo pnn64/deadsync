@@ -34,7 +34,7 @@ pub(super) fn clear_navigation_holds(state: &mut State) {
 pub fn sync_video_renderer(state: &mut State, renderer: BackendType) {
     state.video_renderer_at_load = renderer;
     if let Some(slot) = state
-        .sub_choice_indices_graphics
+        .sub[SubmenuKind::Graphics].choice_indices
         .get_mut(VIDEO_RENDERER_ROW_INDEX)
     {
         *slot = backend_to_renderer_choice_index(renderer);
@@ -58,7 +58,7 @@ pub fn sync_display_mode(
         DisplayMode::Windowed => fullscreen_type,
     };
     if let Some(slot) = state
-        .sub_choice_indices_graphics
+        .sub[SubmenuKind::Graphics].choice_indices
         .get_mut(FULLSCREEN_TYPE_ROW_INDEX)
     {
         *slot = fullscreen_type_to_choice_index(target_type);
@@ -78,7 +78,7 @@ pub fn sync_display_resolution(state: &mut State, width: u32, height: u32) {
 
 pub fn sync_show_stats_mode(state: &mut State, mode: u8) {
     set_choice_by_id(
-        &mut state.sub_choice_indices_graphics,
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::ShowStats,
         mode.min(3) as usize,
@@ -89,7 +89,7 @@ pub fn sync_show_stats_mode(state: &mut State, mode: u8) {
 
 pub fn sync_translated_titles(state: &mut State, enabled: bool) {
     set_choice_by_id(
-        &mut state.sub_choice_indices_select_music,
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowNativeLanguage,
         translated_titles_choice_index(enabled),
@@ -111,7 +111,7 @@ pub fn sync_max_fps(state: &mut State, max_fps: u16) {
 
 pub fn sync_vsync(state: &mut State, enabled: bool) {
     state.vsync_at_load = enabled;
-    if let Some(slot) = state.sub_choice_indices_graphics.get_mut(VSYNC_ROW_INDEX) {
+    if let Some(slot) = state.sub[SubmenuKind::Graphics].choice_indices.get_mut(VSYNC_ROW_INDEX) {
         *slot = yes_no_choice_index(enabled);
     }
     sync_submenu_cursor_indices(state);
@@ -121,7 +121,7 @@ pub fn sync_vsync(state: &mut State, enabled: bool) {
 pub fn sync_high_dpi(state: &mut State, enabled: bool) {
     state.high_dpi_at_load = enabled;
     set_choice_by_id(
-        &mut state.sub_choice_indices_graphics,
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::HighDpi,
         yes_no_choice_index(enabled),
@@ -133,7 +133,7 @@ pub fn sync_high_dpi(state: &mut State, enabled: bool) {
 pub fn sync_present_mode_policy(state: &mut State, mode: PresentModePolicy) {
     state.present_mode_policy_at_load = mode;
     if let Some(slot) = state
-        .sub_choice_indices_graphics
+        .sub[SubmenuKind::Graphics].choice_indices
         .get_mut(PRESENT_MODE_ROW_INDEX)
     {
         *slot = present_mode_choice_index(mode);
@@ -269,7 +269,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 desired_high_dpi,
             ) = if leaving_graphics {
                 let vsync = state
-                    .sub_choice_indices_graphics
+                    .sub[SubmenuKind::Graphics].choice_indices
                     .get(VSYNC_ROW_INDEX)
                     .copied()
                     .is_none_or(yes_no_from_choice);
