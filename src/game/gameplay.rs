@@ -8004,6 +8004,8 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         return GameplayAction::Navigate(GameplayExit::Complete);
     }
 
+    refresh_scorebox_snapshots(state);
+
     finalize_update_trace(
         state,
         delta_time,
@@ -8012,6 +8014,43 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         phase_timings,
     );
     GameplayAction::None
+}
+
+/// Re-check the leaderboard cache for any scorebox snapshots that were still
+/// loading when gameplay started. Once the background fetch completes, the
+/// snapshot is replaced so the scorebox shows the real scores mid-song.
+fn refresh_scorebox_snapshots(state: &mut State) {
+    let play_style = profile::get_session_play_style();
+    let player_side = profile::get_session_player_side();
+    for p in 0..state.num_players {
+        if !state.player_profiles[p].display_scorebox {
+            continue;
+        }
+        let side = player_side_for_index(play_style, player_side, p);
+        let idx = side_index(side);
+        let needs_refresh = state.scorebox_side_snapshot[idx]
+            .as_ref()
+            .is_some_and(|s| s.loading);
+        if !needs_refresh {
+            continue;
+        }
+        if !scores::is_gs_active_for_side(side) {
+            continue;
+        }
+        let chart_hash = state.charts[p].short_hash.trim();
+        if chart_hash.is_empty() {
+            continue;
+        }
+        if let Some(fresh) = scores::get_or_fetch_player_leaderboards_for_side(
+            chart_hash,
+            side,
+            SCOREBOX_NUM_ENTRIES,
+        ) {
+            if !fresh.loading {
+                state.scorebox_side_snapshot[idx] = Some(fresh);
+            }
+        }
+    }
 }
 
 fn update_danger_fx(state: &mut State) {
