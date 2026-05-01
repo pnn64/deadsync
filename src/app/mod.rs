@@ -3443,6 +3443,22 @@ impl App {
                 Vec::new()
             }
             ScreenAction::FetchOnlineGrade(hash) => vec![Command::FetchOnlineGrade(hash)],
+            ScreenAction::WriteFsrDump => {
+                let path = dirs::app_dirs().data_dir.join("fsrdump.txt");
+                match self.fsr_monitor.write_debug_dump(&path) {
+                    Ok(()) => {
+                        info!("Wrote FSR debug dump to '{}'", path.display());
+                        self.state.shell.gamepad_overlay_state =
+                            Some((format!("Wrote {}", path.display()), Instant::now()));
+                    }
+                    Err(e) => {
+                        warn!("Failed to write FSR debug dump: {e}");
+                        self.state.shell.gamepad_overlay_state =
+                            Some((format!("FSR dump failed: {e}"), Instant::now()));
+                    }
+                }
+                Vec::new()
+            }
             ScreenAction::ChangeGraphics {
                 renderer,
                 display_mode,

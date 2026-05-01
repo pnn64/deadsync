@@ -836,6 +836,17 @@ pub(super) fn activate_current_selection(
                         _ => {}
                     }
                 }
+            } else if matches!(kind, SubmenuKind::InputBackend) {
+                let rows = submenu_rows(kind);
+                let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
+                    return ScreenAction::None;
+                };
+                if let Some(row) = rows.get(row_idx)
+                    && row.id == SubRowId::DebugFsrDump
+                {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    return ScreenAction::WriteFsrDump;
+                }
             } else if matches!(kind, SubmenuKind::OnlineScoring) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {

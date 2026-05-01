@@ -45,6 +45,7 @@ pub(in crate::screens::options) const INPUT_OPTIONS_ITEMS: &[Item] = &[
             HelpEntry::Paragraph(lookup_key("OptionsInputHelp", "InputOptionsHelp")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "GamepadBackend")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "UseFSRs")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "DebugFsrDump")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "MenuNavigation")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "OptionsNavigation")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "MenuButtons")),
@@ -76,6 +77,12 @@ pub(in crate::screens::options) const INPUT_BACKEND_OPTIONS_ROWS: &[SubRow] = &[
             localized_choice("Common", "Yes"),
         ],
         inline: true,
+    },
+    SubRow {
+        id: SubRowId::DebugFsrDump,
+        label: lookup_key("OptionsInput", "DebugFsrDump"),
+        choices: &[localized_choice("Common", "Start")],
+        inline: false,
     },
     SubRow {
         id: SubRowId::MenuNavigation,
@@ -127,6 +134,14 @@ pub(in crate::screens::options) const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "UseFSRsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpDebugFsrDump,
+        name: lookup_key("OptionsInput", "DebugFsrDump"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "DebugFsrDumpHelp",
         ))],
     },
     Item {

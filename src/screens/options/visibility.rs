@@ -111,6 +111,24 @@ pub(super) fn submenu_visible_row_indices(
                 })
                 .collect()
         }
+        SubmenuKind::InputBackend => {
+            let show_fsr_dump = get_choice_by_id(
+                &state.sub[SubmenuKind::InputBackend].choice_indices,
+                INPUT_BACKEND_OPTIONS_ROWS,
+                SubRowId::UseFsrs,
+            )
+            .is_some_and(yes_no_from_choice);
+            rows.iter()
+                .enumerate()
+                .filter_map(|(idx, row)| {
+                    if row.id == SubRowId::DebugFsrDump && !show_fsr_dump {
+                        None
+                    } else {
+                        Some(idx)
+                    }
+                })
+                .collect()
+        }
         SubmenuKind::Advanced => rows.iter().enumerate().map(|(idx, _)| idx).collect(),
         SubmenuKind::SelectMusic => {
             let show_banners = get_choice_by_id(

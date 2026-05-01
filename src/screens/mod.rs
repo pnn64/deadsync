@@ -78,6 +78,7 @@ pub enum ScreenAction {
         changes: Vec<SongOffsetSyncChange>,
     },
     FetchOnlineGrade(String),
+    WriteFsrDump,
     ChangeGraphics {
         renderer: Option<BackendType>,
         display_mode: Option<DisplayMode>,
