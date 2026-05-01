@@ -135,7 +135,7 @@ fn perform_check() {
     let service_name = service_name();
     debug!("Performing {service_name} connectivity check...");
 
-    match network::get_json::<ApiResponse>(&new_session_url()) {
+    match network::get_json_with::<ApiResponse>(&network::get_groovestats_agent(), &new_session_url()) {
         Ok(data) => {
             if !data.services_result.eq_ignore_ascii_case("OK") {
                 warn!("{service_name} servicesResult != OK.");
