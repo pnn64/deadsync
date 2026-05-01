@@ -8,6 +8,9 @@ use std::time::Duration;
 
 pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
+// Match Simply Love / ITGmania's GrooveStats request timeout (60s).
+pub const GROOVESTATS_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AgentConfig {
     pub timeout: Duration,
@@ -77,15 +80,34 @@ pub fn build_agent(config: AgentConfig) -> ureq::Agent {
 // one connection pool instead of opening fresh sockets/TLS sessions per request.
 static DEFAULT_AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| build_agent(AgentConfig::default()));
 
+// Dedicated agent for GrooveStats (and BoogieStats) requests, configured with the
+// longer 60s timeout used by Simply Love / ITGmania.
+static GROOVESTATS_AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
+    build_agent(AgentConfig {
+        timeout: GROOVESTATS_REQUEST_TIMEOUT,
+    })
+});
+
 pub fn get_agent() -> ureq::Agent {
     DEFAULT_AGENT.clone()
+}
+
+pub fn get_groovestats_agent() -> ureq::Agent {
+    GROOVESTATS_AGENT.clone()
 }
 
 pub fn get_json<T>(url: &str) -> Result<T, NetworkError>
 where
     T: DeserializeOwned,
 {
-    let response = get_agent()
+    get_json_with(&get_agent(), url)
+}
+
+pub fn get_json_with<T>(agent: &ureq::Agent, url: &str) -> Result<T, NetworkError>
+where
+    T: DeserializeOwned,
+{
+    let response = agent
         .get(url)
         .call()
         .map_err(|error| request_error(error.to_string()))?;

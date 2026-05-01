@@ -2872,7 +2872,7 @@ fn fetch_player_leaderboards_internal(
 
     let max_entries = max_entries.max(1);
     let max_entries_str = max_entries.to_string();
-    let agent = network::get_agent();
+    let agent = network::get_groovestats_agent();
     let api_url = online::groovestats_player_leaderboards_url();
     let response = agent
         .get(&api_url)
@@ -4106,7 +4106,12 @@ fn fetch_player_score_from_endpoint(
         .into());
     }
 
-    let agent = network::get_agent();
+    let agent = match endpoint {
+        ScoreImportEndpoint::GrooveStats | ScoreImportEndpoint::BoogieStats => {
+            network::get_groovestats_agent()
+        }
+        ScoreImportEndpoint::ArrowCloud => network::get_agent(),
+    };
     let api_url = endpoint.player_leaderboards_url();
     let response = agent
         .get(&api_url)

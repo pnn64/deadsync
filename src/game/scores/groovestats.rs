@@ -922,7 +922,7 @@ fn submit_groovestats_request(
     job: &GrooveStatsSubmitRequest,
 ) -> Result<GrooveStatsSubmitApiResponse, GrooveStatsSubmitError> {
     let service_name = online::groovestats_service_name();
-    let mut request = network::get_agent()
+    let mut request = network::get_groovestats_agent()
         .post(&online::groovestats_score_submit_url())
         .header("Content-Type", "application/json");
     for (name, value) in &job.headers {
