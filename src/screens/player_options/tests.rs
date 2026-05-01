@@ -379,6 +379,44 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn early_dw_options_hide_until_rescore_early_hits_is_active() {
+        ensure_i18n();
+        let mut row_map = test_row_map(vec![
+            test_row(
+                RowId::RescoreEarlyHits,
+                lookup_key("PlayerOptions", "RescoreEarlyHits"),
+                &["No", "Yes"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::EarlyDecentWayOffOptions,
+                lookup_key("PlayerOptions", "EarlyDecentWayOffOptions"),
+                &["Hide Judgments", "Hide Flash"],
+                [0, 0],
+            ),
+        ]);
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [PlayerOptionMasks::default(), PlayerOptionMasks::default()],
+            false,
+        );
+        assert!(!is_row_visible(&row_map, 1, visibility));
+
+        row_map
+            .get_mut(RowId::RescoreEarlyHits)
+            .unwrap()
+            .selected_choice_index[P1] = 1;
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [PlayerOptionMasks::default(), PlayerOptionMasks::default()],
+            false,
+        );
+        assert!(is_row_visible(&row_map, 1, visibility));
+    }
+
+    #[test]
     fn init_active_masks_accumulate_across_panes() {
         // Regression: apply_profile_defaults gates 8 of its 17 returned masks
         // (Scroll, Insert, Remove, Holds, Accel, Effect, Appearance, EarlyDw)

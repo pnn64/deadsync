@@ -229,7 +229,7 @@ const OFFSET_INDICATOR: ChoiceBinding<bool> = ChoiceBinding::<bool> {
 const RESCORE_EARLY_HITS: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
         p.rescore_early_hits = v;
-        Outcome::persisted()
+        Outcome::persisted_with_visibility()
     },
     persist_for_side: gp::update_rescore_early_hits_for_side,
     init: Some(CycleInit {
