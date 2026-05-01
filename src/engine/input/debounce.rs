@@ -68,9 +68,8 @@ impl DebounceStore {
         self.slots.clear();
         self.due_slots.clear();
         self.active_len = 0;
-        let needed = cap.saturating_sub(self.slots.capacity());
-        if needed > 0 {
-            self.slots.reserve(needed);
+        if self.slots.capacity() < cap {
+            self.slots.reserve(cap);
         }
     }
 
