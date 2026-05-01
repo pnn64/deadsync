@@ -197,6 +197,11 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 parent_anchor_visible_index(&state.pane().row_map, RowId::ErrorBar, visibility);
             let hide_anchor_visible_idx =
                 parent_anchor_visible_index(&state.pane().row_map, RowId::Hide, visibility);
+            let fa_plus_anchor_visible_idx = parent_anchor_visible_index(
+                &state.pane().row_map,
+                RowId::FAPlusOptions,
+                visibility,
+            );
             let mut visible_idx = 0i32;
             for i in 0..total_rows {
                 let visible = is_row_visible(&state.pane().row_map, i, visibility);
@@ -212,6 +217,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                                 Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
                                 Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
                                 Some(RowId::Hide) => hide_anchor_visible_idx,
+                                Some(RowId::FAPlusOptions) => fa_plus_anchor_visible_idx,
                                 _ => None,
                             },
                         );

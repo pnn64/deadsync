@@ -499,41 +499,55 @@ const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding {
         cursor: CursorInit::FirstActiveBit,
     }),
 };
+fn fa_plus_bits_from_profile(p: &gp::Profile) -> u32 {
+    let mut bits = super::super::state::FaPlusMask::empty();
+    if p.show_fa_plus_window {
+        bits.insert(super::super::state::FaPlusMask::WINDOW);
+    }
+    if p.show_ex_score {
+        bits.insert(super::super::state::FaPlusMask::EX_SCORE);
+    }
+    if p.show_hard_ex_score {
+        bits.insert(super::super::state::FaPlusMask::HARD_EX_SCORE);
+    }
+    if p.show_fa_plus_pane {
+        bits.insert(super::super::state::FaPlusMask::PANE);
+    }
+    if p.fa_plus_10ms_blue_window {
+        bits.insert(super::super::state::FaPlusMask::BLUE_WINDOW_10MS);
+    }
+    if p.split_15_10ms {
+        bits.insert(super::super::state::FaPlusMask::SPLIT_15_10MS);
+    }
+    bits.bits() as u32
+}
+
+fn set_fa_plus_bits(m: &mut super::super::state::PlayerOptionMasks, b: u32) {
+    debug_assert_eq!(
+        b & !(u8::MAX as u32),
+        0,
+        "FaPlusMask init bits exceed u8 width"
+    );
+    m.fa_plus = super::super::state::FaPlusMask::from_bits_retain(b as u8);
+}
+
 const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding {
     toggle: super::super::choice::toggle_fa_plus_row,
     init: Some(BitmaskInit {
-        from_profile: |p| {
-            let mut bits = super::super::state::FaPlusMask::empty();
-            if p.show_fa_plus_window {
-                bits.insert(super::super::state::FaPlusMask::WINDOW);
-            }
-            if p.show_ex_score {
-                bits.insert(super::super::state::FaPlusMask::EX_SCORE);
-            }
-            if p.show_hard_ex_score {
-                bits.insert(super::super::state::FaPlusMask::HARD_EX_SCORE);
-            }
-            if p.show_fa_plus_pane {
-                bits.insert(super::super::state::FaPlusMask::PANE);
-            }
-            if p.fa_plus_10ms_blue_window {
-                bits.insert(super::super::state::FaPlusMask::BLUE_WINDOW_10MS);
-            }
-            if p.split_15_10ms {
-                bits.insert(super::super::state::FaPlusMask::SPLIT_15_10MS);
-            }
-            bits.bits() as u32
-        },
-        get_active: |m| m.fa_plus.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u8::MAX as u32),
-                0,
-                "FaPlusMask init bits exceed u8 width"
-            );
-            m.fa_plus = super::super::state::FaPlusMask::from_bits_retain(b as u8);
-        },
+        from_profile: fa_plus_bits_from_profile,
+        get_active: |m| (m.fa_plus.bits() & 0b0000_1111) as u32,
+        set_active: set_fa_plus_bits,
         cursor: CursorInit::Fixed(0),
+    }),
+};
+
+const FA_PLUS_WINDOW_OPTIONS: BitmaskBinding = BitmaskBinding {
+    toggle: super::super::choice::toggle_fa_plus_row,
+    init: Some(BitmaskInit {
+        from_profile: fa_plus_bits_from_profile,
+        get_active: |m| ((m.fa_plus.bits() >> 4) & 0b0000_0011) as u32,
+        set_active: set_fa_plus_bits,
+        cursor: CursorInit::FirstActiveBit,
     }),
 };
 const EARLY_DW_OPTIONS: BitmaskBinding = BitmaskBinding {
@@ -1108,6 +1122,14 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
             tr("PlayerOptions", "FAPlusOptionsDisplayEXScore").to_string(),
             tr("PlayerOptions", "FAPlusOptionsDisplayHEXScore").to_string(),
             tr("PlayerOptions", "FAPlusOptionsDisplayFAPlusPane").to_string(),
+        ],
+    ));
+    b.push(Row::bitmask(
+        RowId::FAPlusWindowOptions,
+        lookup_key("PlayerOptions", "FAPlusWindowOptions"),
+        lookup_key("PlayerOptionsHelp", "FAPlusWindowOptionsHelp"),
+        FA_PLUS_WINDOW_OPTIONS,
+        vec![
             tr("PlayerOptions", "FAPlusOptions10msBlueWindow").to_string(),
             tr("PlayerOptions", "FAPlusOptions1510msSplit").to_string(),
         ],
@@ -1220,7 +1242,7 @@ mod bitmask_binding_init_tests {
         let mut row = make_bitmask_row(
             RowId::FAPlusOptions,
             lookup_key("PlayerOptions", "FAPlusOptions"),
-            &["Window", "EX", "HardEX", "Pane", "Blue10", "Split"],
+            &["Window", "EX", "HardEX", "Pane"],
         );
         let mut masks = PlayerOptionMasks::default();
         let applied =
@@ -1234,6 +1256,37 @@ mod bitmask_binding_init_tests {
         assert_eq!(
             row.selected_choice_index[0], 0,
             "Fixed(0) cursor pins to 0 even though EX_SCORE is the only active bit",
+        );
+    }
+
+    #[test]
+    fn fa_plus_window_binding_reads_shifted_child_bits() {
+        ensure_i18n();
+        let mut profile = Profile::default();
+        profile.split_15_10ms = true;
+
+        let mut row = make_bitmask_row(
+            RowId::FAPlusWindowOptions,
+            lookup_key("PlayerOptions", "FAPlusWindowOptions"),
+            &["Blue10", "Split"],
+        );
+        let mut masks = PlayerOptionMasks::default();
+        let applied = init_bitmask_row_from_binding(
+            &mut row,
+            &FA_PLUS_WINDOW_OPTIONS,
+            &profile,
+            &mut masks,
+            0,
+        );
+        assert!(applied, "FA_PLUS_WINDOW_OPTIONS binding has init contract");
+        assert_eq!(
+            masks.fa_plus,
+            FaPlusMask::SPLIT_15_10MS,
+            "child row init preserves the shared FA+ mask bits",
+        );
+        assert_eq!(
+            row.selected_choice_index[0], 1,
+            "child row cursor reads shifted bits so Split lands on choice index 1",
         );
     }
 

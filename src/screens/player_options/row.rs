@@ -64,6 +64,7 @@ pub enum RowId {
     ResultsExtras,
     TimingWindows,
     FAPlusOptions,
+    FAPlusWindowOptions,
     CustomBlueFantasticWindow,
     CustomBlueFantasticWindowMs,
     // Uncommon pane
@@ -206,7 +207,7 @@ pub struct BitmaskInit {
 #[derive(Clone, Copy, Debug)]
 pub enum CursorInit {
     /// Cursor lands on the first set bit, or `0` if no bits are set. Used
-    /// by every mask row except `FAPlusOptions`.
+    /// by every mask row except pinned rows like `FAPlusOptions`.
     FirstActiveBit,
     /// Cursor is pinned to a fixed index regardless of which bits are
     /// active. Used by `FAPlusOptions` (always 0).
@@ -668,6 +669,7 @@ pub(super) fn row_shows_all_choices_inline(id: RowId) -> bool {
         || id == RowId::CustomBlueFantasticWindow
         || id == RowId::EarlyDecentWayOffOptions
         || id == RowId::FAPlusOptions
+        || id == RowId::FAPlusWindowOptions
         || id == RowId::Insert
         || id == RowId::Remove
         || id == RowId::Holds

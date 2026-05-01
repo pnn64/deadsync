@@ -810,41 +810,35 @@ pub(super) fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) 
 pub(super) fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state
+    let row_id = if let Some(row) = state
         .pane()
         .row_map
         .display_order()
         .get(row_index)
         .and_then(|&id| state.pane().row_map.get(id))
     {
-        if row.id != RowId::FAPlusOptions {
-            return;
+        match row.id {
+            RowId::FAPlusOptions | RowId::FAPlusWindowOptions => row.id,
+            _ => return,
         }
     } else {
         return;
-    }
+    };
 
     let choice_index = state
         .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
-    let bit = if choice_index
-        < state
-            .pane()
-            .row_map
-            .row(state.pane().row_map.id_at(row_index))
-            .choices
-            .len()
-            .min(u8::BITS as usize)
-    {
-        FaPlusMask::from_bits_truncate(1u8 << (choice_index as u8))
-    } else {
-        FaPlusMask::empty()
+    let bit = match (row_id, choice_index) {
+        (RowId::FAPlusOptions, 0) => FaPlusMask::WINDOW,
+        (RowId::FAPlusOptions, 1) => FaPlusMask::EX_SCORE,
+        (RowId::FAPlusOptions, 2) => FaPlusMask::HARD_EX_SCORE,
+        (RowId::FAPlusOptions, 3) => FaPlusMask::PANE,
+        (RowId::FAPlusWindowOptions, 0) => FaPlusMask::BLUE_WINDOW_10MS,
+        (RowId::FAPlusWindowOptions, 1) => FaPlusMask::SPLIT_15_10MS,
+        _ => return,
     };
-    if bit.is_empty() {
-        return;
-    }
 
     state.option_masks[idx].fa_plus.toggle(bit);
 
@@ -878,6 +872,9 @@ pub(super) fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
         crate::game::profile::update_split_15_10ms_for_side(side, split_15_10ms_enabled);
     }
 
+    if bit == FaPlusMask::WINDOW {
+        sync_selected_rows_with_visibility(state, session_active_players());
+    }
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 

@@ -542,7 +542,8 @@ pub(super) fn multi_select_mask(state: &State, row_id: RowId, player_idx: usize)
             .life_bar_options
             .bits()
             .into(),
-        FAPlusOptions => state.option_masks[player_idx].fa_plus.bits().into(),
+        FAPlusOptions => (state.option_masks[player_idx].fa_plus.bits() & 0b0000_1111).into(),
+        FAPlusWindowOptions => ((state.option_masks[player_idx].fa_plus.bits() >> 4) & 0b11).into(),
         GameplayExtras => state.option_masks[player_idx].gameplay_extras.bits().into(),
         GameplayExtrasMore => state.option_masks[player_idx]
             .gameplay_extras_more
@@ -580,6 +581,7 @@ pub(super) fn is_multi_select_row(row_id: RowId) -> bool {
             | Appearance
             | LifeBarOptions
             | FAPlusOptions
+            | FAPlusWindowOptions
             | GameplayExtras
             | GameplayExtrasMore
             | ResultsExtras

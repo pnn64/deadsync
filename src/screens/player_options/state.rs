@@ -32,7 +32,7 @@ bitflags! {
 }
 
 bitflags! {
-    /// Active toggles for the FA+ Options row.
+    /// Active toggles for the FA+ Options rows.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct FaPlusMask: u8 {
         const WINDOW           = 1 << 0;

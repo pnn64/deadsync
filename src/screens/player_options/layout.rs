@@ -165,6 +165,8 @@ pub(super) fn init_row_tweens(
     let error_bar_anchor_visible_idx =
         parent_anchor_visible_index(row_map, RowId::ErrorBar, visibility);
     let hide_anchor_visible_idx = parent_anchor_visible_index(row_map, RowId::Hide, visibility);
+    let fa_plus_anchor_visible_idx =
+        parent_anchor_visible_index(row_map, RowId::FAPlusOptions, visibility);
 
     let mut out: Vec<RowTween> = Vec::with_capacity(total_rows);
     let mut visible_idx = 0i32;
@@ -186,6 +188,7 @@ pub(super) fn init_row_tweens(
                     Some(RowId::ComboFont) => combo_font_anchor_visible_idx,
                     Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
                     Some(RowId::Hide) => hide_anchor_visible_idx,
+                    Some(RowId::FAPlusOptions) => fa_plus_anchor_visible_idx,
                     _ => None,
                 });
             if let Some(anchor_idx) = anchor {

@@ -11,6 +11,7 @@ pub(super) struct RowVisibility {
     pub(super) show_density_graph_background: bool,
     pub(super) show_target_score: bool,
     pub(super) show_early_dw_options: bool,
+    pub(super) show_fa_plus_window_options: bool,
     pub(super) show_combo_rows: bool,
     pub(super) show_lifebar_rows: bool,
     pub(super) show_indicator_score_type: bool,
@@ -49,6 +50,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     }
     if id == RowId::EarlyDecentWayOffOptions {
         return visibility.show_early_dw_options;
+    }
+    if id == RowId::FAPlusWindowOptions {
+        return visibility.show_fa_plus_window_options;
     }
     if id == RowId::ComboColors || id == RowId::ComboColorMode || id == RowId::CarryCombo {
         return visibility.show_combo_rows;
@@ -105,6 +109,9 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     }
     if id == RowId::EarlyDecentWayOffOptions {
         return Some(RowId::RescoreEarlyHits);
+    }
+    if id == RowId::FAPlusWindowOptions {
+        return Some(RowId::FAPlusOptions);
     }
     None
 }
@@ -284,6 +291,27 @@ pub(super) fn early_dw_options_visible(row_map: &RowMap, active: [bool; PLAYER_S
     !any_active
 }
 
+pub(super) fn fa_plus_window_options_visible(
+    row_map: &RowMap,
+    active: [bool; PLAYER_SLOTS],
+    option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
+) -> bool {
+    if row_map.get(RowId::FAPlusOptions).is_none() {
+        return true;
+    }
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        if option_masks[player_idx]
+            .fa_plus
+            .contains(FaPlusMask::WINDOW)
+        {
+            return true;
+        }
+    }
+    !any_active
+}
+
 pub(super) fn combo_rows_visible(
     active: [bool; PLAYER_SLOTS],
     option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
@@ -348,6 +376,7 @@ pub(super) fn row_visibility(
         show_density_graph_background: density_graph_background_visible(row_map, active),
         show_target_score: target_score_visible(row_map, active),
         show_early_dw_options: early_dw_options_visible(row_map, active),
+        show_fa_plus_window_options: fa_plus_window_options_visible(row_map, active, option_masks),
         show_combo_rows: combo_rows_visible(active, option_masks),
         show_lifebar_rows: lifebar_rows_visible(active, option_masks),
         show_indicator_score_type: indicator_score_type_visible(row_map, active),

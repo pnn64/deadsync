@@ -417,6 +417,46 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn fa_plus_window_options_hide_until_window_is_active() {
+        ensure_i18n();
+        let row_map = test_row_map(vec![
+            test_row(
+                RowId::FAPlusOptions,
+                lookup_key("PlayerOptions", "FAPlusOptions"),
+                &["Window", "EX", "HardEX", "Pane"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::FAPlusWindowOptions,
+                lookup_key("PlayerOptions", "FAPlusWindowOptions"),
+                &["Blue10", "Split"],
+                [0, 0],
+            ),
+        ]);
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [PlayerOptionMasks::default(), PlayerOptionMasks::default()],
+            false,
+        );
+        assert!(!is_row_visible(&row_map, 1, visibility));
+
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [
+                PlayerOptionMasks {
+                    fa_plus: FaPlusMask::WINDOW,
+                    ..Default::default()
+                },
+                PlayerOptionMasks::default(),
+            ],
+            false,
+        );
+        assert!(is_row_visible(&row_map, 1, visibility));
+    }
+
+    #[test]
     fn init_active_masks_accumulate_across_panes() {
         // Regression: apply_profile_defaults gates 8 of its 17 returned masks
         // (Scroll, Insert, Remove, Holds, Accel, Effect, Appearance, EarlyDw)
@@ -628,7 +668,7 @@ pub(super) mod tests {
         let mut fa_plus_rows = test_row_map(vec![test_bitmask_row(
             RowId::FAPlusOptions,
             lookup_key("PlayerOptions", "FAPlusOptions"),
-            &["Window", "EX", "HardEX", "Pane", "Blue10", "Split"],
+            &["Window", "EX", "HardEX", "Pane"],
             fa_plus_binding,
         )]);
 
