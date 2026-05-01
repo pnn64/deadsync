@@ -51,8 +51,8 @@ pub use itl::{
     get_cached_itl_score_for_song, get_cached_itl_self_score_for_side,
     get_cached_itl_tournament_overall_ranks_for_side, get_cached_itl_tournament_rank_for_side,
     get_or_fetch_itl_self_score_for_side, get_or_fetch_itl_tournament_rank_for_side,
-    itl_eval_state_from_gameplay, itl_points_for_chart, save_itl_data_from_gameplay,
-    should_warn_cmod_for_itl_chart,
+    is_itl_song_folder_unlocked_for_side, is_itl_unlocks_pack, itl_eval_state_from_gameplay,
+    itl_points_for_chart, save_itl_data_from_gameplay, should_warn_cmod_for_itl_chart,
 };
 pub use submit_status::RejectReason;
 pub(crate) use submit_status::{
@@ -2440,9 +2440,6 @@ fn submit_record_banner(
     player: &GrooveStatsSubmitPlayerJob,
     response: &GrooveStatsSubmitApiPlayer,
 ) -> Option<GrooveStatsSubmitRecordBanner> {
-    if player.is_fail {
-        return None;
-    }
     if !submit_result_improved(response.result.as_str()) {
         return None;
     }

@@ -102,13 +102,13 @@ pub fn update_keyboard_features(enabled: bool) {
     save_without_keymaps();
 }
 
-pub fn update_menu_background_style(style: MenuBackgroundStyle) {
+pub fn update_visual_style(style: VisualStyle) {
     {
         let mut cfg = lock_config();
-        if cfg.menu_background_style == style {
+        if cfg.visual_style == style {
             return;
         }
-        cfg.menu_background_style = style;
+        cfg.visual_style = style;
     }
     save_without_keymaps();
 }
@@ -285,17 +285,6 @@ pub fn update_enable_arrowcloud(enabled: bool) {
             return;
         }
         cfg.enable_arrowcloud = enabled;
-    }
-    save_without_keymaps();
-}
-
-pub fn update_submit_groovestats_fails(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.submit_groovestats_fails == enabled {
-            return;
-        }
-        cfg.submit_groovestats_fails = enabled;
     }
     save_without_keymaps();
 }

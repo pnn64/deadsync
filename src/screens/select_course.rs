@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, PadDir, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
@@ -17,7 +18,9 @@ use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{music_wheel, screen_bars, select_pane, step_artist_bar},
-    shared::{banner as shared_banner, gs_scorebox, heart_bg, mode_pads, timers, transitions},
+    shared::{
+        banner as shared_banner, gs_scorebox, mode_pads, timers, transitions, visual_style_bg,
+    },
 };
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
@@ -226,7 +229,7 @@ pub struct State {
     pack_course_counts: HashMap<String, usize>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     last_requested_banner_path: Option<PathBuf>,
@@ -1181,7 +1184,7 @@ pub fn init() -> State {
         pack_course_counts: init.pack_course_counts,
         course_meta_by_path: init.course_meta_by_path,
         course_text_color_overrides: init.course_text_color_overrides,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         nav_key_held_direction: None,
         nav_key_held_since: None,
         last_requested_banner_path: None,
@@ -1974,13 +1977,16 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         )
     });
 
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(screen_bars::build(&tr("ScreenTitles", "SelectCourse")));
+    actors.extend(screen_bars::build(
+        &tr("ScreenTitles", "SelectCourse"),
+        None,
+    ));
     actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
@@ -2355,7 +2361,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                     state.active_color_index,
                 );
                 actors.push(act!(text:
-                    font("wendy"):
+                    font(current_machine_font_key(FontRole::Header)):
                     settext(meter_text):
                     align(0.5, 0.5):
                     xy(rating_box_cx, y):
@@ -2482,7 +2488,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         match state.out_prompt {
             OutPromptState::PressStartForOptions { .. } => {
                 actors.push(act!(text:
-                    font("wendy"):
+                    font(current_machine_font_key(FontRole::Header)):
                     settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -2493,7 +2499,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
             }
             OutPromptState::EnteringOptions { .. } => {
                 actors.push(act!(text:
-                    font("wendy"):
+                    font(current_machine_font_key(FontRole::Header)):
                     settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -2503,7 +2509,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                     linear(ENTERING_OPTIONS_FADE_OUT_SECONDS): alpha(0.0)
                 ));
                 actors.push(act!(text:
-                    font("wendy"):
+                    font(current_machine_font_key(FontRole::Header)):
                     settext(tr("SelectMusic", "EnteringOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -2649,7 +2655,7 @@ fn push_exit_prompt_choice(
     out.push(act!(text:
         align(0.5, 0.5):
         xy(cx, cy):
-        font("wendy"):
+        font(current_machine_font_key(FontRole::Header)):
         zoom(SL_EXIT_PROMPT_LABEL_ZOOM * choice_zoom):
         settext(label):
         diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):

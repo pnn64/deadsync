@@ -1,4 +1,4 @@
-use log::{info, warn};
+use log::warn;
 use std::path::PathBuf;
 
 /// Single source of truth for all resolved application directories.
@@ -105,16 +105,32 @@ impl AppDirs {
     /// Resolves a relative asset path (e.g. `"assets/sounds/change.ogg"`) by
     /// checking the data dir overlay first. In platform-native mode, if the
     /// file or directory exists at `{data_dir}/{path}`, returns that absolute
-    /// path; otherwise returns the original path (which resolves to
-    /// `{exe_dir}/{path}` via CWD).
+    /// path. Otherwise, returns the first existing bundled path found from the
+    /// current working directory, the workspace `deadsync/` directory, or the
+    /// executable directory. If no candidate exists, returns the original path.
     pub fn resolve_asset_path(&self, path: &str) -> PathBuf {
+        let original = PathBuf::from(path);
+        if original.is_absolute() {
+            return original;
+        }
         if !self.portable {
             let candidate = self.data_dir.join(path);
             if candidate.exists() {
                 return candidate;
             }
         }
-        PathBuf::from(path)
+        if let Ok(cwd) = std::env::current_dir() {
+            for candidate in [cwd.join(path), cwd.join("deadsync").join(path)] {
+                if candidate.exists() {
+                    return candidate;
+                }
+            }
+        }
+        let candidate = self.exe_dir.join(path);
+        if candidate.exists() {
+            return candidate;
+        }
+        original
     }
 
     /// Strips the data-dir or exe-dir `assets/` prefix from an absolute path,
@@ -212,21 +228,6 @@ impl AppDirs {
             return Self::portable_layout(exe_dir);
         }
 
-        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-        {
-            let home_dir = std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .expect("cannot determine home directory");
-            let data_dir = home_dir.join(".deadsync");
-            Self {
-                cache_dir: cache_dir_under(&data_dir),
-                data_dir,
-                exe_dir,
-                portable: false,
-            }
-        }
-
-        #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
         {
             let proj = directories::ProjectDirs::from("", "", "deadsync")
                 .expect("cannot determine platform directories");
@@ -269,76 +270,6 @@ pub fn ensure_dirs_exist() {
     }
 }
 
-/// Attempts to migrate mutable data from the exe directory to platform-native
-/// dirs. Only runs in platform-native mode when data exists at the old
-/// location but not yet at the new location.
-pub fn maybe_migrate_from_exe_dir() {
-    let dirs = app_dirs();
-    if dirs.portable {
-        return;
-    }
-
-    let exe_config = dirs.exe_dir.join("deadsync.ini");
-    let native_config = dirs.config_path();
-
-    if !exe_config.exists() || native_config.exists() {
-        return;
-    }
-
-    warn!(
-        "Migrating data from exe directory ({}) to platform data directory ({})...",
-        dirs.exe_dir.display(),
-        dirs.data_dir.display()
-    );
-
-    copy_item(&exe_config, &native_config);
-    copy_dir_if_exists(&dirs.exe_dir.join("save"), &dirs.data_dir.join("save"));
-
-    // Migrate cache subdirectories.
-    let exe_cache = dirs.exe_dir.join("cache");
-    if exe_cache.is_dir() {
-        copy_dir_if_exists(&exe_cache.join("songs"), &dirs.song_cache_dir());
-        copy_dir_if_exists(&exe_cache.join("banner"), &dirs.banner_cache_dir());
-        copy_dir_if_exists(&exe_cache.join("cdtitle"), &dirs.cdtitle_cache_dir());
-    }
-
-    warn!("Migration complete. Original files were NOT deleted.");
-}
-fn copy_item(src: &std::path::Path, dst: &std::path::Path) {
-    if let Some(parent) = dst.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            warn!("Failed to create parent dir for {}: {e}", dst.display());
-            return;
-        }
-    }
-    match std::fs::copy(src, dst) {
-        Ok(_) => info!("  Copied {} -> {}", src.display(), dst.display()),
-        Err(e) => warn!(
-            "  Failed to copy {} -> {}: {e}",
-            src.display(),
-            dst.display()
-        ),
-    }
-}
-
-fn copy_dir_if_exists(src: &std::path::Path, dst: &std::path::Path) {
-    if !src.is_dir() {
-        return;
-    }
-    info!(
-        "  Copying directory {} -> {} ...",
-        src.display(),
-        dst.display()
-    );
-    if let Err(e) = copy_dir_recursive(src, dst) {
-        warn!(
-            "  Failed to copy directory {} -> {}: {e}",
-            src.display(),
-            dst.display()
-        );
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{AppDirs, native_cache_dir_for_data_dir};
@@ -346,7 +277,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
-    fn native_cache_dir_is_nested_under_data_dir() {
+    fn windows_cache_dir_is_nested_under_data_dir() {
         assert_eq!(
             native_cache_dir_for_data_dir(Path::new("/tmp/deadsync")),
             Path::new("/tmp/deadsync/cache")
@@ -412,19 +343,4 @@ mod tests {
             Path::new("/tmp/deadsync-portable/cache/songs")
         );
     }
-}
-
-fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), std::io::Error> {
-    std::fs::create_dir_all(dst)?;
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-        if src_path.is_dir() {
-            copy_dir_recursive(&src_path, &dst_path)?;
-        } else {
-            std::fs::copy(&src_path, &dst_path)?;
-        }
-    }
-    Ok(())
 }

@@ -84,8 +84,7 @@ impl DevdWatch {
         self.fd
     }
 
-    pub(super) fn collect_events(&self) -> Vec<DevdEvent> {
-        let mut out = Vec::new();
+    pub(super) fn collect_events(&self, out: &mut Vec<DevdEvent>) {
         let mut buf = [0u8; DEVD_BUF_LEN];
         loop {
             // SAFETY: `buf` is a valid writable byte array of length `buf.len()`,
@@ -100,15 +99,15 @@ impl DevdWatch {
             }
             if n == 0 {
                 warn!("freebsd input devd seqpacket socket closed");
-                return out;
+                return;
             }
             let err = std::io::Error::last_os_error();
             let raw = err.raw_os_error();
             if raw == Some(libc::EAGAIN) || raw == Some(libc::EWOULDBLOCK) {
-                return out;
+                return;
             }
             warn!("freebsd input devd seqpacket read failed: {err}");
-            return out;
+            return;
         }
     }
 }

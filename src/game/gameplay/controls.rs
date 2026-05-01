@@ -70,8 +70,8 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
     state.autoplay_enabled = enabled;
 
     if enabled {
-        state.keyboard_lane_counts = [0; MAX_COLS];
-        state.gamepad_lane_counts = [0; MAX_COLS];
+        state.input_slot_count = 0;
+        state.input_lane_counts = [0; MAX_COLS];
         state.prev_inputs = [false; MAX_COLS];
         state.receptor_glow_timers = [0.0; MAX_COLS];
         state.receptor_glow_press_timers = [0.0; MAX_COLS];

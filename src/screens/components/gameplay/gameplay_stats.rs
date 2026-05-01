@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key, tr};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::gfx::{BlendMode, MeshMode};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
@@ -21,6 +22,9 @@ use std::sync::{Arc, LazyLock};
 const TEXT_CACHE_LIMIT: usize = 8192;
 const COUNT_PREWARM_CAP: u32 = 2048;
 const TIME_PREWARM_CAP_S: u32 = 600;
+const STEP_STATS_BANNER_W: f32 = 418.0;
+const STEP_STATS_BANNER_H: f32 = 164.0;
+const STEP_STATS_SONG_BANNER_ZOOM: f32 = 0.4;
 
 thread_local! {
     static PADDED_NUM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
@@ -342,7 +346,7 @@ fn push_versus_count_texts(
     if is_p1 {
         if !dim_text.is_empty() {
             let mut a = act!(text:
-                font("wendy_screenevaluation"): settext(dim_text):
+                font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                 align(0.0, 0.5): xy(anchor_x, y):
                 zoom(numbers_zoom_y):
                 diffuse(dim[0], dim[1], dim[2], dim[3]):
@@ -357,7 +361,7 @@ fn push_versus_count_texts(
         }
         if !bright_text.is_empty() {
             let mut a = act!(text:
-                font("wendy_screenevaluation"): settext(bright_text):
+                font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                 align(0.0, 0.5): xy(anchor_x + dim_len * digit_w, y):
                 zoom(numbers_zoom_y):
                 diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -373,7 +377,7 @@ fn push_versus_count_texts(
     } else {
         if !bright_text.is_empty() {
             let mut a = act!(text:
-                font("wendy_screenevaluation"): settext(bright_text):
+                font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                 align(1.0, 0.5): xy(anchor_x, y):
                 zoom(numbers_zoom_y):
                 diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -388,7 +392,7 @@ fn push_versus_count_texts(
         }
         if !dim_text.is_empty() {
             let mut a = act!(text:
-                font("wendy_screenevaluation"): settext(dim_text):
+                font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                 align(1.0, 0.5): xy(anchor_x - bright_len * digit_w, y):
                 zoom(numbers_zoom_y):
                 diffuse(dim[0], dim[1], dim[2], dim[3]):
@@ -466,12 +470,32 @@ pub fn prewarm_text_layout(
     };
     for count in 0..=max_count.min(COUNT_PREWARM_CAP) {
         let (dim, bright) = cached_padded_runs(count, digits);
-        cache.prewarm_text(fonts, "wendy_screenevaluation", dim.as_ref(), None);
-        cache.prewarm_text(fonts, "wendy_screenevaluation", bright.as_ref(), None);
+        cache.prewarm_text(
+            fonts,
+            current_machine_font_key(FontRole::ScreenEval),
+            dim.as_ref(),
+            None,
+        );
+        cache.prewarm_text(
+            fonts,
+            current_machine_font_key(FontRole::ScreenEval),
+            bright.as_ref(),
+            None,
+        );
     }
     let (dim, bright) = cached_padded_runs(max_count, digits);
-    cache.prewarm_text(fonts, "wendy_screenevaluation", dim.as_ref(), None);
-    cache.prewarm_text(fonts, "wendy_screenevaluation", bright.as_ref(), None);
+    cache.prewarm_text(
+        fonts,
+        current_machine_font_key(FontRole::ScreenEval),
+        dim.as_ref(),
+        None,
+    );
+    cache.prewarm_text(
+        fonts,
+        current_machine_font_key(FontRole::ScreenEval),
+        bright.as_ref(),
+        None,
+    );
     for player in 0..state.num_players {
         for count in [
             state.total_steps[player],
@@ -480,8 +504,18 @@ pub fn prewarm_text_layout(
             state.mines_total[player],
         ] {
             let (dim, bright) = cached_padded_runs(count, digits);
-            cache.prewarm_text(fonts, "wendy_screenevaluation", dim.as_ref(), None);
-            cache.prewarm_text(fonts, "wendy_screenevaluation", bright.as_ref(), None);
+            cache.prewarm_text(
+                fonts,
+                current_machine_font_key(FontRole::ScreenEval),
+                dim.as_ref(),
+                None,
+            );
+            cache.prewarm_text(
+                fonts,
+                current_machine_font_key(FontRole::ScreenEval),
+                bright.as_ref(),
+                None,
+            );
         }
     }
     let end_seconds = crate::game::gameplay::song_time_ns_to_seconds(
@@ -673,7 +707,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
     ));
 
     asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font("wendy_screenevaluation", |f| {
+        asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
             let digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom_x);
             if digit_w <= 0.0 {
                 return;
@@ -854,14 +888,14 @@ pub fn build_double_step_stats(
     ));
 
     // Banner.lua (double): xy(GetNotefieldWidth() - 140, -200)
+    let song_banner_x = pane_cx + ((notefield_width - 140.0) * banner_data_zoom);
     if let Some(banner_path) = &state.song.banner_path {
         let banner_key = banner_path.to_string_lossy().into_owned();
-        let banner_x = pane_cx + ((notefield_width - 140.0) * banner_data_zoom);
         let banner_y = pane_cy + (-200.0 * banner_data_zoom);
         actors.push(act!(sprite(banner_key):
-            align(0.5, 0.5): xy(banner_x, banner_y):
-            setsize(418.0, 164.0):
-            zoom(0.4 * banner_data_zoom):
+            align(0.5, 0.5): xy(song_banner_x, banner_y):
+            setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H):
+            zoom(STEP_STATS_SONG_BANNER_ZOOM * banner_data_zoom):
             z(-50)
         ));
     }
@@ -869,16 +903,14 @@ pub fn build_double_step_stats(
     // Banner2.lua (zmod pack banner): static (no animation) at the final position.
     if let Some(pack_banner_path) = state.pack_banner_path.as_ref() {
         let pack_key = pack_banner_path.to_string_lossy().into_owned();
-        let (final_offset, final_size) = if note_field_is_centered {
-            (-115.0, 0.2)
-        } else {
-            (-160.0, 0.25)
-        };
-        let x = pane_cx + (final_offset * banner_data_zoom);
+        let final_size = if note_field_is_centered { 0.2 } else { 0.25 };
+        let song_w = STEP_STATS_BANNER_W * STEP_STATS_SONG_BANNER_ZOOM * banner_data_zoom;
+        let pack_w = STEP_STATS_BANNER_W * final_size * banner_data_zoom;
+        let x = song_banner_x - song_w * 0.5 + pack_w * 0.5;
         let y = pane_cy + (20.0 * banner_data_zoom);
         actors.push(act!(sprite(pack_key):
             align(0.5, 0.5): xy(x, y):
-            setsize(418.0, 164.0):
+            setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H):
             zoom(final_size * banner_data_zoom):
             z(-49)
         ));
@@ -907,7 +939,7 @@ pub fn build_double_step_stats(
         let y_base = -280.0;
 
         asset_manager.with_fonts(|all_fonts| {
-            asset_manager.with_font("wendy_screenevaluation", |f| {
+            asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
                 let numbers_zoom = base_zoom * 0.5;
                 let digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom);
                 if digit_w <= 0.0 {
@@ -942,7 +974,7 @@ pub fn build_double_step_stats(
 
                         if !dim_text.is_empty() {
                             actors.push(act!(text:
-                                font("wendy_screenevaluation"): settext(dim_text):
+                                font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                                 align(0.0, 0.5): xy(numbers_left_x, y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(dim[0], dim[1], dim[2], dim[3]):
@@ -952,7 +984,7 @@ pub fn build_double_step_stats(
                         }
                         if !bright_text.is_empty() {
                             actors.push(act!(text:
-                                font("wendy_screenevaluation"): settext(bright_text):
+                                font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                                 align(0.0, 0.5): xy(numbers_left_x + dim_len * digit_w, y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1028,7 +1060,7 @@ pub fn build_double_step_stats(
 
                         if !dim_text.is_empty() {
                             actors.push(act!(text:
-                                font("wendy_screenevaluation"): settext(dim_text):
+                                font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                                 align(0.0, 0.5): xy(numbers_left_x, y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(dim[0], dim[1], dim[2], dim[3]):
@@ -1038,7 +1070,7 @@ pub fn build_double_step_stats(
                         }
                         if !bright_text.is_empty() {
                             actors.push(act!(text:
-                                font("wendy_screenevaluation"): settext(bright_text):
+                                font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                                 align(0.0, 0.5): xy(numbers_left_x + dim_len * digit_w, y_numbers):
                                 zoom(numbers_zoom):
                                 diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1247,26 +1279,37 @@ fn build_banner(
 ) {
     if let Some(banner_path) = &state.song.banner_path {
         let banner_key = banner_path.to_string_lossy().into_owned();
-        let mut local_banner_x = 70.0;
-        if layout.note_field_is_centered && wide {
-            local_banner_x = 72.0;
-        }
-        if player_side == profile::PlayerSide::P2 {
-            local_banner_x *= -1.0;
-        }
-        if layout.is_ultrawide && state.num_players > 1 {
-            local_banner_x *= -1.0;
-        }
+        let local_banner_x = song_banner_local_x(layout, wide, player_side, state.num_players);
         let local_banner_y = -200.0;
         let banner_x = layout.sidepane_center_x + (local_banner_x * layout.banner_data_zoom);
         let banner_y = layout.sidepane_center_y + (local_banner_y * layout.banner_data_zoom);
-        let final_zoom = 0.4 * layout.banner_data_zoom;
+        let final_zoom = STEP_STATS_SONG_BANNER_ZOOM * layout.banner_data_zoom;
         actors.push(act!(sprite(banner_key):
             align(0.5, 0.5): xy(banner_x, banner_y):
-            setsize(418.0, 164.0): zoom(final_zoom):
+            setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H): zoom(final_zoom):
             z(-50)
         ));
     }
+}
+
+fn song_banner_local_x(
+    layout: StepStatsPaneLayout,
+    wide: bool,
+    player_side: profile::PlayerSide,
+    num_players: usize,
+) -> f32 {
+    let mut x = if layout.note_field_is_centered && wide {
+        72.0
+    } else {
+        70.0
+    };
+    if player_side == profile::PlayerSide::P2 {
+        x *= -1.0;
+    }
+    if layout.is_ultrawide && num_players > 1 {
+        x *= -1.0;
+    }
+    x
 }
 
 fn build_pack_banner(
@@ -1284,23 +1327,29 @@ fn build_pack_banner(
     };
     let pack_key = pack_banner_path.to_string_lossy().into_owned();
 
-    let x_sign = match player_side {
+    let final_size = if layout.note_field_is_centered {
+        0.2
+    } else {
+        0.25
+    };
+    // Arrow Cloud Banner2.lua parity for non-double Step Statistics. The
+    // doubles-specific renderer handles its separate left-edge alignment.
+    let final_offset = if layout.note_field_is_centered {
+        -115.0
+    } else {
+        -160.0
+    };
+    let side_sign = match player_side {
         profile::PlayerSide::P1 => 1.0,
         profile::PlayerSide::P2 => -1.0,
     };
-
-    let (final_offset, final_size) = if layout.note_field_is_centered {
-        (-115.0, 0.2)
-    } else {
-        (-160.0, 0.25)
-    };
-    let x = layout.sidepane_center_x + (final_offset * x_sign * layout.banner_data_zoom);
+    let x = layout.sidepane_center_x + final_offset * side_sign * layout.banner_data_zoom;
     let y = layout.sidepane_center_y + (20.0 * layout.banner_data_zoom);
 
     actors.push(act!(sprite(pack_key):
         align(0.5, 0.5):
         xy(x, y):
-        setsize(418.0, 164.0):
+        setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H):
         zoom(final_size * layout.banner_data_zoom):
         z(-49)
     ));
@@ -1465,7 +1514,7 @@ fn build_holds_mines_rolls_pane_at(
     let mut children = Vec::with_capacity(categories.len() * (digits_to_fmt * 2 + 2));
 
     asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font("wendy_screenevaluation", |metrics_font| {
+        asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |metrics_font| {
             let value_zoom = 0.4 * frame_zoom;
             let label_zoom = 0.833 * frame_zoom;
             const GRAY: [f32; 4] = color::rgba_hex("#5A6166");
@@ -1498,7 +1547,7 @@ fn build_holds_mines_rolls_pane_at(
                     let color = if original_index < possible_split { GRAY } else { white };
                     let x_pos = cursor_x - (char_idx as f32 * digit_width);
                     children.push(act!(text:
-                        font("wendy_screenevaluation"): settext(digit_text(possible_bytes[original_index])):
+                        font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
                         align(1.0, 0.5): xy(x_pos, item_y):
                         zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
                     ));
@@ -1506,7 +1555,7 @@ fn build_holds_mines_rolls_pane_at(
                 cursor_x -= possible_bytes.len() as f32 * digit_width;
 
                 children.push(act!(text:
-                    font("wendy_screenevaluation"): settext(SLASH_TEXT.clone()):
+                    font(current_machine_font_key(FontRole::ScreenEval)): settext(SLASH_TEXT.clone()):
                     align(1.0, 0.5): xy(cursor_x, item_y):
                     zoom(value_zoom): diffuse(GRAY[0], GRAY[1], GRAY[2], GRAY[3])
                 ));
@@ -1517,7 +1566,7 @@ fn build_holds_mines_rolls_pane_at(
                     let color = if original_index < achieved_split { GRAY } else { white };
                     let x_pos = cursor_x - (char_idx as f32 * digit_width);
                     children.push(act!(text:
-                        font("wendy_screenevaluation"): settext(digit_text(achieved_bytes[original_index])):
+                        font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
                         align(1.0, 0.5): xy(x_pos, item_y):
                         zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
                     ));
@@ -1551,35 +1600,13 @@ fn build_holds_mines_rolls_pane_at(
 }
 
 fn notefield_width(state: &State) -> Option<f32> {
-    let ns = state.noteskin[0].as_ref()?;
-    let field_zoom = state.field_zoom[0];
-    let cols = state
-        .cols_per_player
-        .min(ns.column_xs.len())
-        .min(ns.receptor_off.len());
-    if cols == 0 {
+    if state.cols_per_player == 0 {
         return None;
     }
-
-    let mut min_x = f32::INFINITY;
-    let mut max_x = f32::NEG_INFINITY;
-    for x in ns.column_xs.iter().take(cols) {
-        let xf = *x as f32;
-        min_x = min_x.min(xf);
-        max_x = max_x.max(xf);
-    }
-
-    let target_arrow_px = 64.0 * field_zoom.max(0.0);
-    let size = ns.receptor_off[0].size();
-    let w = size[0].max(0) as f32;
-    let h = size[1].max(0) as f32;
-    let arrow_w = if h > 0.0 && target_arrow_px > 0.0 {
-        w * (target_arrow_px / h)
-    } else {
-        w * field_zoom.max(0.0)
-    };
-
-    Some(((max_x - min_x) * field_zoom.max(0.0)) + arrow_w)
+    // Simply Love GetNotefieldWidth() parity: dance single/versus are 256
+    // and double is 512. This is independent of Mini, Spacing, and noteskin
+    // render scale, so step-stat panes do not drift with visual modifiers.
+    Some(state.cols_per_player as f32 * 64.0)
 }
 
 fn build_holds_mines_rolls_pane(
@@ -1624,7 +1651,7 @@ fn build_holds_mines_rolls_pane(
     let row_height = 28.0 * frame_zoom;
     let mut children = Vec::with_capacity(categories.len() * (digits_to_fmt * 2 + 2));
 
-    asset_manager.with_fonts(|all_fonts| asset_manager.with_font("wendy_screenevaluation", |metrics_font| {
+    asset_manager.with_fonts(|all_fonts| asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |metrics_font| {
         let value_zoom = 0.4 * frame_zoom;
         let label_zoom = 0.833 * frame_zoom;
         let gray = color::rgba_hex("#5A6166");
@@ -1666,7 +1693,7 @@ fn build_holds_mines_rolls_pane(
                 };
                 let x_pos = cursor_x - (char_idx as f32 * digit_width);
                 children.push(act!(text:
-                    font("wendy_screenevaluation"): settext(digit_text(possible_bytes[original_index])):
+                    font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
                     align(1.0, 0.5): xy(x_pos, item_y):
                     zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
                 ));
@@ -1674,7 +1701,7 @@ fn build_holds_mines_rolls_pane(
             cursor_x -= possible_bytes.len() as f32 * digit_width;
 
             // 2. Draw slash
-            children.push(act!(text: font("wendy_screenevaluation"): settext(SLASH_TEXT.clone()): align(1.0, 0.5): xy(cursor_x, item_y): zoom(value_zoom): diffuse(gray[0], gray[1], gray[2], gray[3])));
+            children.push(act!(text: font(current_machine_font_key(FontRole::ScreenEval)): settext(SLASH_TEXT.clone()): align(1.0, 0.5): xy(cursor_x, item_y): zoom(value_zoom): diffuse(gray[0], gray[1], gray[2], gray[3])));
             cursor_x -= slash_width;
 
             // 3. Draw "achieved" number
@@ -1687,7 +1714,7 @@ fn build_holds_mines_rolls_pane(
                 };
                 let x_pos = cursor_x - (char_idx as f32 * digit_width);
                 children.push(act!(text:
-                    font("wendy_screenevaluation"): settext(digit_text(achieved_bytes[original_index])):
+                    font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
                     align(1.0, 0.5): xy(x_pos, item_y):
                     zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
                 ));
@@ -1806,7 +1833,7 @@ fn build_side_pane(
     let row_height = if show_fa_split { 29.0 } else { 35.0 };
     let y_base = -280.0;
 
-    asset_manager.with_fonts(|all_fonts| asset_manager.with_font("wendy_screenevaluation", |f| {
+    asset_manager.with_fonts(|all_fonts| asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |f| {
         let numbers_zoom = final_text_base_zoom * 0.5;
         let max_digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom);
         if max_digit_w <= 0.0 { return; }
@@ -1838,14 +1865,14 @@ fn build_side_pane(
                 if player_side == profile::PlayerSide::P1 {
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(bright_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                             align(1.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71)
                         ));
                     }
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(dim_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                             align(1.0, 0.5): xy(numbers_cx - bright_len * max_digit_w, world_y):
                             zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71)
@@ -1854,7 +1881,7 @@ fn build_side_pane(
                 } else {
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(dim_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                             align(0.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71):
                             horizalign(left)
@@ -1862,7 +1889,7 @@ fn build_side_pane(
                     }
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(bright_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                             align(0.0, 0.5): xy(numbers_cx + dim_len * max_digit_w, world_y):
                             zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71):
@@ -1937,14 +1964,14 @@ fn build_side_pane(
                 if player_side == profile::PlayerSide::P1 {
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(bright_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                             align(1.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71)
                         ));
                     }
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(dim_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                             align(1.0, 0.5): xy(numbers_cx - bright_len * max_digit_w, world_y):
                             zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71)
@@ -1953,7 +1980,7 @@ fn build_side_pane(
                 } else {
                     if !dim_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(dim_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(dim_text):
                             align(0.0, 0.5): xy(numbers_cx, world_y): zoom(numbers_zoom):
                             diffuse(dim[0], dim[1], dim[2], dim[3]): z(71):
                             horizalign(left)
@@ -1961,7 +1988,7 @@ fn build_side_pane(
                     }
                     if !bright_text.is_empty() {
                         actors.push(act!(text:
-                            font("wendy_screenevaluation"): settext(bright_text):
+                            font(current_machine_font_key(FontRole::ScreenEval)): settext(bright_text):
                             align(0.0, 0.5): xy(numbers_cx + dim_len * max_digit_w, world_y):
                             zoom(numbers_zoom):
                             diffuse(bright[0], bright[1], bright[2], bright[3]): z(71):

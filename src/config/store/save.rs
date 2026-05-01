@@ -138,16 +138,12 @@ fn push_saved_options(
         "SubmitArrowCloudFails",
         cfg.submit_arrowcloud_fails,
     );
-    push_bool(
-        content,
-        "SubmitGrooveStatsFails",
-        cfg.submit_groovestats_fails,
-    );
     push_bool(content, "FastLoad", cfg.fastload);
     push_line(content, "FullscreenType", cfg.fullscreen_type.as_str());
     push_line(content, "Game", cfg.game_flag.as_str());
     push_line(content, "GamepadBackend", cfg.windows_gamepad_backend);
     push_bool(content, "GfxDebug", cfg.gfx_debug);
+    push_bool(content, "HighDPI", cfg.high_dpi);
     push_line(content, "GlobalOffsetSeconds", cfg.global_offset_seconds);
     push_line(content, "Language", cfg.language_flag.as_str());
     push_line(content, "LogLevel", cfg.log_level.as_str());
@@ -352,11 +348,7 @@ fn push_saved_keymaps(content: &mut String, keymap: &Keymap) {
 fn push_saved_theme(content: &mut String, cfg: &Config) {
     push_section(content, "[Theme]");
     push_bool(content, "KeyboardFeatures", cfg.keyboard_features);
-    push_line(
-        content,
-        "MenuBackgroundStyle",
-        cfg.menu_background_style.as_str(),
-    );
+    push_line(content, "VisualStyle", cfg.visual_style.as_str());
     push_bool(content, "VideoBackgrounds", cfg.show_video_backgrounds);
     push_bool(
         content,
@@ -406,6 +398,7 @@ fn push_saved_theme(content: &mut String, cfg: &Config) {
         "MachinePreferredPlayMode",
         cfg.machine_preferred_play_mode.as_str(),
     );
+    push_line(content, "MachineFont", cfg.machine_font.as_str());
     push_bool(
         content,
         "ShowSelectMusicGameplayTimer",

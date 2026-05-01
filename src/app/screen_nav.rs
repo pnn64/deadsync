@@ -4,6 +4,7 @@ use super::{
     manage_local_profiles, mappings, menu, options, player_options, profile_load, sandbox,
     select_color, select_course, select_mode, select_music, select_profile, select_style,
 };
+use crate::assets::visual_styles;
 use crate::config;
 use crate::config::dirs;
 use crate::engine::present::{actors::Actor, color};
@@ -183,7 +184,7 @@ impl App {
         if target_menu_music {
             if !prev_menu_music {
                 crate::engine::audio::play_music(
-                    dirs::app_dirs().resolve_asset_path("assets/music/in_two (loop).ogg"),
+                    dirs::app_dirs().resolve_asset_path(visual_styles::menu_music_asset_path()),
                     crate::engine::audio::Cut::default(),
                     true,
                     1.0,
@@ -493,6 +494,7 @@ impl App {
                 menu::out_transition(self.state.screens.menu_state.active_color_index)
             }
             CurrentScreen::Gameplay => gameplay::out_transition(),
+            CurrentScreen::Practice => gameplay::out_transition(),
             CurrentScreen::Options => options::out_transition(),
             CurrentScreen::Credits => credits::out_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::out_transition(),
@@ -518,9 +520,18 @@ impl App {
     pub(super) fn get_in_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
         match screen {
             CurrentScreen::Menu => menu::in_transition(),
-            CurrentScreen::Gameplay => {
-                gameplay::in_transition(self.state.screens.gameplay_state.as_ref())
-            }
+            CurrentScreen::Gameplay => gameplay::in_transition(
+                self.state.screens.gameplay_state.as_ref(),
+                &self.asset_manager,
+            ),
+            CurrentScreen::Practice => gameplay::in_transition(
+                self.state
+                    .screens
+                    .practice_state
+                    .as_ref()
+                    .map(|state| &state.gameplay),
+                &self.asset_manager,
+            ),
             CurrentScreen::Options => options::in_transition(),
             CurrentScreen::Credits => credits::in_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),

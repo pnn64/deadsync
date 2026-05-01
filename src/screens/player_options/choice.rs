@@ -74,6 +74,7 @@ pub(super) fn cycle_choice_index(
     player_idx: usize,
     row_id: RowId,
     delta: isize,
+    wrap: NavWrap,
 ) -> Option<usize> {
     let row = state.pane_mut().row_map.get_mut(row_id)?;
     let n = row.choices.len();
@@ -81,7 +82,11 @@ pub(super) fn cycle_choice_index(
         return None;
     }
     let cur = row.selected_choice_index[player_idx] as isize;
-    let new_index = (cur + delta).rem_euclid(n as isize) as usize;
+    let raw = cur + delta;
+    let new_index = match wrap {
+        NavWrap::Wrap => raw.rem_euclid(n as isize) as usize,
+        NavWrap::Clamp => raw.clamp(0, (n as isize) - 1) as usize,
+    };
     row.selected_choice_index[player_idx] = new_index;
     Some(new_index)
 }
@@ -94,6 +99,7 @@ pub(super) fn dispatch_behavior_delta(
     asset_manager: &AssetManager,
     player_idx: usize,
     delta: isize,
+    wrap: NavWrap,
 ) {
     if state.pane().row_map.is_empty() {
         return;
@@ -114,9 +120,9 @@ pub(super) fn dispatch_behavior_delta(
     };
 
     let outcome = match behavior {
-        RowBehavior::Numeric(b) => apply_numeric(state, player_idx, id, delta, b),
-        RowBehavior::Cycle(b) => apply_cycle(state, player_idx, id, delta, &b),
-        RowBehavior::Custom(b) => (b.apply)(state, player_idx, id, delta),
+        RowBehavior::Numeric(b) => apply_numeric(state, player_idx, id, delta, b, wrap),
+        RowBehavior::Cycle(b) => apply_cycle(state, player_idx, id, delta, &b, wrap),
+        RowBehavior::Custom(b) => (b.apply)(state, player_idx, id, delta, wrap),
         RowBehavior::Bitmask(_) => Outcome::NONE,
         RowBehavior::Exit => Outcome::NONE,
     };
@@ -157,8 +163,9 @@ fn apply_numeric(
     id: RowId,
     delta: isize,
     binding: NumericBinding,
+    wrap: NavWrap,
 ) -> Outcome {
-    let new_index = match cycle_choice_index(state, player_idx, id, delta) {
+    let new_index = match cycle_choice_index(state, player_idx, id, delta, wrap) {
         Some(i) => i,
         None => return Outcome::NONE,
     };
@@ -183,8 +190,9 @@ fn apply_cycle(
     id: RowId,
     delta: isize,
     binding: &CycleBinding,
+    wrap: NavWrap,
 ) -> Outcome {
-    let new_index = match cycle_choice_index(state, player_idx, id, delta) {
+    let new_index = match cycle_choice_index(state, player_idx, id, delta, wrap) {
         Some(i) => i,
         None => return Outcome::NONE,
     };
@@ -201,8 +209,9 @@ pub(super) fn change_choice_for_player(
     asset_manager: &AssetManager,
     player_idx: usize,
     delta: isize,
+    wrap: NavWrap,
 ) {
-    dispatch_behavior_delta(state, asset_manager, player_idx, delta);
+    dispatch_behavior_delta(state, asset_manager, player_idx, delta, wrap);
 }
 
 pub fn apply_choice_delta(
@@ -210,6 +219,7 @@ pub fn apply_choice_delta(
     asset_manager: &AssetManager,
     player_idx: usize,
     delta: isize,
+    wrap: NavWrap,
 ) {
     if state.pane().row_map.is_empty() {
         return;
@@ -225,15 +235,15 @@ pub fn apply_choice_delta(
         && row_supports_inline_nav(row)
     {
         if state.current_pane == OptionsPane::Main || row_selects_on_focus_move(row.id) {
-            change_choice_for_player(state, asset_manager, idx, delta);
+            change_choice_for_player(state, asset_manager, idx, delta, wrap);
             return;
         }
-        if move_inline_focus(state, asset_manager, idx, delta) {
+        if move_inline_focus(state, asset_manager, idx, delta, wrap) {
             audio::play_sfx("assets/sounds/change_value.ogg");
         }
         return;
     }
-    change_choice_for_player(state, asset_manager, player_idx, delta);
+    change_choice_for_player(state, asset_manager, player_idx, delta, wrap);
 }
 
 pub(super) fn toggle_scroll_row(state: &mut State, player_idx: usize) {
@@ -800,41 +810,35 @@ pub(super) fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) 
 pub(super) fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state
+    let row_id = if let Some(row) = state
         .pane()
         .row_map
         .display_order()
         .get(row_index)
         .and_then(|&id| state.pane().row_map.get(id))
     {
-        if row.id != RowId::FAPlusOptions {
-            return;
+        match row.id {
+            RowId::FAPlusOptions | RowId::FAPlusWindowOptions => row.id,
+            _ => return,
         }
     } else {
         return;
-    }
+    };
 
     let choice_index = state
         .pane()
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
-    let bit = if choice_index
-        < state
-            .pane()
-            .row_map
-            .row(state.pane().row_map.id_at(row_index))
-            .choices
-            .len()
-            .min(u8::BITS as usize)
-    {
-        FaPlusMask::from_bits_truncate(1u8 << (choice_index as u8))
-    } else {
-        FaPlusMask::empty()
+    let bit = match (row_id, choice_index) {
+        (RowId::FAPlusOptions, 0) => FaPlusMask::WINDOW,
+        (RowId::FAPlusOptions, 1) => FaPlusMask::EX_SCORE,
+        (RowId::FAPlusOptions, 2) => FaPlusMask::HARD_EX_SCORE,
+        (RowId::FAPlusOptions, 3) => FaPlusMask::PANE,
+        (RowId::FAPlusWindowOptions, 0) => FaPlusMask::BLUE_WINDOW_10MS,
+        (RowId::FAPlusWindowOptions, 1) => FaPlusMask::SPLIT_15_10MS,
+        _ => return,
     };
-    if bit.is_empty() {
-        return;
-    }
 
     state.option_masks[idx].fa_plus.toggle(bit);
 
@@ -868,6 +872,9 @@ pub(super) fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
         crate::game::profile::update_split_15_10ms_for_side(side, split_15_10ms_enabled);
     }
 
+    if bit == FaPlusMask::WINDOW {
+        sync_selected_rows_with_visibility(state, session_active_players());
+    }
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
@@ -893,21 +900,22 @@ pub(super) fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
         .row_map
         .row(state.pane().row_map.id_at(row_index))
         .selected_choice_index[idx];
-    let bit = if choice_index < 1 {
-        ResultsExtrasMask::from_bits_truncate(1u8 << (choice_index as u8))
-    } else {
-        ResultsExtrasMask::empty()
+    let bit = match choice_index {
+        0 => ResultsExtrasMask::TRACK_EARLY_JUDGMENTS,
+        1 => ResultsExtrasMask::SCALE_SCATTERPLOT,
+        _ => return,
     };
-    if bit.is_empty() {
-        return;
-    }
 
     state.option_masks[idx].results_extras.toggle(bit);
 
     let track_early_judgments = state.option_masks[idx]
         .results_extras
         .contains(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
+    let scale_scatterplot = state.option_masks[idx]
+        .results_extras
+        .contains(ResultsExtrasMask::SCALE_SCATTERPLOT);
     state.player_profiles[idx].track_early_judgments = track_early_judgments;
+    state.player_profiles[idx].scale_scatterplot = scale_scatterplot;
 
     let play_style = crate::game::profile::get_session_play_style();
     let should_persist = play_style == crate::game::profile::PlayStyle::Versus
@@ -919,6 +927,7 @@ pub(super) fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
             crate::game::profile::PlayerSide::P2
         };
         crate::game::profile::update_track_early_judgments_for_side(side, track_early_judgments);
+        crate::game::profile::update_scale_scatterplot_for_side(side, scale_scatterplot);
     }
 
     audio::play_sfx("assets/sounds/change_value.ogg");

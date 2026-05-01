@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager};
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::{
     self, BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
     SyncGraphMode, dirs,
@@ -28,8 +29,8 @@ use crate::screens::components::{
         lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
     },
     shared::{
-        banner as shared_banner, gs_scorebox, heart_bg, lobby_hud, mode_pads, profile_boxes,
-        test_input, timers, transitions,
+        banner as shared_banner, gs_scorebox, lobby_hud, mode_pads, profile_boxes, test_input,
+        timers, transitions, visual_style_bg,
     },
 };
 use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, ScreenAction};
@@ -954,7 +955,7 @@ pub struct State {
     playlist_library: Vec<PlaylistCacheEntry>,
     active_playlist_id: Option<String>,
     expanded_pack_name: Option<String>,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
     pub(crate) banner_high_quality_requested: bool,
@@ -3140,7 +3141,7 @@ pub fn init() -> State {
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: last_pack_name,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
         banner_high_quality_requested: false,
@@ -3276,12 +3277,6 @@ pub fn init() -> State {
             } else {
                 state.p2_selected_steps_index = state.selected_steps_index;
             }
-            if state.selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
-                state.preferred_difficulty_index = state.selected_steps_index;
-            }
-            if state.p2_selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
-                state.p2_preferred_difficulty_index = state.p2_selected_steps_index;
-            }
         }
     }
 
@@ -3355,7 +3350,7 @@ pub fn init_placeholder() -> State {
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: None,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
         banner_high_quality_requested: false,
@@ -3728,6 +3723,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     }
     standalone.push(select_music_menu::ITEM_SONG_SEARCH);
     if has_song_selected {
+        standalone.push(select_music_menu::ITEM_PRACTICE_MODE);
         standalone.push(select_music_menu::ITEM_SHOW_LEADERBOARD);
         standalone.push(select_music_menu::ITEM_TOGGLE_FAVORITE);
     }
@@ -4819,6 +4815,15 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
     } else {
         None
     };
+    let ready_prompt_text = if overlay.phase == SyncOverlayPhase::Ready {
+        Some(build_sync_save_prompt_text(overlay))
+    } else {
+        None
+    };
+    let ready_prompt_line_count = ready_prompt_text
+        .as_deref()
+        .map(|s| s.lines().count().max(1))
+        .unwrap_or(0);
 
     actors.push(act!(quad:
         align(0.0, 0.0):
@@ -4842,7 +4847,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
         z(SYNC_OVERLAY_Z + 2)
     ));
     actors.push(act!(text:
-        font("wendy"):
+        font(current_machine_font_key(FontRole::Header)):
         settext(title):
         align(0.5, 0.5):
         xy(pane_cx, pane_top + 34.0):
@@ -4912,6 +4917,8 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             animate: false,
             state_delay: 0.0,
             scale: [1.0, 1.0],
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: Default::default(),
         });
     }
@@ -5001,12 +5008,24 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             .map(Arc::from)
             .unwrap_or_else(|| tr("SelectMusic", "UnknownSyncError")),
     };
-    let status_y =
-        if matches!(overlay.phase, SyncOverlayPhase::Ready) && ready_offset_line.is_some() {
-            ready_prompt_y - SYNC_READY_LINE_STEP * 1.5
+    let status_y = if matches!(overlay.phase, SyncOverlayPhase::Ready) {
+        // Anchor the prompt's bottom edge to the same position it had with the
+        // default 2-line prompt, then stack the optional offset line and the
+        // status line above it with a one-line gap.  This keeps the YES/NO
+        // buttons clear of the prompt and prevents the status line from
+        // overlapping the prompt when a low-confidence warning expands it.
+        let prompt_bottom = ready_prompt_y + SYNC_READY_LINE_STEP * 0.5;
+        let half_prompt = (ready_prompt_line_count.max(1) as f32 - 1.0) * 0.5;
+        let prompt_top = prompt_bottom - half_prompt * 2.0 * SYNC_READY_LINE_STEP;
+        let above_prompt = prompt_top - SYNC_READY_LINE_STEP;
+        if ready_offset_line.is_some() {
+            above_prompt - SYNC_READY_LINE_STEP
         } else {
-            graph_y + graph_h + 18.0
-        };
+            above_prompt
+        }
+    } else {
+        graph_y + graph_h + 18.0
+    };
     actors.push(act!(text:
         font("miso"):
         settext(status_text):
@@ -5029,12 +5048,11 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             } else {
                 choice_no_x
             };
-            let prompt = build_sync_save_prompt_text(overlay);
-            let prompt_y = if ready_offset_line.is_some() {
-                ready_prompt_y + SYNC_READY_LINE_STEP
-            } else {
-                ready_prompt_y
-            };
+            let prompt = ready_prompt_text.clone().unwrap_or_default();
+            let prompt_bottom = ready_prompt_y + SYNC_READY_LINE_STEP * 0.5;
+            let half_prompt = (ready_prompt_line_count.max(1) as f32 - 1.0) * 0.5;
+            let prompt_y = prompt_bottom - half_prompt * SYNC_READY_LINE_STEP;
+            let prompt_top = prompt_y - half_prompt * SYNC_READY_LINE_STEP;
 
             actors.push(act!(quad:
                 align(0.5, 0.5):
@@ -5048,7 +5066,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
                     font("miso"):
                     settext(line.clone()):
                     align(0.5, 0.5):
-                    xy(pane_cx, ready_prompt_y - SYNC_READY_LINE_STEP * 0.5):
+                    xy(pane_cx, prompt_top - SYNC_READY_LINE_STEP):
                     zoom(SYNC_READY_TEXT_ZOOM):
                     maxwidth(pane_w - 90.0):
                     diffuse(1.0, 1.0, 1.0, 1.0):
@@ -5068,7 +5086,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
                 horizalign(center)
             ));
             actors.push(act!(text:
-                font("wendy"):
+                font(current_machine_font_key(FontRole::Header)):
                 settext(tr("Common", "Yes")):
                 align(0.5, 0.5):
                 xy(choice_yes_x, answer_y):
@@ -5078,7 +5096,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
                 horizalign(center)
             ));
             actors.push(act!(text:
-                font("wendy"):
+                font(current_machine_font_key(FontRole::Header)):
                 settext(tr("Common", "No")):
                 align(0.5, 0.5):
                 xy(choice_no_x, answer_y):
@@ -5232,9 +5250,6 @@ fn refresh_after_reload(state: &mut State) {
             )
         {
             refreshed.selected_steps_index = index;
-            if index < color::FILE_DIFFICULTY_NAMES.len() {
-                refreshed.preferred_difficulty_index = index;
-            }
         }
 
         let mut restored_p2 = false;
@@ -5259,9 +5274,6 @@ fn refresh_after_reload(state: &mut State) {
             )
         {
             refreshed.p2_selected_steps_index = index;
-            if index < color::FILE_DIFFICULTY_NAMES.len() {
-                refreshed.p2_preferred_difficulty_index = index;
-            }
         }
     }
 
@@ -5573,7 +5585,7 @@ fn lobby_song_path(song: &SongData) -> Option<String> {
     Some(format!("{group_dir}/{song_dir}"))
 }
 
-fn song_pack_and_dir_name(song: &SongData) -> Option<(&str, &str)> {
+pub(crate) fn song_pack_and_dir_name(song: &SongData) -> Option<(&str, &str)> {
     let song_dir = song.simfile_path.parent()?.file_name()?.to_str()?;
     let pack_dir = song
         .simfile_path
@@ -6250,7 +6262,7 @@ fn build_sync_save_prompt_text(overlay: &SyncOverlayStateData) -> String {
         sync_low_confidence_warning(overlay.final_confidence, sync_confidence_threshold())
     {
         prompt.push_str(&warning);
-        prompt.push_str("\n\n");
+        prompt.push('\n');
     }
     prompt.push_str(&tr("SelectMusic", "SyncSaveQuestion"));
     prompt.push('\n');
@@ -6823,6 +6835,10 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
             hide_select_music_menu(state);
             show_replay_overlay(state);
             ScreenAction::None
+        }
+        select_music_menu::Action::PracticeMode => {
+            hide_select_music_menu(state);
+            ScreenAction::Navigate(Screen::Practice)
         }
         select_music_menu::Action::ShowLeaderboard => {
             hide_select_music_menu(state);
@@ -7843,17 +7859,11 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 best_steps_index(song, target_chart_type, state.preferred_difficulty_index)
             {
                 state.selected_steps_index = idx;
-                if idx < color::FILE_DIFFICULTY_NAMES.len() {
-                    state.preferred_difficulty_index = idx;
-                }
             }
             if let Some(idx) =
                 best_steps_index(song, target_chart_type, state.p2_preferred_difficulty_index)
             {
                 state.p2_selected_steps_index = idx;
-                if idx < color::FILE_DIFFICULTY_NAMES.len() {
-                    state.p2_preferred_difficulty_index = idx;
-                }
             }
         }
     }
@@ -8291,6 +8301,7 @@ fn sl_select_music_wheel_cascade_mask() -> Vec<Actor> {
 
         // upper half mask
         actors.push(act!(quad:
+            tweensalt(i):
             align(0.5, 0.5):
             xy(x, SL_WHEEL_CASCADE_ROW_Y_UPPER + y_base):
             zoomto(w, item_half_h):
@@ -8304,6 +8315,7 @@ fn sl_select_music_wheel_cascade_mask() -> Vec<Actor> {
 
         // lower half mask
         actors.push(act!(quad:
+            tweensalt(i):
             align(0.5, 0.5):
             xy(x, SL_WHEEL_CASCADE_ROW_Y_LOWER + y_base):
             zoomto(w, item_half_h):
@@ -8319,7 +8331,7 @@ fn sl_select_music_wheel_cascade_mask() -> Vec<Actor> {
     actors
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usize) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(256);
     let side = crate::game::profile::get_session_player_side();
     let play_style = crate::game::profile::get_session_play_style();
@@ -8345,13 +8357,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let allow_gs_fetch = allow_gs_fetch_for_selection(state);
     let cfg = config::get();
 
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(screen_bars::build("SELECT MUSIC"));
+    actors.extend(screen_bars::build("SELECT MUSIC", Some(stage_number)));
 
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
     let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
@@ -9339,7 +9351,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
         if let Some(chart) = steps_charts[idx] {
             let c = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
-            actors.push(act!(text: font("wendy"): settext(chart.meter.to_string()): align(0.5, 0.5): xy(lst_cx, lst_cy + y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
+            actors.push(act!(text: font(current_machine_font_key(FontRole::Header)): settext(chart.meter.to_string()): align(0.5, 0.5): xy(lst_cx, lst_cy + y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
         }
     }
 
@@ -9707,7 +9719,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         match state.out_prompt {
             OutPromptState::PressStartForOptions { .. } => {
                 actors.push(act!(text:
-                    font("wendy"):
+                    font(current_machine_font_key(FontRole::Header)):
                     settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -9719,7 +9731,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             OutPromptState::EnteringOptions { .. } => {
                 // Fade out "Press Start for options"
                 actors.push(act!(text:
-                    font("wendy"):
+                    font(current_machine_font_key(FontRole::Header)):
                     settext(tr("SelectMusic", "PressStartForOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -9731,7 +9743,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                 // Fade in "Entering Options..." after 0.1s hibernate
                 actors.push(act!(text:
-                    font("wendy"):
+                    font(current_machine_font_key(FontRole::Header)):
                     settext(tr("SelectMusic", "EnteringOptions")):
                     align(0.5, 0.5):
                     xy(screen_center_x(), screen_center_y()):
@@ -9873,7 +9885,7 @@ fn push_exit_prompt_choice(
     out.push(act!(text:
         align(0.5, 0.5):
         xy(cx, cy):
-        font("wendy"):
+        font(current_machine_font_key(FontRole::Header)):
         zoom(SL_EXIT_PROMPT_LABEL_ZOOM * choice_zoom):
         settext(label):
         diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
@@ -10331,6 +10343,119 @@ mod tests {
         assert_eq!(
             select_music_lobby_lock_text_for(&joined, 1, Some(&local_song), None),
             None
+        );
+    }
+
+    // --- Regression tests for preferred_difficulty_index preservation ---
+
+    use crate::game::chart::{ChartData, StaminaCounts};
+
+    fn test_chart(difficulty: &str) -> ChartData {
+        ChartData {
+            chart_type: "dance-single".to_string(),
+            difficulty: difficulty.to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 9,
+            step_artist: String::new(),
+            music_path: None,
+            short_hash: format!("hash_{}", difficulty.to_lowercase()),
+            stats: rssp::stats::ArrowStats::default(),
+            tech_counts: rssp::TechCounts::default(),
+            mines_nonfake: 0,
+            stamina_counts: StaminaCounts::default(),
+            total_streams: 0,
+            matrix_rating: 0.0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: true,
+            has_chart_attacks: false,
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
+            display_bpm: None,
+            min_bpm: 120.0,
+            max_bpm: 120.0,
+        }
+    }
+
+    fn test_song_with_charts(title: &str, difficulties: &[&str]) -> Arc<SongData> {
+        let mut song = (*test_song(title)).clone();
+        song.charts = difficulties.iter().map(|d| test_chart(d)).collect();
+        Arc::new(song)
+    }
+
+    #[test]
+    fn best_steps_index_returns_exact_match_when_available() {
+        let song =
+            test_song_with_charts("full", &["Beginner", "Easy", "Medium", "Hard", "Challenge"]);
+        // Challenge = index 4
+        assert_eq!(super::best_steps_index(&song, "dance-single", 4), Some(4));
+    }
+
+    #[test]
+    fn best_steps_index_returns_nearest_when_preferred_missing() {
+        // Song has only Beginner(0), Easy(1), Hard(3) — no Medium(2) or Challenge(4)
+        let song = test_song_with_charts("partial", &["Beginner", "Easy", "Hard"]);
+        // Prefer Challenge(4) → nearest is Hard(3)
+        assert_eq!(super::best_steps_index(&song, "dance-single", 4), Some(3));
+        // Prefer Medium(2) → nearest is Easy(1) or Hard(3), both distance=1; first found wins
+        let result = super::best_steps_index(&song, "dance-single", 2);
+        assert!(result == Some(1) || result == Some(3));
+    }
+
+    #[test]
+    fn best_steps_index_fallback_does_not_corrupt_preference() {
+        // Regression: navigating to a song without the preferred difficulty
+        // must NOT overwrite preferred_difficulty_index.
+        let song_full =
+            test_song_with_charts("full", &["Beginner", "Easy", "Medium", "Hard", "Challenge"]);
+        let song_partial = test_song_with_charts("partial", &["Beginner", "Easy", "Hard"]);
+
+        // Simulate: user prefers Challenge (index 4)
+        let preferred_difficulty_index: usize = 4;
+        let mut selected_steps_index: usize = 4;
+
+        // Navigate to song_full — Challenge exists, exact match
+        if let Some(idx) =
+            super::best_steps_index(&song_full, "dance-single", preferred_difficulty_index)
+        {
+            selected_steps_index = idx;
+        }
+        assert_eq!(selected_steps_index, 4);
+        assert_eq!(preferred_difficulty_index, 4);
+
+        // Navigate to song_partial — Challenge missing, falls back to Hard(3)
+        if let Some(idx) =
+            super::best_steps_index(&song_partial, "dance-single", preferred_difficulty_index)
+        {
+            selected_steps_index = idx;
+        }
+        assert_eq!(selected_steps_index, 3, "selected should fall back to Hard");
+        assert_eq!(
+            preferred_difficulty_index, 4,
+            "preference must stay Challenge"
+        );
+
+        // Navigate back to song_full — should resolve to Challenge again, not Hard
+        if let Some(idx) =
+            super::best_steps_index(&song_full, "dance-single", preferred_difficulty_index)
+        {
+            selected_steps_index = idx;
+        }
+        assert_eq!(
+            selected_steps_index, 4,
+            "should return to Challenge, not stay on Hard"
         );
     }
 }

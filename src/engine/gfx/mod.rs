@@ -17,9 +17,71 @@ use winit::window::Window;
 pub type TextureHandle = u64;
 pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
 pub type FastU64Map<V> = HashMap<u64, V, BuildHasherDefault<XxHash64>>;
-pub type TextureHandleMap<V> = FastU64Map<V>;
 pub type TMeshCacheKey = u64;
 pub const INVALID_TMESH_CACHE_KEY: TMeshCacheKey = 0;
+
+pub struct TextureHandleMap<V> {
+    slots: Vec<Option<V>>,
+}
+
+impl<V> Default for TextureHandleMap<V> {
+    #[inline(always)]
+    fn default() -> Self {
+        Self { slots: Vec::new() }
+    }
+}
+
+impl<V> TextureHandleMap<V> {
+    #[inline(always)]
+    fn slot(handle: TextureHandle) -> Option<usize> {
+        handle
+            .checked_sub(1)
+            .and_then(|index| usize::try_from(index).ok())
+    }
+
+    #[inline(always)]
+    pub fn contains_key(&self, handle: &TextureHandle) -> bool {
+        self.get(handle).is_some()
+    }
+
+    #[inline(always)]
+    pub fn get(&self, handle: &TextureHandle) -> Option<&V> {
+        self.slots.get(Self::slot(*handle)?)?.as_ref()
+    }
+
+    #[inline(always)]
+    pub fn get_mut(&mut self, handle: &TextureHandle) -> Option<&mut V> {
+        self.slots.get_mut(Self::slot(*handle)?)?.as_mut()
+    }
+
+    pub fn insert(&mut self, handle: TextureHandle, value: V) -> Option<V> {
+        let slot = Self::slot(handle)?;
+        if slot >= self.slots.len() {
+            self.slots.resize_with(slot + 1, || None);
+        }
+        self.slots[slot].replace(value)
+    }
+
+    #[inline(always)]
+    pub fn remove(&mut self, handle: &TextureHandle) -> Option<V> {
+        self.slots.get_mut(Self::slot(*handle)?)?.take()
+    }
+
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        self.slots.clear();
+    }
+
+    #[inline(always)]
+    pub fn values(&self) -> impl Iterator<Item = &V> {
+        self.slots.iter().filter_map(Option::as_ref)
+    }
+
+    #[inline(always)]
+    pub fn into_values(self) -> impl Iterator<Item = V> {
+        self.slots.into_iter().flatten()
+    }
+}
 
 #[derive(Clone)]
 pub struct RenderList {
@@ -61,8 +123,8 @@ pub struct MeshVertex {
 pub struct TexturedMeshVertex {
     pub pos: [f32; 3],
     pub uv: [f32; 2],
-    pub tex_matrix_scale: [f32; 2],
     pub color: [f32; 4],
+    pub tex_matrix_scale: [f32; 2],
 }
 
 impl Default for TexturedMeshVertex {
@@ -71,8 +133,8 @@ impl Default for TexturedMeshVertex {
         Self {
             pos: [0.0, 0.0, 0.0],
             uv: [0.0, 0.0],
-            tex_matrix_scale: [1.0, 1.0],
             color: [0.0, 0.0, 0.0, 0.0],
+            tex_matrix_scale: [1.0, 1.0],
         }
     }
 }
@@ -80,7 +142,7 @@ impl Default for TexturedMeshVertex {
 #[derive(Clone)]
 pub enum TexturedMeshVertices {
     Shared(Arc<[TexturedMeshVertex]>),
-    Transient(Arc<Vec<TexturedMeshVertex>>),
+    Transient(Vec<TexturedMeshVertex>),
 }
 
 impl AsRef<[TexturedMeshVertex]> for TexturedMeshVertices {
@@ -660,6 +722,7 @@ pub fn create_backend(
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
+    high_dpi_enabled: bool,
 ) -> Result<Backend, Box<dyn Error>> {
     let backend_impl = match backend_type {
         #[cfg(not(target_pointer_width = "32"))]
@@ -683,9 +746,12 @@ pub fn create_backend(
             present_mode_policy,
             gfx_debug_enabled,
         )?),
-        BackendType::OpenGL => {
-            BackendImpl::OpenGL(opengl::init(window, vsync_enabled, gfx_debug_enabled)?)
-        }
+        BackendType::OpenGL => BackendImpl::OpenGL(opengl::init(
+            window,
+            vsync_enabled,
+            gfx_debug_enabled,
+            high_dpi_enabled,
+        )?),
         BackendType::OpenGLWgpu => BackendImpl::OpenGLWgpu(wgpu_core::init_opengl(
             window,
             vsync_enabled,

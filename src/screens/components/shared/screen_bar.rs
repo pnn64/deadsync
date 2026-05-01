@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::engine::present::actors::{self, Actor, Background, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
@@ -113,13 +114,14 @@ pub fn build(params: ScreenBarParams) -> Actor {
             };
 
             // Create the actor first without the horizalign, then modify it.
+            let title_font = current_machine_font_key_for_text(FontRole::Header, &title);
             let mut title_actor = act!(text:
                 align(title_align[0], title_align[1]):
                 xy(title_xy[0], title_xy[1]):
                 zoom(title_scale):
                 z(2):
                 diffuse(params.fg_color[0], params.fg_color[1], params.fg_color[2], params.fg_color[3]):
-                font("wendy"): settext(title.clone())
+                font(title_font): settext(title.clone())
             );
 
             // Now, apply the alignment from the variable.
@@ -132,14 +134,15 @@ pub fn build(params: ScreenBarParams) -> Actor {
 
         /* ============================ BOTTOM BAR ============================ */
         ScreenBarPosition::Bottom => {
-            // Center title (Wendy) uses the same scaling as the top bar
+            // Center title (Wendy by default; Mega when MachineFont = Mega).
+            let bottom_title_font = current_machine_font_key_for_text(FontRole::Header, &title);
             children.push(act!(text:
                 align(0.5, 0.5):
                 xy(screen_center_x(), 16.0):
                 zoom(0.5):
                 z(2):
                 diffuse(params.fg_color[0], params.fg_color[1], params.fg_color[2], params.fg_color[3]):
-                font("wendy"): settext(title): horizalign(center)
+                font(bottom_title_font): settext(title): horizalign(center)
             ));
 
             // Small side texts (Miso), positioned like Simply Love credits

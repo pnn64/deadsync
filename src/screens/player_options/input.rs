@@ -33,7 +33,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         }
         match direction {
             NavDirection::Up => {
-                move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up);
+                move_selection_vertical(
+                    state,
+                    asset_manager,
+                    active,
+                    player_idx,
+                    NavDirection::Up,
+                    NavWrap::Clamp,
+                );
             }
             NavDirection::Down => {
                 move_selection_vertical(
@@ -42,16 +49,17 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     active,
                     player_idx,
                     NavDirection::Down,
+                    NavWrap::Clamp,
                 );
             }
             NavDirection::Left => {
                 if !move_arcade_horizontal_focus(state, asset_manager, player_idx, -1) {
-                    apply_choice_delta(state, asset_manager, player_idx, -1);
+                    apply_choice_delta(state, asset_manager, player_idx, -1, NavWrap::Clamp);
                 }
             }
             NavDirection::Right => {
                 if !move_arcade_horizontal_focus(state, asset_manager, player_idx, 1) {
-                    apply_choice_delta(state, asset_manager, player_idx, 1);
+                    apply_choice_delta(state, asset_manager, player_idx, 1, NavWrap::Clamp);
                 }
             }
         }
@@ -189,6 +197,11 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 parent_anchor_visible_index(&state.pane().row_map, RowId::ErrorBar, visibility);
             let hide_anchor_visible_idx =
                 parent_anchor_visible_index(&state.pane().row_map, RowId::Hide, visibility);
+            let fa_plus_anchor_visible_idx = parent_anchor_visible_index(
+                &state.pane().row_map,
+                RowId::FAPlusOptions,
+                visibility,
+            );
             let mut visible_idx = 0i32;
             for i in 0..total_rows {
                 let visible = is_row_visible(&state.pane().row_map, i, visibility);
@@ -204,6 +217,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                                 Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
                                 Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
                                 Some(RowId::Hide) => hide_anchor_visible_idx,
+                                Some(RowId::FAPlusOptions) => fa_plus_anchor_visible_idx,
                                 _ => None,
                             },
                         );
@@ -362,10 +376,15 @@ pub(super) fn finish_start_without_action(
 }
 
 #[inline(always)]
-fn all_active_players_on_last_row(state: &State, active: [bool; PLAYER_SLOTS]) -> bool {
-    let last_row = state.pane().row_map.len().saturating_sub(1);
-    active_player_indices(active)
-        .all(|player_idx| state.pane().selected_row[player_idx] == last_row)
+fn all_active_players_on_row(
+    state: &State,
+    active: [bool; PLAYER_SLOTS],
+    row_index: usize,
+) -> bool {
+    active_player_indices(active).all(|player_idx| {
+        state.pane().selected_row[player_idx]
+            == row_index.min(state.pane().row_map.len().saturating_sub(1))
+    })
 }
 
 pub(super) fn handle_nav_event(
@@ -382,19 +401,25 @@ pub(super) fn handle_nav_event(
     if pressed {
         sync_selected_rows_with_visibility(state, active);
         match dir {
-            NavDirection::Up => {
-                move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up)
-            }
+            NavDirection::Up => move_selection_vertical(
+                state,
+                asset_manager,
+                active,
+                player_idx,
+                NavDirection::Up,
+                NavWrap::Wrap,
+            ),
             NavDirection::Down => move_selection_vertical(
                 state,
                 asset_manager,
                 active,
                 player_idx,
                 NavDirection::Down,
+                NavWrap::Wrap,
             ),
             NavDirection::Left => {
                 if !move_arcade_horizontal_focus(state, asset_manager, player_idx, -1) {
-                    apply_choice_delta(state, asset_manager, player_idx, -1);
+                    apply_choice_delta(state, asset_manager, player_idx, -1, NavWrap::Wrap);
                     if arcade_row_uses_choice_focus(state, player_idx) {
                         state.pane_mut().arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
                     }
@@ -402,7 +427,7 @@ pub(super) fn handle_nav_event(
             }
             NavDirection::Right => {
                 if !move_arcade_horizontal_focus(state, asset_manager, player_idx, 1) {
-                    apply_choice_delta(state, asset_manager, player_idx, 1);
+                    apply_choice_delta(state, asset_manager, player_idx, 1, NavWrap::Wrap);
                     if arcade_row_uses_choice_focus(state, player_idx) {
                         state.pane_mut().arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
                     }
@@ -513,7 +538,7 @@ pub(super) fn move_arcade_horizontal_focus(
         return false;
     }
     if row_supports_inline {
-        apply_choice_delta(state, asset_manager, idx, delta);
+        apply_choice_delta(state, asset_manager, idx, delta, NavWrap::Wrap);
         return true;
     }
     if num_choices <= 1 {
@@ -527,7 +552,13 @@ pub(super) fn move_arcade_horizontal_focus(
         if current_choice == 0 {
             audio::play_sfx("assets/sounds/change_value.ogg");
         } else {
-            change_choice_for_player(state, asset_manager, idx, -(current_choice as isize));
+            change_choice_for_player(
+                state,
+                asset_manager,
+                idx,
+                -(current_choice as isize),
+                NavWrap::Wrap,
+            );
         }
         return true;
     }
@@ -537,13 +568,13 @@ pub(super) fn move_arcade_horizontal_focus(
             audio::play_sfx("assets/sounds/change_value.ogg");
             return true;
         }
-        change_choice_for_player(state, asset_manager, idx, -1);
+        change_choice_for_player(state, asset_manager, idx, -1, NavWrap::Wrap);
         return true;
     }
     if current_choice + 1 >= num_choices {
         return false;
     }
-    change_choice_for_player(state, asset_manager, idx, 1);
+    change_choice_for_player(state, asset_manager, idx, 1, NavWrap::Wrap);
     true
 }
 
@@ -559,7 +590,14 @@ pub(super) fn handle_arcade_prev_event(
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let prev_row = state.pane().selected_row[idx];
     clear_nav_hold(state, player_idx);
-    move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up);
+    move_selection_vertical(
+        state,
+        asset_manager,
+        active,
+        player_idx,
+        NavDirection::Up,
+        NavWrap::Wrap,
+    );
     if state.pane().selected_row[idx] != prev_row {
         audio::play_sfx("assets/sounds/prev_row.ogg");
         state.help_anim_time[idx] = 0.0;
@@ -592,7 +630,14 @@ pub(super) fn handle_arcade_start_event(
         state.pane_mut().arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
         return action;
     }
-    move_selection_vertical(state, asset_manager, active, idx, NavDirection::Down);
+    move_selection_vertical(
+        state,
+        asset_manager,
+        active,
+        idx,
+        NavDirection::Down,
+        NavWrap::Wrap,
+    );
     state.pane_mut().arcade_row_focus[idx] =
         row_allows_arcade_next_row(state, state.pane().selected_row[idx]);
     None
@@ -626,25 +671,19 @@ pub(super) fn handle_start_event(
     if row_supports_inline {
         let changed = commit_inline_focus_selection(state, asset_manager, player_idx, row_index);
         if changed && !row_toggles {
-            change_choice_for_player(state, asset_manager, player_idx, 0);
+            change_choice_for_player(state, asset_manager, player_idx, 0, NavWrap::Wrap);
             return finish_start_without_action(state, active, player_idx, should_focus_exit);
         }
     }
     if super::choice::dispatch_behavior_toggle(state, player_idx, id) {
         return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
-    // ITG ScreenOptions only exits once every active player is on the last row.
-    if row_index == num_rows.saturating_sub(1) && !all_active_players_on_last_row(state, active) {
+    // ITG ScreenOptions only exits once every active player is on Exit.
+    if id == RowId::Exit && !all_active_players_on_row(state, active, row_index) {
         return None;
     }
-    if row_index == num_rows.saturating_sub(1)
-        && let Some(what_comes_next_row) = state
-            .pane()
-            .row_map
-            .display_order()
-            .get(num_rows.saturating_sub(2))
-            .and_then(|&id| state.pane().row_map.get(id))
-        && what_comes_next_row.id == RowId::WhatComesNext
+    if id == RowId::Exit
+        && let Some(what_comes_next_row) = state.pane().row_map.get(RowId::WhatComesNext)
     {
         let choice_idx = what_comes_next_row.selected_choice_index[player_idx];
         if let Some(choice) = what_comes_next_row.choices.get(choice_idx) {
@@ -656,10 +695,14 @@ pub(super) fn handle_start_event(
             let choice_str = choice.as_str();
             if choice_str == gameplay.as_ref() {
                 audio::play_sfx("assets/sounds/start.ogg");
-                return Some(ScreenAction::Navigate(Screen::Gameplay));
+                return Some(ScreenAction::Navigate(play_screen_for_return(
+                    state.return_screen,
+                )));
             } else if choice_str == choose_different {
                 audio::play_sfx("assets/sounds/start.ogg");
-                return Some(ScreenAction::Navigate(state.return_screen));
+                return Some(ScreenAction::Navigate(choose_different_screen(
+                    state.return_screen,
+                )));
             } else if choice_str == advanced.as_ref() {
                 switch_to_pane(state, OptionsPane::Advanced);
             } else if choice_str == uncommon.as_ref() {
@@ -670,6 +713,22 @@ pub(super) fn handle_start_event(
         }
     }
     finish_start_without_action(state, active, player_idx, should_focus_exit)
+}
+
+const fn play_screen_for_return(return_screen: Screen) -> Screen {
+    if matches!(return_screen, Screen::Practice) {
+        Screen::Practice
+    } else {
+        Screen::Gameplay
+    }
+}
+
+const fn choose_different_screen(return_screen: Screen) -> Screen {
+    if matches!(return_screen, Screen::Practice) {
+        Screen::SelectMusic
+    } else {
+        return_screen
+    }
 }
 
 pub fn handle_input(

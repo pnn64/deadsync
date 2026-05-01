@@ -216,7 +216,7 @@ enum HotplugEvent {
     Remove(String),
 }
 
-static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(true);
+static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(false);
 static KEYBOARD_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(true);
 static KEYBOARD_BACKEND_ACTIVE: AtomicBool = AtomicBool::new(false);
 
@@ -539,8 +539,7 @@ impl UdevMonitor {
         }
     }
 
-    fn collect_hotplug(&self) -> Vec<HotplugEvent> {
-        let mut out = Vec::new();
+    fn collect_hotplug(&self, out: &mut Vec<HotplugEvent>) {
         loop {
             // SAFETY: `self.0` is a live monitor handle; libudev returns either a
             // newly owned device pointer or null when no event is pending.
@@ -571,7 +570,6 @@ impl UdevMonitor {
                 out.push(HotplugEvent::Remove(path));
             }
         }
-        out
     }
 }
 
@@ -1082,8 +1080,14 @@ fn run_inner(
         )
     };
     let mut pollfds = Vec::with_capacity(17);
+    let mut hotplug = Vec::with_capacity(16);
+    let mut remove = Vec::with_capacity(16);
+    let mut key_remove = Vec::with_capacity(16);
 
     loop {
+        hotplug.clear();
+        remove.clear();
+        key_remove.clear();
         pollfds.clear();
         let dev_offset = match &discovery {
             Discovery::Udev(state) => {
@@ -1122,7 +1126,6 @@ fn run_inner(
         }
         let receipt = receipt_time();
 
-        let mut hotplug = Vec::new();
         let mut fallback_refresh = false;
         if dev_offset == 1 {
             let revents = pollfds[0].revents;
@@ -1131,7 +1134,7 @@ fn run_inner(
             }
             if (revents & POLLIN) != 0 {
                 match &discovery {
-                    Discovery::Udev(state) => hotplug = state.monitor.collect_hotplug(),
+                    Discovery::Udev(state) => state.monitor.collect_hotplug(&mut hotplug),
                     Discovery::Inotify(watch) => {
                         watch.drain();
                         fallback_refresh = true;
@@ -1141,7 +1144,6 @@ fn run_inner(
             }
         }
 
-        let mut remove = Vec::new();
         for i in 0..devs.len() {
             let revents = pollfds[i + dev_offset].revents;
             if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
@@ -1228,7 +1230,6 @@ fn run_inner(
             }
         }
 
-        let mut key_remove = Vec::new();
         for i in 0..key_devs.len() {
             let revents = pollfds[i + key_offset].revents;
             if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
@@ -1300,7 +1301,7 @@ fn run_inner(
         }
         publish_keyboard_backend_state(&key_devs);
 
-        for event in hotplug {
+        for event in hotplug.drain(..) {
             match event {
                 HotplugEvent::Add(spec) => match spec.class {
                     DevClass::Pad => {

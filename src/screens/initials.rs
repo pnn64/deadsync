@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
@@ -10,7 +11,7 @@ use crate::engine::space::{screen_center_x, screen_center_y, screen_height};
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::stage_stats;
-use crate::screens::components::shared::{heart_bg, transitions};
+use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -130,7 +131,7 @@ struct StageHighScores {
 
 pub struct State {
     pub active_color_index: i32,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     elapsed: f32,
     finish_hold_elapsed: Option<f32>,
     players: [PlayerEntry; 2],
@@ -593,7 +594,7 @@ fn update_hold_scroll(p: &mut PlayerEntry) {
 pub fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // overwritten by app
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         elapsed: 0.0,
         finish_hold_elapsed: None,
         players: [
@@ -940,7 +941,7 @@ fn build_wheel(
         };
 
         let mut actor = act!(text:
-            font("wendy_white"):
+            font(current_machine_font_key(FontRole::Header)):
             settext(content):
             align(0.5, 0.5):
             xy(x, 0.0):
@@ -1111,7 +1112,7 @@ fn build_player_frame(side: profile::PlayerSide, state: &State) -> Actor {
     if p.can_enter {
         // PlayerName text (stays visible even after finishing input).
         children.push(act!(text:
-            font("wendy_white"):
+            font(current_machine_font_key(FontRole::Header)):
             settext(p.name.clone()):
             align(0.0, 0.5):
             xy(PLAYERNAME_X, 0.0):
@@ -1174,7 +1175,7 @@ pub fn get_actors(
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
 
     // Background
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,

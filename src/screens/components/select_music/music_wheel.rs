@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::{SelectMusicItlRankMode, SelectMusicItlWheelMode};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
@@ -44,6 +45,10 @@ const HEART_COLOR_P1: [f32; 4] = [0.3, 0.5, 1.0, 1.0]; // blue
 const HEART_COLOR_P2: [f32; 4] = [1.0, 0.47, 0.47, 1.0]; // pink (#ff7777)
 const HEART_ZOOM_SINGLE: f32 = 0.039; // 512 * 0.039 ≈ 20px
 const HEART_ZOOM_DUAL: f32 = 0.029; // 512 * 0.029 ≈ 15px
+const LOCK_COLOR_P1: [f32; 4] = [1.0, 1.0, 0.0, 1.0]; // yellow
+const LOCK_COLOR_P2: [f32; 4] = [1.0, 0.5, 0.0, 1.0]; // orange
+const LOCK_ZOOM_SINGLE: f32 = 0.039; // 512 * 0.039 ≈ 20px
+const LOCK_ZOOM_DUAL: f32 = 0.029; // 512 * 0.029 ≈ 15px
 const ITL_RANK_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
@@ -190,6 +195,17 @@ fn choose_itl_wheel_score(
         local_itl.map(|score| score.points)
     };
     Some((ex_hundredths, points))
+}
+
+#[inline(always)]
+const fn itl_wheel_mode_for_sides(
+    mode: SelectMusicItlWheelMode,
+    joined_sides: usize,
+) -> SelectMusicItlWheelMode {
+    match (mode, joined_sides >= 2) {
+        (SelectMusicItlWheelMode::PointsAndScore, true) => SelectMusicItlWheelMode::Score,
+        _ => mode,
+    }
 }
 
 #[inline(always)]
@@ -348,6 +364,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let itl_points_color = [1.0, 1.0, 1.0, 1.0];
     let joined_sides = usize::from(profile::is_session_side_joined(profile::PlayerSide::P1))
         + usize::from(profile::is_session_side_joined(profile::PlayerSide::P2));
+    let itl_wheel_mode = itl_wheel_mode_for_sides(p.itl_wheel_mode, joined_sides);
     let is_double_style = target_chart_type.to_ascii_lowercase().contains("double");
     let selected_chart_hash_for_side = |side: profile::PlayerSide| {
         let Some(MusicWheelEntry::Song(info)) = p.entries.get(p.selected_index) else {
@@ -685,7 +702,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                     let judge_y = grade_y + 10.0;
                                     let judge_col = lamp_judge_count_color(lamp_index);
                                     slot_children.push(act!(text:
-                                        font("wendy_screenevaluation"):
+                                        font(current_machine_font_key(FontRole::ScreenEval)):
                                         settext(digit_text(count)):
                                         align(0.5, 0.5):
                                         horizalign(center):
@@ -744,7 +761,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             };
                             let rank_color = itl_rank_color(rank, is_double_style);
                             slot_children.push(act!(text:
-                                font("wendy"):
+                                font(current_machine_font_key(FontRole::Header)):
                                 settext(cached_itl_rank_text(rank)):
                                 align(0.5, 0.5):
                                 horizalign(center):
@@ -757,7 +774,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     }
 
                     for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
-                        if matches!(p.itl_wheel_mode, SelectMusicItlWheelMode::Off) {
+                        if matches!(itl_wheel_mode, SelectMusicItlWheelMode::Off) {
                             continue;
                         }
                         if !profile::is_session_side_joined(side) {
@@ -782,11 +799,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         else {
                             continue;
                         };
-                        match p.itl_wheel_mode {
+                        match itl_wheel_mode {
                             SelectMusicItlWheelMode::Off => {}
                             SelectMusicItlWheelMode::Score => {
                                 slot_children.push(act!(text:
-                                    font("wendy_monospace_numbers"):
+                                    font(current_machine_font_key(FontRole::Numbers)):
                                     settext(cached_itl_ex_text(ex_hundredths)):
                                     align(1.0, 0.5):
                                     horizalign(right):
@@ -799,7 +816,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             SelectMusicItlWheelMode::PointsAndScore => {
                                 let Some(points) = points else {
                                     slot_children.push(act!(text:
-                                        font("wendy_monospace_numbers"):
+                                        font(current_machine_font_key(FontRole::Numbers)):
                                         settext(cached_itl_ex_text(ex_hundredths)):
                                         align(1.0, 0.5):
                                         horizalign(right):
@@ -812,7 +829,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 };
                                 let (points_y, ex_y) = itl_score_line_y(side, joined_sides);
                                 slot_children.push(act!(text:
-                                    font("wendy_monospace_numbers"):
+                                    font(current_machine_font_key(FontRole::Numbers)):
                                     settext(cached_itl_points_text(points)):
                                     align(1.0, 0.5):
                                     horizalign(right):
@@ -827,7 +844,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                     z(2)
                                 ));
                                 slot_children.push(act!(text:
-                                    font("wendy_monospace_numbers"):
+                                    font(current_machine_font_key(FontRole::Numbers)):
                                     settext(cached_itl_ex_text(ex_hundredths)):
                                     align(1.0, 0.5):
                                     horizalign(right):
@@ -899,6 +916,70 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 diffuse(col[0], col[1], col[2], col[3]):
                                 z(3)
                             ));
+                        }
+                    }
+
+                    // ITL unlocks lock icon (per-player)
+                    {
+                        let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+                        let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+                        let both_joined = p1_joined && p2_joined;
+                        if (p1_joined || p2_joined)
+                            && let Some((pack_dir, song_dir)) =
+                                crate::screens::select_music::song_pack_and_dir_name(info.as_ref())
+                            && scores::is_itl_unlocks_pack(pack_dir)
+                        {
+                            let p1_locked = p1_joined
+                                && !scores::is_itl_song_folder_unlocked_for_side(
+                                    song_dir,
+                                    profile::PlayerSide::P1,
+                                );
+                            let p2_locked = p2_joined
+                                && !scores::is_itl_song_folder_unlocked_for_side(
+                                    song_dir,
+                                    profile::PlayerSide::P2,
+                                );
+                            let lock_x = -12.0_f32;
+                            if p1_locked {
+                                let lock_y = if both_joined {
+                                    half_item_h - 8.0
+                                } else {
+                                    half_item_h
+                                };
+                                let zm = if both_joined {
+                                    LOCK_ZOOM_DUAL
+                                } else {
+                                    LOCK_ZOOM_SINGLE
+                                };
+                                let c = LOCK_COLOR_P1;
+                                slot_children.push(act!(sprite("lock.png"):
+                                    align(0.5, 0.5):
+                                    xy(lock_x, lock_y):
+                                    zoom(zm):
+                                    diffuse(c[0], c[1], c[2], c[3]):
+                                    z(3)
+                                ));
+                            }
+                            if p2_locked {
+                                let lock_y = if both_joined {
+                                    half_item_h + 8.0
+                                } else {
+                                    half_item_h
+                                };
+                                let zm = if both_joined {
+                                    LOCK_ZOOM_DUAL
+                                } else {
+                                    LOCK_ZOOM_SINGLE
+                                };
+                                let c = LOCK_COLOR_P2;
+                                slot_children.push(act!(sprite("lock.png"):
+                                    align(0.5, 0.5):
+                                    xy(lock_x, lock_y):
+                                    zoom(zm):
+                                    diffuse(c[0], c[1], c[2], c[3]):
+                                    z(3)
+                                ));
+                            }
                         }
                     }
 
@@ -1010,7 +1091,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 
 #[cfg(test)]
 mod tests {
-    use super::{choose_itl_wheel_score, itl_rank_color, should_fetch_online_itl_score};
+    use super::{
+        choose_itl_wheel_score, itl_rank_color, itl_wheel_mode_for_sides,
+        should_fetch_online_itl_score,
+    };
+    use crate::config::SelectMusicItlWheelMode;
     use crate::engine::present::color;
     use crate::game::scores::CachedItlScore;
 
@@ -1053,6 +1138,22 @@ mod tests {
         assert_eq!(
             choose_itl_wheel_score(local, Some(9912), None),
             Some((9912, None))
+        );
+    }
+
+    #[test]
+    fn points_score_wheel_falls_back_to_score_for_versus() {
+        assert_eq!(
+            itl_wheel_mode_for_sides(SelectMusicItlWheelMode::PointsAndScore, 2),
+            SelectMusicItlWheelMode::Score
+        );
+        assert_eq!(
+            itl_wheel_mode_for_sides(SelectMusicItlWheelMode::PointsAndScore, 1),
+            SelectMusicItlWheelMode::PointsAndScore
+        );
+        assert_eq!(
+            itl_wheel_mode_for_sides(SelectMusicItlWheelMode::Off, 2),
+            SelectMusicItlWheelMode::Off
         );
     }
 

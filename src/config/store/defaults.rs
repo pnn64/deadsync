@@ -63,16 +63,12 @@ fn push_default_options(content: &mut String, default: &Config) {
         "SubmitArrowCloudFails",
         default.submit_arrowcloud_fails,
     );
-    push_bool(
-        content,
-        "SubmitGrooveStatsFails",
-        default.submit_groovestats_fails,
-    );
     push_bool(content, "FastLoad", default.fastload);
     push_line(content, "FullscreenType", default.fullscreen_type.as_str());
     push_line(content, "Game", default.game_flag.as_str());
     push_line(content, "GamepadBackend", default.windows_gamepad_backend);
     push_bool(content, "GfxDebug", default.gfx_debug);
+    push_bool(content, "HighDPI", default.high_dpi);
     push_line(
         content,
         "GlobalOffsetSeconds",
@@ -277,11 +273,7 @@ fn push_default_keymaps(content: &mut String) {
 fn push_default_theme(content: &mut String, default: &Config) {
     push_section(content, "[Theme]");
     push_bool(content, "KeyboardFeatures", default.keyboard_features);
-    push_line(
-        content,
-        "MenuBackgroundStyle",
-        default.menu_background_style.as_str(),
-    );
+    push_line(content, "VisualStyle", default.visual_style.as_str());
     push_bool(content, "VideoBackgrounds", default.show_video_backgrounds);
     push_bool(
         content,
@@ -343,6 +335,7 @@ fn push_default_theme(content: &mut String, default: &Config) {
         "MachinePreferredPlayMode",
         default.machine_preferred_play_mode.as_str(),
     );
+    push_line(content, "MachineFont", default.machine_font.as_str());
     push_bool(
         content,
         "ShowSelectMusicGameplayTimer",

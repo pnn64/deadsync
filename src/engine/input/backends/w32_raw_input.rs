@@ -56,7 +56,7 @@ const WIN_SC_NUMLOCK: u16 = 0x0045;
 const WIN_SC_IGNORE_PAUSE_PREFIX: u16 = 0xe11d;
 const WIN_SC_IGNORE_PRTSC_PREFIX: u16 = 0xe02a;
 
-static WINDOW_FOCUSED: AtomicBool = AtomicBool::new(true);
+static WINDOW_FOCUSED: AtomicBool = AtomicBool::new(false);
 static CAPTURE_ENABLED: AtomicBool = AtomicBool::new(false);
 static RAW_INPUT_HWND: AtomicIsize = AtomicIsize::new(0);
 

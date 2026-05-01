@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::i18n::tr;
+use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::config::dirs;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
@@ -11,7 +12,7 @@ use crate::game::{
     course,
     parsing::{noteskin, simfile as song_loading},
 };
-use crate::screens::components::shared::{heart_bg, loading_bar};
+use crate::screens::components::shared::{loading_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use log::info;
 use std::cell::RefCell;
@@ -165,7 +166,7 @@ pub struct State {
     loader_started: bool,
     loading: Option<LoadingState>,
     pub active_color_index: i32,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
 }
 
 pub fn init() -> State {
@@ -175,7 +176,7 @@ pub fn init() -> State {
         loader_started: false,
         loading: None,
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
     }
 }
 
@@ -195,7 +196,7 @@ pub(crate) fn bench_loading_state() -> State {
         loader_started: true,
         loading: Some(loading),
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
     }
 }
 
@@ -651,8 +652,9 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>, loading_elapsed_
         z(104.0)
     ));
     let title_text = tr("Init", "TitleText");
+    let title_font = current_machine_font_key_for_text(FontRole::Header, &title_text);
     actors.push(act!(text:
-        font("wendy"):
+        font(title_font):
         settext(title_text):
         align(0.5, 0.5):
         xy(screen_center_x(), bar_cy - 136.0):
@@ -742,7 +744,7 @@ fn get_actors_with_elapsed_overrides(
     let mut actors: Vec<Actor> = Vec::with_capacity(32 + ARROW_COUNT);
 
     /* 1) HEART BACKGROUND — visible immediately */
-    let bg_params = heart_bg::Params {
+    let bg_params = visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
@@ -805,6 +807,7 @@ fn get_actors_with_elapsed_overrides(
         let tint = color::decorative_rgba(state.active_color_index - i as i32 - 4);
 
         actors.push(act!(sprite("init_arrow.png"):
+            tweensalt(i):
             align(0.5, 0.5):
             xy(cx + x, cy):
             z(110.0):

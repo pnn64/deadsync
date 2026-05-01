@@ -12,12 +12,14 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::{
     evaluation::{self as eval_panes, eval_grades},
     shared::{
-        banner as shared_banner, heart_bg, lobby_hud, mode_pads, screen_bar, timers, transitions,
+        banner as shared_banner, lobby_hud, mode_pads, screen_bar, timers, transitions,
+        visual_style_bg,
     },
 };
 
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
+use crate::assets::{FontRole, current_machine_font_key, current_machine_font_key_for_text};
 use crate::engine::present::font;
 use crate::game::chart::ChartData;
 use crate::game::gameplay::MAX_PLAYERS;
@@ -39,6 +41,7 @@ use std::time::Instant;
 
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::game::profile;
+use crate::game::profile::ScatterWindow;
 use crate::screens::ScreenAction;
 // Keyboard handling is centralized in app via virtual actions
 use chrono::Local;
@@ -1423,30 +1426,42 @@ enum EvalGraphPane {
 }
 
 #[inline(always)]
-const fn eval_graph_next(pane: EvalGraphPane) -> EvalGraphPane {
-    match pane {
-        EvalGraphPane::Itg => EvalGraphPane::Ex,
-        EvalGraphPane::Ex => EvalGraphPane::HardEx,
-        EvalGraphPane::HardEx => EvalGraphPane::Arrow,
-        EvalGraphPane::Arrow => EvalGraphPane::Foot,
-        EvalGraphPane::Foot => EvalGraphPane::Itg,
+const fn eval_graph_default_for(show_fa_plus_pane: bool, show_hard_ex: bool) -> EvalGraphPane {
+    if show_hard_ex {
+        EvalGraphPane::HardEx
+    } else if show_fa_plus_pane {
+        EvalGraphPane::Ex
+    } else {
+        EvalGraphPane::Itg
     }
 }
 
 #[inline(always)]
-const fn eval_graph_prev(pane: EvalGraphPane) -> EvalGraphPane {
-    match pane {
-        EvalGraphPane::Itg => EvalGraphPane::Foot,
-        EvalGraphPane::Ex => EvalGraphPane::Itg,
-        EvalGraphPane::HardEx => EvalGraphPane::Ex,
-        EvalGraphPane::Arrow => EvalGraphPane::HardEx,
-        EvalGraphPane::Foot => EvalGraphPane::Arrow,
-    }
+fn eval_graph_cycle(show_fa_plus_pane: bool, show_hard_ex: bool) -> Vec<EvalGraphPane> {
+    let scoring = eval_graph_default_for(show_fa_plus_pane, show_hard_ex);
+    vec![scoring, EvalGraphPane::Arrow, EvalGraphPane::Foot]
+}
+
+#[inline(always)]
+fn eval_graph_shift(
+    pane: EvalGraphPane,
+    dir: i32,
+    show_fa_plus_pane: bool,
+    show_hard_ex: bool,
+) -> EvalGraphPane {
+    let cycle = eval_graph_cycle(show_fa_plus_pane, show_hard_ex);
+    let cur_idx = cycle
+        .iter()
+        .position(|&candidate| candidate == pane)
+        .unwrap_or(0);
+    let step = if dir >= 0 { 1 } else { -1 };
+    let next_idx = (cur_idx as i32 + step).rem_euclid(cycle.len() as i32) as usize;
+    cycle[next_idx]
 }
 
 pub struct State {
     pub active_color_index: i32,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     pub screen_elapsed: f32,
     pub session_elapsed: f32, // To display the timer
     pub gameplay_elapsed: f32,
@@ -1543,7 +1558,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     let mut scatter_mesh_foot: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
-    let active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
+    let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let mut stage_duration_seconds: f32 = 0.0;
     let mut machine_records_by_hash: HashMap<String, Vec<scores::LeaderboardEntry>> =
         HashMap::new();
@@ -1589,20 +1604,59 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let histogram = timing_stats::build_histogram_ms(notes);
             let scatter_worst_window_ms = {
                 let tw = timing_stats::effective_windows_ms();
-                let abs = histogram.worst_observed_ms.max(0.0);
-                let mut idx: usize = if abs <= tw[0] {
+                let observed = histogram.worst_observed_ms.max(0.0);
+                let mut idx: usize = if observed <= tw[0] {
                     1
-                } else if abs <= tw[1] {
+                } else if observed <= tw[1] {
                     2
-                } else if abs <= tw[2] {
+                } else if observed <= tw[2] {
                     3
-                } else if abs <= tw[3] {
+                } else if observed <= tw[3] {
                     4
                 } else {
                     5
                 };
-                idx = idx.max(2);
-                tw[idx - 1]
+                if prof.scale_scatterplot {
+                    // zmod-style `ScaleGraph`: cap at Great so a single
+                    // Decent/Way Off doesn't squash the plot, and floor
+                    // at Fantastic so quad/quint runs can zoom past
+                    // Excellent. Snap-to-max-error and padding stay as
+                    // internal-only knobs for future use.
+                    const MAX_WINDOW: ScatterWindow = ScatterWindow::Great;
+                    const MIN_WINDOW: ScatterWindow = ScatterWindow::Fantastic;
+                    const SNAP_MAX_ERROR: bool = true;
+                    const PADDING_PCT: u8 = 5;
+
+                    let max_w = MAX_WINDOW.ms();
+                    let min_w = MIN_WINDOW.ms();
+                    let lo = min_w.min(max_w);
+                    let hi = min_w.max(max_w);
+                    let candidate = if SNAP_MAX_ERROR {
+                        observed * (1.0 + (PADDING_PCT as f32) / 100.0)
+                    } else {
+                        if idx == 1 {
+                            idx = 2;
+                        }
+                        let tier = tw[idx - 1];
+                        // FA+ W0 is layered on top of W1..W5 in deadsync,
+                        // so the tier-edge ladder above never lands on it.
+                        // Honor it explicitly when it's the configured
+                        // lower bound and the data fits.
+                        if MIN_WINDOW == ScatterWindow::FantasticPlus
+                            && observed <= ScatterWindow::FantasticPlus.ms()
+                        {
+                            ScatterWindow::FantasticPlus.ms().min(tier)
+                        } else {
+                            tier
+                        }
+                    };
+                    candidate.clamp(lo, hi)
+                } else {
+                    // Original deadsync behavior: Excellent floor with
+                    // no upper cap.
+                    idx = idx.max(2);
+                    tw[idx - 1]
+                }
             };
             let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
             let graph_last_second = gs.song.total_length_seconds as f32;
@@ -1660,7 +1714,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 p.fail_time.is_some(),
             );
             let expected_groovestats_submit = cfg.enable_groovestats
-                && (passed || (failed && cfg.submit_groovestats_fails))
+                && passed
                 && groovestats.valid
                 && prof.groovestats_is_pad_player
                 && !prof.groovestats_api_key.trim().is_empty();
@@ -1824,50 +1878,56 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
-            scatter_mesh_itg[player_idx] = {
-                const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
-                    &si.scatter,
-                    si.graph_first_second,
-                    si.graph_last_second,
-                    graph_width,
-                    GRAPH_H,
-                    si.scatter_worst_window_ms,
-                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Itg,
-                );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
-            };
+            let scoring_scatter =
+                eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score);
 
-            scatter_mesh_ex[player_idx] = {
-                const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
-                    &si.scatter,
-                    si.graph_first_second,
-                    si.graph_last_second,
-                    graph_width,
-                    GRAPH_H,
-                    si.scatter_worst_window_ms,
-                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Ex,
-                );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
-            };
+            if scoring_scatter == EvalGraphPane::Itg {
+                scatter_mesh_itg[player_idx] = {
+                    const GRAPH_H: f32 = 64.0;
+                    let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
+                        &si.scatter,
+                        si.graph_first_second,
+                        si.graph_last_second,
+                        graph_width,
+                        GRAPH_H,
+                        si.scatter_worst_window_ms,
+                        crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Itg,
+                    );
+                    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                };
+            }
 
-            scatter_mesh_hard_ex[player_idx] = {
-                const GRAPH_H: f32 = 64.0;
-                let hard_ex_worst_window = si
-                    .scatter_worst_window_ms
-                    .min(timing_stats::effective_windows_ms()[1]);
-                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
-                    &si.scatter,
-                    si.graph_first_second,
-                    si.graph_last_second,
-                    graph_width,
-                    GRAPH_H,
-                    hard_ex_worst_window,
-                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::HardEx,
-                );
-                (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
-            };
+            if scoring_scatter == EvalGraphPane::Ex {
+                scatter_mesh_ex[player_idx] = {
+                    const GRAPH_H: f32 = 64.0;
+                    let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
+                        &si.scatter,
+                        si.graph_first_second,
+                        si.graph_last_second,
+                        graph_width,
+                        GRAPH_H,
+                        si.scatter_worst_window_ms,
+                        crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Ex,
+                    );
+                    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                };
+            }
+
+            if scoring_scatter == EvalGraphPane::HardEx {
+                scatter_mesh_hard_ex[player_idx] = {
+                    const GRAPH_H: f32 = 64.0;
+                    let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
+                        &si.scatter,
+                        si.graph_first_second,
+                        si.graph_last_second,
+                        graph_width,
+                        GRAPH_H,
+                        si.scatter_worst_window_ms,
+                        crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::HardEx,
+                    );
+                    (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
+                };
+            }
 
             scatter_mesh_arrow[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
@@ -1960,6 +2020,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 active_pane[1] = score_info[1].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
                 });
+                active_graph[0] = score_info[0].as_ref().map_or(EvalGraphPane::Itg, |si| {
+                    eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
+                });
+                active_graph[1] = score_info[1].as_ref().map_or(EvalGraphPane::Itg, |si| {
+                    eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
+                });
             }
             profile::PlayStyle::Single | profile::PlayStyle::Double => {
                 let joined = profile::get_session_player_side();
@@ -1977,13 +2043,20 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                     profile::PlayerSide::P1 => [primary, secondary],
                     profile::PlayerSide::P2 => [secondary, primary],
                 };
+                let primary_graph = score_info[0].as_ref().map_or(EvalGraphPane::Itg, |si| {
+                    eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
+                });
+                active_graph = match joined {
+                    profile::PlayerSide::P1 => [primary_graph, EvalGraphPane::Itg],
+                    profile::PlayerSide::P2 => [EvalGraphPane::Itg, primary_graph],
+                };
             }
         }
     }
 
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         screen_elapsed: 0.0,
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
@@ -2024,7 +2097,7 @@ pub fn init_from_score_info(
     stage_duration_seconds: f32,
 ) -> State {
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
-    let active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
+    let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let play_style = profile::get_session_play_style();
     match play_style {
         profile::PlayStyle::Versus => {
@@ -2033,6 +2106,12 @@ pub fn init_from_score_info(
             });
             active_pane[1] = score_info[1].as_ref().map_or(EvalPane::Standard, |si| {
                 eval_pane_default_for(si.show_fa_plus_pane)
+            });
+            active_graph[0] = score_info[0].as_ref().map_or(EvalGraphPane::Itg, |si| {
+                eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
+            });
+            active_graph[1] = score_info[1].as_ref().map_or(EvalGraphPane::Itg, |si| {
+                eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
             });
         }
         profile::PlayStyle::Single | profile::PlayStyle::Double => {
@@ -2045,12 +2124,19 @@ pub fn init_from_score_info(
                 profile::PlayerSide::P1 => [primary, secondary],
                 profile::PlayerSide::P2 => [secondary, primary],
             };
+            let primary_graph = score_info[0].as_ref().map_or(EvalGraphPane::Itg, |si| {
+                eval_graph_default_for(si.show_fa_plus_pane, si.show_hard_ex_score)
+            });
+            active_graph = match joined {
+                profile::PlayerSide::P1 => [primary_graph, EvalGraphPane::Itg],
+                profile::PlayerSide::P2 => [EvalGraphPane::Itg, primary_graph],
+            };
         }
     }
 
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         screen_elapsed: 0.0,
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
@@ -2419,14 +2505,79 @@ fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
     actors
 }
 
-#[inline(always)]
+/// Phases of the eval auto-screenshot state machine. Advances strictly forward
+/// as eval-screen state evolves; the screenshot is taken when we reach `Ready`.
+///
+/// ```text
+///   IntroPlaying
+///        v   (intro/rolling-numbers animation finishes)
+///   WaitingForGrooveStats
+///        v   (GS submit reaches a terminal status; the network layer
+///             times out / errors on its own, so no extra cap here)
+///   WaitingForItlOverlayDismissal
+///        v   (user dismisses the overlay; skipped entirely if no ITL
+///             overlay opened)
+///   Ready
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AutoScreenshotPhase {
+    IntroPlaying,
+    WaitingForGrooveStats,
+    WaitingForItlOverlayDismissal,
+    Ready,
+}
+
 pub(crate) fn auto_screenshot_ready(state: &State) -> bool {
-    state.screen_elapsed >= auto_screenshot_ready_seconds()
+    auto_screenshot_phase(state) == AutoScreenshotPhase::Ready
+}
+
+fn auto_screenshot_phase(state: &State) -> AutoScreenshotPhase {
+    let elapsed = state.screen_elapsed;
+
+    if elapsed < auto_screenshot_intro_done_seconds() {
+        return AutoScreenshotPhase::IntroPlaying;
+    }
+
+    if waiting_for_groovestats_submit(state) {
+        return AutoScreenshotPhase::WaitingForGrooveStats;
+    }
+
+    if state.itl_overlay_visible {
+        return AutoScreenshotPhase::WaitingForItlOverlayDismissal;
+    }
+
+    AutoScreenshotPhase::Ready
 }
 
 #[inline(always)]
-pub(crate) fn auto_screenshot_ready_seconds() -> f32 {
+fn auto_screenshot_intro_done_seconds() -> f32 {
     EVAL_STAGE_IN_TOTAL_SECONDS.max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
+}
+
+/// True if any player expected a GrooveStats submit and the response
+/// (terminal status or ITL progress) hasn't arrived yet.
+fn waiting_for_groovestats_submit(state: &State) -> bool {
+    for player_idx in 0..MAX_PLAYERS {
+        let Some(si) = state.score_info[player_idx].as_ref() else {
+            continue;
+        };
+        if !si.expected_groovestats_submit {
+            continue;
+        }
+        if state.itl_progress[player_idx].is_some() {
+            continue;
+        }
+        let status = scores::get_groovestats_submit_ui_status_for_side(
+            si.chart.short_hash.as_str(),
+            si.side,
+        )
+        .or(state.submit_groovestats_fallback[player_idx]);
+        match status {
+            None | Some(scores::GrooveStatsSubmitUiStatus::Submitting) => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -2741,20 +2892,16 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     let mut shift_graph_for = |controller: profile::PlayerSide, dir: i32| {
         let controller_idx = side_idx(controller);
         let player_idx = player_idx_for_controller(controller);
-        if state
-            .score_info
-            .get(player_idx)
-            .and_then(|s| s.as_ref())
-            .is_none()
-        {
+        let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
             return;
-        }
-
-        state.active_graph[controller_idx] = if dir >= 0 {
-            eval_graph_next(state.active_graph[controller_idx])
-        } else {
-            eval_graph_prev(state.active_graph[controller_idx])
         };
+
+        state.active_graph[controller_idx] = eval_graph_shift(
+            state.active_graph[controller_idx],
+            dir,
+            si.show_fa_plus_pane,
+            si.show_hard_ex_score,
+        );
 
         // Single/double have one lower graph; keep both controller slots in sync.
         if play_style != profile::PlayStyle::Versus {
@@ -2842,7 +2989,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(20);
 
     // 1. Background
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
@@ -2876,9 +3023,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let player_side = profile::get_session_player_side();
 
     let Some(score_info) = state.score_info.iter().find_map(|s| s.as_ref()) else {
+        let no_data_text = tr("Evaluation", "NoScoreDataAvailable");
+        let no_data_font = current_machine_font_key_for_text(FontRole::Header, &no_data_text);
         actors.push(act!(text:
-            font("wendy"):
-            settext(tr("Evaluation", "NoScoreDataAvailable")):
+            font(no_data_font):
+            settext(no_data_text):
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             zoom(0.8): horizalign(center):
             z(100)
@@ -3062,8 +3211,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 let record_x = record_frame_x - 110.0 * record_frame_zoom;
 
                 if let Some(rank) = machine_record_rank {
-                    actors.push(act!(text: font("wendy"):
-                        settext(cached_record_text(true, rank)):
+                    let mr_text = cached_record_text(true, rank);
+                    let mr_font = current_machine_font_key_for_text(FontRole::Header, &mr_text);
+                    actors.push(act!(text: font(mr_font):
+                        settext(mr_text):
                         align(0.5, 0.5):
                         xy(record_x, record_frame_y - 18.0 * record_frame_zoom):
                         zoom(record_frame_zoom): z(101):
@@ -3072,8 +3223,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
 
                 if let Some(rank) = personal_record_rank {
-                    actors.push(act!(text: font("wendy"):
-                        settext(cached_record_text(false, rank)):
+                    let pr_text = cached_record_text(false, rank);
+                    let pr_font = current_machine_font_key_for_text(FontRole::Header, &pr_text);
+                    actors.push(act!(text: font(pr_font):
+                        settext(pr_text):
                         align(0.5, 0.5):
                         xy(record_x, record_frame_y + 24.0 * record_frame_zoom):
                         zoom(record_frame_zoom): z(101):
@@ -3113,7 +3266,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
                     ));
                     actors.push(act!(text:
-                        font("wendy"):
+                        font(current_machine_font_key(FontRole::Bold)):
                         settext(si.chart.meter.to_string()):
                         align(0.5, 0.5):
                         xy(box_x, cy - 76.0):
@@ -3172,7 +3325,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
                     ));
                     actors.push(act!(text:
-                        font("wendy"):
+                        font(current_machine_font_key(FontRole::Bold)):
                         settext(si.chart.meter.to_string()):
                         align(0.5, 0.5):
                         xy(box_x, cy - 71.0):
@@ -3788,8 +3941,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             let arrow_start_y = anchor_y - 10.0;
                             let arrow_mid_y = anchor_y + 5.0;
                             let arrow_end_y = anchor_y + 20.0;
+                            let salt = u64::from(x.to_bits());
 
                             life_children.push(act!(text:
+                                tweensalt(salt):
                                 font("miso"): settext(tr("Evaluation", "Barely")):
                                 align(0.5, 0.5): xy(x, text_start_y):
                                 zoom(0.75):
@@ -3801,6 +3956,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 z(8)
                             ));
                             life_children.push(act!(sprite("meter_arrow.png"):
+                                tweensalt(salt):
                                 align(0.5, 0.5): xy(x, arrow_start_y):
                                 // SL uses rotationz(90); deadsync's current z-rotation sign
                                 // is opposite in screen space, so -90 is the visual parity.
@@ -3936,9 +4092,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 continue;
             }
 
+            let dq_text = tr("Evaluation", "DisqualifiedFromRanking");
+            let dq_font = current_machine_font_key_for_text(FontRole::Header, &dq_text);
             actors.push(act!(text:
-                font("wendy"):
-                settext(tr("Evaluation", "DisqualifiedFromRanking")):
+                font(dq_font):
+                settext(dq_text):
                 align(0.5, 0.5):
                 xy(center_x, label_y):
                 zoom(label_zoom):
@@ -3950,7 +4108,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Auto-submit UI text (SL/zmod parity with AutoSubmitScore.lua):
     // top PB/WR banner plus bottom submit-status actors.
-    // Common Normal/ThemeFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
+    // Common Normal/MachineFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
     // In SL/zmod, Common Normal.redir points to Miso/_miso light.
     // When both GrooveStats/BoogieStats and ArrowCloud resolve to submitted/failed,
     // collapse them into one summary line; keep stacked lines for pending/timeouts.
@@ -3980,9 +4138,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 } else {
                     screen_center_x() + 225.0
                 };
+                let banner_text = submit_record_text(banner);
+                let banner_font = current_machine_font_key_for_text(FontRole::Header, &banner_text);
                 actors.push(act!(text:
-                    font("wendy"):
-                    settext(submit_record_text(banner)):
+                    font(banner_font):
+                    settext(banner_text):
                     align(0.5, 0.5):
                     xy(x, AUTO_SUBMIT_RECORD_TEXT_Y):
                     zoom(AUTO_SUBMIT_RECORD_TEXT_ZOOM):
@@ -4021,19 +4181,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if lines.is_empty() {
                 continue;
             }
-            let pane_left = if side == profile::PlayerSide::P1 {
-                screen_center_x() - 305.0
+            let submit_center_x = if side == profile::PlayerSide::P1 {
+                screen_width() * 0.25
             } else {
-                screen_center_x() + 5.0
-            };
-            let pane_right = if side == profile::PlayerSide::P1 {
-                if play_style == profile::PlayStyle::Versus {
-                    screen_center_x() - 5.0
-                } else {
-                    screen_center_x() + 305.0
-                }
-            } else {
-                screen_center_x() + 305.0
+                screen_width() * 0.75
             };
             let base_y = screen_height() - 15.0;
             let frame = ((state.screen_elapsed.max(0.0) * SUBMIT_FOOTER_SPRITE_FPS) as u32)
@@ -4100,11 +4251,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     FooterFrag::Sprite { .. } => SUBMIT_FOOTER_SPRITE_PX,
                 })
                 .sum();
-            let mut cursor = if side == profile::PlayerSide::P1 {
-                pane_left
-            } else {
-                pane_right - total_w
-            };
+            let mut cursor = submit_center_x - total_w * 0.5;
             for frag in frags {
                 match frag {
                     FooterFrag::Text { text, width } => {
@@ -4146,7 +4293,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // --- "ITG" text and Pads (top right) ---
     {
         let itg_text_x = screen_width() - widescale(55.0, 62.0);
-        actors.push(act!(text: font("wendy"): settext(tr("Evaluation", "ITGLabel")): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
+        let itg_text = tr("Evaluation", "ITGLabel");
+        let itg_font = current_machine_font_key_for_text(FontRole::Header, &itg_text);
+        actors.push(act!(text: font(itg_font): settext(itg_text): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
         actors.extend(mode_pads::build());
     }
 

@@ -1,11 +1,10 @@
 use crate::engine::gfx::{
     BlendMode, ClockDomainTrace, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    TMeshCacheKey, Texture as RendererTexture, TextureHandleMap,
+    TMeshCacheKey, Texture as RendererTexture, TextureHandleMap, TexturedMeshVertex,
     draw_prep::{
         self, DrawOp, DrawScratch, SpriteInstanceRaw as InstanceData,
         TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshSource,
-        TexturedMeshVertexRaw as TexturedMeshVertexGpu,
     },
 };
 use crate::engine::space::ortho_for_window;
@@ -32,6 +31,7 @@ const MAX_FRAMES_IN_FLIGHT: usize = 3;
 const DESCRIPTOR_POOL_SET_CAPACITY: u32 = 1024;
 const VULKAN_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
+const VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY: bool = false;
 const VULKAN_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 #[cfg(windows)]
 static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
@@ -209,7 +209,7 @@ pub struct State {
     mesh_capacity_vertices: usize,         // total vertices across ring
     per_frame_stride_vertices: usize,      // vertices reserved per frame
     tmesh_ring: Option<BufferResource>,    // one big VB for all frames (textured mesh)
-    tmesh_ring_ptr: *mut TexturedMeshVertexGpu, // persistently mapped pointer
+    tmesh_ring_ptr: *mut TexturedMeshVertex, // persistently mapped pointer
     tmesh_capacity_vertices: usize,        // total textured mesh vertices across ring
     per_frame_stride_tmesh_vertices: usize, // textured mesh vertices reserved per frame
     tmesh_instance_ring: Option<BufferResource>, // one big instanced VB for textured meshes
@@ -939,7 +939,7 @@ fn ensure_tmesh_ring_capacity(
     };
 
     let need_total_vertices = stride * MAX_FRAMES_IN_FLIGHT;
-    let bytes_per_vertex = std::mem::size_of::<TexturedMeshVertexGpu>() as vk::DeviceSize;
+    let bytes_per_vertex = std::mem::size_of::<TexturedMeshVertex>() as vk::DeviceSize;
     let need_bytes = (need_total_vertices as u64) * (bytes_per_vertex as u64);
 
     let dev = state.device.as_ref().unwrap();
@@ -974,7 +974,7 @@ fn ensure_tmesh_ring_capacity(
             buffer: buf,
             memory: mem,
         });
-        state.tmesh_ring_ptr = mapped.cast::<TexturedMeshVertexGpu>();
+        state.tmesh_ring_ptr = mapped.cast::<TexturedMeshVertex>();
         state.tmesh_capacity_vertices = need_total_vertices;
         state.per_frame_stride_tmesh_vertices = stride;
     } else if state.per_frame_stride_tmesh_vertices != stride {
@@ -2028,13 +2028,10 @@ pub fn draw(
         if present_suboptimal {
             recreate_swapchain_and_dependents(state)?;
         }
-        if apply_present_back_pressure
-            && screenshot_staging.is_none()
-            && state.swapchain_resources.present_mode != vk::PresentModeKHR::MAILBOX
-        {
-            // MAILBOX already bounds the queue and drops stale frames, so an
-            // extra post-present fence wait mostly adds jitter instead of
-            // helping pacing.
+        if apply_present_back_pressure && screenshot_staging.is_none() {
+            // Match the wgpu Vulkan pacing path: when the app is running
+            // uncapped, wait for this frame's GPU work to retire so the CPU
+            // cannot build a long queue of stale Mailbox presents.
             let wait_started = Instant::now();
             device.wait_for_fences(&[fence], true, u64::MAX)?;
             let wait_us = elapsed_us_since(wait_started);
@@ -2590,7 +2587,7 @@ fn vertex_input_descriptions_tmesh() -> (
 ) {
     let b0 = vk::VertexInputBindingDescription::default()
         .binding(0)
-        .stride(std::mem::size_of::<TexturedMeshVertexGpu>() as u32)
+        .stride(std::mem::size_of::<TexturedMeshVertex>() as u32)
         .input_rate(vk::VertexInputRate::VERTEX);
     let b1 = vk::VertexInputBindingDescription::default()
         .binding(1)
@@ -2863,7 +2860,7 @@ fn ensure_cached_tmesh(
         return Ok(entry.vertex_count == vertices.len() as u32);
     }
 
-    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertexGpu>();
+    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertex>();
     if bytes > VULKAN_TMESH_CACHE_MAX_BYTES
         || cached_tmesh_bytes.saturating_add(bytes) > VULKAN_TMESH_CACHE_MAX_BYTES
     {
@@ -2884,18 +2881,8 @@ fn ensure_cached_tmesh(
     // mapped range is fully written with initialized vertex data before unmapping.
     unsafe {
         let mapped = device.map_memory(memory, 0, size, vk::MemoryMapFlags::empty())?;
-        let dst = mapped.cast::<TexturedMeshVertexGpu>();
-        for (ix, vertex) in vertices.iter().enumerate() {
-            std::ptr::write(
-                dst.add(ix),
-                TexturedMeshVertexGpu {
-                    pos: vertex.pos,
-                    uv: vertex.uv,
-                    color: vertex.color,
-                    tex_matrix_scale: vertex.tex_matrix_scale,
-                },
-            );
-        }
+        let dst = mapped.cast::<TexturedMeshVertex>();
+        std::ptr::copy_nonoverlapping(vertices.as_ptr(), dst, vertices.len());
         device.unmap_memory(memory);
     }
 
@@ -3308,6 +3295,10 @@ fn init_present_telemetry(
     exts: DeviceExts,
 ) -> PresentTelemetryState {
     let mut telemetry = PresentTelemetryState::default();
+    if !VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY {
+        info!("Vulkan present telemetry: CPU-only (display timing disabled)");
+        return telemetry;
+    }
     if !exts.display_timing {
         info!("Vulkan present telemetry: CPU-only (VK_GOOGLE_display_timing unavailable)");
         return telemetry;
@@ -3654,12 +3645,12 @@ fn create_logical_device(
     let queue_create_info = vk::DeviceQueueCreateInfo::default()
         .queue_family_index(queue_family_index)
         .queue_priorities(&queue_priorities);
-    let mut device_extensions = Vec::with_capacity(2);
+    let mut device_extensions = Vec::with_capacity(3);
     device_extensions.push(swapchain::NAME.as_ptr());
-    if device_exts.display_timing {
+    if VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY && device_exts.display_timing {
         device_extensions.push(display_timing::NAME.as_ptr());
     }
-    if device_exts.calibrated_timestamps {
+    if VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY && device_exts.calibrated_timestamps {
         device_extensions.push(calibrated_timestamps::NAME.as_ptr());
     }
     let features = vk::PhysicalDeviceFeatures::default();

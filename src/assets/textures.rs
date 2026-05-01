@@ -17,7 +17,7 @@ use std::{
     },
 };
 
-use super::AssetError;
+use super::{AssetError, visual_styles};
 
 #[derive(Clone, Copy, Debug)]
 pub struct TexMeta {
@@ -70,6 +70,12 @@ impl TextureHints {
             mipmaps: self.mipmaps.unwrap_or(false),
         }
     }
+}
+
+#[inline(always)]
+fn needs_repeat_sampler(key: &str) -> bool {
+    matches!(key, "swoosh.png" | "graphics/menu_bg_technique/square.png")
+        || visual_styles::is_shared_background_texture(key)
 }
 
 fn absolute_or_self(path: &Path) -> PathBuf {
@@ -256,13 +262,15 @@ pub fn resolve_texture_choice<'a>(
     requested: Option<&str>,
     choices: &'a [TextureChoice],
 ) -> Option<&'a str> {
-    requested
-        .and_then(|key| {
-            choices
-                .iter()
-                .find(|choice| choice.key.eq_ignore_ascii_case(key))
-                .map(|choice| choice.key.as_str())
-        })
+    // When the caller explicitly opts out of a texture (e.g. user selected "None"),
+    // honor that and render nothing. Only fall back to the first available choice
+    // when a texture was requested but could not be located in the discovered set
+    // (e.g. the user-customized file was removed).
+    let key = requested?;
+    choices
+        .iter()
+        .find(|choice| choice.key.eq_ignore_ascii_case(key))
+        .map(|choice| choice.key.as_str())
         .or_else(|| {
             choices
                 .iter()
@@ -577,6 +585,15 @@ pub(crate) fn clear_texture_handles() {
 
 pub fn register_texture_dims(key: &str, w: u32, h: u32) {
     let sheet = parse_sprite_sheet_dims(key);
+    let same_meta = TEX_META
+        .read()
+        .unwrap()
+        .get(key)
+        .is_some_and(|meta| meta.w == w && meta.h == h);
+    if same_meta && SHEET_DIMS.read().unwrap().get(key).copied() == Some(sheet) {
+        return;
+    }
+
     let key = key.to_string();
     let mut m = TEX_META.write().unwrap();
     m.insert(key.clone(), TexMeta { w, h });
@@ -885,7 +902,6 @@ impl AssetManager {
             ),
             ("circle.png".to_string(), "circle.png".to_string()),
             ("swoosh.png".to_string(), "swoosh.png".to_string()),
-            ("heart.png".to_string(), "heart.png".to_string()),
             (
                 "graphics/menu_bg_technique/arrow_tex.png".to_string(),
                 "menu_bg_technique/arrow_tex.png".to_string(),
@@ -899,6 +915,7 @@ impl AssetManager {
                 "menu_bg_technique/white_tex.png".to_string(),
             ),
             ("fave-icon.png".to_string(), "fave-icon.png".to_string()),
+            ("lock.png".to_string(), "lock.png".to_string()),
             (
                 "folder-solid.png".to_string(),
                 "folder-solid.png".to_string(),
@@ -1011,7 +1028,22 @@ impl AssetManager {
                 "feet-diagram.png".to_string(),
                 "feet-diagram.png".to_string(),
             ),
+            (
+                "practice/snap_display_icon_9x1 (doubleres).png".to_string(),
+                "practice/snap_display_icon_9x1 (doubleres).png".to_string(),
+            ),
         ];
+
+        for asset in &visual_styles::ASSETS {
+            textures_to_load.push((
+                asset.select_color.to_string(),
+                asset.select_color.to_string(),
+            ));
+            textures_to_load.push((
+                asset.shared_background.to_string(),
+                asset.shared_background.to_string(),
+            ));
+        }
 
         for p in [
             "grades/star.png",
@@ -1107,17 +1139,16 @@ impl AssetManager {
         for r in res_rx {
             match r {
                 Ok((key, rgba)) => {
-                    let sampler =
-                        if key == "swoosh.png" || key == "graphics/menu_bg_technique/square.png" {
-                            SamplerDesc {
-                                wrap: SamplerWrap::Repeat,
-                                ..SamplerDesc::default()
-                            }
-                        } else if key.starts_with("noteskins/") {
-                            parse_texture_hints(&key).sampler_desc()
-                        } else {
-                            SamplerDesc::default()
-                        };
+                    let sampler = if needs_repeat_sampler(&key) {
+                        SamplerDesc {
+                            wrap: SamplerWrap::Repeat,
+                            ..SamplerDesc::default()
+                        }
+                    } else if key.starts_with("noteskins/") {
+                        parse_texture_hints(&key).sampler_desc()
+                    } else {
+                        SamplerDesc::default()
+                    };
                     let texture = backend.create_texture(&rgba, sampler)?;
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     debug!("Loaded texture: {key}");
@@ -1125,17 +1156,16 @@ impl AssetManager {
                 }
                 Err((key, msg)) => {
                     warn!("Failed to load texture for key '{key}': {msg}. Using fallback.");
-                    let sampler =
-                        if key == "swoosh.png" || key == "graphics/menu_bg_technique/square.png" {
-                            SamplerDesc {
-                                wrap: SamplerWrap::Repeat,
-                                ..SamplerDesc::default()
-                            }
-                        } else if key.starts_with("noteskins/") {
-                            parse_texture_hints(&key).sampler_desc()
-                        } else {
-                            SamplerDesc::default()
-                        };
+                    let sampler = if needs_repeat_sampler(&key) {
+                        SamplerDesc {
+                            wrap: SamplerWrap::Repeat,
+                            ..SamplerDesc::default()
+                        }
+                    } else if key.starts_with("noteskins/") {
+                        parse_texture_hints(&key).sampler_desc()
+                    } else {
+                        SamplerDesc::default()
+                    };
                     let texture = backend.create_texture(&fallback_image, sampler)?;
                     register_texture_dims(&key, fallback_image.width(), fallback_image.height());
                     self.insert_texture(
@@ -1194,7 +1224,7 @@ impl AssetManager {
         }
 
         let hints = parse_texture_hints(&key);
-        let sampler = if key == "graphics/menu_bg_technique/square.png" {
+        let sampler = if needs_repeat_sampler(&key) {
             SamplerDesc {
                 wrap: SamplerWrap::Repeat,
                 ..hints.sampler_desc()

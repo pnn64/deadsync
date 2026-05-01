@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::i18n::tr;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
@@ -8,7 +9,7 @@ use crate::engine::space::{screen_center_x, screen_center_y, widescale};
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::shared::{heart_bg, screen_bar};
+use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 
 /* ------------------------------ layout ------------------------------- */
@@ -75,7 +76,7 @@ pub struct State {
     exit_requested: bool,
     exit_chosen_anim: bool,
     exit_target: Option<Screen>,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
 }
 
 pub fn init() -> State {
@@ -86,7 +87,7 @@ pub fn init() -> State {
         exit_requested: false,
         exit_chosen_anim: false,
         exit_target: None,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
     }
 }
 
@@ -262,7 +263,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
         (0.0, 1.0)
     };
 
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
@@ -400,7 +401,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
             z(1):
             shadowlength(1.0):
             diffuse(1.0, 1.0, 1.0, alpha):
-            font("wendy"): settext(choice_label(choice)): horizalign(center)
+            font(current_machine_font_key(FontRole::Header)): settext(choice_label(choice)): horizalign(center)
         ));
     }
 

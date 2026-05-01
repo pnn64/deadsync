@@ -340,17 +340,17 @@ static FONT_CHAR_ALIAS_TABLE: &[(&str, AliasValue)] = &[
     ("auxback", AliasValue::Internal),
 ];
 
-static FONT_CHAR_ALIAS_MAP: OnceLock<HashMap<String, char>> = OnceLock::new();
+static FONT_CHAR_ALIAS_MAP: OnceLock<HashMap<&'static str, char>> = OnceLock::new();
 thread_local! {
     static FONT_LOAD_STACK: RefCell<Vec<PathBuf>> = const { RefCell::new(Vec::new()) };
 }
 
 #[inline(always)]
-fn font_char_alias_map() -> &'static HashMap<String, char> {
+fn font_char_alias_map() -> &'static HashMap<&'static str, char> {
     FONT_CHAR_ALIAS_MAP.get_or_init(|| {
         let mut map = HashMap::with_capacity(FONT_CHAR_ALIAS_TABLE.len() + 2);
-        map.insert("default".to_string(), FONT_DEFAULT_CHAR);
-        map.insert("invalid".to_string(), char::REPLACEMENT_CHARACTER);
+        map.insert("default", FONT_DEFAULT_CHAR);
+        map.insert("invalid", char::REPLACEMENT_CHARACTER);
 
         let mut next_internal = INTERNAL_ALIAS_START;
         for &(name, value) in FONT_CHAR_ALIAS_TABLE {
@@ -363,7 +363,7 @@ fn font_char_alias_map() -> &'static HashMap<String, char> {
                 }
             };
             if let Some(ch) = char::from_u32(cp) {
-                map.insert(name.to_ascii_lowercase(), ch);
+                map.insert(name, ch);
             }
         }
         map
@@ -376,9 +376,22 @@ fn lookup_font_char_alias(spec: &str) -> Option<char> {
     if key.is_empty() {
         return None;
     }
-    font_char_alias_map()
-        .get(&key.to_ascii_lowercase())
-        .copied()
+    let map = font_char_alias_map();
+    if !key.as_bytes().iter().any(u8::is_ascii_uppercase) {
+        return map.get(key).copied();
+    }
+
+    let mut lowered = [0u8; 64];
+    if key.len() <= lowered.len() {
+        for (dst, src) in lowered.iter_mut().zip(key.as_bytes()) {
+            *dst = src.to_ascii_lowercase();
+        }
+        return std::str::from_utf8(&lowered[..key.len()])
+            .ok()
+            .and_then(|key| map.get(key).copied());
+    }
+
+    map.get(key.to_ascii_lowercase().as_str()).copied()
 }
 
 #[inline(always)]
@@ -501,10 +514,14 @@ fn replace_unicode_markers(text: &str) -> Cow<'_, str> {
 /// - `&NAME;` (`FontCharAliases` like `&START;`, `&MENULEFT;`)
 /// - `&#NNNN;` (decimal) and `&xNNNN;` (hex) Unicode markers
 pub fn replace_markers(text: &str) -> Cow<'_, str> {
-    let t = replace_entity_markers(text);
+    if !text.as_bytes().contains(&b'&') {
+        return Cow::Borrowed(text);
+    }
+
+    let t = replace_unicode_markers(text);
     match t {
-        Cow::Borrowed(s) => replace_unicode_markers(s),
-        Cow::Owned(s) => match replace_unicode_markers(&s) {
+        Cow::Borrowed(s) => replace_entity_markers(s),
+        Cow::Owned(s) => match replace_entity_markers(&s) {
             Cow::Borrowed(_) => Cow::Owned(s),
             Cow::Owned(s2) => Cow::Owned(s2),
         },
@@ -2078,6 +2095,46 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
                 return Some(c.clone());
             }
         }
+
+        // SM5-style stem-prefix fallback: filenames in StepMania may carry a
+        // ` <W>x<H>` frame-layout suffix and an optional ` (hint)` qualifier
+        // (e.g. `_game chars 36px 4x1 (doubleres).ini`), but font `import=`
+        // lines often omit them. Scan the candidate directories for a `.ini`
+        // whose stem begins with the requested stem followed by a separator
+        // we recognise (end-of-stem, a space + digit/`(`).
+        let target_stem = rel.file_stem()?.to_string_lossy().to_string();
+        let target_stem_lower = target_stem.to_ascii_lowercase();
+        for dir in candidates.iter().flatten().filter_map(|p| p.parent()) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(str::to_ascii_lowercase)
+                    != Some("ini".to_string())
+                {
+                    continue;
+                }
+                let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                    continue;
+                };
+                let stem_lower = stem.to_ascii_lowercase();
+                if !stem_lower.starts_with(&target_stem_lower) {
+                    continue;
+                }
+                let rest = &stem_lower[target_stem_lower.len()..];
+                let accept = rest.is_empty()
+                    || rest
+                        .strip_prefix(' ')
+                        .is_some_and(|r| r.starts_with(|c: char| c.is_ascii_digit() || c == '('));
+                if accept {
+                    return Some(path);
+                }
+            }
+        }
         None
     }
 
@@ -2466,6 +2523,11 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
             draw_left += 1;
         }
 
+        let texture_key_arc = Arc::<str>::from(texture_key.as_str());
+        let stroke_texture_key_arc = stroke_texture_map
+            .get(texture_key.as_str())
+            .map(|key| Arc::<str>::from(key.as_str()));
+
         for i in 0..total_frames {
             let base_w_ini = if let Some(&w) = settings.glyph_widths.get(&i) {
                 w
@@ -2540,10 +2602,8 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
             ];
 
             let glyph = Glyph {
-                texture_key: Arc::<str>::from(texture_key.as_str()),
-                stroke_texture_key: stroke_texture_map
-                    .get(texture_key.as_str())
-                    .map(|key| Arc::<str>::from(key.as_str())),
+                texture_key: Arc::clone(&texture_key_arc),
+                stroke_texture_key: stroke_texture_key_arc.clone(),
                 tex_rect,
                 uv_scale,
                 uv_offset,
@@ -2702,5 +2762,34 @@ fn synthesize_space_from_nbsp(all_glyphs: &mut std::collections::HashMap<char, G
     {
         all_glyphs.insert(' ', nbsp);
         debug!("SPACE synthesized from NBSP glyph at font level (SM parity).");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replace_markers_keeps_plain_text_borrowed() {
+        assert!(matches!(replace_markers("plain text"), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn replace_markers_handles_numeric_markers() {
+        assert_eq!(
+            replace_markers("score &#9654; combo &x2605;").as_ref(),
+            "score \u{25B6} combo \u{2605}"
+        );
+    }
+
+    #[test]
+    fn replace_markers_handles_case_insensitive_aliases() {
+        let lower = replace_markers("&start;").into_owned();
+        assert_ne!(lower, "&start;");
+        assert_eq!(replace_markers("&START;").as_ref(), lower);
+        assert_eq!(
+            replace_markers("Press &START; &#9654;").as_ref(),
+            format!("Press {lower} \u{25B6}")
+        );
     }
 }

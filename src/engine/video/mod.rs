@@ -38,9 +38,9 @@ struct QueuedFrame {
     image: RgbaImage,
 }
 
-#[derive(Default)]
 struct SharedQueue {
     frames: VecDeque<QueuedFrame>,
+    recycled_buffers: Vec<Vec<u8>>,
 }
 
 pub struct Player {
@@ -54,11 +54,16 @@ pub struct Player {
 impl Player {
     pub fn take_due_frame(&mut self, play_time_sec: f32) -> Option<RgbaImage> {
         let target = clamp_play_time(play_time_sec, self.info);
+        let frame_bytes = rgba_frame_bytes(self.info);
+        let max_frames = queue_capacity(self.info);
         let mut queue = self.queue.lock().ok()?;
         let mut latest = None;
         while let Some(frame) = queue.frames.front() {
             if frame.pts_sec > target {
                 break;
+            }
+            if let Some(image) = latest.take() {
+                recycle_frame_buffer(&mut queue, image, frame_bytes, max_frames);
             }
             latest = queue.frames.pop_front().map(|queued| queued.image);
         }
@@ -110,7 +115,11 @@ pub fn open_player(path: &Path, looped: bool) -> Result<Player, String> {
 }
 
 fn open_player_with_info(path: &Path, info: Info) -> Result<Player, String> {
-    let queue = Arc::new(Mutex::new(SharedQueue::default()));
+    let max_frames = queue_capacity(info);
+    let queue = Arc::new(Mutex::new(SharedQueue {
+        frames: VecDeque::with_capacity(max_frames),
+        recycled_buffers: Vec::with_capacity(max_frames),
+    }));
     let stop = Arc::new(AtomicBool::new(false));
     let child = Arc::new(Mutex::new(None));
     let worker = spawn_worker(
@@ -176,7 +185,7 @@ fn decode_loop(
         if stop.load(Ordering::Relaxed) {
             break;
         }
-        let mut raw = vec![0; frame_bytes];
+        let mut raw = take_frame_buffer(&queue, frame_bytes);
         match read_frame(&mut stdout, &mut raw) {
             Ok(true) => {}
             Ok(false) => break,
@@ -193,7 +202,9 @@ fn decode_loop(
         frame_index = frame_index.saturating_add(1);
         if let Ok(mut shared) = queue.lock() {
             while shared.frames.len() >= max_frames {
-                let _ = shared.frames.pop_front();
+                if let Some(queued) = shared.frames.pop_front() {
+                    recycle_frame_buffer(&mut shared, queued.image, frame_bytes, max_frames);
+                }
             }
             shared.frames.push_back(QueuedFrame { pts_sec, image });
         } else {
@@ -216,6 +227,36 @@ fn wait_for_queue_room(queue: &Arc<Mutex<SharedQueue>>, max_frames: usize, stop:
             break;
         }
         thread::sleep(Duration::from_millis(2));
+    }
+}
+
+fn take_frame_buffer(queue: &Arc<Mutex<SharedQueue>>, frame_bytes: usize) -> Vec<u8> {
+    let Some(mut raw) = queue
+        .lock()
+        .ok()
+        .and_then(|mut shared| shared.recycled_buffers.pop())
+    else {
+        return vec![0; frame_bytes];
+    };
+    if raw.len() == frame_bytes {
+        raw
+    } else {
+        raw.resize(frame_bytes, 0);
+        raw
+    }
+}
+
+fn recycle_frame_buffer(
+    queue: &mut SharedQueue,
+    image: RgbaImage,
+    frame_bytes: usize,
+    max_frames: usize,
+) {
+    if queue.recycled_buffers.len() < max_frames {
+        let raw = image.into_raw();
+        if raw.len() == frame_bytes {
+            queue.recycled_buffers.push(raw);
+        }
     }
 }
 
@@ -483,10 +524,16 @@ struct ProbeFormat {
 
 #[cfg(test)]
 mod tests {
-    use super::{bundled_tool_candidates, parse_duration, parse_rate, resolve_tool_path_in_dirs};
+    use super::{
+        Info, Player, QueuedFrame, SharedQueue, bundled_tool_candidates, parse_duration,
+        parse_rate, resolve_tool_path_in_dirs, take_frame_buffer,
+    };
+    use image::RgbaImage;
     use std::{
+        collections::VecDeque,
         fs,
         path::{Path, PathBuf},
+        sync::{Arc, Mutex, atomic::AtomicBool},
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -558,5 +605,56 @@ mod tests {
         fs::create_dir_all(&runtime_bin).unwrap();
         let resolved = resolve_tool_path_in_dirs("ffprobe", Some(runtime_bin.as_path()));
         assert!(resolved.is_none());
+    }
+
+    #[test]
+    fn take_due_frame_recycles_skipped_frames() {
+        let queue = Arc::new(Mutex::new(SharedQueue {
+            frames: VecDeque::from([
+                QueuedFrame {
+                    pts_sec: 0.0,
+                    image: RgbaImage::from_raw(1, 1, vec![1, 1, 1, 1]).unwrap(),
+                },
+                QueuedFrame {
+                    pts_sec: 1.0,
+                    image: RgbaImage::from_raw(1, 1, vec![2, 2, 2, 2]).unwrap(),
+                },
+            ]),
+            recycled_buffers: Vec::new(),
+        }));
+        let mut player = Player {
+            info: Info {
+                width: 1,
+                height: 1,
+                fps: 30.0,
+                duration_sec: None,
+                looped: false,
+            },
+            queue: queue.clone(),
+            stop: Arc::new(AtomicBool::new(false)),
+            child: Arc::new(Mutex::new(None)),
+            worker: None,
+        };
+
+        let image = player.take_due_frame(1.0).unwrap();
+
+        assert_eq!(image.into_raw(), vec![2, 2, 2, 2]);
+        let shared = queue.lock().unwrap();
+        assert_eq!(shared.frames.len(), 0);
+        assert_eq!(shared.recycled_buffers.len(), 1);
+        assert_eq!(shared.recycled_buffers[0], vec![1, 1, 1, 1]);
+    }
+
+    #[test]
+    fn take_frame_buffer_reuses_recycled_buffer() {
+        let queue = Arc::new(Mutex::new(SharedQueue {
+            frames: VecDeque::new(),
+            recycled_buffers: vec![vec![7, 7, 7, 7]],
+        }));
+
+        let raw = take_frame_buffer(&queue, 4);
+
+        assert_eq!(raw, vec![7, 7, 7, 7]);
+        assert!(queue.lock().unwrap().recycled_buffers.is_empty());
     }
 }

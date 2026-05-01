@@ -13,8 +13,79 @@ use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event_loop::ActiveEventLoop,
     monitor::MonitorHandle,
-    window::{Icon, Window},
+    window::{Icon, Window, WindowAttributes},
 };
+
+#[cfg(target_os = "macos")]
+use winit::{dpi::LogicalSize, platform::macos::WindowAttributesExtMacOS};
+
+#[cfg(target_os = "macos")]
+fn macos_opengl_low_dpi(backend_type: BackendType) -> bool {
+    backend_type == BackendType::OpenGL && !config::get().high_dpi
+}
+
+#[cfg(not(target_os = "macos"))]
+const fn macos_opengl_low_dpi(_backend_type: BackendType) -> bool {
+    false
+}
+
+fn logical_px_for_physical(px: u32, scale: f64) -> u32 {
+    if px == 0 {
+        return 0;
+    }
+    ((f64::from(px) / scale.max(0.001)).round().max(1.0)) as u32
+}
+
+fn window_render_size(window: &Window, backend_type: BackendType) -> PhysicalSize<u32> {
+    let size = window.inner_size();
+    if !macos_opengl_low_dpi(backend_type) {
+        return size;
+    }
+    let scale = window.scale_factor();
+    PhysicalSize::new(
+        logical_px_for_physical(size.width, scale),
+        logical_px_for_physical(size.height, scale),
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn with_requested_window_size(
+    attrs: WindowAttributes,
+    backend_type: BackendType,
+    width: u32,
+    height: u32,
+) -> WindowAttributes {
+    if macos_opengl_low_dpi(backend_type) {
+        attrs.with_inner_size(LogicalSize::new(f64::from(width), f64::from(height)))
+    } else {
+        attrs.with_inner_size(PhysicalSize::new(width, height))
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn with_requested_window_size(
+    attrs: WindowAttributes,
+    _backend_type: BackendType,
+    width: u32,
+    height: u32,
+) -> WindowAttributes {
+    attrs.with_inner_size(PhysicalSize::new(width, height))
+}
+
+fn request_window_size(window: &Window, backend_type: BackendType, width: u32, height: u32) {
+    #[cfg(not(target_os = "macos"))]
+    let _ = backend_type;
+    #[cfg(target_os = "macos")]
+    {
+        if macos_opengl_low_dpi(backend_type) {
+            let size = LogicalSize::new(f64::from(width), f64::from(height));
+            let _ = window.request_inner_size(size);
+            return;
+        }
+    }
+    let size = PhysicalSize::new(width, height);
+    let _ = window.request_inner_size(size);
+}
 
 fn load_window_icon() -> Option<Icon> {
     const WINDOW_ICON_PATHS: [&str; 2] = [
@@ -87,6 +158,10 @@ impl App {
         if let Some(icon) = load_window_icon() {
             window_attributes = window_attributes.with_window_icon(Some(icon));
         }
+        #[cfg(target_os = "macos")]
+        if self.backend_type == BackendType::OpenGL {
+            window_attributes = window_attributes.with_disallow_hidpi(!config::get().high_dpi);
+        }
 
         let window_width = self.state.shell.display_width;
         let window_height = self.state.shell.display_height;
@@ -117,8 +192,12 @@ impl App {
                 window_attributes = window_attributes.with_fullscreen(fullscreen);
             }
             DisplayMode::Windowed => {
-                window_attributes = window_attributes
-                    .with_inner_size(PhysicalSize::new(window_width, window_height));
+                window_attributes = with_requested_window_size(
+                    window_attributes,
+                    self.backend_type,
+                    window_width,
+                    window_height,
+                );
                 if let Some(pos) = self.state.shell.pending_window_position.take() {
                     window_attributes = window_attributes.with_position(pos);
                 } else if let Some(pos) =
@@ -132,7 +211,8 @@ impl App {
         let window = Arc::new(event_loop.create_window(window_attributes)?);
         // Re-assert the opaque hint so compositors do not apply alpha-based blending.
         window.set_transparent(false);
-        let sz = window.inner_size();
+        let high_dpi = config::get().high_dpi;
+        let sz = window_render_size(&window, self.backend_type);
         self.state.shell.metrics = space::metrics_for_window(sz.width, sz.height);
         space::set_current_metrics(self.state.shell.metrics);
         let mut backend = create_backend(
@@ -141,6 +221,7 @@ impl App {
             self.state.shell.vsync_enabled,
             self.state.shell.present_mode_policy,
             self.gfx_debug_enabled,
+            high_dpi,
         )?;
 
         if self.backend_type == BackendType::Software {
@@ -167,6 +248,13 @@ impl App {
         self.state.shell.current_frame_vpf = 0;
 
         window.set_visible(true);
+        // Seed window focus from the OS now that the window is visible. If the
+        // game launched into the background, `has_focus()` returns false and the
+        // raw input backends keep dropping global keystrokes. If it launched
+        // focused, this propagates true through `apply_window_focus_change` and
+        // wakes the rest of the input pipeline.
+        let focused_now = window.has_focus();
+        self.apply_window_focus_change(focused_now, Instant::now(), Some(&window));
         self.request_redraw(&window, "init_graphics");
 
         self.window = Some(window);
@@ -180,8 +268,9 @@ impl App {
         target: BackendType,
         desired_size: Option<(u32, u32)>,
         event_loop: &ActiveEventLoop,
+        force_recreate: bool,
     ) -> Result<(), Box<dyn Error>> {
-        if target == self.backend_type {
+        if target == self.backend_type && !force_recreate {
             return Ok(());
         }
 
@@ -193,7 +282,7 @@ impl App {
         }
         if let Some(window) = &self.window {
             if desired_size.is_none() {
-                let sz = window.inner_size();
+                let sz = window_render_size(window, self.backend_type);
                 self.state.shell.display_width = sz.width;
                 self.state.shell.display_height = sz.height;
             }
@@ -217,6 +306,10 @@ impl App {
         }
         self.backend = None;
         self.window = None;
+        // The window is gone; mark unfocused so the global raw-input backends
+        // stop forwarding keystrokes during the tear-down/init gap. The new
+        // window's focus will be seeded by `init_graphics` below.
+        self.apply_window_focus_change(false, Instant::now(), None);
         self.state.shell.pending_window_position = old_window_pos;
 
         self.backend_type = target;
@@ -271,6 +364,10 @@ impl App {
     }
 
     pub(super) fn sync_window_size(&mut self, size: PhysicalSize<u32>) {
+        let size = self
+            .window
+            .as_ref()
+            .map_or(size, |window| window_render_size(window, self.backend_type));
         if size.width > 0 && size.height > 0 {
             self.state.shell.metrics = space::metrics_for_window(size.width, size.height);
             space::set_current_metrics(self.state.shell.metrics);
@@ -295,7 +392,7 @@ impl App {
 
         if let Some(window) = &self.window {
             if matches!(previous_mode, DisplayMode::Windowed) {
-                let sz = window.inner_size();
+                let sz = window_render_size(window, self.backend_type);
                 self.state.shell.display_width = sz.width;
                 self.state.shell.display_height = sz.height;
                 if let Ok(pos) = window.outer_position() {
@@ -306,11 +403,12 @@ impl App {
             match mode {
                 DisplayMode::Windowed => {
                     window.set_fullscreen(None);
-                    let size = PhysicalSize::new(
+                    request_window_size(
+                        window,
+                        self.backend_type,
                         self.state.shell.display_width,
                         self.state.shell.display_height,
                     );
-                    let _ = window.request_inner_size(size);
                     if let Some(pos) = self.state.shell.pending_window_position.take() {
                         window.set_outer_position(pos);
                     } else if let Some(pos) = display::default_window_position(
@@ -333,7 +431,7 @@ impl App {
                 }
             }
 
-            let sz = window.inner_size();
+            let sz = window_render_size(window, self.backend_type);
             self.sync_window_size(sz);
         }
 
@@ -373,8 +471,7 @@ impl App {
         if let Some(window) = &self.window {
             match self.state.shell.display_mode {
                 DisplayMode::Windowed => {
-                    let size = PhysicalSize::new(width, height);
-                    let _ = window.request_inner_size(size);
+                    request_window_size(window, self.backend_type, width, height);
                 }
                 DisplayMode::Fullscreen(fullscreen_type) => {
                     let fullscreen = display::fullscreen_mode(
@@ -388,7 +485,7 @@ impl App {
                 }
             }
 
-            let sz = window.inner_size();
+            let sz = window_render_size(window, self.backend_type);
             self.sync_window_size(sz);
         }
 

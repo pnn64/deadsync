@@ -5,12 +5,43 @@ use crate::engine::present::{anim, font, runtime};
 use glam::Mat4 as Matrix4;
 use smallvec::SmallVec;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 // PARITY COMMENT STANDARD:
 // PARITY[<Source>]: <mirrored behavior>. Ref: <file/symbol> when known.
 
 pub trait IntoTextureKey {
     fn into_texture_key(self) -> Arc<str>;
+
+    #[inline(always)]
+    fn into_sprite_source(self) -> SpriteSource
+    where
+        Self: Sized,
+    {
+        SpriteSource::Texture(self.into_texture_key())
+    }
+}
+
+pub struct TextureKeyHandle {
+    pub key: Arc<str>,
+    pub handle: crate::engine::gfx::TextureHandle,
+    pub generation: u64,
+}
+
+impl IntoTextureKey for TextureKeyHandle {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        self.key
+    }
+
+    #[inline(always)]
+    fn into_sprite_source(self) -> SpriteSource {
+        SpriteSource::TextureHandle {
+            key: self.key,
+            handle: self.handle,
+            generation: self.generation,
+        }
+    }
 }
 
 impl IntoTextureKey for Arc<str> {
@@ -67,30 +98,6 @@ pub fn __dsl_parse_effect_clock(raw: &str) -> anim::EffectClock {
     }
 }
 
-/* ===================== small hashing helpers ===================== */
-/* Fix for clippy::items_after_statements: no nested fn items mid-block */
-
-#[inline(always)]
-fn mix_u64(h: &mut u64, v: u64) {
-    *h ^= v.wrapping_mul(0x9E3779B97F4A7C15);
-    *h = h.rotate_left(27) ^ (*h >> 33);
-}
-
-#[inline(always)]
-fn f32b_u64(f: f32) -> u64 {
-    f.to_bits() as u64
-}
-
-#[inline(always)]
-fn hash_bytes64(bs: &[u8]) -> u64 {
-    let mut x = 0xcbf29ce484222325u64;
-    for &b in bs {
-        x ^= b as u64;
-        x = x.wrapping_mul(0x100000001b3);
-    }
-    x
-}
-
 #[inline(always)]
 fn sprite_native_dims(
     source: &SpriteSource,
@@ -100,7 +107,7 @@ fn sprite_native_dims(
 ) -> (f32, f32) {
     match source {
         SpriteSource::Solid => (1.0, 1.0),
-        SpriteSource::TextureStatic(key) => {
+        SpriteSource::TextureStatic(key) | SpriteSource::TextureStaticHandle { key, .. } => {
             let Some(meta) = assets::texture_dims(key) else {
                 return (0.0, 0.0);
             };
@@ -133,7 +140,7 @@ fn sprite_native_dims(
 
             (tw, th)
         }
-        SpriteSource::Texture(key) => {
+        SpriteSource::Texture(key) | SpriteSource::TextureHandle { key, .. } => {
             let Some(meta) = assets::texture_dims(key) else {
                 return (0.0, 0.0);
             };
@@ -214,6 +221,7 @@ pub struct SpriteBuilder {
     shx: f32,
     shy: f32,
     shc: [f32; 4],
+    tween_salt: u64,
     tw: SmallVec<[anim::Step; 4]>,
 }
 
@@ -260,18 +268,47 @@ impl SpriteBuilder {
             shx: 0.0,
             shy: 0.0,
             shc: [0.0, 0.0, 0.0, 0.5],
+            tween_salt: 0,
             tw: SmallVec::new(),
         }
     }
 
     #[inline(always)]
     pub fn texture<T: IntoTextureKey>(tex: T) -> Self {
-        Self::with_source(SpriteSource::Texture(tex.into_texture_key()))
+        Self::with_source(tex.into_sprite_source())
     }
 
     #[inline(always)]
     pub fn static_texture(tex: &'static str) -> Self {
         Self::with_source(SpriteSource::TextureStatic(tex))
+    }
+
+    #[inline(always)]
+    pub fn static_texture_cached(
+        tex: &'static str,
+        cached_handle: &'static AtomicU64,
+        cached_generation: &'static AtomicU64,
+    ) -> Self {
+        let generation = assets::texture_registry_generation();
+        let handle = cached_handle.load(Ordering::Relaxed);
+        if handle != crate::engine::gfx::INVALID_TEXTURE_HANDLE
+            && cached_generation.load(Ordering::Relaxed) == generation
+        {
+            return Self::with_source(SpriteSource::TextureStaticHandle {
+                key: tex,
+                handle,
+                generation,
+            });
+        }
+
+        let handle = assets::texture_handle(tex);
+        cached_handle.store(handle, Ordering::Relaxed);
+        cached_generation.store(generation, Ordering::Relaxed);
+        Self::with_source(SpriteSource::TextureStaticHandle {
+            key: tex,
+            handle,
+            generation,
+        })
     }
 
     #[inline(always)]
@@ -282,6 +319,11 @@ impl SpriteBuilder {
     #[inline(always)]
     pub fn set_tween(&mut self, steps: SmallVec<[anim::Step; 4]>) {
         self.tw = steps;
+    }
+
+    #[inline(always)]
+    pub fn tweensalt(&mut self, salt: u64) {
+        self.tween_salt = salt;
     }
 
     #[inline(always)]
@@ -658,59 +700,7 @@ impl SpriteBuilder {
             init.crop_b = self.cb;
             init.scale = [self.sx, self.sy];
 
-            #[inline(always)]
-            fn auto_salt(src: &SpriteSource, init: &anim::TweenState, steps: &[anim::Step]) -> u64 {
-                let mut h = 0xcbf29ce484222325u64;
-
-                match src {
-                    SpriteSource::TextureStatic(key) => {
-                        mix_u64(&mut h, 0x54455854);
-                        mix_u64(&mut h, hash_bytes64(key.as_bytes()));
-                    }
-                    SpriteSource::Texture(key) => {
-                        mix_u64(&mut h, 0x54455854);
-                        mix_u64(&mut h, hash_bytes64(key.as_bytes()));
-                    }
-                    SpriteSource::Solid => {
-                        mix_u64(&mut h, 0x534F4C49);
-                    }
-                }
-
-                mix_u64(&mut h, f32b_u64(init.x));
-                mix_u64(&mut h, f32b_u64(init.y));
-                mix_u64(&mut h, f32b_u64(init.w));
-                mix_u64(&mut h, f32b_u64(init.h));
-                mix_u64(&mut h, f32b_u64(init.hx));
-                mix_u64(&mut h, f32b_u64(init.vy));
-                mix_u64(&mut h, f32b_u64(init.rot_x));
-                mix_u64(&mut h, f32b_u64(init.rot_y));
-                mix_u64(&mut h, f32b_u64(init.rot_z));
-                for c in init.tint {
-                    mix_u64(&mut h, f32b_u64(c));
-                }
-                for c in init.glow {
-                    mix_u64(&mut h, f32b_u64(c));
-                }
-                mix_u64(&mut h, u64::from(init.visible));
-                mix_u64(&mut h, u64::from(init.flip_x));
-                mix_u64(&mut h, u64::from(init.flip_y));
-                mix_u64(&mut h, f32b_u64(init.fade_l));
-                mix_u64(&mut h, f32b_u64(init.fade_r));
-                mix_u64(&mut h, f32b_u64(init.fade_t));
-                mix_u64(&mut h, f32b_u64(init.fade_b));
-                mix_u64(&mut h, f32b_u64(init.crop_l));
-                mix_u64(&mut h, f32b_u64(init.crop_r));
-                mix_u64(&mut h, f32b_u64(init.crop_t));
-                mix_u64(&mut h, f32b_u64(init.crop_b));
-                mix_u64(&mut h, f32b_u64(init.scale[0]));
-                mix_u64(&mut h, f32b_u64(init.scale[1]));
-                for s in steps {
-                    mix_u64(&mut h, s.fingerprint64());
-                }
-                h
-            }
-
-            let sid = runtime::site_id(site_base, auto_salt(&self.source, &init, &self.tw));
+            let sid = runtime::site_id(site_base, self.tween_salt);
             let s = runtime::materialize(sid, init, &self.tw);
 
             self.x = s.x;
@@ -760,7 +750,7 @@ impl SpriteBuilder {
             [self.sx, self.sy]
         };
 
-        let base = Actor::Sprite {
+        Actor::Sprite {
             align: [self.hx, self.vy],
             offset: [self.x, self.y],
             world_z: 0.0,
@@ -795,17 +785,9 @@ impl SpriteBuilder {
             animate: self.anim_enable,
             state_delay: self.state_delay,
             scale: scale_carry,
+            shadow_len: [self.shx, self.shy],
+            shadow_color: self.shc,
             effect: self.effect,
-        };
-
-        if self.shx != 0.0 || self.shy != 0.0 {
-            Actor::Shadow {
-                len: [self.shx, self.shy],
-                color: self.shc,
-                child: Box::new(base),
-            }
-        } else {
-            base
         }
     }
 }
@@ -841,6 +823,7 @@ pub struct TextBuilder {
     shx: f32,
     shy: f32,
     shc: [f32; 4],
+    tween_salt: u64,
     tw: SmallVec<[anim::Step; 4]>,
 }
 
@@ -875,6 +858,7 @@ impl TextBuilder {
             shx: 0.0,
             shy: 0.0,
             shc: [0.0, 0.0, 0.0, 0.5],
+            tween_salt: 0,
             tw: SmallVec::new(),
         }
     }
@@ -882,6 +866,11 @@ impl TextBuilder {
     #[inline(always)]
     pub fn set_tween(&mut self, steps: SmallVec<[anim::Step; 4]>) {
         self.tw = steps;
+    }
+
+    #[inline(always)]
+    pub fn tweensalt(&mut self, salt: u64) {
+        self.tween_salt = salt;
     }
 
     #[inline(always)]
@@ -1194,7 +1183,9 @@ impl TextBuilder {
 
     #[inline(always)]
     pub fn build(mut self, site_base: u64) -> Actor {
-        if let std::borrow::Cow::Owned(s) = font::replace_markers(self.content.as_str()) {
+        if self.content.as_str().as_bytes().contains(&b'&')
+            && let std::borrow::Cow::Owned(s) = font::replace_markers(self.content.as_str())
+        {
             self.content = TextContent::Owned(s);
         }
 
@@ -1206,16 +1197,7 @@ impl TextBuilder {
             init.glow = self.glow;
             init.scale = [self.sx, self.sy];
 
-            let salt = {
-                let mut h = 0xcbf29ce484222325u64;
-                for &b in self.content.as_str().as_bytes() {
-                    h ^= b as u64;
-                    h = h.wrapping_mul(0x100000001b3);
-                }
-                h
-            };
-
-            let sid = runtime::site_id(site_base, salt);
+            let sid = runtime::site_id(site_base, self.tween_salt);
             let s = runtime::materialize(sid, init, &self.tw);
 
             self.x = s.x;
@@ -1226,7 +1208,7 @@ impl TextBuilder {
             self.sy = s.scale[1];
         }
 
-        let base = Actor::Text {
+        Actor::Text {
             align: [self.hx, self.vy],
             offset: [self.x, self.y],
             local_transform: Matrix4::IDENTITY,
@@ -1247,20 +1229,14 @@ impl TextBuilder {
             max_height: self.max_h,
             max_w_pre_zoom: self.max_w_pre_zoom,
             max_h_pre_zoom: self.max_h_pre_zoom,
+            jitter: false,
+            distortion: 0.0,
             clip: None,
             mask_dest: false,
             blend: self.blend,
+            shadow_len: [self.shx, self.shy],
+            shadow_color: self.shc,
             effect: self.effect,
-        };
-
-        if self.shx != 0.0 || self.shy != 0.0 {
-            Actor::Shadow {
-                len: [self.shx, self.shy],
-                color: self.shc,
-                child: Box::new(base),
-            }
-        } else {
-            base
         }
     }
 }
@@ -1329,8 +1305,16 @@ macro_rules! __ui_valign_from_ident {
 #[macro_export]
 macro_rules! act {
     (sprite($tex:literal): $($tail:tt)+) => {{
+        static __TEXTURE_HANDLE: ::std::sync::atomic::AtomicU64 =
+            ::std::sync::atomic::AtomicU64::new($crate::engine::gfx::INVALID_TEXTURE_HANDLE);
+        static __TEXTURE_GENERATION: ::std::sync::atomic::AtomicU64 =
+            ::std::sync::atomic::AtomicU64::new(::core::u64::MAX);
         let mut __tw = ::smallvec::SmallVec::<[_; 4]>::new();
-        let mut __mods = $crate::engine::present::dsl::SpriteBuilder::static_texture($tex);
+        let mut __mods = $crate::engine::present::dsl::SpriteBuilder::static_texture_cached(
+            $tex,
+            &__TEXTURE_HANDLE,
+            &__TEXTURE_GENERATION,
+        );
         let mut __cur: ::core::option::Option<$crate::engine::present::anim::SegmentBuilder> = None;
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
@@ -1387,6 +1371,10 @@ macro_rules! __dsl_apply {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __dsl_apply_one {
+    (tweensalt ($salt:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.tweensalt(($salt) as u64);
+    }};
+
     // --- segment controls ---
     (linear ($d:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(seg)=$cur.take(){$tw.push(seg.build());}

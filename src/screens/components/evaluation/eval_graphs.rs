@@ -26,18 +26,6 @@ fn hard_ex_display_window_ms(worst_window_ms: f32) -> f32 {
 }
 
 #[inline(always)]
-fn scatter_display_window_ms(worst_window_ms: f32, scale: ScatterPlotScale) -> f32 {
-    let display = match scale {
-        ScatterPlotScale::HardEx => hard_ex_display_window_ms(worst_window_ms),
-        ScatterPlotScale::Itg
-        | ScatterPlotScale::Ex
-        | ScatterPlotScale::Arrow
-        | ScatterPlotScale::Foot => worst_window_ms,
-    };
-    display.max(1.0)
-}
-
-#[inline(always)]
 pub(crate) fn timing_display_window_ms(worst_window_ms: f32, scale: TimingHistogramScale) -> f32 {
     let display = match scale {
         TimingHistogramScale::HardEx => hard_ex_display_window_ms(worst_window_ms),
@@ -215,7 +203,11 @@ pub fn build_scatter_mesh(
     }
 
     let denom = ((last_second + 0.05) - first_second).max(0.001);
-    let worst = scatter_display_window_ms(worst_window_ms, scale);
+    let worst = match scale {
+        ScatterPlotScale::HardEx => hard_ex_display_window_ms(worst_window_ms),
+        _ => worst_window_ms,
+    }
+    .max(1.0);
     let timing_windows_ms = crate::game::timing::effective_windows_ms();
     const POINT_W: f32 = 1.5;
     const POINT_H: f32 = 1.5;

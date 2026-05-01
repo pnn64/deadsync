@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
@@ -520,7 +521,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
             z(GS_LEADERBOARD_Z + 5)
         ));
         actors.push(act!(text:
-            font("wendy"):
+            font(current_machine_font_key(FontRole::Header)):
             settext(header_text):
             align(0.5, 0.5):
             xy(center_x, header_y):
@@ -531,7 +532,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
         ));
         if show_ex {
             actors.push(act!(text:
-                font("wendy"):
+                font(current_machine_font_key(FontRole::Header)):
                 settext("EX"):
                 align(1.0, 0.5):
                 xy(center_x + pane_width * 0.5 - 16.0, header_y):
@@ -542,7 +543,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
             ));
         } else if show_itg_arrowcloud {
             actors.push(act!(text:
-                font("wendy"):
+                font(current_machine_font_key(FontRole::Header)):
                 settext("ITG"):
                 align(1.0, 0.5):
                 xy(center_x + pane_width * 0.5 - 16.0, header_y):
@@ -553,7 +554,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
             ));
         } else if show_hard_ex {
             actors.push(act!(text:
-                font("wendy"):
+                font(current_machine_font_key(FontRole::Header)):
                 settext("H.EX"):
                 align(1.0, 0.5):
                 xy(center_x + pane_width * 0.5 - 16.0, header_y):

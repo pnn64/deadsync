@@ -4,7 +4,7 @@ use crate::engine::input::{
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::game::profile;
-use crate::screens::components::shared::{heart_bg, test_input, transitions};
+use crate::screens::components::shared::{test_input, transitions, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use std::time::{Duration, Instant};
 /* ---------------------------- transitions ---------------------------- */
@@ -204,7 +204,7 @@ pub fn menu_lr_both_held(chord: &MenuLrChordTracker, side: profile::PlayerSide) 
 
 pub struct State {
     pub active_color_index: i32,
-    bg: heart_bg::State,
+    bg: visual_style_bg::State,
     test_input: test_input::State,
     back_hold_active: bool,
     back_hold_secs: f32,
@@ -213,7 +213,7 @@ pub struct State {
 pub fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: heart_bg::State::new(),
+        bg: visual_style_bg::State::new(),
         test_input: test_input::State::default(),
         back_hold_active: false,
         back_hold_secs: 0.0,
@@ -304,7 +304,7 @@ pub fn take_fsr_command(state: &mut State) -> Option<test_input::FsrCommand> {
 pub fn get_actors(state: &State) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(56);
 
-    actors.extend(state.bg.build(heart_bg::Params {
+    actors.extend(state.bg.build(visual_style_bg::Params {
         active_color_index: state.active_color_index,
         backdrop_rgba: [0.0, 0.0, 0.0, 1.0],
         alpha_mul: 1.0,
@@ -327,6 +327,7 @@ mod tests {
     fn input_event(action: VirtualAction, pressed: bool, timestamp: Instant) -> InputEvent {
         InputEvent {
             action,
+            input_slot: 0,
             pressed,
             source: InputSource::Keyboard,
             timestamp,

@@ -15,6 +15,15 @@ pub struct Params<'a> {
     pub message: &'a str,
 }
 
+fn message_salt(message: &str) -> u64 {
+    let mut salt = 0xcbf29ce484222325u64;
+    for &b in message.as_bytes() {
+        salt ^= u64::from(b);
+        salt = salt.wrapping_mul(0x100000001b3);
+    }
+    salt
+}
+
 /// Builds the actors for a temporary system message overlay at the top of the screen.
 /// The actors manage their own lifecycle (fade-in, hold, fade-out) via tweens.
 pub fn build(params: Params) -> Vec<Actor> {
@@ -29,8 +38,10 @@ pub fn build(params: Params) -> Vec<Actor> {
     // font `miso` has a cap height around 18-20 logical units. 20 * zoom is a safe bet.
     let approx_text_height = 20.0 * text_zoom;
     let final_bar_h = approx_text_height + 16.0; // Matches `bmt:GetHeight() + 16` logic
+    let salt = message_salt(params.message);
 
     let bg = act!(quad:
+        tweensalt(salt):
         align(0.5, 0.0):
         xy(screen_center_x(), 0.0):
         zoomto(screen_width(), final_bar_h): // Use calculated height
@@ -44,6 +55,7 @@ pub fn build(params: Params) -> Vec<Actor> {
     );
 
     let text = act!(text:
+        tweensalt(salt):
         font("miso"):
         settext(params.message.to_owned()):
         align(0.0, 0.0): // top-left

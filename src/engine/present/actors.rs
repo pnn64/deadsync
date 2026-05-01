@@ -1,4 +1,6 @@
-use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, TMeshCacheKey, TexturedMeshVertex};
+use crate::engine::gfx::{
+    BlendMode, MeshMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
+};
 use crate::engine::present::anim;
 use glam::Mat4 as Matrix4;
 use std::sync::Arc;
@@ -31,6 +33,16 @@ pub enum SizeSpec {
 #[derive(Clone, Debug)]
 pub enum SpriteSource {
     TextureStatic(&'static str),
+    TextureStaticHandle {
+        key: &'static str,
+        handle: TextureHandle,
+        generation: u64,
+    },
+    TextureHandle {
+        key: Arc<str>,
+        handle: TextureHandle,
+        generation: u64,
+    },
     Texture(Arc<str>),
     Solid,
 }
@@ -45,6 +57,8 @@ impl SpriteSource {
     pub fn texture_key(&self) -> Option<&str> {
         match self {
             Self::TextureStatic(key) => Some(key),
+            Self::TextureStaticHandle { key, .. } => Some(key),
+            Self::TextureHandle { key, .. } => Some(key.as_ref()),
             Self::Texture(key) => Some(key.as_ref()),
             Self::Solid => None,
         }
@@ -90,6 +104,8 @@ pub enum Actor {
         animate: bool,
         state_delay: f32,
         scale: [f32; 2],
+        shadow_len: [f32; 2],
+        shadow_color: [f32; 4],
         effect: anim::EffectState,
     },
 
@@ -116,10 +132,14 @@ pub enum Actor {
         max_height: Option<f32>,
         max_w_pre_zoom: bool,
         max_h_pre_zoom: bool,
+        jitter: bool,
+        distortion: f32,
         /// Clip rect in parent TL space: [x, y, w, h].
         clip: Option<[f32; 4]>,
         mask_dest: bool,
         blend: BlendMode,
+        shadow_len: [f32; 2],
+        shadow_color: [f32; 4],
         effect: anim::EffectState,
     },
 
@@ -185,8 +205,20 @@ pub enum Actor {
 impl Actor {
     pub fn mul_alpha(&mut self, alpha: f32) {
         match self {
-            Self::Sprite { tint, .. } => tint[3] *= alpha,
-            Self::Text { color, .. } => color[3] *= alpha,
+            Self::Sprite {
+                tint, shadow_color, ..
+            } => {
+                tint[3] *= alpha;
+                shadow_color[3] *= alpha;
+            }
+            Self::Text {
+                color,
+                shadow_color,
+                ..
+            } => {
+                color[3] *= alpha;
+                shadow_color[3] *= alpha;
+            }
             Self::Mesh { vertices, .. } => {
                 let mut out = Vec::with_capacity(vertices.len());
                 for vertex in vertices.iter() {
@@ -230,6 +262,15 @@ pub struct TextAttribute {
     pub start: usize,
     pub length: usize,
     pub color: [f32; 4],
+    pub vertex_colors: Option<[[f32; 4]; 4]>,
+    pub glow: Option<[f32; 4]>,
+}
+
+impl TextAttribute {
+    #[inline(always)]
+    pub fn colors(self) -> [[f32; 4]; 4] {
+        self.vertex_colors.unwrap_or([self.color; 4])
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -321,9 +362,13 @@ mod tests {
             max_height: None,
             max_w_pre_zoom: false,
             max_h_pre_zoom: false,
+            jitter: false,
+            distortion: 0.0,
             clip: None,
             mask_dest: false,
             blend: BlendMode::Alpha,
+            shadow_len: [0.0, 0.0],
+            shadow_color: [0.0, 0.0, 0.0, 0.5],
             effect: anim::EffectState::default(),
         }
     }

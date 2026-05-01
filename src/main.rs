@@ -191,9 +191,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Startup default when config is missing or malformed.
     log::set_max_level(log::LevelFilter::Warn);
 
-    // Log resolved directories and migrate data from exe dir if necessary.
-    config::dirs::maybe_migrate_from_exe_dir();
-
     config::load();
     let cfg = config::get();
     log::set_max_level(cfg.log_level.as_level_filter());

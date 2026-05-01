@@ -13,8 +13,10 @@ use crate::game::song::SongData;
 use crate::game::timing::{ROWS_PER_BEAT, TimingData};
 use log::{debug, info, trace, warn};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use super::{
     AccelEffects, AccelOverrides, AppearanceEffects, AppearanceOverrides, ChartAttackEffects,
@@ -100,6 +102,14 @@ pub struct SongLuaVisualLayerRuntime {
     pub overlay_events: Vec<Vec<SongLuaOverlayMessageRuntime>>,
     pub song_foreground: SongLuaCapturedActor,
     pub song_foreground_events: Vec<SongLuaOverlayMessageRuntime>,
+}
+
+fn extend_song_lua_sound_paths(out: &mut Vec<PathBuf>, paths: &[PathBuf]) {
+    for path in paths {
+        if !out.contains(path) {
+            out.push(path.clone());
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -762,6 +772,25 @@ fn song_lua_time_to_second(
         SongLuaTimeUnit::Beat => timing_player.get_time_for_beat(value),
         SongLuaTimeUnit::Second => value - global_offset_seconds,
     }
+}
+
+fn song_lua_message_seconds(
+    messages: &[SongLuaMessageEvent],
+    timing_player: &TimingData,
+    global_offset_seconds: f32,
+) -> Vec<Option<f32>> {
+    messages
+        .iter()
+        .map(|message| {
+            let event_second = song_lua_time_to_second(
+                SongLuaTimeUnit::Beat,
+                message.beat,
+                timing_player,
+                global_offset_seconds,
+            );
+            event_second.is_finite().then_some(event_second)
+        })
+        .collect()
 }
 
 fn song_lua_window_seconds(
@@ -1704,10 +1733,29 @@ pub(super) fn build_song_lua_ease_windows_for_player(
     (out, unsupported_targets)
 }
 
+#[cfg(test)]
 pub(super) fn build_song_lua_overlay_ease_windows(
     compiled: &CompiledSongLua,
     timing_player: &TimingData,
     global_offset_seconds: f32,
+) -> Vec<SongLuaOverlayEaseWindowRuntime> {
+    let message_seconds =
+        song_lua_message_seconds(&compiled.messages, timing_player, global_offset_seconds);
+    let overlay_events =
+        build_song_lua_overlay_message_events_with_seconds(compiled, &message_seconds);
+    build_song_lua_overlay_ease_windows_with_events(
+        compiled,
+        timing_player,
+        global_offset_seconds,
+        &overlay_events,
+    )
+}
+
+fn build_song_lua_overlay_ease_windows_with_events(
+    compiled: &CompiledSongLua,
+    timing_player: &TimingData,
+    global_offset_seconds: f32,
+    overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
 ) -> Vec<SongLuaOverlayEaseWindowRuntime> {
     let mut out = Vec::new();
     for ease in &compiled.overlay_eases {
@@ -1730,13 +1778,8 @@ pub(super) fn build_song_lua_overlay_ease_windows(
             global_offset_seconds,
             end_second,
         );
-        let cutoff_second = song_lua_overlay_ease_cutoff_second(
-            compiled,
-            ease,
-            timing_player,
-            global_offset_seconds,
-            start_second,
-        );
+        let cutoff_second =
+            song_lua_overlay_ease_cutoff_second(compiled, ease, overlay_events, start_second);
         out.push(SongLuaOverlayEaseWindowRuntime {
             overlay_index: ease.overlay_index,
             start_second,
@@ -1783,45 +1826,35 @@ fn group_song_lua_overlay_eases(
     (flat, ranges)
 }
 
-fn build_song_lua_overlay_message_events(
+fn build_song_lua_overlay_message_events_with_seconds(
     compiled: &CompiledSongLua,
-    timing_player: &TimingData,
-    global_offset_seconds: f32,
+    message_seconds: &[Option<f32>],
 ) -> Vec<Vec<SongLuaOverlayMessageRuntime>> {
     compiled
         .overlays
         .iter()
         .map(|overlay| {
-            build_song_lua_actor_message_events(
+            build_song_lua_actor_message_events_with_seconds(
                 &compiled.messages,
+                message_seconds,
                 &overlay.message_commands,
-                timing_player,
-                global_offset_seconds,
             )
         })
         .collect()
 }
 
-fn build_song_lua_actor_message_events(
+fn build_song_lua_actor_message_events_with_seconds(
     messages: &[SongLuaMessageEvent],
+    message_seconds: &[Option<f32>],
     commands: &[SongLuaOverlayMessageCommand],
-    timing_player: &TimingData,
-    global_offset_seconds: f32,
 ) -> Vec<SongLuaOverlayMessageRuntime> {
+    let command_indices = song_lua_message_command_indices(commands);
     let mut out = Vec::new();
-    for message in messages {
-        let event_second = song_lua_time_to_second(
-            SongLuaTimeUnit::Beat,
-            message.beat,
-            timing_player,
-            global_offset_seconds,
-        );
-        if !event_second.is_finite() {
+    for (idx, message) in messages.iter().enumerate() {
+        let Some(event_second) = message_seconds.get(idx).copied().flatten() else {
             continue;
-        }
-        let Some(command_index) = commands
-            .iter()
-            .position(|command| command.message.eq_ignore_ascii_case(&message.message))
+        };
+        let Some(&command_index) = command_indices.get(&message.message.to_ascii_lowercase())
         else {
             continue;
         };
@@ -1833,32 +1866,34 @@ fn build_song_lua_actor_message_events(
     out
 }
 
+fn song_lua_message_command_indices(
+    commands: &[SongLuaOverlayMessageCommand],
+) -> BTreeMap<String, usize> {
+    let mut out = BTreeMap::new();
+    for (idx, command) in commands.iter().enumerate() {
+        out.entry(command.message.to_ascii_lowercase())
+            .or_insert(idx);
+    }
+    out
+}
+
 fn song_lua_overlay_ease_cutoff_second(
     compiled: &CompiledSongLua,
     ease: &SongLuaOverlayEase,
-    timing_player: &TimingData,
-    global_offset_seconds: f32,
+    overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
     start_second: f32,
 ) -> Option<f32> {
     const SAME_TICK_CUTOFF_EPSILON: f32 = 0.001;
 
     let overlay = compiled.overlays.get(ease.overlay_index)?;
     let mut cutoff_second: Option<f32> = None;
-    for event in &compiled.messages {
-        let event_second = song_lua_time_to_second(
-            SongLuaTimeUnit::Beat,
-            event.beat,
-            timing_player,
-            global_offset_seconds,
-        );
+    let events = overlay_events.get(ease.overlay_index)?;
+    for event in events {
+        let event_second = event.event_second;
         if !event_second.is_finite() || event_second < start_second {
             continue;
         }
-        let Some(command) = overlay
-            .message_commands
-            .iter()
-            .find(|command| command.message.eq_ignore_ascii_case(&event.message))
-        else {
+        let Some(command) = overlay.message_commands.get(event.command_index) else {
             continue;
         };
         for block in &command.blocks {
@@ -2075,6 +2110,7 @@ fn build_song_lua_compile_context(
     } else {
         1.0
     };
+    context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
     context.style_name = match play_style {
         profile::PlayStyle::Single => "single",
         profile::PlayStyle::Versus => "versus",
@@ -2170,26 +2206,31 @@ fn build_song_lua_visual_layer_runtime(
         return None;
     }
 
-    let mut overlay_eases =
-        build_song_lua_overlay_ease_windows(compiled, timing_player, machine_global_offset_seconds);
+    let message_seconds = song_lua_message_seconds(
+        &compiled.messages,
+        timing_player,
+        machine_global_offset_seconds,
+    );
+    let mut overlay_events =
+        build_song_lua_overlay_message_events_with_seconds(compiled, &message_seconds);
+    let mut overlay_eases = build_song_lua_overlay_ease_windows_with_events(
+        compiled,
+        timing_player,
+        machine_global_offset_seconds,
+        &overlay_events,
+    );
     offset_song_lua_overlay_eases(&mut overlay_eases, start_second);
     let (overlay_eases, overlay_ease_ranges) =
         group_song_lua_overlay_eases(compiled.overlays.len(), overlay_eases);
 
-    let mut overlay_events = build_song_lua_overlay_message_events(
-        compiled,
-        timing_player,
-        machine_global_offset_seconds,
-    );
     for events in &mut overlay_events {
         offset_song_lua_message_events(events, start_second);
     }
 
-    let mut song_foreground_events = build_song_lua_actor_message_events(
+    let mut song_foreground_events = build_song_lua_actor_message_events_with_seconds(
         &compiled.messages,
+        &message_seconds,
         &compiled.song_foreground.message_commands,
-        timing_player,
-        machine_global_offset_seconds,
     );
     offset_song_lua_message_events(&mut song_foreground_events, start_second);
 
@@ -2230,6 +2271,7 @@ pub(super) fn build_song_lua_runtime_windows(
     SongLuaCapturedActor,
     Vec<SongLuaOverlayMessageRuntime>,
     [bool; MAX_PLAYERS],
+    Vec<PathBuf>,
     f32,
     f32,
 ) {
@@ -2277,6 +2319,7 @@ pub(super) fn build_song_lua_runtime_windows(
     let mut song_foreground = SongLuaCapturedActor::default();
     let mut song_foreground_events = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
+    let mut sound_paths = Vec::new();
     let screen_width = screen_width();
     let screen_height = screen_height();
 
@@ -2303,6 +2346,7 @@ pub(super) fn build_song_lua_runtime_windows(
             song_foreground,
             song_foreground_events,
             hidden_players,
+            sound_paths,
             screen_width,
             screen_height,
         );
@@ -2322,6 +2366,7 @@ pub(super) fn build_song_lua_runtime_windows(
     let mut out_screen_height = screen_height;
 
     if let Some(entry) = primary_entry {
+        let compile_started = Instant::now();
         let compiled = match compile_song_lua(&entry.path, &context) {
             Ok(compiled) => compiled,
             Err(err) => {
@@ -2345,39 +2390,44 @@ pub(super) fn build_song_lua_runtime_windows(
                     song_foreground,
                     song_foreground_events,
                     hidden_players,
+                    sound_paths,
                     screen_width,
                     screen_height,
                 );
             }
         };
+        let compile_ms = compile_started.elapsed().as_secs_f64() * 1000.0;
+        let runtime_started = Instant::now();
+        extend_song_lua_sound_paths(&mut sound_paths, &compiled.sound_paths);
         overlays = compiled.overlays.clone();
-        let overlay_runtime_eases = build_song_lua_overlay_ease_windows(
+        let message_seconds = song_lua_message_seconds(
+            &compiled.messages,
+            timing_players[0].as_ref(),
+            machine_global_offset_seconds,
+        );
+        overlay_events =
+            build_song_lua_overlay_message_events_with_seconds(&compiled, &message_seconds);
+        let overlay_runtime_eases = build_song_lua_overlay_ease_windows_with_events(
             &compiled,
             timing_players[0].as_ref(),
             machine_global_offset_seconds,
+            &overlay_events,
         );
         (overlay_eases, overlay_ease_ranges) =
             group_song_lua_overlay_eases(compiled.overlays.len(), overlay_runtime_eases);
-        overlay_events = build_song_lua_overlay_message_events(
-            &compiled,
-            timing_players[0].as_ref(),
-            machine_global_offset_seconds,
-        );
         player_actors[..compiled.player_actors.len()].clone_from_slice(&compiled.player_actors);
         for (player, actor) in compiled.player_actors.iter().enumerate() {
-            player_events[player] = build_song_lua_actor_message_events(
+            player_events[player] = build_song_lua_actor_message_events_with_seconds(
                 &compiled.messages,
+                &message_seconds,
                 &actor.message_commands,
-                timing_players[0].as_ref(),
-                machine_global_offset_seconds,
             );
         }
         song_foreground = compiled.song_foreground.clone();
-        song_foreground_events = build_song_lua_actor_message_events(
+        song_foreground_events = build_song_lua_actor_message_events_with_seconds(
             &compiled.messages,
+            &message_seconds,
             &compiled.song_foreground.message_commands,
-            timing_players[0].as_ref(),
-            machine_global_offset_seconds,
         );
         hidden_players[..compiled.hidden_players.len()].copy_from_slice(&compiled.hidden_players);
 
@@ -2405,28 +2455,33 @@ pub(super) fn build_song_lua_runtime_windows(
             ease_windows[player] = player_eases;
         }
 
+        let runtime_ms = runtime_started.elapsed().as_secs_f64() * 1000.0;
         if total_constant > 0
             || total_eases > 0
             || !overlays.is_empty()
             || !overlay_eases.is_empty()
             || !compiled.messages.is_empty()
+            || !compiled.sound_paths.is_empty()
             || compiled.info.unsupported_perframes > 0
             || compiled.info.unsupported_function_eases > 0
             || compiled.info.unsupported_function_actions > 0
+            || !compiled.info.skipped_message_command_captures.is_empty()
             || unsupported_targets > 0
         {
             info!(
-                "Compiled gameplay lua for '{}' (constants={}, eases={}, overlay_eases={}, overlays={}, messages={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}).",
+                "Compiled gameplay lua for '{}' (constants={}, eases={}, overlay_eases={}, overlays={}, messages={}, sound_assets={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}, skipped_message_commands={}, compile_ms={compile_ms:.3}, runtime_ms={runtime_ms:.3}).",
                 song.title,
                 total_constant,
                 total_eases,
                 overlay_eases.len(),
                 overlays.len(),
                 compiled.messages.len(),
+                compiled.sound_paths.len(),
                 unsupported_targets,
                 compiled.info.unsupported_function_eases,
                 compiled.info.unsupported_function_actions,
                 compiled.info.unsupported_perframes,
+                compiled.info.skipped_message_command_captures.len(),
             );
             log_song_lua_runtime_debug(
                 song.title.as_str(),
@@ -2457,6 +2512,7 @@ pub(super) fn build_song_lua_runtime_windows(
                 continue;
             }
         };
+        extend_song_lua_sound_paths(&mut sound_paths, &compiled.sound_paths);
         if let Some(layer) = build_song_lua_visual_layer_runtime(
             song,
             change.start_beat,
@@ -2487,6 +2543,7 @@ pub(super) fn build_song_lua_runtime_windows(
                 continue;
             }
         };
+        extend_song_lua_sound_paths(&mut sound_paths, &compiled.sound_paths);
         if let Some(layer) = build_song_lua_visual_layer_runtime(
             song,
             change.start_beat,
@@ -2512,6 +2569,7 @@ pub(super) fn build_song_lua_runtime_windows(
         song_foreground,
         song_foreground_events,
         hidden_players,
+        sound_paths,
         out_screen_width,
         out_screen_height,
     )
@@ -2528,7 +2586,7 @@ fn log_song_lua_runtime_debug(
     unsupported_targets: usize,
 ) {
     debug!(
-        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} constants={} eases={} overlay_eases={} overlays={} messages={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={}",
+        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} constants={} eases={} overlay_eases={} overlays={} messages={} sound_assets={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={} skipped_message_commands={}",
         song_title,
         compiled.entry_path.display(),
         compiled.screen_width,
@@ -2539,10 +2597,12 @@ fn log_song_lua_runtime_debug(
         overlay_eases.len(),
         compiled.overlays.len(),
         messages.len(),
+        compiled.sound_paths.len(),
         unsupported_targets,
         compiled.info.unsupported_function_eases,
         compiled.info.unsupported_function_actions,
         compiled.info.unsupported_perframes,
+        compiled.info.skipped_message_command_captures.len(),
     );
 
     let mut message_counts = BTreeMap::<&str, usize>::new();
@@ -2558,6 +2618,53 @@ fn log_song_lua_runtime_debug(
                 .map(|(message, count)| format!("{message}x{count}"))
                 .collect::<Vec<_>>()
                 .join(", ")
+        );
+    }
+    if !compiled.sound_paths.is_empty() {
+        debug!(
+            "Song lua sound assets for '{}': {}",
+            song_title,
+            compiled
+                .sound_paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(" | ")
+        );
+    }
+    if !compiled.info.skipped_message_command_captures.is_empty() {
+        debug!(
+            "Song lua skipped message command captures for '{}': {}",
+            song_title,
+            compiled.info.skipped_message_command_captures.join(" | ")
+        );
+    }
+    if !compiled
+        .info
+        .unsupported_function_action_captures
+        .is_empty()
+    {
+        debug!(
+            "Song lua unsupported function action captures for '{}': {}",
+            song_title,
+            compiled
+                .info
+                .unsupported_function_action_captures
+                .join(" | ")
+        );
+    }
+    if !compiled.info.unsupported_function_ease_captures.is_empty() {
+        debug!(
+            "Song lua unsupported function ease captures for '{}': {}",
+            song_title,
+            compiled.info.unsupported_function_ease_captures.join(" | ")
+        );
+    }
+    if !compiled.info.unsupported_perframe_captures.is_empty() {
+        debug!(
+            "Song lua unsupported perframe captures for '{}': {}",
+            song_title,
+            compiled.info.unsupported_perframe_captures.join(" | ")
         );
     }
 
@@ -3660,6 +3767,23 @@ pub fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f3
                 state.player_profiles[player_idx].mini_percent as f32
             }
         })
+}
+
+/// Multiplier applied to the noteskin's per-column lateral offsets to
+/// realise the Spacing player option (zmod parity, proportional model).
+/// `1.0 + spacing_percent / 100`.
+#[inline(always)]
+pub fn effective_spacing_multiplier_for_player(state: &State, player_idx: usize) -> f32 {
+    if player_idx >= state.num_players {
+        return 1.0;
+    }
+    spacing_multiplier_for_percent(state.player_profiles[player_idx].spacing_percent)
+}
+
+#[inline(always)]
+pub fn spacing_multiplier_for_percent(spacing_percent: i32) -> f32 {
+    1.0 + (spacing_percent.clamp(profile::SPACING_PERCENT_MIN, profile::SPACING_PERCENT_MAX) as f32)
+        / 100.0
 }
 
 #[inline(always)]

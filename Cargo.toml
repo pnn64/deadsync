@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.684"
+version = "0.3.902"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -72,7 +72,7 @@ lewton = "0.10.2"
 ogg = "0.9.2"
 minimp3 = "0.6.1"
 claxon = "0.4.3"
-opusic-c = "1.5.5"
+opusic-c = "1.6.1"
 rubato = "0.16.2"
 memmap2 = "0.9.10"
 
@@ -81,7 +81,7 @@ ureq = { version = "3.3.0", features = ["json", "rustls"] }
 tungstenite = "0.29.0"
 
 # Unlocks
-zip = { version = "8.5.1", default-features = false, features = ["deflate"] }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 # Platform-native data directories
 directories = "6.0.0"
@@ -145,7 +145,7 @@ wgpu = { version = "29.0.1", features = ["dx12", "gles"] }
 wgpu = { version = "29.0.1", features = ["gles"] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
-libc = "0.2.185"
+libc = "0.2.186"
 xcb = { version = "1.7.0", features = ["randr"] }
 smithay-client-toolkit = { version = "0.20.0", default-features = false }
 
@@ -160,7 +160,7 @@ libloading = "0.9.0"
 pipewire = { version = "0.9.2", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-coreaudio = { package = "coreaudio-rs", version = "0.14.1" }
+coreaudio = { package = "coreaudio-rs", version = "0.14.2" }
 hidapi = { version = "2.6.5", default-features = false }
 mach2 = "0.6.0"
 objc2 = { version = "0.6.4", features = ["relax-sign-encoding"] }

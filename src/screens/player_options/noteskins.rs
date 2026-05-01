@@ -161,34 +161,33 @@ pub(super) fn resolved_tap_explosion_preview(
     resolved_noteskin_override_preview(cache, noteskin, tap_explosion_noteskin, cols_per_player)
 }
 
-pub(super) fn sync_noteskin_previews_for_player(state: &mut State, player_idx: usize) {
+pub(super) fn sync_noteskin_previews_for_player(
+    noteskin: &mut NoteskinState,
+    profile: &crate::game::profile::Profile,
+    player_idx: usize,
+) {
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
-    let noteskin_setting = state.player_profiles[player_idx].noteskin.clone();
-    let mine_noteskin_setting = state.player_profiles[player_idx].mine_noteskin.clone();
-    let receptor_noteskin_setting = state.player_profiles[player_idx].receptor_noteskin.clone();
-    let tap_explosion_noteskin_setting = state.player_profiles[player_idx]
-        .tap_explosion_noteskin
-        .clone();
-    let previews = &mut state.noteskin_previews[player_idx];
-    previews.base = cached_or_load_noteskin(
-        &mut state.noteskin_cache,
-        &noteskin_setting,
-        cols_per_player,
-    );
+    let noteskin_setting = profile.noteskin.clone();
+    let mine_noteskin_setting = profile.mine_noteskin.clone();
+    let receptor_noteskin_setting = profile.receptor_noteskin.clone();
+    let tap_explosion_noteskin_setting = profile.tap_explosion_noteskin.clone();
+    let previews = &mut noteskin.previews[player_idx];
+    previews.base =
+        cached_or_load_noteskin(&mut noteskin.cache, &noteskin_setting, cols_per_player);
     previews.mine = resolved_noteskin_override_preview(
-        &mut state.noteskin_cache,
+        &mut noteskin.cache,
         &noteskin_setting,
         mine_noteskin_setting.as_ref(),
         cols_per_player,
     );
     previews.receptor = resolved_noteskin_override_preview(
-        &mut state.noteskin_cache,
+        &mut noteskin.cache,
         &noteskin_setting,
         receptor_noteskin_setting.as_ref(),
         cols_per_player,
     );
     previews.tap_explosion = resolved_tap_explosion_preview(
-        &mut state.noteskin_cache,
+        &mut noteskin.cache,
         &noteskin_setting,
         tap_explosion_noteskin_setting.as_ref(),
         cols_per_player,

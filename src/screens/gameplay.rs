@@ -2,11 +2,12 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::gfx::{
     BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, TexturedMeshVertex,
 };
 use crate::engine::input::{InputEvent, VirtualAction};
-use crate::engine::present::actors::{Actor, SizeSpec, TextContent};
+use crate::engine::present::actors::{Actor, SizeSpec, TextAttribute, TextContent};
 use crate::engine::present::anim::EffectState;
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
@@ -18,8 +19,9 @@ use crate::engine::space::{screen_center_x, screen_center_y, screen_height, scre
 use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock,
-    SongLuaOverlayKind, SongLuaOverlayMessageCommand, SongLuaOverlayState,
-    SongLuaOverlayStateDelta, SongLuaProxyTarget,
+    SongLuaOverlayKind, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
+    SongLuaOverlayModelDraw, SongLuaOverlayModelLayer, SongLuaOverlayState,
+    SongLuaOverlayStateDelta, SongLuaProxyTarget, SongLuaTextGlowMode,
 };
 use crate::game::{profile, scroll::ScrollSpeedSetting, song::SongData};
 use crate::screens::components::gameplay::{gameplay_stats, notefield};
@@ -37,6 +39,15 @@ use std::time::Instant;
 
 const TEXT_CACHE_LIMIT: usize = 8192;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
+const INTRO_TEXT_GETWIDTH_PAD: f32 = 0.25;
+
+pub use crate::screens::components::gameplay::notefield::ViewOverride as NotefieldViewOverride;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ActorViewOverride {
+    pub notefield: NotefieldViewOverride,
+    pub hide_gameplay_hud: bool,
+}
 
 use crate::game::gameplay::{
     self as gameplay_core, CourseDisplayCarry, CourseDisplayTotals, GameplayAction, GameplayExit,
@@ -225,6 +236,45 @@ fn local_lobby_side_is_active(side: profile::PlayerSide) -> bool {
         profile::PlayerSide::P1 => p1_joined,
         profile::PlayerSide::P2 => p2_joined,
     }
+}
+
+fn intro_text_width(asset_manager: &AssetManager, text: &str) -> f32 {
+    let font_key = current_machine_font_key(FontRole::Header);
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager
+            .with_font(font_key, |f| {
+                font::measure_line_width_logical(f, text, all_fonts) as f32
+            })
+            .unwrap_or(0.0)
+            .max(0.0)
+    })
+}
+
+fn intro_text_target_x(
+    state: &State,
+    asset_manager: &AssetManager,
+    text: &str,
+    play_style: profile::PlayStyle,
+    player_side: profile::PlayerSide,
+    center_1player_notefield: bool,
+) -> f32 {
+    let centered_notefield = state.num_players == 1
+        && (play_style == profile::PlayStyle::Double
+            || (play_style == profile::PlayStyle::Single && center_1player_notefield));
+    if !centered_notefield || state.cols_per_player == 0 {
+        return screen_center_x();
+    }
+
+    // Simply Love ScreenGameplay in/default.lua: when one human player's
+    // notefield is centered, move the Stage/Event text outside GetNotefieldWidth().
+    let side_sign = match player_side {
+        profile::PlayerSide::P1 => -1.0,
+        profile::PlayerSide::P2 => 1.0,
+    };
+    let notefield_width = state.cols_per_player as f32 * 64.0;
+    screen_center_x()
+        + (notefield_width * 0.5 + intro_text_width(asset_manager, text) * INTRO_TEXT_GETWIDTH_PAD)
+            * side_sign
 }
 
 fn gameplay_player_index_for_side(state: &State, side: profile::PlayerSide) -> Option<usize> {
@@ -486,7 +536,71 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         gameplay_lobby_player_stats(state, profile::PlayerSide::P1),
         gameplay_lobby_player_stats(state, profile::PlayerSide::P2),
     );
-    map_gameplay_action(gameplay_update(state, delta_time))
+    let previous_song_lua_time = state.current_music_time_display;
+    let action = gameplay_update(state, delta_time);
+    play_song_lua_sound_events(
+        state,
+        previous_song_lua_time,
+        state.current_music_time_display,
+    );
+    map_gameplay_action(action)
+}
+
+fn song_lua_sound_time_crossed(previous: f32, now: f32, event_second: f32) -> bool {
+    if !event_second.is_finite() {
+        return false;
+    }
+    let starts_at_zero = previous <= 0.0 && event_second.abs() <= f32::EPSILON;
+    (event_second > previous || starts_at_zero) && event_second <= now
+}
+
+fn play_song_lua_sound_events(state: &State, previous: f32, now: f32) {
+    if !previous.is_finite() || !now.is_finite() || now < previous {
+        return;
+    }
+    play_song_lua_sound_events_for(
+        &state.song_lua_overlays,
+        &state.song_lua_overlay_events,
+        previous,
+        now,
+    );
+    for layer in &state.song_lua_background_visual_layers {
+        play_song_lua_sound_events_for(&layer.overlays, &layer.overlay_events, previous, now);
+    }
+    for layer in &state.song_lua_foreground_visual_layers {
+        play_song_lua_sound_events_for(&layer.overlays, &layer.overlay_events, previous, now);
+    }
+}
+
+fn play_song_lua_sound_events_for(
+    overlays: &[SongLuaOverlayActor],
+    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
+    previous: f32,
+    now: f32,
+) {
+    for (overlay_index, overlay) in overlays.iter().enumerate() {
+        let SongLuaOverlayKind::Sound { sound_path } = &overlay.kind else {
+            continue;
+        };
+        let Some(events) = overlay_events.get(overlay_index) else {
+            continue;
+        };
+        for event in events {
+            let Some(command) = overlay.message_commands.get(event.command_index) else {
+                continue;
+            };
+            for block in &command.blocks {
+                if block.delta.sound_play != Some(true) {
+                    continue;
+                }
+                let play_second = event.event_second + block.start;
+                if song_lua_sound_time_crossed(previous, now, play_second) {
+                    let key = sound_path.to_string_lossy();
+                    crate::engine::audio::play_sfx(key.as_ref());
+                }
+            }
+        }
+    }
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -694,7 +808,12 @@ pub fn prewarm_text_layout(
     let cfg = crate::config::get();
     for centi in 0..=10_000 {
         let text = cached_score_2dp(centi as f64 / 100.0);
-        cache.prewarm_text(fonts, "wendy_monospace_numbers", text.as_ref(), None);
+        cache.prewarm_text(
+            fonts,
+            current_machine_font_key(FontRole::Numbers),
+            text.as_ref(),
+            None,
+        );
     }
     for tenths in 0..=1_000 {
         let text = cached_life_percent_text(tenths as f32 / 10.0);
@@ -703,7 +822,12 @@ pub fn prewarm_text_layout(
     for player in 0..state.num_players {
         let chart = &state.charts[player];
         let meter_text = cached_meter_text(chart.meter);
-        cache.prewarm_text(fonts, "wendy", meter_text.as_ref(), None);
+        cache.prewarm_text(
+            fonts,
+            current_machine_font_key(FontRole::Header),
+            meter_text.as_ref(),
+            None,
+        );
         let detail = color::difficulty_display_name_for_song(
             &chart.difficulty,
             &state.song.title,
@@ -718,6 +842,12 @@ pub fn prewarm_text_layout(
             cache.prewarm_text(fonts, "miso", text.as_ref(), None);
         }
     }
+    cache.prewarm_text(
+        fonts,
+        current_machine_font_key(FontRole::Header),
+        state.stage_intro_text.as_ref(),
+        None,
+    );
     cache.prewarm_text(fonts, "miso", "Assist Tick", None);
     cache.prewarm_text(fonts, "miso", "Hit Tick", None);
     cache.prewarm_text(fonts, "miso", "AutoSync Song", None);
@@ -758,11 +888,21 @@ pub fn prewarm_text_layout(
 }
 
 // --- TRANSITIONS ---
-pub fn in_transition(state: Option<&State>) -> (Vec<Actor>, f32) {
+pub fn in_transition(state: Option<&State>, asset_manager: &AssetManager) -> (Vec<Actor>, f32) {
     let text = state
         .map(|gs| gs.stage_intro_text.clone())
         .unwrap_or_else(|| Arc::from("EVENT"));
     let intro_color = state.map_or(color::decorative_rgba(0), |gs| gs.player_color);
+    let text_target_x = state.map_or(screen_center_x(), |gs| {
+        intro_text_target_x(
+            gs,
+            asset_manager,
+            text.as_ref(),
+            profile::get_session_play_style(),
+            profile::get_session_player_side(),
+            crate::config::get().center_1player_notefield,
+        )
+    });
     let mut mirrored_splode = act!(sprite("gameplayin_splode.png"):
         align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
         diffuse(intro_color[0], intro_color[1], intro_color[2], 0.8):
@@ -804,14 +944,14 @@ pub fn in_transition(state: Option<&State>) -> (Vec<Actor>, f32) {
             decelerate(0.8): rotationz(0.0): zoom(0.9): alpha(0.0)
         ),
         act!(text:
-            font("wendy"): settext(text):
+            font(current_machine_font_key(FontRole::Header)): settext(text):
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             shadowlength(1.0):
             diffuse(1.0, 1.0, 1.0, 0.0):
             z(1102):
             accelerate(0.5): alpha(1.0):
             sleep(0.66):
-            accelerate(0.33): zoom(0.4): y(screen_height() - 30.0):
+            accelerate(0.33): zoom(0.4): xy(text_target_x, screen_height() - 30.0):
             sleep((TRANSITION_IN_DURATION - INTRO_TEXT_SETTLE_SECONDS).max(0.0))
         ),
     ];
@@ -946,8 +1086,14 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.z {
         state.z = value;
     }
+    if let Some(value) = delta.z_bias {
+        state.z_bias = value;
+    }
     if let Some(value) = delta.draw_order {
         state.draw_order = value;
+    }
+    if let Some(value) = delta.draw_by_z_position {
+        state.draw_by_z_position = value;
     }
     if let Some(value) = delta.halign {
         state.halign = value;
@@ -978,6 +1124,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     }
     if let Some(value) = delta.diffuse {
         state.diffuse = value;
+    }
+    if let Some(value) = delta.vertex_colors {
+        state.vertex_colors = Some(value);
     }
     if let Some(value) = delta.visible {
         state.visible = value;
@@ -1012,6 +1161,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.mask_dest {
         state.mask_dest = value;
     }
+    if let Some(value) = delta.depth_test {
+        state.depth_test = value;
+    }
     if let Some(value) = delta.zoom {
         state.zoom = value;
     }
@@ -1032,6 +1184,9 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     }
     if let Some(value) = delta.basezoom_y {
         state.basezoom_y = value;
+    }
+    if let Some(value) = delta.basezoom_z {
+        state.basezoom_z = value;
     }
     if let Some(value) = delta.rot_x_deg {
         state.rot_x_deg = value;
@@ -1078,6 +1233,24 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.effect_timing {
         state.effect_timing = Some(value);
     }
+    if let Some(value) = delta.rainbow {
+        state.rainbow = value;
+    }
+    if let Some(value) = delta.rainbow_scroll {
+        state.rainbow_scroll = value;
+    }
+    if let Some(value) = delta.text_jitter {
+        state.text_jitter = value;
+    }
+    if let Some(value) = delta.text_distortion {
+        state.text_distortion = value;
+    }
+    if let Some(value) = delta.text_glow_mode {
+        state.text_glow_mode = value;
+    }
+    if let Some(value) = delta.mult_attrs_with_diffuse {
+        state.mult_attrs_with_diffuse = value;
+    }
     if let Some(value) = delta.sprite_animate {
         state.sprite_animate = value;
     }
@@ -1110,6 +1283,12 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     }
     if let Some(value) = delta.max_h_pre_zoom {
         state.max_h_pre_zoom = value;
+    }
+    if let Some(value) = delta.max_dimension_uses_zoom {
+        state.max_dimension_uses_zoom = value;
+    }
+    if let Some(value) = delta.texture_filtering {
+        state.texture_filtering = value;
     }
     if let Some(value) = delta.texture_wrapping {
         state.texture_wrapping = value;
@@ -1154,8 +1333,14 @@ fn song_lua_overlay_state_lerp(
     if delta.z.is_some() {
         from.z = (to.z - from.z).mul_add(t, from.z);
     }
+    if delta.z_bias.is_some() {
+        from.z_bias = (to.z_bias - from.z_bias).mul_add(t, from.z_bias);
+    }
     if delta.draw_order.is_some() && t >= 1.0 - f32::EPSILON {
         from.draw_order = to.draw_order;
+    }
+    if delta.draw_by_z_position.is_some() && t >= 1.0 - f32::EPSILON {
+        from.draw_by_z_position = to.draw_by_z_position;
     }
     if delta.halign.is_some() {
         from.halign = (to.halign - from.halign).mul_add(t, from.halign);
@@ -1203,6 +1388,18 @@ fn song_lua_overlay_state_lerp(
         for i in 0..4 {
             from.diffuse[i] = (to.diffuse[i] - from.diffuse[i]).mul_add(t, from.diffuse[i]);
         }
+    }
+    if delta.vertex_colors.is_some() {
+        let mut from_colors = from.vertex_colors.unwrap_or([[1.0, 1.0, 1.0, 1.0]; 4]);
+        let to_colors = to.vertex_colors.unwrap_or([[1.0, 1.0, 1.0, 1.0]; 4]);
+        for corner in 0..4 {
+            for channel in 0..4 {
+                from_colors[corner][channel] = (to_colors[corner][channel]
+                    - from_colors[corner][channel])
+                    .mul_add(t, from_colors[corner][channel]);
+            }
+        }
+        from.vertex_colors = Some(from_colors);
     }
     if delta.cropleft.is_some() {
         from.cropleft = (to.cropleft - from.cropleft).mul_add(t, from.cropleft);
@@ -1254,6 +1451,9 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.basezoom_y.is_some() {
         from.basezoom_y = (to.basezoom_y - from.basezoom_y).mul_add(t, from.basezoom_y);
+    }
+    if delta.basezoom_z.is_some() {
+        from.basezoom_z = (to.basezoom_z - from.basezoom_z).mul_add(t, from.basezoom_z);
     }
     if delta.rot_x_deg.is_some() {
         from.rot_x_deg = (to.rot_x_deg - from.rot_x_deg).mul_add(t, from.rot_x_deg);
@@ -1338,6 +1538,9 @@ fn song_lua_overlay_state_lerp(
     if delta.max_h_pre_zoom.is_some() && t >= 1.0 - f32::EPSILON {
         from.max_h_pre_zoom = to.max_h_pre_zoom;
     }
+    if delta.max_dimension_uses_zoom.is_some() && t >= 1.0 - f32::EPSILON {
+        from.max_dimension_uses_zoom = to.max_dimension_uses_zoom;
+    }
     if delta.texcoord_offset.is_some()
         && let (Some(from_offset), Some(to_offset)) = (from.texcoord_offset, to.texcoord_offset)
     {
@@ -1396,6 +1599,25 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.effect_mode.is_some() && t >= 1.0 - f32::EPSILON {
         from.effect_mode = to.effect_mode;
+    }
+    if delta.rainbow.is_some() && t >= 1.0 - f32::EPSILON {
+        from.rainbow = to.rainbow;
+    }
+    if delta.rainbow_scroll.is_some() && t >= 1.0 - f32::EPSILON {
+        from.rainbow_scroll = to.rainbow_scroll;
+    }
+    if delta.text_jitter.is_some() && t >= 1.0 - f32::EPSILON {
+        from.text_jitter = to.text_jitter;
+    }
+    if delta.text_distortion.is_some() {
+        from.text_distortion =
+            (to.text_distortion - from.text_distortion).mul_add(t, from.text_distortion);
+    }
+    if delta.text_glow_mode.is_some() && t >= 1.0 - f32::EPSILON {
+        from.text_glow_mode = to.text_glow_mode;
+    }
+    if delta.mult_attrs_with_diffuse.is_some() && t >= 1.0 - f32::EPSILON {
+        from.mult_attrs_with_diffuse = to.mult_attrs_with_diffuse;
     }
     if delta.sprite_animate.is_some() && t >= 1.0 - f32::EPSILON {
         from.sprite_animate = to.sprite_animate;
@@ -1486,10 +1708,42 @@ fn song_lua_overlay_uv_rect(
 
 #[inline(always)]
 fn song_lua_overlay_axis_scale(state: SongLuaOverlayState) -> [f32; 2] {
-    [
-        state.basezoom_x * state.zoom_x,
-        state.basezoom_y * state.zoom_y,
-    ]
+    let basezoom_x = if (state.basezoom_x - 1.0).abs() <= f32::EPSILON {
+        state.basezoom
+    } else {
+        state.basezoom_x
+    };
+    let basezoom_y = if (state.basezoom_y - 1.0).abs() <= f32::EPSILON {
+        state.basezoom
+    } else {
+        state.basezoom_y
+    };
+    let zoom_x = if (state.zoom_x - 1.0).abs() <= f32::EPSILON {
+        state.zoom
+    } else {
+        state.zoom_x
+    };
+    let zoom_y = if (state.zoom_y - 1.0).abs() <= f32::EPSILON {
+        state.zoom
+    } else {
+        state.zoom_y
+    };
+    [basezoom_x * zoom_x, basezoom_y * zoom_y]
+}
+
+#[inline(always)]
+fn song_lua_overlay_z_scale(state: SongLuaOverlayState) -> f32 {
+    let basezoom_z = if (state.basezoom_z - 1.0).abs() <= f32::EPSILON {
+        state.basezoom
+    } else {
+        state.basezoom_z
+    };
+    let zoom_z = if (state.zoom_z - 1.0).abs() <= f32::EPSILON {
+        state.zoom
+    } else {
+        state.zoom_z
+    };
+    basezoom_z * zoom_z
 }
 
 #[inline(always)]
@@ -1500,7 +1754,9 @@ fn song_lua_overlay_parent_uses_center_origin(
 ) -> bool {
     matches!(
         parent_kind,
-        SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+        SongLuaOverlayKind::Actor
+            | SongLuaOverlayKind::ActorFrame
+            | SongLuaOverlayKind::ActorFrameTexture
     ) && (parent_axis - 0.5 * overlay_space_axis).abs() <= 0.01
 }
 
@@ -1516,7 +1772,9 @@ fn song_lua_overlay_compose_state(
     let epsilon = 0.01;
     let local_x = if matches!(
         parent_kind,
-        SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+        SongLuaOverlayKind::Actor
+            | SongLuaOverlayKind::ActorFrame
+            | SongLuaOverlayKind::ActorFrameTexture
     ) && song_lua_overlay_parent_uses_center_origin(
         parent_kind,
         parent.x,
@@ -1529,7 +1787,9 @@ fn song_lua_overlay_compose_state(
     } * parent_scale_x;
     let local_y = if matches!(
         parent_kind,
-        SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+        SongLuaOverlayKind::Actor
+            | SongLuaOverlayKind::ActorFrame
+            | SongLuaOverlayKind::ActorFrameTexture
     ) && song_lua_overlay_parent_uses_center_origin(
         parent_kind,
         parent.y,
@@ -1551,6 +1811,7 @@ fn song_lua_overlay_compose_state(
     child.basezoom *= parent.basezoom * parent.zoom;
     child.basezoom_x *= parent.basezoom_x * parent.zoom_x;
     child.basezoom_y *= parent.basezoom_y * parent.zoom_y;
+    child.basezoom_z *= parent.basezoom_z * parent.zoom_z;
     child.rot_x_deg += parent.rot_x_deg;
     child.rot_y_deg += parent.rot_y_deg;
     child.rot_z_deg += parent.rot_z_deg;
@@ -1569,25 +1830,38 @@ fn song_lua_overlay_compose_state(
     child
 }
 
-fn song_lua_overlay_states_from(
+fn song_lua_overlay_local_states_from(
     now: f32,
     overlays: &[SongLuaOverlayActor],
     overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
     overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
+) -> Vec<SongLuaOverlayState> {
+    overlays
+        .iter()
+        .enumerate()
+        .map(|(idx, overlay)| {
+            song_lua_overlay_render_state_from(
+                now,
+                idx,
+                overlay,
+                overlay_events,
+                overlay_eases,
+                overlay_ease_ranges,
+            )
+        })
+        .collect()
+}
+
+fn song_lua_overlay_states_from_local(
+    overlays: &[SongLuaOverlayActor],
+    local_states: &[SongLuaOverlayState],
     screen_width: f32,
     screen_height: f32,
 ) -> Vec<SongLuaOverlayState> {
     let mut out = Vec::with_capacity(overlays.len());
     for (idx, overlay) in overlays.iter().enumerate() {
-        let local = song_lua_overlay_render_state_from(
-            now,
-            idx,
-            overlay,
-            overlay_events,
-            overlay_eases,
-            overlay_ease_ranges,
-        );
+        let local = local_states.get(idx).copied().unwrap_or_default();
         let composed = overlay
             .parent_index
             .and_then(|parent_index| {
@@ -1610,8 +1884,52 @@ fn song_lua_overlay_states_from(
     out
 }
 
-fn song_lua_overlay_states(state: &State) -> Vec<SongLuaOverlayState> {
-    song_lua_overlay_states_from(
+fn song_lua_overlay_state_sets_from(
+    now: f32,
+    overlays: &[SongLuaOverlayActor],
+    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
+    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
+    overlay_ease_ranges: &[std::ops::Range<usize>],
+    screen_width: f32,
+    screen_height: f32,
+) -> (Vec<SongLuaOverlayState>, Vec<SongLuaOverlayState>) {
+    let local_states = song_lua_overlay_local_states_from(
+        now,
+        overlays,
+        overlay_events,
+        overlay_eases,
+        overlay_ease_ranges,
+    );
+    let overlay_states =
+        song_lua_overlay_states_from_local(overlays, &local_states, screen_width, screen_height);
+    (local_states, overlay_states)
+}
+
+fn song_lua_overlay_states_from(
+    now: f32,
+    overlays: &[SongLuaOverlayActor],
+    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
+    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
+    overlay_ease_ranges: &[std::ops::Range<usize>],
+    screen_width: f32,
+    screen_height: f32,
+) -> Vec<SongLuaOverlayState> {
+    let (_, overlay_states) = song_lua_overlay_state_sets_from(
+        now,
+        overlays,
+        overlay_events,
+        overlay_eases,
+        overlay_ease_ranges,
+        screen_width,
+        screen_height,
+    );
+    overlay_states
+}
+
+fn song_lua_overlay_state_sets(
+    state: &State,
+) -> (Vec<SongLuaOverlayState>, Vec<SongLuaOverlayState>) {
+    song_lua_overlay_state_sets_from(
         state.current_music_time_display,
         &state.song_lua_overlays,
         &state.song_lua_overlay_events,
@@ -1819,6 +2137,8 @@ struct SongLuaScreenProxyRequests {
 
 fn song_lua_screen_proxy_sources<'a>(
     actors: &'a [Actor],
+    p1_player_source: Option<&'a [Actor]>,
+    p2_player_source: Option<&'a [Actor]>,
     p1_actor_range: Option<(usize, usize)>,
     p2_actor_range: Option<(usize, usize)>,
     p1_sources: [Option<&'a [Actor]>; 3],
@@ -1829,13 +2149,15 @@ fn song_lua_screen_proxy_sources<'a>(
     SongLuaScreenProxySources {
         players: [
             SongLuaPlayerProxySources {
-                player: p1_actor_range.map(|(start, end)| &actors[start..end]),
+                player: p1_player_source
+                    .or_else(|| p1_actor_range.map(|(start, end)| &actors[start..end])),
                 note_field: p1_sources[0],
                 judgment: p1_sources[1],
                 combo: p1_sources[2],
             },
             SongLuaPlayerProxySources {
-                player: p2_actor_range.map(|(start, end)| &actors[start..end]),
+                player: p2_player_source
+                    .or_else(|| p2_actor_range.map(|(start, end)| &actors[start..end])),
                 note_field: p2_sources[0],
                 judgment: p2_sources[1],
                 combo: p2_sources[2],
@@ -2058,33 +2380,121 @@ fn song_lua_push_order(
             children.push(idx);
         }
     }
-    children.sort_by_key(|&idx| {
-        (
-            overlay_states
-                .get(idx)
-                .map_or(overlays[idx].initial_state.draw_order, |state| {
-                    state.draw_order
-                }),
-            idx,
-        )
+    let draw_by_z_position = parent_index.is_some_and(|idx| {
+        overlay_states
+            .get(idx)
+            .map_or(overlays[idx].initial_state.draw_by_z_position, |state| {
+                state.draw_by_z_position
+            })
     });
+    if draw_by_z_position {
+        children.sort_by(|&left, &right| {
+            let left_z = overlay_states
+                .get(left)
+                .map_or(overlays[left].initial_state.z, |state| state.z);
+            let right_z = overlay_states
+                .get(right)
+                .map_or(overlays[right].initial_state.z, |state| state.z);
+            left_z.total_cmp(&right_z).then_with(|| left.cmp(&right))
+        });
+    } else {
+        children.sort_by_key(|&idx| {
+            (
+                overlay_states
+                    .get(idx)
+                    .map_or(overlays[idx].initial_state.draw_order, |state| {
+                        state.draw_order
+                    }),
+                idx,
+            )
+        });
+    }
     for idx in children {
         out.push(idx);
         song_lua_push_order(overlays, overlay_states, Some(idx), out);
     }
 }
 
+fn song_lua_capture_root_state(state: SongLuaOverlayState) -> SongLuaOverlayState {
+    SongLuaOverlayState {
+        draw_order: state.draw_order,
+        draw_by_z_position: state.draw_by_z_position,
+        glow: state.glow,
+        fov: state.fov,
+        vanishpoint: state.vanishpoint,
+        diffuse: state.diffuse,
+        visible: state.visible,
+        mask_source: state.mask_source,
+        mask_dest: state.mask_dest,
+        depth_test: state.depth_test,
+        blend: state.blend,
+        ..SongLuaOverlayState::default()
+    }
+}
+
+fn song_lua_capture_overlay_states(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    local_overlay_states: &[SongLuaOverlayState],
+    capture_index: usize,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+) -> Vec<SongLuaOverlayState> {
+    let mut out = vec![SongLuaOverlayState::default(); overlays.len()];
+    let Some(capture_state) = overlay_states.get(capture_index).copied() else {
+        return out;
+    };
+    // AFTs capture in texture space; placement transforms apply to the sprite
+    // that consumes the texture, not to the captured children.
+    out[capture_index] = song_lua_capture_root_state(capture_state);
+    for (idx, overlay) in overlays.iter().enumerate() {
+        if idx == capture_index
+            || song_lua_overlay_aft_ancestor(overlays, idx) != Some(capture_index)
+        {
+            continue;
+        }
+        let local = local_overlay_states.get(idx).copied().unwrap_or_default();
+        out[idx] = overlay
+            .parent_index
+            .and_then(|parent_index| {
+                out.get(parent_index)
+                    .copied()
+                    .zip(overlays.get(parent_index))
+            })
+            .map(|(parent, parent_overlay)| {
+                song_lua_overlay_compose_state(
+                    &parent_overlay.kind,
+                    parent,
+                    local,
+                    overlay_space_width,
+                    overlay_space_height,
+                )
+            })
+            .unwrap_or(local);
+    }
+    out
+}
+
 fn song_lua_capture_children(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
+    local_overlay_states: &[SongLuaOverlayState],
     asset_manager: &AssetManager,
     capture_index: usize,
     proxy_sources: &SongLuaScreenProxySources<'_>,
     overlay_space_width: f32,
     overlay_space_height: f32,
 ) -> Vec<Actor> {
+    let capture_states = song_lua_capture_overlay_states(
+        overlays,
+        overlay_states,
+        local_overlay_states,
+        capture_index,
+        overlay_space_width,
+        overlay_space_height,
+    );
     let mut out = Vec::new();
-    for (draw_idx, idx) in song_lua_overlay_order(overlays, overlay_states, Some(capture_index))
+    for (draw_idx, idx) in song_lua_overlay_order(overlays, &capture_states, Some(capture_index))
         .into_iter()
         .enumerate()
     {
@@ -2096,11 +2506,13 @@ fn song_lua_capture_children(
         }
         if matches!(
             overlay.kind,
-            SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+            SongLuaOverlayKind::Actor
+                | SongLuaOverlayKind::ActorFrame
+                | SongLuaOverlayKind::ActorFrameTexture
         ) {
             continue;
         }
-        let overlay_state = overlay_states.get(idx).copied().unwrap_or_default();
+        let overlay_state = capture_states.get(idx).copied().unwrap_or_default();
         let actor = match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
                 song_lua_proxy_source(target, proxy_sources).and_then(|source| {
@@ -2116,7 +2528,7 @@ fn song_lua_capture_children(
             _ => build_song_lua_overlay_actor(
                 overlay,
                 overlay_state,
-                song_lua_overlay_camera_state(overlays, overlay_states, overlay.parent_index),
+                song_lua_overlay_camera_state(overlays, &capture_states, overlay.parent_index),
                 asset_manager,
                 draw_idx.min(i16::MAX as usize) as i16,
                 overlay_space_width,
@@ -2302,6 +2714,10 @@ fn song_lua_capture_tint(color: [f32; 4], tint: [f32; 4]) -> [f32; 4] {
     ]
 }
 
+fn song_lua_biased_world_z(state: SongLuaOverlayState, effect_z: f32) -> f32 {
+    effect_z + state.z_bias
+}
+
 fn song_lua_add_z(z: i16, delta: i16) -> i16 {
     (i32::from(z) + i32::from(delta)).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
 }
@@ -2375,6 +2791,8 @@ fn song_lua_style_capture_actor(
             animate,
             state_delay,
             scale,
+            shadow_len,
+            shadow_color,
             effect,
         } => Actor::Sprite {
             align,
@@ -2411,6 +2829,8 @@ fn song_lua_style_capture_actor(
             animate,
             state_delay,
             scale,
+            shadow_len,
+            shadow_color: song_lua_capture_tint(shadow_color, tint),
             effect,
         },
         Actor::Text {
@@ -2434,9 +2854,13 @@ fn song_lua_style_capture_actor(
             max_height,
             max_w_pre_zoom,
             max_h_pre_zoom,
+            jitter,
+            distortion,
             clip,
             mask_dest,
             blend: actor_blend,
+            shadow_len,
+            shadow_color,
             effect,
         } => Actor::Text {
             align,
@@ -2459,9 +2883,13 @@ fn song_lua_style_capture_actor(
             max_height,
             max_w_pre_zoom,
             max_h_pre_zoom,
+            jitter,
+            distortion,
             clip,
             mask_dest,
             blend: blend.unwrap_or(actor_blend),
+            shadow_len,
+            shadow_color: song_lua_capture_tint(shadow_color, tint),
             effect,
         },
         Actor::Mesh {
@@ -2566,20 +2994,21 @@ fn song_lua_capture_transform_matrix(
     let y_scale = screen_height() / overlay_space_height.max(1.0);
     let translate_x = (state.x - 0.5 * overlay_space_width) * x_scale + extra_offset[0];
     let translate_y = (state.y - 0.5 * overlay_space_height) * y_scale + extra_offset[1];
-    let scale_x = state.basezoom_x * state.zoom_x;
-    let scale_y = state.basezoom_y * state.zoom_y;
+    let [scale_x, scale_y] = song_lua_overlay_axis_scale(state);
+    let scale_z = song_lua_overlay_z_scale(state);
     if translate_x.abs() <= f32::EPSILON
         && translate_y.abs() <= f32::EPSILON
         && state.rot_z_deg.abs() <= f32::EPSILON
         && (scale_x - 1.0).abs() <= f32::EPSILON
         && (scale_y - 1.0).abs() <= f32::EPSILON
+        && (scale_z - 1.0).abs() <= f32::EPSILON
     {
         return None;
     }
     Some(
         Matrix4::from_translation(Vector3::new(translate_x, -translate_y, 0.0))
             * Matrix4::from_rotation_z(state.rot_z_deg.to_radians())
-            * Matrix4::from_scale(Vector3::new(scale_x, scale_y, 1.0)),
+            * Matrix4::from_scale(Vector3::new(scale_x, scale_y, scale_z)),
     )
 }
 
@@ -2703,6 +3132,7 @@ fn song_lua_overlay_has_visible_output(state: SongLuaOverlayState) -> bool {
 
 fn song_lua_apply_overlay_effect(
     effect: EffectState,
+    rainbow: bool,
     effect_time: f32,
     effect_beat: f32,
     tint: &mut [f32; 4],
@@ -2776,6 +3206,12 @@ fn song_lua_apply_overlay_effect(
             | crate::engine::present::anim::EffectMode::None => {}
         }
     }
+    if rainbow {
+        let color = song_lua_rainbow_color(effect_time, effect.period, effect.offset);
+        tint[0] *= color[0];
+        tint[1] *= color[1];
+        tint[2] *= color[2];
+    }
     offset[0] = offset[0].max(-1_000_000.0).min(1_000_000.0);
     offset[1] = offset[1].max(-1_000_000.0).min(1_000_000.0);
     offset[2] = offset[2].max(-1_000_000.0).min(1_000_000.0);
@@ -2790,6 +3226,143 @@ fn song_lua_apply_overlay_effect(
     scale[0] = scale[0].max(0.0);
     scale[1] = scale[1].max(0.0);
     scale[2] = scale[2].max(0.0);
+}
+
+fn song_lua_rainbow_color(time: f32, period: f32, offset: f32) -> [f32; 3] {
+    let hue = ((time + offset) / period.max(f32::EPSILON)).rem_euclid(1.0);
+    let h = hue * 6.0;
+    let x = 1.0 - (h.rem_euclid(2.0) - 1.0).abs();
+    if h < 1.0 {
+        [1.0, x, 0.0]
+    } else if h < 2.0 {
+        [x, 1.0, 0.0]
+    } else if h < 3.0 {
+        [0.0, 1.0, x]
+    } else if h < 4.0 {
+        [0.0, x, 1.0]
+    } else if h < 5.0 {
+        [x, 0.0, 1.0]
+    } else {
+        [1.0, 0.0, x]
+    }
+}
+
+const SONG_LUA_TEXT_RAINBOW_COLORS: [[f32; 4]; 7] = [
+    [1.0, 0.0, 0.4, 1.0],
+    [0.8, 0.2, 0.6, 1.0],
+    [0.4, 0.3, 0.5, 1.0],
+    [0.2, 0.6, 1.0, 1.0],
+    [0.2, 0.8, 0.8, 1.0],
+    [0.2, 0.8, 0.4, 1.0],
+    [1.0, 0.8, 0.2, 1.0],
+];
+
+fn song_lua_rainbow_scroll_attributes(text: &str, total_elapsed: f32) -> Vec<TextAttribute> {
+    let char_count = text.chars().count();
+    let mut out = Vec::with_capacity(char_count);
+    if char_count == 0 {
+        return out;
+    }
+    let first_color = ((total_elapsed / 0.2).floor() as usize) % SONG_LUA_TEXT_RAINBOW_COLORS.len();
+    for index in 0..char_count {
+        out.push(TextAttribute {
+            start: index,
+            length: 1,
+            color: SONG_LUA_TEXT_RAINBOW_COLORS
+                [(first_color + index) % SONG_LUA_TEXT_RAINBOW_COLORS.len()],
+            vertex_colors: None,
+            glow: None,
+        });
+    }
+    out
+}
+
+fn song_lua_transparent_text_attributes(text: &str) -> Vec<TextAttribute> {
+    let char_count = text.chars().count();
+    if char_count == 0 {
+        return Vec::new();
+    }
+    vec![TextAttribute {
+        start: 0,
+        length: char_count,
+        color: [1.0, 1.0, 1.0, 0.0],
+        vertex_colors: None,
+        glow: None,
+    }]
+}
+
+fn song_lua_text_attributes_have_glow(attributes: &[TextAttribute]) -> bool {
+    attributes
+        .iter()
+        .any(|attr| attr.glow.is_some_and(|glow| glow[3] > f32::EPSILON))
+}
+
+fn song_lua_text_glow_attributes(
+    text: &str,
+    attributes: &[TextAttribute],
+    glow: [f32; 4],
+) -> Vec<TextAttribute> {
+    let char_count = text.chars().count();
+    if char_count == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(attributes.len() + usize::from(glow[3] > f32::EPSILON));
+    if glow[3] > f32::EPSILON {
+        out.push(TextAttribute {
+            start: 0,
+            length: char_count,
+            color: glow,
+            vertex_colors: None,
+            glow: None,
+        });
+    }
+    for attr in attributes {
+        let Some(glow) = attr.glow else {
+            continue;
+        };
+        if glow[3] <= f32::EPSILON {
+            continue;
+        }
+        out.push(TextAttribute {
+            start: attr.start,
+            length: attr.length,
+            color: glow,
+            vertex_colors: None,
+            glow: None,
+        });
+    }
+    out
+}
+
+fn song_lua_text_attributes_for_diffuse_mode(
+    attributes: &[TextAttribute],
+    color: [f32; 4],
+    text: &str,
+    mult_attrs_with_diffuse: bool,
+) -> (Vec<TextAttribute>, [f32; 4]) {
+    if attributes.is_empty() || mult_attrs_with_diffuse {
+        return (attributes.to_vec(), color);
+    }
+    let char_count = text.chars().count();
+    if char_count == 0 {
+        return (attributes.to_vec(), color);
+    }
+    if color
+        .iter()
+        .all(|component| (*component - 1.0).abs() <= f32::EPSILON)
+    {
+        return (attributes.to_vec(), [1.0, 1.0, 1.0, 1.0]);
+    }
+    let mut out = Vec::with_capacity(attributes.len() + 1);
+    out.push(TextAttribute {
+        start: 0,
+        length: char_count,
+        color,
+        vertex_colors: None,
+        glow: None,
+    });
+    out.extend_from_slice(attributes);
+    (out, [1.0, 1.0, 1.0, 1.0])
 }
 
 fn song_lua_overlay_camera_state(
@@ -2852,6 +3425,463 @@ fn song_lua_overlay_view_proj(
         Vector3::new(0.0, 1.0, 0.0),
     );
     Some(proj * view)
+}
+
+fn song_lua_actor_multi_vertex_mesh(
+    vertices: &Arc<[SongLuaOverlayMeshVertex]>,
+    tint: [f32; 4],
+    x_scale: f32,
+    y_scale: f32,
+    actor_scale: [f32; 2],
+    effect_scale: [f32; 3],
+    rotation_z_deg: f32,
+    skew: [f32; 2],
+) -> Arc<[MeshVertex]> {
+    let mut out = Vec::with_capacity(vertices.len());
+    for vertex in vertices.iter() {
+        out.push(MeshVertex {
+            pos: song_lua_actor_multi_vertex_pos(
+                vertex.pos,
+                x_scale,
+                y_scale,
+                actor_scale,
+                effect_scale,
+                rotation_z_deg,
+                skew,
+            ),
+            color: song_lua_capture_tint(vertex.color, tint),
+        });
+    }
+    Arc::from(out.into_boxed_slice())
+}
+
+fn song_lua_actor_multi_vertex_textured_mesh(
+    vertices: &Arc<[SongLuaOverlayMeshVertex]>,
+    x_scale: f32,
+    y_scale: f32,
+    actor_scale: [f32; 2],
+    effect_scale: [f32; 3],
+    rotation_z_deg: f32,
+    skew: [f32; 2],
+) -> Arc<[TexturedMeshVertex]> {
+    let mut out = Vec::with_capacity(vertices.len());
+    for vertex in vertices.iter() {
+        let pos = song_lua_actor_multi_vertex_pos(
+            vertex.pos,
+            x_scale,
+            y_scale,
+            actor_scale,
+            effect_scale,
+            rotation_z_deg,
+            skew,
+        );
+        out.push(TexturedMeshVertex {
+            pos: [pos[0], pos[1], 0.0],
+            uv: vertex.uv,
+            tex_matrix_scale: [1.0, 1.0],
+            color: vertex.color,
+        });
+    }
+    Arc::from(out.into_boxed_slice())
+}
+
+fn song_lua_actor_multi_vertex_pos(
+    pos: [f32; 2],
+    x_scale: f32,
+    y_scale: f32,
+    actor_scale: [f32; 2],
+    effect_scale: [f32; 3],
+    rotation_z_deg: f32,
+    skew: [f32; 2],
+) -> [f32; 2] {
+    let scale = [
+        x_scale * actor_scale[0] * effect_scale[0],
+        y_scale * actor_scale[1] * effect_scale[1],
+    ];
+    let (sin_z, cos_z) = rotation_z_deg.to_radians().sin_cos();
+    let mut x = pos[0] * scale[0];
+    let mut y = -pos[1] * scale[1];
+    if skew[0].abs() > f32::EPSILON {
+        x += skew[0] * y;
+    }
+    if skew[1].abs() > f32::EPSILON {
+        y += skew[1] * x;
+    }
+    [x * cos_z - y * sin_z, x * sin_z + y * cos_z]
+}
+
+fn song_lua_model_actor(
+    layers: &[SongLuaOverlayModelLayer],
+    state: SongLuaOverlayState,
+    asset_manager: &AssetManager,
+    z: i16,
+    x_scale: f32,
+    y_scale: f32,
+    actor_scale: [f32; 2],
+    effect_scale: [f32; 3],
+    effect_rot: [f32; 3],
+    effect_offset: [f32; 3],
+    tint: [f32; 4],
+    glow: [f32; 4],
+    blend: BlendMode,
+) -> Option<Actor> {
+    let mut children = Vec::with_capacity(layers.len());
+    let offset = [
+        state.x * x_scale + effect_offset[0] * x_scale,
+        state.y * y_scale + effect_offset[1] * y_scale,
+    ];
+    for (idx, layer) in layers.iter().enumerate() {
+        if !layer.draw.visible || !asset_manager.has_texture_key(layer.texture_key.as_ref()) {
+            continue;
+        }
+        let actor = Actor::TexturedMesh {
+            align: [0.0, 0.0],
+            offset,
+            world_z: song_lua_biased_world_z(state, effect_offset[2]),
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            local_transform: song_lua_model_local_transform(
+                layer.model_size,
+                layer.draw,
+                x_scale,
+                y_scale,
+                actor_scale,
+                effect_scale,
+                effect_rot,
+                [state.skew_x, state.skew_y],
+            ),
+            texture: Arc::clone(&layer.texture_key),
+            tint: song_lua_capture_tint(layer.draw.tint, tint),
+            vertices: Arc::clone(&layer.vertices),
+            geom_cache_key: INVALID_TMESH_CACHE_KEY,
+            mode: MeshMode::Triangles,
+            uv_scale: layer.uv_scale,
+            uv_offset: layer.uv_offset,
+            uv_tex_shift: layer.uv_tex_shift,
+            depth_test: state.depth_test,
+            visible: true,
+            blend: if layer.draw.blend_add {
+                BlendMode::Add
+            } else {
+                blend
+            },
+            z: song_lua_add_z(z, idx.min(i16::MAX as usize) as i16),
+        };
+        let glow_actor = song_lua_overlay_glow_actor(&actor, glow, state.text_glow_mode);
+        children.push(actor);
+        if let Some(glow_actor) = glow_actor {
+            children.push(glow_actor);
+        }
+    }
+    if children.is_empty() {
+        None
+    } else {
+        Some(Actor::Frame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children,
+            background: None,
+            z: 0,
+        })
+    }
+}
+
+fn song_lua_model_local_transform(
+    model_size: [f32; 2],
+    draw: SongLuaOverlayModelDraw,
+    x_scale: f32,
+    y_scale: f32,
+    actor_scale: [f32; 2],
+    effect_scale: [f32; 3],
+    effect_rot: [f32; 3],
+    skew: [f32; 2],
+) -> Matrix4 {
+    let align_y = (0.5 - draw.vert_align) * model_size[1];
+    let scale = Vector3::new(
+        x_scale * actor_scale[0] * effect_scale[0] * draw.zoom[0],
+        y_scale * actor_scale[1] * effect_scale[1] * draw.zoom[1],
+        actor_scale[1].abs() * effect_scale[2] * draw.zoom[2],
+    );
+    Matrix4::from_translation(Vector3::new(
+        draw.pos[0] * x_scale,
+        -draw.pos[1] * y_scale,
+        draw.pos[2],
+    )) * song_lua_overlay_local_transform(
+        [
+            draw.rot[0] + effect_rot[0],
+            draw.rot[1] + effect_rot[1],
+            draw.rot[2] + effect_rot[2],
+        ],
+        skew[0],
+        skew[1],
+    ) * Matrix4::from_translation(Vector3::new(0.0, align_y, 0.0))
+        * Matrix4::from_scale(scale)
+        * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0))
+}
+
+fn song_lua_song_meter_actor(
+    state: SongLuaOverlayState,
+    stream_state: SongLuaOverlayState,
+    stream_width: f32,
+    music_length_seconds: f32,
+    x_scale: f32,
+    y_scale: f32,
+    z: i16,
+    total_elapsed: f32,
+) -> Option<Actor> {
+    let progress = if music_length_seconds > f32::EPSILON {
+        (total_elapsed / music_length_seconds).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let parent_scale = song_lua_overlay_axis_scale(state);
+    let stream_scale = song_lua_overlay_axis_scale(stream_state);
+    let full_width = stream_width * parent_scale[0].abs() * stream_scale[0].abs();
+    let progress_width = full_width * progress;
+    if progress_width <= f32::EPSILON {
+        return None;
+    }
+    let stream_height = stream_state.size.map_or(1.0, |size| size[1].abs())
+        * parent_scale[1].abs()
+        * stream_scale[1].abs();
+    let left = state.x + stream_state.x * parent_scale[0] - full_width * 0.5;
+    let y = state.y + stream_state.y * parent_scale[1];
+    let tint = [
+        state.diffuse[0] * stream_state.diffuse[0],
+        state.diffuse[1] * stream_state.diffuse[1],
+        state.diffuse[2] * stream_state.diffuse[2],
+        state.diffuse[3] * stream_state.diffuse[3],
+    ];
+    let mut actor = act!(quad:
+        align(0.0, stream_state.valign):
+        xy(left * x_scale, y * y_scale):
+        zoomto(progress_width * x_scale, stream_height * y_scale):
+        diffuse(tint[0], tint[1], tint[2], tint[3]):
+        z(z)
+    );
+    if let Actor::Sprite {
+        visible,
+        blend,
+        mask_source,
+        mask_dest,
+        ..
+    } = &mut actor
+    {
+        *visible = state.visible && stream_state.visible;
+        *blend = if stream_state.blend == SongLuaOverlayBlendMode::Alpha {
+            song_lua_overlay_blend(state.blend)
+        } else {
+            song_lua_overlay_blend(stream_state.blend)
+        };
+        *mask_source = state.mask_source || stream_state.mask_source;
+        *mask_dest = state.mask_dest || stream_state.mask_dest;
+    }
+    Some(actor)
+}
+
+fn song_lua_graph_display_actor(
+    state: SongLuaOverlayState,
+    body_values: &Arc<[f32]>,
+    body_state: SongLuaOverlayState,
+    line_state: SongLuaOverlayState,
+    size: [f32; 2],
+    x_scale: f32,
+    y_scale: f32,
+    z: i16,
+) -> Option<Actor> {
+    let mut children = Vec::with_capacity(2);
+    if let Some(body) =
+        song_lua_graph_display_body_actor(state, body_values, body_state, size, x_scale, y_scale, z)
+    {
+        children.push(body);
+    }
+    if let Some(line) =
+        song_lua_graph_display_line_actor(state, body_values, line_state, size, x_scale, y_scale, z)
+    {
+        children.push(line);
+    }
+    match children.len() {
+        0 => None,
+        1 => children.pop(),
+        _ => Some(Actor::Frame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children,
+            background: None,
+            z: 0,
+        }),
+    }
+}
+
+fn song_lua_graph_display_body_actor(
+    state: SongLuaOverlayState,
+    body_values: &[f32],
+    body_state: SongLuaOverlayState,
+    size: [f32; 2],
+    x_scale: f32,
+    y_scale: f32,
+    z: i16,
+) -> Option<Actor> {
+    if !body_state.visible || body_state.diffuse[3] <= f32::EPSILON {
+        return None;
+    }
+    let values = graph_display_values_or_default(body_values);
+    let graph_scale = song_lua_overlay_axis_scale(state);
+    let body_scale = song_lua_overlay_axis_scale(body_state);
+    let width = size[0] * graph_scale[0].abs() * body_scale[0].abs();
+    let height = size[1] * graph_scale[1].abs() * body_scale[1].abs();
+    if width <= f32::EPSILON || height <= f32::EPSILON {
+        return None;
+    }
+    let left = state.x - width * state.halign + body_state.x * graph_scale[0];
+    let top =
+        state.y - size[1] * graph_scale[1].abs() * state.valign + body_state.y * graph_scale[1];
+    let tint = [
+        state.diffuse[0] * body_state.diffuse[0],
+        state.diffuse[1] * body_state.diffuse[1],
+        state.diffuse[2] * body_state.diffuse[2],
+        state.diffuse[3] * body_state.diffuse[3],
+    ];
+    let bottom = top + height;
+    let mut vertices = Vec::with_capacity((values.len().saturating_sub(1)) * 6);
+    for (index, pair) in values.windows(2).enumerate() {
+        let x0 = left + width * index as f32 / (values.len() - 1) as f32;
+        let x1 = left + width * (index + 1) as f32 / (values.len() - 1) as f32;
+        let y0 = top + (1.0 - pair[0].clamp(0.0, 1.0)) * height;
+        let y1 = top + (1.0 - pair[1].clamp(0.0, 1.0)) * height;
+        push_graph_display_tri(
+            &mut vertices,
+            [x0 * x_scale, y0 * y_scale],
+            [x0 * x_scale, bottom * y_scale],
+            [x1 * x_scale, bottom * y_scale],
+            tint,
+        );
+        push_graph_display_tri(
+            &mut vertices,
+            [x0 * x_scale, y0 * y_scale],
+            [x1 * x_scale, bottom * y_scale],
+            [x1 * x_scale, y1 * y_scale],
+            tint,
+        );
+    }
+    Some(Actor::Mesh {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        vertices: Arc::from(vertices.into_boxed_slice()),
+        mode: MeshMode::Triangles,
+        visible: state.visible && body_state.visible,
+        blend: if body_state.blend == SongLuaOverlayBlendMode::Alpha {
+            song_lua_overlay_blend(state.blend)
+        } else {
+            song_lua_overlay_blend(body_state.blend)
+        },
+        z,
+    })
+}
+
+fn song_lua_graph_display_line_actor(
+    state: SongLuaOverlayState,
+    body_values: &[f32],
+    line_state: SongLuaOverlayState,
+    size: [f32; 2],
+    x_scale: f32,
+    y_scale: f32,
+    z: i16,
+) -> Option<Actor> {
+    if !line_state.visible || line_state.diffuse[3] <= f32::EPSILON {
+        return None;
+    }
+    let values = graph_display_values_or_default(body_values);
+    let graph_scale = song_lua_overlay_axis_scale(state);
+    let line_scale = song_lua_overlay_axis_scale(line_state);
+    let width = size[0] * graph_scale[0].abs() * line_scale[0].abs();
+    if width <= f32::EPSILON {
+        return None;
+    }
+    let line_height = line_state.size.map_or(1.0, |line_size| line_size[1].abs())
+        * graph_scale[1].abs()
+        * line_scale[1].abs();
+    let left = state.x - width * state.halign + line_state.x * graph_scale[0];
+    let top = state.y - size[1] * graph_scale[1].abs() * state.valign;
+    let y = top + size[1] * graph_scale[1].abs() * 0.5 + line_state.y * graph_scale[1];
+    let tint = [
+        state.diffuse[0] * line_state.diffuse[0],
+        state.diffuse[1] * line_state.diffuse[1],
+        state.diffuse[2] * line_state.diffuse[2],
+        state.diffuse[3] * line_state.diffuse[3],
+    ];
+    let mut vertices = Vec::with_capacity((values.len().saturating_sub(1)) * 6);
+    let stroke = line_height.max(1.0);
+    for (index, pair) in values.windows(2).enumerate() {
+        let x0 = left + width * index as f32 / (values.len() - 1) as f32;
+        let x1 = left + width * (index + 1) as f32 / (values.len() - 1) as f32;
+        let y0 = y + (0.5 - pair[0].clamp(0.0, 1.0)) * size[1] * graph_scale[1].abs();
+        let y1 = y + (0.5 - pair[1].clamp(0.0, 1.0)) * size[1] * graph_scale[1].abs();
+        push_graph_display_line_segment(
+            &mut vertices,
+            [x0 * x_scale, y0 * y_scale],
+            [x1 * x_scale, y1 * y_scale],
+            stroke * y_scale,
+            tint,
+        );
+    }
+    Some(Actor::Mesh {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        vertices: Arc::from(vertices.into_boxed_slice()),
+        mode: MeshMode::Triangles,
+        visible: state.visible && line_state.visible,
+        blend: if line_state.blend == SongLuaOverlayBlendMode::Alpha {
+            song_lua_overlay_blend(state.blend)
+        } else {
+            song_lua_overlay_blend(line_state.blend)
+        },
+        z,
+    })
+}
+
+fn graph_display_values_or_default(values: &[f32]) -> &[f32] {
+    static DEFAULT: [f32; 2] = [0.5, 0.5];
+    if values.len() >= 2 { values } else { &DEFAULT }
+}
+
+fn push_graph_display_line_segment(
+    out: &mut Vec<MeshVertex>,
+    start: [f32; 2],
+    end: [f32; 2],
+    stroke: f32,
+    color: [f32; 4],
+) {
+    let dx = end[0] - start[0];
+    let dy = end[1] - start[1];
+    let len = (dx * dx + dy * dy).sqrt();
+    if len <= f32::EPSILON {
+        return;
+    }
+    let half = stroke * 0.5;
+    let nx = -dy / len * half;
+    let ny = dx / len * half;
+    let a = [start[0] + nx, start[1] + ny];
+    let b = [start[0] - nx, start[1] - ny];
+    let c = [end[0] - nx, end[1] - ny];
+    let d = [end[0] + nx, end[1] + ny];
+    push_graph_display_tri(out, a, b, c, color);
+    push_graph_display_tri(out, a, c, d, color);
+}
+
+fn push_graph_display_tri(
+    out: &mut Vec<MeshVertex>,
+    a: [f32; 2],
+    b: [f32; 2],
+    c: [f32; 2],
+    color: [f32; 4],
+) {
+    out.push(MeshVertex { pos: a, color });
+    out.push(MeshVertex { pos: b, color });
+    out.push(MeshVertex { pos: c, color });
 }
 
 fn song_lua_project_overlay_point(view_proj: Matrix4, point: [f32; 3]) -> Option<[f32; 2]> {
@@ -3070,6 +4100,29 @@ fn song_lua_projected_overlay_uv_point(uv: [[f32; 2]; 4], x: f32, y: f32) -> [f3
     ]
 }
 
+fn song_lua_overlay_vertex_color(
+    state: SongLuaOverlayState,
+    x: f32,
+    y: f32,
+    flip_x: bool,
+    flip_y: bool,
+    alpha: f32,
+) -> [f32; 4] {
+    let Some(colors) = state.vertex_colors else {
+        return [1.0, 1.0, 1.0, alpha];
+    };
+    let x = if flip_x { 1.0 - x } else { x }.clamp(0.0, 1.0);
+    let y = if flip_y { 1.0 - y } else { y }.clamp(0.0, 1.0);
+    let mut out = [0.0; 4];
+    for channel in 0..4 {
+        let top = song_lua_effect_lerp(colors[0][channel], colors[1][channel], x);
+        let bottom = song_lua_effect_lerp(colors[3][channel], colors[2][channel], x);
+        out[channel] = song_lua_effect_lerp(top, bottom, y);
+    }
+    out[3] *= alpha;
+    out
+}
+
 #[inline(always)]
 fn song_lua_overlay_fold_xy_rot(
     mut flip_x: bool,
@@ -3141,7 +4194,14 @@ fn song_lua_flat_skewed_overlay_actor(
                 pos: [point.x, point.y, 0.0],
                 uv: song_lua_projected_overlay_uv_point(uv, x, y),
                 tex_matrix_scale: [1.0, 1.0],
-                color: [1.0, 1.0, 1.0, fade_x.min(fade_y)],
+                color: song_lua_overlay_vertex_color(
+                    state,
+                    x,
+                    y,
+                    flip_x,
+                    flip_y,
+                    fade_x.min(fade_y),
+                ),
             });
         }
     }
@@ -3175,7 +4235,7 @@ fn song_lua_flat_skewed_overlay_actor(
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
-        depth_test: false,
+        depth_test: state.depth_test,
         visible: state.visible,
         blend,
         z,
@@ -3219,7 +4279,14 @@ fn song_lua_projected_overlay_actor(
                 pos: [screen[0], screen[1], 0.0],
                 uv: song_lua_projected_overlay_uv_point(uv, x, y),
                 tex_matrix_scale: [1.0, 1.0],
-                color: [1.0, 1.0, 1.0, fade_x.min(fade_y)],
+                color: song_lua_overlay_vertex_color(
+                    state,
+                    x,
+                    y,
+                    flip_x,
+                    flip_y,
+                    fade_x.min(fade_y),
+                ),
             });
         }
     }
@@ -3242,7 +4309,7 @@ fn song_lua_projected_overlay_actor(
     Some(Actor::TexturedMesh {
         align: [0.0, 0.0],
         offset: [0.0, 0.0],
-        world_z: 0.0,
+        world_z: state.z_bias,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         local_transform: Matrix4::IDENTITY,
         texture,
@@ -3253,7 +4320,7 @@ fn song_lua_projected_overlay_actor(
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
-        depth_test: false,
+        depth_test: state.depth_test,
         visible: true,
         blend,
         z,
@@ -3296,10 +4363,12 @@ fn build_song_lua_overlay_actor(
     let finalize_actor =
         |actor, glow| song_lua_finalize_overlay_actor(state, actor, glow, x_scale, y_scale);
     match &overlay.kind {
+        SongLuaOverlayKind::Actor => None,
         SongLuaOverlayKind::ActorFrame => None,
         SongLuaOverlayKind::ActorFrameTexture => None,
         SongLuaOverlayKind::ActorProxy { .. } => None,
         SongLuaOverlayKind::AftSprite { .. } => None,
+        SongLuaOverlayKind::Sound { .. } => None,
         SongLuaOverlayKind::Sprite { texture_path } => {
             let key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
             if !asset_manager.has_texture_key(key.as_ref()) {
@@ -3322,6 +4391,7 @@ fn build_song_lua_overlay_actor(
                 let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
                 song_lua_apply_overlay_effect(
                     effect,
+                    state.rainbow,
                     effect_time,
                     effect_beat,
                     &mut tint,
@@ -3350,7 +4420,9 @@ fn build_song_lua_overlay_actor(
                 )?;
                 return Some(finalize_actor(actor, glow));
             }
-            if (state.skew_x.abs() > f32::EPSILON || state.skew_y.abs() > f32::EPSILON)
+            if (state.skew_x.abs() > f32::EPSILON
+                || state.skew_y.abs() > f32::EPSILON
+                || state.vertex_colors.is_some())
                 && !state.mask_source
                 && !state.mask_dest
             {
@@ -3370,6 +4442,7 @@ fn build_song_lua_overlay_actor(
                 let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
                 song_lua_apply_overlay_effect(
                     effect,
+                    state.rainbow,
                     effect_time,
                     effect_beat,
                     &mut tint,
@@ -3455,6 +4528,7 @@ fn build_song_lua_overlay_actor(
                 let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
                 song_lua_apply_overlay_effect(
                     effect,
+                    state.rainbow,
                     effect_time,
                     effect_beat,
                     &mut effect_tint,
@@ -3481,7 +4555,7 @@ fn build_song_lua_overlay_actor(
                 *rot_z_deg = effect_rot[2];
                 offset[0] += effect_offset[0] * x_scale;
                 offset[1] += effect_offset[1] * y_scale;
-                *world_z += effect_offset[2];
+                *world_z += song_lua_biased_world_z(state, effect_offset[2]);
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
                 *uv_rect = song_lua_overlay_uv_rect(state, Some(key.as_ref()), total_elapsed);
@@ -3502,6 +4576,7 @@ fn build_song_lua_overlay_actor(
             font_name,
             text,
             stroke_color,
+            attributes,
             ..
         } => {
             let content = if state.uppercase {
@@ -3521,6 +4596,7 @@ fn build_song_lua_overlay_actor(
             let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
             song_lua_apply_overlay_effect(
                 effect,
+                state.rainbow,
                 effect_time,
                 effect_beat,
                 &mut color,
@@ -3529,6 +4605,19 @@ fn build_song_lua_overlay_actor(
                 &mut effect_scale,
                 &mut effect_rot,
             );
+            let (text_attributes, color) = if state.rainbow_scroll {
+                (
+                    song_lua_rainbow_scroll_attributes(content.as_str(), total_elapsed),
+                    color,
+                )
+            } else {
+                song_lua_text_attributes_for_diffuse_mode(
+                    attributes,
+                    color,
+                    content.as_str(),
+                    state.mult_attrs_with_diffuse,
+                )
+            };
             Some(finalize_actor(
                 Actor::Text {
                     align: [state.halign, state.valign],
@@ -3546,7 +4635,7 @@ fn build_song_lua_overlay_actor(
                     glow,
                     font,
                     content,
-                    attributes: Vec::new(),
+                    attributes: text_attributes,
                     align_text: state.text_align,
                     z,
                     scale: [
@@ -3563,15 +4652,186 @@ fn build_song_lua_overlay_actor(
                         .map(|value| ((value as f32) * x_scale).round() as i32),
                     max_width: state.max_width.map(|value| value * x_scale),
                     max_height: state.max_height.map(|value| value * y_scale),
-                    max_w_pre_zoom: state.max_w_pre_zoom,
-                    max_h_pre_zoom: state.max_h_pre_zoom,
+                    max_w_pre_zoom: state.max_w_pre_zoom && !state.max_dimension_uses_zoom,
+                    max_h_pre_zoom: state.max_h_pre_zoom && !state.max_dimension_uses_zoom,
+                    jitter: state.text_jitter,
+                    distortion: state.text_distortion,
                     clip: None,
                     mask_dest: state.mask_dest,
                     blend: overlay_blend,
+                    shadow_len: [0.0, 0.0],
+                    shadow_color: [0.0, 0.0, 0.0, 0.5],
                     effect: EffectState::default(),
                 },
                 glow,
             ))
+        }
+        SongLuaOverlayKind::ActorMultiVertex {
+            vertices,
+            texture_path,
+        } => {
+            let mut tint = state.diffuse;
+            let mut glow = state.glow;
+            let mut effect_offset = [0.0, 0.0, 0.0];
+            let mut effect_scale = [1.0, 1.0, 1.0];
+            let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+            song_lua_apply_overlay_effect(
+                effect,
+                state.rainbow,
+                effect_time,
+                effect_beat,
+                &mut tint,
+                &mut glow,
+                &mut effect_offset,
+                &mut effect_scale,
+                &mut effect_rot,
+            );
+            if let Some(texture_path) = texture_path {
+                let key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
+                if !asset_manager.has_texture_key(key.as_ref()) {
+                    return None;
+                }
+                let mesh = song_lua_actor_multi_vertex_textured_mesh(
+                    vertices,
+                    x_scale,
+                    y_scale,
+                    [size_scale_x, size_scale_y],
+                    effect_scale,
+                    effect_rot[2],
+                    [state.skew_x, state.skew_y],
+                );
+                return Some(finalize_actor(
+                    Actor::TexturedMesh {
+                        align: [0.0, 0.0],
+                        offset: [
+                            state.x * x_scale + effect_offset[0] * x_scale,
+                            state.y * y_scale + effect_offset[1] * y_scale,
+                        ],
+                        world_z: song_lua_biased_world_z(state, effect_offset[2]),
+                        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                        local_transform: Matrix4::IDENTITY,
+                        texture: key,
+                        tint,
+                        vertices: mesh,
+                        geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                        mode: MeshMode::Triangles,
+                        uv_scale: [1.0, 1.0],
+                        uv_offset: [0.0, 0.0],
+                        uv_tex_shift: [0.0, 0.0],
+                        depth_test: state.depth_test,
+                        visible: state.visible,
+                        blend: overlay_blend,
+                        z,
+                    },
+                    glow,
+                ));
+            }
+            let mesh = song_lua_actor_multi_vertex_mesh(
+                vertices,
+                tint,
+                x_scale,
+                y_scale,
+                [size_scale_x, size_scale_y],
+                effect_scale,
+                effect_rot[2],
+                [state.skew_x, state.skew_y],
+            );
+            Some(finalize_actor(
+                Actor::Mesh {
+                    align: [0.0, 0.0],
+                    offset: [
+                        state.x * x_scale + effect_offset[0] * x_scale,
+                        state.y * y_scale + effect_offset[1] * y_scale,
+                    ],
+                    size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                    vertices: mesh,
+                    mode: MeshMode::Triangles,
+                    visible: state.visible,
+                    blend: overlay_blend,
+                    z,
+                },
+                glow,
+            ))
+        }
+        SongLuaOverlayKind::Model { layers } => {
+            let mut tint = state.diffuse;
+            let mut glow = state.glow;
+            let mut effect_offset = [0.0, 0.0, 0.0];
+            let mut effect_scale = [1.0, 1.0, 1.0];
+            let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+            song_lua_apply_overlay_effect(
+                effect,
+                state.rainbow,
+                effect_time,
+                effect_beat,
+                &mut tint,
+                &mut glow,
+                &mut effect_offset,
+                &mut effect_scale,
+                &mut effect_rot,
+            );
+            song_lua_model_actor(
+                layers,
+                state,
+                asset_manager,
+                z,
+                x_scale,
+                y_scale,
+                [size_scale_x, size_scale_y],
+                effect_scale,
+                effect_rot,
+                effect_offset,
+                tint,
+                glow,
+                overlay_blend,
+            )
+        }
+        SongLuaOverlayKind::SongMeterDisplay {
+            stream_width,
+            stream_state,
+            music_length_seconds,
+        } => {
+            let actor = song_lua_song_meter_actor(
+                state,
+                *stream_state,
+                *stream_width,
+                *music_length_seconds,
+                x_scale,
+                y_scale,
+                z,
+                total_elapsed,
+            )?;
+            let glow = [
+                state.glow[0] + stream_state.glow[0],
+                state.glow[1] + stream_state.glow[1],
+                state.glow[2] + stream_state.glow[2],
+                state.glow[3].max(stream_state.glow[3]),
+            ];
+            Some(finalize_actor(actor, glow))
+        }
+        SongLuaOverlayKind::GraphDisplay {
+            size,
+            body_values,
+            body_state,
+            line_state,
+        } => {
+            let actor = song_lua_graph_display_actor(
+                state,
+                body_values,
+                *body_state,
+                *line_state,
+                *size,
+                x_scale,
+                y_scale,
+                z,
+            )?;
+            let glow = [
+                state.glow[0] + body_state.glow[0].max(line_state.glow[0]),
+                state.glow[1] + body_state.glow[1].max(line_state.glow[1]),
+                state.glow[2] + body_state.glow[2].max(line_state.glow[2]),
+                state.glow[3].max(body_state.glow[3].max(line_state.glow[3])),
+            ];
+            Some(finalize_actor(actor, glow))
         }
         SongLuaOverlayKind::Quad => {
             if let Some(view_proj) = perspective_view_proj {
@@ -3590,6 +4850,7 @@ fn build_song_lua_overlay_actor(
                 let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
                 song_lua_apply_overlay_effect(
                     effect,
+                    state.rainbow,
                     effect_time,
                     effect_beat,
                     &mut tint,
@@ -3618,7 +4879,9 @@ fn build_song_lua_overlay_actor(
                 )?;
                 return Some(finalize_actor(actor, glow));
             }
-            if (state.skew_x.abs() > f32::EPSILON || state.skew_y.abs() > f32::EPSILON)
+            if (state.skew_x.abs() > f32::EPSILON
+                || state.skew_y.abs() > f32::EPSILON
+                || state.vertex_colors.is_some())
                 && !state.mask_source
                 && !state.mask_dest
             {
@@ -3637,6 +4900,7 @@ fn build_song_lua_overlay_actor(
                 let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
                 song_lua_apply_overlay_effect(
                     effect,
+                    state.rainbow,
                     effect_time,
                     effect_beat,
                     &mut tint,
@@ -3722,6 +4986,7 @@ fn build_song_lua_overlay_actor(
                 let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
                 song_lua_apply_overlay_effect(
                     effect,
+                    state.rainbow,
                     effect_time,
                     effect_beat,
                     &mut effect_tint,
@@ -3748,7 +5013,7 @@ fn build_song_lua_overlay_actor(
                 *rot_z_deg = effect_rot[2];
                 offset[0] += effect_offset[0] * x_scale;
                 offset[1] += effect_offset[1] * y_scale;
-                *world_z += effect_offset[2];
+                *world_z += song_lua_biased_world_z(state, effect_offset[2]);
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
                 *actor_effect = EffectState::default();
@@ -3768,24 +5033,42 @@ fn build_song_lua_overlay_actor(
 
 fn song_lua_wrap_overlay_shadow(
     state: SongLuaOverlayState,
-    actor: Actor,
+    mut actor: Actor,
     x_scale: f32,
     y_scale: f32,
 ) -> Actor {
     if state.shadow_len[0].abs() <= f32::EPSILON && state.shadow_len[1].abs() <= f32::EPSILON {
         return actor;
     }
-    Actor::Shadow {
-        len: [state.shadow_len[0] * x_scale, state.shadow_len[1] * y_scale],
-        color: state.shadow_color,
-        child: Box::new(actor),
+    let len = [state.shadow_len[0] * x_scale, state.shadow_len[1] * y_scale];
+    match &mut actor {
+        Actor::Sprite {
+            shadow_len,
+            shadow_color,
+            ..
+        }
+        | Actor::Text {
+            shadow_len,
+            shadow_color,
+            ..
+        } if shadow_len[0].abs() <= f32::EPSILON && shadow_len[1].abs() <= f32::EPSILON => {
+            *shadow_len = len;
+            *shadow_color = state.shadow_color;
+            actor
+        }
+        _ => Actor::Shadow {
+            len,
+            color: state.shadow_color,
+            child: Box::new(actor),
+        },
     }
 }
 
-fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
-    if glow[3] <= f32::EPSILON {
-        return None;
-    }
+fn song_lua_overlay_glow_actor(
+    actor: &Actor,
+    glow: [f32; 4],
+    text_glow_mode: SongLuaTextGlowMode,
+) -> Option<Actor> {
     match actor {
         Actor::Sprite {
             align,
@@ -3822,6 +5105,9 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
             effect,
             ..
         } => {
+            if glow[3] <= f32::EPSILON {
+                return None;
+            }
             if *mask_source && !*mask_dest {
                 return None;
             }
@@ -3860,6 +5146,8 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
                 animate: *animate,
                 state_delay: *state_delay,
                 scale: *scale,
+                shadow_len: [0.0, 0.0],
+                shadow_color: [0.0, 0.0, 0.0, 0.5],
                 effect: *effect,
             })
         }
@@ -3869,7 +5157,7 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
             local_transform,
             font,
             content,
-            attributes,
+            attributes: base_attributes,
             align_text,
             z,
             scale,
@@ -3881,36 +5169,70 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
             max_height,
             max_w_pre_zoom,
             max_h_pre_zoom,
+            jitter: _,
+            distortion,
             clip,
             mask_dest,
             effect,
             ..
-        } => Some(Actor::Text {
-            align: *align,
-            offset: *offset,
-            local_transform: *local_transform,
-            color: glow,
-            stroke_color: None,
-            glow: [0.0, 0.0, 0.0, 0.0],
-            font: *font,
-            content: content.clone(),
-            attributes: attributes.clone(),
-            align_text: *align_text,
-            z: *z,
-            scale: *scale,
-            fit_width: *fit_width,
-            fit_height: *fit_height,
-            line_spacing: *line_spacing,
-            wrap_width_pixels: *wrap_width_pixels,
-            max_width: *max_width,
-            max_height: *max_height,
-            max_w_pre_zoom: *max_w_pre_zoom,
-            max_h_pre_zoom: *max_h_pre_zoom,
-            clip: *clip,
-            mask_dest: *mask_dest,
-            blend: BlendMode::Add,
-            effect: *effect,
-        }),
+        } => {
+            let has_attr_glow = song_lua_text_attributes_have_glow(base_attributes);
+            if glow[3] <= f32::EPSILON && !has_attr_glow {
+                return None;
+            }
+            let (attributes, color, stroke_color) = if has_attr_glow {
+                let attributes =
+                    song_lua_text_glow_attributes(content.as_str(), base_attributes, glow);
+                let stroke_color = (glow[3] > f32::EPSILON
+                    && matches!(
+                        text_glow_mode,
+                        SongLuaTextGlowMode::Stroke | SongLuaTextGlowMode::Both
+                    ))
+                .then_some(glow);
+                (attributes, [1.0, 1.0, 1.0, 1.0], stroke_color)
+            } else {
+                let mut attributes = base_attributes.clone();
+                let (color, stroke_color) = match text_glow_mode {
+                    SongLuaTextGlowMode::Inner => (glow, None),
+                    SongLuaTextGlowMode::Both => (glow, Some(glow)),
+                    SongLuaTextGlowMode::Stroke => {
+                        attributes = song_lua_transparent_text_attributes(content.as_str());
+                        ([1.0, 1.0, 1.0, 1.0], Some(glow))
+                    }
+                };
+                (attributes, color, stroke_color)
+            };
+            Some(Actor::Text {
+                align: *align,
+                offset: *offset,
+                local_transform: *local_transform,
+                color,
+                stroke_color,
+                glow: [0.0, 0.0, 0.0, 0.0],
+                font: *font,
+                content: content.clone(),
+                attributes,
+                align_text: *align_text,
+                z: *z,
+                scale: *scale,
+                fit_width: *fit_width,
+                fit_height: *fit_height,
+                line_spacing: *line_spacing,
+                wrap_width_pixels: *wrap_width_pixels,
+                max_width: *max_width,
+                max_height: *max_height,
+                max_w_pre_zoom: *max_w_pre_zoom,
+                max_h_pre_zoom: *max_h_pre_zoom,
+                jitter: false,
+                distortion: *distortion,
+                clip: *clip,
+                mask_dest: *mask_dest,
+                blend: BlendMode::Add,
+                shadow_len: [0.0, 0.0],
+                shadow_color: [0.0, 0.0, 0.0, 0.5],
+                effect: *effect,
+            })
+        }
         Actor::TexturedMesh {
             align,
             offset,
@@ -3928,6 +5250,9 @@ fn song_lua_overlay_glow_actor(actor: &Actor, glow: [f32; 4]) -> Option<Actor> {
             z,
             ..
         } => {
+            if glow[3] <= f32::EPSILON {
+                return None;
+            }
             let mut glow_vertices = vertices.as_ref().to_vec();
             for vertex in &mut glow_vertices {
                 vertex.color = [1.0, 1.0, 1.0, vertex.color[3]];
@@ -3963,7 +5288,7 @@ fn song_lua_finalize_overlay_actor(
     x_scale: f32,
     y_scale: f32,
 ) -> Actor {
-    let glow_actor = song_lua_overlay_glow_actor(&actor, glow);
+    let glow_actor = song_lua_overlay_glow_actor(&actor, glow, state.text_glow_mode);
     let actor = song_lua_wrap_overlay_shadow(state, actor, x_scale, y_scale);
     if let Some(glow_actor) = glow_actor {
         Actor::Frame {
@@ -4043,6 +5368,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             animate,
             state_delay,
             scale,
+            shadow_len,
+            shadow_color,
             effect,
         } => {
             offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
@@ -4081,6 +5408,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 animate,
                 state_delay,
                 scale,
+                shadow_len,
+                shadow_color,
                 effect,
             }
         }
@@ -4105,9 +5434,13 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             max_height,
             max_w_pre_zoom,
             max_h_pre_zoom,
+            jitter,
+            distortion,
             clip,
             mask_dest,
             blend,
+            shadow_len,
+            shadow_color,
             effect,
         } => {
             offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
@@ -4133,9 +5466,13 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 max_height,
                 max_w_pre_zoom,
                 max_h_pre_zoom,
+                jitter,
+                distortion,
                 clip,
                 mask_dest,
                 blend,
+                shadow_len,
+                shadow_color,
                 effect,
             }
         }
@@ -4433,8 +5770,22 @@ fn apply_song_lua_player_transform(
     }
 }
 
+fn song_lua_player_target_x(
+    explicit_x: Option<f32>,
+    player_state_x: f32,
+    layout_center_x: f32,
+    notefield_view: notefield::ViewOverride,
+) -> f32 {
+    explicit_x.unwrap_or(if notefield_view.force_center_1player {
+        layout_center_x
+    } else {
+        player_state_x
+    })
+}
+
 fn build_song_lua_layer_actors(
     overlays: &[SongLuaOverlayActor],
+    local_overlay_states: &[SongLuaOverlayState],
     overlay_states: &[SongLuaOverlayState],
     song_foreground_state: SongLuaOverlayState,
     proxy_sources: &SongLuaScreenProxySources<'_>,
@@ -4485,6 +5836,7 @@ fn build_song_lua_layer_actors(
                         let source = song_lua_capture_children(
                             overlays,
                             overlay_states,
+                            local_overlay_states,
                             asset_manager,
                             capture_index,
                             proxy_sources,
@@ -4529,6 +5881,31 @@ fn build_song_lua_layer_actors(
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+    get_actors_with_view(state, asset_manager, ActorViewOverride::default())
+}
+
+pub fn get_actors_with_notefield_view(
+    state: &State,
+    asset_manager: &AssetManager,
+    notefield_view: NotefieldViewOverride,
+) -> Vec<Actor> {
+    get_actors_with_view(
+        state,
+        asset_manager,
+        ActorViewOverride {
+            notefield: notefield_view,
+            hide_gameplay_hud: false,
+        },
+    )
+}
+
+pub fn get_actors_with_view(
+    state: &State,
+    asset_manager: &AssetManager,
+    view: ActorViewOverride,
+) -> Vec<Actor> {
+    let notefield_view = view.notefield;
+    let hide_gameplay_hud = view.hide_gameplay_hud;
     let cfg = crate::config::get();
     let hud_snapshot = profile::gameplay_hud_snapshot();
     let mut actors = Vec::with_capacity(96);
@@ -4536,9 +5913,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let player_side = hud_snapshot.player_side;
     let is_p2_single =
         play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2;
+    let center_1player_notefield =
+        cfg.center_1player_notefield || notefield_view.force_center_1player;
     let centered_single_notefield = play_style == profile::PlayStyle::Single
         && state.num_players == 1
-        && cfg.center_1player_notefield;
+        && center_1player_notefield;
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
     let player_color = if is_p2_single {
@@ -4546,7 +5925,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         state.player_color
     };
-    let overlay_states = song_lua_overlay_states(state);
+    let (local_overlay_states, overlay_states) = song_lua_overlay_state_sets(state);
     let proxy_requests = song_lua_proxy_requests(&state.song_lua_overlays, &overlay_states);
     let mut underlay_proxy_source = proxy_requests.underlay.then_some(Vec::new());
     let mut overlay_proxy_source = proxy_requests.overlay.then_some(Vec::new());
@@ -4557,7 +5936,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
-        let overlay_states = song_lua_overlay_states_from(
+        let (local_overlay_states, overlay_states) = song_lua_overlay_state_sets_from(
             state.current_music_time_display,
             &layer.overlays,
             &layer.overlay_events,
@@ -4573,6 +5952,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         );
         actors.extend(build_song_lua_layer_actors(
             &layer.overlays,
+            &local_overlay_states,
             &overlay_states,
             song_foreground_state,
             &SongLuaScreenProxySources::default(),
@@ -4630,7 +6010,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     // ITGmania/Simply Love parity: ScreenSyncOverlay status text.
-    {
+    if !hide_gameplay_hud {
         let overlay_start = actors.len();
         let status_line_count = if let Some((status_text, line_count)) = sync_overlay_text(state) {
             actors.push(act!(text:
@@ -4690,7 +6070,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     // Hold START/BACK prompt (Simply Love parity: ScreenGameplay debug text).
-    {
+    if !hide_gameplay_hud {
         let overlay_start = actors.len();
         const HOLD_FADE_IN_S: f32 = 1.0 / 8.0;
         const ABORT_FADE_OUT_S: f32 = 0.5;
@@ -4748,18 +6128,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         song_lua_capture_new_actors(&mut overlay_proxy_source, &actors, overlay_start);
     }
 
-    let overlay_start = actors.len();
-    let lobby_snapshot = crate::game::online::lobbies::snapshot();
-    if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
-        actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
-            screen_name: "ScreenGameplay",
-            joined,
-            z: 995,
-            show_song_info: false,
-            status_text: gameplay_lobby_hud_status_text(state),
-        }));
+    if !hide_gameplay_hud {
+        let overlay_start = actors.len();
+        let lobby_snapshot = crate::game::online::lobbies::snapshot();
+        if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
+            actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
+                screen_name: "ScreenGameplay",
+                joined,
+                z: 995,
+                show_song_info: false,
+                status_text: gameplay_lobby_hud_status_text(state),
+            }));
+        }
+        song_lua_capture_new_actors(&mut overlay_proxy_source, &actors, overlay_start);
     }
-    song_lua_capture_new_actors(&mut overlay_proxy_source, &actors, overlay_start);
 
     // Fade-to-black when giving up / backing out (Simply Love parity).
     let overlay_start = actors.len();
@@ -4788,10 +6170,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if cols == 0 {
             return 256.0;
         }
+        let spacing_mult = crate::game::gameplay::spacing_multiplier_for_percent(
+            state.player_profiles[player_idx].spacing_percent,
+        );
         let mut min_x = f32::INFINITY;
         let mut max_x = f32::NEG_INFINITY;
         for x in ns.column_xs.iter().take(cols) {
-            let xf = *x as f32;
+            let xf = *x as f32 * spacing_mult;
             min_x = min_x.min(xf);
             max_x = max_x.max(xf);
         }
@@ -4820,17 +6205,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             field_actors,
             judgment_actors,
             combo_actors,
-        } = notefield::build_bundles(
+        } = notefield::build_bundles_with_view(
             state,
             profile,
             placement,
             play_style,
-            cfg.center_1player_notefield,
+            center_1player_notefield,
             notefield::ProxyCaptureRequests {
                 note_field: requests.note_field,
                 judgment: requests.judgment,
                 combo: requests.combo,
             },
+            notefield_view,
         );
         let player_actor = &state.song_lua_player_actors[player_idx];
         let player_state = song_lua_player_render_state(state, player_idx);
@@ -4840,10 +6226,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let rotation_y = player_state.rot_y_deg + state.song_lua_player_rotation_y[player_idx];
         let skew_x = state.song_lua_player_skew_x[player_idx];
         let skew_y = state.song_lua_player_skew_y[player_idx];
-        let zoom_x = player_state.zoom_x * state.song_lua_player_zoom_x[player_idx];
-        let zoom_y = player_state.zoom_y * state.song_lua_player_zoom_y[player_idx];
-        let zoom_z = player_state.zoom_z * state.song_lua_player_zoom_z[player_idx];
-        let target_x = state.song_lua_player_x[player_idx].unwrap_or(player_state.x);
+        let [player_scale_x, player_scale_y] = song_lua_overlay_axis_scale(player_state);
+        let player_scale_z = song_lua_overlay_z_scale(player_state);
+        let zoom_x = player_scale_x * state.song_lua_player_zoom_x[player_idx];
+        let zoom_y = player_scale_y * state.song_lua_player_zoom_y[player_idx];
+        let zoom_z = player_scale_z * state.song_lua_player_zoom_z[player_idx];
+        let target_x = song_lua_player_target_x(
+            state.song_lua_player_x[player_idx],
+            player_state.x,
+            layout_center_x,
+            notefield_view,
+        );
         let target_y = state.song_lua_player_y[player_idx].unwrap_or(player_state.y);
         let z_shift = song_lua_player_layer_z(
             song_lua_active,
@@ -4857,41 +6250,53 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             SongLuaOverlayBlendMode::Multiply => Some(BlendMode::Multiply),
             SongLuaOverlayBlendMode::Subtract => Some(BlendMode::Subtract),
         };
+        let render_source_bundle = |bundle| {
+            apply_song_lua_player_transform(
+                bundle,
+                z_shift,
+                player_state.diffuse,
+                player_blend,
+                layout_center_x,
+                target_x,
+                target_y,
+                rotation_x,
+                rotation_z,
+                rotation_y,
+                skew_x,
+                skew_y,
+                zoom_x,
+                zoom_y,
+                zoom_z,
+            )
+        };
+        let player_source = requests
+            .player
+            .then(|| render_source_bundle(actors.clone()));
         let render_bundle = |bundle| {
             if !player_state.visible {
                 Vec::new()
             } else {
-                apply_song_lua_player_transform(
-                    bundle,
-                    z_shift,
-                    player_state.diffuse,
-                    player_blend,
-                    layout_center_x,
-                    target_x,
-                    target_y,
-                    rotation_x,
-                    rotation_z,
-                    rotation_y,
-                    skew_x,
-                    skew_y,
-                    zoom_x,
-                    zoom_y,
-                    zoom_z,
-                )
+                render_source_bundle(bundle)
             }
         };
         let player = render_bundle(actors);
         let proxy_sources = [
-            requests.note_field.then(|| render_bundle(field_actors)),
-            requests.judgment.then(|| render_bundle(judgment_actors)),
-            requests.combo.then(|| render_bundle(combo_actors)),
+            requests
+                .note_field
+                .then(|| render_source_bundle(field_actors)),
+            requests
+                .judgment
+                .then(|| render_source_bundle(judgment_actors)),
+            requests.combo.then(|| render_source_bundle(combo_actors)),
         ];
-        (player, layout_center_x, proxy_sources)
+        (player, layout_center_x, player_source, proxy_sources)
     };
 
     let (
         p1_actors,
         p2_actors,
+        p1_player_proxy_source,
+        p2_player_proxy_source,
         p1_proxy_sources,
         p2_proxy_sources,
         playfield_center_x,
@@ -4899,19 +6304,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     ): (
         Vec<Actor>,
         Option<Vec<Actor>>,
+        Option<Vec<Actor>>,
+        Option<Vec<Actor>>,
         [Option<Vec<Actor>>; 3],
         [Option<Vec<Actor>>; 3],
         f32,
         [(usize, f32); 2],
     ) = match play_style {
         profile::PlayStyle::Versus => {
-            let (p1, p1_x, p1_sources) = build_player_bundle(
+            let (p1, p1_x, p1_player_source, p1_sources) = build_player_bundle(
                 0,
                 &state.player_profiles[0],
                 notefield::FieldPlacement::P1,
                 proxy_requests.players[0],
             );
-            let (p2, p2_x, p2_sources) = build_player_bundle(
+            let (p2, p2_x, p2_player_source, p2_sources) = build_player_bundle(
                 1,
                 &state.player_profiles[1],
                 notefield::FieldPlacement::P2,
@@ -4920,6 +6327,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             (
                 p1,
                 Some(p2),
+                p1_player_source,
+                p2_player_source,
                 p1_sources,
                 p2_sources,
                 p1_x,
@@ -4932,7 +6341,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 notefield::FieldPlacement::P1
             };
-            let (nf, nf_x, nf_sources) = build_player_bundle(
+            let (nf, nf_x, nf_player_source, nf_sources) = build_player_bundle(
                 0,
                 &state.player_profiles[0],
                 placement,
@@ -4940,6 +6349,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             );
             (
                 nf,
+                None,
+                nf_player_source,
                 None,
                 nf_sources,
                 [None, None, None],
@@ -4950,18 +6361,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
     let replacement_proxy_sources = [
         SongLuaPlayerProxySources {
-            player: proxy_requests.players[0]
-                .player
-                .then_some(p1_actors.as_slice()),
+            player: p1_player_proxy_source.as_deref(),
             note_field: p1_proxy_sources[0].as_deref(),
             judgment: p1_proxy_sources[1].as_deref(),
             combo: p1_proxy_sources[2].as_deref(),
         },
         SongLuaPlayerProxySources {
-            player: proxy_requests.players[1]
-                .player
-                .then(|| p2_actors.as_deref())
-                .flatten(),
+            player: p2_player_proxy_source.as_deref(),
             note_field: p2_proxy_sources[0].as_deref(),
             judgment: p2_proxy_sources[1].as_deref(),
             combo: p2_proxy_sources[2].as_deref(),
@@ -4974,7 +6380,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     );
 
     // Danger overlay (Simply Love parity): red flashing in danger + green recovery, optional HideDanger.
-    {
+    if !hide_gameplay_hud {
         let underlay_start = actors.len();
         let sw = screen_width();
         let sh = screen_height();
@@ -5036,14 +6442,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Simply Love parity: BGAnimations/ScreenGameplay underlay/Shared/Header.lua.
     // This translucent top strip sits underneath the UpperNPSGraph and other HUD actors.
-    let underlay_start = actors.len();
-    actors.push(act!(quad:
-        align(0.5, 0.0): xy(screen_center_x(), 0.0):
-        zoomto(screen_width(), 80.0):
-        diffuse(0.0, 0.0, 0.0, 0.85):
-        z(83)
-    ));
-    song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_start);
+    if !hide_gameplay_hud {
+        let underlay_start = actors.len();
+        actors.push(act!(quad:
+            align(0.5, 0.0): xy(screen_center_x(), 0.0):
+            zoomto(screen_width(), 80.0):
+            diffuse(0.0, 0.0, 0.0, 0.85):
+            z(83)
+        ));
+        song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_start);
+    }
 
     actors.reserve(p1_actors.len() + p2_actors.as_ref().map_or(0, Vec::len) + 48);
     let mut p1_actor_range = None;
@@ -5060,569 +6468,578 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(p1_actors);
         p1_actor_range = Some((start, actors.len()));
     }
-    let underlay_tail_start = actors.len();
-    let clamped_width = screen_width().clamp(640.0, 854.0);
-    let score_x_p1 = screen_center_x() - clamped_width / 4.3;
-    let score_x_p2 = screen_center_x() + clamped_width / 2.75;
-    let diff_x_p1 = screen_center_x() - widescale(292.5, 342.5);
-    let diff_x_p2 = screen_center_x() + widescale(292.5, 342.5);
+    if !hide_gameplay_hud {
+        let underlay_tail_start = actors.len();
+        let clamped_width = screen_width().clamp(640.0, 854.0);
+        let score_x_p1 = screen_center_x() - clamped_width / 4.3;
+        let score_x_p2 = screen_center_x() + clamped_width / 2.75;
+        let diff_x_p1 = screen_center_x() - widescale(292.5, 342.5);
+        let diff_x_p2 = screen_center_x() + widescale(292.5, 342.5);
 
-    let mut players = [(0usize, profile::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
-    let player_count = match play_style {
-        profile::PlayStyle::Versus => {
-            players[0] = (
-                0,
-                profile::PlayerSide::P1,
-                per_player_fields[0].1,
-                diff_x_p1,
-                score_x_p1,
-                score_x_p2,
-            );
-            players[1] = (
-                1,
-                profile::PlayerSide::P2,
-                per_player_fields[1].1,
-                diff_x_p2,
-                score_x_p2,
-                score_x_p1,
-            );
-            2
-        }
-        _ if is_p2_single => {
-            players[0] = (
-                0,
-                profile::PlayerSide::P2,
-                per_player_fields[0].1,
-                diff_x_p2,
-                score_x_p2,
-                score_x_p1,
-            );
-            1
-        }
-        _ => {
-            players[0] = (
-                0,
-                profile::PlayerSide::P1,
-                per_player_fields[0].1,
-                diff_x_p1,
-                score_x_p1,
-                score_x_p2,
-            );
-            1
-        }
-    };
-
-    let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
-    let graph_center_shift = widescale(45.0, 95.0);
-
-    for &(player_idx, player_side, field_x, _, _, _) in &players[..player_count] {
-        if !state.player_profiles[player_idx].nps_graph_at_top {
-            continue;
-        }
-        let graph_w = state.density_graph_top_w[player_idx];
-        let graph_h = state.density_graph_top_h;
-        let graph_mesh_h = graph_h * state.density_graph_top_scale_y[player_idx].clamp(0.0, 1.0);
-        if graph_w <= 0.0 || graph_h <= 0.0 || graph_mesh_h <= 0.0 {
-            continue;
-        }
-        let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
-        let x = if note_field_is_centered {
-            screen_center_x() - graph_w * 0.5
-        } else if player_side == profile::PlayerSide::P1 {
-            screen_center_x() - graph_w - graph_center_shift
-        } else {
-            screen_center_x() + graph_center_shift
-        };
-        let y_bottom = 71.0;
-        let y_top = y_bottom - graph_h;
-        let y_mesh_top = y_bottom - graph_mesh_h;
-        let graph_bg_alpha = if state.player_profiles[player_idx].transparent_density_graph_bg {
-            0.5
-        } else {
-            1.0
-        };
-
-        actors.push(act!(quad:
-            align(0.0, 0.0): xy(x, y_top):
-            zoomto(graph_w, graph_h):
-            diffuse(30.0 / 255.0, 40.0 / 255.0, 47.0 / 255.0, graph_bg_alpha):
-            z(84)
-        ));
-
-        if let Some(mesh) = &state.density_graph.top_mesh[player_idx]
-            && !mesh.is_empty()
-        {
-            actors.push(Actor::Mesh {
-                align: [0.0, 0.0],
-                offset: [x, y_mesh_top],
-                size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_mesh_h)],
-                vertices: mesh.clone(),
-                mode: MeshMode::Triangles,
-                visible: true,
-                blend: BlendMode::Alpha,
-                z: 85,
-            });
-        }
-
-        let duration =
-            (state.density_graph_last_second - state.density_graph_first_second).max(0.001_f32);
-        let progress_w = (((state.current_music_time_display - state.density_graph_first_second)
-            / duration)
-            * graph_w)
-            .clamp(0.0, graph_w);
-        if progress_w > 0.0 {
-            actors.push(act!(quad:
-                align(0.0, 0.0): xy(x, y_top):
-                zoomto(progress_w, graph_h):
-                diffuse(0.0, 0.0, 0.0, 0.85):
-                z(86)
-            ));
-        }
-    }
-
-    for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in
-        &players[..player_count]
-    {
-        let chart = &state.charts[player_idx];
-        let difficulty_color = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
-        let meter_text = cached_meter_text(chart.meter);
-        let meter_detail_text =
-            color::difficulty_display_name_for_song(&chart.difficulty, &state.song.title, true);
-
-        // Difficulty Box
-        let y = 56.0;
-        let mut diff_children = Vec::with_capacity(if cfg.zmod_rating_box_text { 3 } else { 2 });
-        diff_children.push(act!(quad:
-            align(0.5, 0.5): xy(0.0, 0.0): zoomto(30.0, 30.0):
-            diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
-        ));
-        let meter_y = if cfg.zmod_rating_box_text { -4.0 } else { 0.0 };
-        diff_children.push(act!(text:
-            font("wendy"): settext(meter_text): align(0.5, 0.5): xy(0.0, meter_y):
-            zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0)
-        ));
-        if cfg.zmod_rating_box_text {
-            diff_children.push(act!(text:
-                font("miso"):
-                settext(meter_detail_text):
-                align(0.5, 0.5): xy(0.0, 9.5):
-                zoom(0.5):
-                diffuse(0.0, 0.0, 0.0, 1.0)
-            ));
-        }
-        actors.push(Actor::Frame {
-            align: [0.5, 0.5],
-            offset: [diff_x, y],
-            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            children: diff_children,
-            background: None,
-            z: 90,
-        });
-
-        // Score Display
-        let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
-        let nps_graph_at_top = state.player_profiles[player_idx].nps_graph_at_top;
-        let single_score_swapped = state.num_players == 1
-            && play_style != profile::PlayStyle::Double
-            && nps_graph_at_top
-            && !note_field_is_centered;
-        let score_x = if single_score_swapped {
-            score_x_other
-        } else {
-            score_x_normal
-        };
-        let hide_score_for_top_graph = state.num_players > 1 && nps_graph_at_top && !is_ultrawide;
-
-        if !state.player_profiles[player_idx].hide_score && !hide_score_for_top_graph {
-            let score_y = 56.0;
-            let show_ex_score = state.player_profiles[player_idx].show_ex_score;
-            let show_hard_ex_score =
-                show_ex_score && state.player_profiles[player_idx].show_hard_ex_score;
-            let (score_text, score_color) = if show_ex_score {
-                let ex_percent = crate::game::gameplay::display_ex_score_percent(state, player_idx);
-                (
-                    cached_score_2dp(ex_percent.max(0.0)),
-                    color::JUDGMENT_RGBA[0],
-                )
-            } else {
-                let score_percent =
-                    (crate::game::gameplay::display_itg_score_percent(state, player_idx) * 100.0)
-                        as f32;
-                (cached_score_2dp(score_percent as f64), [1.0, 1.0, 1.0, 1.0])
-            };
-
-            let is_p2_side = player_side == profile::PlayerSide::P2;
-            // Arrow Cloud parity: EX remains the "normal" score position/anchor.
-            // H.EX is placed at a different x on P2 so it appears to the left of EX.
-            actors.push(act!(text:
-                font("wendy_monospace_numbers"): settext(score_text):
-                align(1.0, 1.0): xy(score_x, score_y):
-                zoom(0.5): horizalign(right):
-                diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
-                z(90)
-            ));
-
-            if show_hard_ex_score {
-                let hard_ex_percent =
-                    crate::game::gameplay::display_hard_ex_score_percent(state, player_idx);
-                let hex = color::HARD_EX_SCORE_RGBA;
-                let hard_ex_x = if single_score_swapped {
-                    let swapped_base = if is_p2_side {
-                        screen_center_x() - clamped_width / 4.3
-                    } else {
-                        screen_center_x() + clamped_width / 4.3
-                    };
-                    swapped_base + 115.0
-                } else if is_p2_side {
-                    // Arrow Cloud: HardEX uses /4.3 on P2 (while EX uses /2.75).
-                    screen_center_x() + clamped_width / 4.3
-                } else {
-                    score_x
-                };
-
-                if is_p2_side {
-                    actors.push(act!(text:
-                        font("wendy_monospace_numbers"):
-                        settext(cached_score_2dp(hard_ex_percent.max(0.0))):
-                        align(1.0, 0.0): xy(hard_ex_x, score_y):
-                        zoom(0.25): horizalign(right):
-                        diffuse(hex[0], hex[1], hex[2], hex[3]):
-                        z(90)
-                    ));
-                } else {
-                    actors.push(act!(text:
-                        font("wendy_monospace_numbers"):
-                        settext(cached_score_2dp(hard_ex_percent.max(0.0))):
-                        align(0.0, 0.0): xy(hard_ex_x, score_y):
-                        zoom(0.25): horizalign(left):
-                        diffuse(hex[0], hex[1], hex[2], hex[3]):
-                        z(90)
-                    ));
-                }
-            }
-        }
-    }
-    // Current BPM Display (1:1 with Simply Love)
-    {
-        let base_bpm = state.timing.get_bpm_for_beat(state.current_beat_display);
-        let rate = if state.music_rate.is_finite() {
-            state.music_rate as f64
-        } else {
-            1.0
-        };
-        let display_bpm = if base_bpm.is_finite() {
-            f64::from(base_bpm) * rate
-        } else {
-            0.0
-        };
-        let bpm_text = cached_bpm_text(display_bpm, cfg.show_bpm_decimal);
-        // Final world-space positions derived from analyzing the SM Lua transforms.
-        // The parent frame is bottom-aligned to y=52, and its children are positioned
-        // relative to that y-coordinate, with a zoom of 1.33 applied to the whole group.
-        let frame_origin_y = 51.0;
-        let frame_zoom = 1.33;
-        // The BPM text is at y=0 relative to the frame's origin. Its final position is just the origin.
-        let bpm_center_y = frame_origin_y;
-        // The Rate text is at y=12 relative to the frame's origin. Its offset is scaled by the frame's zoom.
-        let rate_center_y = 12.0f64.mul_add(frame_zoom, frame_origin_y);
-        let bpm_final_zoom = 1.0 * frame_zoom;
-        let rate_final_zoom = 0.5 * frame_zoom;
-        let mut bpm_x = screen_center_x();
-        let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-        if state.num_players == 1
-            && note_field_is_centered
-            && state.player_profiles[0].nps_graph_at_top
-        {
-            let side_shift = if player_side == profile::PlayerSide::P1 {
-                0.3
-            } else {
-                -0.3
-            };
-            bpm_x = screen_center_x() + screen_width() * side_shift;
-        }
-        actors.push(act!(text:
-            font("miso"): settext(bpm_text):
-            align(0.5, 0.5): xy(bpm_x, bpm_center_y):
-            zoom(bpm_final_zoom): horizalign(center): z(90)
-        ));
-        let rate = if state.music_rate.is_finite() {
-            state.music_rate
-        } else {
-            1.0
-        };
-        let rate_text = cached_rate_text(rate);
-        actors.push(act!(text:
-            font("miso"): settext(rate_text):
-            align(0.5, 0.5): xy(bpm_x, rate_center_y):
-            zoom(rate_final_zoom): horizalign(center): z(90)
-        ));
-    }
-    // Song Title Box (SongMeter)
-    {
-        let w = widescale(310.0, 417.0);
-        let h = 22.0;
-        let box_cx = screen_center_x();
-        let box_cy = 20.0;
-        let mut frame_children = Vec::with_capacity(4);
-        frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w, h): diffuse(1.0, 1.0, 1.0, 1.0): z(0) ));
-        frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w - 4.0, h - 4.0): diffuse(0.0, 0.0, 0.0, 1.0): z(1) ));
-        if state.song.total_length_seconds > 0 && state.current_music_time_display >= 0.0 {
-            let progress = (state.current_music_time_display
-                / state.song.total_length_seconds as f32)
-                .clamp(0.0, 1.0);
-            frame_children.push(act!(quad:
-                align(0.0, 0.5): xy(2.0, h / 2.0): zoomto((w - 4.0) * progress, h - 4.0):
-                diffuse(player_color[0], player_color[1], player_color[2], 1.0): z(2)
-            ));
-        }
-        let full_title = state.song_full_title.clone();
-        frame_children.push(act!(text:
-            font("miso"): settext(full_title): align(0.5, 0.5): xy(w / 2.0, h / 2.0):
-            zoom(0.8): maxwidth(screen_width() / 2.5 - 10.0): horizalign(center): z(3)
-        ));
-        actors.push(Actor::Frame {
-            align: [0.5, 0.5],
-            offset: [box_cx, box_cy],
-            size: [SizeSpec::Px(w), SizeSpec::Px(h)],
-            background: None,
-            z: 90,
-            children: frame_children,
-        });
-    }
-    // --- Life Meter ---
-    {
-        let player_life_color = |player_idx: usize| -> [f32; 4] {
-            match play_style {
-                profile::PlayStyle::Versus => {
-                    if player_idx == 0 {
-                        color::decorative_rgba(state.active_color_index)
-                    } else {
-                        color::decorative_rgba(state.active_color_index - 2)
-                    }
-                }
-                _ => {
-                    if is_p2_single {
-                        color::decorative_rgba(state.active_color_index - 2)
-                    } else {
-                        color::decorative_rgba(state.active_color_index)
-                    }
-                }
-            }
-        };
-        let rainbow_life_color = |elapsed: f32| -> [f32; 4] {
-            let phase = elapsed * 2.0;
-            let r = (phase + 0.0).sin() * 0.5 + 0.5;
-            let g = (phase + std::f32::consts::TAU / 3.0).sin() * 0.5 + 0.5;
-            let b = (phase + (2.0 * std::f32::consts::TAU) / 3.0).sin() * 0.5 + 0.5;
-            [r, g, b, 1.0]
-        };
-        let responsive_life_color = |life: f32| -> [f32; 4] {
-            let life = life.clamp(0.0, 1.0);
-            if life >= 0.9 {
-                [0.0, 1.0, ((life - 0.9) * 10.0).clamp(0.0, 1.0), 1.0]
-            } else if life >= 0.5 {
-                [((0.9 - life) * 2.5).clamp(0.0, 1.0), 1.0, 0.0, 1.0]
-            } else {
-                [1.0, ((life - 0.2) * (10.0 / 3.0)).clamp(0.0, 1.0), 0.0, 1.0]
-            }
-        };
-        let fill_life_color = |player_idx: usize, life: f32, dead: bool| -> [f32; 4] {
-            let profile = &state.player_profiles[player_idx];
-            let is_hot = !dead && life >= 1.0;
-            if is_hot {
-                if profile.rainbow_max {
-                    rainbow_life_color(state.total_elapsed_in_screen)
-                } else {
-                    [1.0, 1.0, 1.0, 1.0]
-                }
-            } else if profile.responsive_colors {
-                responsive_life_color(life)
-            } else {
-                player_life_color(player_idx)
-            }
-        };
-        let show_standard_life_percent = screen_width() / screen_height().max(1.0) >= (16.0 / 9.0);
-
-        let mut life_players = [(0usize, profile::PlayerSide::P1); 2];
-        let life_player_count = match play_style {
+        let mut players = [(0usize, profile::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
+        let player_count = match play_style {
             profile::PlayStyle::Versus => {
-                life_players[0] = (0, profile::PlayerSide::P1);
-                life_players[1] = (1, profile::PlayerSide::P2);
+                players[0] = (
+                    0,
+                    profile::PlayerSide::P1,
+                    per_player_fields[0].1,
+                    diff_x_p1,
+                    score_x_p1,
+                    score_x_p2,
+                );
+                players[1] = (
+                    1,
+                    profile::PlayerSide::P2,
+                    per_player_fields[1].1,
+                    diff_x_p2,
+                    score_x_p2,
+                    score_x_p1,
+                );
                 2
             }
             _ if is_p2_single => {
-                life_players[0] = (0, profile::PlayerSide::P2);
+                players[0] = (
+                    0,
+                    profile::PlayerSide::P2,
+                    per_player_fields[0].1,
+                    diff_x_p2,
+                    score_x_p2,
+                    score_x_p1,
+                );
                 1
             }
             _ => {
-                life_players[0] = (0, profile::PlayerSide::P1);
+                players[0] = (
+                    0,
+                    profile::PlayerSide::P1,
+                    per_player_fields[0].1,
+                    diff_x_p1,
+                    score_x_p1,
+                    score_x_p2,
+                );
                 1
             }
         };
 
-        for &(player_idx, side) in &life_players[..life_player_count] {
-            if state.player_profiles[player_idx].hide_lifebar {
+        let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
+        let graph_center_shift = widescale(45.0, 95.0);
+
+        for &(player_idx, player_side, field_x, _, _, _) in &players[..player_count] {
+            if !state.player_profiles[player_idx].nps_graph_at_top {
                 continue;
             }
-
-            // Latch-to-zero for rendering the very frame we die.
-            let dead =
-                state.players[player_idx].is_failing || state.players[player_idx].life <= 0.0;
-            let life_for_render = if dead {
-                0.0
+            let graph_w = state.density_graph_top_w[player_idx];
+            let graph_h = state.density_graph_top_h;
+            let graph_mesh_h =
+                graph_h * state.density_graph_top_scale_y[player_idx].clamp(0.0, 1.0);
+            if graph_w <= 0.0 || graph_h <= 0.0 || graph_mesh_h <= 0.0 {
+                continue;
+            }
+            let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
+            let x = if note_field_is_centered {
+                screen_center_x() - graph_w * 0.5
+            } else if player_side == profile::PlayerSide::P1 {
+                screen_center_x() - graph_w - graph_center_shift
             } else {
-                state.players[player_idx].life.clamp(0.0, 1.0)
+                screen_center_x() + graph_center_shift
             };
-            let is_hot = !dead && life_for_render >= 1.0;
-            let life_color = fill_life_color(player_idx, life_for_render, dead);
-            let life_percent = life_for_render * 100.0;
-            let life_percent_text = cached_life_percent_text(life_percent);
+            let y_bottom = 71.0;
+            let y_top = y_bottom - graph_h;
+            let y_mesh_top = y_bottom - graph_mesh_h;
+            let graph_bg_alpha = if state.player_profiles[player_idx].transparent_density_graph_bg {
+                0.5
+            } else {
+                1.0
+            };
 
-            match state.player_profiles[player_idx].lifemeter_type {
-                profile::LifeMeterType::Standard => {
-                    let w = 136.0;
-                    let h = 18.0;
-                    let meter_cy = 20.0;
-                    let meter_cx = screen_center_x()
-                        + match play_style {
-                            profile::PlayStyle::Versus => match side {
-                                profile::PlayerSide::P1 => -widescale(238.0, 288.0),
-                                profile::PlayerSide::P2 => widescale(238.0, 288.0),
-                            },
-                            _ => match side {
-                                profile::PlayerSide::P1 => -widescale(238.0, 288.0),
-                                profile::PlayerSide::P2 => widescale(238.0, 288.0),
-                            },
-                        };
+            actors.push(act!(quad:
+                align(0.0, 0.0): xy(x, y_top):
+                zoomto(graph_w, graph_h):
+                diffuse(30.0 / 255.0, 40.0 / 255.0, 47.0 / 255.0, graph_bg_alpha):
+                z(84)
+            ));
 
-                    // Frames/border
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0):
-                        diffuse(1.0, 1.0, 1.0, 1.0): z(90)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h):
-                        diffuse(0.0, 0.0, 0.0, 1.0): z(91)
-                    ));
+            if let Some(mesh) = &state.density_graph.top_mesh[player_idx]
+                && !mesh.is_empty()
+            {
+                actors.push(Actor::Mesh {
+                    align: [0.0, 0.0],
+                    offset: [x, y_mesh_top],
+                    size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_mesh_h)],
+                    vertices: mesh.clone(),
+                    mode: MeshMode::Triangles,
+                    visible: true,
+                    blend: BlendMode::Alpha,
+                    z: 85,
+                });
+            }
 
-                    let filled_width = w * life_for_render;
-                    // Never draw swoosh if dead OR nothing to fill.
-                    if filled_width > 0.0 && !dead {
-                        // Logic Parity:
-                        // velocity = -(songposition:GetCurBPS() * 0.5)
-                        // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
-                        let bps = state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
-                        let velocity_x = if state.is_in_freeze || state.is_in_delay {
-                            0.0
+            let duration =
+                (state.density_graph_last_second - state.density_graph_first_second).max(0.001_f32);
+            let progress_w = (((state.current_music_time_display
+                - state.density_graph_first_second)
+                / duration)
+                * graph_w)
+                .clamp(0.0, graph_w);
+            if progress_w > 0.0 {
+                actors.push(act!(quad:
+                    align(0.0, 0.0): xy(x, y_top):
+                    zoomto(progress_w, graph_h):
+                    diffuse(0.0, 0.0, 0.0, 0.85):
+                    z(86)
+                ));
+            }
+        }
+
+        for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in
+            &players[..player_count]
+        {
+            let chart = &state.charts[player_idx];
+            let difficulty_color =
+                color::difficulty_rgba(&chart.difficulty, state.active_color_index);
+            let meter_text = cached_meter_text(chart.meter);
+            let meter_detail_text =
+                color::difficulty_display_name_for_song(&chart.difficulty, &state.song.title, true);
+
+            // Difficulty Box
+            let y = 56.0;
+            let mut diff_children =
+                Vec::with_capacity(if cfg.zmod_rating_box_text { 3 } else { 2 });
+            diff_children.push(act!(quad:
+                align(0.5, 0.5): xy(0.0, 0.0): zoomto(30.0, 30.0):
+                diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
+            ));
+            let meter_y = if cfg.zmod_rating_box_text { -4.0 } else { 0.0 };
+            diff_children.push(act!(text:
+                font(current_machine_font_key(FontRole::Header)): settext(meter_text): align(0.5, 0.5): xy(0.0, meter_y):
+                zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0)
+            ));
+            if cfg.zmod_rating_box_text {
+                diff_children.push(act!(text:
+                    font("miso"):
+                    settext(meter_detail_text):
+                    align(0.5, 0.5): xy(0.0, 9.5):
+                    zoom(0.5):
+                    diffuse(0.0, 0.0, 0.0, 1.0)
+                ));
+            }
+            actors.push(Actor::Frame {
+                align: [0.5, 0.5],
+                offset: [diff_x, y],
+                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                children: diff_children,
+                background: None,
+                z: 90,
+            });
+
+            // Score Display
+            let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
+            let nps_graph_at_top = state.player_profiles[player_idx].nps_graph_at_top;
+            let single_score_swapped = state.num_players == 1
+                && play_style != profile::PlayStyle::Double
+                && nps_graph_at_top
+                && !note_field_is_centered;
+            let score_x = if single_score_swapped {
+                score_x_other
+            } else {
+                score_x_normal
+            };
+            let hide_score_for_top_graph =
+                state.num_players > 1 && nps_graph_at_top && !is_ultrawide;
+
+            if !state.player_profiles[player_idx].hide_score && !hide_score_for_top_graph {
+                let score_y = 56.0;
+                let show_ex_score = state.player_profiles[player_idx].show_ex_score;
+                let show_hard_ex_score =
+                    show_ex_score && state.player_profiles[player_idx].show_hard_ex_score;
+                let (score_text, score_color) = if show_ex_score {
+                    let ex_percent =
+                        crate::game::gameplay::display_ex_score_percent(state, player_idx);
+                    (
+                        cached_score_2dp(ex_percent.max(0.0)),
+                        color::JUDGMENT_RGBA[0],
+                    )
+                } else {
+                    let score_percent =
+                        (crate::game::gameplay::display_itg_score_percent(state, player_idx)
+                            * 100.0) as f32;
+                    (cached_score_2dp(score_percent as f64), [1.0, 1.0, 1.0, 1.0])
+                };
+
+                let is_p2_side = player_side == profile::PlayerSide::P2;
+                // Arrow Cloud parity: EX remains the "normal" score position/anchor.
+                // H.EX is placed at a different x on P2 so it appears to the left of EX.
+                actors.push(act!(text:
+                    font(current_machine_font_key(FontRole::Numbers)): settext(score_text):
+                    align(1.0, 1.0): xy(score_x, score_y):
+                    zoom(0.5): horizalign(right):
+                    diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
+                    z(90)
+                ));
+
+                if show_hard_ex_score {
+                    let hard_ex_percent =
+                        crate::game::gameplay::display_hard_ex_score_percent(state, player_idx);
+                    let hex = color::HARD_EX_SCORE_RGBA;
+                    let hard_ex_x = if single_score_swapped {
+                        let swapped_base = if is_p2_side {
+                            screen_center_x() - clamped_width / 4.3
                         } else {
-                            -(bps * 0.5)
+                            screen_center_x() + clamped_width / 4.3
                         };
+                        swapped_base + 115.0
+                    } else if is_p2_side {
+                        // Arrow Cloud: HardEX uses /4.3 on P2 (while EX uses /2.75).
+                        screen_center_x() + clamped_width / 4.3
+                    } else {
+                        score_x
+                    };
 
-                        let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
-
-                        // MeterSwoosh
-                        actors.push(act!(sprite("swoosh.png"):
-                            align(0.0, 0.5):
-                            xy(meter_cx - w / 2.0, meter_cy):
-                            zoomto(filled_width, h):
-                            diffusealpha(swoosh_alpha):
-                            texcoordvelocity(velocity_x, 0.0):
-                            z(93)
+                    if is_p2_side {
+                        actors.push(act!(text:
+                            font(current_machine_font_key(FontRole::Numbers)):
+                            settext(cached_score_2dp(hard_ex_percent.max(0.0))):
+                            align(1.0, 0.0): xy(hard_ex_x, score_y):
+                            zoom(0.25): horizalign(right):
+                            diffuse(hex[0], hex[1], hex[2], hex[3]):
+                            z(90)
                         ));
-
-                        // MeterFill
-                        actors.push(act!(quad:
-                            align(0.0, 0.5):
-                            xy(meter_cx - w / 2.0, meter_cy):
-                            zoomto(filled_width, h):
-                            diffuse(life_color[0], life_color[1], life_color[2], 1.0):
-                            z(92)
+                    } else {
+                        actors.push(act!(text:
+                            font(current_machine_font_key(FontRole::Numbers)):
+                            settext(cached_score_2dp(hard_ex_percent.max(0.0))):
+                            align(0.0, 0.0): xy(hard_ex_x, score_y):
+                            zoom(0.25): horizalign(left):
+                            diffuse(hex[0], hex[1], hex[2], hex[3]):
+                            z(90)
                         ));
                     }
-
-                    if state.player_profiles[player_idx].show_life_percent
-                        && show_standard_life_percent
-                        && !is_hot
-                    {
-                        let life_text_color = player_life_color(player_idx);
-                        let (outer_x, inner_x, text_x, align_x) = if side == profile::PlayerSide::P1
-                        {
-                            (meter_cx - 76.0, meter_cx - 77.0, meter_cx - 77.0, 1.0)
+                }
+            }
+        }
+        // Current BPM Display (1:1 with Simply Love)
+        {
+            let base_bpm = state.timing.get_bpm_for_beat(state.current_beat_display);
+            let rate = if state.music_rate.is_finite() {
+                state.music_rate as f64
+            } else {
+                1.0
+            };
+            let display_bpm = if base_bpm.is_finite() {
+                f64::from(base_bpm) * rate
+            } else {
+                0.0
+            };
+            let bpm_text = cached_bpm_text(display_bpm, cfg.show_bpm_decimal);
+            // Final world-space positions derived from analyzing the SM Lua transforms.
+            // The parent frame is bottom-aligned to y=52, and its children are positioned
+            // relative to that y-coordinate, with a zoom of 1.33 applied to the whole group.
+            let frame_origin_y = 51.0;
+            let frame_zoom = 1.33;
+            // The BPM text is at y=0 relative to the frame's origin. Its final position is just the origin.
+            let bpm_center_y = frame_origin_y;
+            // The Rate text is at y=12 relative to the frame's origin. Its offset is scaled by the frame's zoom.
+            let rate_center_y = 12.0f64.mul_add(frame_zoom, frame_origin_y);
+            let bpm_final_zoom = 1.0 * frame_zoom;
+            let rate_final_zoom = 0.5 * frame_zoom;
+            let mut bpm_x = screen_center_x();
+            let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
+            if state.num_players == 1
+                && note_field_is_centered
+                && state.player_profiles[0].nps_graph_at_top
+            {
+                let side_shift = if player_side == profile::PlayerSide::P1 {
+                    0.3
+                } else {
+                    -0.3
+                };
+                bpm_x = screen_center_x() + screen_width() * side_shift;
+            }
+            actors.push(act!(text:
+                font("miso"): settext(bpm_text):
+                align(0.5, 0.5): xy(bpm_x, bpm_center_y):
+                zoom(bpm_final_zoom): horizalign(center): z(90)
+            ));
+            let rate = if state.music_rate.is_finite() {
+                state.music_rate
+            } else {
+                1.0
+            };
+            let rate_text = cached_rate_text(rate);
+            actors.push(act!(text:
+                font("miso"): settext(rate_text):
+                align(0.5, 0.5): xy(bpm_x, rate_center_y):
+                zoom(rate_final_zoom): horizalign(center): z(90)
+            ));
+        }
+        // Song Title Box (SongMeter)
+        {
+            let w = widescale(310.0, 417.0);
+            let h = 22.0;
+            let box_cx = screen_center_x();
+            let box_cy = 20.0;
+            let mut frame_children = Vec::with_capacity(4);
+            frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w, h): diffuse(1.0, 1.0, 1.0, 1.0): z(0) ));
+            frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w - 4.0, h - 4.0): diffuse(0.0, 0.0, 0.0, 1.0): z(1) ));
+            if state.song.total_length_seconds > 0 && state.current_music_time_display >= 0.0 {
+                let progress = (state.current_music_time_display
+                    / state.song.total_length_seconds as f32)
+                    .clamp(0.0, 1.0);
+                frame_children.push(act!(quad:
+                    align(0.0, 0.5): xy(2.0, h / 2.0): zoomto((w - 4.0) * progress, h - 4.0):
+                    diffuse(player_color[0], player_color[1], player_color[2], 1.0): z(2)
+                ));
+            }
+            let full_title = state.song_full_title.clone();
+            frame_children.push(act!(text:
+                font("miso"): settext(full_title): align(0.5, 0.5): xy(w / 2.0, h / 2.0):
+                zoom(0.8): maxwidth(screen_width() / 2.5 - 10.0): horizalign(center): z(3)
+            ));
+            actors.push(Actor::Frame {
+                align: [0.5, 0.5],
+                offset: [box_cx, box_cy],
+                size: [SizeSpec::Px(w), SizeSpec::Px(h)],
+                background: None,
+                z: 90,
+                children: frame_children,
+            });
+        }
+        // --- Life Meter ---
+        {
+            let player_life_color = |player_idx: usize| -> [f32; 4] {
+                match play_style {
+                    profile::PlayStyle::Versus => {
+                        if player_idx == 0 {
+                            color::decorative_rgba(state.active_color_index)
                         } else {
-                            (meter_cx + 76.0, meter_cx + 77.0, meter_cx + 78.0, 0.0)
-                        };
+                            color::decorative_rgba(state.active_color_index - 2)
+                        }
+                    }
+                    _ => {
+                        if is_p2_single {
+                            color::decorative_rgba(state.active_color_index - 2)
+                        } else {
+                            color::decorative_rgba(state.active_color_index)
+                        }
+                    }
+                }
+            };
+            let rainbow_life_color = |elapsed: f32| -> [f32; 4] {
+                let phase = elapsed * 2.0;
+                let r = (phase + 0.0).sin() * 0.5 + 0.5;
+                let g = (phase + std::f32::consts::TAU / 3.0).sin() * 0.5 + 0.5;
+                let b = (phase + (2.0 * std::f32::consts::TAU) / 3.0).sin() * 0.5 + 0.5;
+                [r, g, b, 1.0]
+            };
+            let responsive_life_color = |life: f32| -> [f32; 4] {
+                let life = life.clamp(0.0, 1.0);
+                if life >= 0.9 {
+                    [0.0, 1.0, ((life - 0.9) * 10.0).clamp(0.0, 1.0), 1.0]
+                } else if life >= 0.5 {
+                    [((0.9 - life) * 2.5).clamp(0.0, 1.0), 1.0, 0.0, 1.0]
+                } else {
+                    [1.0, ((life - 0.2) * (10.0 / 3.0)).clamp(0.0, 1.0), 0.0, 1.0]
+                }
+            };
+            let fill_life_color = |player_idx: usize, life: f32, dead: bool| -> [f32; 4] {
+                let profile = &state.player_profiles[player_idx];
+                let is_hot = !dead && life >= 1.0;
+                if is_hot {
+                    if profile.rainbow_max {
+                        rainbow_life_color(state.total_elapsed_in_screen)
+                    } else {
+                        [1.0, 1.0, 1.0, 1.0]
+                    }
+                } else if profile.responsive_colors {
+                    responsive_life_color(life)
+                } else {
+                    player_life_color(player_idx)
+                }
+            };
+            let show_standard_life_percent =
+                screen_width() / screen_height().max(1.0) >= (16.0 / 9.0);
+
+            let mut life_players = [(0usize, profile::PlayerSide::P1); 2];
+            let life_player_count = match play_style {
+                profile::PlayStyle::Versus => {
+                    life_players[0] = (0, profile::PlayerSide::P1);
+                    life_players[1] = (1, profile::PlayerSide::P2);
+                    2
+                }
+                _ if is_p2_single => {
+                    life_players[0] = (0, profile::PlayerSide::P2);
+                    1
+                }
+                _ => {
+                    life_players[0] = (0, profile::PlayerSide::P1);
+                    1
+                }
+            };
+
+            for &(player_idx, side) in &life_players[..life_player_count] {
+                if state.player_profiles[player_idx].hide_lifebar {
+                    continue;
+                }
+
+                // Latch-to-zero for rendering the very frame we die.
+                let dead =
+                    state.players[player_idx].is_failing || state.players[player_idx].life <= 0.0;
+                let life_for_render = if dead {
+                    0.0
+                } else {
+                    state.players[player_idx].life.clamp(0.0, 1.0)
+                };
+                let is_hot = !dead && life_for_render >= 1.0;
+                let life_color = fill_life_color(player_idx, life_for_render, dead);
+                let life_percent = life_for_render * 100.0;
+                let life_percent_text = cached_life_percent_text(life_percent);
+
+                match state.player_profiles[player_idx].lifemeter_type {
+                    profile::LifeMeterType::Standard => {
+                        let w = 136.0;
+                        let h = 18.0;
+                        let meter_cy = 20.0;
+                        let meter_cx = screen_center_x()
+                            + match play_style {
+                                profile::PlayStyle::Versus => match side {
+                                    profile::PlayerSide::P1 => -widescale(238.0, 288.0),
+                                    profile::PlayerSide::P2 => widescale(238.0, 288.0),
+                                },
+                                _ => match side {
+                                    profile::PlayerSide::P1 => -widescale(238.0, 288.0),
+                                    profile::PlayerSide::P2 => widescale(238.0, 288.0),
+                                },
+                            };
+
+                        // Frames/border
                         actors.push(act!(quad:
+                            align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0):
+                            diffuse(1.0, 1.0, 1.0, 1.0): z(90)
+                        ));
+                        actors.push(act!(quad:
+                            align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w, h):
+                            diffuse(0.0, 0.0, 0.0, 1.0): z(91)
+                        ));
+
+                        let filled_width = w * life_for_render;
+                        // Never draw swoosh if dead OR nothing to fill.
+                        if filled_width > 0.0 && !dead {
+                            // Logic Parity:
+                            // velocity = -(songposition:GetCurBPS() * 0.5)
+                            // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
+                            let bps =
+                                state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
+                            let velocity_x = if state.is_in_freeze || state.is_in_delay {
+                                0.0
+                            } else {
+                                -(bps * 0.5)
+                            };
+
+                            let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
+
+                            // MeterSwoosh
+                            actors.push(act!(sprite("swoosh.png"):
+                                align(0.0, 0.5):
+                                xy(meter_cx - w / 2.0, meter_cy):
+                                zoomto(filled_width, h):
+                                diffusealpha(swoosh_alpha):
+                                texcoordvelocity(velocity_x, 0.0):
+                                z(93)
+                            ));
+
+                            // MeterFill
+                            actors.push(act!(quad:
+                                align(0.0, 0.5):
+                                xy(meter_cx - w / 2.0, meter_cy):
+                                zoomto(filled_width, h):
+                                diffuse(life_color[0], life_color[1], life_color[2], 1.0):
+                                z(92)
+                            ));
+                        }
+
+                        if state.player_profiles[player_idx].show_life_percent
+                            && show_standard_life_percent
+                            && !is_hot
+                        {
+                            let life_text_color = player_life_color(player_idx);
+                            let (outer_x, inner_x, text_x, align_x) =
+                                if side == profile::PlayerSide::P1 {
+                                    (meter_cx - 76.0, meter_cx - 77.0, meter_cx - 77.0, 1.0)
+                                } else {
+                                    (meter_cx + 76.0, meter_cx + 77.0, meter_cx + 78.0, 0.0)
+                                };
+                            actors.push(act!(quad:
                             align(align_x, 0.5): xy(outer_x, meter_cy):
                             zoomto(44.0, 18.0):
                             diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
                             z(94)
                         ));
-                        actors.push(act!(quad:
-                            align(align_x, 0.5): xy(inner_x, meter_cy):
-                            zoomto(42.0, 16.0):
-                            diffuse(0.0, 0.0, 0.0, 1.0):
-                            z(95)
-                        ));
-                        actors.push(act!(text:
+                            actors.push(act!(quad:
+                                align(align_x, 0.5): xy(inner_x, meter_cy):
+                                zoomto(42.0, 16.0):
+                                diffuse(0.0, 0.0, 0.0, 1.0):
+                                z(95)
+                            ));
+                            actors.push(act!(text:
                             font("miso"): settext(life_percent_text.clone()):
                             align(align_x, 0.5): xy(text_x, meter_cy):
                             zoom(1.0):
                             diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
                             z(96)
                         ));
+                        }
                     }
-                }
-                profile::LifeMeterType::Surround => {
-                    let sw = screen_width();
-                    let sh = screen_height();
-                    let w = sw * 0.5;
-                    let h = sh - 80.0;
-                    let y = 80.0;
-                    let croptop = 1.0 - life_for_render;
+                    profile::LifeMeterType::Surround => {
+                        let sw = screen_width();
+                        let sh = screen_height();
+                        let w = sw * 0.5;
+                        let h = sh - 80.0;
+                        let y = 80.0;
+                        let croptop = 1.0 - life_for_render;
 
-                    if play_style == profile::PlayStyle::Double {
-                        // Double: two quads flanking left/right, moving in unison.
-                        actors.push(act!(quad:
-                            align(0.0, 0.0): xy(0.0, y):
-                            zoomto(w, h):
-                            diffuse(0.2, 0.2, 0.2, 1.0):
-                            faderight(0.8):
-                            croptop(croptop):
-                            z(-98)
-                        ));
-                        actors.push(act!(quad:
-                            align(1.0, 0.0): xy(sw, y):
-                            zoomto(w, h):
-                            diffuse(0.2, 0.2, 0.2, 1.0):
-                            fadeleft(0.8):
-                            croptop(croptop):
-                            z(-98)
-                        ));
-                        // Only one player in Double style.
-                        break;
-                    }
-
-                    let mut surround_color = if state.player_profiles[player_idx].responsive_colors
-                    {
-                        let mut c = responsive_life_color(life_for_render);
-                        c[3] = 0.2;
-                        c
-                    } else {
-                        [0.2, 0.2, 0.2, 1.0]
-                    };
-                    if life_for_render >= 1.0 && state.player_profiles[player_idx].rainbow_max {
-                        let mut c = rainbow_life_color(state.total_elapsed_in_screen);
-                        c[3] = if state.player_profiles[player_idx].responsive_colors {
-                            0.2
-                        } else {
-                            1.0
-                        };
-                        surround_color = c;
-                    }
-
-                    match side {
-                        profile::PlayerSide::P1 => {
+                        if play_style == profile::PlayStyle::Double {
+                            // Double: two quads flanking left/right, moving in unison.
                             actors.push(act!(quad:
+                                align(0.0, 0.0): xy(0.0, y):
+                                zoomto(w, h):
+                                diffuse(0.2, 0.2, 0.2, 1.0):
+                                faderight(0.8):
+                                croptop(croptop):
+                                z(-98)
+                            ));
+                            actors.push(act!(quad:
+                                align(1.0, 0.0): xy(sw, y):
+                                zoomto(w, h):
+                                diffuse(0.2, 0.2, 0.2, 1.0):
+                                fadeleft(0.8):
+                                croptop(croptop):
+                                z(-98)
+                            ));
+                            // Only one player in Double style.
+                            break;
+                        }
+
+                        let mut surround_color =
+                            if state.player_profiles[player_idx].responsive_colors {
+                                let mut c = responsive_life_color(life_for_render);
+                                c[3] = 0.2;
+                                c
+                            } else {
+                                [0.2, 0.2, 0.2, 1.0]
+                            };
+                        if life_for_render >= 1.0 && state.player_profiles[player_idx].rainbow_max {
+                            let mut c = rainbow_life_color(state.total_elapsed_in_screen);
+                            c[3] = if state.player_profiles[player_idx].responsive_colors {
+                                0.2
+                            } else {
+                                1.0
+                            };
+                            surround_color = c;
+                        }
+
+                        match side {
+                            profile::PlayerSide::P1 => {
+                                actors.push(act!(quad:
                                 align(0.0, 0.0): xy(0.0, y):
                                 zoomto(w, h):
                                 diffuse(surround_color[0], surround_color[1], surround_color[2], surround_color[3]):
@@ -5630,9 +7047,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 croptop(croptop):
                                 z(-98)
                             ));
-                        }
-                        profile::PlayerSide::P2 => {
-                            actors.push(act!(quad:
+                            }
+                            profile::PlayerSide::P2 => {
+                                actors.push(act!(quad:
                                 align(1.0, 0.0): xy(sw, y):
                                 zoomto(w, h):
                                 diffuse(surround_color[0], surround_color[1], surround_color[2], surround_color[3]):
@@ -5640,228 +7057,239 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 croptop(croptop):
                                 z(-98)
                             ));
+                            }
                         }
                     }
-                }
-                profile::LifeMeterType::Vertical => {
-                    let bar_w = 16.0;
-                    let bar_h = 250.0;
+                    profile::LifeMeterType::Vertical => {
+                        let bar_w = 16.0;
+                        let bar_h = 250.0;
 
-                    let x = {
-                        // SL: default to _screen.cx +/- SL_WideScale(302, 400).
-                        let mut x = screen_center_x()
-                            + match side {
-                                profile::PlayerSide::P1 => -widescale(302.0, 400.0),
-                                profile::PlayerSide::P2 => widescale(302.0, 400.0),
-                            };
-
-                        // SL: if double style, position next to notefield.
-                        if play_style == profile::PlayStyle::Double {
-                            let half_nf = notefield_width(player_idx) * 0.5;
-                            x = screen_center_x()
+                        let x = {
+                            // SL: default to _screen.cx +/- SL_WideScale(302, 400).
+                            let mut x = screen_center_x()
                                 + match side {
-                                    profile::PlayerSide::P1 => -(half_nf + 10.0),
-                                    profile::PlayerSide::P2 => half_nf + 10.0,
+                                    profile::PlayerSide::P1 => -widescale(302.0, 400.0),
+                                    profile::PlayerSide::P2 => widescale(302.0, 400.0),
                                 };
+
+                            // SL: if double style, position next to notefield.
+                            if play_style == profile::PlayStyle::Double {
+                                let half_nf = notefield_width(player_idx) * 0.5;
+                                x = screen_center_x()
+                                    + match side {
+                                        profile::PlayerSide::P1 => -(half_nf + 10.0),
+                                        profile::PlayerSide::P2 => half_nf + 10.0,
+                                    };
+                            }
+
+                            x
+                        };
+
+                        let cy = bar_h + 10.0;
+                        // Frames/border
+                        actors.push(act!(quad:
+                            align(0.5, 0.5): xy(x, cy): zoomto(bar_w + 2.0, bar_h + 2.0):
+                            diffuse(1.0, 1.0, 1.0, 1.0): z(90)
+                        ));
+                        actors.push(act!(quad:
+                            align(0.5, 0.5): xy(x, cy): zoomto(bar_w, bar_h):
+                            diffuse(0.0, 0.0, 0.0, 1.0): z(91)
+                        ));
+
+                        let filled_h = bar_h * life_for_render;
+
+                        // MeterFill
+                        if filled_h > 0.0 {
+                            actors.push(act!(quad:
+                                align(0.0, 1.0):
+                                xy(x - bar_w * 0.5, cy + bar_h * 0.5):
+                                zoomto(bar_w, filled_h):
+                                diffuse(life_color[0], life_color[1], life_color[2], 1.0):
+                                z(92)
+                            ));
                         }
 
-                        x
-                    };
+                        // MeterSwoosh
+                        if filled_h > 0.0 && !dead {
+                            let bps =
+                                state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
+                            let velocity_x = if state.is_in_freeze || state.is_in_delay {
+                                0.0
+                            } else {
+                                -(bps * 0.5)
+                            };
+                            let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
 
-                    let cy = bar_h + 10.0;
-                    // Frames/border
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(x, cy): zoomto(bar_w + 2.0, bar_h + 2.0):
-                        diffuse(1.0, 1.0, 1.0, 1.0): z(90)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(x, cy): zoomto(bar_w, bar_h):
-                        diffuse(0.0, 0.0, 0.0, 1.0): z(91)
-                    ));
+                            actors.push(act!(sprite("swoosh.png"):
+                                align(0.5, 0.5):
+                                xy(x, (cy + bar_h * 0.5) - filled_h * 0.5):
+                                zoomto(filled_h, bar_w):
+                                diffusealpha(swoosh_alpha):
+                                rotationz(90.0):
+                                texcoordvelocity(velocity_x, 0.0):
+                                z(93)
+                            ));
+                        }
 
-                    let filled_h = bar_h * life_for_render;
-
-                    // MeterFill
-                    if filled_h > 0.0 {
-                        actors.push(act!(quad:
-                            align(0.0, 1.0):
-                            xy(x - bar_w * 0.5, cy + bar_h * 0.5):
-                            zoomto(bar_w, filled_h):
-                            diffuse(life_color[0], life_color[1], life_color[2], 1.0):
-                            z(92)
-                        ));
-                    }
-
-                    // MeterSwoosh
-                    if filled_h > 0.0 && !dead {
-                        let bps = state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
-                        let velocity_x = if state.is_in_freeze || state.is_in_delay {
-                            0.0
-                        } else {
-                            -(bps * 0.5)
-                        };
-                        let swoosh_alpha = if is_hot { 1.0 } else { 0.2 };
-
-                        actors.push(act!(sprite("swoosh.png"):
-                            align(0.5, 0.5):
-                            xy(x, (cy + bar_h * 0.5) - filled_h * 0.5):
-                            zoomto(filled_h, bar_w):
-                            diffusealpha(swoosh_alpha):
-                            rotationz(90.0):
-                            texcoordvelocity(velocity_x, 0.0):
-                            z(93)
-                        ));
-                    }
-
-                    if state.player_profiles[player_idx].show_life_percent && !is_hot {
-                        let life_text_color = player_life_color(player_idx);
-                        let text_y = cy + bar_h * 0.5 - (bar_h * life_for_render);
-                        let (outer_x, inner_x, text_x, align_x) = if side == profile::PlayerSide::P1
-                        {
-                            (x + 10.0, x + 11.0, x + 12.0, 0.0)
-                        } else {
-                            (x - 11.0, x - 12.0, x - 13.0, 1.0)
-                        };
-                        actors.push(act!(quad:
+                        if state.player_profiles[player_idx].show_life_percent && !is_hot {
+                            let life_text_color = player_life_color(player_idx);
+                            let text_y = cy + bar_h * 0.5 - (bar_h * life_for_render);
+                            let (outer_x, inner_x, text_x, align_x) =
+                                if side == profile::PlayerSide::P1 {
+                                    (x + 10.0, x + 11.0, x + 12.0, 0.0)
+                                } else {
+                                    (x - 11.0, x - 12.0, x - 13.0, 1.0)
+                                };
+                            actors.push(act!(quad:
                             align(align_x, 0.5): xy(outer_x, text_y):
                             zoomto(44.0, 18.0):
                             diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
                             z(94)
                         ));
-                        actors.push(act!(quad:
-                            align(align_x, 0.5): xy(inner_x, text_y):
-                            zoomto(42.0, 16.0):
-                            diffuse(0.0, 0.0, 0.0, 1.0):
-                            z(95)
-                        ));
-                        actors.push(act!(text:
+                            actors.push(act!(quad:
+                                align(align_x, 0.5): xy(inner_x, text_y):
+                                zoomto(42.0, 16.0):
+                                diffuse(0.0, 0.0, 0.0, 1.0):
+                                z(95)
+                            ));
+                            actors.push(act!(text:
                             font("miso"): settext(life_percent_text.clone()):
                             align(align_x, 0.5): xy(text_x, text_y):
                             zoom(1.0):
                             diffuse(life_text_color[0], life_text_color[1], life_text_color[2], 1.0):
                             z(96)
                         ));
+                        }
                     }
                 }
             }
         }
-    }
-    // Simply Love parity: keep Stage/Event text visible at the footer after intro animation ends.
-    if !state.stage_intro_text.is_empty()
-        && state.total_elapsed_in_screen >= INTRO_TEXT_SETTLE_SECONDS
-    {
-        actors.push(act!(text:
-            font("wendy"): settext(state.stage_intro_text.clone()):
-            align(0.5, 0.5): xy(screen_center_x(), screen_height() - 30.0):
+        // Simply Love parity: keep Stage/Event text visible at the footer after intro animation ends.
+        if !state.stage_intro_text.is_empty()
+            && state.total_elapsed_in_screen >= INTRO_TEXT_SETTLE_SECONDS
+        {
+            let text_x = intro_text_target_x(
+                state,
+                asset_manager,
+                state.stage_intro_text.as_ref(),
+                play_style,
+                player_side,
+                cfg.center_1player_notefield,
+            );
+            actors.push(act!(text:
+            font(current_machine_font_key(FontRole::Header)): settext(state.stage_intro_text.clone()):
+            align(0.5, 0.5): xy(text_x, screen_height() - 30.0):
             zoom(0.4):
             shadowlength(1.0):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(110)
         ));
-    }
-    let p1_avatar = hud_snapshot
-        .p1
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
-    let p2_avatar = hud_snapshot
-        .p2
-        .avatar_texture_key
-        .as_deref()
-        .map(|texture_key| AvatarParams { texture_key });
+        }
+        let p1_avatar = hud_snapshot
+            .p1
+            .avatar_texture_key
+            .as_deref()
+            .map(|texture_key| AvatarParams { texture_key });
+        let p2_avatar = hud_snapshot
+            .p2
+            .avatar_texture_key
+            .as_deref()
+            .map(|texture_key| AvatarParams { texture_key });
 
-    let p1_joined = hud_snapshot.p1.joined;
-    let p2_joined = hud_snapshot.p2.joined;
-    let p1_guest = hud_snapshot.p1.guest;
-    let p2_guest = hud_snapshot.p2.guest;
+        let p1_joined = hud_snapshot.p1.joined;
+        let p2_joined = hud_snapshot.p2.joined;
+        let p1_guest = hud_snapshot.p1.guest;
+        let p2_guest = hud_snapshot.p2.guest;
 
-    let insert_card_text = tr("Common", "InsertCard");
-    let (p1_footer_text, p1_footer_avatar) = if p1_joined {
-        (
-            Some(if p1_guest {
-                &*insert_card_text
-            } else {
-                hud_snapshot.p1.display_name.as_str()
-            }),
-            if p1_guest { None } else { p1_avatar },
-        )
-    } else {
-        (None, None)
-    };
-    let (p2_footer_text, p2_footer_avatar) = if p2_joined {
-        (
-            Some(if p2_guest {
-                &*insert_card_text
-            } else {
-                hud_snapshot.p2.display_name.as_str()
-            }),
-            if p2_guest { None } else { p2_avatar },
-        )
-    } else {
-        (None, None)
-    };
-
-    let (footer_left, footer_right, left_avatar, right_avatar) =
-        if play_style == profile::PlayStyle::Versus {
+        let insert_card_text = tr("Common", "InsertCard");
+        let (p1_footer_text, p1_footer_avatar) = if p1_joined {
             (
-                p1_footer_text,
-                p2_footer_text,
-                p1_footer_avatar,
-                p2_footer_avatar,
+                Some(if p1_guest {
+                    &*insert_card_text
+                } else {
+                    hud_snapshot.p1.display_name.as_str()
+                }),
+                if p1_guest { None } else { p1_avatar },
             )
         } else {
-            match player_side {
-                profile::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
-                profile::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
+            (None, None)
+        };
+        let (p2_footer_text, p2_footer_avatar) = if p2_joined {
+            (
+                Some(if p2_guest {
+                    &*insert_card_text
+                } else {
+                    hud_snapshot.p2.display_name.as_str()
+                }),
+                if p2_guest { None } else { p2_avatar },
+            )
+        } else {
+            (None, None)
+        };
+
+        let (footer_left, footer_right, left_avatar, right_avatar) =
+            if play_style == profile::PlayStyle::Versus {
+                (
+                    p1_footer_text,
+                    p2_footer_text,
+                    p1_footer_avatar,
+                    p2_footer_avatar,
+                )
+            } else {
+                match player_side {
+                    profile::PlayerSide::P1 => (p1_footer_text, None, p1_footer_avatar, None),
+                    profile::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
+                }
+            };
+        actors.push(screen_bar::build(ScreenBarParams {
+            title: "",
+            title_placement: screen_bar::ScreenBarTitlePlacement::Center,
+            position: screen_bar::ScreenBarPosition::Bottom,
+            transparent: true,
+            fg_color: [1.0; 4],
+            left_text: footer_left,
+            center_text: None,
+            right_text: footer_right,
+            left_avatar,
+            right_avatar,
+        }));
+        let show_step_stats = match play_style {
+            profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                state.player_profiles.first().is_some_and(|p| {
+                    p.data_visualizations == profile::DataVisualizations::StepStatistics
+                })
+            }
+            profile::PlayStyle::Versus => {
+                state.player_profiles.first().is_some_and(|p| {
+                    p.data_visualizations == profile::DataVisualizations::StepStatistics
+                }) || state.player_profiles.get(1).is_some_and(|p| {
+                    p.data_visualizations == profile::DataVisualizations::StepStatistics
+                })
             }
         };
-    actors.push(screen_bar::build(ScreenBarParams {
-        title: "",
-        title_placement: screen_bar::ScreenBarTitlePlacement::Center,
-        position: screen_bar::ScreenBarPosition::Bottom,
-        transparent: true,
-        fg_color: [1.0; 4],
-        left_text: footer_left,
-        center_text: None,
-        right_text: footer_right,
-        left_avatar,
-        right_avatar,
-    }));
-    let show_step_stats = match play_style {
-        profile::PlayStyle::Single | profile::PlayStyle::Double => state
-            .player_profiles
-            .first()
-            .is_some_and(|p| p.data_visualizations == profile::DataVisualizations::StepStatistics),
-        profile::PlayStyle::Versus => {
-            state.player_profiles.first().is_some_and(|p| {
-                p.data_visualizations == profile::DataVisualizations::StepStatistics
-            }) || state.player_profiles.get(1).is_some_and(|p| {
-                p.data_visualizations == profile::DataVisualizations::StepStatistics
-            })
+        if show_step_stats {
+            if state.num_cols <= 4 && play_style != profile::PlayStyle::Versus {
+                actors.extend(gameplay_stats::build(
+                    state,
+                    asset_manager,
+                    playfield_center_x,
+                    player_side,
+                ));
+            } else if play_style == profile::PlayStyle::Versus {
+                actors.extend(gameplay_stats::build_versus_step_stats(
+                    state,
+                    asset_manager,
+                ));
+            } else if play_style == profile::PlayStyle::Double {
+                actors.extend(gameplay_stats::build_double_step_stats(
+                    state,
+                    asset_manager,
+                    playfield_center_x,
+                ));
+            }
         }
-    };
-    if show_step_stats {
-        if state.num_cols <= 4 && play_style != profile::PlayStyle::Versus {
-            actors.extend(gameplay_stats::build(
-                state,
-                asset_manager,
-                playfield_center_x,
-                player_side,
-            ));
-        } else if play_style == profile::PlayStyle::Versus {
-            actors.extend(gameplay_stats::build_versus_step_stats(
-                state,
-                asset_manager,
-            ));
-        } else if play_style == profile::PlayStyle::Double {
-            actors.extend(gameplay_stats::build_double_step_stats(
-                state,
-                asset_manager,
-                playfield_center_x,
-            ));
-        }
+        song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_tail_start);
     }
-    song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_tail_start);
     let song_foreground_state = song_lua_song_foreground_state(state);
     let p1_proxy_slices = [
         p1_proxy_sources[0].as_deref(),
@@ -5873,11 +7301,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         p2_proxy_sources[1].as_deref(),
         p2_proxy_sources[2].as_deref(),
     ];
+    let p1_player_proxy_slice = p1_player_proxy_source.as_deref();
+    let p2_player_proxy_slice = p2_player_proxy_source.as_deref();
     let underlay_proxy_slice = underlay_proxy_source.as_deref();
     let overlay_proxy_slice = overlay_proxy_source.as_deref();
     let main_layer_actors = {
         let proxy_sources = song_lua_screen_proxy_sources(
             &actors,
+            p1_player_proxy_slice,
+            p2_player_proxy_slice,
             p1_actor_range,
             p2_actor_range,
             p1_proxy_slices,
@@ -5887,6 +7319,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         );
         build_song_lua_layer_actors(
             &state.song_lua_overlays,
+            &local_overlay_states,
             &overlay_states,
             song_foreground_state,
             &proxy_sources,
@@ -5906,7 +7339,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
-        let layer_states = song_lua_overlay_states_from(
+        let (layer_local_states, layer_states) = song_lua_overlay_state_sets_from(
             state.current_music_time_display,
             &layer.overlays,
             &layer.overlay_events,
@@ -5923,6 +7356,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let layer_actors = {
             let proxy_sources = song_lua_screen_proxy_sources(
                 &actors,
+                p1_player_proxy_slice,
+                p2_player_proxy_slice,
                 p1_actor_range,
                 p2_actor_range,
                 p1_proxy_slices,
@@ -5932,6 +7367,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             );
             build_song_lua_layer_actors(
                 &layer.overlays,
+                &layer_local_states,
                 &layer_states,
                 song_foreground_state,
                 &proxy_sources,
@@ -5951,10 +7387,46 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::present::actors::TextAttribute;
+
+    fn empty_text_attributes() -> Arc<[TextAttribute]> {
+        Arc::from([])
+    }
     use crate::engine::present::actors::{SizeSpec, TextAlign};
 
     fn ensure_i18n() {
         crate::assets::i18n::init("en");
+    }
+
+    #[test]
+    fn forced_center_view_uses_layout_player_x() {
+        let view = notefield::ViewOverride {
+            force_center_1player: true,
+            ..notefield::ViewOverride::default()
+        };
+
+        assert_eq!(song_lua_player_target_x(None, 320.0, 800.0, view), 800.0);
+    }
+
+    #[test]
+    fn forced_center_view_preserves_explicit_player_x() {
+        let view = notefield::ViewOverride {
+            force_center_1player: true,
+            ..notefield::ViewOverride::default()
+        };
+
+        assert_eq!(
+            song_lua_player_target_x(Some(640.0), 320.0, 800.0, view),
+            640.0
+        );
+    }
+
+    #[test]
+    fn default_view_uses_player_state_x() {
+        assert_eq!(
+            song_lua_player_target_x(None, 320.0, 800.0, notefield::ViewOverride::default()),
+            320.0
+        );
     }
 
     fn test_proxy_overlay(player_index: usize) -> SongLuaOverlayActor {
@@ -6033,6 +7505,17 @@ mod tests {
             },
             message_commands: Vec::new(),
         }
+    }
+
+    fn test_skewed_overlay_point(
+        center: [f32; 2],
+        local: [f32; 2],
+        skew_x: f32,
+        skew_y: f32,
+    ) -> [f32; 2] {
+        let y = skew_y.mul_add(local[0], local[1]);
+        let x = skew_x.mul_add(y, local[0]);
+        [center[0] + x, center[1] + y]
     }
 
     fn test_lobby_player(
@@ -6205,6 +7688,63 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_aft_capture_uses_local_proxy_origin() {
+        let root = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorFrame,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState {
+                x: 427.0,
+                y: 240.0,
+                ..SongLuaOverlayState::default()
+            },
+            message_commands: Vec::new(),
+        };
+        let mut capture = test_capture_overlay("cap");
+        capture.parent_index = Some(0);
+        let overlays = vec![
+            root,
+            capture,
+            test_capture_proxy_child(1, SongLuaProxyTarget::Player { player_index: 0 }),
+        ];
+        let local_states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        let overlay_states =
+            song_lua_overlay_states_from_local(&overlays, &local_states, 854.0, 480.0);
+        assert_eq!(overlay_states[2].x, 427.0);
+        assert_eq!(overlay_states[2].y, 240.0);
+
+        let source = vec![test_source_actor()];
+        let proxy_sources = SongLuaScreenProxySources {
+            players: [
+                SongLuaPlayerProxySources {
+                    player: Some(source.as_slice()),
+                    ..SongLuaPlayerProxySources::default()
+                },
+                SongLuaPlayerProxySources::default(),
+            ],
+            ..SongLuaScreenProxySources::default()
+        };
+        let actors = song_lua_capture_children(
+            &overlays,
+            &overlay_states,
+            &local_states,
+            &AssetManager::new(),
+            1,
+            &proxy_sources,
+            854.0,
+            480.0,
+        );
+
+        match actors.as_slice() {
+            [Actor::Frame { offset, .. }] => assert_eq!(*offset, [0.0, 0.0]),
+            other => panic!("expected one capture proxy frame, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn song_lua_actor_proxy_keeps_overlay_z_layer() {
         let source = vec![test_source_actor()];
         let actor =
@@ -6278,6 +7818,420 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_actor_multi_vertex_builds_mesh_overlay() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorMultiVertex {
+                vertices: Arc::from(vec![
+                    SongLuaOverlayMeshVertex {
+                        pos: [0.0, 0.0],
+                        color: [1.0, 0.0, 0.0, 1.0],
+                        uv: [0.0, 0.0],
+                    },
+                    SongLuaOverlayMeshVertex {
+                        pos: [10.0, 0.0],
+                        color: [0.0, 1.0, 0.0, 1.0],
+                        uv: [1.0, 0.0],
+                    },
+                    SongLuaOverlayMeshVertex {
+                        pos: [0.0, 10.0],
+                        color: [0.0, 0.0, 1.0, 1.0],
+                        uv: [0.0, 1.0],
+                    },
+                ]),
+                texture_path: None,
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 40.0,
+                y: 50.0,
+                zoom_x: 2.0,
+                diffuse: [0.5, 0.5, 0.5, 0.75],
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            321,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("ActorMultiVertex overlay should render");
+
+        let Actor::Mesh {
+            offset,
+            vertices,
+            z,
+            blend,
+            ..
+        } = actor
+        else {
+            panic!("expected mesh-backed ActorMultiVertex overlay");
+        };
+        assert_eq!(offset, [40.0, 50.0]);
+        assert_eq!(z, 321);
+        assert_eq!(blend, BlendMode::Alpha);
+        assert_eq!(vertices.len(), 3);
+        assert_eq!(vertices[1].pos, [20.0, -0.0]);
+        assert_eq!(vertices[2].pos, [0.0, -10.0]);
+        assert_eq!(vertices[0].color, [0.5, 0.0, 0.0, 0.75]);
+    }
+
+    #[test]
+    fn song_lua_actor_multi_vertex_builds_textured_mesh_overlay() {
+        let texture_key = "song-lua-amv-texture.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(texture_key.clone(), image::RgbaImage::new(16, 16));
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorMultiVertex {
+                vertices: Arc::from(vec![
+                    SongLuaOverlayMeshVertex {
+                        pos: [0.0, 0.0],
+                        color: [1.0, 1.0, 1.0, 1.0],
+                        uv: [0.0, 0.0],
+                    },
+                    SongLuaOverlayMeshVertex {
+                        pos: [16.0, 0.0],
+                        color: [0.0, 1.0, 0.0, 1.0],
+                        uv: [1.0, 0.0],
+                    },
+                    SongLuaOverlayMeshVertex {
+                        pos: [0.0, 16.0],
+                        color: [0.0, 0.0, 1.0, 0.5],
+                        uv: [0.0, 1.0],
+                    },
+                ]),
+                texture_path: Some(std::path::PathBuf::from(&texture_key)),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 12.0,
+                y: 24.0,
+                diffuse: [0.5, 0.25, 0.75, 0.5],
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            322,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("textured ActorMultiVertex overlay should render");
+
+        let Actor::TexturedMesh {
+            offset,
+            texture,
+            tint,
+            vertices,
+            z,
+            blend,
+            ..
+        } = actor
+        else {
+            panic!("expected textured mesh-backed ActorMultiVertex overlay");
+        };
+        assert_eq!(offset, [12.0, 24.0]);
+        assert_eq!(texture.as_ref(), texture_key.as_str());
+        assert_eq!(tint, [0.5, 0.25, 0.75, 0.5]);
+        assert_eq!(z, 322);
+        assert_eq!(blend, BlendMode::Alpha);
+        assert_eq!(vertices.len(), 3);
+        assert_eq!(vertices[1].uv, [1.0, 0.0]);
+        assert_eq!(vertices[2].color, [0.0, 0.0, 1.0, 0.5]);
+    }
+
+    #[test]
+    fn song_lua_model_builds_textured_mesh_layers() {
+        let texture_key = "song-lua-model-texture.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(texture_key.clone(), image::RgbaImage::new(16, 16));
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Model {
+                layers: Arc::from(vec![SongLuaOverlayModelLayer {
+                    texture_key: Arc::from(texture_key.as_str()),
+                    vertices: Arc::from(vec![
+                        TexturedMeshVertex {
+                            pos: [0.0, 0.0, 0.0],
+                            uv: [0.0, 0.0],
+                            tex_matrix_scale: [1.0, 1.0],
+                            color: [1.0, 1.0, 1.0, 1.0],
+                        },
+                        TexturedMeshVertex {
+                            pos: [16.0, 0.0, 0.0],
+                            uv: [1.0, 0.0],
+                            tex_matrix_scale: [1.0, 1.0],
+                            color: [1.0, 1.0, 1.0, 1.0],
+                        },
+                        TexturedMeshVertex {
+                            pos: [0.0, 16.0, 0.0],
+                            uv: [0.0, 1.0],
+                            tex_matrix_scale: [1.0, 1.0],
+                            color: [1.0, 1.0, 1.0, 1.0],
+                        },
+                    ]),
+                    model_size: [16.0, 16.0],
+                    uv_scale: [1.0, 1.0],
+                    uv_offset: [0.0, 0.0],
+                    uv_tex_shift: [0.0, 0.0],
+                    draw: SongLuaOverlayModelDraw {
+                        pos: [2.0, 3.0, 4.0],
+                        rot: [0.0, 0.0, 0.0],
+                        zoom: [1.0, 1.0, 1.0],
+                        tint: [1.0, 0.5, 0.25, 0.75],
+                        vert_align: 0.5,
+                        blend_add: false,
+                        visible: true,
+                    },
+                }]),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 12.0,
+                y: 24.0,
+                diffuse: [0.5, 0.25, 0.75, 0.5],
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            323,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("Model overlay should render");
+
+        let Actor::Frame { children, .. } = actor else {
+            panic!("expected frame-backed Model overlay");
+        };
+        assert_eq!(children.len(), 1);
+        let Actor::TexturedMesh {
+            offset,
+            texture,
+            tint,
+            vertices,
+            z,
+            blend,
+            ..
+        } = &children[0]
+        else {
+            panic!("expected textured mesh model layer");
+        };
+        assert_eq!(*offset, [12.0, 24.0]);
+        assert_eq!(texture.as_ref(), texture_key.as_str());
+        assert_eq!(*tint, [0.5, 0.125, 0.1875, 0.375]);
+        assert_eq!(*z, 323);
+        assert_eq!(*blend, BlendMode::Alpha);
+        assert_eq!(vertices.len(), 3);
+    }
+
+    #[test]
+    fn song_lua_song_meter_display_builds_progress_quad() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::SongMeterDisplay {
+                stream_width: 100.0,
+                stream_state: SongLuaOverlayState {
+                    zoom_y: 18.0,
+                    diffuse: [1.0, 0.0, 0.0, 0.8],
+                    ..SongLuaOverlayState::default()
+                },
+                music_length_seconds: 100.0,
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 20.0,
+                diffuse: [0.5, 1.0, 1.0, 1.0],
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            323,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            25.0,
+        )
+        .expect("SongMeterDisplay overlay should render");
+
+        match actor {
+            Actor::Sprite {
+                offset,
+                scale,
+                tint,
+                z,
+                visible,
+                ..
+            } => {
+                assert_eq!(offset, [270.0, 20.0]);
+                assert_eq!(scale, [25.0, 18.0]);
+                assert_eq!(tint, [0.5, 0.0, 0.0, 0.8]);
+                assert_eq!(z, 323);
+                assert!(visible);
+            }
+            other => panic!("expected sprite-backed SongMeterDisplay quad, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_graph_display_builds_line_quad() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::GraphDisplay {
+                size: [120.0, 60.0],
+                body_values: Arc::from([0.5, 0.5]),
+                body_state: SongLuaOverlayState {
+                    visible: false,
+                    ..SongLuaOverlayState::default()
+                },
+                line_state: SongLuaOverlayState {
+                    y: 1.0,
+                    diffuse: [0.8, 0.7, 0.6, 0.5],
+                    ..SongLuaOverlayState::default()
+                },
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 100.0,
+                valign: 0.0,
+                diffuse: [0.5, 1.0, 1.0, 1.0],
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            324,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("GraphDisplay overlay should render");
+
+        match actor {
+            Actor::Mesh {
+                vertices,
+                z,
+                visible,
+                ..
+            } => {
+                assert_eq!(z, 324);
+                assert_eq!(vertices.len(), 6);
+                assert_eq!(vertices[0].pos, [260.0, 131.5]);
+                assert_eq!(vertices[1].pos, [260.0, 130.5]);
+                assert_eq!(vertices[2].pos, [380.0, 130.5]);
+                assert_eq!(vertices[0].color, [0.4, 0.7, 0.6, 0.5]);
+                assert!(visible);
+            }
+            other => panic!("expected mesh-backed GraphDisplay line, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_graph_display_builds_body_and_line_quads() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::GraphDisplay {
+                size: [120.0, 60.0],
+                body_values: Arc::from([0.25, 0.75]),
+                body_state: SongLuaOverlayState {
+                    diffuse: [0.2, 0.5, 1.0, 0.75],
+                    ..SongLuaOverlayState::default()
+                },
+                line_state: SongLuaOverlayState {
+                    y: 1.0,
+                    diffuse: [0.8, 0.7, 0.6, 0.5],
+                    ..SongLuaOverlayState::default()
+                },
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 100.0,
+                valign: 0.0,
+                diffuse: [0.5, 1.0, 1.0, 1.0],
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            324,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("GraphDisplay overlay should render");
+
+        let Actor::Frame { children, .. } = actor else {
+            panic!("expected GraphDisplay body and line frame");
+        };
+        assert_eq!(children.len(), 2);
+        match &children[0] {
+            Actor::Mesh {
+                vertices, visible, ..
+            } => {
+                assert_eq!(vertices.len(), 6);
+                assert_eq!(vertices[0].pos, [260.0, 145.0]);
+                assert_eq!(vertices[1].pos, [260.0, 160.0]);
+                assert_eq!(vertices[2].pos, [380.0, 160.0]);
+                assert_eq!(vertices[5].pos, [380.0, 115.0]);
+                assert_eq!(vertices[0].color, [0.1, 0.5, 1.0, 0.75]);
+                assert!(*visible);
+            }
+            other => panic!("expected mesh-backed GraphDisplay body, got {other:?}"),
+        }
+        match &children[1] {
+            Actor::Mesh { vertices, .. } => {
+                assert_eq!(vertices.len(), 6);
+                assert_eq!(vertices[0].color, [0.4, 0.7, 0.6, 0.5]);
+            }
+            other => panic!("expected mesh-backed GraphDisplay line, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn song_lua_quad_uses_textured_mesh_under_perspective_camera() {
         let overlay = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::Quad,
@@ -6338,6 +8292,7 @@ mod tests {
                 effect_period: 2.0,
                 effect_offset: 1.0,
                 effect_magnitude: [10.0, 20.0, 5.0],
+                z_bias: 2.5,
                 ..SongLuaOverlayState::default()
             },
             None,
@@ -6364,7 +8319,7 @@ mod tests {
                 assert_eq!(z, 777);
                 assert!((offset[0] - (320.0 + 10.0) * x_scale).abs() <= 0.000_1);
                 assert!((offset[1] - (240.0 + 20.0) * y_scale).abs() <= 0.000_1);
-                assert!((world_z - 5.0).abs() <= 0.000_1);
+                assert!((world_z - 7.5).abs() <= 0.000_1);
                 assert!(scale[0] > 0.0);
                 assert!(scale[1] > 0.0);
             }
@@ -6417,6 +8372,208 @@ mod tests {
                 assert!(world_z.abs() <= 0.000_1);
             }
             other => panic!("expected sprite-backed quad, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_quad_applies_rainbow_tint_at_runtime() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                size: Some([100.0, 50.0]),
+                rainbow: true,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            779,
+            640.0,
+            480.0,
+            0.5,
+            0.0,
+            0.5,
+        )
+        .expect("rainbow quad should render");
+
+        match actor {
+            Actor::Sprite { tint, z, .. } => {
+                assert_eq!(z, 779);
+                assert_eq!(tint, [0.0, 1.0, 1.0, 1.0]);
+            }
+            other => panic!("expected rainbow sprite-backed quad, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_bitmaptext_applies_rainbow_scroll_at_runtime() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("ABC"),
+                stroke_color: None,
+                attributes: empty_text_attributes(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                rainbow_scroll: true,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            780,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.4,
+        )
+        .expect("rainbow-scroll bitmap text should render");
+
+        match actor {
+            Actor::Text { attributes, z, .. } => {
+                assert_eq!(z, 780);
+                assert_eq!(attributes.len(), 3);
+                assert_eq!(attributes[0].color, [0.4, 0.3, 0.5, 1.0]);
+                assert_eq!(attributes[1].color, [0.2, 0.6, 1.0, 1.0]);
+                assert_eq!(attributes[2].color, [0.2, 0.8, 0.8, 1.0]);
+            }
+            other => panic!("expected rainbow-scroll bitmap text actor, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_bitmaptext_respects_text_glow_mode_at_runtime() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("GLOW"),
+                stroke_color: Some([0.0, 0.0, 0.0, 0.5]),
+                attributes: empty_text_attributes(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                glow: [0.2, 0.3, 0.4, 0.5],
+                text_glow_mode: SongLuaTextGlowMode::Stroke,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            781,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("text glow bitmap text should render");
+
+        match actor {
+            Actor::Frame { children, .. } => match &children[1] {
+                Actor::Text {
+                    color,
+                    stroke_color,
+                    attributes,
+                    blend,
+                    ..
+                } => {
+                    assert_eq!(*color, [1.0, 1.0, 1.0, 1.0]);
+                    assert_eq!(*stroke_color, Some([0.2, 0.3, 0.4, 0.5]));
+                    assert_eq!(*blend, BlendMode::Add);
+                    assert_eq!(attributes.len(), 1);
+                    assert_eq!(attributes[0].color, [1.0, 1.0, 1.0, 0.0]);
+                }
+                other => panic!("expected stroke-only text glow child, got {other:?}"),
+            },
+            other => panic!("expected text glow wrapper frame, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_bitmaptext_attribute_glow_adds_runtime_glow_pass() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("GLOW"),
+                stroke_color: None,
+                attributes: Arc::from([TextAttribute {
+                    start: 1,
+                    length: 2,
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    vertex_colors: None,
+                    glow: Some([0.7, 0.3, 0.9, 0.5]),
+                }]),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            783,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("attribute glow bitmap text should render");
+
+        match actor {
+            Actor::Frame { children, .. } => match &children[1] {
+                Actor::Text {
+                    color,
+                    stroke_color,
+                    attributes,
+                    blend,
+                    ..
+                } => {
+                    assert_eq!(*color, [1.0, 1.0, 1.0, 1.0]);
+                    assert_eq!(*stroke_color, None);
+                    assert_eq!(*blend, BlendMode::Add);
+                    assert_eq!(attributes.len(), 1);
+                    assert_eq!(attributes[0].start, 1);
+                    assert_eq!(attributes[0].length, 2);
+                    assert_eq!(attributes[0].color, [0.7, 0.3, 0.9, 0.5]);
+                }
+                other => panic!("expected text attribute glow child, got {other:?}"),
+            },
+            other => panic!("expected text attribute glow wrapper frame, got {other:?}"),
         }
     }
 
@@ -6609,6 +8766,57 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_sprite_renders_vertex_diffuse_as_mesh() {
+        let key = "song-lua-vertex-diffuse.png".to_string();
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: std::path::PathBuf::from(&key),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                vertex_colors: Some([
+                    [1.0, 0.0, 0.0, 1.0],
+                    [0.0, 1.0, 0.0, 1.0],
+                    [1.0, 1.0, 0.0, 1.0],
+                    [0.0, 0.0, 1.0, 1.0],
+                ]),
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &asset_manager,
+            782,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("vertex-diffuse sprite should render");
+
+        match actor {
+            Actor::TexturedMesh { vertices, z, .. } => {
+                assert_eq!(z, 782);
+                assert_eq!(vertices.len(), 6);
+                assert_eq!(vertices[0].color, [1.0, 0.0, 0.0, 1.0]);
+                assert_eq!(vertices[1].color, [0.0, 1.0, 0.0, 1.0]);
+                assert_eq!(vertices[2].color, [1.0, 1.0, 0.0, 1.0]);
+                assert_eq!(vertices[5].color, [0.0, 0.0, 1.0, 1.0]);
+            }
+            other => panic!("expected textured mesh-backed vertex diffuse, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn song_lua_sprite_applies_fade_edges_at_runtime() {
         let key = "song-lua-fade-edges.png".to_string();
         let mut asset_manager = AssetManager::new();
@@ -6701,10 +8909,16 @@ mod tests {
             Actor::TexturedMesh { vertices, z, .. } => {
                 assert_eq!(z, 783);
                 assert_eq!(vertices.len(), 6);
-                assert!((vertices[0].pos[0] - 251.25).abs() <= 0.001);
-                assert!((vertices[0].pos[1] - 202.5).abs() <= 0.001);
-                assert!((vertices[2].pos[0] - 388.75).abs() <= 0.001);
-                assert!((vertices[2].pos[1] - 277.5).abs() <= 0.001);
+                let x_scale = screen_width() / 640.0;
+                let y_scale = screen_height() / 480.0;
+                let center = [320.0 * x_scale, 240.0 * y_scale];
+                let half = [20.0 * x_scale, 15.0 * y_scale];
+                let top_left = test_skewed_overlay_point(center, [-half[0], -half[1]], 0.5, 0.25);
+                let bottom_right = test_skewed_overlay_point(center, [half[0], half[1]], 0.5, 0.25);
+                assert!((vertices[0].pos[0] - top_left[0]).abs() <= 0.001);
+                assert!((vertices[0].pos[1] - top_left[1]).abs() <= 0.001);
+                assert!((vertices[2].pos[0] - bottom_right[0]).abs() <= 0.001);
+                assert!((vertices[2].pos[1] - bottom_right[1]).abs() <= 0.001);
             }
             other => panic!("expected skewed textured mesh overlay, got {other:?}"),
         }
@@ -6759,6 +8973,7 @@ mod tests {
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("MASK"),
                 stroke_color: None,
+                attributes: empty_text_attributes(),
             },
             name: None,
             parent_index: None,
@@ -6837,6 +9052,7 @@ mod tests {
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("ALIGN"),
                 stroke_color: None,
+                attributes: empty_text_attributes(),
             },
             name: None,
             parent_index: None,
@@ -6880,7 +9096,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_overlay_wraps_runtime_actors_with_shadow() {
+    fn song_lua_overlay_applies_runtime_actor_shadow() {
         let quad = SongLuaOverlayActor {
             kind: SongLuaOverlayKind::Quad,
             name: None,
@@ -6910,15 +9126,17 @@ mod tests {
         .expect("shadowed quad should render");
 
         match quad_actor {
-            Actor::Shadow { len, color, child } => {
-                assert_eq!(len, [3.0, -4.0]);
-                assert_eq!(color, [0.1, 0.2, 0.3, 0.4]);
-                match *child {
-                    Actor::Sprite { z, .. } => assert_eq!(z, 787),
-                    other => panic!("expected shadowed quad sprite child, got {other:?}"),
-                }
+            Actor::Sprite {
+                z,
+                shadow_len,
+                shadow_color,
+                ..
+            } => {
+                assert_eq!(z, 787);
+                assert_eq!(shadow_len, [3.0, -4.0]);
+                assert_eq!(shadow_color, [0.1, 0.2, 0.3, 0.4]);
             }
-            other => panic!("expected shadow wrapper, got {other:?}"),
+            other => panic!("expected shadowed quad sprite, got {other:?}"),
         }
     }
 
@@ -7169,6 +9387,7 @@ mod tests {
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("WRAP"),
                 stroke_color: None,
+                attributes: empty_text_attributes(),
             },
             name: None,
             parent_index: None,
@@ -7185,6 +9404,8 @@ mod tests {
                 max_height: Some(40.0),
                 max_w_pre_zoom: true,
                 max_h_pre_zoom: false,
+                text_jitter: true,
+                text_distortion: 0.5,
                 ..SongLuaOverlayState::default()
             },
             None,
@@ -7205,6 +9426,8 @@ mod tests {
                 max_height,
                 max_w_pre_zoom,
                 max_h_pre_zoom,
+                jitter,
+                distortion,
                 z,
                 ..
             } => {
@@ -7214,8 +9437,173 @@ mod tests {
                 assert_eq!(max_height, Some(40.0));
                 assert!(max_w_pre_zoom);
                 assert!(!max_h_pre_zoom);
+                assert!(jitter);
+                assert_eq!(distortion, 0.5);
             }
             other => panic!("expected bitmap text actor with layout settings, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_bitmaptext_max_dimension_use_zoom_reaches_runtime() {
+        let text = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("USEZOOM"),
+                stroke_color: None,
+                attributes: empty_text_attributes(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let text_actor = build_song_lua_overlay_actor(
+            &text,
+            SongLuaOverlayState {
+                max_width: Some(80.0),
+                max_height: Some(40.0),
+                max_w_pre_zoom: true,
+                max_h_pre_zoom: true,
+                max_dimension_uses_zoom: true,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            0,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("bitmap text max dimension zoom should render");
+
+        match text_actor {
+            Actor::Text {
+                max_w_pre_zoom,
+                max_h_pre_zoom,
+                ..
+            } => {
+                assert!(!max_w_pre_zoom);
+                assert!(!max_h_pre_zoom);
+            }
+            other => panic!("expected bitmap text actor with max-dimension zoom, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_overlay_applies_bitmaptext_attributes_at_runtime() {
+        let text = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("ATTR"),
+                stroke_color: None,
+                attributes: Arc::from([TextAttribute {
+                    start: 1,
+                    length: 2,
+                    color: [0.2, 0.4, 0.6, 0.8],
+                    vertex_colors: None,
+                    glow: None,
+                }]),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let text_actor = build_song_lua_overlay_actor(
+            &text,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            791,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("bitmap text with attributes should render");
+
+        match text_actor {
+            Actor::Text { attributes, z, .. } => {
+                assert_eq!(z, 791);
+                assert_eq!(attributes.len(), 1);
+                assert_eq!(attributes[0].start, 1);
+                assert_eq!(attributes[0].length, 2);
+                assert_eq!(attributes[0].color, [0.2, 0.4, 0.6, 0.8]);
+            }
+            other => panic!("expected bitmap text actor with attributes, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_bitmaptext_attributes_can_ignore_actor_diffuse_at_runtime() {
+        let text = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::<str>::from("ATTR"),
+                stroke_color: None,
+                attributes: Arc::from([TextAttribute {
+                    start: 1,
+                    length: 2,
+                    color: [0.2, 0.4, 0.6, 0.8],
+                    vertex_colors: None,
+                    glow: None,
+                }]),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let text_actor = build_song_lua_overlay_actor(
+            &text,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                diffuse: [0.5, 0.6, 0.7, 0.9],
+                ..SongLuaOverlayState::default()
+            },
+            None,
+            &AssetManager::new(),
+            792,
+            screen_width(),
+            screen_height(),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .expect("bitmap text with non-multiplied attributes should render");
+
+        match text_actor {
+            Actor::Text {
+                color,
+                attributes,
+                z,
+                ..
+            } => {
+                assert_eq!(z, 792);
+                assert_eq!(color, [1.0, 1.0, 1.0, 1.0]);
+                assert_eq!(attributes.len(), 2);
+                assert_eq!(attributes[0].start, 0);
+                assert_eq!(attributes[0].length, 4);
+                assert_eq!(attributes[0].color, [0.5, 0.6, 0.7, 0.9]);
+                assert_eq!(attributes[1].start, 1);
+                assert_eq!(attributes[1].length, 2);
+                assert_eq!(attributes[1].color, [0.2, 0.4, 0.6, 0.8]);
+            }
+            other => {
+                panic!("expected bitmap text actor with non-multiplied attributes, got {other:?}")
+            }
         }
     }
 
@@ -7227,6 +9615,7 @@ mod tests {
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("Mixed Case"),
                 stroke_color: None,
+                attributes: empty_text_attributes(),
             },
             name: None,
             parent_index: None,
@@ -7278,6 +9667,7 @@ mod tests {
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("SKEW"),
                 stroke_color: None,
+                attributes: empty_text_attributes(),
             },
             name: None,
             parent_index: None,
@@ -7331,6 +9721,7 @@ mod tests {
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("FIT"),
                 stroke_color: None,
+                attributes: empty_text_attributes(),
             },
             name: None,
             parent_index: None,
@@ -7429,6 +9820,55 @@ mod tests {
             song_lua_overlay_order(&overlays, &states, None),
             [3, 0, 2, 1]
         );
+    }
+
+    #[test]
+    fn song_lua_overlay_order_sorts_children_by_z_when_enabled() {
+        let overlays = vec![
+            SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::ActorFrame,
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState {
+                    draw_by_z_position: true,
+                    ..SongLuaOverlayState::default()
+                },
+                message_commands: Vec::new(),
+            },
+            test_order_overlay(SongLuaOverlayKind::Quad, Some(0), 100),
+            test_order_overlay(SongLuaOverlayKind::Quad, Some(0), -100),
+            test_order_overlay(SongLuaOverlayKind::Quad, Some(0), 0),
+        ];
+        let mut states = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect::<Vec<_>>();
+        states[1].z = -20.0;
+        states[2].z = 5.0;
+        states[3].z = 0.0;
+
+        assert_eq!(
+            song_lua_overlay_order(&overlays, &states, None),
+            [0, 1, 3, 2]
+        );
+    }
+
+    #[test]
+    fn song_lua_overlay_delta_applies_depth_filtering_and_draw_by_z() {
+        let mut state = SongLuaOverlayState::default();
+        apply_song_lua_overlay_delta(
+            &mut state,
+            &SongLuaOverlayStateDelta {
+                depth_test: Some(true),
+                draw_by_z_position: Some(true),
+                texture_filtering: Some(false),
+                ..SongLuaOverlayStateDelta::default()
+            },
+        );
+
+        assert!(state.depth_test);
+        assert!(state.draw_by_z_position);
+        assert!(!state.texture_filtering);
     }
 
     #[test]

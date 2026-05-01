@@ -68,10 +68,6 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "EnableBoogieStats")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.enable_boogiestats, |v| v != 0);
-    cfg.submit_groovestats_fails = conf
-        .get("Options", "SubmitGrooveStatsFails")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.submit_groovestats_fails, |v| v != 0);
     cfg.submit_arrowcloud_fails = conf
         .get("Options", "SubmitArrowCloudFails")
         .and_then(|v| v.parse::<u8>().ok())
@@ -148,6 +144,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "VideoRenderer")
         .and_then(|s| BackendType::from_str(&s).ok())
         .unwrap_or(default.video_renderer);
+    cfg.high_dpi = conf
+        .get("Options", "HighDPI")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.high_dpi);
     cfg.windows_gamepad_backend = conf
         .get("Options", "GamepadBackend")
         .and_then(|s| WindowsPadBackend::from_str(&s).ok())

@@ -13,11 +13,11 @@ use self::input_routing::{GameplayQueuedEvent, gameplay_raw_key_event};
 use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
-use crate::assets::{AssetManager, TextureUploadBudget};
+use crate::assets::{AssetManager, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode, dirs};
 use crate::engine::display;
 use crate::engine::gfx::{
-    self as renderer, BackendType, PresentModePolicy, SamplerDesc, SamplerWrap,
+    self as renderer, BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap,
 };
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use crate::engine::host_time;
@@ -30,8 +30,8 @@ use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
     SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
     initials, input as input_screen, manage_local_profiles, mappings, menu, options,
-    player_options, profile_load, sandbox, select_color, select_course, select_mode, select_music,
-    select_profile, select_style,
+    player_options, practice, profile_load, sandbox, select_color, select_course, select_mode,
+    select_music, select_profile, select_style,
 };
 use winit::{
     application::ApplicationHandler,
@@ -601,7 +601,7 @@ struct FrameIntervalState {
 
 #[inline(always)]
 const fn should_background_throttle_unfocused(screen: CurrentScreen) -> bool {
-    !matches!(screen, CurrentScreen::Gameplay)
+    !matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice)
 }
 
 #[inline(always)]
@@ -793,7 +793,7 @@ fn apply_tab_acceleration(
     slow: bool,
     enabled: bool,
 ) -> f32 {
-    if !enabled || matches!(screen, CurrentScreen::Gameplay) {
+    if !enabled || matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice) {
         return wall_dt;
     }
     let scaled = match (fast, slow) {
@@ -839,6 +839,7 @@ pub struct ScreensState {
     current_screen: CurrentScreen,
     menu_state: menu::State,
     gameplay_state: Option<gameplay::State>,
+    practice_state: Option<practice::State>,
     options_state: options::State,
     credits_state: credits::State,
     manage_local_profiles_state: manage_local_profiles::State,
@@ -928,7 +929,10 @@ impl ShellState {
             tab_held: false,
             backquote_held: false,
             tab_acceleration_enabled: cfg.tab_acceleration,
-            window_focused: true,
+            // Default to unfocused so background input backends (Win32 RawInput,
+            // evdev, IOHID) drop globally-observed key events until the window
+            // is created and proven focused.
+            window_focused: false,
             window_occluded: false,
             surface_active: cfg.display_width > 0 && cfg.display_height > 0,
             screenshot_pending: false,
@@ -1614,6 +1618,9 @@ fn fallback_eval_mods_text(side: profile::PlayerSide, speed_mod: ScrollSpeedSett
     if profile.mini_percent != 0 {
         parts.push(format!("{}% Mini", profile.mini_percent));
     }
+    if profile.spacing_percent != 0 {
+        parts.push(format!("{}% Spacing", profile.spacing_percent));
+    }
     let scroll = profile.scroll_option;
     if scroll.contains(profile::ScrollOption::Reverse) {
         parts.push("Reverse".to_string());
@@ -1718,9 +1725,9 @@ fn prewarm_gameplay_assets(
     backend: &mut renderer::Backend,
     state: &gameplay::State,
 ) {
-    fn song_lua_overlay_uses_repeat_sampler(
+    fn song_lua_overlay_sampler(
         overlay: &crate::game::parsing::song_lua::SongLuaOverlayActor,
-    ) -> bool {
+    ) -> SamplerDesc {
         let uses_repeat_state = |state: &crate::game::parsing::song_lua::SongLuaOverlayState| {
             state.texture_wrapping
                 || state
@@ -1742,12 +1749,37 @@ fn prewarm_gameplay_assets(
                     })
                     || delta.texcoord_velocity.is_some()
             };
-        uses_repeat_state(&overlay.initial_state)
+        let uses_nearest_state =
+            |state: &crate::game::parsing::song_lua::SongLuaOverlayState| !state.texture_filtering;
+        let uses_nearest_delta =
+            |delta: &crate::game::parsing::song_lua::SongLuaOverlayStateDelta| {
+                delta.texture_filtering == Some(false)
+            };
+        let uses_repeat = uses_repeat_state(&overlay.initial_state)
             || overlay
                 .message_commands
                 .iter()
                 .flat_map(|command| command.blocks.iter())
-                .any(|block| uses_repeat_delta(&block.delta))
+                .any(|block| uses_repeat_delta(&block.delta));
+        let uses_nearest = uses_nearest_state(&overlay.initial_state)
+            || overlay
+                .message_commands
+                .iter()
+                .flat_map(|command| command.blocks.iter())
+                .any(|block| uses_nearest_delta(&block.delta));
+        SamplerDesc {
+            filter: if uses_nearest {
+                SamplerFilter::Nearest
+            } else {
+                SamplerFilter::Linear
+            },
+            wrap: if uses_repeat {
+                SamplerWrap::Repeat
+            } else {
+                SamplerWrap::Clamp
+            },
+            ..SamplerDesc::default()
+        }
     }
 
     fn gameplay_media_paths(state: &gameplay::State) -> Vec<&PathBuf> {
@@ -1830,30 +1862,67 @@ fn prewarm_gameplay_assets(
                     }
                     crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } => {
                         let key = texture_path.to_string_lossy().into_owned();
-                        if seen.insert(key.clone()) {
-                            if song_lua_overlay_uses_repeat_sampler(overlay) {
-                                match media_cache::load_banner_source_rgba(texture_path) {
-                                    Ok(rgba) => {
-                                        let sampler = SamplerDesc {
-                                            wrap: SamplerWrap::Repeat,
-                                            ..SamplerDesc::default()
-                                        };
-                                        if let Err(e) = assets.update_texture_for_key_with_sampler(
-                                            backend, &key, &rgba, sampler,
-                                        ) {
-                                            warn!(
-                                                "Failed to create repeating GPU texture for image {texture_path:?}: {e}. Skipping."
-                                            );
-                                        }
-                                    }
-                                    Err(e) => {
+                        let first_seen = seen.insert(key.clone());
+                        let sampler = song_lua_overlay_sampler(overlay);
+                        if sampler != SamplerDesc::default() {
+                            match media_cache::load_banner_source_rgba(texture_path) {
+                                Ok(rgba) => {
+                                    if let Err(e) = assets.update_texture_for_key_with_sampler(
+                                        backend, &key, &rgba, sampler,
+                                    ) {
                                         warn!(
-                                            "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
+                                            "Failed to create custom-sampled GPU texture for image {texture_path:?}: {e}. Skipping."
                                         );
                                     }
                                 }
-                            } else {
-                                media_cache::ensure_banner_texture(assets, backend, texture_path);
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
+                                    );
+                                }
+                            }
+                        } else if first_seen {
+                            media_cache::ensure_banner_texture(assets, backend, texture_path);
+                        }
+                    }
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::Sound { sound_path } => {
+                        let key = sound_path.to_string_lossy().into_owned();
+                        if seen.insert(key.clone()) {
+                            crate::engine::audio::preload_sfx(&key);
+                        }
+                    }
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::ActorMultiVertex {
+                        texture_path: Some(texture_path),
+                        ..
+                    } => {
+                        let key = texture_path.to_string_lossy().into_owned();
+                        let first_seen = seen.insert(key.clone());
+                        let sampler = song_lua_overlay_sampler(overlay);
+                        if sampler != SamplerDesc::default() {
+                            match media_cache::load_banner_source_rgba(texture_path) {
+                                Ok(rgba) => {
+                                    if let Err(e) = assets.update_texture_for_key_with_sampler(
+                                        backend, &key, &rgba, sampler,
+                                    ) {
+                                        warn!(
+                                            "Failed to create custom-sampled GPU texture for image {texture_path:?}: {e}. Skipping."
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
+                                    );
+                                }
+                            }
+                        } else if first_seen {
+                            media_cache::ensure_banner_texture(assets, backend, texture_path);
+                        }
+                    }
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::Model { layers } => {
+                        for layer in layers.iter() {
+                            if seen.insert(layer.texture_key.to_string()) {
+                                assets.ensure_texture_for_key(backend, layer.texture_key.as_ref());
                             }
                         }
                     }
@@ -1867,6 +1936,12 @@ fn prewarm_gameplay_assets(
     }
     for layer in &state.song_lua_foreground_visual_layers {
         prewarm_song_lua_overlays(&layer.overlays);
+    }
+    for sound_path in &state.song_lua_sound_paths {
+        let key = sound_path.to_string_lossy().into_owned();
+        if seen.insert(key.clone()) {
+            crate::engine::audio::preload_sfx(&key);
+        }
     }
     crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");
     crate::engine::audio::preload_sfx("assets/sounds/assist_tick.ogg");
@@ -2281,6 +2356,7 @@ impl ScreensState {
             current_screen: CurrentScreen::Init,
             menu_state,
             gameplay_state: None,
+            practice_state: None,
             options_state,
             credits_state,
             manage_local_profiles_state,
@@ -2315,6 +2391,11 @@ impl ScreensState {
                 .gameplay_state
                 .as_mut()
                 .map(|gs| gameplay::update(gs, delta_time))
+                .map_or((None, false), |action| (Some(action), false)),
+            CurrentScreen::Practice => self
+                .practice_state
+                .as_mut()
+                .map(|ps| practice::update(ps, delta_time))
                 .map_or((None, false), |action| (Some(action), false)),
             CurrentScreen::Init => (Some(init::update(&mut self.init_state, delta_time)), false),
             CurrentScreen::Options => (
@@ -2546,6 +2627,41 @@ impl App {
         )
     }
 
+    /// Apply a window focus change to all subsystems that care about it.
+    ///
+    /// Used by both the `WindowEvent::Focused` handler and the initial focus
+    /// seed performed in `init_graphics` (and on renderer-switch window
+    /// recreation). Always pushes the new focus state to the raw input
+    /// backends so their gating flag stays in sync with the shell, and only
+    /// runs the change-only side effects (capture sync, modifier reset,
+    /// debounce/queue clear, redraw) when the shell focus actually toggled.
+    pub(super) fn apply_window_focus_change(
+        &mut self,
+        focused: bool,
+        now: Instant,
+        window: Option<&Arc<Window>>,
+    ) {
+        input::set_raw_keyboard_window_focused(focused);
+        if !self.state.shell.set_window_focus(focused, now) {
+            return;
+        }
+        self.sync_gameplay_input_capture();
+        debug!(
+            "Window focus changed: focused={} screen={:?}",
+            focused, self.state.screens.current_screen
+        );
+        if !focused {
+            self.state.shell.shift_held = false;
+            self.state.shell.ctrl_held = false;
+            self.state.shell.tab_held = false;
+            self.state.shell.backquote_held = false;
+            input::clear_debounce_state();
+            self.clear_gameplay_input_events();
+        } else if let Some(w) = window {
+            self.request_redraw(w, "focus");
+        }
+    }
+
     #[inline(always)]
     fn sync_input_fsr_view(&mut self) {
         let pending = input_screen::take_fsr_command(&mut self.state.screens.input_state)
@@ -2741,7 +2857,7 @@ impl App {
             self.state.shell.backquote_held,
             self.state.shell.tab_acceleration_enabled,
         );
-        crate::screens::components::shared::heart_bg::tick_global(logic_dt);
+        crate::screens::components::shared::visual_style_bg::tick_global(logic_dt);
 
         self.sync_gameplay_input_capture();
         self.sync_input_fsr_view();
@@ -2868,6 +2984,7 @@ impl App {
         }
 
         self.sync_gameplay_background();
+        self.sync_theme_background_video();
         let actor_build_started = Instant::now();
         let (actors, clear_color) = self.get_current_actors();
         let actor_build_us = elapsed_us_since(actor_build_started);
@@ -2888,9 +3005,17 @@ impl App {
         };
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
-            let gameplay_time = screens.gameplay_state.as_ref().map(|state| {
-                crate::game::gameplay::song_time_ns_to_seconds(state.current_music_time_ns)
-            });
+            let gameplay_time = match current_screen {
+                CurrentScreen::Gameplay => screens.gameplay_state.as_ref().map(|state| {
+                    crate::game::gameplay::song_time_ns_to_seconds(state.current_music_time_ns)
+                }),
+                CurrentScreen::Practice => screens.practice_state.as_ref().map(|state| {
+                    crate::game::gameplay::song_time_ns_to_seconds(
+                        state.gameplay.current_music_time_ns,
+                    )
+                }),
+                _ => None,
+            };
             match current_screen {
                 CurrentScreen::SelectMusic => {
                     let state = &screens.select_music_state;
@@ -2972,8 +3097,11 @@ impl App {
                     );
                 }
             }
-            self.dynamic_media
-                .queue_video_frames(&mut self.asset_manager, gameplay_time);
+            self.dynamic_media.queue_video_frames(
+                &mut self.asset_manager,
+                gameplay_time,
+                total_elapsed,
+            );
             self.asset_manager.queue_pending_generated_textures();
             self.asset_manager.drain_texture_uploads(
                 backend,
@@ -3323,6 +3451,7 @@ impl App {
                 vsync,
                 present_mode_policy,
                 max_fps,
+                high_dpi,
             } => {
                 // Ensure options menu reflects current hardware state before processing changes
                 self.update_options_monitor_specs(event_loop);
@@ -3351,6 +3480,11 @@ impl App {
                     );
                     present_config_changed = true;
                 }
+                if let Some(enabled) = high_dpi {
+                    debug!("Graphics setting changed: high_dpi={enabled}");
+                    config::update_high_dpi(enabled);
+                    options::sync_high_dpi(&mut self.state.screens.options_state, enabled);
+                }
 
                 let mut pending_resolution = None;
                 if let Some((w, h)) = resolution {
@@ -3364,10 +3498,19 @@ impl App {
                     event_loop,
                     monitor.unwrap_or(self.state.shell.display_monitor),
                 );
-                let recreate_renderer = renderer.is_some();
+                let target_renderer = renderer.unwrap_or(self.backend_type);
+                let high_dpi_affects_renderer =
+                    high_dpi.is_some() && target_renderer == BackendType::OpenGL;
+                if high_dpi_affects_renderer && pending_resolution.is_none() {
+                    pending_resolution = Some((
+                        self.state.shell.display_width,
+                        self.state.shell.display_height,
+                    ));
+                }
+                let recreate_renderer = renderer.is_some() || high_dpi_affects_renderer;
 
-                match (renderer, display_mode) {
-                    (Some(new_backend), Some(mode)) => {
+                match (recreate_renderer, display_mode) {
+                    (true, Some(mode)) => {
                         // When both change, avoid touching the old window; update state/config
                         // first so the new renderer is created directly in the target mode.
                         let prev_mode = self.state.shell.display_mode;
@@ -3392,15 +3535,20 @@ impl App {
                             chosen_monitor,
                             monitor_count,
                         );
-                        self.switch_renderer(new_backend, pending_resolution, event_loop)?;
+                        self.switch_renderer(
+                            target_renderer,
+                            pending_resolution,
+                            event_loop,
+                            high_dpi_affects_renderer,
+                        )?;
                     }
-                    (None, Some(mode)) => {
+                    (false, Some(mode)) => {
                         self.apply_display_mode(mode, Some(chosen_monitor), event_loop)?;
                         if let Some((w, h)) = pending_resolution {
                             self.apply_resolution(w, h, event_loop)?;
                         }
                     }
-                    (Some(new_backend), None) => {
+                    (true, None) => {
                         if monitor.is_some() {
                             self.state.shell.display_monitor = chosen_monitor;
                             config::update_display_monitor(chosen_monitor);
@@ -3416,9 +3564,14 @@ impl App {
                                 monitor_count,
                             );
                         }
-                        self.switch_renderer(new_backend, pending_resolution, event_loop)?;
+                        self.switch_renderer(
+                            target_renderer,
+                            pending_resolution,
+                            event_loop,
+                            high_dpi_affects_renderer,
+                        )?;
                     }
-                    (None, None) => {
+                    (false, None) => {
                         if monitor.is_some() {
                             // Move the existing window/fullscreen session to the chosen monitor.
                             self.apply_display_mode(
@@ -4168,7 +4321,7 @@ impl App {
         }
         if config::get().only_dedicated_menu_buttons && ev.action.is_gameplay_arrow() {
             let allow_gameplay_arrow = match self.state.screens.current_screen {
-                CurrentScreen::Gameplay | CurrentScreen::Input => true,
+                CurrentScreen::Gameplay | CurrentScreen::Practice | CurrentScreen::Input => true,
                 CurrentScreen::SelectMusic => {
                     self.state
                         .screens
@@ -4301,6 +4454,13 @@ impl App {
                     ScreenAction::None
                 }
             }
+            CurrentScreen::Practice => {
+                if let Some(ps) = &mut self.state.screens.practice_state {
+                    crate::screens::practice::handle_input(ps, &ev)
+                } else {
+                    ScreenAction::None
+                }
+            }
         };
         if matches!(action, ScreenAction::None) {
             return Ok(());
@@ -4309,12 +4469,25 @@ impl App {
     }
 
     fn sync_gameplay_background(&mut self) {
-        if self.state.screens.current_screen != CurrentScreen::Gameplay {
+        if !matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Gameplay | CurrentScreen::Practice
+        ) {
             return;
         }
         let show_video_backgrounds = config::get().show_video_backgrounds;
         let desired_path = {
-            let Some(gs) = self.state.screens.gameplay_state.as_mut() else {
+            let gs = match self.state.screens.current_screen {
+                CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_mut(),
+                CurrentScreen::Practice => self
+                    .state
+                    .screens
+                    .practice_state
+                    .as_mut()
+                    .map(|state| &mut state.gameplay),
+                _ => None,
+            };
+            let Some(gs) = gs else {
                 return;
             };
             if let Some(next_change) = gs.song.background_changes.get(gs.next_background_change_ix)
@@ -4348,15 +4521,32 @@ impl App {
                 show_video_backgrounds,
             )
         });
-        if let Some(key) = next_key
-            && let Some(gs) = self.state.screens.gameplay_state.as_mut()
-        {
-            gs.background_texture_key = key;
+        if let Some(key) = next_key {
+            match self.state.screens.current_screen {
+                CurrentScreen::Gameplay => {
+                    if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+                        gs.background_texture_key = key;
+                    }
+                }
+                CurrentScreen::Practice => {
+                    if let Some(ps) = self.state.screens.practice_state.as_mut() {
+                        ps.gameplay.background_texture_key = key;
+                    }
+                }
+                _ => {}
+            }
         }
-        if let (Some(backend), Some(gs)) = (
-            self.backend.as_mut(),
-            self.state.screens.gameplay_state.as_ref(),
-        ) {
+        let gs = match self.state.screens.current_screen {
+            CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_ref(),
+            CurrentScreen::Practice => self
+                .state
+                .screens
+                .practice_state
+                .as_ref()
+                .map(|state| &state.gameplay),
+            _ => None,
+        };
+        if let (Some(backend), Some(gs)) = (self.backend.as_mut(), gs) {
             let overlay_video_paths = gameplay_overlay_video_paths(gs);
             self.dynamic_media.sync_active_song_lua_videos(
                 &mut self.asset_manager,
@@ -4364,6 +4554,33 @@ impl App {
                 &overlay_video_paths,
             );
         }
+    }
+
+    fn sync_theme_background_video(&mut self) {
+        if matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Gameplay | CurrentScreen::Practice
+        ) {
+            crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(None);
+            return;
+        }
+
+        let cfg = config::get();
+        let path = (cfg.visual_style == config::VisualStyle::Srpg9 && cfg.show_video_backgrounds)
+            .then(visual_styles::shared_background_video_asset_path)
+            .flatten()
+            .map(|path| dirs::app_dirs().resolve_asset_path(path));
+
+        let Some(backend) = self.backend.as_mut() else {
+            crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(None);
+            return;
+        };
+
+        let key = self
+            .dynamic_media
+            .set_background(&mut self.asset_manager, backend, path);
+        let srpg9_key = if key == "__black" { None } else { Some(key) };
+        crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(srpg9_key);
     }
 
     fn append_gameplay_offset_prompt_actors(&self, actors: &mut Vec<Actor>) {
@@ -4478,6 +4695,16 @@ impl App {
                     vec![]
                 }
             }
+            CurrentScreen::Practice => {
+                if let Some(ps) = &mut self.state.screens.practice_state {
+                    crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(
+                        &mut ps.gameplay,
+                    );
+                    practice::get_actors(ps, &self.asset_manager)
+                } else {
+                    vec![]
+                }
+            }
             CurrentScreen::Options => options::get_actors(
                 &self.state.screens.options_state,
                 &self.asset_manager,
@@ -4524,6 +4751,7 @@ impl App {
             CurrentScreen::SelectMusic => select_music::get_actors(
                 &self.state.screens.select_music_state,
                 &self.asset_manager,
+                self.state.session.played_stages.len() + 1,
             ),
             CurrentScreen::SelectCourse => select_course::get_actors(
                 &self.state.screens.select_course_state,
@@ -5459,6 +5687,20 @@ impl App {
                 }
                 return true;
             }
+        } else if self.state.screens.current_screen == CurrentScreen::Practice {
+            if let Some(ps) = self.state.screens.practice_state.as_mut() {
+                let (consumed, action) =
+                    crate::screens::practice::handle_raw_key_event(ps, &raw_key);
+                if !matches!(action, ScreenAction::None) {
+                    if let Err(e) = self.handle_action(action, event_loop) {
+                        log::error!("Failed to handle Practice raw key action: {e}");
+                    }
+                    return true;
+                }
+                if consumed {
+                    return true;
+                }
+            }
         } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
             if App::raw_keyboard_restart_screen(self.state.screens.current_screen)
                 && raw_key.pressed
@@ -5707,7 +5949,8 @@ impl App {
         if target_menu_music {
             if !prev_menu_music {
                 commands.push(Command::PlayMusic {
-                    path: dirs::app_dirs().resolve_asset_path("assets/music/in_two (loop).ogg"),
+                    path: dirs::app_dirs()
+                        .resolve_asset_path(visual_styles::menu_music_asset_path()),
                     looped: true,
                     volume: 1.0,
                 });
@@ -5737,7 +5980,9 @@ impl App {
             commands.push(Command::StopMusic);
         }
 
-        if prev == CurrentScreen::Gameplay && target != CurrentScreen::Gameplay {
+        if matches!(prev, CurrentScreen::Gameplay | CurrentScreen::Practice)
+            && !matches!(target, CurrentScreen::Gameplay | CurrentScreen::Practice)
+        {
             if !target_menu_music && !target_course_music && !target_credits_music {
                 commands.push(Command::StopMusic);
             }
@@ -6003,12 +6248,17 @@ impl App {
                 };
 
                 let color_index = self.state.screens.select_music_state.active_color_index;
+                let return_screen = if prev == CurrentScreen::Practice {
+                    CurrentScreen::Practice
+                } else {
+                    CurrentScreen::SelectMusic
+                };
                 self.state.screens.player_options_state = Some(player_options::init(
                     song_arc,
                     chart_steps_index,
                     preferred_difficulty_index,
                     color_index,
-                    CurrentScreen::SelectMusic,
+                    return_screen,
                     None,
                 ));
             }
@@ -6023,8 +6273,9 @@ impl App {
                     warn!("Unable to prepare gameplay for the next course stage.");
                 }
             }
-        } else if target == CurrentScreen::Gameplay
-            && (prev == CurrentScreen::SelectMusic || prev == CurrentScreen::SelectCourse)
+        } else if matches!(target, CurrentScreen::Gameplay | CurrentScreen::Practice)
+            && (prev == CurrentScreen::SelectMusic
+                || (target == CurrentScreen::Gameplay && prev == CurrentScreen::SelectCourse))
             && self.state.screens.player_options_state.is_none()
         {
             // Allow starting Gameplay directly from SelectMusic (Simply Love behavior) by
@@ -6044,7 +6295,7 @@ impl App {
                     let entry = sm_state.entries.get(sm_state.selected_index).unwrap();
                     let song = match entry {
                         select_music::MusicWheelEntry::Song(s) => s,
-                        _ => panic!("Cannot start gameplay on a pack header"),
+                        _ => panic!("Cannot start gameplay or practice on a pack header"),
                     };
                     let play_style = profile::get_session_play_style();
                     let (steps, pref) = match play_style {
@@ -6084,13 +6335,223 @@ impl App {
         target: CurrentScreen,
     ) -> Vec<Command> {
         let mut commands = Vec::new();
-        if prev == CurrentScreen::Gameplay
-            && target != CurrentScreen::Gameplay
+        if matches!(prev, CurrentScreen::Gameplay | CurrentScreen::Practice)
+            && !matches!(target, CurrentScreen::Gameplay | CurrentScreen::Practice)
             && target != CurrentScreen::Evaluation
             && let Some(backend) = self.backend.as_mut()
         {
             self.dynamic_media
                 .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
+        }
+        if target == CurrentScreen::Practice {
+            crate::engine::audio::stop_music();
+            if let Some(po_state) = self.state.screens.player_options_state.take() {
+                let song_arc = po_state.song.clone();
+                let play_style = profile::get_session_play_style();
+                let player_side = profile::get_session_player_side();
+                let target_chart_type = play_style.chart_type();
+                let mut resolved_steps_index = po_state.chart_steps_index;
+                let mut resolve_chart = |slot: usize| {
+                    let requested_idx = resolved_steps_index[slot];
+                    if let Some(chart_ref) = select_music::chart_for_steps_index(
+                        &song_arc,
+                        target_chart_type,
+                        requested_idx,
+                    ) {
+                        return chart_ref;
+                    }
+
+                    let preferred_idx = po_state.chart_difficulty_index[slot];
+                    if let Some(fallback_idx) =
+                        select_music::best_steps_index(&song_arc, target_chart_type, preferred_idx)
+                        && let Some(chart_ref) = select_music::chart_for_steps_index(
+                            &song_arc,
+                            target_chart_type,
+                            fallback_idx,
+                        )
+                    {
+                        warn!(
+                            "Missing stepchart index {} for '{}'; using fallback index {}",
+                            requested_idx, song_arc.title, fallback_idx
+                        );
+                        resolved_steps_index[slot] = fallback_idx;
+                        return chart_ref;
+                    }
+
+                    let chart_ref = song_arc
+                        .charts
+                        .iter()
+                        .find(|c| c.chart_type.eq_ignore_ascii_case(target_chart_type))
+                        .or_else(|| song_arc.charts.first())
+                        .expect("Selected song has no charts");
+                    warn!(
+                        "Missing indexed stepchart for '{}'; using raw chart fallback ({}/{})",
+                        song_arc.title, chart_ref.chart_type, chart_ref.difficulty
+                    );
+                    chart_ref
+                };
+                let chart_ix_for_ref = |chart_ref: &crate::game::chart::ChartData| {
+                    song_arc
+                        .charts
+                        .iter()
+                        .position(|chart| std::ptr::eq(chart, chart_ref))
+                        .expect("selected chart ref must come from selected song")
+                };
+                let (charts, chart_ixs, last_played_idx) = match play_style {
+                    profile::PlayStyle::Versus => {
+                        let chart_ref_p1 = resolve_chart(0);
+                        let chart_ref_p2 = resolve_chart(1);
+                        (
+                            [
+                                Arc::new(chart_ref_p1.clone()),
+                                Arc::new(chart_ref_p2.clone()),
+                            ],
+                            [
+                                chart_ix_for_ref(chart_ref_p1),
+                                chart_ix_for_ref(chart_ref_p2),
+                            ],
+                            0usize,
+                        )
+                    }
+                    profile::PlayStyle::Single | profile::PlayStyle::Double => {
+                        let idx = match player_side {
+                            profile::PlayerSide::P1 => 0,
+                            profile::PlayerSide::P2 => 1,
+                        };
+                        let chart_ref = resolve_chart(idx);
+                        let chart = Arc::new(chart_ref.clone());
+                        let chart_ix = chart_ix_for_ref(chart_ref);
+                        ([chart.clone(), chart], [chart_ix, chart_ix], idx)
+                    }
+                };
+
+                let payload_started = Instant::now();
+                let gameplay_song = match song_loading::load_gameplay_charts(
+                    song_arc.as_ref(),
+                    &chart_ixs,
+                    config::get().global_offset_seconds,
+                ) {
+                    Ok(gameplay_song) => gameplay_song,
+                    Err(e) => {
+                        error!(
+                            "Failed to load practice payload for '{}': {}",
+                            song_arc.title, e
+                        );
+                        self.commit_screen_change(CurrentScreen::PlayerOptions);
+                        self.state.screens.player_options_state = Some(po_state);
+                        return commands;
+                    }
+                };
+                let gameplay_charts = [
+                    Arc::new(gameplay_song[0].clone()),
+                    Arc::new(gameplay_song[1].clone()),
+                ];
+                let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
+
+                if play_style == profile::PlayStyle::Versus {
+                    self.state
+                        .screens
+                        .select_music_state
+                        .preferred_difficulty_index = po_state.chart_difficulty_index[0];
+                    self.state.screens.select_music_state.selected_steps_index =
+                        resolved_steps_index[0];
+                    self.state
+                        .screens
+                        .select_music_state
+                        .p2_preferred_difficulty_index = po_state.chart_difficulty_index[1];
+                    self.state
+                        .screens
+                        .select_music_state
+                        .p2_selected_steps_index = resolved_steps_index[1];
+                } else {
+                    self.state
+                        .screens
+                        .select_music_state
+                        .preferred_difficulty_index =
+                        po_state.chart_difficulty_index[last_played_idx];
+                    self.state.screens.select_music_state.selected_steps_index =
+                        resolved_steps_index[last_played_idx];
+                }
+
+                let to_scroll_speed = |m: &player_options::SpeedMod| match m.mod_type {
+                    player_options::SpeedModType::X => ScrollSpeedSetting::XMod(m.value),
+                    player_options::SpeedModType::C => ScrollSpeedSetting::CMod(m.value),
+                    player_options::SpeedModType::M => ScrollSpeedSetting::MMod(m.value),
+                };
+                let scroll_speeds = [
+                    to_scroll_speed(&po_state.speed_mod[0]),
+                    to_scroll_speed(&po_state.speed_mod[1]),
+                ];
+
+                let init_started = Instant::now();
+                let mut gs = gameplay::init(
+                    song_arc,
+                    charts,
+                    gameplay_charts,
+                    po_state.active_color_index,
+                    po_state.music_rate,
+                    scroll_speeds,
+                    po_state.player_profiles,
+                    None,
+                    None,
+                    Some(Arc::from("Practice Mode")),
+                    Arc::from("PRACTICE MODE"),
+                    Some(crate::game::gameplay::LeadInTiming {
+                        min_seconds_to_step: 0.0,
+                        min_seconds_to_music: 0.0,
+                    }),
+                    None,
+                    None,
+                    [0; crate::game::gameplay::MAX_PLAYERS],
+                );
+                crate::game::gameplay::disable_score_for_practice(&mut gs);
+                let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
+                let overlay_video_paths = gameplay_overlay_video_paths(&gs);
+
+                let asset_prewarm_started = Instant::now();
+                if let Some(backend) = self.backend.as_mut() {
+                    prewarm_gameplay_assets(&mut self.asset_manager, backend, &gs);
+                    self.dynamic_media.set_gameplay_background_keys(
+                        &mut self.asset_manager,
+                        backend,
+                        gameplay_media_keys(&gs),
+                    );
+                    self.dynamic_media.sync_active_song_lua_videos(
+                        &mut self.asset_manager,
+                        backend,
+                        &overlay_video_paths,
+                    );
+                    if let Some(path) = gs.song.banner_path.as_ref() {
+                        media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
+                    }
+                }
+                let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                let text_prewarm_started = Instant::now();
+                prewarm_gameplay_text_layout_cache(
+                    &self.asset_manager,
+                    &self.state.shell.metrics,
+                    &mut self.gameplay_text_layout_cache,
+                    &mut gs,
+                );
+                let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                debug!(
+                    "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3}",
+                    gs.song.title
+                );
+                commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
+                let show_video_backgrounds = config::get().show_video_backgrounds;
+                commands.push(Command::SetDynamicBackground(
+                    gs.song
+                        .gameplay_background_path(gs.current_beat, show_video_backgrounds)
+                        .cloned(),
+                ));
+                self.state.screens.practice_state = Some(practice::init(gs));
+                if let Some(ps) = self.state.screens.practice_state.as_mut() {
+                    crate::screens::practice::on_enter(ps);
+                }
+            } else {
+                panic!("Navigating to Practice without PlayerOptions state!");
+            }
         }
         if target == CurrentScreen::Gameplay {
             crate::engine::audio::stop_music();
@@ -6674,7 +7135,7 @@ impl App {
                         &mut self.state.screens.select_music_state,
                     );
                 }
-                CurrentScreen::Gameplay | CurrentScreen::Evaluation => {
+                CurrentScreen::Gameplay | CurrentScreen::Practice | CurrentScreen::Evaluation => {
                     select_music::reset_preview_after_gameplay(
                         &mut self.state.screens.select_music_state,
                     );
@@ -7058,25 +7519,7 @@ impl ApplicationHandler<UserEvent> for App {
                 }
             }
             WindowEvent::Focused(focused) => {
-                input::set_raw_keyboard_window_focused(focused);
-                if self.state.shell.set_window_focus(focused, Instant::now()) {
-                    self.sync_gameplay_input_capture();
-                    debug!(
-                        "Window focus changed: focused={} screen={:?}",
-                        focused, self.state.screens.current_screen
-                    );
-                    if !focused {
-                        self.state.shell.shift_held = false;
-                        self.state.shell.ctrl_held = false;
-                        self.state.shell.tab_held = false;
-                        self.state.shell.backquote_held = false;
-                        input::clear_debounce_state();
-                        self.clear_gameplay_input_events();
-                    }
-                    if focused {
-                        self.request_redraw(&window, "focus");
-                    }
-                }
+                self.apply_window_focus_change(focused, Instant::now(), Some(&window));
             }
             WindowEvent::Occluded(occluded) => {
                 if self
@@ -7097,6 +7540,9 @@ impl ApplicationHandler<UserEvent> for App {
             WindowEvent::KeyboardInput {
                 event: key_event, ..
             } => {
+                if !self.accepts_live_input() {
+                    return;
+                }
                 if key_event.state == winit::event::ElementState::Pressed
                     && let Some(text) = key_event.text.as_deref()
                 {
@@ -7197,7 +7643,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Spawn background input backend threads; all input stays decoupled from frame rate.
     let proxy: EventLoopProxy<UserEvent> = event_loop.create_proxy();
-    input::set_raw_keyboard_window_focused(true);
+    // Raw input backends default to "unfocused" until init_graphics seeds the
+    // real focus state from the created window. This prevents global keyboard
+    // input (e.g. Win32 RawInput RIDEV_INPUTSINK, evdev, IOHID) from being
+    // routed into the game while it is launched into the background.
     app.sync_gameplay_input_capture();
     #[cfg(windows)]
     {

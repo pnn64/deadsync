@@ -36,9 +36,11 @@ fn sprite_heart(
     tint: [f32; 4],
     z: i16,
     flip_x: bool,
+    salt: u64,
 ) -> Actor {
     let [r, g, b, _] = tint;
     let mut actor = act!(sprite(tex.to_string()):
+        tweensalt(salt):
         align(0.5, 0.5):
         xy(x, y):
         zoom(0.0):
@@ -81,6 +83,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c2,
             z_layer,
             true, // rot180 in original
+            0,
         ));
         actors.push(sprite_heart(
             FLYCENTER_TEX,
@@ -93,6 +96,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c1,
             z_layer,
             false, // no rot
+            1,
         ));
     }
     // Bottom center pair
@@ -109,6 +113,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c2,
             z_layer,
             true, // rot180
+            2,
         ));
         actors.push(sprite_heart(
             FLYCENTER_TEX,
@@ -121,6 +126,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c1,
             z_layer,
             false, // no rot
+            3,
         ));
     }
     // ---------------------- upper sprays -----------------------
@@ -138,37 +144,39 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c1,
             z_layer,
             true, // rot180 (top left in original)
+            4,
         ));
         actors.push(sprite_heart(
             FLYTOP_TEX, cx, base_y, 200.0, -100.0, 1.0, 0.4, c1, z_layer,
             false, // no rot (top right)
+            5,
         ));
         // Up 250 cluster
         actors.push(sprite_heart(
-            FLYTOP_TEX, cx, base_y, -200.0, -150.0, 1.5, 0.3, c2, z_layer, true, // rot180
+            FLYTOP_TEX, cx, base_y, -200.0, -150.0, 1.5, 0.3, c2, z_layer, true, 6, // rot180
         ));
         actors.push(sprite_heart(
-            FLYTOP_TEX, cx, base_y, -200.0, -150.0, 0.8, 0.6, c1, z_layer, true, // rot180
+            FLYTOP_TEX, cx, base_y, -200.0, -150.0, 0.8, 0.6, c1, z_layer, true, 7, // rot180
         ));
         actors.push(sprite_heart(
-            FLYTOP_TEX, cx, base_y, 200.0, -150.0, 1.5, 0.2, c1, z_layer, false, // no rot
+            FLYTOP_TEX, cx, base_y, 200.0, -150.0, 1.5, 0.2, c1, z_layer, false, 8, // no rot
         ));
         actors.push(sprite_heart(
-            FLYTOP_TEX, cx, base_y, 200.0, -150.0, 0.8, 0.4, c2, z_layer, false, // no rot
+            FLYTOP_TEX, cx, base_y, 200.0, -150.0, 0.8, 0.4, c2, z_layer, false, 9, // no rot
         ));
         // Up 150, out 280
         actors.push(sprite_heart(
-            FLYTOP_TEX, cx, base_y, -280.0, -50.0, 1.2, 0.6, c1, z_layer, true, // rot180
+            FLYTOP_TEX, cx, base_y, -280.0, -50.0, 1.2, 0.6, c1, z_layer, true, 10, // rot180
         ));
         actors.push(sprite_heart(
-            FLYTOP_TEX, cx, base_y, 280.0, -50.0, 1.2, 0.4, c1, z_layer, false, // no rot
+            FLYTOP_TEX, cx, base_y, 280.0, -50.0, 1.2, 0.4, c1, z_layer, false, 11, // no rot
         ));
         // Up 250, out 280 (small outer pair)
         actors.push(sprite_heart(
-            FLYTOP_TEX, cx, base_y, -280.0, -150.0, 0.2, 0.3, c1, z_layer, true, // rot180
+            FLYTOP_TEX, cx, base_y, -280.0, -150.0, 0.2, 0.3, c1, z_layer, true, 12, // rot180
         ));
         actors.push(sprite_heart(
-            FLYTOP_TEX, cx, base_y, 280.0, -150.0, 0.2, 0.2, c1, z_layer, false, // no rot
+            FLYTOP_TEX, cx, base_y, 280.0, -150.0, 0.2, 0.2, c1, z_layer, false, 13, // no rot
         ));
     }
     // ---------------------- lower sprays -----------------------
@@ -186,6 +194,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c1,
             z_layer,
             true, // rot180 (bottom left)
+            14,
         ));
         actors.push(sprite_heart(
             FLYBOTTOM_TEX,
@@ -198,6 +207,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c1,
             z_layer,
             false, // no rot (bottom right)
+            15,
         ));
         // Bottom 250 cluster
         actors.push(sprite_heart(
@@ -211,6 +221,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c2,
             z_layer,
             true, // rot180
+            16,
         ));
         actors.push(sprite_heart(
             FLYBOTTOM_TEX,
@@ -223,6 +234,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c1,
             z_layer,
             true, // rot180
+            17,
         ));
         actors.push(sprite_heart(
             FLYBOTTOM_TEX,
@@ -235,6 +247,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c1,
             z_layer,
             false, // no rot
+            18,
         ));
         actors.push(sprite_heart(
             FLYBOTTOM_TEX,
@@ -247,6 +260,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c2,
             z_layer,
             false, // no rot
+            19,
         ));
         // Bottom 150, out 280
         actors.push(sprite_heart(
@@ -260,6 +274,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c1,
             z_layer,
             true, // rot180
+            20,
         ));
         actors.push(sprite_heart(
             FLYBOTTOM_TEX,
@@ -272,6 +287,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c1,
             z_layer,
             false, // no rot
+            21,
         ));
         // Bottom 250, out 280 (small outer pair)
         actors.push(sprite_heart(
@@ -285,6 +301,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c1,
             z_layer,
             true, // rot180
+            22,
         ));
         actors.push(sprite_heart(
             FLYBOTTOM_TEX,
@@ -297,6 +314,7 @@ pub fn build(active_color_index: i32) -> Vec<Actor> {
             c1,
             z_layer,
             false, // no rot
+            23,
         ));
     }
     actors

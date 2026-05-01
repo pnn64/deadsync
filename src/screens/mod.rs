@@ -14,6 +14,7 @@ pub mod menu;
 pub mod options;
 pub(crate) mod pack_sync;
 pub mod player_options;
+pub mod practice;
 pub mod profile_load;
 pub mod sandbox;
 pub mod select_color;
@@ -85,6 +86,7 @@ pub enum ScreenAction {
         vsync: Option<bool>,
         present_mode_policy: Option<PresentModePolicy>,
         max_fps: Option<u16>,
+        high_dpi: Option<bool>,
     },
     UpdateShowOverlay(u8),
 }
@@ -93,6 +95,7 @@ pub enum ScreenAction {
 pub enum Screen {
     Menu,
     Gameplay,
+    Practice,
     Options,
     Credits,
     ManageLocalProfiles,
@@ -120,6 +123,7 @@ impl Screen {
         match self {
             Self::Menu => "ScreenTitleMenu",
             Self::Gameplay => "ScreenGameplay",
+            Self::Practice => "ScreenPractice",
             Self::Options => "ScreenOptionsService",
             Self::Credits => "ScreenCredits",
             Self::ManageLocalProfiles => "ScreenOptionsManageProfiles",
@@ -153,6 +157,10 @@ mod tests {
         assert_eq!(
             Screen::Options.current_screen_file_name(),
             "ScreenOptionsService"
+        );
+        assert_eq!(
+            Screen::Practice.current_screen_file_name(),
+            "ScreenPractice"
         );
         assert_eq!(
             Screen::ManageLocalProfiles.current_screen_file_name(),

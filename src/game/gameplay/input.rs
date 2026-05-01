@@ -1,6 +1,6 @@
 use crate::engine::audio;
 use crate::engine::input::{
-    InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
+    INPUT_SLOT_INVALID, InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
 use crate::game::parsing::noteskin::{self, Noteskin};
 use crate::game::profile;
@@ -9,16 +9,16 @@ use std::collections::VecDeque;
 use std::time::Instant;
 
 use super::{
-    ASSIST_TICK_SFX_PATH, COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION,
-    ComboMilestoneKind, GAMEPLAY_INPUT_BACKLOG_WARN, GAMEPLAY_INPUT_LATENCY_WARN_US,
-    GameplayAction, GameplayUpdatePhaseTimings, HOLD_JUDGMENT_TOTAL_DURATION, HoldToExitKey,
-    INVALID_SONG_TIME_NS, MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION,
-    REPLAY_EDGE_FLOOR_PER_LANE, REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, SongClockSnapshot,
-    SongTimeNs, State, TickMode, abort_hold_to_exit, add_elapsed_us, current_music_time_s,
-    elapsed_us_between, integrate_active_hold_to_time, judge_a_lift, judge_a_tap,
-    live_autoplay_enabled, music_time_ns_from_song_clock, record_step_calories,
-    refresh_roll_life_on_step, single_runtime_player_is_p2, song_time_ns_invalid,
-    song_time_ns_to_seconds,
+    ASSIST_TICK_SFX_PATH, ActiveInputSlot, COMBO_HUNDRED_MILESTONE_DURATION,
+    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, GAMEPLAY_INPUT_BACKLOG_WARN,
+    GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction, GameplayUpdatePhaseTimings,
+    HOLD_JUDGMENT_TOTAL_DURATION, HoldToExitKey, INVALID_SONG_TIME_NS, MAX_ACTIVE_INPUT_SLOTS,
+    MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION, REPLAY_EDGE_FLOOR_PER_LANE,
+    REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, SongClockSnapshot, SongTimeNs, State, TickMode,
+    abort_hold_to_exit, add_elapsed_us, current_music_time_s, elapsed_us_between,
+    integrate_active_hold_to_time, judge_a_lift, judge_a_tap, live_autoplay_enabled,
+    music_time_ns_from_song_clock, record_step_calories, refresh_roll_life_on_step,
+    single_runtime_player_is_p2, song_time_ns_invalid, song_time_ns_to_seconds,
 };
 
 #[inline(always)]
@@ -113,24 +113,106 @@ fn receptor_glow_behavior_for_col(state: &State, col: usize) -> noteskin::Recept
 
 #[inline(always)]
 pub(super) fn lane_is_pressed(state: &State, col: usize) -> bool {
-    lane_counts_pressed(
-        state.keyboard_lane_counts[col],
-        state.gamepad_lane_counts[col],
-    )
+    state.input_lane_counts[col] != 0
 }
 
 #[inline(always)]
-const fn lane_counts_pressed(keyboard_count: u8, gamepad_count: u8) -> bool {
-    keyboard_count != 0 || gamepad_count != 0
+const fn lane_bit(lane_idx: usize) -> u8 {
+    1u8 << lane_idx
 }
 
 #[inline(always)]
-pub(super) fn update_lane_count(count: &mut u8, pressed: bool) {
-    *count = if pressed {
-        (*count).saturating_add(1)
+fn normalized_input_slot(lane: Lane, input_slot: u32) -> u32 {
+    if input_slot == INPUT_SLOT_INVALID {
+        lane.index() as u32
     } else {
-        (*count).saturating_sub(1)
+        input_slot
+    }
+}
+
+#[inline(always)]
+fn find_input_slot(state: &State, source: InputSource, input_slot: u32) -> Option<usize> {
+    state.input_slots[..state.input_slot_count]
+        .iter()
+        .position(|slot| slot.source == source && slot.input_slot == input_slot)
+}
+
+#[inline(always)]
+fn insert_input_slot(state: &mut State, source: InputSource, input_slot: u32) -> Option<usize> {
+    if let Some(idx) = find_input_slot(state, source, input_slot) {
+        return Some(idx);
+    }
+    if state.input_slot_count >= MAX_ACTIVE_INPUT_SLOTS {
+        debug!(
+            "Gameplay active input slot table full; dropping held-state edge for {:?} slot {}",
+            source, input_slot
+        );
+        return None;
+    }
+    let idx = state.input_slot_count;
+    state.input_slots[idx] = ActiveInputSlot {
+        source,
+        input_slot,
+        lane_mask: 0,
     };
+    state.input_slot_count += 1;
+    Some(idx)
+}
+
+#[inline(always)]
+fn remove_input_slot_if_empty(state: &mut State, idx: usize) {
+    if state.input_slots[idx].lane_mask != 0 {
+        return;
+    }
+    state.input_slot_count = state.input_slot_count.saturating_sub(1);
+    if idx < state.input_slot_count {
+        state.input_slots[idx] = state.input_slots[state.input_slot_count];
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct LaneInputUpdate {
+    pub(super) was_down: bool,
+    pub(super) is_down: bool,
+    pub(super) slot_was_down: bool,
+}
+
+pub(super) fn update_lane_input_slot(
+    state: &mut State,
+    lane: Lane,
+    source: InputSource,
+    input_slot: u32,
+    pressed: bool,
+) -> LaneInputUpdate {
+    let lane_idx = lane.index();
+    let input_slot = normalized_input_slot(lane, input_slot);
+    let bit = lane_bit(lane_idx);
+    let was_down = lane_is_pressed(state, lane_idx);
+    let mut slot_was_down = false;
+
+    if pressed {
+        if let Some(idx) = insert_input_slot(state, source, input_slot) {
+            slot_was_down = state.input_slots[idx].lane_mask & bit != 0;
+            if !slot_was_down {
+                state.input_slots[idx].lane_mask |= bit;
+                state.input_lane_counts[lane_idx] =
+                    state.input_lane_counts[lane_idx].saturating_add(1);
+            }
+        }
+    } else if let Some(idx) = find_input_slot(state, source, input_slot) {
+        slot_was_down = state.input_slots[idx].lane_mask & bit != 0;
+        if slot_was_down {
+            state.input_slots[idx].lane_mask &= !bit;
+            state.input_lane_counts[lane_idx] = state.input_lane_counts[lane_idx].saturating_sub(1);
+            remove_input_slot_if_empty(state, idx);
+        }
+    }
+
+    LaneInputUpdate {
+        was_down,
+        is_down: lane_is_pressed(state, lane_idx),
+        slot_was_down,
+    }
 }
 
 #[inline(always)]
@@ -144,13 +226,13 @@ pub(super) const fn lane_release_finished(pressed: bool, was_down: bool, is_down
 }
 
 #[inline(always)]
-pub(super) const fn lane_edge_judges_tap(pressed: bool) -> bool {
-    pressed
+pub(super) const fn lane_edge_judges_tap(pressed: bool, slot_was_down: bool) -> bool {
+    pressed && !slot_was_down
 }
 
 #[inline(always)]
-pub(super) const fn lane_edge_judges_lift(pressed: bool, was_down: bool) -> bool {
-    !pressed && was_down
+pub(super) const fn lane_edge_judges_lift(pressed: bool, slot_was_down: bool) -> bool {
+    !pressed && slot_was_down
 }
 
 #[inline(always)]
@@ -229,6 +311,7 @@ pub fn queue_input_edge(
     state: &mut State,
     source: InputSource,
     lane: Lane,
+    input_slot: u32,
     pressed: bool,
     timestamp: Instant,
     timestamp_host_nanos: u64,
@@ -271,6 +354,7 @@ pub fn queue_input_edge(
         state,
         source,
         lane,
+        input_slot,
         pressed,
         timestamp,
         timestamp_host_nanos,
@@ -297,6 +381,7 @@ pub(super) fn push_input_edge(
     state: &mut State,
     source: InputSource,
     lane: Lane,
+    input_slot: u32,
     pressed: bool,
     event_music_time_ns: SongTimeNs,
     record_replay: bool,
@@ -306,6 +391,7 @@ pub(super) fn push_input_edge(
         state,
         source,
         lane,
+        input_slot,
         pressed,
         now,
         0,
@@ -322,6 +408,7 @@ fn push_input_edge_timed(
     state: &mut State,
     source: InputSource,
     lane: Lane,
+    input_slot: u32,
     pressed: bool,
     captured_at: Instant,
     captured_host_nanos: u64,
@@ -336,6 +423,7 @@ fn push_input_edge_timed(
     }
     state.pending_edges.push_back(InputEdge {
         lane,
+        input_slot,
         pressed,
         source,
         record_replay,
@@ -383,13 +471,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
             state,
             ev.source,
             lane,
+            ev.input_slot,
             ev.pressed,
             ev.timestamp,
             ev.timestamp_host_nanos,
             ev.stored_at,
             ev.emitted_at,
         );
-        abort_hold_to_exit(state, ev.timestamp);
         return GameplayAction::None;
     }
     let p2_runtime_player = single_runtime_player_is_p2(
@@ -528,23 +616,17 @@ pub(super) fn process_input_edges(
         } else {
             None
         };
-        let mut keyboard_count = state.keyboard_lane_counts[lane_idx];
-        let mut gamepad_count = state.gamepad_lane_counts[lane_idx];
-        let was_down = keyboard_count != 0 || gamepad_count != 0;
-        match edge.source {
-            InputSource::Keyboard => update_lane_count(&mut keyboard_count, edge.pressed),
-            InputSource::Gamepad => update_lane_count(&mut gamepad_count, edge.pressed),
-        }
-        state.keyboard_lane_counts[lane_idx] = keyboard_count;
-        state.gamepad_lane_counts[lane_idx] = gamepad_count;
-        let is_down = keyboard_count != 0 || gamepad_count != 0;
+        let lane_update =
+            update_lane_input_slot(state, edge.lane, edge.source, edge.input_slot, edge.pressed);
         if let Some(started) = state_started {
             add_elapsed_us(&mut phase_timings.input_state_us, started);
         }
 
-        let press_started = lane_press_started(edge.pressed, was_down, is_down);
-        let release_finished = lane_release_finished(edge.pressed, was_down, is_down);
-        sync_active_hold_pressed_state(state, lane_idx, is_down);
+        let press_started =
+            lane_press_started(edge.pressed, lane_update.was_down, lane_update.is_down);
+        let release_finished =
+            lane_release_finished(edge.pressed, lane_update.was_down, lane_update.is_down);
+        sync_active_hold_pressed_state(state, lane_idx, lane_update.is_down);
 
         if press_started {
             state.lane_pressed_since_ns[lane_idx] = Some(edge.event_music_time_ns);
@@ -567,7 +649,7 @@ pub(super) fn process_input_edges(
             }
         }
 
-        if lane_edge_judges_tap(edge.pressed) {
+        if lane_edge_judges_tap(edge.pressed, lane_update.slot_was_down) {
             let event_music_time_ns = edge.event_music_time_ns;
             let hit_note = if trace_enabled {
                 let started = Instant::now();
@@ -591,7 +673,7 @@ pub(super) fn process_input_edges(
             } else {
                 state.receptor_bop_timers[lane_idx] = 0.11;
             }
-        } else if lane_edge_judges_lift(edge.pressed, was_down) {
+        } else if lane_edge_judges_lift(edge.pressed, lane_update.slot_was_down) {
             let hit_lift =
                 judge_a_lift(state, lane_idx, event_music_time, edge.event_music_time_ns);
             if hit_lift && state.tick_mode == TickMode::Hit {

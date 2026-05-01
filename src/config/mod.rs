@@ -18,6 +18,9 @@ pub use self::keybinds::{
     clear_keymap_binding, update_keymap_binding_unique_gamepad,
     update_keymap_binding_unique_keyboard,
 };
+pub(crate) use self::keybinds::{
+    editable_key_binding_slot_indices, protected_default_key_for_action,
+};
 pub use self::load::{bootstrap_log_to_file, load};
 pub use self::null_or_die_cfg::null_or_die_bias_cfg;
 pub use self::runtime::{
@@ -26,10 +29,11 @@ pub use self::runtime::{
 pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
     AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, GameFlag, LanguageFlag,
-    LogLevel, MachinePreferredPlayMode, MachinePreferredPlayStyle, MenuBackgroundStyle,
-    NewPackMode, SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SyncGraphMode, ThemeFlag,
-    auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
+    LogLevel, MACHINE_FONT_VARIANTS, MachineFont, MachinePreferredPlayMode,
+    MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
+    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SyncGraphMode,
+    ThemeFlag, VisualStyle, auto_screenshot_bit, auto_screenshot_mask_from_str,
+    auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 
@@ -123,6 +127,8 @@ pub struct Config {
     pub display_width: u32,
     pub display_height: u32,
     pub video_renderer: BackendType,
+    /// Native high-DPI/Retina rendering. Currently affects macOS OpenGL only.
+    pub high_dpi: bool,
     pub gfx_debug: bool,
     /// Windows-only: choose which gamepad backend to use.
     pub windows_gamepad_backend: WindowsPadBackend,
@@ -154,8 +160,8 @@ pub struct Config {
     pub select_music_preview_loop: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart in gameplay/evaluation.
     pub keyboard_features: bool,
-    /// Shared menu-family background style used outside gameplay.
-    pub menu_background_style: MenuBackgroundStyle,
+    /// Simply Love visual style used by shared menu art.
+    pub visual_style: VisualStyle,
     /// Enable or disable animated gameplay background videos.
     pub show_video_backgrounds: bool,
     /// Startup flow: show Select Profile before continuing.
@@ -172,6 +178,10 @@ pub struct Config {
     pub machine_preferred_style: MachinePreferredPlayStyle,
     /// Startup flow fallback mode used when Select Play Mode is disabled.
     pub machine_preferred_play_mode: MachinePreferredPlayMode,
+    /// Machine font for Bold/Header/Footer/numbers/ScreenEval roles.
+    /// Default `Common` keeps Wendy; `Mega` swaps those roles to Mega.
+    /// Body text (Normal role) stays Miso regardless.
+    pub machine_font: MachineFont,
     /// Machine-wide replay recording and replay menu visibility.
     pub machine_enable_replays: bool,
     /// Allow players to add a personal timing shift on top of machine global offset.
@@ -237,7 +247,6 @@ pub struct Config {
     pub enable_boogiestats: bool,
     pub enable_groovestats: bool,
     pub submit_arrowcloud_fails: bool,
-    pub submit_groovestats_fails: bool,
     pub separate_unlocks_by_player: bool,
     pub fastload: bool,
     pub cachesongs: bool,
@@ -284,6 +293,7 @@ impl Default for Config {
             display_width: 1600,
             display_height: 900,
             video_renderer: BackendType::OpenGL,
+            high_dpi: false,
             gfx_debug: false,
             windows_gamepad_backend: WindowsPadBackend::RawInput,
             software_renderer_threads: 1,
@@ -304,7 +314,7 @@ impl Default for Config {
             show_select_music_preview_marker: false,
             select_music_preview_loop: true,
             keyboard_features: true,
-            menu_background_style: MenuBackgroundStyle::Hearts,
+            visual_style: VisualStyle::Hearts,
             show_video_backgrounds: true,
             machine_show_select_profile: true,
             allow_switch_profile_in_menu: false,
@@ -313,6 +323,7 @@ impl Default for Config {
             machine_show_select_play_mode: true,
             machine_preferred_style: MachinePreferredPlayStyle::Single,
             machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
+            machine_font: MachineFont::Common,
             machine_enable_replays: true,
             machine_allow_per_player_global_offsets: false,
             machine_show_eval_summary: true,
@@ -364,7 +375,6 @@ impl Default for Config {
             enable_boogiestats: false,
             enable_groovestats: false,
             submit_arrowcloud_fails: false,
-            submit_groovestats_fails: false,
             separate_unlocks_by_player: false,
             fastload: true,
             cachesongs: true,
