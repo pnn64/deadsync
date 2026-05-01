@@ -31,7 +31,6 @@ pub const SPACING_PERCENT_MAX: i32 = 100;
 pub const MINI_PERCENT_MIN: i32 = -100;
 pub const MINI_PERCENT_MAX: i32 = 150;
 
-<<<<<<< judgment-cutoff-feature
 /// Min/max for judgment tilt thresholds, in milliseconds.
 pub const TILT_THRESHOLD_MIN_MS: u32 = 0;
 pub const TILT_THRESHOLD_MAX_MS: u32 = 100;
@@ -47,8 +46,6 @@ pub const fn clamp_tilt_threshold_ms(ms: u32) -> u32 {
     }
 }
 
-=======
->>>>>>> main
 /// Min/max for the per-player NoteField horizontal offset.
 pub const NOTE_FIELD_OFFSET_X_MIN: i32 = 0;
 pub const NOTE_FIELD_OFFSET_X_MAX: i32 = 50;
