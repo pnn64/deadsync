@@ -218,6 +218,9 @@ fn set_global_elapsed_for_test(elapsed_s: f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{LazyLock, Mutex};
+
+    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     const EPS: f32 = 1e-3;
 
@@ -239,6 +242,7 @@ mod tests {
 
     #[test]
     fn build_reads_shared_elapsed_clock() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         set_global_elapsed_for_test(2.5);
         let state = State::new();
         let shared_xy = first_heart_xy(&state.build(params()));
@@ -252,6 +256,7 @@ mod tests {
 
     #[test]
     fn tick_global_accumulates_positive_dt() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         set_global_elapsed_for_test(1.0);
         tick_global(0.5);
         assert!(
