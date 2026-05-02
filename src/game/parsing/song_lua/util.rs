@@ -95,6 +95,30 @@ pub(super) fn lua_format_text(lua: &Lua, args: &MultiValue) -> mlua::Result<Stri
     lua_text_value(format.call::<Value>(call_args)?)
 }
 
+pub(super) fn create_string_array(lua: &Lua, values: &[&str]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    for (index, value) in values.iter().enumerate() {
+        table.raw_set(index + 1, *value)?;
+    }
+    Ok(table)
+}
+
+pub(super) fn create_owned_string_array(lua: &Lua, values: &[String]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    for (index, value) in values.iter().enumerate() {
+        table.raw_set(index + 1, value.as_str())?;
+    }
+    Ok(table)
+}
+
+pub(super) fn create_bool_array(lua: &Lua, values: &[bool]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    for (index, value) in values.iter().enumerate() {
+        table.raw_set(index + 1, *value)?;
+    }
+    Ok(table)
+}
+
 #[inline(always)]
 pub(super) fn make_color_table(lua: &Lua, rgba: [f32; 4]) -> mlua::Result<Table> {
     let table = lua.create_table()?;
