@@ -63,6 +63,7 @@ pub enum ItemId {
     // Machine Options submenu
     MchSelectProfile,
     MchSelectColor,
+    MchPreferredColor,
     MchSelectStyle,
     MchPreferredStyle,
     MchSelectPlayMode,
@@ -289,6 +290,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsMachine", "VisualStyle")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectProfile")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectColor")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "PreferredColor")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectStyle")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectPlayMode")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "EvalSummary")),

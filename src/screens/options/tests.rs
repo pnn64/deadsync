@@ -82,3 +82,34 @@ fn p2_can_navigate_and_change_system_options() {
     press(&mut state, &asset_manager, VirtualAction::p2_right);
     assert_eq!(state.sub[SubmenuKind::System].cursor_indices[3], before + 1);
 }
+
+#[test]
+fn preferred_color_only_shows_when_select_color_is_off() {
+    let mut state = init();
+
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::SelectColor,
+        yes_no_choice_index(true),
+    );
+    let visible = submenu_visible_row_indices(&state, SubmenuKind::Machine, MACHINE_OPTIONS_ROWS);
+    assert!(
+        !visible
+            .iter()
+            .any(|&idx| MACHINE_OPTIONS_ROWS[idx].id == SubRowId::PreferredColor)
+    );
+
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::SelectColor,
+        yes_no_choice_index(false),
+    );
+    let visible = submenu_visible_row_indices(&state, SubmenuKind::Machine, MACHINE_OPTIONS_ROWS);
+    assert!(
+        visible
+            .iter()
+            .any(|&idx| MACHINE_OPTIONS_ROWS[idx].id == SubRowId::PreferredColor)
+    );
+}

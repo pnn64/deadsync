@@ -345,6 +345,10 @@ pub(super) fn apply_submenu_choice_delta(
         match row.id {
             SubRowId::SelectProfile => config::update_machine_show_select_profile(enabled),
             SubRowId::SelectColor => config::update_machine_show_select_color(enabled),
+            SubRowId::PreferredColor => {
+                state.active_color_index = new_index as i32;
+                config::update_simply_love_color(state.active_color_index);
+            }
             SubRowId::SelectStyle => config::update_machine_show_select_style(enabled),
             SubRowId::PreferredStyle => config::update_machine_preferred_style(
                 MachinePreferredPlayStyle::from_choice(new_index),

@@ -474,6 +474,7 @@ pub fn get_actors(
     let desc_h = DESC_H * s;
     let visual_style = visual_styles::current_style();
     let select_color_texture = visual_styles::select_color_texture_key();
+    let select_color_aspect = visual_styles::select_color_aspect(visual_style);
     let select_color_zoom = HEART_ZOOM * visual_styles::select_color_zoom_scale(visual_style);
 
     // Separator immediately to the RIGHT of the rows, aligned to the FIRST row top
@@ -873,6 +874,8 @@ pub fn get_actors(
                                 && row.id == SubRowId::GsBoxLeaderboards;
                             let is_auto_screenshot_row = matches!(kind, SubmenuKind::Gameplay)
                                 && row.id == SubRowId::AutoScreenshot;
+                            let is_color_choice_row = matches!(kind, SubmenuKind::Machine)
+                                && row.id == SubRowId::PreferredColor;
                             let is_multi_toggle_row = is_chart_info_row
                                 || is_scorebox_cycle_row
                                 || is_auto_screenshot_row;
@@ -932,15 +935,30 @@ pub fn get_actors(
                                         sl_gray
                                     };
                                     choice_color[3] *= row_alpha;
-                                    ui_actors.push(act!(text:
-                                        align(0.0, 0.5):
-                                        xy(x, row_mid_y):
-                                        zoom(value_zoom):
-                                        diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                                        font("miso"):
-                                        settext(choice):
-                                        horizalign(left)
-                                    ));
+                                    if is_color_choice_row {
+                                        let icon_w =
+                                            layout.widths.get(idx).copied().unwrap_or(
+                                                COLOR_CHOICE_ICON_H * select_color_aspect,
+                                            );
+                                        let mut tint = color::decorative_rgba(idx as i32);
+                                        tint[3] *= row_alpha;
+                                        ui_actors.push(act!(sprite(select_color_texture):
+                                            align(0.5, 0.5):
+                                            xy(x + icon_w * 0.5, row_mid_y):
+                                            setsize(icon_w, COLOR_CHOICE_ICON_H):
+                                            diffuse(tint[0], tint[1], tint[2], tint[3])
+                                        ));
+                                    } else {
+                                        ui_actors.push(act!(text:
+                                            align(0.0, 0.5):
+                                            xy(x, row_mid_y):
+                                            zoom(value_zoom):
+                                            diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                                            font("miso"):
+                                            settext(choice):
+                                            horizalign(left)
+                                        ));
+                                    }
                                 }
                             } else {
                                 let mut choice_color = if is_active { col_white } else { sl_gray };
@@ -949,20 +967,31 @@ pub fn get_actors(
                                 let draw_w =
                                     layout.widths.get(selected_choice).copied().unwrap_or(40.0);
                                 selected_left_x = Some(choice_center_x - draw_w * 0.5);
-                                let choice_text = layout
-                                    .texts
-                                    .get(selected_choice)
-                                    .cloned()
-                                    .unwrap_or_else(|| Arc::<str>::from("??"));
-                                ui_actors.push(act!(text:
-                                    align(0.5, 0.5):
-                                    xy(choice_center_x, row_mid_y):
-                                    zoom(value_zoom):
-                                    diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                                    font("miso"):
-                                    settext(choice_text):
-                                    horizalign(center)
-                                ));
+                                if is_color_choice_row {
+                                    let mut tint = color::decorative_rgba(selected_choice as i32);
+                                    tint[3] *= row_alpha;
+                                    ui_actors.push(act!(sprite(select_color_texture):
+                                        align(0.5, 0.5):
+                                        xy(choice_center_x, row_mid_y):
+                                        setsize(draw_w, COLOR_CHOICE_ICON_H):
+                                        diffuse(tint[0], tint[1], tint[2], tint[3])
+                                    ));
+                                } else {
+                                    let choice_text = layout
+                                        .texts
+                                        .get(selected_choice)
+                                        .cloned()
+                                        .unwrap_or_else(|| Arc::<str>::from("??"));
+                                    ui_actors.push(act!(text:
+                                        align(0.5, 0.5):
+                                        xy(choice_center_x, row_mid_y):
+                                        zoom(value_zoom):
+                                        diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                                        font("miso"):
+                                        settext(choice_text):
+                                        horizalign(center)
+                                    ));
+                                }
                             }
 
                             // For normal rows, underline the selected option.

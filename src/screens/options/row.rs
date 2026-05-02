@@ -55,6 +55,7 @@ pub enum SubRowId {
     // Machine Options
     SelectProfile,
     SelectColor,
+    PreferredColor,
     SelectStyle,
     PreferredStyle,
     SelectPlayMode,

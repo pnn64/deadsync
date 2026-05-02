@@ -498,6 +498,13 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
+        SubRowId::PreferredColor,
+        cfg.simply_love_color
+            .rem_euclid(color::DECORATIVE_RGBA.len() as i32) as usize,
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
         SubRowId::SelectStyle,
         usize::from(cfg.machine_show_select_style),
     );

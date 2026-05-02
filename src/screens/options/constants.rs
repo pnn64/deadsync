@@ -23,6 +23,8 @@ pub(super) const INLINE_SPACING: f32 = 15.75;
 pub(super) const SUBMENU_VALUE_ZOOM: f32 = 0.835;
 pub(super) const VISUAL_STYLE_VALUE_ZOOM: f32 = 0.75;
 pub(super) const VISUAL_STYLE_INLINE_SPACING: f32 = 13.0;
+pub(super) const COLOR_CHOICE_ICON_H: f32 = 18.0;
+pub(super) const COLOR_CHOICE_INLINE_SPACING: f32 = 7.0;
 
 // Match Simply Love operator menu ranges (±1000 ms) for these calibrations.
 pub(super) const GLOBAL_OFFSET_MIN_MS: i32 = -1000;

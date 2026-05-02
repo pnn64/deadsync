@@ -6103,30 +6103,10 @@ impl App {
     fn handle_screen_state_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.screens.select_color_state.active_color_index;
-            self.state.screens.menu_state.active_color_index = idx;
-            self.state.screens.select_profile_state.active_color_index = idx;
-            self.state.screens.select_style_state.active_color_index = idx;
-            self.state.screens.select_play_mode_state.active_color_index = idx;
-            self.state.screens.profile_load_state.active_color_index = idx;
-            self.state.screens.select_music_state.active_color_index = idx;
-            self.state.screens.select_course_state.active_color_index = idx;
-            self.state.screens.options_state.active_color_index = idx;
-            self.state.screens.credits_state.active_color_index = idx;
-            self.state
-                .screens
-                .manage_local_profiles_state
-                .active_color_index = idx;
-            self.state.screens.input_state.active_color_index = idx;
-            self.state
-                .screens
-                .evaluation_summary_state
-                .active_color_index = idx;
-            self.state.screens.initials_state.active_color_index = idx;
-            self.state.screens.gameover_state.active_color_index = idx;
-            if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                gs.active_color_index = idx;
-                gs.player_color = color::simply_love_rgba(idx);
-            }
+            self.sync_screen_color_index(idx);
+        } else if prev == CurrentScreen::Options {
+            let idx = self.state.screens.options_state.active_color_index;
+            self.sync_screen_color_index(idx);
         }
 
         if target == CurrentScreen::Menu {
@@ -6342,6 +6322,33 @@ impl App {
                     None,
                 ));
             }
+        }
+    }
+
+    fn sync_screen_color_index(&mut self, idx: i32) {
+        self.state.screens.menu_state.active_color_index = idx;
+        self.state.screens.select_profile_state.active_color_index = idx;
+        self.state.screens.select_style_state.active_color_index = idx;
+        self.state.screens.select_play_mode_state.active_color_index = idx;
+        self.state.screens.profile_load_state.active_color_index = idx;
+        self.state.screens.select_music_state.active_color_index = idx;
+        self.state.screens.select_course_state.active_color_index = idx;
+        self.state.screens.options_state.active_color_index = idx;
+        self.state.screens.credits_state.active_color_index = idx;
+        self.state
+            .screens
+            .manage_local_profiles_state
+            .active_color_index = idx;
+        self.state.screens.input_state.active_color_index = idx;
+        self.state
+            .screens
+            .evaluation_summary_state
+            .active_color_index = idx;
+        self.state.screens.initials_state.active_color_index = idx;
+        self.state.screens.gameover_state.active_color_index = idx;
+        if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+            gs.active_color_index = idx;
+            gs.player_color = color::simply_love_rgba(idx);
         }
     }
 
