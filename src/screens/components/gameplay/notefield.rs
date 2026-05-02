@@ -1070,6 +1070,30 @@ fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
 }
 
 #[inline(always)]
+fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
+    let width = size[0].max(0) as f32;
+    let height = size[1].max(0) as f32;
+    if height <= 0.0 || target_arrow_px <= 0.0 {
+        [width, height]
+    } else {
+        let scale = target_arrow_px / height;
+        [width * scale, target_arrow_px]
+    }
+}
+
+#[inline(always)]
+fn scale_cap_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
+    let width = size[0].max(0) as f32;
+    let height = size[1].max(0) as f32;
+    if width <= 0.0 || target_arrow_px <= 0.0 {
+        [width, height]
+    } else {
+        let scale = target_arrow_px / width;
+        [target_arrow_px, height * scale]
+    }
+}
+
+#[inline(always)]
 fn offset_center(
     center: [f32; 2],
     local_offset: [f32; 2],
@@ -1481,8 +1505,8 @@ fn hold_segment_pose(top: [f32; 2], bottom: [f32; 2]) -> ([f32; 2], f32, f32) {
 }
 
 #[inline(always)]
-fn hold_strip_row(
-    center: [f32; 2],
+fn hold_strip_row_3d(
+    center: [f32; 3],
     forward: [f32; 2],
     half_width: f32,
     u0: f32,
@@ -1495,13 +1519,13 @@ fn hold_strip_row(
     let ny = forward[0] / len * half_width;
     [
         TexturedMeshVertex {
-            pos: [center[0] + nx, center[1] + ny, 0.0],
+            pos: [center[0] + nx, center[1] + ny, center[2]],
             uv: [u0, v],
             tex_matrix_scale: [1.0, 1.0],
             color,
         },
         TexturedMeshVertex {
-            pos: [center[0] - nx, center[1] - ny, 0.0],
+            pos: [center[0] - nx, center[1] - ny, center[2]],
             uv: [u1, v],
             tex_matrix_scale: [1.0, 1.0],
             color,
@@ -1553,6 +1577,7 @@ fn hold_strip_actor(
     texture: Arc<str>,
     vertices: Arc<[TexturedMeshVertex]>,
     blend: BlendMode,
+    depth_test: bool,
     z: i16,
 ) -> Actor {
     Actor::TexturedMesh {
@@ -1569,7 +1594,7 @@ fn hold_strip_actor(
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
-        depth_test: false,
+        depth_test,
         visible: true,
         blend,
         z,
@@ -1577,11 +1602,25 @@ fn hold_strip_actor(
 }
 
 #[inline(always)]
-fn note_world_z(y: f32, visual: VisualEffects) -> f32 {
-    if visual.bumpy <= f32::EPSILON {
+fn note_world_z_for_bumpy(y: f32, bumpy: f32) -> f32 {
+    if bumpy <= f32::EPSILON {
         return 0.0;
     }
-    visual.bumpy * BUMPY_Z_MAGNITUDE * (y / BUMPY_Z_ANGLE_DIVISOR).sin()
+    bumpy * BUMPY_Z_MAGNITUDE * (y / BUMPY_Z_ANGLE_DIVISOR).sin()
+}
+
+#[inline(always)]
+fn bumpy_for_col(visual: &VisualEffects, local_col: usize) -> f32 {
+    visual.bumpy + visual.bumpy_cols.get(local_col).copied().unwrap_or(0.0)
+}
+
+#[inline(always)]
+fn tiny_zoom_for_col(visual: &VisualEffects, local_col: usize) -> f32 {
+    let tiny = visual.tiny_cols.get(local_col).copied().unwrap_or(0.0);
+    if tiny.abs() <= f32::EPSILON || !tiny.is_finite() {
+        return 1.0;
+    }
+    0.5_f32.powf(tiny)
 }
 
 #[inline(always)]
@@ -3539,16 +3578,8 @@ pub fn build_bundles_with_view(
         };
         let timing = &state.timing_players[player_idx];
         let target_arrow_px = TARGET_ARROW_PIXEL_SIZE * field_zoom;
-        let scale_sprite = |size: [i32; 2]| -> [f32; 2] {
-            let width = size[0].max(0) as f32;
-            let height = size[1].max(0) as f32;
-            if height <= 0.0 || target_arrow_px <= 0.0 {
-                [width, height]
-            } else {
-                let scale = target_arrow_px / height;
-                [width * scale, target_arrow_px]
-            }
-        };
+        let scale_sprite =
+            |size: [i32; 2]| -> [f32; 2] { scale_sprite_to_arrow(size, target_arrow_px) };
         let scale_mine_slot = |slot: &SpriteSlot| -> [f32; 2] {
             // ITG NoteDisplay::DrawTap uses SetPRZForActor zoom for TapMine and does not
             // normalize Def.Model mine meshes to an arrow texture target size. Preserve
@@ -3560,16 +3591,6 @@ pub fn build_bundles_with_view(
                 }
             }
             scale_sprite(slot.size())
-        };
-        let scale_cap = |size: [i32; 2]| -> [f32; 2] {
-            let width = size[0].max(0) as f32;
-            let height = size[1].max(0) as f32;
-            if width <= 0.0 || target_arrow_px <= 0.0 {
-                [width, height]
-            } else {
-                let scale = target_arrow_px / width;
-                [target_arrow_px, height * scale]
-            }
         };
         let logical_slot_size = |slot: &SpriteSlot| -> [f32; 2] { slot.logical_size() };
         let scale_explosion = |logical_size: [f32; 2]| -> [f32; 2] {
@@ -3764,11 +3785,15 @@ pub fn build_bundles_with_view(
                 appearance,
             )
         };
-        let world_z_for_raw_travel = |travel_offset: f32| -> f32 {
-            note_world_z(adjusted_travel_offset(travel_offset), visual)
+        let world_z_for_raw_travel = |local_col: usize, travel_offset: f32| -> f32 {
+            note_world_z_for_bumpy(
+                adjusted_travel_offset(travel_offset),
+                bumpy_for_col(&visual, local_col),
+            )
         };
-        let world_z_for_adjusted_travel =
-            |travel_offset: f32| -> f32 { note_world_z(travel_offset, visual) };
+        let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
+            note_world_z_for_bumpy(travel_offset, bumpy_for_col(&visual, local_col))
+        };
         // For dynamic values (e.g., last_held_beat while letting go), fall back to timing for that beat.
         // Direction and receptor row are per-lane: upwards lanes anchor to the normal receptor row,
         // downwards lanes anchor to the reverse row.
@@ -4767,8 +4792,11 @@ pub fn build_bundles_with_view(
             // anchored to that same tail-side join.
             let body_top = top;
             let mut body_bottom = bottom;
+            let hold_tiny_zoom = tiny_zoom_for_col(&visual, local_col);
+            let hold_target_arrow_px = target_arrow_px * hold_tiny_zoom;
+            let hold_note_scale = field_zoom * hold_tiny_zoom;
             if let Some(cap_slot) = bottom_cap_slot {
-                let cap_size = scale_cap(cap_slot.size());
+                let cap_size = scale_cap_to_arrow(cap_slot.size(), hold_target_arrow_px);
                 let cap_height = cap_size[1];
                 if cap_height > f32::EPSILON {
                     // ITGmania joins hold body to cap at the tail edge (with a tiny overlap),
@@ -4785,7 +4813,9 @@ pub fn build_bundles_with_view(
             let mut rendered_body_bottom: Option<f32> = None;
             let mut body_head_row: Option<[[f32; 3]; 2]> = None;
             let mut body_tail_row: Option<[[f32; 3]; 2]> = None;
-            let use_legacy_hold_sprites = visual.bumpy <= f32::EPSILON
+            let col_bumpy = bumpy_for_col(&visual, local_col);
+            let hold_depth_test = col_bumpy > f32::EPSILON;
+            let use_legacy_hold_sprites = col_bumpy <= f32::EPSILON
                 && visual.drunk <= f32::EPSILON
                 && visual.tornado <= f32::EPSILON
                 && visual.beat <= f32::EPSILON;
@@ -4814,7 +4844,7 @@ pub fn build_bundles_with_view(
                 let texture_height = texture_size[1].max(1) as f32;
                 if texture_width > f32::EPSILON && texture_height > f32::EPSILON {
                     let body_frame = body_slot.frame_index_from_phase(hold_body_phase);
-                    let body_width = TARGET_ARROW_PIXEL_SIZE * field_zoom;
+                    let body_width = hold_target_arrow_px;
                     let scale = body_width / texture_width;
                     let segment_height = (texture_height * scale).max(f32::EPSILON);
                     let body_uv_elapsed = if body_slot.model.is_some() {
@@ -4970,7 +5000,10 @@ pub fn build_bundles_with_view(
                                             ):
                                             z(Z_HOLD_BODY)
                                         ),
-                                        world_z_for_adjusted_travel(segment_center_travel),
+                                        world_z_for_adjusted_travel(
+                                            local_col,
+                                            segment_center_travel,
+                                        ),
                                     ));
                                     if segment_glow > f32::EPSILON {
                                         actors.push(actor_with_world_z(
@@ -4984,7 +5017,10 @@ pub fn build_bundles_with_view(
                                                 diffuse(1.0, 1.0, 1.0, segment_glow):
                                                 z(Z_HOLD_GLOW)
                                             ),
-                                            world_z_for_adjusted_travel(segment_center_travel),
+                                            world_z_for_adjusted_travel(
+                                                local_col,
+                                                segment_center_travel,
+                                            ),
                                         ));
                                     }
                                 }
@@ -4993,14 +5029,9 @@ pub fn build_bundles_with_view(
                                 emitted += 1;
                             }
                         } else {
-                            let body_slice_step = if visual.bumpy > f32::EPSILON {
-                                4.0
-                            } else {
-                                16.0
-                            };
-                            let use_body_mesh = body_slot.model.is_none()
-                                && visual.bumpy <= f32::EPSILON
-                                && !hold_y_rotation_active;
+                            let body_slice_step = if hold_depth_test { 4.0 } else { 16.0 };
+                            let use_body_mesh =
+                                body_slot.model.is_none() && !hold_y_rotation_active;
                             let mut body_mesh_vertices =
                                 use_body_mesh.then(|| Vec::with_capacity(96));
                             let mut body_glow_vertices =
@@ -5122,7 +5153,7 @@ pub fn build_bundles_with_view(
                                         continue;
                                     }
                                     let slice_world_z =
-                                        world_z_for_adjusted_travel(slice_center_travel);
+                                        world_z_for_adjusted_travel(local_col, slice_center_travel);
 
                                     rendered_body_top = Some(match rendered_body_top {
                                         None => slice_top,
@@ -5163,9 +5194,17 @@ pub fn build_bundles_with_view(
                                             slice_bottom - slice_top,
                                         ];
                                         let half_width = body_width * 0.5;
+                                        let slice_top_z = world_z_for_adjusted_travel(
+                                            local_col,
+                                            slice_top_travel,
+                                        );
+                                        let slice_bottom_z = world_z_for_adjusted_travel(
+                                            local_col,
+                                            slice_bottom_travel,
+                                        );
                                         let top_row = prev_body_row.unwrap_or_else(|| {
-                                            let row = hold_strip_row(
-                                                [slice_top_x, slice_top],
+                                            let row = hold_strip_row_3d(
+                                                [slice_top_x, slice_top, slice_top_z],
                                                 slice_forward,
                                                 half_width,
                                                 u0,
@@ -5196,8 +5235,8 @@ pub fn build_bundles_with_view(
                                         if body_head_row.is_none() {
                                             body_head_row = Some([top_row[0].pos, top_row[1].pos]);
                                         }
-                                        let bottom_row = hold_strip_row(
-                                            [slice_bottom_x, slice_bottom],
+                                        let bottom_row = hold_strip_row_3d(
+                                            [slice_bottom_x, slice_bottom, slice_bottom_z],
                                             slice_forward,
                                             half_width,
                                             u0,
@@ -5290,6 +5329,7 @@ pub fn build_bundles_with_view(
                                     body_slot.texture_key_shared(),
                                     Arc::from(vertices),
                                     BlendMode::Alpha,
+                                    hold_depth_test,
                                     Z_HOLD_BODY as i16,
                                 ));
                             }
@@ -5300,6 +5340,7 @@ pub fn build_bundles_with_view(
                                     body_slot.texture_key_shared(),
                                     Arc::from(vertices),
                                     BlendMode::Alpha,
+                                    hold_depth_test,
                                     Z_HOLD_GLOW as i16,
                                 ));
                             }
@@ -5328,7 +5369,7 @@ pub fn build_bundles_with_view(
                         lane_reverse,
                         body_flipped,
                     );
-                    let cap_size = scale_cap(cap_slot.size());
+                    let cap_size = scale_cap_to_arrow(cap_slot.size(), hold_target_arrow_px);
                     let cap_width = cap_size[0];
                     let mut cap_height = cap_size[1];
                     let u0 = cap_uv[0];
@@ -5393,7 +5434,6 @@ pub fn build_bundles_with_view(
                         }
                         let use_top_cap_mesh = !use_legacy_hold_sprites
                             && cap_slot.model.is_none()
-                            && visual.bumpy <= f32::EPSILON
                             && !hold_y_rotation_active;
                         if use_top_cap_mesh {
                             let top_alpha = note_alpha(
@@ -5422,8 +5462,11 @@ pub fn build_bundles_with_view(
                             );
                             let cap_forward = [cap_bottom_x - cap_top_x, cap_bottom - cap_top];
                             let half_width = cap_width * 0.5;
-                            let top_row = hold_strip_row(
-                                [cap_top_x, cap_top],
+                            let cap_top_z = world_z_for_adjusted_travel(local_col, cap_top_travel);
+                            let cap_bottom_z =
+                                world_z_for_adjusted_travel(local_col, cap_bottom_travel);
+                            let top_row = hold_strip_row_3d(
+                                [cap_top_x, cap_top, cap_top_z],
                                 cap_forward,
                                 half_width,
                                 u0,
@@ -5454,8 +5497,8 @@ pub fn build_bundles_with_view(
                                     ],
                                 )
                             } else {
-                                hold_strip_row(
-                                    [cap_bottom_x, cap_bottom],
+                                hold_strip_row_3d(
+                                    [cap_bottom_x, cap_bottom, cap_bottom_z],
                                     cap_forward,
                                     half_width,
                                     u0,
@@ -5475,6 +5518,7 @@ pub fn build_bundles_with_view(
                                 cap_slot.texture_key_shared(),
                                 Arc::from(cap_vertices),
                                 BlendMode::Alpha,
+                                hold_depth_test,
                                 Z_HOLD_CAP as i16,
                             ));
                             if top_glow > f32::EPSILON || bottom_glow > f32::EPSILON {
@@ -5504,11 +5548,13 @@ pub fn build_bundles_with_view(
                                     cap_slot.texture_key_shared(),
                                     Arc::from(cap_glow_vertices),
                                     BlendMode::Alpha,
+                                    hold_depth_test,
                                     Z_HOLD_GLOW as i16,
                                 ));
                             }
                         } else {
-                            let cap_world_z = world_z_for_adjusted_travel(cap_center_travel);
+                            let cap_world_z =
+                                world_z_for_adjusted_travel(local_col, cap_center_travel);
                             let cap_rotation = cap_path_rotation
                                 + top_cap_rotation_deg(lane_reverse, body_flipped);
                             actors.push(actor_with_world_z(
@@ -5569,7 +5615,7 @@ pub fn build_bundles_with_view(
                         lane_reverse,
                         body_flipped,
                     );
-                    let cap_size = scale_cap(cap_slot.size());
+                    let cap_size = scale_cap_to_arrow(cap_slot.size(), hold_target_arrow_px);
                     let cap_width = cap_size[0];
                     let cap_span = cap_size[1];
                     let u0 = cap_uv[0];
@@ -5656,7 +5702,6 @@ pub fn build_bundles_with_view(
                         }
                         let use_bottom_cap_mesh = !use_legacy_hold_sprites
                             && cap_slot.model.is_none()
-                            && visual.bumpy <= f32::EPSILON
                             && !lane_reverse
                             && !hold_y_rotation_active;
                         if use_bottom_cap_mesh {
@@ -5686,6 +5731,9 @@ pub fn build_bundles_with_view(
                             );
                             let cap_forward = [cap_bottom_x - cap_top_x, draw_bottom - draw_top];
                             let half_width = cap_width * 0.5;
+                            let cap_top_z = world_z_for_adjusted_travel(local_col, cap_top_travel);
+                            let cap_bottom_z =
+                                world_z_for_adjusted_travel(local_col, cap_bottom_travel);
                             let top_row = if let Some(body_tail_row) = body_tail_row {
                                 hold_strip_row_from_positions(
                                     body_tail_row[0],
@@ -5701,8 +5749,8 @@ pub fn build_bundles_with_view(
                                     ],
                                 )
                             } else {
-                                hold_strip_row(
-                                    [cap_top_x, draw_top],
+                                hold_strip_row_3d(
+                                    [cap_top_x, draw_top, cap_top_z],
                                     cap_forward,
                                     half_width,
                                     u0,
@@ -5716,8 +5764,8 @@ pub fn build_bundles_with_view(
                                     ],
                                 )
                             };
-                            let bottom_row = hold_strip_row(
-                                [cap_bottom_x, draw_bottom],
+                            let bottom_row = hold_strip_row_3d(
+                                [cap_bottom_x, draw_bottom, cap_bottom_z],
                                 cap_forward,
                                 half_width,
                                 u0,
@@ -5736,6 +5784,7 @@ pub fn build_bundles_with_view(
                                 cap_slot.texture_key_shared(),
                                 Arc::from(cap_vertices),
                                 BlendMode::Alpha,
+                                hold_depth_test,
                                 Z_HOLD_CAP as i16,
                             ));
                             if top_glow > f32::EPSILON || bottom_glow > f32::EPSILON {
@@ -5765,11 +5814,13 @@ pub fn build_bundles_with_view(
                                     cap_slot.texture_key_shared(),
                                     Arc::from(cap_glow_vertices),
                                     BlendMode::Alpha,
+                                    hold_depth_test,
                                     Z_HOLD_GLOW as i16,
                                 ));
                             }
                         } else {
-                            let cap_world_z = world_z_for_adjusted_travel(cap_center_travel);
+                            let cap_world_z =
+                                world_z_for_adjusted_travel(local_col, cap_center_travel);
                             actors.push(actor_with_world_z(
                                 act!(sprite(cap_slot.texture_key_handle()):
                                     align(0.5, 0.5):
@@ -5826,7 +5877,7 @@ pub fn build_bundles_with_view(
                     lane_center_x_from_travel(local_col, head_anchor_travel)
                 };
                 let head_center = [head_center_x, head_draw_y];
-                let head_world_z = world_z_for_raw_travel(head_anchor_travel);
+                let head_world_z = world_z_for_raw_travel(local_col, head_anchor_travel);
                 let elapsed = state.total_elapsed_in_screen;
                 let head_slot = if use_active {
                     visuals
@@ -5849,7 +5900,7 @@ pub fn build_bundles_with_view(
                     if !draw.visible {
                         return None;
                     }
-                    let note_scale = field_zoom;
+                    let note_scale = hold_note_scale;
                     let base_size = note_slot_base_size(slot, note_scale);
                     (base_size[0] * draw.zoom[0].max(0.0) > f32::EPSILON
                         && base_size[1] * draw.zoom[1].max(0.0) > f32::EPSILON)
@@ -5947,7 +5998,7 @@ pub fn build_bundles_with_view(
                         ));
                     }
                 } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
-                    let note_scale = field_zoom;
+                    let note_scale = hold_note_scale;
                     for note_slot in note_slots.iter() {
                         let draw = song_lua_note_model_draw(
                             note_slot.model_draw_at(elapsed, current_beat),
@@ -6061,7 +6112,7 @@ pub fn build_bundles_with_view(
                         note_slot.uv_for_frame_at(frame, uv_elapsed),
                         hold_head_translation,
                     );
-                    let size = scale_sprite(note_slot.size());
+                    let size = scale_sprite_to_arrow(note_slot.size(), hold_target_arrow_px);
                     let draw = song_lua_note_model_draw(
                         note_slot.model_draw_at(elapsed, current_beat),
                         note_rotation_y,
@@ -6213,7 +6264,10 @@ pub fn build_bundles_with_view(
                         return;
                     }
                     let column_center_x = lane_center_x_from_travel(col_idx, raw_travel_offset);
-                    let note_world_z = world_z_for_adjusted_travel(travel_offset);
+                    let note_world_z = world_z_for_adjusted_travel(col_idx, travel_offset);
+                    let col_tiny_zoom = tiny_zoom_for_col(&visual, col_idx);
+                    let col_note_scale = field_zoom * col_tiny_zoom;
+                    let col_target_arrow_px = target_arrow_px * col_tiny_zoom;
                     let note_rot = calc_note_rotation_z(visual, note.beat, current_beat, false);
                     if matches!(note.note_type, NoteType::Mine) {
                         if fill_slot.is_none() && frame_slot.is_none() {
@@ -6432,7 +6486,7 @@ pub fn build_bundles_with_view(
                                 head_slot.uv_for_frame_at(note_frame, uv_elapsed),
                                 head_translation,
                             );
-                            let note_scale = field_zoom;
+                            let note_scale = col_note_scale;
                             let note_size = note_slot_base_size(head_slot, note_scale);
                             let center = [column_center_x, y_pos];
                             let draw = song_lua_note_model_draw(
@@ -6484,7 +6538,7 @@ pub fn build_bundles_with_view(
                         let note_center = [column_center_x, y_pos];
                         let note_uv_phase =
                             ns.part_uv_phase(tap_note_part, elapsed, current_beat, note.beat);
-                        let note_scale = field_zoom;
+                        let note_scale = col_note_scale;
                         for note_slot in note_slots.iter() {
                             let draw = song_lua_note_model_draw(
                                 note_slot.model_draw_at(elapsed, current_beat),
@@ -6604,7 +6658,8 @@ pub fn build_bundles_with_view(
                             note_slot.uv_for_frame_at(note_frame, uv_elapsed),
                             tap_note_translation,
                         );
-                        let note_size = scale_sprite(note_slot.size());
+                        let note_size =
+                            scale_sprite_to_arrow(note_slot.size(), col_target_arrow_px);
                         let center = [column_center_x, y_pos];
                         let draw = song_lua_note_model_draw(
                             note_slot.model_draw_at(elapsed, current_beat),
@@ -7788,15 +7843,17 @@ mod tests {
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, hallway_judgment_zoom,
-        hold_draw_span, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
-        hold_window_for_display_run, hud_layout_ys, hud_y, judgment_actor_zoom,
-        judgment_tilt_rotation_deg, lane_hold_window_bounds_by_time_ns, let_go_head_beat,
-        maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size,
-        note_window_for_display_run, note_world_z, note_x_extra, offset_center,
-        predictive_itg_percents, push_transform_parts, receptor_row_center, tap_judgment_rows,
-        tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits,
-        turn_option_name, zmod_subtractive_counter_state,
+        hold_draw_span, hold_head_render_flags, hold_segment_pose, hold_strip_actor,
+        hold_strip_row_3d, hold_tail_cap_bounds, hold_window_for_display_run, hud_layout_ys, hud_y,
+        judgment_actor_zoom, judgment_tilt_rotation_deg, lane_hold_window_bounds_by_time_ns,
+        let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha,
+        note_slot_base_size, note_window_for_display_run, note_world_z_for_bumpy, note_x_extra,
+        offset_center, predictive_itg_percents, push_transform_parts, receptor_row_center,
+        tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra,
+        top_cap_rotation_deg, turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
     };
+    use crate::engine::gfx::BlendMode;
+    use crate::engine::present::actors::Actor;
     use crate::game::gameplay::{ActiveHold, AppearanceEffects, LaneIndexRun, VisualEffects};
     use crate::game::judgment::{
         ExScoreData, JUDGE_GRADE_COUNT, JudgeGrade, Judgment, TimingWindow, ex_score_percent,
@@ -7808,6 +7865,7 @@ mod tests {
     };
     use crate::game::profile;
     use crate::game::timing::{TimeSignatureSegment, beat_to_note_row};
+    use std::sync::Arc;
 
     fn fantastic_judgment(window: TimingWindow, time_error_ms: f32) -> Judgment {
         Judgment {
@@ -8279,14 +8337,49 @@ mod tests {
 
     #[test]
     fn bumpy_world_z_matches_itg_default_wave() {
-        let z = note_world_z(
-            8.0 * std::f32::consts::PI,
-            VisualEffects {
-                bumpy: 1.0,
-                ..VisualEffects::default()
-            },
-        );
+        let z = note_world_z_for_bumpy(8.0 * std::f32::consts::PI, 1.0);
         assert!((z - 40.0).abs() <= 1e-4);
+    }
+
+    #[test]
+    fn hold_strip_row_3d_preserves_row_z() {
+        let row = hold_strip_row_3d(
+            [64.0, 128.0, 12.5],
+            [0.0, 16.0],
+            8.0,
+            0.0,
+            1.0,
+            0.5,
+            [1.0; 4],
+        );
+        assert!((row[0].pos[2] - 12.5).abs() <= 1e-6);
+        assert!((row[1].pos[2] - 12.5).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn hold_strip_actor_carries_depth_test_flag() {
+        let actor = hold_strip_actor(
+            Arc::from("hold.png"),
+            Arc::from([]),
+            BlendMode::Alpha,
+            true,
+            Z_HOLD_BODY as i16,
+        );
+        assert!(matches!(
+            actor,
+            Actor::TexturedMesh {
+                depth_test: true,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn tiny_column_zoom_matches_itg_power_formula() {
+        let mut visual = VisualEffects::default();
+        visual.tiny_cols[1] = 2.5;
+        assert!((tiny_zoom_for_col(&visual, 1) - 0.5_f32.powf(2.5)).abs() <= 1e-6);
+        assert!((tiny_zoom_for_col(&visual, 0) - 1.0).abs() <= 1e-6);
     }
 
     #[test]

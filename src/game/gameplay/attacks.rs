@@ -23,7 +23,7 @@ use super::{
     HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_HOLDS_TO_ROLLS, HOLDS_MASK_BIT_NO_ROLLS,
     HOLDS_MASK_BIT_PLANTED, HOLDS_MASK_BIT_TWISTER, INSERT_MASK_BIT_BIG, INSERT_MASK_BIT_BMRIZE,
     INSERT_MASK_BIT_ECHO, INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK, INSERT_MASK_BIT_SKIPPY,
-    INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE, MAX_PLAYERS, PerspectiveEffects,
+    INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE, MAX_COLS, MAX_PLAYERS, PerspectiveEffects,
     PerspectiveOverrides, RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS, RANDOM_ATTACK_MOD_POOL,
     RANDOM_ATTACK_OVERLAP_SECONDS, RANDOM_ATTACK_RUN_TIME_SECONDS,
     RANDOM_ATTACK_START_SECONDS_INIT, REMOVE_MASK_BIT_LITTLE, REMOVE_MASK_BIT_NO_FAKES,
@@ -128,6 +128,8 @@ pub(super) enum SongLuaEaseMaskTarget {
     VisualTornado,
     VisualTipsy,
     VisualBumpy,
+    VisualBumpyColumn(usize),
+    VisualTinyColumn(usize),
     VisualBeat,
     AppearanceHidden,
     AppearanceSudden,
@@ -328,6 +330,16 @@ fn attack_token_key(token: &str) -> String {
 }
 
 #[inline(always)]
+fn mod_column_suffix(key: &str, prefix: &str) -> Option<usize> {
+    let suffix = key.strip_prefix(prefix)?;
+    if suffix.is_empty() {
+        return None;
+    }
+    let col = suffix.parse::<usize>().ok()?;
+    (1..=MAX_COLS).contains(&col).then_some(col - 1)
+}
+
+#[inline(always)]
 fn parse_attack_scroll_override(token: &str) -> Option<ScrollSpeedSetting> {
     let trimmed = token.trim();
     let value = trimmed
@@ -389,6 +401,15 @@ fn apply_runtime_mod(
     percent_value: Option<f32>,
     approach_speed: f32,
 ) {
+    if let Some(col) = mod_column_suffix(key, "bumpy") {
+        out.visual.bumpy_cols[col] = attack_level(percent_value);
+        return;
+    }
+    if let Some(col) = mod_column_suffix(key, "tiny") {
+        out.visual.tiny_cols[col] = attack_level(percent_value);
+        return;
+    }
+
     match key {
         "wide" => out.insert_mask |= INSERT_MASK_BIT_WIDE,
         "big" => out.insert_mask |= INSERT_MASK_BIT_BIG,
@@ -437,9 +458,7 @@ fn apply_runtime_mod(
         "invert" => out.visual.invert = attack_level(percent_value),
         "tornado" => out.visual.tornado = attack_level(percent_value),
         "tipsy" => out.visual.tipsy = attack_level(percent_value),
-        "bumpy" | "bumpy1" | "bumpy2" | "bumpy3" | "bumpy4" => {
-            out.visual.bumpy = attack_level(percent_value)
-        }
+        "bumpy" => out.visual.bumpy = attack_level(percent_value),
         "beat" => out.visual.beat = attack_level(percent_value),
         "mini" | "tiny" => {
             let mini = percent_value.unwrap_or(100.0);
@@ -949,6 +968,36 @@ fn append_song_lua_ease_targets(
     }
     let pct_from = song_lua_normalized_value(from);
     let pct_to = song_lua_normalized_value(to);
+    if let Some(col) = mod_column_suffix(&key, "bumpy") {
+        push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualBumpyColumn(col),
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        );
+        return true;
+    }
+    if let Some(col) = mod_column_suffix(&key, "tiny") {
+        push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualTinyColumn(col),
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        );
+        return true;
+    }
     match key.as_str() {
         "boost" => push_song_lua_ease_target(
             out,
@@ -1106,7 +1155,7 @@ fn append_song_lua_ease_targets(
             opt1,
             opt2,
         ),
-        "bumpy" | "bumpy1" | "bumpy2" | "bumpy3" | "bumpy4" => push_song_lua_ease_target(
+        "bumpy" => push_song_lua_ease_target(
             out,
             SongLuaEaseMaskTarget::VisualBumpy,
             start_second,
@@ -3021,6 +3070,16 @@ pub(super) fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualTornado => visual.tornado = Some(value),
         SongLuaEaseMaskTarget::VisualTipsy => visual.tipsy = Some(value),
         SongLuaEaseMaskTarget::VisualBumpy => visual.bumpy = Some(value),
+        SongLuaEaseMaskTarget::VisualBumpyColumn(col) => {
+            if col < MAX_COLS {
+                visual.bumpy_cols[col] = Some(value);
+            }
+        }
+        SongLuaEaseMaskTarget::VisualTinyColumn(col) => {
+            if col < MAX_COLS {
+                visual.tiny_cols[col] = Some(value);
+            }
+        }
         SongLuaEaseMaskTarget::VisualBeat => visual.beat = Some(value),
         SongLuaEaseMaskTarget::AppearanceHidden => appearance.hidden = value,
         SongLuaEaseMaskTarget::AppearanceSudden => appearance.sudden = value,
@@ -3484,6 +3543,16 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                 if let Some(v) = window.visual.bumpy {
                     visual.bumpy = Some(v);
                 }
+                for (dst, src) in visual.bumpy_cols.iter_mut().zip(window.visual.bumpy_cols) {
+                    if src.is_some() {
+                        *dst = src;
+                    }
+                }
+                for (dst, src) in visual.tiny_cols.iter_mut().zip(window.visual.tiny_cols) {
+                    if src.is_some() {
+                        *dst = src;
+                    }
+                }
                 if let Some(v) = window.visual.beat {
                     visual.beat = Some(v);
                 }
@@ -3655,6 +3724,16 @@ pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> 
         )
     };
     let attack = state.active_attack_visual[player_idx];
+    let mut bumpy_cols = base.bumpy_cols;
+    let mut tiny_cols = base.tiny_cols;
+    for i in 0..MAX_COLS {
+        if let Some(v) = attack.bumpy_cols[i].filter(|v| v.is_finite()) {
+            bumpy_cols[i] = v;
+        }
+        if let Some(v) = attack.tiny_cols[i].filter(|v| v.is_finite()) {
+            tiny_cols[i] = v;
+        }
+    }
     VisualEffects {
         drunk: merge_attack_value(base.drunk, attack.drunk),
         dizzy: merge_attack_value(base.dizzy, attack.dizzy),
@@ -3666,6 +3745,8 @@ pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> 
         tornado: merge_attack_value(base.tornado, attack.tornado),
         tipsy: merge_attack_value(base.tipsy, attack.tipsy),
         bumpy: merge_attack_value(base.bumpy, attack.bumpy),
+        bumpy_cols,
+        tiny_cols,
         beat: merge_attack_value(base.beat, attack.beat),
     }
 }

@@ -747,6 +747,26 @@ pub fn draw(
         *last = Some(want);
     }
 
+    #[inline(always)]
+    fn apply_depth_test(gl: &glow::Context, want: bool, last: &mut Option<bool>) {
+        if *last == Some(want) {
+            return;
+        }
+        // SAFETY: depth-state calls only mutate GL state on the current context and
+        // do not retain Rust pointers.
+        unsafe {
+            if want {
+                gl.enable(glow::DEPTH_TEST);
+                gl.depth_func(glow::LEQUAL);
+                gl.depth_mask(true);
+            } else {
+                gl.depth_mask(false);
+                gl.disable(glow::DEPTH_TEST);
+            }
+        }
+        *last = Some(want);
+    }
+
     let backend_prepare_started = Instant::now();
     {
         let prep = &mut state.prep;
@@ -772,7 +792,11 @@ pub fn draw(
         let c = render_list.clear_color;
         gl.color_mask(true, true, true, true);
         gl.clear_color(c[0], c[1], c[2], 1.0);
-        gl.clear(glow::COLOR_BUFFER_BIT);
+        gl.clear_depth_f32(1.0);
+        gl.depth_mask(true);
+        gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+        gl.depth_mask(false);
+        gl.disable(glow::DEPTH_TEST);
         // Keep the presented window surface opaque even when EGL hands us an
         // alpha-bearing default framebuffer. Otherwise Linux compositors can
         // treat the game as translucent and the whole scene looks ghosted.
@@ -790,6 +814,7 @@ pub fn draw(
         let mut last_sprite_instance_start: Option<u32> = None;
         let mut last_tmesh_instance_start: Option<u32> = None;
         let mut last_tmesh_source: Option<TexturedMeshSource> = None;
+        let mut last_depth_test = Some(false);
 
         if !state.prep.sprite_instances.is_empty() {
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_instance_vbo));
@@ -828,6 +853,7 @@ pub fn draw(
             match op {
                 DrawOp::Sprite(run) => {
                     apply_blend(gl, run.blend, &mut last_blend);
+                    apply_depth_test(gl, false, &mut last_depth_test);
 
                     let cam = render_list
                         .cameras
@@ -955,6 +981,7 @@ pub fn draw(
                     }
 
                     apply_blend(gl, run.blend, &mut last_blend);
+                    apply_depth_test(gl, false, &mut last_depth_test);
 
                     let cam = render_list
                         .cameras
@@ -984,6 +1011,7 @@ pub fn draw(
                 }
                 DrawOp::TexturedMesh(run) => {
                     apply_blend(gl, run.blend, &mut last_blend);
+                    apply_depth_test(gl, run.depth_test, &mut last_depth_test);
 
                     if last_prog != Some(2) {
                         gl.use_program(Some(state.tmesh_program));
@@ -1143,6 +1171,7 @@ pub fn draw(
                 }
             }
         }
+        apply_depth_test(gl, false, &mut last_depth_test);
         gl.bind_vertex_array(None);
         gl.use_program(None);
     }
@@ -1644,7 +1673,7 @@ fn find_config(
     let template = ConfigTemplateBuilder::new()
         .with_api(api)
         .with_alpha_size(0)
-        .with_depth_size(0)
+        .with_depth_size(24)
         .with_stencil_size(0)
         .with_transparency(false)
         .compatible_with_native_window(raw_window_handle)
