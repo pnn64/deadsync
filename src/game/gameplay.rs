@@ -278,8 +278,14 @@ pub struct VisualEffects {
     pub tornado: f32,
     pub tipsy: f32,
     pub bumpy: f32,
+    pub bumpy_offset: f32,
+    pub bumpy_period: f32,
     pub bumpy_cols: [f32; MAX_COLS],
     pub tiny_cols: [f32; MAX_COLS],
+    pub pulse_inner: f32,
+    pub pulse_outer: f32,
+    pub pulse_period: f32,
+    pub pulse_offset: f32,
     pub beat: f32,
 }
 
@@ -297,8 +303,14 @@ impl VisualEffects {
             tornado: f32::from((mask & VISUAL_MASK_BIT_TORNADO) != 0),
             tipsy: f32::from((mask & VISUAL_MASK_BIT_TIPSY) != 0),
             bumpy: f32::from((mask & VISUAL_MASK_BIT_BUMPY) != 0),
+            bumpy_offset: 0.0,
+            bumpy_period: 0.0,
             bumpy_cols: [0.0; MAX_COLS],
             tiny_cols: [0.0; MAX_COLS],
+            pulse_inner: 0.0,
+            pulse_outer: 0.0,
+            pulse_period: 0.0,
+            pulse_offset: 0.0,
             beat: f32::from((mask & VISUAL_MASK_BIT_BEAT) != 0),
         }
     }
@@ -492,8 +504,14 @@ struct VisualOverrides {
     tornado: Option<f32>,
     tipsy: Option<f32>,
     bumpy: Option<f32>,
+    bumpy_offset: Option<f32>,
+    bumpy_period: Option<f32>,
     bumpy_cols: [Option<f32>; MAX_COLS],
     tiny_cols: [Option<f32>; MAX_COLS],
+    pulse_inner: Option<f32>,
+    pulse_outer: Option<f32>,
+    pulse_period: Option<f32>,
+    pulse_offset: Option<f32>,
     beat: Option<f32>,
 }
 
@@ -509,8 +527,14 @@ impl VisualOverrides {
             || self.tornado.is_some()
             || self.tipsy.is_some()
             || self.bumpy.is_some()
+            || self.bumpy_offset.is_some()
+            || self.bumpy_period.is_some()
             || self.bumpy_cols.iter().any(Option::is_some)
             || self.tiny_cols.iter().any(Option::is_some)
+            || self.pulse_inner.is_some()
+            || self.pulse_outer.is_some()
+            || self.pulse_period.is_some()
+            || self.pulse_offset.is_some()
             || self.beat.is_some()
     }
 }
@@ -10094,7 +10118,7 @@ mod tests {
     #[test]
     fn song_lua_mod_parser_accepts_star_prefix_and_aliases() {
         let mods = parse_song_lua_runtime_mods(
-            "*9999 25 invert,*9999 no hidden,*9999 3x,*9999 -25 tiny,*9999 50 incoming,*9999 15 bumpy3,*9999 250 tiny2",
+            "*9999 25 invert,*9999 no hidden,*9999 3x,*9999 -25 tiny,*9999 50 incoming,*9999 15 bumpy3,*9999 250 tiny2,*9999 -125 bumpyperiod,*9999 100 pulseouter",
         );
         assert_eq!(mods.visual.invert, Some(0.25));
         assert_eq!(mods.appearance.hidden, Some(0.0));
@@ -10105,6 +10129,8 @@ mod tests {
         assert_eq!(mods.visual.bumpy, None);
         assert_eq!(mods.visual.bumpy_cols[2], Some(0.15));
         assert_eq!(mods.visual.tiny_cols[1], Some(2.5));
+        assert_eq!(mods.visual.bumpy_period, Some(-1.25));
+        assert_eq!(mods.visual.pulse_outer, Some(1.0));
     }
 
     #[test]

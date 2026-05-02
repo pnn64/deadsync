@@ -128,8 +128,14 @@ pub(super) enum SongLuaEaseMaskTarget {
     VisualTornado,
     VisualTipsy,
     VisualBumpy,
+    VisualBumpyOffset,
+    VisualBumpyPeriod,
     VisualBumpyColumn(usize),
     VisualTinyColumn(usize),
+    VisualPulseInner,
+    VisualPulseOuter,
+    VisualPulsePeriod,
+    VisualPulseOffset,
     VisualBeat,
     AppearanceHidden,
     AppearanceSudden,
@@ -459,6 +465,12 @@ fn apply_runtime_mod(
         "tornado" => out.visual.tornado = attack_level(percent_value),
         "tipsy" => out.visual.tipsy = attack_level(percent_value),
         "bumpy" => out.visual.bumpy = attack_level(percent_value),
+        "bumpyoffset" => out.visual.bumpy_offset = attack_level(percent_value),
+        "bumpyperiod" => out.visual.bumpy_period = attack_level(percent_value),
+        "pulseinner" => out.visual.pulse_inner = attack_level(percent_value),
+        "pulseouter" => out.visual.pulse_outer = attack_level(percent_value),
+        "pulseperiod" => out.visual.pulse_period = attack_level(percent_value),
+        "pulseoffset" => out.visual.pulse_offset = attack_level(percent_value),
         "beat" => out.visual.beat = attack_level(percent_value),
         "mini" | "tiny" => {
             let mini = percent_value.unwrap_or(100.0);
@@ -1158,6 +1170,78 @@ fn append_song_lua_ease_targets(
         "bumpy" => push_song_lua_ease_target(
             out,
             SongLuaEaseMaskTarget::VisualBumpy,
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        ),
+        "bumpyoffset" => push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualBumpyOffset,
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        ),
+        "bumpyperiod" => push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualBumpyPeriod,
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        ),
+        "pulseinner" => push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualPulseInner,
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        ),
+        "pulseouter" => push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualPulseOuter,
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        ),
+        "pulseperiod" => push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualPulsePeriod,
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        ),
+        "pulseoffset" => push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualPulseOffset,
             start_second,
             end_second,
             sustain_end_second,
@@ -3070,6 +3154,8 @@ pub(super) fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualTornado => visual.tornado = Some(value),
         SongLuaEaseMaskTarget::VisualTipsy => visual.tipsy = Some(value),
         SongLuaEaseMaskTarget::VisualBumpy => visual.bumpy = Some(value),
+        SongLuaEaseMaskTarget::VisualBumpyOffset => visual.bumpy_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualBumpyPeriod => visual.bumpy_period = Some(value),
         SongLuaEaseMaskTarget::VisualBumpyColumn(col) => {
             if col < MAX_COLS {
                 visual.bumpy_cols[col] = Some(value);
@@ -3080,6 +3166,10 @@ pub(super) fn song_lua_apply_eased_target(
                 visual.tiny_cols[col] = Some(value);
             }
         }
+        SongLuaEaseMaskTarget::VisualPulseInner => visual.pulse_inner = Some(value),
+        SongLuaEaseMaskTarget::VisualPulseOuter => visual.pulse_outer = Some(value),
+        SongLuaEaseMaskTarget::VisualPulsePeriod => visual.pulse_period = Some(value),
+        SongLuaEaseMaskTarget::VisualPulseOffset => visual.pulse_offset = Some(value),
         SongLuaEaseMaskTarget::VisualBeat => visual.beat = Some(value),
         SongLuaEaseMaskTarget::AppearanceHidden => appearance.hidden = value,
         SongLuaEaseMaskTarget::AppearanceSudden => appearance.sudden = value,
@@ -3543,6 +3633,12 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                 if let Some(v) = window.visual.bumpy {
                     visual.bumpy = Some(v);
                 }
+                if let Some(v) = window.visual.bumpy_offset {
+                    visual.bumpy_offset = Some(v);
+                }
+                if let Some(v) = window.visual.bumpy_period {
+                    visual.bumpy_period = Some(v);
+                }
                 for (dst, src) in visual.bumpy_cols.iter_mut().zip(window.visual.bumpy_cols) {
                     if src.is_some() {
                         *dst = src;
@@ -3552,6 +3648,18 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                     if src.is_some() {
                         *dst = src;
                     }
+                }
+                if let Some(v) = window.visual.pulse_inner {
+                    visual.pulse_inner = Some(v);
+                }
+                if let Some(v) = window.visual.pulse_outer {
+                    visual.pulse_outer = Some(v);
+                }
+                if let Some(v) = window.visual.pulse_period {
+                    visual.pulse_period = Some(v);
+                }
+                if let Some(v) = window.visual.pulse_offset {
+                    visual.pulse_offset = Some(v);
                 }
                 if let Some(v) = window.visual.beat {
                     visual.beat = Some(v);
@@ -3745,8 +3853,14 @@ pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> 
         tornado: merge_attack_value(base.tornado, attack.tornado),
         tipsy: merge_attack_value(base.tipsy, attack.tipsy),
         bumpy: merge_attack_value(base.bumpy, attack.bumpy),
+        bumpy_offset: merge_attack_value(base.bumpy_offset, attack.bumpy_offset),
+        bumpy_period: merge_attack_value(base.bumpy_period, attack.bumpy_period),
         bumpy_cols,
         tiny_cols,
+        pulse_inner: merge_attack_value(base.pulse_inner, attack.pulse_inner),
+        pulse_outer: merge_attack_value(base.pulse_outer, attack.pulse_outer),
+        pulse_period: merge_attack_value(base.pulse_period, attack.pulse_period),
+        pulse_offset: merge_attack_value(base.pulse_offset, attack.pulse_offset),
         beat: merge_attack_value(base.beat, attack.beat),
     }
 }
