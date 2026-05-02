@@ -514,9 +514,10 @@ pub fn get_actors(
             let col_active_text =
                 color::simply_love_rgba(state.active_color_index + state.selected as i32);
 
-            let total_items = ITEMS.len();
+            let visible = visible_items();
+            let total_items = visible.len();
             let row_h = ROW_H * s;
-            for (item_idx, _) in ITEMS.iter().enumerate() {
+            for (item_idx, _) in visible.iter().enumerate() {
                 let (row_mid_y, row_alpha) = state
                     .row_tweens
                     .get(item_idx)
@@ -567,7 +568,7 @@ pub fn get_actors(
                 }
 
                 let text_x = if is_exit { heart_x } else { text_x_base };
-                let label = ITEMS[item_idx].name.get();
+                let label = visible[item_idx].name.get();
                 let mut color_t = if is_exit {
                     if is_active { col_black } else { col_white }
                 } else if is_active {
@@ -587,8 +588,8 @@ pub fn get_actors(
                 ));
             }
 
-            let sel = state.selected.min(ITEMS.len() - 1);
-            selected_item = Some((DescriptionCacheKey::Main(sel), &ITEMS[sel]));
+            let sel = state.selected.min(visible.len() - 1);
+            selected_item = Some((DescriptionCacheKey::Main(sel), visible[sel]));
         }
         OptionsView::Submenu(kind) => {
             let rows = submenu_rows(kind);
@@ -1258,6 +1259,10 @@ pub fn get_actors(
         actor.mul_alpha(combined_alpha);
     }
     actors.extend(ui_actors);
+
+    actors.extend(crate::screens::components::shared::update_overlay::build(
+        &crate::engine::updater::action::current(),
+    ));
 
     actors
 }

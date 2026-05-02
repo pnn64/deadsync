@@ -134,19 +134,36 @@ jobs:
         shell: bash
         run: bash scripts/package-macos-release.sh "${{ steps.tag.outputs.tag }}" "${{ matrix.arch }}"
 
+      - name: Compute SHA-256 checksum
+        id: checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive='${{ steps.package.outputs.archive }}'
+          name="$(basename "$archive")"
+          sum="${archive}.sha256"
+          # macOS lacks sha256sum by default; shasum -a 256 emits the same format.
+          ( cd "$(dirname "$archive")" && shasum -a 256 "$name" > "$(basename "$sum")" )
+          echo "checksum=${sum}" >> "$GITHUB_OUTPUT"
+          echo "Wrote ${sum}"
+
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: deadsync-macos-${{ steps.tag.outputs.tag }}-${{ matrix.arch }}
           if-no-files-found: error
-          path: ${{ steps.package.outputs.archive }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.checksum.outputs.checksum }}
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          files: ${{ steps.package.outputs.archive }}
+          files: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.checksum.outputs.checksum }}
           generate_release_notes: true
           prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
           fail_on_unmatched_files: true

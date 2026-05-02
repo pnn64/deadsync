@@ -18,6 +18,7 @@ pub enum ItemId {
     OnlineScoreServices,
     NullOrDieOptions,
     ReloadSongsCourses,
+    CheckForUpdates,
     Credits,
     Exit,
 
@@ -223,6 +224,25 @@ pub(super) fn submenu_inline_widths_fit(widths: &[f32], spacing: f32) -> bool {
     total_w <= inline_w
 }
 
+/// Returns the slice of `ITEMS` that should be shown given the current
+/// host + config state. Selection, navigation, and render index into the
+/// visible list, so hidden rows don't leave gaps or trap the cursor.
+pub(super) fn visible_items() -> Vec<&'static Item> {
+    ITEMS.iter().filter(|i| item_visible(i.id)).collect()
+}
+
+/// Per-row visibility predicate. Defaults to true; add a match arm to
+/// gate a row on host capabilities or config.
+fn item_visible(id: ItemId) -> bool {
+    match id {
+        ItemId::CheckForUpdates => {
+            crate::engine::updater::apply_supported_for_host()
+                && crate::config::get().updater_install_enabled
+        }
+        _ => true,
+    }
+}
+
 pub const ITEMS: &[Item] = &[
     // Top-level ScreenOptionsService rows, ordered to match Simply Love's LineNames.
     Item {
@@ -393,6 +413,14 @@ pub const ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsHelp",
             "ReloadSongsCoursesHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::CheckForUpdates,
+        name: lookup_key("Options", "CheckForUpdates"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "CheckForUpdatesHelp",
         ))],
     },
     Item {
