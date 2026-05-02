@@ -73,19 +73,36 @@ jobs:
         shell: pwsh
         run: scripts/package-windows-release.ps1 -Tag "${{ steps.tag.outputs.tag }}" -Arch x86_64
 
+      - name: Compute SHA-256 checksum
+        id: checksum
+        shell: pwsh
+        run: |
+          $archive = "${{ steps.package.outputs.archive }}"
+          $name = Split-Path $archive -Leaf
+          $hash = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLower()
+          $sumPath = "$archive.sha256"
+          # GNU coreutils-compatible single-line "<hex>  <filename>" format.
+          [System.IO.File]::WriteAllText($sumPath, "$hash  $name`n")
+          "checksum=$sumPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Wrote $sumPath"
+
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: deadsync-windows-${{ steps.tag.outputs.tag }}-x86_64
           if-no-files-found: error
-          path: ${{ steps.package.outputs.archive }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.checksum.outputs.checksum }}
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          files: ${{ steps.package.outputs.archive }}
+          files: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.checksum.outputs.checksum }}
           generate_release_notes: true
           prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
           fail_on_unmatched_files: true

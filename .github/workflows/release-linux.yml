@@ -119,13 +119,28 @@ jobs:
         shell: bash
         run: bash scripts/package-linux-release.sh "${{ steps.tag.outputs.tag }}" "${{ matrix.arch }}" "${{ matrix.target }}"
 
+      - name: Compute SHA-256 checksum
+        id: checksum
+        if: steps.select_arch.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive='${{ steps.package.outputs.archive }}'
+          name="$(basename "$archive")"
+          sum="${archive}.sha256"
+          ( cd "$(dirname "$archive")" && sha256sum "$name" > "$(basename "$sum")" )
+          echo "checksum=${sum}" >> "$GITHUB_OUTPUT"
+          echo "Wrote ${sum}"
+
       - name: Upload workflow artifacts
         if: steps.select_arch.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: deadsync-linux-${{ steps.tag.outputs.tag }}-${{ matrix.arch }}
           if-no-files-found: error
-          path: ${{ steps.package.outputs.archive }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.checksum.outputs.checksum }}
 
       - name: Publish GitHub release
         if: steps.select_arch.outputs.enabled == 'true'
@@ -133,7 +148,9 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          files: ${{ steps.package.outputs.archive }}
+          files: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.checksum.outputs.checksum }}
           generate_release_notes: true
           prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
           fail_on_unmatched_files: true
