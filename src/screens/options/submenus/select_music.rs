@@ -64,6 +64,15 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::SwitchProfile,
+        label: lookup_key("OptionsSelectMusic", "SwitchProfile"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::ShowCdTitles,
         label: lookup_key("OptionsSelectMusic", "ShowCDTitles"),
         choices: &[
@@ -261,6 +270,14 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "MusicWheelStyleHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SmSwitchProfile,
+        name: lookup_key("OptionsSelectMusic", "SwitchProfile"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "SwitchProfileHelp",
         ))],
     },
     Item {

@@ -84,6 +84,7 @@ pub enum SubRowId {
     ShowNativeLanguage,
     MusicWheelSpeed,
     MusicWheelStyle,
+    SwitchProfile,
     ShowCdTitles,
     ShowWheelGrades,
     ShowWheelLamps,

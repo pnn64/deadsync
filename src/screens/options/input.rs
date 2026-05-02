@@ -522,6 +522,8 @@ pub(super) fn apply_submenu_choice_delta(
             ));
         } else if row.id == SubRowId::MusicWheelStyle {
             config::update_select_music_wheel_style(SelectMusicWheelStyle::from_choice(new_index));
+        } else if row.id == SubRowId::SwitchProfile {
+            config::update_allow_switch_profile_in_menu(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ShowCdTitles {
             config::update_show_select_music_cdtitles(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ShowWheelGrades {

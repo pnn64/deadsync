@@ -430,9 +430,9 @@ mod imp {
         )
         .to_ascii_lowercase();
         [
-            "fsr", "force", "dance", "step", "itg", "adp", "arrow", "sensor", "cabinet",
-            "i/o", "io board", "arduino", "teensy", "pico", "rp2040", "stm32", "adafruit",
-            "sparkfun", "piu", "l-tek", "ltek", "makey",
+            "fsr", "force", "dance", "step", "itg", "adp", "arrow", "sensor", "cabinet", "i/o",
+            "io board", "arduino", "teensy", "pico", "rp2040", "stm32", "adafruit", "sparkfun",
+            "piu", "l-tek", "ltek", "makey",
         ]
         .iter()
         .any(|needle| haystack.contains(needle))

@@ -818,6 +818,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::SwitchProfile,
+        yes_no_choice_index(cfg.allow_switch_profile_in_menu),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowCdTitles,
         yes_no_choice_index(cfg.show_select_music_cdtitles),
     );
