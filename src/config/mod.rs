@@ -242,6 +242,13 @@ pub struct Config {
     pub audio_sample_rate_hz: Option<u32>,
     pub auto_download_unlocks: bool,
     pub auto_populate_gs_scores: bool,
+    /// Allows the in-app updater to download and install updates.
+    /// When `false`, the menu banner and "Check for Updates" still
+    /// surface that a release is available, but the overlay routes to
+    /// `AvailableNoInstall` (release page URL only) instead of offering
+    /// a Download button. Intended for builds shipped through channels
+    /// that own updates themselves (Steam, MSIX, distro packages).
+    pub updater_install_enabled: bool,
     pub rate_mod_preserves_pitch: bool,
     pub enable_arrowcloud: bool,
     pub enable_boogiestats: bool,
@@ -370,6 +377,7 @@ impl Default for Config {
             audio_sample_rate_hz: None,
             auto_download_unlocks: false,
             auto_populate_gs_scores: false,
+            updater_install_enabled: true,
             rate_mod_preserves_pitch: true,
             enable_arrowcloud: false,
             enable_boogiestats: false,

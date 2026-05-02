@@ -25,6 +25,11 @@ fn push_default_options(content: &mut String, default: &Config) {
         "AutoPopulateGrooveStatsScores",
         default.auto_populate_gs_scores,
     );
+    push_bool(
+        content,
+        "UpdaterInstallEnabled",
+        default.updater_install_enabled,
+    );
     push_line(content, "BGBrightness", default.bg_brightness);
     push_bool(content, "BannerCache", default.banner_cache);
     push_bool(content, "CacheSongs", default.cachesongs);

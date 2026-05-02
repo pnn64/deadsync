@@ -43,6 +43,11 @@ fn push_saved_options(
         "AutoPopulateGrooveStatsScores",
         cfg.auto_populate_gs_scores,
     );
+    push_bool(
+        content,
+        "UpdaterInstallEnabled",
+        cfg.updater_install_enabled,
+    );
     push_line(content, "BGBrightness", cfg.bg_brightness.clamp(0.0, 1.0));
     push_bool(content, "BannerCache", cfg.banner_cache);
     push_bool(content, "CacheSongs", cfg.cachesongs);

@@ -56,6 +56,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "AutoPopulateGrooveStatsScores")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.auto_populate_gs_scores, |v| v != 0);
+    cfg.updater_install_enabled = conf
+        .get("Options", "UpdaterInstallEnabled")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.updater_install_enabled, |v| v != 0);
     cfg.enable_groovestats = conf
         .get("Options", "EnableGrooveStats")
         .and_then(|v| v.parse::<u8>().ok())
