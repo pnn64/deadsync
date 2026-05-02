@@ -32,6 +32,7 @@ thread_local! {
     static PADDED_BRIGHT_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
     static BLUE_WINDOW_LABEL_CACHE: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity(64));
     static PEAK_NPS_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
+    static SCORE_2DP_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(1024));
     static GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(1024));
     static GAME_TIME_WIDTH_CACHE: RefCell<HashMap<(u32, u8), f32>> = RefCell::new(HashMap::with_capacity(1024));
     static STR_REF_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(512));
@@ -279,6 +280,24 @@ fn cached_peak_nps_text(peak: f32) -> Arc<str> {
             &[("peak_nps", &format!("{:.2}", peak.max(0.0)))],
         )
         .to_string()
+    })
+}
+
+#[inline(always)]
+fn quantize_centi_u32(value: f64) -> u32 {
+    let value = if value.is_finite() {
+        value.max(0.0)
+    } else {
+        0.0
+    };
+    ((value * 100.0).round()).clamp(0.0, u32::MAX as f64) as u32
+}
+
+#[inline(always)]
+fn cached_score_2dp(value: f64) -> Arc<str> {
+    let key = quantize_centi_u32(value);
+    cached_text(&SCORE_2DP_CACHE, key, TEXT_CACHE_LIMIT, || {
+        format!("{:.2}", key as f64 / 100.0)
     })
 }
 
@@ -815,6 +834,34 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
             }
         });
     });
+
+    for (player_idx, show) in show_for.iter().copied().enumerate() {
+        if !show || !state.player_profiles[player_idx].nps_graph_at_top {
+            continue;
+        }
+
+        let player_profile = &state.player_profiles[player_idx];
+        let (score_text, score_color) = if player_profile.show_ex_score {
+            (
+                cached_score_2dp(gameplay::display_ex_score_percent(state, player_idx).max(0.0)),
+                color::JUDGMENT_RGBA[0],
+            )
+        } else {
+            let score_percent = gameplay::display_itg_score_percent(state, player_idx) * 100.0;
+            (cached_score_2dp(score_percent), [1.0, 1.0, 1.0, 1.0])
+        };
+        let x = center_x + if player_idx == 0 { -7.0 } else { 65.0 };
+        actors.push(act!(text:
+            font(current_machine_font_key(FontRole::Numbers)):
+            settext(score_text):
+            align(1.0, 1.0):
+            horizalign(right):
+            xy(x, screen_center_y() - 150.0):
+            zoom(0.25):
+            diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
+            z(z_fg)
+        ));
+    }
 
     if let Some(banner_path) = &state.song.banner_path {
         let key = banner_path.to_string_lossy().into_owned();
