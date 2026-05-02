@@ -93,6 +93,7 @@ twox-hash = "2.1.2"
 # Localization
 rust-ini = "0.21.3"
 sys-locale = "0.3.2"
+semver = "1.0.27"
 tokio = { version = "1.52.1", features = ["rt"] }
 bitflags = "2.11.1"
 
@@ -182,7 +183,7 @@ winres = "0.1.12"
 opt-level = 3
 overflow-checks = false
 debug-assertions = false
-lto = true
+lto = "thin"
 debug = false
 panic = "abort"
 
