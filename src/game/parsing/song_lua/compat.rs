@@ -3,6 +3,10 @@ use std::ffi::c_int;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use super::actor_host::{
+    current_gamestate_player_value, current_gamestate_value, current_song_value,
+    current_steps_value,
+};
 use super::runtime::note_song_lua_side_effect;
 use super::sl::{create_sl_streams, init_sl_streams, player_short_name};
 use super::theme_colors::install_theme_color_helpers;
@@ -13,9 +17,7 @@ use super::util::{
 };
 use super::{
     SONG_LUA_NOTE_COLUMNS, SONG_LUA_PRODUCT_VERSION, SONG_LUA_THEME_NAME,
-    SONG_LUA_THEME_PATH_PREFIX, current_gamestate_player_value, current_gamestate_value,
-    current_song_value, current_steps_value, is_compile_global_name, seconds_to_hhmmss,
-    set_string_method,
+    SONG_LUA_THEME_PATH_PREFIX, is_compile_global_name, seconds_to_hhmmss, set_string_method,
 };
 
 pub(super) fn create_fileman_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
