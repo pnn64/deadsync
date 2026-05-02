@@ -1244,24 +1244,59 @@ mod tests {
             EvalPane::MachineRecords,
             EvalPane::QrCode,
             EvalPane::GrooveStats,
+            EvalPane::GrooveStatsEx,
             EvalPane::ArrowCloud,
             EvalPane::Timing,
             EvalPane::TimingEx,
         ];
 
         for window in cycle.windows(2) {
-            assert_eq!(eval_pane_shift(window[0], 1, false, true, true), window[1]);
-            assert_eq!(eval_pane_shift(window[1], -1, false, true, true), window[0]);
+            assert_eq!(
+                eval_pane_shift(window[0], 1, false, true, false, true),
+                window[1]
+            );
+            assert_eq!(
+                eval_pane_shift(window[1], -1, false, true, false, true),
+                window[0]
+            );
         }
 
         assert_eq!(
-            eval_pane_shift(cycle[cycle.len() - 1], 1, false, true, true),
+            eval_pane_shift(cycle[cycle.len() - 1], 1, false, true, false, true),
             cycle[0]
         );
         assert_eq!(
-            eval_pane_shift(cycle[0], -1, false, true, true),
+            eval_pane_shift(cycle[0], -1, false, true, false, true),
             cycle[cycle.len() - 1]
         );
+    }
+
+    #[test]
+    fn eval_pane_shift_adds_itl_pane_when_active() {
+        let cycle = [
+            EvalPane::Standard,
+            EvalPane::FaPlus,
+            EvalPane::Column,
+            EvalPane::MachineRecords,
+            EvalPane::QrCode,
+            EvalPane::GrooveStats,
+            EvalPane::GrooveStatsEx,
+            EvalPane::Itl,
+            EvalPane::ArrowCloud,
+            EvalPane::Timing,
+            EvalPane::TimingEx,
+        ];
+
+        for window in cycle.windows(2) {
+            assert_eq!(
+                eval_pane_shift(window[0], 1, false, true, true, true),
+                window[1]
+            );
+            assert_eq!(
+                eval_pane_shift(window[1], -1, false, true, true, true),
+                window[0]
+            );
+        }
     }
 
     #[test]
@@ -1274,6 +1309,7 @@ mod tests {
             EvalPane::MachineRecords,
             EvalPane::QrCode,
             EvalPane::GrooveStats,
+            EvalPane::GrooveStatsEx,
             EvalPane::ArrowCloud,
             EvalPane::Timing,
             EvalPane::TimingEx,
@@ -1281,16 +1317,22 @@ mod tests {
         ];
 
         for window in cycle.windows(2) {
-            assert_eq!(eval_pane_shift(window[0], 1, true, true, true), window[1]);
-            assert_eq!(eval_pane_shift(window[1], -1, true, true, true), window[0]);
+            assert_eq!(
+                eval_pane_shift(window[0], 1, true, true, false, true),
+                window[1]
+            );
+            assert_eq!(
+                eval_pane_shift(window[1], -1, true, true, false, true),
+                window[0]
+            );
         }
 
         assert_eq!(
-            eval_pane_shift(cycle[cycle.len() - 1], 1, true, true, true),
+            eval_pane_shift(cycle[cycle.len() - 1], 1, true, true, false, true),
             cycle[0]
         );
         assert_eq!(
-            eval_pane_shift(cycle[0], -1, true, true, true),
+            eval_pane_shift(cycle[0], -1, true, true, false, true),
             cycle[cycle.len() - 1]
         );
     }
@@ -1329,6 +1371,8 @@ pub(crate) enum EvalPane {
     MachineRecords,
     QrCode,
     GrooveStats,
+    GrooveStatsEx,
+    Itl,
     ArrowCloud,
     Timing,
     TimingEx,
@@ -1366,8 +1410,18 @@ fn eval_has_arrowcloud_pane(has_online_panes: bool, side: profile::PlayerSide) -
 }
 
 #[inline(always)]
-fn eval_pane_cycle(has_hard_ex: bool, has_gs: bool, has_arrowcloud: bool) -> Vec<EvalPane> {
-    let mut panes = Vec::with_capacity(11);
+fn eval_has_itl_pane(has_online_panes: bool, score_info: &ScoreInfo) -> bool {
+    eval_has_gs_pane(has_online_panes) && score_info.itl.active
+}
+
+#[inline(always)]
+fn eval_pane_cycle(
+    has_hard_ex: bool,
+    has_gs: bool,
+    has_itl: bool,
+    has_arrowcloud: bool,
+) -> Vec<EvalPane> {
+    let mut panes = Vec::with_capacity(13);
     panes.push(EvalPane::Standard);
     panes.push(EvalPane::FaPlus);
     if has_hard_ex {
@@ -1380,6 +1434,10 @@ fn eval_pane_cycle(has_hard_ex: bool, has_gs: bool, has_arrowcloud: bool) -> Vec
     }
     if has_gs {
         panes.push(EvalPane::GrooveStats);
+        panes.push(EvalPane::GrooveStatsEx);
+    }
+    if has_itl {
+        panes.push(EvalPane::Itl);
     }
     if has_arrowcloud {
         panes.push(EvalPane::ArrowCloud);
@@ -1398,9 +1456,10 @@ fn eval_pane_shift(
     dir: i32,
     has_hard_ex: bool,
     has_gs: bool,
+    has_itl: bool,
     has_arrowcloud: bool,
 ) -> EvalPane {
-    let panes = eval_pane_cycle(has_hard_ex, has_gs, has_arrowcloud);
+    let panes = eval_pane_cycle(has_hard_ex, has_gs, has_itl, has_arrowcloud);
     let Some(cur_idx) = panes.iter().position(|&candidate| candidate == pane) else {
         return panes.first().copied().unwrap_or(EvalPane::Standard);
     };
@@ -2864,6 +2923,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         };
         warm_eval_leaderboards(has_online_panes, &si.chart.short_hash, gs_side);
         let has_gs = eval_has_gs_pane(has_online_panes);
+        let has_itl = eval_has_itl_pane(has_online_panes, si);
         let has_arrowcloud = eval_has_arrowcloud_pane(has_online_panes, gs_side);
 
         state.active_pane[controller_idx] = eval_pane_shift(
@@ -2871,6 +2931,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             dir,
             has_hard_ex,
             has_gs,
+            has_itl,
             has_arrowcloud,
         );
 
@@ -2883,6 +2944,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     dir,
                     has_hard_ex,
                     has_gs,
+                    has_itl,
                     has_arrowcloud,
                 );
             }
@@ -3643,6 +3705,28 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 )),
                 EvalPane::QrCode => actors.extend(eval_panes::build_gs_qr_pane(si, controller)),
                 EvalPane::GrooveStats => actors.extend(eval_panes::build_gs_records_pane(
+                    controller,
+                    gs_side,
+                    Some(si.chart.short_hash.as_str()),
+                    scores::get_or_fetch_player_leaderboards_for_side(
+                        &si.chart.short_hash,
+                        gs_side,
+                        GS_RECORD_ROWS,
+                    )
+                    .as_ref(),
+                )),
+                EvalPane::GrooveStatsEx => actors.extend(eval_panes::build_gs_ex_records_pane(
+                    controller,
+                    gs_side,
+                    Some(si.chart.short_hash.as_str()),
+                    scores::get_or_fetch_player_leaderboards_for_side(
+                        &si.chart.short_hash,
+                        gs_side,
+                        GS_RECORD_ROWS,
+                    )
+                    .as_ref(),
+                )),
+                EvalPane::Itl => actors.extend(eval_panes::build_itl_records_pane(
                     controller,
                     gs_side,
                     Some(si.chart.short_hash.as_str()),
