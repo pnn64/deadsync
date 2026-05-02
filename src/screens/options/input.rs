@@ -613,7 +613,7 @@ pub(super) fn undo_three_key_selection(state: &mut State, asset_manager: &AssetM
     match state.menu_lr_undo {
         1 => match state.view {
             OptionsView::Main => {
-                let total = ITEMS.len();
+                let total = visible_items().len();
                 if total > 0 {
                     state.selected = (state.selected + 1) % total;
                 }
@@ -630,7 +630,7 @@ pub(super) fn undo_three_key_selection(state: &mut State, asset_manager: &AssetM
         },
         -1 => match state.view {
             OptionsView::Main => {
-                let total = ITEMS.len();
+                let total = visible_items().len();
                 if total > 0 {
                     state.selected = if state.selected == 0 {
                         total - 1
@@ -659,12 +659,13 @@ pub(super) fn activate_current_selection(
 ) -> ScreenAction {
     match state.view {
         OptionsView::Main => {
-            let total = ITEMS.len();
+            let visible = visible_items();
+            let total = visible.len();
             if total == 0 {
                 return ScreenAction::None;
             }
             let sel = state.selected.min(total - 1);
-            let item = &ITEMS[sel];
+            let item = visible[sel];
             state.pending_submenu_parent_kind = None;
 
             match item.id {
@@ -742,6 +743,10 @@ pub(super) fn activate_current_selection(
                 ItemId::ReloadSongsCourses => {
                     audio::play_sfx("assets/sounds/start.ogg");
                     start_reload_songs_and_courses(state);
+                }
+                ItemId::CheckForUpdates => {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    crate::engine::updater::action::request_check_now();
                 }
                 ItemId::Credits => {
                     audio::play_sfx("assets/sounds/start.ogg");
@@ -973,6 +978,14 @@ pub fn handle_input(
     asset_manager: &AssetManager,
     ev: &InputEvent,
 ) -> ScreenAction {
+    use crate::screens::components::shared::update_overlay;
+    let overlay_phase = crate::engine::updater::action::current();
+    if !matches!(overlay_phase, crate::engine::updater::action::ActionPhase::Idle)
+        && update_overlay::handle_input(&overlay_phase, ev)
+            == update_overlay::InputOutcome::Consumed
+    {
+        return ScreenAction::None;
+    }
     if state.reload_ui.is_some() {
         return ScreenAction::None;
     }
@@ -1188,7 +1201,7 @@ pub fn handle_input(
             screen_input::ThreeKeyMenuAction::Prev => {
                 match state.view {
                     OptionsView::Main => {
-                        let total = ITEMS.len();
+                        let total = visible_items().len();
                         if total > 0 {
                             state.selected = if state.selected == 0 {
                                 total - 1
@@ -1214,7 +1227,7 @@ pub fn handle_input(
             screen_input::ThreeKeyMenuAction::Next => {
                 match state.view {
                     OptionsView::Main => {
-                        let total = ITEMS.len();
+                        let total = visible_items().len();
                         if total > 0 {
                             state.selected = (state.selected + 1) % total;
                         }
@@ -1258,7 +1271,7 @@ pub fn handle_input(
             if ev.pressed {
                 match state.view {
                     OptionsView::Main => {
-                        let total = ITEMS.len();
+                        let total = visible_items().len();
                         if total > 0 {
                             state.selected = if state.selected == 0 {
                                 total - 1
@@ -1289,7 +1302,7 @@ pub fn handle_input(
             if ev.pressed {
                 match state.view {
                     OptionsView::Main => {
-                        let total = ITEMS.len();
+                        let total = visible_items().len();
                         if total > 0 {
                             state.selected = (state.selected + 1) % total;
                         }
