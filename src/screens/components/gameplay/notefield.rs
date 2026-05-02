@@ -1117,6 +1117,18 @@ fn clipped_hold_body_bounds(
 }
 
 #[inline(always)]
+fn hold_draw_span(y_head: f32, y_tail: f32) -> Option<(f32, f32)> {
+    let mut top = y_head.min(y_tail);
+    let mut bottom = y_head.max(y_tail);
+    if bottom < -200.0 || top > screen_height() + 200.0 {
+        return None;
+    }
+    top = top.max(-400.0);
+    bottom = bottom.min(screen_height() + 400.0);
+    (bottom >= top).then_some((top, bottom))
+}
+
+#[inline(always)]
 fn bottom_cap_uv_window(
     v_base0: f32,
     v_base1: f32,
@@ -4658,12 +4670,8 @@ pub fn build_bundles_with_view(
                     hold_end_y + note_display.stop_drawing_hold_body_offset_from_tail,
                 )
             };
-            let mut top = y_head.min(y_tail);
-            let mut bottom = y_head.max(y_tail);
-            let mut draw_body_or_cap = !(bottom < -200.0 || top > screen_height() + 200.0);
-            top = top.max(-400.0);
-            bottom = bottom.min(screen_height() + 400.0);
-            draw_body_or_cap &= bottom > top;
+            let (top, bottom, draw_body_or_cap) = hold_draw_span(y_head, y_tail)
+                .map_or((0.0, 0.0, false), |(top, bottom)| (top, bottom, true));
             let let_go_gray = ns.hold_let_go_gray_percent.clamp(0.0, 1.0);
             let hold_life = hold.life.clamp(0.0, 1.0);
             let hold_color_scale = let_go_gray + (1.0 - let_go_gray) * hold_life;
@@ -7780,7 +7788,7 @@ mod tests {
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, hallway_judgment_zoom,
-        hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
+        hold_draw_span, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
         hold_window_for_display_run, hud_layout_ys, hud_y, judgment_actor_zoom,
         judgment_tilt_rotation_deg, lane_hold_window_bounds_by_time_ns, let_go_head_beat,
         maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size,
@@ -8102,6 +8110,11 @@ mod tests {
             hold_tail_cap_bounds(natural_bottom, 24.0, None, None),
             Some((110.0, 134.0))
         );
+    }
+
+    #[test]
+    fn collapsed_hold_draw_span_still_draws_caps() {
+        assert_eq!(hold_draw_span(120.0, 120.0), Some((120.0, 120.0)));
     }
 
     #[test]
