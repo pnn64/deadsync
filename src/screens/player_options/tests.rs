@@ -1974,6 +1974,35 @@ pub(super) mod tests {
         assert_choice_at_cursor(&row_map, RowId::ErrorBarOffsetY, "30");
     }
 
+    #[test]
+    fn apply_profile_defaults_initializes_uncommon_pane_rows_via_contracts() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+
+        let p = &mut state.player_profiles[P1];
+        p.attack_mode = super::ATTACK_MODE_VARIANTS[1];
+        p.hide_light_type = super::HIDE_LIGHT_TYPE_VARIANTS[1];
+
+        let profile = state.player_profiles[P1].clone();
+        let noteskin_names = super::discover_noteskin_names();
+        let mut row_map = super::build_rows(
+            &state.song,
+            &state.speed_mod[P1],
+            state.chart_steps_index,
+            [0; 2],
+            state.music_rate,
+            super::OptionsPane::Uncommon,
+            &noteskin_names,
+            Screen::SelectMusic,
+            state.fixed_stepchart.as_ref(),
+        );
+        let mut masks = PlayerOptionMasks::default();
+        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+
+        assert_variant_at_cursor(&row_map, RowId::Attacks, &super::ATTACK_MODE_VARIANTS, profile.attack_mode);
+        assert_variant_at_cursor(&row_map, RowId::HideLightType, &super::HIDE_LIGHT_TYPE_VARIANTS, profile.hide_light_type);
+    }
+
     fn assert_choice_at_cursor(row_map: &RowMap, id: RowId, expected: &str) {
         let row = row_map
             .get(id)
