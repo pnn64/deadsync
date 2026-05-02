@@ -16,6 +16,7 @@ use crate::engine::present::anim::EffectClock;
 use crate::engine::present::anim::EffectMode;
 
 mod overlay;
+mod runtime;
 mod types;
 mod util;
 
@@ -29,6 +30,16 @@ use self::overlay::{
     overlay_delta_from_blocks, overlay_delta_intersection, overlay_state_after_blocks,
     parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
     parse_overlay_text_align, parse_overlay_text_glow_mode,
+};
+use self::runtime::{
+    SONG_LUA_BROADCASTS_KEY, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
+    SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY,
+    compile_song_runtime_delta_values, compile_song_runtime_values, create_song_position_table,
+    create_song_runtime_table, note_song_lua_side_effect, read_song_lua_broadcasts,
+    record_song_lua_broadcast, set_compile_song_runtime_beat,
+    set_compile_song_runtime_delta_values, set_compile_song_runtime_values, song_display_bps,
+    song_elapsed_seconds_for_beat, song_lua_runtime_number, song_lua_side_effect_count,
+    song_music_rate,
 };
 pub use self::types::{
     CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaCompileInfo,
@@ -54,16 +65,7 @@ const SONG_LUA_PRODUCT_VERSION: &str = "1.2.0";
 const THEME_RECEPTOR_Y_STD: f32 = -125.0;
 const THEME_RECEPTOR_Y_REV: f32 = 145.0;
 const SONG_LUA_COLUMN_X: [f32; SONG_LUA_NOTE_COLUMNS] = [-96.0, -32.0, 32.0, 96.0];
-const SONG_LUA_RUNTIME_KEY: &str = "__songlua_compile_song_runtime";
-const SONG_LUA_RUNTIME_BEAT_KEY: &str = "__songlua_song_beat";
-const SONG_LUA_RUNTIME_SECONDS_KEY: &str = "__songlua_music_seconds";
-const SONG_LUA_RUNTIME_DELTA_BEAT_KEY: &str = "__songlua_song_delta_beat";
-const SONG_LUA_RUNTIME_DELTA_SECONDS_KEY: &str = "__songlua_music_delta_seconds";
-const SONG_LUA_RUNTIME_BPS_KEY: &str = "__songlua_song_bps";
-const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
-const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
-const SONG_LUA_BROADCASTS_KEY: &str = "__songlua_broadcast_messages";
 const SONG_LUA_PROBE_METHODS_KEY: &str = "__songlua_probe_methods";
 const SONG_LUA_PROBE_ACTORS_KEY: &str = "__songlua_probe_actors";
 const SONG_LUA_PROBE_ACTOR_SET_KEY: &str = "__songlua_probe_actor_set";
@@ -429,25 +431,6 @@ fn easiest_steps_difficulty(
         .filter(|player| player.enabled)
         .map(|player| player.difficulty)
         .min_by_key(|difficulty| difficulty.sort_key())
-}
-
-#[inline(always)]
-fn song_display_bps(context: &SongLuaCompileContext) -> f32 {
-    (context.song_display_bpms[0].max(context.song_display_bpms[1]) / 60.0).max(f32::EPSILON)
-}
-
-#[inline(always)]
-fn song_music_rate(context: &SongLuaCompileContext) -> f32 {
-    if context.song_music_rate.is_finite() && context.song_music_rate > 0.0 {
-        context.song_music_rate
-    } else {
-        1.0
-    }
-}
-
-#[inline(always)]
-fn song_elapsed_seconds_for_beat(beat: f32, song_bps: f32, music_rate: f32) -> f32 {
-    beat / (song_bps.max(f32::EPSILON) * music_rate.max(f32::EPSILON))
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -11644,152 +11627,6 @@ fn create_timing_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
         table.raw_set(2, bpms[1].max(0.0))?;
     }
     Ok(table)
-}
-
-fn create_song_runtime_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    table.set(SONG_LUA_RUNTIME_BEAT_KEY, 0_i64)?;
-    table.set(SONG_LUA_RUNTIME_SECONDS_KEY, 0_i64)?;
-    table.set(SONG_LUA_RUNTIME_DELTA_BEAT_KEY, 0_i64)?;
-    table.set(SONG_LUA_RUNTIME_DELTA_SECONDS_KEY, 0_i64)?;
-    table.set(SONG_LUA_RUNTIME_BPS_KEY, song_display_bps(context))?;
-    table.set(SONG_LUA_RUNTIME_RATE_KEY, song_music_rate(context))?;
-    Ok(table)
-}
-
-fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    for method in ["GetSongBeat", "GetSongBeatVisible"] {
-        table.set(
-            method,
-            lua.create_function({
-                let song_runtime = song_runtime.clone();
-                move |_, _args: MultiValue| {
-                    song_lua_runtime_number(song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?)
-                }
-            })?,
-        )?;
-    }
-    for method in ["GetMusicSeconds", "GetMusicSecondsVisible"] {
-        table.set(
-            method,
-            lua.create_function({
-                let song_runtime = song_runtime.clone();
-                move |_, _args: MultiValue| {
-                    song_lua_runtime_number(song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?)
-                }
-            })?,
-        )?;
-    }
-    table.set(
-        "GetCurBPS",
-        lua.create_function({
-            let song_runtime = song_runtime.clone();
-            move |_, _args: MultiValue| Ok(song_runtime.get::<f32>(SONG_LUA_RUNTIME_BPS_KEY)?)
-        })?,
-    )?;
-    Ok(table)
-}
-
-fn song_lua_runtime_number(value: f32) -> mlua::Result<Value> {
-    if value.is_finite() && value.fract().abs() <= f32::EPSILON {
-        Ok(Value::Integer(value as i64))
-    } else {
-        Ok(Value::Number(value as f64))
-    }
-}
-
-fn compile_song_runtime_table(lua: &Lua) -> mlua::Result<Table> {
-    lua.globals().get(SONG_LUA_RUNTIME_KEY)
-}
-
-fn song_lua_side_effect_count(lua: &Lua) -> mlua::Result<i64> {
-    Ok(lua
-        .globals()
-        .get::<Option<i64>>(SONG_LUA_SIDE_EFFECT_COUNT_KEY)?
-        .unwrap_or(0))
-}
-
-fn note_song_lua_side_effect(lua: &Lua) -> mlua::Result<()> {
-    let globals = lua.globals();
-    let count = song_lua_side_effect_count(lua)?;
-    globals.set(SONG_LUA_SIDE_EFFECT_COUNT_KEY, count.saturating_add(1))
-}
-
-fn record_song_lua_broadcast(lua: &Lua, message: &str, has_params: bool) -> mlua::Result<()> {
-    let globals = lua.globals();
-    let Some(broadcasts) = globals.get::<Option<Table>>(SONG_LUA_BROADCASTS_KEY)? else {
-        return Ok(());
-    };
-    let entry = lua.create_table()?;
-    entry.set("message", message)?;
-    entry.set("has_params", has_params)?;
-    broadcasts.raw_set(broadcasts.raw_len() + 1, entry)?;
-    Ok(())
-}
-
-fn read_song_lua_broadcasts(table: &Table) -> mlua::Result<Vec<(String, bool)>> {
-    let mut out = Vec::new();
-    for entry in table.sequence_values::<Table>() {
-        let entry = entry?;
-        let Some(message) = entry.get::<Option<String>>("message")? else {
-            continue;
-        };
-        out.push((
-            message,
-            entry.get::<Option<bool>>("has_params")?.unwrap_or(false),
-        ));
-    }
-    Ok(out)
-}
-
-fn compile_song_runtime_values(lua: &Lua) -> mlua::Result<(f32, f32)> {
-    let runtime = compile_song_runtime_table(lua)?;
-    Ok((
-        runtime.get(SONG_LUA_RUNTIME_BEAT_KEY)?,
-        runtime.get(SONG_LUA_RUNTIME_SECONDS_KEY)?,
-    ))
-}
-
-fn set_compile_song_runtime_values(lua: &Lua, beat: f32, seconds: f32) -> mlua::Result<()> {
-    let runtime = compile_song_runtime_table(lua)?;
-    runtime.set(SONG_LUA_RUNTIME_BEAT_KEY, beat)?;
-    runtime.set(SONG_LUA_RUNTIME_SECONDS_KEY, seconds)?;
-    Ok(())
-}
-
-fn compile_song_runtime_delta_values(lua: &Lua) -> mlua::Result<(f32, f32)> {
-    let runtime = compile_song_runtime_table(lua)?;
-    Ok((
-        runtime.get(SONG_LUA_RUNTIME_DELTA_BEAT_KEY)?,
-        runtime.get(SONG_LUA_RUNTIME_DELTA_SECONDS_KEY)?,
-    ))
-}
-
-fn set_compile_song_runtime_delta_values(
-    lua: &Lua,
-    delta_beat: f32,
-    delta_seconds: f32,
-) -> mlua::Result<()> {
-    let runtime = compile_song_runtime_table(lua)?;
-    runtime.set(SONG_LUA_RUNTIME_DELTA_BEAT_KEY, delta_beat)?;
-    runtime.set(SONG_LUA_RUNTIME_DELTA_SECONDS_KEY, delta_seconds)?;
-    Ok(())
-}
-
-fn set_compile_song_runtime_beat(lua: &Lua, beat: f32) -> mlua::Result<()> {
-    let runtime = compile_song_runtime_table(lua)?;
-    let song_bps = runtime
-        .get::<Option<f32>>(SONG_LUA_RUNTIME_BPS_KEY)?
-        .unwrap_or(1.0);
-    let music_rate = runtime
-        .get::<Option<f32>>(SONG_LUA_RUNTIME_RATE_KEY)?
-        .unwrap_or(1.0);
-    set_compile_song_runtime_values(
-        lua,
-        beat,
-        song_elapsed_seconds_for_beat(beat, song_bps, music_rate),
-    )
 }
 
 fn create_style_table(lua: &Lua, style_name: &str) -> mlua::Result<Table> {
