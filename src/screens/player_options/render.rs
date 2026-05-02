@@ -456,6 +456,15 @@ pub(super) fn selection_border_width() -> f32 {
     widescale(2.0, 2.5)
 }
 
+/// Simply Love / Arrow Cloud offset stacked P1/P2 cursors by one pixel.
+#[inline(always)]
+pub(super) fn cursor_stack_y(active: [bool; PLAYER_SLOTS], player_idx: usize) -> f32 {
+    if !active[P1] || !active[P2] {
+        return 0.0;
+    }
+    if player_idx == P2 { 1.0 } else { -1.0 }
+}
+
 /// Resolved profile + session flags for one side, used by `get_actors`
 /// to populate the screen footer.
 pub(super) struct PlayerCardInfo {
@@ -729,6 +738,7 @@ pub(super) fn draw_cursor_ring(
         else {
             continue;
         };
+        let center_y = center_y + cursor_stack_y(active, player_idx);
 
         let left = center_x - ring_w * 0.5;
         let right = center_x + ring_w * 0.5;
@@ -956,47 +966,6 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
                 z(Z_ROW_FOREGROUND)
             ));
-            // Encircling cursor around the rc.fc.active option value (programmatic border)
-            if rc.fc.active[primary_player_idx]
-                && rc.fc.state.pane().selected_row[primary_player_idx] == rc.item_idx
-            {
-                let border_w = selection_border_width();
-                if let Some((center_x, center_y, ring_w, ring_h)) =
-                    cursor_for_player(rc.fc.state, primary_player_idx)
-                {
-                    let left = center_x - ring_w * 0.5;
-                    let right = center_x + ring_w * 0.5;
-                    let top = center_y - ring_h * 0.5;
-                    let bottom = center_y + ring_h * 0.5;
-                    let mut ring_color =
-                        color::decorative_rgba(player_color_index(rc.fc.state, primary_player_idx));
-                    ring_color[3] *= rc.a;
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
-                        zoomto(ring_w, border_w):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5):
-                        zoomto(ring_w, border_w):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(left + border_w * 0.5, center_y):
-                        zoomto(border_w, ring_h):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(right - border_w * 0.5, center_y):
-                        zoomto(border_w, ring_h):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                }
-            }
             let p2_text = if rc.fc.show_p2 && rc.row.id != RowId::MusicRate {
                 if arcade_row_focuses_next_row(rc.fc.state, P2, rc.item_idx) {
                     ARCADE_NEXT_ROW_TEXT.to_string()
@@ -1043,45 +1012,8 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
                     diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
                     z(Z_ROW_FOREGROUND)
                 ));
-                if rc.fc.active[P2] && rc.fc.state.pane().selected_row[P2] == rc.item_idx {
-                    let border_w = selection_border_width();
-                    if let Some((center_x, center_y, ring_w, ring_h)) =
-                        cursor_for_player(rc.fc.state, P2)
-                    {
-                        let left = center_x - ring_w * 0.5;
-                        let right = center_x + ring_w * 0.5;
-                        let top = center_y - ring_h * 0.5;
-                        let bottom = center_y + ring_h * 0.5;
-                        let mut ring_color =
-                            color::decorative_rgba(player_color_index(rc.fc.state, P2));
-                        ring_color[3] *= rc.a;
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
-                            zoomto(ring_w, border_w):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(Z_ROW_FOREGROUND)
-                        ));
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5):
-                            zoomto(ring_w, border_w):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(Z_ROW_FOREGROUND)
-                        ));
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(left + border_w * 0.5, center_y):
-                            zoomto(border_w, ring_h):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(Z_ROW_FOREGROUND)
-                        ));
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(right - border_w * 0.5, center_y):
-                            zoomto(border_w, ring_h):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(Z_ROW_FOREGROUND)
-                        ));
-                    }
-                }
             }
+            draw_cursor_ring(actors, rc.fc.state, rc.fc.active, rc.item_idx, rc.a);
         });
     });
 }

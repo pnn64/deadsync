@@ -9,7 +9,7 @@ pub(super) mod tests {
         NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row, RowBehavior, RowId, RowMap,
         ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event,
         hud_offset_choices, init_cycle_row_from_binding, init_numeric_row_from_binding,
-        is_row_visible, judgment_tilt_intensity_visible, repeat_held_arcade_start, row_visibility,
+        is_row_visible, judgment_tilt_options_visible, repeat_held_arcade_start, row_visibility,
         session_active_players, sync_profile_scroll_speed,
     };
     use crate::assets::AssetManager;
@@ -870,6 +870,47 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn versus_shared_cursor_rings_stack_by_player() {
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_versus_state();
+
+        let exit_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::Exit)
+            .expect("Exit should be in Main pane");
+        state.pane_mut().selected_row = [exit_row, exit_row];
+
+        let rect = super::CursorRect::new(100.0, 50.0, 40.0, 20.0);
+        let pane = state.pane_mut();
+        pane.cursor_initialized = [true, true];
+        pane.cursor_from = [rect, rect];
+        pane.cursor_to = [rect, rect];
+        pane.cursor_t = [1.0, 1.0];
+
+        let mut actors = Vec::new();
+        super::draw_cursor_ring(&mut actors, &state, [true, true], exit_row, 1.0);
+        assert_eq!(actors.len(), 8, "two 4-sided cursor rings should draw");
+
+        let sprite_y = |idx: usize| match &actors[idx] {
+            crate::engine::present::actors::Actor::Sprite { offset, .. } => offset[1],
+            _ => panic!("cursor ring actor should be a quad sprite"),
+        };
+        let p1_top_y = sprite_y(0);
+        let p2_top_y = sprite_y(4);
+        assert!(
+            p1_top_y < p2_top_y,
+            "Arrow Cloud metrics place P1 one pixel above P2"
+        );
+        assert!(
+            (p2_top_y - p1_top_y - 2.0).abs() < 0.001,
+            "P1/P2 cursor centers should differ by two pixels"
+        );
+    }
+
+    #[test]
     fn dispatch_with_zero_delta_commits_choice() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
@@ -1031,7 +1072,7 @@ pub(super) mod tests {
         let active = session_active_players();
         // Initially JudgmentTilt=0 (off) so JudgmentTiltIntensity should be hidden.
         assert!(
-            !judgment_tilt_intensity_visible(&state.pane().row_map, active),
+            !judgment_tilt_options_visible(&state.pane().row_map, active),
             "JudgmentTiltIntensity should start hidden"
         );
 
@@ -1039,7 +1080,7 @@ pub(super) mod tests {
         super::change_choice_for_player(&mut state, &asset_manager, P1, 1, super::NavWrap::Wrap);
 
         assert!(
-            judgment_tilt_intensity_visible(&state.pane().row_map, active),
+            judgment_tilt_options_visible(&state.pane().row_map, active),
             "JudgmentTiltIntensity should be visible after enabling JudgmentTilt"
         );
     }
