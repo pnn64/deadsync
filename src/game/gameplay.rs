@@ -1042,73 +1042,6 @@ fn closest_lane_note_ns(
 }
 
 #[inline(always)]
-fn build_lane_note_display_runs(
-    note_indices: &[usize],
-    note_display_beats: &[f32],
-) -> Vec<LaneIndexRun> {
-    if note_indices.is_empty() {
-        return Vec::new();
-    }
-    let mut runs = Vec::with_capacity(1);
-    let mut run_start = 0usize;
-    let mut prev = note_display_beats[note_indices[0]];
-    for (pos, &note_index) in note_indices.iter().enumerate().skip(1) {
-        let curr = note_display_beats[note_index];
-        if curr < prev {
-            runs.push(LaneIndexRun {
-                start: run_start,
-                end: pos,
-            });
-            run_start = pos;
-        }
-        prev = curr;
-    }
-    runs.push(LaneIndexRun {
-        start: run_start,
-        end: note_indices.len(),
-    });
-    runs
-}
-
-#[inline(always)]
-fn build_lane_hold_display_runs(
-    hold_indices: &[usize],
-    hold_display_beat_min_cache: &[Option<f32>],
-    hold_display_beat_max_cache: &[Option<f32>],
-) -> Vec<LaneIndexRun> {
-    if hold_indices.is_empty() {
-        return Vec::new();
-    }
-    let first = hold_indices[0];
-    let mut runs = Vec::with_capacity(1);
-    let mut run_start = 0usize;
-    let mut prev_min = hold_display_beat_min_cache[first].unwrap_or(0.0);
-    let mut prev_max = hold_display_beat_max_cache[first].unwrap_or(0.0);
-    debug_assert!(hold_display_beat_min_cache[first].is_some());
-    debug_assert!(hold_display_beat_max_cache[first].is_some());
-    for (pos, &note_index) in hold_indices.iter().enumerate().skip(1) {
-        let curr_min = hold_display_beat_min_cache[note_index].unwrap_or(0.0);
-        let curr_max = hold_display_beat_max_cache[note_index].unwrap_or(0.0);
-        debug_assert!(hold_display_beat_min_cache[note_index].is_some());
-        debug_assert!(hold_display_beat_max_cache[note_index].is_some());
-        if curr_min < prev_min || curr_max < prev_max {
-            runs.push(LaneIndexRun {
-                start: run_start,
-                end: pos,
-            });
-            run_start = pos;
-        }
-        prev_min = curr_min;
-        prev_max = curr_max;
-    }
-    runs.push(LaneIndexRun {
-        start: run_start,
-        end: hold_indices.len(),
-    });
-    runs
-}
-
-#[inline(always)]
 const fn note_has_displayable_hold(note: &Note) -> bool {
     matches!(note.note_type, NoteType::Hold | NoteType::Roll) && note.hold.is_some()
 }
@@ -2737,12 +2670,6 @@ pub struct ColumnCue {
     pub columns: Vec<ColumnCueColumn>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct LaneIndexRun {
-    pub start: usize,
-    pub end: usize,
-}
-
 #[derive(Clone, Debug)]
 pub struct JudgmentRenderInfo {
     pub judgment: Judgment,
@@ -3504,16 +3431,10 @@ pub struct State {
     display_clock_diag: DisplayClockDiagRing,
     pub lane_note_indices: [Vec<usize>; MAX_COLS],
     pub lane_hold_indices: [Vec<usize>; MAX_COLS],
-    pub lane_note_display_runs: [Vec<LaneIndexRun>; MAX_COLS],
-    pub lane_hold_display_runs: [Vec<LaneIndexRun>; MAX_COLS],
     pub row_entry_ranges: [(usize, usize); MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
     pub note_time_cache_ns: Vec<SongTimeNs>,
-    pub note_display_beat_cache: Vec<f32>,
     pub hold_end_time_cache_ns: Vec<Option<SongTimeNs>>,
-    pub hold_end_display_beat_cache: Vec<Option<f32>>,
-    pub hold_display_beat_min_cache: Vec<Option<f32>>,
-    pub hold_display_beat_max_cache: Vec<Option<f32>>,
     pub notes_end_time_ns: SongTimeNs,
     pub music_end_time_ns: SongTimeNs,
     pub music_rate: f32,
@@ -4101,11 +4022,7 @@ fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_s
         state.cols_per_player
     );
     debug_assert_eq!(state.notes.len(), state.note_time_cache_ns.len());
-    debug_assert_eq!(state.notes.len(), state.note_display_beat_cache.len());
     debug_assert_eq!(state.notes.len(), state.hold_end_time_cache_ns.len());
-    debug_assert_eq!(state.notes.len(), state.hold_end_display_beat_cache.len());
-    debug_assert_eq!(state.notes.len(), state.hold_display_beat_min_cache.len());
-    debug_assert_eq!(state.notes.len(), state.hold_display_beat_max_cache.len());
     debug_assert_eq!(state.notes.len(), state.hold_decay_active.len());
     debug_assert_eq!(state.notes.len(), state.note_row_entry_indices.len());
     for player in 0..state.num_players {
@@ -4189,32 +4106,6 @@ fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_s
             let right = pair[1];
             left < right && state.note_time_cache_ns[left] <= state.note_time_cache_ns[right]
         }));
-        let note_runs = &state.lane_note_display_runs[col];
-        if state.lane_note_indices[col].is_empty() {
-            debug_assert!(note_runs.is_empty());
-        } else {
-            debug_assert_eq!(note_runs.first().map(|run| run.start), Some(0));
-            debug_assert_eq!(
-                note_runs.last().map(|run| run.end),
-                Some(state.lane_note_indices[col].len())
-            );
-            debug_assert!(note_runs.iter().all(|run| run.start < run.end));
-            debug_assert!(
-                note_runs
-                    .windows(2)
-                    .all(|pair| pair[0].end == pair[1].start)
-            );
-            for run in note_runs {
-                debug_assert!(
-                    state.lane_note_indices[col][run.start..run.end]
-                        .windows(2)
-                        .all(|pair| {
-                            state.note_display_beat_cache[pair[0]]
-                                <= state.note_display_beat_cache[pair[1]]
-                        })
-                );
-            }
-        }
         for &note_index in &state.lane_note_indices[col] {
             debug_assert!(note_index < state.notes.len());
             debug_assert_eq!(state.notes[note_index].column, col);
@@ -4224,38 +4115,6 @@ fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_s
             let right = pair[1];
             left < right && state.note_time_cache_ns[left] <= state.note_time_cache_ns[right]
         }));
-        let hold_runs = &state.lane_hold_display_runs[col];
-        if state.lane_hold_indices[col].is_empty() {
-            debug_assert!(hold_runs.is_empty());
-        } else {
-            debug_assert_eq!(hold_runs.first().map(|run| run.start), Some(0));
-            debug_assert_eq!(
-                hold_runs.last().map(|run| run.end),
-                Some(state.lane_hold_indices[col].len())
-            );
-            debug_assert!(hold_runs.iter().all(|run| run.start < run.end));
-            debug_assert!(
-                hold_runs
-                    .windows(2)
-                    .all(|pair| pair[0].end == pair[1].start)
-            );
-            for run in hold_runs {
-                debug_assert!(
-                    state.lane_hold_indices[col][run.start..run.end]
-                        .windows(2)
-                        .all(|pair| {
-                            let left = pair[0];
-                            let right = pair[1];
-                            state.hold_display_beat_min_cache[left]
-                                .zip(state.hold_display_beat_min_cache[right])
-                                .is_some_and(|(lhs, rhs)| lhs <= rhs)
-                                && state.hold_display_beat_max_cache[left]
-                                    .zip(state.hold_display_beat_max_cache[right])
-                                    .is_some_and(|(lhs, rhs)| lhs <= rhs)
-                        })
-                );
-            }
-        }
         for &note_index in &state.lane_hold_indices[col] {
             debug_assert!(note_index < state.notes.len());
             debug_assert_eq!(state.notes[note_index].column, col);
@@ -4268,8 +4127,6 @@ fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_s
     for col in state.num_cols..MAX_COLS {
         debug_assert!(state.lane_note_indices[col].is_empty());
         debug_assert!(state.lane_hold_indices[col].is_empty());
-        debug_assert!(state.lane_note_display_runs[col].is_empty());
-        debug_assert!(state.lane_hold_display_runs[col].is_empty());
     }
     let mut lane_positions = [0usize; MAX_COLS];
     for (note_index, note) in state.notes.iter().enumerate() {
@@ -5487,29 +5344,16 @@ pub fn init(
 
     let cache_build_started = Instant::now();
     let mut note_time_cache_ns = Vec::with_capacity(notes.len());
-    let mut note_display_beat_cache = Vec::with_capacity(notes.len());
     let mut hold_end_time_cache_ns = Vec::with_capacity(notes.len());
-    let mut hold_end_display_beat_cache = Vec::with_capacity(notes.len());
-    let mut hold_display_beat_min_cache = Vec::with_capacity(notes.len());
-    let mut hold_display_beat_max_cache = Vec::with_capacity(notes.len());
     for note in &notes {
         let timing_player = &timing_players[note_player_for_col(note.column)];
         let note_time_ns = timing_player.get_time_for_beat_ns(note.beat);
-        let note_display_beat = timing_player.get_displayed_beat(note.beat);
         note_time_cache_ns.push(note_time_ns);
-        note_display_beat_cache.push(note_display_beat);
         if let Some(hold) = note.hold.as_ref() {
             let end_time_ns = timing_player.get_time_for_beat_ns(hold.end_beat);
-            let end_display_beat = timing_player.get_displayed_beat(hold.end_beat);
             hold_end_time_cache_ns.push(Some(end_time_ns));
-            hold_end_display_beat_cache.push(Some(end_display_beat));
-            hold_display_beat_min_cache.push(Some(note_display_beat.min(end_display_beat)));
-            hold_display_beat_max_cache.push(Some(note_display_beat.max(end_display_beat)));
         } else {
             hold_end_time_cache_ns.push(None);
-            hold_end_display_beat_cache.push(None);
-            hold_display_beat_min_cache.push(None);
-            hold_display_beat_max_cache.push(None);
         }
     }
 
@@ -5704,19 +5548,6 @@ pub fn init(
                 lane_hold_indices[col].push(note_index);
             }
         }
-    }
-    let mut lane_note_display_runs: [Vec<LaneIndexRun>; MAX_COLS] =
-        std::array::from_fn(|_| Vec::new());
-    let mut lane_hold_display_runs: [Vec<LaneIndexRun>; MAX_COLS] =
-        std::array::from_fn(|_| Vec::new());
-    for col in 0..num_cols {
-        lane_note_display_runs[col] =
-            build_lane_note_display_runs(&lane_note_indices[col], &note_display_beat_cache);
-        lane_hold_display_runs[col] = build_lane_hold_display_runs(
-            &lane_hold_indices[col],
-            &hold_display_beat_min_cache,
-            &hold_display_beat_max_cache,
-        );
     }
     let pending_edges_capacity = input_queue_cap(num_cols);
     let replay_seconds = (song_time_ns_to_seconds(music_end_time_ns) + start_delay)
@@ -6060,16 +5891,10 @@ pub fn init(
         display_clock_diag: DisplayClockDiagRing::new(),
         lane_note_indices,
         lane_hold_indices,
-        lane_note_display_runs,
-        lane_hold_display_runs,
         row_entry_ranges,
         judged_row_cursor: row_entry_range_start,
         note_time_cache_ns,
-        note_display_beat_cache,
         hold_end_time_cache_ns,
-        hold_end_display_beat_cache,
-        hold_display_beat_min_cache,
-        hold_display_beat_max_cache,
         notes_end_time_ns,
         music_end_time_ns,
         music_rate: rate,
@@ -8148,28 +7973,28 @@ mod tests {
     use super::{
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, FinalizedRowOutcome,
         FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, HoldJudgmentRenderInfo,
-        HoldToExitKey, INSERT_MASK_BIT_MINES, LaneIndexRun, MAX_COLS, MAX_PLAYERS,
-        REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
-        TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
-        advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
-        apply_autosync_for_row_hits, apply_global_offset_delta, apply_mines_insert,
-        apply_song_offset_delta, autoplay_random_offset_music_ns_for_window,
-        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
-        build_lane_hold_display_runs, build_lane_note_display_runs, build_player_judgment_timing,
-        build_row_entry, build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
-        completed_row_final_judgment, completed_row_flash_note_indices_and_grade,
-        count_rescore_tracks_on_row, crossed_mine_bounds_ns,
-        effective_appearance_effects_for_player, effective_player_global_offset_seconds,
-        enforce_max_simultaneous_notes, finalize_row_judgment,
-        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, handle_input,
-        input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
-        lane_note_window_bounds_ns, lane_press_started, lane_release_finished,
-        late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_step_distance_ns,
-        mine_window_bounds_ns, music_time_ns_from_song_clock, mutate_timing_arc,
-        next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold, note_hit_eval,
-        parse_attack_mods, parse_song_lua_runtime_mods,
-        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
-        recompute_player_totals, refresh_active_attack_masks, refresh_timing_after_offset_change,
+        HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, REPLAY_EDGE_RATE_PER_SEC,
+        RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TickMode, TurnRng,
+        active_hold_counts_as_pressed, add_provisional_early_score, advance_hold_last_held,
+        advance_hold_life_ns, advance_judged_row_cursor, apply_autosync_for_row_hits,
+        apply_global_offset_delta, apply_mines_insert, apply_song_offset_delta,
+        autoplay_random_offset_music_ns_for_window, build_assist_clap_rows,
+        build_attack_mask_windows_for_player, build_column_cues_for_player,
+        build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
+        collect_edge_judge_indices, completed_row_final_judgment,
+        completed_row_flash_note_indices_and_grade, count_rescore_tracks_on_row,
+        crossed_mine_bounds_ns, effective_appearance_effects_for_player,
+        effective_player_global_offset_seconds, enforce_max_simultaneous_notes,
+        finalize_row_judgment, finalized_row_outcome_for_cached_row,
+        frame_stable_display_music_time_ns, handle_input, input_queue_cap, lane_edge_judges_lift,
+        lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
+        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
+        live_autoplay_enabled_from_flags, max_step_distance_ns, mine_window_bounds_ns,
+        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
+        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
+        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
+        player_row_scan_state, recent_step_tracks, recompute_player_totals,
+        refresh_active_attack_masks, refresh_timing_after_offset_change,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
         row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
@@ -10767,38 +10592,6 @@ mod tests {
                 song_time_ns_from_seconds(2.0),
             ),
             (1, 3)
-        );
-    }
-
-    #[test]
-    fn lane_note_display_runs_split_nonmonotonic_display_order() {
-        let note_indices = [0usize, 1, 2, 3, 4];
-        let note_display_beats = [10.0f32, 40.0, 20.0, 45.0, 30.0];
-        assert_eq!(
-            build_lane_note_display_runs(&note_indices, &note_display_beats),
-            vec![
-                LaneIndexRun { start: 0, end: 2 },
-                LaneIndexRun { start: 2, end: 4 },
-                LaneIndexRun { start: 4, end: 5 },
-            ]
-        );
-    }
-
-    #[test]
-    fn lane_hold_display_runs_split_when_interval_bounds_decrease() {
-        let hold_indices = [0usize, 1, 2, 3];
-        let hold_display_beat_min_cache = [Some(10.0f32), Some(15.0), Some(12.0), Some(40.0)];
-        let hold_display_beat_max_cache = [Some(20.0f32), Some(30.0), Some(32.0), Some(50.0)];
-        assert_eq!(
-            build_lane_hold_display_runs(
-                &hold_indices,
-                &hold_display_beat_min_cache,
-                &hold_display_beat_max_cache,
-            ),
-            vec![
-                LaneIndexRun { start: 0, end: 2 },
-                LaneIndexRun { start: 2, end: 4 },
-            ]
         );
     }
 

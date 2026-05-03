@@ -28,7 +28,7 @@ use crate::game::parsing::noteskin::{
     ModelDrawState, ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
 };
 use crate::game::{
-    gameplay::{ActiveHold, LaneIndexRun, PlayerRuntime, SongTimeNs, State},
+    gameplay::{ActiveHold, PlayerRuntime, SongTimeNs, State},
     profile, scores,
     scroll::ScrollSpeedSetting,
     timing::{TimeSignatureSegment, beat_to_note_row, default_time_signature, note_row_to_beat},
@@ -3167,12 +3167,6 @@ fn let_go_head_beat(note_beat: f32, end_beat: f32, last_held_beat: f32, visible_
 }
 
 #[inline(always)]
-fn song_time_ns_from_seconds(seconds: f32) -> SongTimeNs {
-    let nanos = (seconds as f64 * 1_000_000_000.0).round();
-    nanos.clamp(i64::MIN as f64, i64::MAX as f64) as SongTimeNs
-}
-
-#[inline(always)]
 fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
     (time_ns as f64 * 1.0e-9) as f32
 }
@@ -3183,141 +3177,46 @@ fn song_time_ns_delta_seconds(lhs: SongTimeNs, rhs: SongTimeNs) -> f32 {
 }
 
 #[inline(always)]
-fn lane_window_bounds_by_time_ns(
-    note_indices: &[usize],
-    note_times_ns: &[SongTimeNs],
-    min_time_ns: SongTimeNs,
-    max_time_ns: SongTimeNs,
-) -> (usize, usize) {
-    (
-        note_indices.partition_point(|&note_index| note_times_ns[note_index] < min_time_ns),
-        note_indices.partition_point(|&note_index| note_times_ns[note_index] <= max_time_ns),
-    )
-}
-
-#[inline(always)]
-fn lane_window_bounds_by_display_beat(
-    note_indices: &[usize],
-    note_display_beats: &[f32],
-    min_beat: f32,
-    max_beat: f32,
-) -> (usize, usize) {
-    (
-        note_indices.partition_point(|&note_index| note_display_beats[note_index] < min_beat),
-        note_indices.partition_point(|&note_index| note_display_beats[note_index] <= max_beat),
-    )
-}
-
-#[inline(always)]
-fn lane_window_bounds_by_note_beat(
+fn lane_window_bounds_by_note_row(
     note_indices: &[usize],
     notes: &[Note],
-    min_beat: f32,
-    max_beat: f32,
+    min_row: i32,
+    max_row: i32,
 ) -> (usize, usize) {
+    if max_row < 0 {
+        return (0, 0);
+    }
+    let min_row = min_row.max(0) as usize;
+    let max_row = max_row as usize;
     (
-        note_indices.partition_point(|&note_index| notes[note_index].beat < min_beat),
-        note_indices.partition_point(|&note_index| notes[note_index].beat <= max_beat),
+        note_indices.partition_point(|&note_index| notes[note_index].row_index < min_row),
+        note_indices.partition_point(|&note_index| notes[note_index].row_index <= max_row),
     )
 }
 
 #[inline(always)]
-fn note_window_for_display_run(
-    note_indices: &[usize],
-    note_display_beats: &[f32],
-    run: LaneIndexRun,
-    min_beat: f32,
-    max_beat: f32,
-) -> Option<LaneIndexRun> {
-    let (start, end) = lane_window_bounds_by_display_beat(
-        &note_indices[run.start..run.end],
-        note_display_beats,
-        min_beat,
-        max_beat,
-    );
-    if start == end {
-        None
-    } else {
-        Some(LaneIndexRun {
-            start: run.start + start,
-            end: run.start + end,
-        })
-    }
-}
-
-#[inline(always)]
-fn lane_hold_window_bounds_by_time_ns(
-    hold_indices: &[usize],
-    note_times_ns: &[SongTimeNs],
-    hold_end_time_ns: &[Option<SongTimeNs>],
-    min_time_ns: SongTimeNs,
-    max_time_ns: SongTimeNs,
-) -> (usize, usize) {
-    let (mut start, end) =
-        lane_window_bounds_by_time_ns(hold_indices, note_times_ns, min_time_ns, max_time_ns);
-    // Hold-only lane lists are sorted by head time. For valid charts, same-lane
-    // hold bodies do not overlap, so walking backward until the previous hold no
-    // longer reaches the visible boundary matches ITG's inclusive hold range.
-    while start > 0 {
-        let prev_note_index = hold_indices[start - 1];
-        let prev_end_time_ns =
-            hold_end_time_ns[prev_note_index].unwrap_or(note_times_ns[prev_note_index]);
-        if prev_end_time_ns < min_time_ns {
-            break;
-        }
-        start -= 1;
-    }
-    (start, end)
-}
-
-#[inline(always)]
-fn lane_hold_window_bounds_by_note_beat(
+fn lane_hold_window_bounds_by_note_row(
     hold_indices: &[usize],
     notes: &[Note],
-    min_beat: f32,
-    max_beat: f32,
+    min_row: i32,
+    max_row: i32,
 ) -> (usize, usize) {
-    let (mut start, end) = lane_window_bounds_by_note_beat(hold_indices, notes, min_beat, max_beat);
+    let (mut start, end) = lane_window_bounds_by_note_row(hold_indices, notes, min_row, max_row);
+    let min_row = min_row.max(0) as usize;
     while start > 0 {
         let prev_note_index = hold_indices[start - 1];
-        let prev_end_beat = notes[prev_note_index]
+        let prev_end_row = notes[prev_note_index]
             .hold
             .as_ref()
-            .map_or(notes[prev_note_index].beat, |hold| hold.end_beat);
-        if prev_end_beat < min_beat {
+            .map_or(notes[prev_note_index].row_index, |hold| {
+                beat_to_note_row(hold.end_beat).max(0) as usize
+            });
+        if prev_end_row < min_row {
             break;
         }
         start -= 1;
     }
     (start, end)
-}
-
-#[inline(always)]
-fn hold_window_for_display_run(
-    hold_indices: &[usize],
-    hold_display_beat_min: &[Option<f32>],
-    hold_display_beat_max: &[Option<f32>],
-    run: LaneIndexRun,
-    min_beat: f32,
-    max_beat: f32,
-) -> Option<LaneIndexRun> {
-    let slice = &hold_indices[run.start..run.end];
-    let start = slice.partition_point(|&note_index| {
-        debug_assert!(hold_display_beat_max[note_index].is_some());
-        hold_display_beat_max[note_index].unwrap_or(0.0) < min_beat
-    });
-    let end = slice.partition_point(|&note_index| {
-        debug_assert!(hold_display_beat_min[note_index].is_some());
-        hold_display_beat_min[note_index].unwrap_or(0.0) <= max_beat
-    });
-    if start == end {
-        None
-    } else {
-        Some(LaneIndexRun {
-            start: run.start + start,
-            end: run.start + end,
-        })
-    }
 }
 
 #[inline(always)]
@@ -3378,43 +3277,13 @@ fn find_last_displayed_beat(
 fn for_each_visible_note_index(
     note_indices: &[usize],
     notes: &[Note],
-    note_times_ns: &[SongTimeNs],
-    note_display_beats: &[f32],
-    display_runs: &[LaneIndexRun],
-    visible_beat_range: Option<(f32, f32)>,
-    visible_time_range_ns: Option<(SongTimeNs, SongTimeNs)>,
-    visible_display_beat_range: Option<(f32, f32)>,
+    visible_row_range: Option<(i32, i32)>,
     mut visit: impl FnMut(usize),
 ) {
-    if let Some((min_beat, max_beat)) = visible_beat_range {
-        let (start, end) = lane_window_bounds_by_note_beat(note_indices, notes, min_beat, max_beat);
+    if let Some((min_row, max_row)) = visible_row_range {
+        let (start, end) = lane_window_bounds_by_note_row(note_indices, notes, min_row, max_row);
         for &note_index in &note_indices[start..end] {
             visit(note_index);
-        }
-        return;
-    }
-    if let Some((min_time_ns, max_time_ns)) = visible_time_range_ns {
-        let (start, end) =
-            lane_window_bounds_by_time_ns(note_indices, note_times_ns, min_time_ns, max_time_ns);
-        for &note_index in &note_indices[start..end] {
-            visit(note_index);
-        }
-        return;
-    }
-    if let Some((min_beat, max_beat)) = visible_display_beat_range {
-        for &run in display_runs {
-            let Some(window) = note_window_for_display_run(
-                note_indices,
-                note_display_beats,
-                run,
-                min_beat,
-                max_beat,
-            ) else {
-                continue;
-            };
-            for &note_index in &note_indices[window.start..window.end] {
-                visit(note_index);
-            }
         }
         return;
     }
@@ -3427,52 +3296,14 @@ fn for_each_visible_note_index(
 fn for_each_visible_hold_index(
     hold_indices: &[usize],
     notes: &[Note],
-    note_times_ns: &[SongTimeNs],
-    hold_end_time_ns: &[Option<SongTimeNs>],
-    hold_display_beat_min: &[Option<f32>],
-    hold_display_beat_max: &[Option<f32>],
-    display_runs: &[LaneIndexRun],
-    visible_beat_range: Option<(f32, f32)>,
-    visible_time_range_ns: Option<(SongTimeNs, SongTimeNs)>,
-    visible_display_beat_range: Option<(f32, f32)>,
+    visible_row_range: Option<(i32, i32)>,
     mut visit: impl FnMut(usize),
 ) {
-    if let Some((min_beat, max_beat)) = visible_beat_range {
+    if let Some((min_row, max_row)) = visible_row_range {
         let (start, end) =
-            lane_hold_window_bounds_by_note_beat(hold_indices, notes, min_beat, max_beat);
+            lane_hold_window_bounds_by_note_row(hold_indices, notes, min_row, max_row);
         for &note_index in &hold_indices[start..end] {
             visit(note_index);
-        }
-        return;
-    }
-    if let Some((min_time_ns, max_time_ns)) = visible_time_range_ns {
-        let (start, end) = lane_hold_window_bounds_by_time_ns(
-            hold_indices,
-            note_times_ns,
-            hold_end_time_ns,
-            min_time_ns,
-            max_time_ns,
-        );
-        for &note_index in &hold_indices[start..end] {
-            visit(note_index);
-        }
-        return;
-    }
-    if let Some((min_beat, max_beat)) = visible_display_beat_range {
-        for &run in display_runs {
-            let Some(window) = hold_window_for_display_run(
-                hold_indices,
-                hold_display_beat_min,
-                hold_display_beat_max,
-                run,
-                min_beat,
-                max_beat,
-            ) else {
-                continue;
-            };
-            for &note_index in &hold_indices[window.start..window.end] {
-                visit(note_index);
-            }
         }
         return;
     }
@@ -3485,31 +3316,18 @@ fn for_each_visible_hold_index(
 fn hold_overlaps_visible_window(
     note_index: usize,
     notes: &[Note],
-    note_times_ns: &[SongTimeNs],
-    hold_end_time_ns: &[Option<SongTimeNs>],
-    hold_display_beat_min: &[Option<f32>],
-    hold_display_beat_max: &[Option<f32>],
-    visible_beat_range: Option<(f32, f32)>,
-    visible_time_range_ns: Option<(SongTimeNs, SongTimeNs)>,
-    visible_display_beat_range: Option<(f32, f32)>,
+    visible_row_range: Option<(i32, i32)>,
 ) -> bool {
-    if let Some((min_beat, max_beat)) = visible_beat_range {
-        let hold_end = notes[note_index]
+    if let Some((min_row, max_row)) = visible_row_range {
+        let hold_end_row = notes[note_index]
             .hold
             .as_ref()
-            .map_or(notes[note_index].beat, |hold| hold.end_beat);
-        return hold_end >= min_beat && notes[note_index].beat <= max_beat;
-    }
-    if let Some((min_time_ns, max_time_ns)) = visible_time_range_ns {
-        let hold_end = hold_end_time_ns[note_index].unwrap_or(note_times_ns[note_index]);
-        return hold_end >= min_time_ns && note_times_ns[note_index] <= max_time_ns;
-    }
-    if let Some((min_beat, max_beat)) = visible_display_beat_range {
-        debug_assert!(hold_display_beat_min[note_index].is_some());
-        debug_assert!(hold_display_beat_max[note_index].is_some());
-        let hold_min = hold_display_beat_min[note_index].unwrap_or(0.0);
-        let hold_max = hold_display_beat_max[note_index].unwrap_or(0.0);
-        return hold_max >= min_beat && hold_min <= max_beat;
+            .map_or(notes[note_index].row_index, |hold| {
+                beat_to_note_row(hold.end_beat).max(0) as usize
+            });
+        return max_row >= 0
+            && hold_end_row >= min_row.max(0) as usize
+            && notes[note_index].row_index <= max_row as usize;
     }
     true
 }
@@ -3850,32 +3668,6 @@ pub fn build_bundles_with_view(
             let time_diff_real = song_time_ns_delta_seconds(note_time_ns, current_time_ns) / rate;
             time_diff_real * pps_chart
         };
-        let travel_offset_for_cached_note = |note_index: usize, use_hold_end: bool| -> f32 {
-            match scroll_speed {
-                ScrollSpeedSetting::CMod(_) => {
-                    let note_time_ns = if use_hold_end {
-                        state.hold_end_time_cache_ns[note_index]
-                            .unwrap_or(state.note_time_cache_ns[note_index])
-                    } else {
-                        state.note_time_cache_ns[note_index]
-                    };
-                    travel_offset_for_time_ns(note_time_ns)
-                }
-                ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                    let note_disp = if use_hold_end {
-                        state.hold_end_display_beat_cache[note_index]
-                            .unwrap_or(state.note_display_beat_cache[note_index])
-                    } else {
-                        state.note_display_beat_cache[note_index]
-                    };
-                    let beat_diff_disp = note_disp - curr_disp_beat;
-                    beat_diff_disp
-                        * ScrollSpeedSetting::ARROW_SPACING
-                        * field_zoom
-                        * beatmod_multiplier
-                }
-            }
-        };
         let raw_travel_offset_for_beat = |beat: f32| -> f32 {
             match scroll_speed {
                 ScrollSpeedSetting::CMod(_) => {
@@ -3890,10 +3682,20 @@ pub fn build_bundles_with_view(
                 }
             }
         };
+        let note_endpoint_beat = |note: &Note, use_hold_end: bool| -> f32 {
+            if use_hold_end {
+                note.hold.as_ref().map_or(note.beat, |hold| hold.end_beat)
+            } else {
+                note.beat
+            }
+        };
+        let travel_offset_for_note = |note: &Note, use_hold_end: bool| {
+            raw_travel_offset_for_beat(note_endpoint_beat(note, use_hold_end))
+        };
         // ITGmania derives the drawable row span by probing ArrowEffects::GetYOffset
         // every frame; keep that as the primary note candidate window even when
         // no accel mods are active.
-        let visible_beat_range = {
+        let visible_row_range = {
             let first_beat_to_draw =
                 find_first_displayed_beat(current_beat, draw_distance_after_targets, |beat| {
                     apply_accel_y(
@@ -3921,7 +3723,11 @@ pub fn build_bundles_with_view(
             );
             first_beat_to_draw
                 .zip(last_beat_to_draw)
-                .map(|(first, last)| (first, last.max(first)))
+                .map(|(first, last)| {
+                    let first_row = beat_to_note_row(first);
+                    let last_row = beat_to_note_row(last.max(first)).max(first_row);
+                    (first_row, last_row)
+                })
         };
         let adjusted_travel_offset = |travel_offset: f32| -> f32 {
             apply_accel_y(
@@ -3933,47 +3739,6 @@ pub fn build_bundles_with_view(
             )
         };
         let (note_start, note_end) = state.note_ranges[player_idx];
-        let visible_time_range_ns = match scroll_speed {
-            ScrollSpeedSetting::CMod(_) => {
-                let pps_chart = cmod_pps_opt.expect("cmod pps computed");
-                Some((
-                    current_time_ns.saturating_sub(song_time_ns_from_seconds(
-                        draw_distance_after_targets / pps_chart * rate,
-                    )),
-                    current_time_ns.saturating_add(song_time_ns_from_seconds(
-                        draw_distance_before_targets / pps_chart * rate,
-                    )),
-                ))
-            }
-            ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => None,
-        };
-        let visible_display_beat_range = match scroll_speed {
-            ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                let pixels_per_displayed_beat =
-                    ScrollSpeedSetting::ARROW_SPACING * field_zoom * beatmod_multiplier.abs();
-                if pixels_per_displayed_beat > f32::EPSILON {
-                    let current_chart_beat = state.current_beat_visible[player_idx];
-                    let mut min_beat =
-                        curr_disp_beat - draw_distance_after_targets / pixels_per_displayed_beat;
-                    let mut max_beat =
-                        curr_disp_beat + draw_distance_before_targets / pixels_per_displayed_beat;
-                    if beatmod_multiplier.abs() < 0.75 {
-                        let min_cap =
-                            timing.get_displayed_beat((current_chart_beat - 16.0).max(0.0));
-                        let max_cap = timing.get_displayed_beat(current_chart_beat + 16.0);
-                        min_beat = min_beat.max(min_cap);
-                        max_beat = max_beat.min(max_cap);
-                    }
-                    if max_beat < min_beat {
-                        max_beat = min_beat;
-                    }
-                    Some((min_beat, max_beat))
-                } else {
-                    None
-                }
-            }
-            ScrollSpeedSetting::CMod(_) => None,
-        };
         let tipsy_y_for_col =
             |local_col: usize| -> f32 { tipsy_y_extra(local_col, elapsed_screen, visual) };
         let lane_y_from_travel =
@@ -4880,22 +4645,11 @@ pub fn build_bundles_with_view(
             let receptor_center_x = receptor_center[0];
 
             let head_travel_offset = if is_head_dynamic {
-                match scroll_speed {
-                    ScrollSpeedSetting::CMod(_) => {
-                        travel_offset_for_time_ns(timing.get_time_for_beat_ns(head_beat))
-                    }
-                    ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                        let note_disp_beat = timing.get_displayed_beat(head_beat);
-                        (note_disp_beat - curr_disp_beat)
-                            * ScrollSpeedSetting::ARROW_SPACING
-                            * field_zoom
-                            * beatmod_multiplier
-                    }
-                }
+                raw_travel_offset_for_beat(head_beat)
             } else {
-                travel_offset_for_cached_note(note_index, false)
+                travel_offset_for_note(note, false)
             };
-            let tail_travel_offset = travel_offset_for_cached_note(note_index, true);
+            let tail_travel_offset = travel_offset_for_note(note, true);
             let head_y = lane_y_from_travel(local_col, lane_receptor_y, dir, head_travel_offset);
             let tail_y = lane_y_from_travel(local_col, lane_receptor_y, dir, tail_travel_offset);
             let note_display = ns.note_display_metrics;
@@ -6434,14 +6188,7 @@ pub fn build_bundles_with_view(
             for_each_visible_hold_index(
                 &state.lane_hold_indices[col],
                 &state.notes,
-                &state.note_time_cache_ns,
-                &state.hold_end_time_cache_ns,
-                &state.hold_display_beat_min_cache,
-                &state.hold_display_beat_max_cache,
-                &state.lane_hold_display_runs[col],
-                visible_beat_range,
-                visible_time_range_ns,
-                visible_display_beat_range,
+                visible_row_range,
                 |note_index| render_hold(note_index),
             );
         }
@@ -6453,17 +6200,7 @@ pub fn build_bundles_with_view(
             .filter(|&idx| {
                 idx >= note_start
                     && idx < note_end
-                    && !hold_overlaps_visible_window(
-                        idx,
-                        &state.notes,
-                        &state.note_time_cache_ns,
-                        &state.hold_end_time_cache_ns,
-                        &state.hold_display_beat_min_cache,
-                        &state.hold_display_beat_max_cache,
-                        visible_beat_range,
-                        visible_time_range_ns,
-                        visible_display_beat_range,
-                    )
+                    && !hold_overlaps_visible_window(idx, &state.notes, visible_row_range)
             });
         for note_index in extra_hold_indices {
             render_hold(note_index);
@@ -6492,12 +6229,7 @@ pub fn build_bundles_with_view(
             for_each_visible_note_index(
                 column_note_indices,
                 &state.notes,
-                &state.note_time_cache_ns,
-                &state.note_display_beat_cache,
-                &state.lane_note_display_runs[col],
-                visible_beat_range,
-                visible_time_range_ns,
-                visible_display_beat_range,
+                visible_row_range,
                 |note_index| {
                     let note = &state.notes[note_index];
                     if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
@@ -6514,18 +6246,7 @@ pub fn build_bundles_with_view(
                             return;
                         }
                     }
-                    let raw_travel_offset = match scroll_speed {
-                        ScrollSpeedSetting::CMod(_) => {
-                            travel_offset_for_time_ns(state.note_time_cache_ns[note_index])
-                        }
-                        ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                            let note_disp_beat = state.note_display_beat_cache[note_index];
-                            (note_disp_beat - curr_disp_beat)
-                                * ScrollSpeedSetting::ARROW_SPACING
-                                * field_zoom
-                                * beatmod_multiplier
-                        }
-                    };
+                    let raw_travel_offset = travel_offset_for_note(note, false);
                     let travel_offset = adjusted_travel_offset(raw_travel_offset);
                     let y_pos =
                         lane_y_from_travel(col_idx, receptor_y_lane, dir, raw_travel_offset);
@@ -8124,20 +7845,17 @@ mod tests {
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, hallway_judgment_zoom,
         hold_draw_span, hold_head_render_flags, hold_segment_pose, hold_strip_actor,
-        hold_strip_row_3d, hold_tail_cap_bounds, hold_window_for_display_run, hud_layout_ys, hud_y,
-        judgment_actor_zoom, judgment_tilt_rotation_deg, lane_hold_window_bounds_by_time_ns,
-        let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha,
-        note_slot_base_size, note_window_for_display_run, note_world_z_for_bumpy, note_x_extra,
-        offset_center, predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y,
-        push_transform_parts, receptor_row_center, tap_judgment_rows, tap_part_for_note_type,
-        tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
+        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
+        judgment_tilt_rotation_deg, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped,
+        note_alpha, note_slot_base_size, note_world_z_for_bumpy, note_x_extra, offset_center,
+        predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts,
+        receptor_row_center, tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col,
+        tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
         zmod_subtractive_counter_state,
     };
     use crate::engine::gfx::BlendMode;
     use crate::engine::present::actors::Actor;
-    use crate::game::gameplay::{
-        AccelEffects, ActiveHold, AppearanceEffects, LaneIndexRun, VisualEffects,
-    };
+    use crate::game::gameplay::{AccelEffects, ActiveHold, AppearanceEffects, VisualEffects};
     use crate::game::judgment::{
         ExScoreData, JUDGE_GRADE_COUNT, JudgeGrade, Judgment, TimingWindow, ex_score_percent,
         predictive_ex_score_percents,
@@ -8267,12 +7985,7 @@ mod tests {
         super::for_each_visible_note_index(
             &note_indices,
             &notes,
-            &[],
-            &[],
-            &[],
-            Some((0.0, last)),
-            None,
-            None,
+            Some((beat_to_note_row(0.0), beat_to_note_row(last))),
             |note_index| visited.push(note_index),
         );
         assert_eq!(visited, vec![0, 1]);
@@ -8377,75 +8090,6 @@ mod tests {
     fn let_go_head_beat_uses_last_held_once_visible_clock_has_caught_up() {
         let beat = let_go_head_beat(100.0, 108.0, 102.0, 103.0);
         assert!((beat - 102.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn lane_hold_window_by_time_includes_previous_overlapping_hold() {
-        let hold_indices = [0usize, 1, 2];
-        let note_times_ns = [10i64, 26, 40];
-        let hold_end_time_ns = [Some(25i64), Some(35), Some(60)];
-        assert_eq!(
-            lane_hold_window_bounds_by_time_ns(
-                &hold_indices,
-                &note_times_ns,
-                &hold_end_time_ns,
-                30,
-                45,
-            ),
-            (1, 3)
-        );
-    }
-
-    #[test]
-    fn hold_window_for_display_run_includes_previous_overlapping_hold() {
-        let hold_indices = [0usize, 1, 2];
-        let hold_display_beat_min = [Some(10.0f32), Some(26.0), Some(40.0)];
-        let hold_display_beat_max = [Some(25.0f32), Some(35.0), Some(60.0)];
-        assert_eq!(
-            hold_window_for_display_run(
-                &hold_indices,
-                &hold_display_beat_min,
-                &hold_display_beat_max,
-                LaneIndexRun { start: 0, end: 3 },
-                30.0,
-                45.0,
-            ),
-            Some(LaneIndexRun { start: 1, end: 3 })
-        );
-    }
-
-    #[test]
-    fn note_window_for_display_run_covers_visible_notes_in_run() {
-        let note_indices = [0usize, 1, 2, 3, 4];
-        let note_display_beats = [10.0f32, 40.0, 20.0, 45.0, 30.0];
-        assert_eq!(
-            note_window_for_display_run(
-                &note_indices,
-                &note_display_beats,
-                LaneIndexRun { start: 2, end: 4 },
-                35.0,
-                46.0,
-            ),
-            Some(LaneIndexRun { start: 3, end: 4 })
-        );
-    }
-
-    #[test]
-    fn hold_window_for_display_run_includes_reversed_hold_interval() {
-        let hold_indices = [0usize, 1, 2];
-        let hold_display_beat_min = [Some(10.0f32), Some(20.0), Some(70.0)];
-        let hold_display_beat_max = [Some(20.0f32), Some(50.0), Some(90.0)];
-        assert_eq!(
-            hold_window_for_display_run(
-                &hold_indices,
-                &hold_display_beat_min,
-                &hold_display_beat_max,
-                LaneIndexRun { start: 0, end: 3 },
-                30.0,
-                40.0,
-            ),
-            Some(LaneIndexRun { start: 1, end: 2 })
-        );
     }
 
     #[test]
