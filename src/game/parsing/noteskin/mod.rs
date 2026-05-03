@@ -1808,6 +1808,22 @@ fn load_itg_data_cached(
     Ok(entry.clone())
 }
 
+pub fn clear_itg_runtime_caches() {
+    if let Some(cache) = ITG_SKIN_CACHE.get() {
+        cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+    }
+    if let Some(cache) = ITG_DATA_CACHE.get() {
+        cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+    }
+    noteskin_itg::clear_lookup_caches();
+}
+
 fn song_lua_itg_data(skin: &str) -> Option<Arc<noteskin_itg::NoteskinData>> {
     let requested = skin.trim();
     let skin = if requested.is_empty() {
@@ -1989,6 +2005,7 @@ pub fn compile_all_itg_caches_with_progress<F>(mut on_progress: F) -> CompileAll
 where
     F: FnMut(usize, usize, &str, &str),
 {
+    clear_itg_runtime_caches();
     let roots = dirs::app_dirs().noteskin_roots();
     let game = "dance";
     let skins = discover_itg_skins(game);
@@ -6117,14 +6134,16 @@ mod tests {
     use super::{
         AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode,
         ModelTweenSegment, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, Quantization,
-        SpriteDefinition, SpriteSlot, SpriteSource, Style, itg_apply_state_properties_from_script,
-        itg_model_draw_program, load_itg_model_slots_from_path, load_itg_skin,
-        parse_explosion_animation,
+        SpriteDefinition, SpriteSlot, SpriteSource, Style, clear_itg_runtime_caches,
+        itg_apply_state_properties_from_script, itg_model_draw_program, load_itg_data_cached,
+        load_itg_model_slots_from_path, load_itg_skin, parse_explosion_animation,
     };
     use std::collections::{HashMap, HashSet};
-    use std::path::Path;
+    use std::fs;
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::sync::atomic::AtomicU64;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn test_auto_rot_slot(total_frames: f32, keys: Vec<ModelAutoRotKey>) -> SpriteSlot {
         SpriteSlot {
@@ -6148,6 +6167,55 @@ mod tests {
             model_auto_rot_total_frames: total_frames,
             model_auto_rot_z_keys: Arc::from(keys),
         }
+    }
+
+    fn temp_noteskin_root(name: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "deadsync-noteskin-mod-{name}-{}-{suffix}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn clear_itg_runtime_caches_reloads_data_cache() {
+        clear_itg_runtime_caches();
+        let root = temp_noteskin_root("data-cache");
+        let skin_dir = root.join("dance/hot");
+        fs::create_dir_all(&skin_dir).unwrap();
+        let metrics = skin_dir.join("metrics.ini");
+        fs::write(
+            &metrics,
+            "[Global]\nFallbackNoteSkin=hot\n[Down]\nFoo=old\n",
+        )
+        .unwrap();
+
+        let loaded = load_itg_data_cached(&root, "dance", "hot").unwrap();
+        assert_eq!(loaded.get_metric("Down", "Foo"), Some("old"));
+
+        fs::write(
+            &metrics,
+            "[Global]\nFallbackNoteSkin=hot\n[Down]\nFoo=new\n",
+        )
+        .unwrap();
+        let stale = load_itg_data_cached(&root, "dance", "hot").unwrap();
+        assert_eq!(
+            stale.get_metric("Down", "Foo"),
+            Some("old"),
+            "loaded noteskin data should stay cached until refresh"
+        );
+
+        clear_itg_runtime_caches();
+        let refreshed = load_itg_data_cached(&root, "dance", "hot").unwrap();
+        assert_eq!(refreshed.get_metric("Down", "Foo"), Some("new"));
+        let _ = fs::remove_dir_all(&root);
+        clear_itg_runtime_caches();
     }
 
     #[test]

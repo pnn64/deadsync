@@ -14,6 +14,21 @@ static CHILD_DIR_CACHE: OnceLock<Mutex<HashMap<(String, String), Option<PathBuf>
 static FILE_PREFIX_CACHE: OnceLock<Mutex<HashMap<(String, String), Option<PathBuf>>>> =
     OnceLock::new();
 
+pub(crate) fn clear_lookup_caches() {
+    if let Some(cache) = CHILD_DIR_CACHE.get() {
+        cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+    }
+    if let Some(cache) = FILE_PREFIX_CACHE.get() {
+        cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct IniData {
     sections: HashMap<String, HashMap<String, String>>,
@@ -335,4 +350,69 @@ fn is_redir(path: &Path) -> bool {
     path.extension()
         .and_then(|s| s.to_str())
         .is_some_and(|ext| ext.eq_ignore_ascii_case("redir"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{clear_lookup_caches, find_file_with_prefix, resolve_skin_dir};
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_root(name: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "deadsync-noteskin-itg-{name}-{}-{suffix}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn clear_lookup_caches_rechecks_missing_skin_dirs() {
+        clear_lookup_caches();
+        let root = temp_root("skin-dir");
+        fs::create_dir_all(root.join("dance")).unwrap();
+
+        assert!(resolve_skin_dir(&root, "dance", "fresh").is_none());
+        fs::create_dir_all(root.join("dance/Fresh")).unwrap();
+        assert!(
+            resolve_skin_dir(&root, "dance", "fresh").is_none(),
+            "missing directory result should remain cached until refresh"
+        );
+
+        clear_lookup_caches();
+        assert_eq!(
+            resolve_skin_dir(&root, "dance", "fresh"),
+            Some(root.join("dance/Fresh"))
+        );
+        let _ = fs::remove_dir_all(&root);
+        clear_lookup_caches();
+    }
+
+    #[test]
+    fn clear_lookup_caches_rechecks_missing_file_prefixes() {
+        clear_lookup_caches();
+        let root = temp_root("file-prefix");
+        let dir = root.join("dance/default");
+        fs::create_dir_all(&dir).unwrap();
+
+        assert!(find_file_with_prefix(&dir, "Tap Note").is_none());
+        let path = dir.join("Tap Note 4x1.png");
+        fs::write(&path, []).unwrap();
+        assert!(
+            find_file_with_prefix(&dir, "Tap Note").is_none(),
+            "missing file prefix result should remain cached until refresh"
+        );
+
+        clear_lookup_caches();
+        assert_eq!(find_file_with_prefix(&dir, "Tap Note"), Some(path));
+        let _ = fs::remove_dir_all(&root);
+        clear_lookup_caches();
+    }
 }
