@@ -3582,7 +3582,7 @@ pub struct State {
     pub decaying_hold_indices: Vec<usize>,
     pub hold_decay_active: Vec<bool>,
     pub tap_miss_held_window: Vec<bool>,
-    pending_missed_hold_feedback: Vec<bool>,
+    pending_missed_hold_resolution: Vec<bool>,
     pending_missed_hold_indices: Vec<usize>,
 
     pub players: [PlayerRuntime; MAX_PLAYERS],
@@ -4896,7 +4896,7 @@ pub fn reset_practice_playback(state: &mut State, judge_start_music_time: f32) {
     state.decaying_hold_indices.clear();
     state.hold_decay_active.fill(false);
     state.tap_miss_held_window.fill(false);
-    state.pending_missed_hold_feedback.fill(false);
+    state.pending_missed_hold_resolution.fill(false);
     state.pending_missed_hold_indices.clear();
     state.prev_inputs.fill(false);
     state.input_slot_count = 0;
@@ -6043,7 +6043,7 @@ pub fn init(
         decaying_hold_indices: Vec::with_capacity(decaying_hold_capacity),
         hold_decay_active: vec![false; notes_len],
         tap_miss_held_window: vec![false; notes_len],
-        pending_missed_hold_feedback: vec![false; notes_len],
+        pending_missed_hold_resolution: vec![false; notes_len],
         pending_missed_hold_indices: Vec::new(),
         players,
         hold_judgments: Default::default(),
@@ -7377,18 +7377,18 @@ fn decay_let_go_hold_life(state: &mut State) {
 }
 
 #[inline(always)]
-fn queue_missed_hold_feedback(state: &mut State, note_index: usize) {
-    if note_index >= state.pending_missed_hold_feedback.len()
-        || state.pending_missed_hold_feedback[note_index]
+fn queue_missed_hold_resolution(state: &mut State, note_index: usize) {
+    if note_index >= state.pending_missed_hold_resolution.len()
+        || state.pending_missed_hold_resolution[note_index]
     {
         return;
     }
-    state.pending_missed_hold_feedback[note_index] = true;
+    state.pending_missed_hold_resolution[note_index] = true;
     state.pending_missed_hold_indices.push(note_index);
 }
 
 #[inline(always)]
-fn emit_pending_missed_hold_feedback(state: &mut State, current_time_ns: SongTimeNs) {
+fn resolve_pending_missed_holds(state: &mut State, current_time_ns: SongTimeNs) {
     let mut i = 0usize;
     while i < state.pending_missed_hold_indices.len() {
         let note_index = state.pending_missed_hold_indices[i];
@@ -7397,7 +7397,7 @@ fn emit_pending_missed_hold_feedback(state: &mut State, current_time_ns: SongTim
             .get(note_index)
             .and_then(|t| *t)
         else {
-            state.pending_missed_hold_feedback[note_index] = false;
+            state.pending_missed_hold_resolution[note_index] = false;
             state.pending_missed_hold_indices.swap_remove(i);
             continue;
         };
@@ -7405,20 +7405,30 @@ fn emit_pending_missed_hold_feedback(state: &mut State, current_time_ns: SongTim
             i += 1;
             continue;
         }
-        state.pending_missed_hold_feedback[note_index] = false;
-        if let Some(note) = state.notes.get(note_index)
+        state.pending_missed_hold_resolution[note_index] = false;
+        let Some(note) = state.notes.get(note_index) else {
+            state.pending_missed_hold_indices.swap_remove(i);
+            continue;
+        };
+        let column = note.column;
+        if column >= state.num_cols {
+            state.pending_missed_hold_indices.swap_remove(i);
+            continue;
+        }
+        let hold_result = note.hold.as_ref().and_then(|hold| hold.result);
+        if hold_result == Some(HoldResult::Missed) {
+            state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
+                result: HoldResult::Missed,
+                started_at_screen_s: state.total_elapsed_in_screen,
+            });
+        } else if hold_result.is_none()
             && note
-                .hold
+                .result
                 .as_ref()
-                .is_some_and(|hold| hold.result == Some(HoldResult::Missed))
+                .is_some_and(|judgment| judgment.grade == JudgeGrade::Miss)
+            && state.score_missed_holds_rolls[player_for_col(state, column)]
         {
-            let column = note.column;
-            if column < state.num_cols {
-                state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
-                    result: HoldResult::Missed,
-                    started_at_screen_s: state.total_elapsed_in_screen,
-                });
-            }
+            handle_hold_let_go(state, column, note_index, end_time_ns);
         }
         state.pending_missed_hold_indices.swap_remove(i);
     }
@@ -7603,16 +7613,16 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                 let judgment = state.notes[cursor].early_result.clone().unwrap_or(miss);
                 let judgment_grade = judgment.grade;
                 let judgment_time_error_ms = judgment.time_error_ms;
-                let mut queue_missed_feedback = false;
+                let mut queue_missed_hold = false;
                 if judgment_grade == JudgeGrade::Miss
                     && let Some(hold) = state.notes[cursor].hold.as_mut()
                     && hold.result != Some(HoldResult::Held)
                 {
                     if should_score_miss {
-                        hold.result = Some(HoldResult::LetGo);
+                        queue_missed_hold = true;
                     } else {
                         hold.result = Some(HoldResult::Missed);
-                        queue_missed_feedback = true;
+                        queue_missed_hold = true;
                     }
                     begin_hold_life_decay(
                         hold,
@@ -7622,8 +7632,8 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                         music_time_ns,
                     );
                 }
-                if queue_missed_feedback {
-                    queue_missed_hold_feedback(state, cursor);
+                if queue_missed_hold {
+                    queue_missed_hold_resolution(state, cursor);
                 }
                 set_final_note_result(state, player, cursor, judgment);
                 if log::log_enabled!(log::Level::Debug) {
@@ -7875,7 +7885,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         None
     };
     decay_let_go_hold_life(state);
-    emit_pending_missed_hold_feedback(state, music_time_ns);
+    resolve_pending_missed_holds(state, music_time_ns);
     if let Some(started) = hold_decay_started {
         phase_timings.hold_decay_us = elapsed_us_since(started);
     }
@@ -8113,13 +8123,13 @@ mod tests {
         player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
         recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
         refresh_timing_after_offset_change, remove_provisional_early_score, replay_edge_cap,
-        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
-        score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
-        single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
-        stage_music_cut, step_calories, step_stats_notefield_width,
-        suppress_final_bad_rescore_visual, tick_mode_status_line, tick_visual_effects,
-        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
-        update_lane_input_slot, visible_notefield_time_ns,
+        resolve_pending_missed_holds, row_entry_for_cached_row, row_final_grade_hides_note,
+        score_invalid_reason_lines_for_chart, score_missed_holds_and_rolls,
+        scored_hold_totals_with_carry, set_final_note_result, single_runtime_player_is_p2,
+        song_time_ns_from_seconds, song_time_ns_to_seconds, stage_music_cut, step_calories,
+        step_stats_notefield_width, suppress_final_bad_rescore_visual, tick_mode_status_line,
+        tick_visual_effects, try_hit_crossed_mines_while_held, turn_option_bits,
+        update_active_holds, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::engine::present::color;
@@ -11016,6 +11026,89 @@ mod tests {
         assert_eq!(state.players[0].mines_hit, 1);
         assert_eq!(state.players[0].mines_hit_for_score, 0);
         assert!(state.players[0].is_failing);
+    }
+
+    #[test]
+    fn scored_missed_hold_resolves_let_go_at_hold_end() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        let note_time_ns = song_time_ns_from_seconds(1.0);
+        let hold_end_ns = song_time_ns_from_seconds(2.0);
+        state.score_missed_holds_rolls[0] = true;
+        state.notes[0] = test_hold(0, 48, 96);
+        state.note_time_cache_ns[0] = note_time_ns;
+        state.hold_end_time_cache_ns[0] = Some(hold_end_ns);
+        state.notes[1].can_be_judged = false;
+
+        let miss_time_ns = note_time_ns
+            .saturating_add(max_step_distance_ns(
+                &state.timing_profile,
+                state.music_rate,
+            ))
+            .saturating_add(song_time_ns_from_seconds(0.1));
+        apply_time_based_tap_misses(&mut state, miss_time_ns);
+
+        assert_eq!(
+            state.notes[0]
+                .result
+                .as_ref()
+                .map(|judgment| judgment.grade),
+            Some(JudgeGrade::Miss)
+        );
+        assert_eq!(state.notes[0].hold.as_ref().and_then(|h| h.result), None);
+        assert_eq!(state.players[0].holds_let_go_for_score, 0);
+
+        resolve_pending_missed_holds(&mut state, hold_end_ns.saturating_sub(1));
+        assert_eq!(state.notes[0].hold.as_ref().and_then(|h| h.result), None);
+        assert_eq!(state.players[0].holds_let_go_for_score, 0);
+
+        resolve_pending_missed_holds(&mut state, hold_end_ns);
+
+        assert_eq!(
+            state.notes[0].hold.as_ref().and_then(|hold| hold.result),
+            Some(HoldResult::LetGo)
+        );
+        assert_eq!(state.players[0].holds_let_go_for_score, 1);
+        assert_eq!(
+            state.hold_judgments[0].as_ref().map(|info| info.result),
+            Some(HoldResult::LetGo)
+        );
+    }
+
+    #[test]
+    fn unscored_missed_hold_emits_missed_feedback_at_hold_end() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        let note_time_ns = song_time_ns_from_seconds(1.0);
+        let hold_end_ns = song_time_ns_from_seconds(2.0);
+        state.score_missed_holds_rolls[0] = false;
+        state.notes[0] = test_hold(0, 48, 96);
+        state.note_time_cache_ns[0] = note_time_ns;
+        state.hold_end_time_cache_ns[0] = Some(hold_end_ns);
+        state.notes[1].can_be_judged = false;
+
+        let miss_time_ns = note_time_ns
+            .saturating_add(max_step_distance_ns(
+                &state.timing_profile,
+                state.music_rate,
+            ))
+            .saturating_add(song_time_ns_from_seconds(0.1));
+        apply_time_based_tap_misses(&mut state, miss_time_ns);
+
+        assert_eq!(
+            state.notes[0].hold.as_ref().and_then(|hold| hold.result),
+            Some(HoldResult::Missed)
+        );
+        assert_eq!(state.players[0].holds_let_go_for_score, 0);
+        assert!(state.hold_judgments[0].is_none());
+
+        resolve_pending_missed_holds(&mut state, hold_end_ns);
+
+        assert_eq!(state.players[0].holds_let_go_for_score, 0);
+        assert_eq!(
+            state.hold_judgments[0].as_ref().map(|info| info.result),
+            Some(HoldResult::Missed)
+        );
     }
 
     #[test]
