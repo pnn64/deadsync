@@ -86,6 +86,9 @@ pub(super) fn run_autoplay(state: &mut State, now_music_time_ns: SongTimeNs) {
                         note.column,
                     )
                 };
+                // ITGmania PC_AUTOPLAY gets W1 from PlayerAI; the mine branch
+                // treats that as an avoid, so mines are left for the overdue
+                // avoid pass instead of being hit by live autoplay.
                 if result_is_some
                     || is_fake
                     || !can_be_judged
