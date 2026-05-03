@@ -5067,21 +5067,64 @@ fn itg_resolve_relative_or_noteskin_path(
     base_file: &Path,
     raw: &str,
 ) -> Option<PathBuf> {
-    let rel = raw.trim().trim_matches('"').trim_matches('\'');
-    if rel.is_empty() {
-        return None;
-    }
-    let rel_path = Path::new(rel);
+    let rel = itg_normalized_asset_ref(raw)?;
+    let rel_path = Path::new(&rel);
     if rel_path.is_absolute() && rel_path.is_file() {
         return Some(rel_path.to_path_buf());
     }
     if let Some(parent) = base_file.parent() {
-        let direct = parent.join(rel_path);
-        if direct.is_file() {
-            return Some(direct);
+        if let Some(path) = itg_resolve_relative_file(parent, rel_path) {
+            return Some(path);
         }
     }
-    data.resolve_path("", rel)
+    for dir in &data.search_dirs {
+        if let Some(path) = itg_resolve_relative_file(dir, rel_path) {
+            return Some(path);
+        }
+    }
+    data.resolve_path("", &rel)
+}
+
+fn itg_normalized_asset_ref(raw: &str) -> Option<String> {
+    let rel = raw.trim().trim_matches('"').trim_matches('\'');
+    if rel.is_empty() {
+        None
+    } else {
+        Some(rel.replace('\\', "/"))
+    }
+}
+
+fn itg_resolve_relative_file(base: &Path, rel: &Path) -> Option<PathBuf> {
+    let direct = base.join(rel);
+    if direct.is_file() {
+        return Some(direct);
+    }
+
+    let mut current = base.to_path_buf();
+    for component in rel.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::Normal(part) => {
+                let name = part.to_str()?;
+                current = itg_find_child_case_insensitive(&current, name)?;
+            }
+            _ => return None,
+        }
+    }
+    current.is_file().then_some(current)
+}
+
+fn itg_find_child_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf> {
+    for entry in fs::read_dir(parent).ok()?.flatten() {
+        if entry
+            .file_name()
+            .to_str()
+            .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
+        {
+            return Some(entry.path());
+        }
+    }
+    None
 }
 
 fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTexture> {
@@ -5093,20 +5136,13 @@ fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTextu
     };
     let frame_key = format!("Frame{first_frame_idx:04}");
     let frame = ini.get("AnimatedTexture", &frame_key)?;
-    let rel = frame.trim().trim_matches('"').trim_matches('\'');
-    if rel.is_empty() {
-        return None;
-    }
-    let rel_path = Path::new(rel);
+    let rel = itg_normalized_asset_ref(frame)?;
+    let rel_path = Path::new(&rel);
     let texture_path = if rel_path.is_absolute() && rel_path.is_file() {
         rel_path.to_path_buf()
     } else {
         let base = path.parent()?;
-        let resolved = base.join(rel_path);
-        if !resolved.is_file() {
-            return None;
-        }
-        resolved
+        itg_resolve_relative_file(base, rel_path)?
     };
     let tex_velocity_x = ini
         .get("AnimatedTexture", "TexVelocityX")
@@ -6311,6 +6347,61 @@ mod tests {
             (uv_10[1] - uv_0[1]).abs() <= 1e-6 && (uv_10[3] - uv_0[3]).abs() <= 1e-6,
             "expected UVs to wrap after one 10-second cycle, got {uv_0:?} -> {uv_10:?}"
         );
+    }
+
+    #[test]
+    fn model_material_paths_accept_windows_separators() {
+        let root = temp_noteskin_root("model-paths");
+        let texture_dir = root.join("textures");
+        fs::create_dir_all(&texture_dir).unwrap();
+        image::RgbaImage::from_pixel(2, 2, image::Rgba([255, 0, 0, 255]))
+            .save(texture_dir.join("Tap Note parts.png"))
+            .unwrap();
+        fs::write(
+            texture_dir.join("Tap Note parts.ini"),
+            "[AnimatedTexture]\nTexVelocityY=-1\nFrame0000=Tap Note parts.png\nDelay0000=1.0\n",
+        )
+        .unwrap();
+
+        let model_path = root.join("_down tap note model.txt");
+        fs::write(
+            &model_path,
+            r#"MilkShape 3D ASCII
+Meshes: 1
+"mesh" 0 0
+3
+0 -1.0 -1.0 0.0 0.0 0.0 -1
+0 1.0 -1.0 0.0 1.0 0.0 -1
+0 0.0 1.0 0.0 0.0 1.0 -1
+0
+1
+0 0 1 2 0 0 0 1
+Materials: 1
+"mat"
+0.0 0.0 0.0 1.0
+1.0 1.0 1.0 1.0
+0.0 0.0 0.0 1.0
+0.0 0.0 0.0 1.0
+0.0
+1.0
+"textures\Tap Note parts.ini"
+""
+"#,
+        )
+        .unwrap();
+
+        let slots = load_itg_model_slots_from_path(&model_path)
+            .expect("model should resolve backslash material texture path");
+        let slot = slots.first().expect("expected one model-backed slot");
+        assert!(slot.model.is_some());
+        assert!(
+            slot.texture_key()
+                .replace('\\', "/")
+                .ends_with("textures/Tap Note parts.png")
+        );
+        assert_eq!(slot.uv_velocity, [0.0, -1.0]);
+
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
