@@ -267,6 +267,19 @@ pub(crate) fn compute_possible_grade_points(
     pts as i32
 }
 
+#[inline(always)]
+pub(crate) fn max_grade_points(
+    notes: &[Note],
+    note_range: (usize, usize),
+    holds_total: u32,
+    rolls_total: u32,
+    base_points: i32,
+) -> i32 {
+    // ITGmania scores note-changing mods against max(pre, post): inserted notes
+    // count, and removed notes still count as misses.
+    compute_possible_grade_points(notes, note_range, holds_total, rolls_total).max(base_points)
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CourseDisplayTotals {
     pub possible_grade_points: i32,

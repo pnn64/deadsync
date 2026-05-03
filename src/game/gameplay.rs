@@ -157,7 +157,7 @@ pub use self::stats::{
     score_invalid_reason_lines_for_chart, stream_segments_for_results,
 };
 use self::stats::{
-    compute_possible_grade_points, mini_indicator_mode, needs_stream_data, recompute_player_totals,
+    max_grade_points, mini_indicator_mode, needs_stream_data, recompute_player_totals,
     stream_sequences_threshold, target_score_setting_percent, zmod_stream_totals_full_measures,
 };
 use self::time::{
@@ -5335,11 +5335,12 @@ pub fn init(
             mines_total[player] = totals.mines;
             jumps_total[player] = totals.jumps;
             hands_total[player] = totals.hands;
-            possible_grade_points[player] = compute_possible_grade_points(
+            possible_grade_points[player] = max_grade_points(
                 &notes,
                 note_ranges[player],
                 holds_total[player],
                 rolls_total[player],
+                charts[player].possible_grade_points,
             );
         }
     } else {
@@ -8025,12 +8026,12 @@ mod tests {
         frame_stable_display_music_time_ns, handle_input, input_queue_cap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
         lane_press_started, lane_release_finished, late_note_resolution_window_ns,
-        live_autoplay_enabled_from_flags, max_step_distance_ns, mine_window_bounds_ns,
-        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
-        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
-        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
-        player_row_scan_state, recent_step_tracks, recompute_player_totals,
-        refresh_active_attack_masks, refresh_timing_after_offset_change,
+        live_autoplay_enabled_from_flags, max_grade_points, max_step_distance_ns,
+        mine_window_bounds_ns, music_time_ns_from_song_clock, mutate_timing_arc,
+        next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold, note_hit_eval,
+        parse_attack_mods, parse_song_lua_runtime_mods,
+        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
+        recompute_player_totals, refresh_active_attack_masks, refresh_timing_after_offset_change,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
         row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
@@ -9788,6 +9789,27 @@ mod tests {
         assert_eq!(totals.steps, 2);
         assert_eq!(totals.jumps, 1);
         assert_eq!(totals.hands, 1);
+    }
+
+    #[test]
+    fn max_grade_points_keeps_removed_notes_in_denominator() {
+        let notes = vec![test_note(0, 48, NoteType::Tap)];
+
+        let points = max_grade_points(&notes, (0, notes.len()), 0, 0, 15);
+
+        assert_eq!(points, 15);
+    }
+
+    #[test]
+    fn max_grade_points_counts_inserted_notes() {
+        let notes = vec![
+            test_note(0, 48, NoteType::Tap),
+            test_note(1, 96, NoteType::Tap),
+        ];
+
+        let points = max_grade_points(&notes, (0, notes.len()), 0, 0, 5);
+
+        assert_eq!(points, 10);
     }
 
     #[test]
