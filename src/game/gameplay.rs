@@ -649,6 +649,9 @@ const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32;
 const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35;
 // ITG's MaxInputLatencySeconds preference defaults to 0.0.
 const MAX_INPUT_LATENCY_SECONDS: f32 = 0.0;
+// ITGmania Player::Step searches a wide row range first, then scores the
+// selected note against the active timing window.
+const STEP_SEARCH_DISTANCE_SECONDS: f32 = 1.0;
 // ITGmania _fallback defaults this off, and Simply Love relies on that dance parity.
 const COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO: bool = false;
 
@@ -979,6 +982,7 @@ fn build_row_entry(
     }
 }
 
+#[cfg(test)]
 #[inline(always)]
 fn mine_window_bounds_ns(
     mine_times_ns: &[SongTimeNs],
@@ -991,6 +995,7 @@ fn mine_window_bounds_ns(
     )
 }
 
+#[cfg(test)]
 #[inline(always)]
 fn lane_note_window_bounds_ns(
     note_indices: &[usize],
@@ -1001,6 +1006,39 @@ fn lane_note_window_bounds_ns(
     (
         note_indices.partition_point(|&note_index| note_times_ns[note_index] < start_t_ns),
         note_indices.partition_point(|&note_index| note_times_ns[note_index] <= end_t_ns),
+    )
+}
+
+#[inline(always)]
+fn lane_note_window_bounds_rows(
+    note_indices: &[usize],
+    notes: &[Note],
+    start_row: usize,
+    end_row: usize,
+) -> (usize, usize) {
+    (
+        note_indices.partition_point(|&note_index| notes[note_index].row_index < start_row),
+        note_indices.partition_point(|&note_index| notes[note_index].row_index <= end_row),
+    )
+}
+
+#[inline(always)]
+fn step_search_row_bounds(
+    timing: &TimingData,
+    current_time_ns: SongTimeNs,
+    current_row_index: usize,
+) -> (usize, usize) {
+    let forward_time_ns = song_time_ns_add_seconds(current_time_ns, STEP_SEARCH_DISTANCE_SECONDS);
+    let backward_time_ns = song_time_ns_add_seconds(current_time_ns, -STEP_SEARCH_DISTANCE_SECONDS);
+    let forward_row = timing_row_nearest(timing, timing.get_beat_for_time_ns(forward_time_ns));
+    let backward_row = timing_row_nearest(timing, timing.get_beat_for_time_ns(backward_time_ns));
+    let step_rows = forward_row
+        .saturating_sub(current_row_index)
+        .max(current_row_index.saturating_sub(backward_row))
+        .saturating_add(ROWS_PER_BEAT.max(1) as usize);
+    (
+        current_row_index.saturating_sub(step_rows),
+        current_row_index.saturating_add(step_rows),
     )
 }
 
@@ -1322,6 +1360,11 @@ fn timing_row_floor(timing: &TimingData, beat: f32) -> usize {
         row -= 1;
     }
     row
+}
+
+#[inline(always)]
+fn timing_row_nearest(timing: &TimingData, beat: f32) -> usize {
+    timing.get_row_for_beat(beat).unwrap_or(0)
 }
 
 #[inline(always)]
@@ -6436,48 +6479,6 @@ fn hit_mine(
 }
 
 #[inline(always)]
-fn try_hit_mine_while_held(state: &mut State, column: usize, current_time_ns: SongTimeNs) -> bool {
-    if song_time_ns_invalid(current_time_ns) {
-        return false;
-    }
-    let player = player_for_col(state, column);
-    let mine_window_music_ns = state.player_judgment_timing[player]
-        .profile_music_ns
-        .mine_window_ns;
-    let start_t_ns = current_time_ns.saturating_sub(mine_window_music_ns);
-    let end_t_ns = current_time_ns.saturating_add(mine_window_music_ns);
-    let mine_ix = &state.mine_note_ix[player];
-    let mine_times_ns = &state.mine_note_time_ns[player];
-    let (start_idx, end_idx) = mine_window_bounds_ns(mine_times_ns, start_t_ns, end_t_ns);
-    let mut best: Option<(usize, SongTimeNs)> = None;
-    for i in start_idx..end_idx {
-        let idx = mine_ix[i];
-        let note = &state.notes[idx];
-        if note.column != column {
-            continue;
-        }
-        if !note.can_be_judged || note.is_fake {
-            continue;
-        }
-        if note.mine_result.is_some() {
-            continue;
-        }
-        let signed_err_ns = current_time_ns.saturating_sub(mine_times_ns[i]);
-        let abs_err_ns = (signed_err_ns as i128).unsigned_abs();
-        if abs_err_ns <= i128::from(mine_window_music_ns) as u128 {
-            match best {
-                Some((_, best_err_ns)) if abs_err_ns >= (best_err_ns as i128).unsigned_abs() => {}
-                _ => best = Some((idx, signed_err_ns)),
-            }
-        }
-    }
-    let Some((note_index, time_error_ns)) = best else {
-        return false;
-    };
-    hit_mine(state, column, note_index, time_error_ns)
-}
-
-#[inline(always)]
 fn try_hit_crossed_mines_while_held(
     state: &mut State,
     column: usize,
@@ -6812,23 +6813,18 @@ pub fn judge_a_tap(
     let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
-    let timing = state.player_judgment_timing[player];
-    let search_window_ns = timing
-        .largest_tap_window_music_ns
-        .max(timing.profile_music_ns.mine_window_ns);
-    let search_start_time_ns = current_time_ns.saturating_sub(search_window_ns);
-    let search_end_time_ns = current_time_ns.saturating_add(search_window_ns);
     let lane_notes = &state.lane_note_indices[column];
-    let (search_start_idx, search_end_idx) = lane_note_window_bounds_ns(
-        lane_notes,
-        &state.note_time_cache_ns,
-        search_start_time_ns,
-        search_end_time_ns,
-    );
-    let current_row_index = timing_row_floor(
+    let current_row_index = timing_row_nearest(
         &state.timing_players[player],
         state.timing_players[player].get_beat_for_time_ns(current_time_ns),
     );
+    let (search_start_row, search_end_row) = step_search_row_bounds(
+        &state.timing_players[player],
+        current_time_ns,
+        current_row_index,
+    );
+    let (search_start_idx, search_end_idx) =
+        lane_note_window_bounds_rows(lane_notes, &state.notes, search_start_row, search_end_row);
     if let Some((note_index, _)) = closest_lane_note_ns(
         lane_notes,
         &state.notes,
@@ -6852,13 +6848,8 @@ pub fn judge_a_tap(
             }
             return false;
         }
-        let mine_hit_on_press = if live_autoplay_enabled(state) {
-            false
-        } else {
-            try_hit_mine_while_held(state, column, current_time_ns)
-        };
         if !lane_edge_matches_note_type(true, note_type) {
-            return mine_hit_on_press;
+            return false;
         }
 
         let Some(hit) = note_hit_eval(
@@ -6867,7 +6858,7 @@ pub fn judge_a_tap(
             state.note_time_cache_ns[note_index],
             current_time_ns,
         ) else {
-            return mine_hit_on_press;
+            return false;
         };
         let Some(row_entry) = row_entry_for_cached_row(
             &state.row_entries,
@@ -7068,11 +7059,7 @@ pub fn judge_a_tap(
         }
         return true;
     }
-    if live_autoplay_enabled(state) {
-        false
-    } else {
-        try_hit_mine_while_held(state, column, current_time_ns)
-    }
+    false
 }
 
 /// Judge lift notes on button release. Mirrors tap judging's per-note path but
@@ -7094,20 +7081,18 @@ pub fn judge_a_lift(
     let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
-    let search_window_ns = player_largest_tap_window_ns(state, player);
-    let search_start_time_ns = current_time_ns.saturating_sub(search_window_ns);
-    let search_end_time_ns = current_time_ns.saturating_add(search_window_ns);
     let lane_notes = &state.lane_note_indices[column];
-    let (search_start_idx, search_end_idx) = lane_note_window_bounds_ns(
-        lane_notes,
-        &state.note_time_cache_ns,
-        search_start_time_ns,
-        search_end_time_ns,
-    );
-    let current_row_index = timing_row_floor(
+    let current_row_index = timing_row_nearest(
         &state.timing_players[player],
         state.timing_players[player].get_beat_for_time_ns(current_time_ns),
     );
+    let (search_start_row, search_end_row) = step_search_row_bounds(
+        &state.timing_players[player],
+        current_time_ns,
+        current_row_index,
+    );
+    let (search_start_idx, search_end_idx) =
+        lane_note_window_bounds_rows(lane_notes, &state.notes, search_start_row, search_end_row);
     let Some((note_index, _)) = closest_lane_note_ns(
         lane_notes,
         &state.notes,
@@ -8025,11 +8010,11 @@ mod tests {
         finalize_row_judgment, finalized_row_outcome_for_cached_row,
         frame_stable_display_music_time_ns, handle_input, input_queue_cap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
-        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
-        live_autoplay_enabled_from_flags, max_grade_points, max_step_distance_ns,
-        mine_window_bounds_ns, music_time_ns_from_song_clock, mutate_timing_arc,
-        next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold, note_hit_eval,
-        parse_attack_mods, parse_song_lua_runtime_mods,
+        lane_note_window_bounds_rows, lane_press_started, lane_release_finished,
+        late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_grade_points,
+        max_step_distance_ns, mine_window_bounds_ns, music_time_ns_from_song_clock,
+        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold,
+        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
         player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
         recompute_player_totals, refresh_active_attack_masks, refresh_timing_after_offset_change,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
@@ -10792,6 +10777,33 @@ mod tests {
 
         assert_eq!(note_index, 0);
         assert!((song_time_ns_to_seconds(abs_err_ns.abs()) - 0.010).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn closest_lane_note_keeps_out_of_window_nearer_row_blocker() {
+        let notes = vec![
+            test_note(0, 48, NoteType::Tap),
+            test_note(0, 60, NoteType::Tap),
+        ];
+        let note_indices = [0usize, 1];
+        let note_times_ns = [
+            song_time_ns_from_seconds(0.500),
+            song_time_ns_from_seconds(1.010),
+        ];
+        let (start_idx, end_idx) = lane_note_window_bounds_rows(&note_indices, &notes, 0, 144);
+        let (note_index, abs_err_ns) = closest_lane_note_ns(
+            &note_indices,
+            &notes,
+            &note_times_ns,
+            song_time_ns_from_seconds(1.000),
+            50,
+            start_idx,
+            end_idx,
+        )
+        .expect("expected the nearer row to block the farther hittable row");
+
+        assert_eq!(note_index, 0);
+        assert!((song_time_ns_to_seconds(abs_err_ns.abs()) - 0.500).abs() <= 1e-6);
     }
 
     #[test]
