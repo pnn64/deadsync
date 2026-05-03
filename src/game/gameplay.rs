@@ -8100,13 +8100,13 @@ mod tests {
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, FinalizedRowOutcome,
         FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, HoldJudgmentRenderInfo,
         HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, REPLAY_EDGE_RATE_PER_SEC,
-        RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TickMode, TurnRng,
-        active_hold_counts_as_pressed, add_provisional_early_score, advance_hold_last_held,
-        advance_hold_life_ns, advance_judged_row_cursor, apply_autosync_for_row_hits,
-        apply_global_offset_delta, apply_mines_insert, apply_pending_mine_hits,
-        apply_song_offset_delta, apply_time_based_mine_avoidance, apply_time_based_tap_misses,
-        autoplay_random_offset_music_ns_for_window, build_assist_clap_rows,
-        build_attack_mask_windows_for_player, build_column_cues_for_player,
+        RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TIMING_WINDOW_SECONDS_HOLD,
+        TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
+        advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
+        apply_autosync_for_row_hits, apply_global_offset_delta, apply_mines_insert,
+        apply_pending_mine_hits, apply_song_offset_delta, apply_time_based_mine_avoidance,
+        apply_time_based_tap_misses, autoplay_random_offset_music_ns_for_window,
+        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
         build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
         collect_edge_judge_indices, completed_row_final_judgment,
         completed_row_flash_note_indices_and_grade, count_rescore_tracks_on_row,
@@ -8114,23 +8114,24 @@ mod tests {
         effective_appearance_effects_for_player, effective_player_global_offset_seconds,
         enforce_max_simultaneous_notes, finalize_row_judgment,
         finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, handle_input,
-        hit_mine, input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap,
-        lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
-        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
-        live_autoplay_enabled_from_flags, max_grade_points, max_step_distance_ns,
-        mine_window_bounds_ns, missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock,
-        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold,
-        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
-        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
-        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
-        refresh_timing_after_offset_change, remove_provisional_early_score, replay_edge_cap,
-        resolve_pending_missed_holds, row_entry_for_cached_row, row_final_grade_hides_note,
-        score_invalid_reason_lines_for_chart, score_missed_holds_and_rolls,
-        scored_hold_totals_with_carry, set_final_note_result, single_runtime_player_is_p2,
-        song_time_ns_from_seconds, song_time_ns_to_seconds, stage_music_cut, step_calories,
-        step_stats_notefield_width, suppress_final_bad_rescore_visual, tick_mode_status_line,
-        tick_visual_effects, try_hit_crossed_mines_while_held, turn_option_bits,
-        update_active_holds, update_lane_input_slot, visible_notefield_time_ns,
+        hit_mine, input_queue_cap, integrate_active_hold_to_time, lane_edge_judges_lift,
+        lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
+        lane_note_window_bounds_rows, lane_press_started, lane_release_finished,
+        late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_grade_points,
+        max_step_distance_ns, mine_window_bounds_ns, missed_note_cutoff_row_for_timing,
+        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
+        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
+        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
+        player_row_scan_state, process_input_edges, recent_step_tracks, recompute_player_totals,
+        refresh_active_attack_masks, refresh_timing_after_offset_change,
+        remove_provisional_early_score, replay_edge_cap, resolve_pending_missed_holds,
+        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
+        score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
+        single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
+        stage_music_cut, step_calories, step_stats_notefield_width,
+        suppress_final_bad_rescore_visual, tick_mode_status_line, tick_visual_effects,
+        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
+        update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::engine::present::color;
@@ -8965,6 +8966,39 @@ mod tests {
 
         assert!((whole.life_after - split.life_after).abs() <= 1e-6);
         assert_eq!(whole.zero_elapsed_music_ns, split.zero_elapsed_music_ns);
+    }
+
+    #[test]
+    fn active_hold_let_go_visual_row_uses_frame_target() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        let timing = Arc::new(test_timing(ROWS_PER_BEAT as usize * 4));
+        state.timing = timing.clone();
+        state.timing_players = [timing.clone(), timing];
+
+        let hold_end_ns = song_time_ns_from_seconds(2.0);
+        state.notes[0] = test_hold(0, 0, ROWS_PER_BEAT as usize * 2);
+        state.hold_end_time_cache_ns[0] = Some(hold_end_ns);
+        state.notes[0].hold.as_mut().expect("test hold").life = 0.25;
+        state.active_holds[0] = Some(super::ActiveHold {
+            note_index: 0,
+            start_time_ns: 0,
+            end_time_ns: hold_end_ns,
+            note_type: NoteType::Hold,
+            let_go: false,
+            is_pressed: false,
+            life: 0.25,
+            last_update_time_ns: 0,
+        });
+
+        let target_ns = song_time_ns_from_seconds(0.2);
+        integrate_active_hold_to_time(&mut state, 0, target_ns);
+
+        let hold = state.notes[0].hold.as_ref().expect("test hold");
+        assert_eq!(hold.result, Some(HoldResult::LetGo));
+        assert!(state.active_holds[0].is_none());
+        assert!((hold.last_held_beat - 0.2).abs() <= 1e-6);
+        assert!(hold.last_held_beat > TIMING_WINDOW_SECONDS_HOLD * 0.25 + f32::EPSILON);
     }
 
     #[test]
