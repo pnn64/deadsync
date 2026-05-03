@@ -112,10 +112,11 @@ pub(super) fn load_gameplay_charts_from_cache(
     song: &SongData,
     requested_chart_ixs: &[usize],
     global_offset_seconds: f32,
+    verify_source: bool,
 ) -> Option<Vec<GameplayChartData>> {
     let cache_path = compute_song_cache_path(&song.simfile_path)?;
     let (cached_song, payload_start) =
-        load_cached_song_for_gameplay(&song.simfile_path, &cache_path)?;
+        load_cached_song_for_gameplay(&song.simfile_path, &cache_path, verify_source)?;
     let song_offset = cached_song.data.offset;
     let mut charts = Vec::with_capacity(requested_chart_ixs.len());
     let mut loaded = HashMap::<usize, GameplayChartData>::with_capacity(requested_chart_ixs.len());
@@ -273,6 +274,34 @@ fn load_cached_song_base(path: &Path, cache_path: &Path) -> Option<(CachedSong, 
 
 fn load_cached_song(path: &Path, cache_path: &Path) -> Option<CachedSong> {
     let (cached_song, _) = load_cached_song_base(path, cache_path)?;
+    validate_source_hash(path, &cached_song)?;
+
+    debug!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
+    Some(cached_song)
+}
+
+fn load_cached_song_for_gameplay(
+    path: &Path,
+    cache_path: &Path,
+    verify_source: bool,
+) -> Option<(CachedSong, u64)> {
+    let (cached_song, payload_start) = load_cached_song_base(path, cache_path)?;
+    if verify_source {
+        validate_source_hash(path, &cached_song)?;
+        debug!(
+            "Gameplay cache hit for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
+    } else {
+        debug!(
+            "Gameplay cache hit (no source rehash) for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
+    }
+    Some((cached_song, payload_start))
+}
+
+fn validate_source_hash(path: &Path, cached_song: &CachedSong) -> Option<()> {
     let content_hash = match get_content_hash(path) {
         Ok(hash) => hash,
         Err(error) => {
@@ -293,17 +322,7 @@ fn load_cached_song(path: &Path, cache_path: &Path) -> Option<CachedSong> {
         return None;
     }
 
-    debug!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
-    Some(cached_song)
-}
-
-fn load_cached_song_for_gameplay(path: &Path, cache_path: &Path) -> Option<(CachedSong, u64)> {
-    let (cached_song, payload_start) = load_cached_song_base(path, cache_path)?;
-    debug!(
-        "Gameplay cache hit (no source rehash) for: {:?}",
-        path.file_name().unwrap_or_default()
-    );
-    Some((cached_song, payload_start))
+    Some(())
 }
 
 fn load_cached_chart_payload(
@@ -331,4 +350,82 @@ fn load_cached_chart_payload(
         return None;
     };
     Some(payload)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::parsing::simfile::SerializableSongData;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    fn test_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("deadsync-cache-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn cached_song(path: &Path) -> SerializableSongData {
+        SerializableSongData {
+            simfile_path: path.to_string_lossy().into_owned(),
+            title: "Cache Test".to_string(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            genre: String::new(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            foreground_changes: Vec::new(),
+            background_lua_changes: Vec::new(),
+            foreground_lua_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: String::new(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+            normalized_bpms: String::new(),
+            music_length_seconds: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn gameplay_cache_rejects_stale_source_when_verifying() {
+        let root = test_dir("gameplay-stale-verified");
+        let simfile = root.join("song.ssc");
+        let cache_path = root.join("cache.bin");
+        fs::write(&simfile, b"#TITLE:Old;").unwrap();
+        let source_hash = get_content_hash(&simfile).unwrap();
+        write_song_cache(&cache_path, source_hash, &cached_song(&simfile), 0.0);
+
+        fs::write(&simfile, b"#TITLE:New;").unwrap();
+
+        assert!(load_cached_song_for_gameplay(&simfile, &cache_path, true).is_none());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn gameplay_cache_keeps_fastload_stale_source_without_verifying() {
+        let root = test_dir("gameplay-stale-fastload");
+        let simfile = root.join("song.ssc");
+        let cache_path = root.join("cache.bin");
+        fs::write(&simfile, b"#TITLE:Old;").unwrap();
+        let source_hash = get_content_hash(&simfile).unwrap();
+        write_song_cache(&cache_path, source_hash, &cached_song(&simfile), 0.0);
+
+        fs::write(&simfile, b"#TITLE:New;").unwrap();
+
+        assert!(load_cached_song_for_gameplay(&simfile, &cache_path, false).is_some());
+        let _ = fs::remove_dir_all(root);
+    }
 }

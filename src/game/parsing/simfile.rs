@@ -1419,10 +1419,15 @@ pub fn load_gameplay_charts(
     let config = crate::config::get();
     let allow_cache_read = config.fastload || config.cachesongs;
     let allow_cache_write = config.cachesongs;
+    let verify_cache_source = !config.fastload;
     let load_started = Instant::now();
     if allow_cache_read
-        && let Some(charts) =
-            cache::load_gameplay_charts_from_cache(song, requested_chart_ixs, global_offset_seconds)
+        && let Some(charts) = cache::load_gameplay_charts_from_cache(
+            song,
+            requested_chart_ixs,
+            global_offset_seconds,
+            verify_cache_source,
+        )
     {
         let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
         let total_ms = started.elapsed().as_secs_f64() * 1000.0;
