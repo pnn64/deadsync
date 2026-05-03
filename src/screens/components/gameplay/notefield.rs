@@ -10,8 +10,8 @@ use crate::engine::space::*;
 use crate::game::gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS,
-    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, TRANSITION_IN_DURATION,
-    VisualEffects,
+    NoteCountStat, RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
+    TRANSITION_IN_DURATION, VisualEffects,
 };
 use crate::game::gameplay::{
     active_chart_attack_effects_for_player, active_hold_is_engaged,
@@ -98,6 +98,7 @@ const TEXT_CACHE_LIMIT: usize = 8192;
 const COMBO_PREWARM_CAP: u32 = 2048;
 const MEASURE_PREWARM_CAP: i32 = 64;
 const RUN_TIMER_PREWARM_CAP_S: i32 = 600;
+const MAX_NOTES_AFTER: usize = 64;
 
 // Visual Feedback
 const SHOW_COMBO_AT: u32 = 4; // From Simply Love metrics
@@ -3223,17 +3224,22 @@ fn lane_hold_window_bounds_by_note_row(
 fn find_first_displayed_beat(
     current_beat: f32,
     draw_distance_after_targets: f32,
+    note_count_stats: &[NoteCountStat],
     mut y_offset_for_beat: impl FnMut(f32) -> f32,
 ) -> Option<f32> {
     if !current_beat.is_finite() || !draw_distance_after_targets.is_finite() {
         return None;
     }
-    let mut low = 0.0;
     let mut high = current_beat.max(0.0);
+    let has_cache = !note_count_stats.is_empty();
+    let mut low = if has_cache { 0.0 } else { high - 4.0 };
     let mut first = low;
     for _ in 0..24 {
         let mid = (low + high) * 0.5;
-        if y_offset_for_beat(mid) < -draw_distance_after_targets {
+        if y_offset_for_beat(mid) < -draw_distance_after_targets
+            || (has_cache
+                && note_count_range(note_count_stats, mid, current_beat) > MAX_NOTES_AFTER)
+        {
             first = mid;
             low = mid;
         } else {
@@ -3241,6 +3247,21 @@ fn find_first_displayed_beat(
         }
     }
     Some(first)
+}
+
+#[inline(always)]
+fn note_count_range(stats: &[NoteCountStat], low: f32, high: f32) -> usize {
+    let low = note_count_at(stats, low);
+    let high = note_count_at(stats, high);
+    high.notes_upper.saturating_sub(low.notes_lower)
+}
+
+#[inline(always)]
+fn note_count_at(stats: &[NoteCountStat], beat: f32) -> NoteCountStat {
+    let ix = stats
+        .partition_point(|stat| stat.beat <= beat)
+        .saturating_sub(1);
+    stats[ix]
 }
 
 #[inline(always)]
@@ -3696,8 +3717,11 @@ pub fn build_bundles_with_view(
         // every frame; keep that as the primary note candidate window even when
         // no accel mods are active.
         let visible_row_range = {
-            let first_beat_to_draw =
-                find_first_displayed_beat(current_beat, draw_distance_after_targets, |beat| {
+            let first_beat_to_draw = find_first_displayed_beat(
+                current_beat,
+                draw_distance_after_targets,
+                &state.note_count_stats[player_idx],
+                |beat| {
                     apply_accel_y(
                         raw_travel_offset_for_beat(beat),
                         elapsed_screen,
@@ -3705,7 +3729,8 @@ pub fn build_bundles_with_view(
                         effect_height,
                         accel,
                     )
-                });
+                },
+            );
             let last_beat_to_draw = find_last_displayed_beat(
                 current_beat,
                 draw_distance_before_targets,
@@ -7855,7 +7880,9 @@ mod tests {
     };
     use crate::engine::gfx::BlendMode;
     use crate::engine::present::actors::Actor;
-    use crate::game::gameplay::{AccelEffects, ActiveHold, AppearanceEffects, VisualEffects};
+    use crate::game::gameplay::{
+        AccelEffects, ActiveHold, AppearanceEffects, NoteCountStat, VisualEffects,
+    };
     use crate::game::judgment::{
         ExScoreData, JUDGE_GRADE_COUNT, JudgeGrade, Judgment, TimingWindow, ex_score_percent,
         predictive_ex_score_percents,
@@ -7989,6 +8016,22 @@ mod tests {
             |note_index| visited.push(note_index),
         );
         assert_eq!(visited, vec![0, 1]);
+    }
+
+    #[test]
+    fn first_visible_beat_uses_note_count_cutoff() {
+        let stats = (0..80)
+            .map(|i| NoteCountStat {
+                beat: i as f32 * 0.25,
+                notes_lower: i,
+                notes_upper: i + 1,
+            })
+            .collect::<Vec<_>>();
+
+        let first = super::find_first_displayed_beat(20.0, 120.0, &stats, |_| 0.0)
+            .expect("finite beat range");
+
+        assert!((3.9..=4.1).contains(&first), "first beat was {first}");
     }
 
     #[test]

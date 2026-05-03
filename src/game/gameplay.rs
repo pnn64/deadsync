@@ -1046,6 +1046,31 @@ const fn note_has_displayable_hold(note: &Note) -> bool {
     matches!(note.note_type, NoteType::Hold | NoteType::Roll) && note.hold.is_some()
 }
 
+fn build_note_count_stats(notes: &[Note], note_range: (usize, usize)) -> Vec<NoteCountStat> {
+    let (start, end) = note_range;
+    let mut cursor = start.min(notes.len());
+    let end = end.min(notes.len());
+    let mut count = 0usize;
+    let mut stats = Vec::new();
+
+    while cursor < end {
+        let row_index = notes[cursor].row_index;
+        let beat = notes[cursor].beat;
+        let notes_lower = count;
+        while cursor < end && notes[cursor].row_index == row_index {
+            count = count.saturating_add(1);
+            cursor += 1;
+        }
+        stats.push(NoteCountStat {
+            beat,
+            notes_lower,
+            notes_upper: count,
+        });
+    }
+
+    stats
+}
+
 #[inline(always)]
 fn crossed_mine_bounds_ns(
     mine_times_ns: &[SongTimeNs],
@@ -3401,6 +3426,13 @@ impl Default for GameplayUpdateTraceState {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct NoteCountStat {
+    pub beat: f32,
+    pub notes_lower: usize,
+    pub notes_upper: usize,
+}
+
 pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
@@ -3422,6 +3454,7 @@ pub struct State {
     player_judgment_timing: [PlayerJudgmentTiming; MAX_PLAYERS],
     pub notes: Vec<Note>,
     pub note_ranges: [(usize, usize); MAX_PLAYERS],
+    pub note_count_stats: [Vec<NoteCountStat>; MAX_PLAYERS],
     pub audio_lead_in_seconds: f32,
     pub current_beat: f32,
     pub current_music_time_ns: SongTimeNs,
@@ -5332,6 +5365,8 @@ pub fn init(
         score_missed_holds_rolls[1] = score_missed_holds_rolls[0];
         note_ranges[1] = note_ranges[0];
     }
+    let note_count_stats: [Vec<NoteCountStat>; MAX_PLAYERS] =
+        std::array::from_fn(|player| build_note_count_stats(&notes, note_ranges[player]));
     let transform_ms = transform_started.elapsed().as_secs_f64() * 1000.0;
 
     let note_player_for_col = |col: usize| -> usize {
@@ -5882,6 +5917,7 @@ pub fn init(
         player_judgment_timing,
         notes,
         note_ranges,
+        note_count_stats,
         audio_lead_in_seconds: start_delay,
         current_beat: init_beat,
         current_music_time_ns: song_time_ns_from_seconds(init_music_time),
