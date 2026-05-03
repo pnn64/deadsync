@@ -813,6 +813,52 @@ pub(crate) fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
     }
 }
 
+fn edge_alpha_rgb(image: &RgbaImage, reverse: bool) -> Option<[u8; 3]> {
+    let width = image.width();
+    let height = image.height();
+    if width == 0 || height == 0 {
+        return None;
+    }
+
+    if reverse {
+        for y in (0..height).rev() {
+            for x in (0..width).rev() {
+                let [r, g, b, a] = image.get_pixel(x, y).0;
+                if a != 0 {
+                    return Some([r, g, b]);
+                }
+            }
+        }
+    } else {
+        for y in 0..height {
+            for x in 0..width {
+                let [r, g, b, a] = image.get_pixel(x, y).0;
+                if a != 0 {
+                    return Some([r, g, b]);
+                }
+            }
+        }
+    }
+    None
+}
+
+pub(crate) fn fix_hidden_alpha(image: &mut RgbaImage) {
+    let Some(first) = edge_alpha_rgb(image, false) else {
+        return;
+    };
+    let Some(last) = edge_alpha_rgb(image, true) else {
+        return;
+    };
+    let [r, g, b] = if first == last { first } else { [0, 0, 0] };
+    for pixel in image.pixels_mut() {
+        if pixel.0[3] == 0 {
+            pixel.0[0] = r;
+            pixel.0[1] = g;
+            pixel.0[2] = b;
+        }
+    }
+}
+
 impl AssetManager {
     pub fn load_initial_textures(&mut self, backend: &mut Backend) -> Result<(), AssetError> {
         debug!("Loading initial textures...");
@@ -1097,7 +1143,11 @@ impl AssetManager {
             };
             let path = dirs::app_dirs().resolve_asset_path(&path.to_string_lossy());
             match open_image_fallback(&path) {
-                Ok(img) => Ok((key, img.to_rgba8())),
+                Ok(img) => {
+                    let mut rgba = img.to_rgba8();
+                    fix_hidden_alpha(&mut rgba);
+                    Ok((key, rgba))
+                }
                 Err(e) => Err((key, e.to_string())),
             }
         }
@@ -1238,6 +1288,7 @@ impl AssetManager {
                 if !hints.is_default() {
                     apply_texture_hints(&mut rgba, &hints);
                 }
+                fix_hidden_alpha(&mut rgba);
                 match backend.create_texture(&rgba, sampler) {
                     Ok(texture) => {
                         self.insert_texture(key.clone(), texture, rgba.width(), rgba.height());
@@ -1279,5 +1330,30 @@ mod tests {
             texture_handle("other.png"),
             crate::engine::gfx::INVALID_TEXTURE_HANDLE
         );
+    }
+
+    #[test]
+    fn fix_hidden_alpha_uses_matching_edge_rgb() {
+        let mut image =
+            RgbaImage::from_raw(3, 1, vec![255, 255, 255, 0, 12, 34, 56, 255, 9, 9, 9, 0])
+                .expect("test image");
+        fix_hidden_alpha(&mut image);
+        assert_eq!(image.get_pixel(0, 0).0, [12, 34, 56, 0]);
+        assert_eq!(image.get_pixel(2, 0).0, [12, 34, 56, 0]);
+    }
+
+    #[test]
+    fn fix_hidden_alpha_uses_black_for_mixed_edges() {
+        let mut image = RgbaImage::from_raw(
+            4,
+            1,
+            vec![
+                255, 255, 255, 0, 12, 34, 56, 255, 78, 90, 12, 255, 9, 9, 9, 0,
+            ],
+        )
+        .expect("test image");
+        fix_hidden_alpha(&mut image);
+        assert_eq!(image.get_pixel(0, 0).0, [0, 0, 0, 0]);
+        assert_eq!(image.get_pixel(3, 0).0, [0, 0, 0, 0]);
     }
 }
