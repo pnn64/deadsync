@@ -12,7 +12,7 @@ use crate::game::parsing::song_lua::{SongLuaCapturedActor, SongLuaOverlayActor};
 use crate::game::scores;
 use crate::game::song::SongData;
 use crate::game::timing::{
-    BeatInfoCache, ROWS_PER_BEAT, TimingData, TimingProfile, TimingProfileNs,
+    BeatInfoCache, ROWS_PER_BEAT, TIMING_WINDOW_ADD_S, TimingData, TimingProfile, TimingProfileNs,
 };
 use crate::game::{
     profile::{self, TimingTickMode as TickMode},
@@ -188,7 +188,7 @@ const HOT_LIFE_MIN_NEGATIVE_DELTA: f32 = -0.10;
 // ITGmania _fallback and Simply Love keep mine hits from incrementing miss combo.
 const MINE_HIT_INCREMENTS_MISS_COMBO: bool = false;
 // In SM, life regeneration is tied to LifePercentChangeHeld. Simply Love sets
-// TimingWindowSecondsHold to 0.32s, so mirror that grace window. Reference:
+// TimingWindowSecondsHold to 0.32s before TimingWindowAdd is applied. Reference:
 // itgmania/Themes/Simply Love/Scripts/SL_Init.lua
 const LIFE_FANTASTIC: f32 = 0.008;
 const LIFE_EXCELLENT: f32 = 0.008;
@@ -645,8 +645,9 @@ const DANGER_EC2_RGBA: [f32; 4] = [1.0, 0.0, 0.0, 0.35];
 
 const MAX_HOLD_LIFE: f32 = 1.0;
 const INITIAL_HOLD_LIFE: f32 = 1.0;
-const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32;
-const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35;
+// Player::GetWindowSeconds applies TimingWindowAdd to hold and roll windows too.
+const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32 + TIMING_WINDOW_ADD_S;
+const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35 + TIMING_WINDOW_ADD_S;
 // ITG's MaxInputLatencySeconds preference defaults to 0.0.
 const MAX_INPUT_LATENCY_SECONDS: f32 = 0.0;
 // ITGmania Player::Step searches a wide row range first, then scores the
@@ -8935,7 +8936,7 @@ mod tests {
         let zero_elapsed = advanced
             .zero_elapsed_music_ns
             .expect("hold should cross zero");
-        assert!((song_time_ns_to_seconds(zero_elapsed) - 0.08).abs() <= 1e-6);
+        assert!((song_time_ns_to_seconds(zero_elapsed) - 0.080375).abs() <= 1e-6);
     }
 
     #[test]
@@ -8979,7 +8980,7 @@ mod tests {
         let zero_elapsed = advanced
             .zero_elapsed_music_ns
             .expect("roll should cross zero");
-        assert!((song_time_ns_to_seconds(zero_elapsed) - 0.35).abs() <= 1e-6);
+        assert!((song_time_ns_to_seconds(zero_elapsed) - 0.3515).abs() <= 1e-6);
     }
 
     #[test]
@@ -9709,7 +9710,8 @@ mod tests {
         let timing_profile = TimingProfile::default_itg_with_fa_plus();
 
         assert!(
-            (song_time_ns_to_seconds(late_note_resolution_window_ns(&timing_profile, 1.0)) - 0.35)
+            (song_time_ns_to_seconds(late_note_resolution_window_ns(&timing_profile, 1.0))
+                - 0.3515)
                 .abs()
                 <= 1e-6
         );
@@ -9720,7 +9722,7 @@ mod tests {
         let timing_profile = TimingProfile::default_itg_with_fa_plus();
 
         assert!(
-            (song_time_ns_to_seconds(max_step_distance_ns(&timing_profile, 1.5)) - 0.525).abs()
+            (song_time_ns_to_seconds(max_step_distance_ns(&timing_profile, 1.5)) - 0.52725).abs()
                 <= 1e-6
         );
     }
