@@ -6254,7 +6254,10 @@ pub fn build_bundles_with_view(
             for_each_visible_note_index(
                 column_note_indices,
                 &state.notes,
-                visible_row_range,
+                // Tap positions are culled below by exact travel offset. A
+                // row-derived prefilter can hide valid taps when displayed
+                // timing and chart rows are not ordered the same way.
+                None,
                 |note_index| {
                     let note = &state.notes[note_index];
                     if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
