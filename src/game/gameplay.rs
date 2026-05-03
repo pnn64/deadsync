@@ -7890,6 +7890,18 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         phase_timings.visuals_us = elapsed_us_since(started);
     }
 
+    let judged_rows_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    // ITGmania resolves already-complete rows before it promotes overdue
+    // mines/taps to avoids/misses.
+    update_judged_rows(state);
+    if let Some(started) = judged_rows_started {
+        phase_timings.judged_rows_us = elapsed_us_since(started);
+    }
+
     let mine_avoid_started = if trace_enabled {
         Some(Instant::now())
     } else {
@@ -7898,19 +7910,6 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     apply_time_based_mine_avoidance(state, music_time_ns);
     if let Some(started) = mine_avoid_started {
         phase_timings.mine_avoid_us = elapsed_us_since(started);
-    }
-
-    let judged_rows_started = if trace_enabled {
-        Some(Instant::now())
-    } else {
-        None
-    };
-    // ITGmania resolves already-complete rows before it promotes overdue notes
-    // to misses, so a later completed row can still score on the current frame
-    // even if an earlier row times out immediately afterward.
-    update_judged_rows(state);
-    if let Some(started) = judged_rows_started {
-        phase_timings.judged_rows_us = elapsed_us_since(started);
     }
 
     let tap_miss_started = if trace_enabled {
