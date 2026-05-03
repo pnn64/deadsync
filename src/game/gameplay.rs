@@ -1122,6 +1122,31 @@ fn crossed_mine_bounds_ns(
 }
 
 #[inline(always)]
+fn crossed_mine_held_start_time(
+    now_down: bool,
+    was_down: bool,
+    pressed_since_ns: Option<SongTimeNs>,
+    previous_music_time_ns: SongTimeNs,
+    current_music_time_ns: SongTimeNs,
+) -> Option<SongTimeNs> {
+    if !now_down
+        || song_time_ns_invalid(previous_music_time_ns)
+        || song_time_ns_invalid(current_music_time_ns)
+        || current_music_time_ns <= previous_music_time_ns
+    {
+        return None;
+    }
+    if was_down {
+        return Some(previous_music_time_ns);
+    }
+    let pressed_since_ns = pressed_since_ns?;
+    if song_time_ns_invalid(pressed_since_ns) || pressed_since_ns >= current_music_time_ns {
+        return None;
+    }
+    Some(pressed_since_ns.max(previous_music_time_ns))
+}
+
+#[inline(always)]
 const fn lane_edge_matches_note_type(pressed: bool, note_type: NoteType) -> bool {
     match note_type {
         NoteType::Tap | NoteType::Hold | NoteType::Roll => pressed,
@@ -6492,9 +6517,6 @@ fn try_hit_crossed_mines_while_held(
         return false;
     }
     let player = player_for_col(state, column);
-    let mine_window_music_ns = state.player_judgment_timing[player]
-        .profile_music_ns
-        .mine_window_ns;
     // ITG checks held mines as rows are crossed. Match that by only considering
     // mines whose note time crossed between previous and current music time.
     let (start_idx, end_idx) = crossed_mine_bounds_ns(
@@ -6504,10 +6526,9 @@ fn try_hit_crossed_mines_while_held(
     );
     let mut hit_any = false;
     for i in start_idx..end_idx {
-        let (note_index, note_time_ns) = {
+        let note_index = {
             let mine_ix = &state.mine_note_ix[player];
-            let mine_times_ns = &state.mine_note_time_ns[player];
-            (mine_ix[i], mine_times_ns[i])
+            mine_ix[i]
         };
         let (is_mine, can_be_judged, already_scored, is_fake, note_column) = {
             let note = &state.notes[note_index];
@@ -6522,11 +6543,7 @@ fn try_hit_crossed_mines_while_held(
         if !is_mine || !can_be_judged || already_scored || is_fake || note_column != column {
             continue;
         }
-        let time_error_music_ns = current_time_ns.saturating_sub(note_time_ns);
-        if i128::from(time_error_music_ns).abs() > i128::from(mine_window_music_ns) {
-            continue;
-        }
-        if hit_mine(state, column, note_index, time_error_music_ns) {
+        if hit_mine(state, column, note_index, 0) {
             hit_any = true;
         }
     }
@@ -7749,13 +7766,15 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         for (col, (now_down, was_down)) in
             current_inputs.iter().copied().zip(prev_inputs).enumerate()
         {
-            if now_down && was_down {
-                let _ = try_hit_crossed_mines_while_held(
-                    state,
-                    col,
-                    previous_music_time_ns,
-                    music_time_ns,
-                );
+            if let Some(crossed_from_ns) = crossed_mine_held_start_time(
+                now_down,
+                was_down,
+                state.lane_pressed_since_ns[col],
+                previous_music_time_ns,
+                music_time_ns,
+            ) {
+                let _ =
+                    try_hit_crossed_mines_while_held(state, col, crossed_from_ns, music_time_ns);
             }
         }
     }
@@ -8005,25 +8024,27 @@ mod tests {
         build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
         collect_edge_judge_indices, completed_row_final_judgment,
         completed_row_flash_note_indices_and_grade, count_rescore_tracks_on_row,
-        crossed_mine_bounds_ns, effective_appearance_effects_for_player,
-        effective_player_global_offset_seconds, enforce_max_simultaneous_notes,
-        finalize_row_judgment, finalized_row_outcome_for_cached_row,
-        frame_stable_display_music_time_ns, handle_input, input_queue_cap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
-        lane_note_window_bounds_rows, lane_press_started, lane_release_finished,
-        late_note_resolution_window_ns, live_autoplay_enabled_from_flags, max_grade_points,
-        max_step_distance_ns, mine_window_bounds_ns, music_time_ns_from_song_clock,
-        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold,
-        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
-        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
-        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
-        refresh_timing_after_offset_change, remove_provisional_early_score, replay_edge_cap,
-        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
+        crossed_mine_bounds_ns, crossed_mine_held_start_time,
+        effective_appearance_effects_for_player, effective_player_global_offset_seconds,
+        enforce_max_simultaneous_notes, finalize_row_judgment,
+        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, handle_input,
+        input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
+        lane_note_window_bounds_ns, lane_note_window_bounds_rows, lane_press_started,
+        lane_release_finished, late_note_resolution_window_ns, live_autoplay_enabled_from_flags,
+        max_grade_points, max_step_distance_ns, mine_window_bounds_ns,
+        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
+        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
+        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
+        player_row_scan_state, process_input_edges, recent_step_tracks, recompute_player_totals,
+        refresh_active_attack_masks, refresh_timing_after_offset_change,
+        remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
+        row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
         single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
         stage_music_cut, step_calories, step_stats_notefield_width,
         suppress_final_bad_rescore_visual, tick_mode_status_line, tick_visual_effects,
-        turn_option_bits, update_lane_input_slot, visible_notefield_time_ns,
+        try_hit_crossed_mines_while_held, turn_option_bits, update_lane_input_slot,
+        visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::engine::present::color;
@@ -8301,6 +8322,22 @@ mod tests {
             None,
             [0; MAX_PLAYERS],
         )
+    }
+
+    fn set_regression_mine(
+        state: &mut super::State,
+        note_index: usize,
+        column: usize,
+        row_index: usize,
+        time_ns: super::SongTimeNs,
+    ) {
+        state.notes[note_index] = test_note(column, row_index, NoteType::Mine);
+        state.note_time_cache_ns[note_index] = time_ns;
+        state.mine_note_ix[0] = vec![note_index];
+        state.mine_note_time_ns[0] = vec![time_ns];
+        state.next_mine_ix_cursor[0] = 0;
+        state.next_mine_avoid_cursor[0] = note_index;
+        state.mines_total[0] = 1;
     }
 
     #[test]
@@ -10694,6 +10731,72 @@ mod tests {
             ),
             (2, 3)
         );
+    }
+
+    #[test]
+    fn crossed_mine_held_start_accepts_new_press_during_frame() {
+        assert_eq!(
+            crossed_mine_held_start_time(
+                true,
+                false,
+                Some(song_time_ns_from_seconds(1.25)),
+                song_time_ns_from_seconds(1.0),
+                song_time_ns_from_seconds(1.5),
+            ),
+            Some(song_time_ns_from_seconds(1.25))
+        );
+        assert_eq!(
+            crossed_mine_held_start_time(
+                true,
+                false,
+                Some(song_time_ns_from_seconds(1.6)),
+                song_time_ns_from_seconds(1.0),
+                song_time_ns_from_seconds(1.5),
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn crossed_held_mine_hits_even_when_frame_offset_exceeds_mine_window() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        let mine_time_ns = song_time_ns_from_seconds(1.0);
+        set_regression_mine(&mut state, 0, 0, 48, mine_time_ns);
+
+        assert!(try_hit_crossed_mines_while_held(
+            &mut state,
+            0,
+            song_time_ns_from_seconds(0.9),
+            song_time_ns_from_seconds(1.2),
+        ));
+
+        assert_eq!(state.notes[0].mine_result, Some(MineResult::Hit));
+        assert_eq!(state.players[0].mines_hit, 1);
+        assert_eq!(state.players[0].mines_hit_for_score, 1);
+    }
+
+    #[test]
+    fn crossed_held_mine_new_press_excludes_rows_before_press() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        set_regression_mine(&mut state, 0, 0, 48, song_time_ns_from_seconds(1.0));
+        let crossed_from_ns = crossed_mine_held_start_time(
+            true,
+            false,
+            Some(song_time_ns_from_seconds(1.1)),
+            song_time_ns_from_seconds(0.9),
+            song_time_ns_from_seconds(1.2),
+        )
+        .expect("new press should produce a crossed-row start");
+
+        assert!(!try_hit_crossed_mines_while_held(
+            &mut state,
+            0,
+            crossed_from_ns,
+            song_time_ns_from_seconds(1.2),
+        ));
+        assert_eq!(state.notes[0].mine_result, None);
     }
 
     #[test]
