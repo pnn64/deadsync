@@ -1047,6 +1047,7 @@ fn closest_lane_note_ns(
     note_indices: &[usize],
     notes: &[Note],
     note_times_ns: &[SongTimeNs],
+    timing: &TimingData,
     current_time_ns: SongTimeNs,
     current_row_index: usize,
     search_start_idx: usize,
@@ -1059,7 +1060,9 @@ fn closest_lane_note_ns(
         let note = &notes[note_index];
         let mine_already_judged =
             matches!(note.note_type, NoteType::Mine) && note.mine_result.is_some();
-        if note.result.is_some() || mine_already_judged || !note.can_be_judged || note.is_fake {
+        let fake_note_blocks = note.is_fake && timing.is_judgable_at_beat(note.beat);
+        if note.result.is_some() || mine_already_judged || !(note.can_be_judged || fake_note_blocks)
+        {
             continue;
         }
         let row_distance = current_row_index.abs_diff(note.row_index);
@@ -1151,7 +1154,8 @@ const fn lane_edge_matches_note_type(pressed: bool, note_type: NoteType) -> bool
     match note_type {
         NoteType::Tap | NoteType::Hold | NoteType::Roll => pressed,
         NoteType::Lift => !pressed,
-        NoteType::Mine | NoteType::Fake => false,
+        NoteType::Fake => pressed,
+        NoteType::Mine => false,
     }
 }
 
@@ -6872,6 +6876,7 @@ pub fn judge_a_tap(
         lane_notes,
         &state.notes,
         &state.note_time_cache_ns,
+        &state.timing_players[player],
         current_time_ns,
         current_row_index,
         search_start_idx,
@@ -6903,16 +6908,6 @@ pub fn judge_a_tap(
         ) else {
             return false;
         };
-        let Some(row_entry) = row_entry_for_cached_row(
-            &state.row_entries,
-            &state.row_map_cache[player],
-            note_row_index,
-        ) else {
-            debug_assert!(false, "missing row cache for row {note_row_index}");
-            return false;
-        };
-        let row_rescore_track_count = count_rescore_tracks_on_row(row_entry);
-        let row_note_count = usize::from(row_entry.unresolved_nonlift_count);
         let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
             (
                 state.song_offset_seconds,
@@ -6923,6 +6918,38 @@ pub fn judge_a_tap(
         } else {
             (0.0, 0.0, 0.0, 0.0)
         };
+        if state.notes[note_index].is_fake {
+            let (judgment, judgment_event_time) =
+                build_final_note_hit_judgment(state, player, hit, rate);
+            set_final_note_result(state, player, note_index, judgment.clone());
+            log_timing_hit_detail(
+                timing_hit_log,
+                stream_pos_s,
+                hit.grade,
+                note_row_index,
+                state.notes[note_index].column,
+                state.notes[note_index].beat,
+                song_offset_s,
+                global_offset_s,
+                song_time_ns_to_seconds(hit.note_time_ns),
+                song_time_ns_to_seconds(judgment_event_time),
+                current_music_time_s(state),
+                rate,
+                lead_in_s,
+            );
+            trigger_receptor_glow_pulse(state, column);
+            return true;
+        }
+        let Some(row_entry) = row_entry_for_cached_row(
+            &state.row_entries,
+            &state.row_map_cache[player],
+            note_row_index,
+        ) else {
+            debug_assert!(false, "missing row cache for row {note_row_index}");
+            return false;
+        };
+        let row_rescore_track_count = count_rescore_tracks_on_row(row_entry);
+        let row_note_count = usize::from(row_entry.unresolved_nonlift_count);
 
         if rescore_early_hits && row_rescore_track_count == 1 {
             let note_col = state.notes[note_index].column;
@@ -7140,6 +7167,7 @@ pub fn judge_a_lift(
         lane_notes,
         &state.notes,
         &state.note_time_cache_ns,
+        &state.timing_players[player],
         current_time_ns,
         current_row_index,
         search_start_idx,
@@ -8103,8 +8131,8 @@ mod tests {
     use crate::game::profile;
     use crate::game::song::SongData;
     use crate::game::timing::{
-        DelaySegment, ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile, TimingProfileNs,
-        TimingSegments,
+        DelaySegment, FakeSegment, ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile,
+        TimingProfileNs, TimingSegments,
     };
     use rssp::{TechCounts, stats::ArrowStats};
     use std::path::PathBuf;
@@ -8159,6 +8187,15 @@ mod tests {
         (0..=last_row)
             .map(|row| row as f32 / ROWS_PER_BEAT as f32)
             .collect()
+    }
+
+    fn test_timing(last_row: usize) -> TimingData {
+        TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments::default(),
+            &test_row_to_beat(last_row),
+        )
     }
 
     fn test_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
@@ -11050,6 +11087,7 @@ mod tests {
 
     #[test]
     fn closest_lane_note_keeps_nearer_lift_visible_to_press_edges() {
+        let timing = test_timing(144);
         let notes = vec![
             test_note(0, 48, NoteType::Lift),
             test_note(0, 49, NoteType::Tap),
@@ -11069,6 +11107,7 @@ mod tests {
             &note_indices,
             &notes,
             &note_times_ns,
+            &timing,
             song_time_ns_from_seconds(1.004),
             48,
             start_idx,
@@ -11085,6 +11124,7 @@ mod tests {
 
     #[test]
     fn closest_lane_note_keeps_nearer_tap_visible_to_release_edges() {
+        let timing = test_timing(144);
         let notes = vec![
             test_note(0, 48, NoteType::Tap),
             test_note(0, 49, NoteType::Lift),
@@ -11104,6 +11144,7 @@ mod tests {
             &note_indices,
             &notes,
             &note_times_ns,
+            &timing,
             song_time_ns_from_seconds(1.004),
             48,
             start_idx,
@@ -11119,7 +11160,89 @@ mod tests {
     }
 
     #[test]
+    fn closest_lane_note_keeps_explicit_fake_visible_to_press_edges() {
+        let timing = test_timing(144);
+        let mut fake = test_note(0, 48, NoteType::Tap);
+        fake.is_fake = true;
+        fake.can_be_judged = false;
+        let notes = vec![fake, test_note(0, 49, NoteType::Tap)];
+        let note_indices = [0usize, 1];
+        let note_times_ns = [
+            song_time_ns_from_seconds(1.000),
+            song_time_ns_from_seconds(1.012),
+        ];
+        let (start_idx, end_idx) = lane_note_window_bounds_ns(
+            &note_indices,
+            &note_times_ns,
+            song_time_ns_from_seconds(0.9),
+            song_time_ns_from_seconds(1.1),
+        );
+        let (note_index, _) = closest_lane_note_ns(
+            &note_indices,
+            &notes,
+            &note_times_ns,
+            &timing,
+            song_time_ns_from_seconds(1.004),
+            48,
+            start_idx,
+            end_idx,
+        )
+        .expect("expected the explicit fake note to block the real tap");
+
+        assert_eq!(note_index, 0);
+        assert!(lane_edge_matches_note_type(
+            true,
+            notes[note_index].note_type
+        ));
+    }
+
+    #[test]
+    fn closest_lane_note_skips_taps_marked_fake_by_timing() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                fakes: vec![FakeSegment {
+                    beat: 1.0,
+                    length: 0.01,
+                }],
+                ..TimingSegments::default()
+            },
+            &test_row_to_beat(144),
+        );
+        let mut fake_segment_tap = test_note(0, 48, NoteType::Tap);
+        fake_segment_tap.is_fake = true;
+        fake_segment_tap.can_be_judged = false;
+        let notes = vec![fake_segment_tap, test_note(0, 49, NoteType::Tap)];
+        let note_indices = [0usize, 1];
+        let note_times_ns = [
+            song_time_ns_from_seconds(1.000),
+            song_time_ns_from_seconds(1.012),
+        ];
+        let (start_idx, end_idx) = lane_note_window_bounds_ns(
+            &note_indices,
+            &note_times_ns,
+            song_time_ns_from_seconds(0.9),
+            song_time_ns_from_seconds(1.1),
+        );
+        let (note_index, _) = closest_lane_note_ns(
+            &note_indices,
+            &notes,
+            &note_times_ns,
+            &timing,
+            song_time_ns_from_seconds(1.004),
+            48,
+            start_idx,
+            end_idx,
+        )
+        .expect("expected the real tap to remain hittable");
+
+        assert_eq!(note_index, 1);
+    }
+
+    #[test]
     fn closest_lane_note_breaks_exact_tie_toward_future_note() {
+        let timing = test_timing(144);
         let notes = vec![
             test_note(0, 48, NoteType::Tap),
             test_note(0, 50, NoteType::Tap),
@@ -11136,6 +11259,7 @@ mod tests {
             &note_indices,
             &notes,
             &note_times_ns,
+            &timing,
             1_010_000_000_i64,
             49,
             start_idx,
@@ -11149,6 +11273,7 @@ mod tests {
 
     #[test]
     fn closest_lane_note_prefers_nearer_row_over_nearer_time() {
+        let timing = test_timing(144);
         let notes = vec![
             test_note(0, 48, NoteType::Tap),
             test_note(0, 60, NoteType::Tap),
@@ -11168,6 +11293,7 @@ mod tests {
             &note_indices,
             &notes,
             &note_times_ns,
+            &timing,
             song_time_ns_from_seconds(1.030),
             50,
             start_idx,
@@ -11181,6 +11307,7 @@ mod tests {
 
     #[test]
     fn closest_lane_note_keeps_out_of_window_nearer_row_blocker() {
+        let timing = test_timing(144);
         let notes = vec![
             test_note(0, 48, NoteType::Tap),
             test_note(0, 60, NoteType::Tap),
@@ -11195,6 +11322,7 @@ mod tests {
             &note_indices,
             &notes,
             &note_times_ns,
+            &timing,
             song_time_ns_from_seconds(1.000),
             50,
             start_idx,
@@ -11208,6 +11336,7 @@ mod tests {
 
     #[test]
     fn closest_lane_note_skips_already_judged_mines() {
+        let timing = test_timing(144);
         let mut notes = vec![
             test_note(0, 48, NoteType::Mine),
             test_note(0, 60, NoteType::Tap),
@@ -11228,6 +11357,7 @@ mod tests {
             &note_indices,
             &notes,
             &note_times_ns,
+            &timing,
             song_time_ns_from_seconds(1.030),
             50,
             start_idx,
