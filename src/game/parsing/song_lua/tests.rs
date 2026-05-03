@@ -17,6 +17,34 @@ fn test_dir(name: &str) -> PathBuf {
     dir
 }
 
+fn generated_runtime_mod_lua() -> &'static str {
+    r#"
+mods = {
+    {0, 9999, "*1000 no beat, *1000 no drunk, *1000 no tipsy, *1000 no invert, *1000 no flip, *1000 no dizzy", "end"},
+}
+mod_time = {
+    {0.00, 999, "*1 0 Dark1, *1 0 Dark2, *1 0 Dark3, *1 0 Dark4, *1 0 PulseOuter, *1 0 PulseOffset, *1 0 Wave, *1 0 Bumpy3, *1 0 BumpyPeriod, *1 0 Stealth, *1 0 Blind, *1 0 Sudden, *1 0 Tipsy, *1 0 Drunk, *1 0 Dark", "len"},
+}
+mods_ease = {}
+
+local l = "len"
+local function me(...)
+    table.insert(mods_ease, {...})
+end
+
+me(4, 0.75, 250, 0, "Bumpy1", l, ease.outQuad)
+me(4, 0.75, -125, 0, "BumpyPeriod", l, ease.outQuad)
+me(4, 0.75, 75, 0, "Wave", l, ease.outElastic)
+me(8, 0.75, 250, 0, "Bumpy2", l, ease.outQuad)
+me(12, 0.75, 250, 0, "Bumpy3", l, ease.outQuad)
+me(16, 0.75, 250, 0, "Bumpy4", l, ease.outQuad)
+me(20, 1.5, 50, 1, "hidden", l, ease.outInQuad)
+me(24, 0.5, 25, 0, "beat", l, ease.outBounce)
+
+return Def.ActorFrame{}
+"#
+}
+
 #[test]
 fn compile_song_lua_reads_mod_tables() {
     let song_dir = test_dir("direct");
@@ -10490,6 +10518,55 @@ fn compile_song_lua_supports_kenpo_sample_if_present() {
             .overlays
             .iter()
             .any(|overlay| matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }))
+    );
+}
+
+#[test]
+fn compile_song_lua_supports_generated_runtime_modchart() {
+    let root = test_dir("generated-runtime-modchart");
+    let entry = root.join("default.lua");
+    fs::write(&entry, generated_runtime_mod_lua()).unwrap();
+
+    let mut context = SongLuaCompileContext::new(&root, "Generated Runtime Modchart");
+    context.players = [
+        SongLuaPlayerContext {
+            enabled: true,
+            difficulty: SongLuaDifficulty::Challenge,
+            speedmod: SongLuaSpeedMod::X(2.0),
+            ..SongLuaPlayerContext::default()
+        },
+        SongLuaPlayerContext {
+            enabled: true,
+            difficulty: SongLuaDifficulty::Challenge,
+            speedmod: SongLuaSpeedMod::C(516.0),
+            ..SongLuaPlayerContext::default()
+        },
+    ];
+
+    let compiled = compile_song_lua(&entry, &context).unwrap();
+    assert!(!compiled.beat_mods.is_empty());
+    assert!(!compiled.time_mods.is_empty());
+    assert!(compiled.eases.len() >= 8);
+    assert!(
+        compiled.eases.iter().any(
+            |ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "Bumpy1")
+        )
+    );
+    assert!(
+        compiled.eases.iter().any(
+            |ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "Bumpy4")
+        )
+    );
+    assert!(
+        compiled.eases.iter().any(
+            |ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "hidden")
+        )
+    );
+    assert!(
+        compiled
+            .eases
+            .iter()
+            .any(|ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "beat"))
     );
 }
 

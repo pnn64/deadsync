@@ -1496,6 +1496,16 @@ fn parse_song_and_maybe_write_cache(
     Ok(build_song_meta(song_data, global_offset_seconds))
 }
 
+#[cfg(test)]
+pub(crate) fn parse_song_for_test(
+    path: &Path,
+    global_offset_seconds: f32,
+) -> Result<SongData, String> {
+    let mut song_data = parse_and_process_song_file(path)?;
+    update_precise_last_second(&mut song_data, global_offset_seconds);
+    Ok(build_song_meta(song_data, global_offset_seconds))
+}
+
 #[inline]
 fn build_stamina_counts(chart: &rssp::report::ChartSummary) -> StaminaCounts {
     let boxes = compute_box_counts(&chart.detected_patterns).total_boxes;

@@ -8147,9 +8147,9 @@ mod tests {
         TimingProfileNs, TimingSegments,
     };
     use rssp::{TechCounts, stats::ArrowStats};
-    use std::path::PathBuf;
     use std::sync::{Arc, LazyLock, Mutex};
     use std::time::{Duration, Instant};
+    use std::{fs, path::PathBuf};
 
     static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
@@ -8420,6 +8420,188 @@ mod tests {
             None,
             [0; MAX_PLAYERS],
         )
+    }
+
+    fn test_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("deadsync-gameplay-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn generated_runtime_mod_lua() -> &'static str {
+        r#"
+mods = {
+    {0, 9999, "*1000 no beat, *1000 no drunk, *1000 no tipsy, *1000 no invert, *1000 no flip, *1000 no dizzy", "end"},
+}
+mod_time = {
+    {0.00, 999, "*1 0 Dark1, *1 0 Dark2, *1 0 Dark3, *1 0 Dark4, *1 0 PulseOuter, *1 0 PulseOffset, *1 0 Wave, *1 0 Bumpy3, *1 0 BumpyPeriod, *1 0 Stealth, *1 0 Blind, *1 0 Sudden, *1 0 Tipsy, *1 0 Drunk, *1 0 Dark", "len"},
+}
+mods_ease = {}
+
+local l = "len"
+local function me(...)
+    table.insert(mods_ease, {...})
+end
+
+me(4, 0.75, 250, 0, "Bumpy1", l, ease.outQuad)
+me(4, 0.75, -125, 0, "BumpyPeriod", l, ease.outQuad)
+me(4, 0.75, 75, 0, "Wave", l, ease.outElastic)
+me(8, 0.75, 250, 0, "Bumpy2", l, ease.outQuad)
+me(12, 0.75, 250, 0, "Bumpy3", l, ease.outQuad)
+me(16, 0.75, 250, 0, "Bumpy4", l, ease.outQuad)
+me(20, 1.5, 50, 1, "hidden", l, ease.outInQuad)
+me(24, 0.5, 25, 0, "beat", l, ease.outBounce)
+
+return Def.ActorFrame{}
+"#
+    }
+
+    fn generated_lua_song_simfile() -> &'static str {
+        r#"#VERSION:0.83;
+#TITLE:Generated Lua Regression;
+#MUSIC:;
+#OFFSET:0.000;
+#BPMS:0.000=120.000;
+#FGCHANGES:0.000=lua/default.lua=1.000=0=0=0=StretchNoLoop====;
+
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DESCRIPTION:Generated;
+#DIFFICULTY:Challenge;
+#METER:12;
+#RADARVALUES:0,0,0,0,0;
+#NOTES:
+0000
+0000
+0000
+1000
+,
+0100
+0000
+0010
+0001
+,
+1000
+0100
+0010
+0001
+,
+0010
+0001
+1000
+0100
+,
+0001
+0010
+0100
+1000
+,
+1000
+0000
+0100
+0000
+,
+0010
+0000
+0001
+0000
+;
+"#
+    }
+
+    fn write_generated_lua_song_fixture() -> PathBuf {
+        let song_dir = test_dir("generated-lua-song");
+        let lua_dir = song_dir.join("lua");
+        fs::create_dir_all(&lua_dir).unwrap();
+        fs::write(lua_dir.join("default.lua"), generated_runtime_mod_lua()).unwrap();
+        let simfile = song_dir.join("generated_lua_regression.ssc");
+        fs::write(&simfile, generated_lua_song_simfile()).unwrap();
+        simfile
+    }
+
+    #[test]
+    fn gameplay_handles_generated_song_lua_actor_build() {
+        let simfile = write_generated_lua_song_fixture();
+        const SONG_LUA_TEST_STACK: usize = 16 * 1024 * 1024;
+        std::thread::Builder::new()
+            .name("song-lua-actor-build-regression".to_string())
+            .stack_size(SONG_LUA_TEST_STACK)
+            .spawn(move || {
+                let song = Arc::new(
+                    crate::game::parsing::simfile::parse_song_for_test(&simfile, 0.0)
+                        .expect("generated lua simfile should parse"),
+                );
+                let chart_ix = song
+                    .charts
+                    .iter()
+                    .position(|chart| chart.difficulty.eq_ignore_ascii_case("challenge"))
+                    .unwrap_or(0);
+                let gameplay_chart = Arc::new(
+                    crate::game::parsing::simfile::load_gameplay_charts(&song, &[chart_ix], 0.0)
+                        .expect("generated lua gameplay chart should load")
+                        .remove(0),
+                );
+                let chart = Arc::new(song.charts[chart_ix].clone());
+                let mut player_profiles =
+                    [profile::Profile::default(), profile::Profile::default()];
+                player_profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                player_profiles[1].scroll_speed = ScrollSpeedSetting::CMod(516.0);
+
+                with_session(
+                    profile::PlayStyle::Single,
+                    profile::PlayerSide::P1,
+                    true,
+                    false,
+                    || {
+                        let mut state =
+                            crate::screens::gameplay::State::from_gameplay(super::init(
+                                song,
+                                [chart.clone(), chart],
+                                [gameplay_chart.clone(), gameplay_chart],
+                                5,
+                                1.0,
+                                [
+                                    player_profiles[0].scroll_speed,
+                                    player_profiles[1].scroll_speed,
+                                ],
+                                player_profiles,
+                                None,
+                                None,
+                                None,
+                                Arc::from("TEST"),
+                                None,
+                                None,
+                                None,
+                                [0; MAX_PLAYERS],
+                            ));
+                        assert!(!state.song_lua_ease_windows[0].is_empty());
+
+                        let mut times = vec![0.0, state.current_music_time_display];
+                        for window in &state.song_lua_ease_windows[0] {
+                            times.push(window.start_second);
+                            times.push((window.start_second + window.end_second) * 0.5);
+                            times.push(window.end_second);
+                            times.push(window.sustain_end_second);
+                        }
+                        times.sort_by(f32::total_cmp);
+                        times.dedup_by(|a, b| (*a - *b).abs() <= 0.001);
+
+                        let assets = crate::assets::AssetManager::new();
+                        for time in times {
+                            state.current_music_time_display = time;
+                            state.current_music_time_visible = [time; MAX_PLAYERS];
+                            state.current_beat = state.timing.get_beat_for_time(time);
+                            refresh_active_attack_masks(&mut state.gameplay, 0.0);
+                            let _ = crate::screens::gameplay::get_actors(&state, &assets);
+                        }
+                    },
+                );
+            })
+            .expect("song-lua actor build regression thread should spawn")
+            .join()
+            .expect("song-lua actor build regression thread should finish");
     }
 
     fn set_regression_mine(
