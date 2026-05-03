@@ -3559,6 +3559,7 @@ pub struct State {
     pub mine_note_ix: [Vec<usize>; MAX_PLAYERS],
     pub mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS],
     pub next_mine_ix_cursor: [usize; MAX_PLAYERS],
+    pub pending_mine_hit_indices: Vec<usize>,
     pub row_entries: Vec<RowEntry>,
     pub measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS],
     pub column_cues: [Vec<ColumnCue>; MAX_PLAYERS],
@@ -4899,6 +4900,7 @@ pub fn reset_practice_playback(state: &mut State, judge_start_music_time: f32) {
     state.lane_pressed_since_ns.fill(None);
     state.pending_edges.clear();
     state.replay_edges.clear();
+    state.pending_mine_hit_indices.clear();
     state.replay_cursor = 0;
     state.hold_to_exit_key = None;
     state.hold_to_exit_start = None;
@@ -6023,6 +6025,7 @@ pub fn init(
         mine_note_ix,
         mine_note_time_ns,
         next_mine_ix_cursor,
+        pending_mine_hit_indices: Vec::new(),
         row_entries,
         measure_counter_segments,
         column_cues,
@@ -6461,34 +6464,12 @@ fn hit_mine(
         return false;
     }
 
-    let scoring_blocked = autoplay_blocks_scoring(state);
     state.notes[note_index].mine_result = Some(MineResult::Hit);
-    let current_music_time = current_music_time_s(state);
-    if !scoring_blocked {
-        state.players[player].mines_hit = state.players[player].mines_hit.saturating_add(1);
-    }
-    let mut updated_scoring = false;
-    if !scoring_blocked {
-        apply_life_change(
-            &mut state.players[player],
-            current_music_time,
-            LIFE_HIT_MINE,
-        );
-        capture_failed_ex_score_inputs(state, player);
-        if !is_state_dead(state, player) {
-            state.players[player].mines_hit_for_score =
-                state.players[player].mines_hit_for_score.saturating_add(1);
-            updated_scoring = true;
-        }
-        apply_mine_hit_combo_state(&mut state.players[player]);
-    }
-    state.receptor_glow_timers[column] = 0.0;
-    trigger_mine_explosion(state, column);
-    set_last_mine_judgment(state, player, column, MineResult::Hit);
+    state.pending_mine_hit_indices.push(note_index);
     let note_time_ns = state.note_time_cache_ns[note_index];
     let hit_time_ns = note_time_ns.saturating_add(time_error_music_ns);
     debug!(
-        "JUDGE MINE HIT: row={}, col={}, beat={:.3}, note_time={:.4}s, hit_time={:.4}s, offset_ms={:.2}, rate={:.3}",
+        "JUDGE MINE HIT MARKED: row={}, col={}, beat={:.3}, note_time={:.4}s, hit_time={:.4}s, offset_ms={:.2}, rate={:.3}",
         state.notes[note_index].row_index,
         column,
         state.notes[note_index].beat,
@@ -6497,10 +6478,55 @@ fn hit_mine(
         judgment_time_error_ms_from_music_ns(time_error_music_ns, rate),
         rate
     );
-    if updated_scoring {
-        update_itg_grade_totals(&mut state.players[player]);
-    }
     true
+}
+
+fn apply_pending_mine_hits(state: &mut State) {
+    if state.pending_mine_hit_indices.is_empty() {
+        return;
+    }
+
+    let pending = std::mem::take(&mut state.pending_mine_hit_indices);
+    let scoring_blocked = autoplay_blocks_scoring(state);
+    let current_music_time = current_music_time_s(state);
+
+    for note_index in pending {
+        let Some(note) = state.notes.get(note_index) else {
+            continue;
+        };
+        if note.mine_result != Some(MineResult::Hit) || note.is_fake || !note.can_be_judged {
+            continue;
+        }
+
+        let column = note.column;
+        let player = player_for_col(state, column);
+        if !scoring_blocked {
+            state.players[player].mines_hit = state.players[player].mines_hit.saturating_add(1);
+        }
+
+        let mut updated_scoring = false;
+        if !scoring_blocked {
+            apply_life_change(
+                &mut state.players[player],
+                current_music_time,
+                LIFE_HIT_MINE,
+            );
+            capture_failed_ex_score_inputs(state, player);
+            if !is_state_dead(state, player) {
+                state.players[player].mines_hit_for_score =
+                    state.players[player].mines_hit_for_score.saturating_add(1);
+                updated_scoring = true;
+            }
+            apply_mine_hit_combo_state(&mut state.players[player]);
+        }
+
+        state.receptor_glow_timers[column] = 0.0;
+        trigger_mine_explosion(state, column);
+        set_last_mine_judgment(state, player, column, MineResult::Hit);
+        if updated_scoring {
+            update_itg_grade_totals(&mut state.players[player]);
+        }
+    }
 }
 
 #[inline(always)]
@@ -7793,6 +7819,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     if let Some(started) = active_holds_started {
         phase_timings.active_holds_us = elapsed_us_since(started);
     }
+    apply_pending_mine_hits(state);
 
     let hold_decay_started = if trace_enabled {
         Some(Instant::now())
@@ -8018,9 +8045,9 @@ mod tests {
         RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TickMode, TurnRng,
         active_hold_counts_as_pressed, add_provisional_early_score, advance_hold_last_held,
         advance_hold_life_ns, advance_judged_row_cursor, apply_autosync_for_row_hits,
-        apply_global_offset_delta, apply_mines_insert, apply_song_offset_delta,
-        autoplay_random_offset_music_ns_for_window, build_assist_clap_rows,
-        build_attack_mask_windows_for_player, build_column_cues_for_player,
+        apply_global_offset_delta, apply_mines_insert, apply_pending_mine_hits,
+        apply_song_offset_delta, autoplay_random_offset_music_ns_for_window,
+        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
         build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
         collect_edge_judge_indices, completed_row_final_judgment,
         completed_row_flash_note_indices_and_grade, count_rescore_tracks_on_row,
@@ -8028,23 +8055,23 @@ mod tests {
         effective_appearance_effects_for_player, effective_player_global_offset_seconds,
         enforce_max_simultaneous_notes, finalize_row_judgment,
         finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, handle_input,
-        input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
-        lane_note_window_bounds_ns, lane_note_window_bounds_rows, lane_press_started,
-        lane_release_finished, late_note_resolution_window_ns, live_autoplay_enabled_from_flags,
-        max_grade_points, max_step_distance_ns, mine_window_bounds_ns,
-        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
-        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
-        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
-        player_row_scan_state, process_input_edges, recent_step_tracks, recompute_player_totals,
-        refresh_active_attack_masks, refresh_timing_after_offset_change,
-        remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
-        row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
+        hit_mine, input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap,
+        lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
+        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
+        live_autoplay_enabled_from_flags, max_grade_points, max_step_distance_ns,
+        mine_window_bounds_ns, music_time_ns_from_song_clock, mutate_timing_arc,
+        next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold, note_hit_eval,
+        parse_attack_mods, parse_song_lua_runtime_mods,
+        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
+        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
+        refresh_timing_after_offset_change, remove_provisional_early_score, replay_edge_cap,
+        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
         single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
         stage_music_cut, step_calories, step_stats_notefield_width,
         suppress_final_bad_rescore_visual, tick_mode_status_line, tick_visual_effects,
-        try_hit_crossed_mines_while_held, turn_option_bits, update_lane_input_slot,
-        visible_notefield_time_ns,
+        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
+        update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::engine::present::color;
@@ -10772,8 +10799,54 @@ mod tests {
         ));
 
         assert_eq!(state.notes[0].mine_result, Some(MineResult::Hit));
+        assert_eq!(state.pending_mine_hit_indices, vec![0]);
+        assert_eq!(state.players[0].mines_hit, 0);
+        assert_eq!(state.players[0].mines_hit_for_score, 0);
+
+        apply_pending_mine_hits(&mut state);
+
         assert_eq!(state.players[0].mines_hit, 1);
         assert_eq!(state.players[0].mines_hit_for_score, 1);
+    }
+
+    #[test]
+    fn mine_hit_side_effects_wait_until_after_active_holds() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        let hold_end_ns = song_time_ns_from_seconds(1.0);
+        state.notes[0] = test_hold(0, 0, ROWS_PER_BEAT as usize);
+        state.hold_end_time_cache_ns[0] = Some(hold_end_ns);
+        set_regression_mine(&mut state, 1, 1, ROWS_PER_BEAT as usize, hold_end_ns);
+        state.players[0].life = 0.04;
+        state.active_holds[0] = Some(super::ActiveHold {
+            note_index: 0,
+            start_time_ns: 0,
+            end_time_ns: hold_end_ns,
+            note_type: NoteType::Hold,
+            let_go: false,
+            is_pressed: true,
+            life: super::MAX_HOLD_LIFE,
+            last_update_time_ns: 0,
+        });
+
+        assert!(hit_mine(&mut state, 1, 1, 0));
+        assert_eq!(state.notes[1].mine_result, Some(MineResult::Hit));
+        assert_eq!(state.players[0].mines_hit, 0);
+        assert!(!state.players[0].is_failing);
+
+        let inputs = std::array::from_fn(|col| col == 0);
+        update_active_holds(&mut state, &inputs, hold_end_ns);
+        assert_eq!(
+            state.notes[0].hold.as_ref().and_then(|hold| hold.result),
+            Some(HoldResult::Held)
+        );
+        assert_eq!(state.players[0].holds_held_for_score, 1);
+        assert!(!state.players[0].is_failing);
+
+        apply_pending_mine_hits(&mut state);
+        assert_eq!(state.players[0].mines_hit, 1);
+        assert_eq!(state.players[0].mines_hit_for_score, 0);
+        assert!(state.players[0].is_failing);
     }
 
     #[test]
