@@ -12,6 +12,7 @@ use std::fs;
 use std::hash::Hasher;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 use twox_hash::XxHash64;
 
 pub(super) fn compute_song_cache_path(path: &Path) -> Option<PathBuf> {
@@ -26,17 +27,33 @@ pub(super) fn compute_song_cache_path(path: &Path) -> Option<PathBuf> {
     }
 }
 
-pub(super) fn load_song_from_cache(path: &Path, cache_path: &Path) -> Option<SongData> {
-    let cached_song = load_cached_song(path, cache_path)?;
+pub(super) fn load_song_from_cache(
+    path: &Path,
+    cache_path: &Path,
+    verify_freshness: bool,
+) -> Option<SongData> {
+    let cached_song = load_cached_song(path, cache_path, verify_freshness)?;
     Some(build_song_meta_from_cache(cached_song.data))
 }
 
 pub(super) fn write_song_cache(
     cache_path: &Path,
-    source_hash: u64,
     data: &SerializableSongData,
     global_offset_seconds: f32,
 ) {
+    let directory_hash = match get_song_directory_hash(Path::new(&data.simfile_path)) {
+        Ok(hash) => hash,
+        Err(error) => {
+            warn!(
+                "Could not hash song directory for {:?}: {}. Cache write skipped.",
+                Path::new(&data.simfile_path)
+                    .file_name()
+                    .unwrap_or_default(),
+                error
+            );
+            return;
+        }
+    };
     let payloads = data
         .charts
         .iter()
@@ -68,7 +85,7 @@ pub(super) fn write_song_cache(
         cache_version: SONG_CACHE_VERSION,
         rssp_version: rssp::RSSP_VERSION.to_string(),
         mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
-        source_hash,
+        directory_hash,
         data: meta,
         chart_payloads,
     };
@@ -112,11 +129,11 @@ pub(super) fn load_gameplay_charts_from_cache(
     song: &SongData,
     requested_chart_ixs: &[usize],
     global_offset_seconds: f32,
-    verify_source: bool,
+    verify_freshness: bool,
 ) -> Option<Vec<GameplayChartData>> {
     let cache_path = compute_song_cache_path(&song.simfile_path)?;
     let (cached_song, payload_start) =
-        load_cached_song_for_gameplay(&song.simfile_path, &cache_path, verify_source)?;
+        load_cached_song_for_gameplay(&song.simfile_path, &cache_path, verify_freshness)?;
     let song_offset = cached_song.data.offset;
     let mut charts = Vec::with_capacity(requested_chart_ixs.len());
     let mut loaded = HashMap::<usize, GameplayChartData>::with_capacity(requested_chart_ixs.len());
@@ -134,18 +151,43 @@ pub(super) fn load_gameplay_charts_from_cache(
     Some(charts)
 }
 
-fn get_content_hash(path: &Path) -> Result<u64, std::io::Error> {
-    let mut file = fs::File::open(path)?;
+fn path_hash(path: &Path) -> u64 {
     let mut hasher = XxHash64::with_seed(0);
-    let mut buffer = [0; 8192];
-    loop {
-        let bytes_read = file.read(&mut buffer)?;
-        if bytes_read == 0 {
-            break;
+    hasher.write(path.to_string_lossy().as_bytes());
+    hasher.finish()
+}
+
+fn file_metadata_hash(path: &Path) -> Result<u64, std::io::Error> {
+    let meta = fs::metadata(path)?;
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |duration| duration.as_secs());
+    Ok(modified.wrapping_add(meta.len()))
+}
+
+fn get_song_directory_hash(simfile_path: &Path) -> Result<u64, std::io::Error> {
+    let parent = simfile_path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "simfile path has no parent directory",
+        )
+    })?;
+    let dir = parent.canonicalize()?;
+    let mut hash = path_hash(&dir);
+    for entry in fs::read_dir(&dir)? {
+        let entry = entry?;
+        if entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.starts_with("._"))
+        {
+            continue;
         }
-        hasher.write(&buffer[..bytes_read]);
+        hash = hash.wrapping_add(file_metadata_hash(&entry.path())?);
     }
-    Ok(hasher.finish())
+    Ok(hash)
 }
 
 fn get_cache_path(simfile_path: &Path) -> Result<PathBuf, std::io::Error> {
@@ -272,9 +314,11 @@ fn load_cached_song_base(path: &Path, cache_path: &Path) -> Option<(CachedSong, 
     Some((cached_song, 16 + header_len))
 }
 
-fn load_cached_song(path: &Path, cache_path: &Path) -> Option<CachedSong> {
+fn load_cached_song(path: &Path, cache_path: &Path, verify_freshness: bool) -> Option<CachedSong> {
     let (cached_song, _) = load_cached_song_base(path, cache_path)?;
-    validate_source_hash(path, &cached_song)?;
+    if verify_freshness {
+        validate_directory_hash(path, &cached_song)?;
+    }
 
     debug!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
     Some(cached_song)
@@ -283,30 +327,30 @@ fn load_cached_song(path: &Path, cache_path: &Path) -> Option<CachedSong> {
 fn load_cached_song_for_gameplay(
     path: &Path,
     cache_path: &Path,
-    verify_source: bool,
+    verify_freshness: bool,
 ) -> Option<(CachedSong, u64)> {
     let (cached_song, payload_start) = load_cached_song_base(path, cache_path)?;
-    if verify_source {
-        validate_source_hash(path, &cached_song)?;
+    if verify_freshness {
+        validate_directory_hash(path, &cached_song)?;
         debug!(
             "Gameplay cache hit for: {:?}",
             path.file_name().unwrap_or_default()
         );
     } else {
         debug!(
-            "Gameplay cache hit (no source rehash) for: {:?}",
+            "Gameplay cache hit (no freshness check) for: {:?}",
             path.file_name().unwrap_or_default()
         );
     }
     Some((cached_song, payload_start))
 }
 
-fn validate_source_hash(path: &Path, cached_song: &CachedSong) -> Option<()> {
-    let content_hash = match get_content_hash(path) {
+fn validate_directory_hash(path: &Path, cached_song: &CachedSong) -> Option<()> {
+    let directory_hash = match get_song_directory_hash(path) {
         Ok(hash) => hash,
         Err(error) => {
             warn!(
-                "Could not hash content of {:?}: {}. Ignoring cache.",
+                "Could not hash song directory for {:?}: {}. Ignoring cache.",
                 path.file_name().unwrap_or_default(),
                 error
             );
@@ -314,9 +358,9 @@ fn validate_source_hash(path: &Path, cached_song: &CachedSong) -> Option<()> {
         }
     };
 
-    if cached_song.source_hash != content_hash {
+    if cached_song.directory_hash != directory_hash {
         debug!(
-            "Cache stale (content hash mismatch) for: {:?}",
+            "Cache stale (directory hash mismatch) for: {:?}",
             path.file_name().unwrap_or_default()
         );
         return None;
@@ -400,30 +444,28 @@ mod tests {
     }
 
     #[test]
-    fn gameplay_cache_rejects_stale_source_when_verifying() {
-        let root = test_dir("gameplay-stale-verified");
+    fn gameplay_cache_rejects_stale_directory_when_verifying() {
+        let root = test_dir("gameplay-stale-directory-verified");
         let simfile = root.join("song.ssc");
         let cache_path = root.join("cache.bin");
         fs::write(&simfile, b"#TITLE:Old;").unwrap();
-        let source_hash = get_content_hash(&simfile).unwrap();
-        write_song_cache(&cache_path, source_hash, &cached_song(&simfile), 0.0);
+        write_song_cache(&cache_path, &cached_song(&simfile), 0.0);
 
-        fs::write(&simfile, b"#TITLE:New;").unwrap();
+        fs::write(root.join("banner.png"), b"new asset").unwrap();
 
         assert!(load_cached_song_for_gameplay(&simfile, &cache_path, true).is_none());
         let _ = fs::remove_dir_all(root);
     }
 
     #[test]
-    fn gameplay_cache_keeps_fastload_stale_source_without_verifying() {
-        let root = test_dir("gameplay-stale-fastload");
+    fn gameplay_cache_keeps_fastload_stale_directory_without_verifying() {
+        let root = test_dir("gameplay-stale-directory-fastload");
         let simfile = root.join("song.ssc");
         let cache_path = root.join("cache.bin");
         fs::write(&simfile, b"#TITLE:Old;").unwrap();
-        let source_hash = get_content_hash(&simfile).unwrap();
-        write_song_cache(&cache_path, source_hash, &cached_song(&simfile), 0.0);
+        write_song_cache(&cache_path, &cached_song(&simfile), 0.0);
 
-        fs::write(&simfile, b"#TITLE:New;").unwrap();
+        fs::write(root.join("banner.png"), b"new asset").unwrap();
 
         assert!(load_cached_song_for_gameplay(&simfile, &cache_path, false).is_some());
         let _ = fs::remove_dir_all(root);
