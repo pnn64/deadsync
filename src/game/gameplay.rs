@@ -1018,7 +1018,7 @@ fn lane_note_window_bounds_rows(
 ) -> (usize, usize) {
     (
         note_indices.partition_point(|&note_index| notes[note_index].row_index < start_row),
-        note_indices.partition_point(|&note_index| notes[note_index].row_index <= end_row),
+        note_indices.partition_point(|&note_index| notes[note_index].row_index < end_row),
     )
 }
 
@@ -11020,6 +11020,21 @@ mod tests {
                 song_time_ns_from_seconds(2.0),
             ),
             (1, 3)
+        );
+    }
+
+    #[test]
+    fn lane_note_row_window_excludes_step_search_end_row() {
+        let notes = vec![
+            test_note(0, 48, NoteType::Tap),
+            test_note(0, 96, NoteType::Tap),
+            test_note(0, 144, NoteType::Tap),
+        ];
+        let note_indices = [0usize, 1, 2];
+
+        assert_eq!(
+            lane_note_window_bounds_rows(&note_indices, &notes, 48, 144),
+            (0, 2)
         );
     }
 
