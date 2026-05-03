@@ -7463,19 +7463,40 @@ fn mine_avoid_log_enabled() -> bool {
 }
 
 #[inline(always)]
-fn apply_time_based_mine_avoidance(state: &mut State, music_time_ns: SongTimeNs) {
+fn missed_note_cutoff_row_for_timing(timing: &TimingData, cutoff_time_ns: SongTimeNs) -> usize {
+    let beat_info = timing.get_beat_info_from_time_ns(cutoff_time_ns);
+    let mut row = timing_row_nearest(timing, beat_info.beat);
+    if beat_info.is_in_freeze && !beat_info.is_in_delay {
+        row = row.saturating_add(1);
+    }
+    row
+}
+
+#[inline(always)]
+fn missed_note_cutoff_row(state: &State, player: usize, music_time_ns: SongTimeNs) -> usize {
     let cutoff_time_ns = music_time_ns.saturating_sub(max_step_distance_ns(
         &state.timing_profile,
         state.music_rate,
     ));
+    missed_note_cutoff_row_for_timing(&state.timing_players[player], cutoff_time_ns)
+}
+
+#[inline(always)]
+fn apply_time_based_mine_avoidance(state: &mut State, music_time_ns: SongTimeNs) {
     let music_time_sec = song_time_ns_to_seconds(music_time_ns);
     let log_mine_avoid = mine_avoid_log_enabled();
     for player in 0..state.num_players {
         let mines_len = state.mine_note_ix[player].len();
         let mine_cursor = state.next_mine_ix_cursor[player].min(mines_len);
-        let mine_end = mine_cursor
-            + state.mine_note_time_ns[player][mine_cursor..]
-                .partition_point(|&t| t <= cutoff_time_ns);
+        let cutoff_row = missed_note_cutoff_row(state, player, music_time_ns);
+        let mut mine_end = mine_cursor;
+        while mine_end < mines_len {
+            let note_idx = state.mine_note_ix[player][mine_end];
+            if state.notes[note_idx].row_index >= cutoff_row {
+                break;
+            }
+            mine_end += 1;
+        }
         let mut avoided_count = 0u32;
         for cursor in mine_cursor..mine_end {
             let note_idx = state.mine_note_ix[player][cursor];
@@ -7516,19 +7537,18 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
         1.0
     };
     let music_time_sec = song_time_ns_to_seconds(music_time_ns);
-    let cutoff_time_ns =
-        music_time_ns.saturating_sub(max_step_distance_ns(&state.timing_profile, rate));
     for player in 0..state.num_players {
         let (note_start, note_end) = player_note_range(state, player);
         let should_score_miss = state.score_missed_holds_rolls[player];
+        let cutoff_row = missed_note_cutoff_row(state, player, music_time_ns);
         let mut cursor = state.next_tap_miss_cursor[player].max(note_start);
         while cursor < note_end {
             let note_time_ns = state.note_time_cache_ns[cursor];
-            if note_time_ns > cutoff_time_ns {
-                break;
-            }
             let (row, col, beat) = {
                 let note = &state.notes[cursor];
+                if note.row_index >= cutoff_row {
+                    break;
+                }
                 if matches!(note.note_type, NoteType::Mine)
                     || !note.can_be_judged
                     || note.result.is_some()
@@ -8046,8 +8066,9 @@ mod tests {
         active_hold_counts_as_pressed, add_provisional_early_score, advance_hold_last_held,
         advance_hold_life_ns, advance_judged_row_cursor, apply_autosync_for_row_hits,
         apply_global_offset_delta, apply_mines_insert, apply_pending_mine_hits,
-        apply_song_offset_delta, autoplay_random_offset_music_ns_for_window,
-        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
+        apply_song_offset_delta, apply_time_based_mine_avoidance, apply_time_based_tap_misses,
+        autoplay_random_offset_music_ns_for_window, build_assist_clap_rows,
+        build_attack_mask_windows_for_player, build_column_cues_for_player,
         build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
         collect_edge_judge_indices, completed_row_final_judgment,
         completed_row_flash_note_indices_and_grade, count_rescore_tracks_on_row,
@@ -8059,9 +8080,9 @@ mod tests {
         lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
         lane_press_started, lane_release_finished, late_note_resolution_window_ns,
         live_autoplay_enabled_from_flags, max_grade_points, max_step_distance_ns,
-        mine_window_bounds_ns, music_time_ns_from_song_clock, mutate_timing_arc,
-        next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold, note_hit_eval,
-        parse_attack_mods, parse_song_lua_runtime_mods,
+        mine_window_bounds_ns, missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock,
+        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold,
+        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
         player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
         recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
         refresh_timing_after_offset_change, remove_provisional_early_score, replay_edge_cap,
@@ -8082,7 +8103,8 @@ mod tests {
     use crate::game::profile;
     use crate::game::song::SongData;
     use crate::game::timing::{
-        ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile, TimingProfileNs, TimingSegments,
+        DelaySegment, ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile, TimingProfileNs,
+        TimingSegments,
     };
     use rssp::{TechCounts, stats::ArrowStats};
     use std::path::PathBuf;
@@ -8365,6 +8387,12 @@ mod tests {
         state.next_mine_ix_cursor[0] = 0;
         state.next_mine_avoid_cursor[0] = note_index;
         state.mines_total[0] = 1;
+    }
+
+    fn set_state_timing(state: &mut super::State, timing: Arc<TimingData>) {
+        state.timing = Arc::clone(&timing);
+        state.timing_players[0] = Arc::clone(&timing);
+        state.timing_players[1] = timing;
     }
 
     #[test]
@@ -10758,6 +10786,111 @@ mod tests {
             ),
             (2, 3)
         );
+    }
+
+    #[test]
+    fn missed_note_cutoff_row_matches_itg_stop_delay_rules() {
+        let row_to_beat = test_row_to_beat(ROWS_PER_BEAT as usize * 4);
+        let stop_timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 60.0)],
+                stops: vec![StopSegment {
+                    beat: 1.0,
+                    duration: 2.0,
+                }],
+                ..TimingSegments::default()
+            },
+            &row_to_beat,
+        );
+        let stop_cutoff_time = stop_timing
+            .get_time_for_beat_ns(1.0)
+            .saturating_add(song_time_ns_from_seconds(0.5));
+        assert_eq!(
+            missed_note_cutoff_row_for_timing(&stop_timing, stop_cutoff_time),
+            ROWS_PER_BEAT as usize + 1
+        );
+
+        let delay_timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 60.0)],
+                delays: vec![DelaySegment {
+                    beat: 1.0,
+                    duration: 2.0,
+                }],
+                ..TimingSegments::default()
+            },
+            &row_to_beat,
+        );
+        let delay_cutoff_time = delay_timing
+            .get_time_for_beat_ns(1.0)
+            .saturating_add(song_time_ns_from_seconds(0.5));
+        assert_eq!(
+            missed_note_cutoff_row_for_timing(&delay_timing, delay_cutoff_time),
+            ROWS_PER_BEAT as usize
+        );
+    }
+
+    #[test]
+    fn delayed_rows_do_not_time_miss_or_avoid_until_delay_finishes() {
+        let timing = Arc::new(TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 60.0)],
+                delays: vec![DelaySegment {
+                    beat: 1.0,
+                    duration: 2.0,
+                }],
+                ..TimingSegments::default()
+            },
+            &test_row_to_beat(ROWS_PER_BEAT as usize * 4),
+        ));
+        let note_time_ns = timing.get_time_for_beat_ns(1.0);
+
+        let mut tap_state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        set_state_timing(&mut tap_state, Arc::clone(&timing));
+        tap_state.note_time_cache_ns[0] = note_time_ns;
+        let miss_distance_ns =
+            max_step_distance_ns(&tap_state.timing_profile, tap_state.music_rate);
+        let inside_delay_music_time = note_time_ns
+            .saturating_add(miss_distance_ns)
+            .saturating_add(song_time_ns_from_seconds(0.5));
+        apply_time_based_tap_misses(&mut tap_state, inside_delay_music_time);
+        assert!(tap_state.notes[0].result.is_none());
+        assert_eq!(tap_state.next_tap_miss_cursor[0], 0);
+
+        let after_delay_music_time = note_time_ns
+            .saturating_add(miss_distance_ns)
+            .saturating_add(song_time_ns_from_seconds(2.1));
+        apply_time_based_tap_misses(&mut tap_state, after_delay_music_time);
+        assert_eq!(
+            tap_state.notes[0].result.as_ref().map(|j| j.grade),
+            Some(JudgeGrade::Miss)
+        );
+
+        let mut mine_state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        set_state_timing(&mut mine_state, Arc::clone(&timing));
+        set_regression_mine(&mut mine_state, 0, 0, ROWS_PER_BEAT as usize, note_time_ns);
+        let mine_distance_ns =
+            max_step_distance_ns(&mine_state.timing_profile, mine_state.music_rate);
+        let inside_delay_music_time = note_time_ns
+            .saturating_add(mine_distance_ns)
+            .saturating_add(song_time_ns_from_seconds(0.5));
+        apply_time_based_mine_avoidance(&mut mine_state, inside_delay_music_time);
+        assert_eq!(mine_state.notes[0].mine_result, None);
+        assert_eq!(mine_state.next_mine_ix_cursor[0], 0);
+
+        let after_delay_music_time = note_time_ns
+            .saturating_add(mine_distance_ns)
+            .saturating_add(song_time_ns_from_seconds(2.1));
+        apply_time_based_mine_avoidance(&mut mine_state, after_delay_music_time);
+        assert_eq!(mine_state.notes[0].mine_result, Some(MineResult::Avoided));
     }
 
     #[test]
