@@ -8015,17 +8015,17 @@ mod tests {
         max_step_distance_ns, mine_window_bounds_ns, music_time_ns_from_song_clock,
         mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold,
         note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
-        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
-        recompute_player_totals, refresh_active_attack_masks, refresh_timing_after_offset_change,
-        remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
-        row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
+        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
+        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
+        refresh_timing_after_offset_change, remove_provisional_early_score, replay_edge_cap,
+        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
         single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
         stage_music_cut, step_calories, step_stats_notefield_width,
         suppress_final_bad_rescore_visual, tick_mode_status_line, tick_visual_effects,
         turn_option_bits, update_lane_input_slot, visible_notefield_time_ns,
     };
-    use crate::engine::input::{InputEvent, InputSource, Lane, VirtualAction};
+    use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::engine::present::color;
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
     use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
@@ -8119,6 +8119,12 @@ mod tests {
             last_held_row_index: row_index,
             last_held_beat: row_index as f32 / ROWS_PER_BEAT as f32,
         });
+        note
+    }
+
+    fn test_roll(column: usize, row_index: usize, end_row_index: usize) -> Note {
+        let mut note = test_hold(column, row_index, end_row_index);
+        note.note_type = NoteType::Roll;
         note
     }
 
@@ -8341,6 +8347,27 @@ mod tests {
             timestamp_host_nanos: 0,
             stored_at: now,
             emitted_at: now,
+        }
+    }
+
+    fn test_input_edge_at(
+        lane: Lane,
+        pressed: bool,
+        event_music_time_ns: super::SongTimeNs,
+    ) -> InputEdge {
+        let now = Instant::now();
+        InputEdge {
+            lane,
+            input_slot: 0,
+            pressed,
+            source: InputSource::Keyboard,
+            record_replay: false,
+            captured_at: now,
+            captured_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+            queued_at: now,
+            event_music_time_ns,
         }
     }
 
@@ -8815,6 +8842,55 @@ mod tests {
             .zero_elapsed_music_ns
             .expect("roll should cross zero");
         assert!((song_time_ns_to_seconds(zero_elapsed) - 0.35).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn roll_step_refreshes_before_event_time_decay() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        let mut roll = test_roll(0, 0, ROWS_PER_BEAT as usize * 4);
+        roll.result = Some(Judgment {
+            time_error_ms: 0.0,
+            time_error_music_ns: 0,
+            grade: JudgeGrade::Fantastic,
+            window: Some(TimingWindow::W1),
+            miss_because_held: false,
+        });
+        state.notes[0] = roll;
+
+        let event_time_ns = song_time_ns_from_seconds(super::TIMING_WINDOW_SECONDS_ROLL + 0.01);
+        state.active_holds[0] = Some(super::ActiveHold {
+            note_index: 0,
+            start_time_ns: 0,
+            end_time_ns: song_time_ns_from_seconds(2.0),
+            note_type: NoteType::Roll,
+            let_go: false,
+            is_pressed: false,
+            life: super::MAX_HOLD_LIFE,
+            last_update_time_ns: 0,
+        });
+        state
+            .pending_edges
+            .push_back(test_input_edge_at(Lane::Left, true, event_time_ns));
+
+        let now = Instant::now();
+        let clock = super::SongClockSnapshot {
+            song_time_ns: event_time_ns,
+            seconds_per_second: 1.0,
+            valid_at: now,
+            valid_at_host_nanos: 0,
+        };
+        let mut phase_timings = super::GameplayUpdatePhaseTimings::default();
+        process_input_edges(&mut state, false, &mut phase_timings, clock);
+
+        let active = state.active_holds[0]
+            .as_ref()
+            .expect("roll should remain active after the body step");
+        assert_eq!(active.life, super::MAX_HOLD_LIFE);
+        assert_eq!(active.last_update_time_ns, event_time_ns);
+        let hold = state.notes[0].hold.as_ref().expect("roll hold data");
+        assert_eq!(hold.result, None);
+        assert_eq!(hold.life, super::MAX_HOLD_LIFE);
     }
 
     #[test]

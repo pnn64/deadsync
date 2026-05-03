@@ -387,6 +387,7 @@ pub(super) fn refresh_roll_life_on_step(
     };
     if !matches!(active.note_type, NoteType::Roll)
         || active.let_go
+        || active.life <= 0.0
         || song_time_ns_invalid(event_time_ns)
         || event_time_ns < active.start_time_ns
     {

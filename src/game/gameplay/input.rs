@@ -170,6 +170,19 @@ fn remove_input_slot_if_empty(state: &mut State, idx: usize) {
     }
 }
 
+#[inline(always)]
+fn input_slot_lane_is_down(
+    state: &State,
+    lane: Lane,
+    source: InputSource,
+    input_slot: u32,
+) -> bool {
+    let input_slot = normalized_input_slot(lane, input_slot);
+    let bit = lane_bit(lane.index());
+    find_input_slot(state, source, input_slot)
+        .is_some_and(|idx| state.input_slots[idx].lane_mask & bit != 0)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct LaneInputUpdate {
     pub(super) was_down: bool,
@@ -568,6 +581,12 @@ pub(super) fn process_input_edges(
             continue;
         }
         let event_music_time = song_time_ns_to_seconds(edge.event_music_time_ns);
+        let slot_was_down = input_slot_lane_is_down(state, edge.lane, edge.source, edge.input_slot);
+        let edge_judges_tap = lane_edge_judges_tap(edge.pressed, slot_was_down);
+        let edge_judges_lift = lane_edge_judges_lift(edge.pressed, slot_was_down);
+        if edge_judges_tap {
+            refresh_roll_life_on_step(state, lane_idx, edge.event_music_time_ns);
+        }
         integrate_active_hold_to_time(state, lane_idx, edge.event_music_time_ns);
         if edge.record_replay {
             state.replay_edges.push(RecordedLaneEdge {
@@ -618,6 +637,7 @@ pub(super) fn process_input_edges(
         };
         let lane_update =
             update_lane_input_slot(state, edge.lane, edge.source, edge.input_slot, edge.pressed);
+        debug_assert_eq!(lane_update.slot_was_down, slot_was_down);
         if let Some(started) = state_started {
             add_elapsed_us(&mut phase_timings.input_state_us, started);
         }
@@ -649,7 +669,7 @@ pub(super) fn process_input_edges(
             }
         }
 
-        if lane_edge_judges_tap(edge.pressed, lane_update.slot_was_down) {
+        if edge_judges_tap {
             let event_music_time_ns = edge.event_music_time_ns;
             let hit_note = if trace_enabled {
                 let started = Instant::now();
@@ -673,7 +693,7 @@ pub(super) fn process_input_edges(
             } else {
                 state.receptor_bop_timers[lane_idx] = 0.11;
             }
-        } else if lane_edge_judges_lift(edge.pressed, lane_update.slot_was_down) {
+        } else if edge_judges_lift {
             let hit_lift =
                 judge_a_lift(state, lane_idx, event_music_time, edge.event_music_time_ns);
             if hit_lift && state.tick_mode == TickMode::Hit {
