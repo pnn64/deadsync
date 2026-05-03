@@ -1,3 +1,4 @@
+use crate::config::DefaultFailType;
 use crate::engine::audio;
 use crate::engine::input::{InputEdge, InputSource};
 use crate::engine::present::color;
@@ -3545,6 +3546,7 @@ pub struct State {
     pub music_end_time_ns: SongTimeNs,
     pub music_rate: f32,
     pub play_mine_sounds: bool,
+    pub default_fail_type: DefaultFailType,
     pub global_offset_seconds: f32,
     pub initial_global_offset_seconds: f32,
     pub player_global_offset_shift_seconds: [f32; MAX_PLAYERS],
@@ -6011,6 +6013,7 @@ pub fn init(
         music_end_time_ns,
         music_rate: rate,
         play_mine_sounds: config.mine_hit_sound,
+        default_fail_type: config.default_fail_type,
         global_offset_seconds: config.global_offset_seconds,
         initial_global_offset_seconds: config.global_offset_seconds,
         player_global_offset_shift_seconds,
@@ -7969,10 +7972,8 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         return GameplayAction::Navigate(GameplayExit::Complete);
     }
 
-    if matches!(
-        crate::config::get().default_fail_type,
-        crate::config::DefaultFailType::Immediate
-    ) && all_joined_players_failed(state)
+    if matches!(state.default_fail_type, DefaultFailType::Immediate)
+        && all_joined_players_failed(state)
     {
         debug!("All joined players failed. Transitioning to evaluation.");
         state.song_completed_naturally = false;
