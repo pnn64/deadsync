@@ -36,7 +36,6 @@ pub(crate) struct PlayerTotals {
     pub(crate) holds: u32,
     pub(crate) rolls: u32,
     pub(crate) mines: u32,
-    pub(crate) jumps: u32,
     pub(crate) hands: u32,
 }
 
@@ -102,9 +101,6 @@ pub(crate) fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)
         }
         let notes_on_row = row_mask.count_ones();
         let carried_holds = hold_start_ix.saturating_sub(hold_end_ix) as u32;
-        if notes_on_row >= 2 {
-            totals.jumps = totals.jumps.saturating_add(1);
-        }
         if notes_on_row + carried_holds >= 3 {
             totals.hands = totals.hands.saturating_add(1);
         }

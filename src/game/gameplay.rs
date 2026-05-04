@@ -3680,9 +3680,6 @@ pub struct State {
     pub rolls_total: [u32; MAX_PLAYERS],
     pub mines_total: [u32; MAX_PLAYERS],
     pub total_steps: [u32; MAX_PLAYERS],
-    #[allow(dead_code)]
-    // Stored for parity with transformed radar values; no live UI reads this yet.
-    pub jumps_total: [u32; MAX_PLAYERS],
     pub hands_total: [u32; MAX_PLAYERS],
 
     pub total_elapsed_in_screen: f32,
@@ -5396,7 +5393,6 @@ pub fn init(
     let chart_layout_changed = (0..num_players)
         .any(|player| player_changes_chart(&gameplay_charts[player], &player_profiles[player]));
     let mut total_steps = [0u32; MAX_PLAYERS];
-    let mut jumps_total = [0u32; MAX_PLAYERS];
     let mut hands_total = [0u32; MAX_PLAYERS];
     let mut possible_grade_points = [0i32; MAX_PLAYERS];
     if chart_layout_changed {
@@ -5409,7 +5405,6 @@ pub fn init(
             holds_total[player] = totals.holds;
             rolls_total[player] = totals.rolls;
             mines_total[player] = totals.mines;
-            jumps_total[player] = totals.jumps;
             hands_total[player] = totals.hands;
             possible_grade_points[player] = max_grade_points(
                 &notes,
@@ -5425,7 +5420,6 @@ pub fn init(
             holds_total[player] = charts[player].holds_total;
             rolls_total[player] = charts[player].rolls_total;
             mines_total[player] = charts[player].mines_total;
-            jumps_total[player] = charts[player].stats.jumps;
             hands_total[player] = charts[player].stats.hands;
             possible_grade_points[player] = charts[player].possible_grade_points;
         }
@@ -5436,7 +5430,6 @@ pub fn init(
         rolls_total[1] = rolls_total[0];
         mines_total[1] = mines_total[0];
         total_steps[1] = total_steps[0];
-        jumps_total[1] = jumps_total[0];
         hands_total[1] = hands_total[0];
         score_valid[1] = score_valid[0];
         score_missed_holds_rolls[1] = score_missed_holds_rolls[0];
@@ -6137,7 +6130,6 @@ pub fn init(
         rolls_total,
         mines_total,
         total_steps,
-        jumps_total,
         hands_total,
         total_elapsed_in_screen: 0.0,
         lobby_music_started: false,
@@ -10177,7 +10169,7 @@ return Def.ActorFrame{}
     }
 
     #[test]
-    fn recompute_totals_count_three_note_row_as_jump_and_hand() {
+    fn recompute_totals_count_three_note_row_as_hand() {
         let notes = vec![
             test_note(0, 48, NoteType::Tap),
             test_note(1, 48, NoteType::Tap),
@@ -10187,12 +10179,11 @@ return Def.ActorFrame{}
         let totals = recompute_player_totals(&notes, (0, notes.len()));
 
         assert_eq!(totals.steps, 1);
-        assert_eq!(totals.jumps, 1);
         assert_eq!(totals.hands, 1);
     }
 
     #[test]
-    fn recompute_totals_count_hold_assisted_hand_without_losing_jump() {
+    fn recompute_totals_count_hold_assisted_hand() {
         let notes = vec![
             test_hold(0, 0, 96),
             test_note(1, 48, NoteType::Tap),
@@ -10203,7 +10194,6 @@ return Def.ActorFrame{}
 
         assert_eq!(totals.holds, 1);
         assert_eq!(totals.steps, 2);
-        assert_eq!(totals.jumps, 1);
         assert_eq!(totals.hands, 1);
     }
 
