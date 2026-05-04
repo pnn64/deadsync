@@ -4259,6 +4259,14 @@ pub fn build_bundles(
                     1.0
                 };
                 let receptor_slot = &receptor_ns.receptor_off[i];
+                let receptor_reverse = receptor_ns
+                    .receptor_off_reverse
+                    .get(i)
+                    .copied()
+                    .unwrap_or_default()
+                    .state(column_reverse_percent[i] > 0.5);
+                let receptor_rotation =
+                    receptor_slot.def.rotation_deg as f32 + receptor_reverse.base_rotation_z();
                 let receptor_frame =
                     receptor_slot.frame_index(state.total_elapsed_in_screen, current_beat);
                 let receptor_uv =
@@ -4271,7 +4279,7 @@ pub fn build_bundles(
                 let alpha = receptor_color[3] * receptor_alpha;
                 if alpha > f32::EPSILON {
                     actors.push(act!(sprite(receptor_slot.texture_key_handle()):
-                        align(0.5, 0.5):
+                        align(0.5, receptor_reverse.vert_align()):
                         xy(receptor_center[0], receptor_center[1]):
                         setsize(receptor_size[0], receptor_size[1]):
                         zoom(bop_zoom):
@@ -4282,7 +4290,7 @@ pub fn build_bundles(
                             alpha
                         ):
                         rotationy(note_rotation_y):
-                        rotationz(-receptor_slot.def.rotation_deg as f32 + confusion_receptor_rot):
+                        rotationz(-receptor_rotation + confusion_receptor_rot):
                         customtexturerect(
                             receptor_uv[0],
                             receptor_uv[1],
@@ -4436,15 +4444,23 @@ pub fn build_bundles(
                         glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen);
                     let glow_size = scale_explosion(logical_slot_size(glow_slot));
                     let behavior = receptor_ns.receptor_glow_behavior;
+                    let glow_reverse = receptor_ns
+                        .receptor_glow_reverse
+                        .get(i)
+                        .copied()
+                        .unwrap_or_default()
+                        .state(column_reverse_percent[i] > 0.5);
+                    let glow_rotation =
+                        glow_slot.def.rotation_deg as f32 + glow_reverse.base_rotation_z();
                     let width = glow_size[0] * zoom;
                     let height = glow_size[1] * zoom;
                     if behavior.blend_add {
                         actors.push(act!(sprite(glow_slot.texture_key_handle()):
-                            align(0.5, 0.5):
+                            align(0.5, glow_reverse.vert_align()):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(width, height):
                             rotationy(note_rotation_y):
-                            rotationz(-glow_slot.def.rotation_deg as f32 + confusion_receptor_rot):
+                            rotationz(-glow_rotation + confusion_receptor_rot):
                             customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
                             diffuse(1.0, 1.0, 1.0, alpha):
                             blend(add):
@@ -4452,11 +4468,11 @@ pub fn build_bundles(
                         ));
                     } else {
                         actors.push(act!(sprite(glow_slot.texture_key_handle()):
-                            align(0.5, 0.5):
+                            align(0.5, glow_reverse.vert_align()):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(width, height):
                             rotationy(note_rotation_y):
-                            rotationz(-glow_slot.def.rotation_deg as f32 + confusion_receptor_rot):
+                            rotationz(-glow_rotation + confusion_receptor_rot):
                             customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
                             diffuse(1.0, 1.0, 1.0, alpha):
                             blend(normal):

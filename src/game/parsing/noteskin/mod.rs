@@ -1001,6 +1001,41 @@ impl Default for ReceptorGlowBehavior {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ReceptorReverseState {
+    pub base_rotation_z: Option<f32>,
+    pub vert_align: Option<f32>,
+}
+
+impl ReceptorReverseState {
+    #[inline(always)]
+    pub fn base_rotation_z(self) -> f32 {
+        self.base_rotation_z.unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn vert_align(self) -> f32 {
+        self.vert_align.unwrap_or(0.5)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ReceptorReverseBehavior {
+    pub reverse_off: ReceptorReverseState,
+    pub reverse_on: ReceptorReverseState,
+}
+
+impl ReceptorReverseBehavior {
+    #[inline(always)]
+    pub const fn state(self, reverse: bool) -> ReceptorReverseState {
+        if reverse {
+            self.reverse_on
+        } else {
+            self.reverse_off
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct HoldVisuals {
     pub head_inactive: Option<SpriteSlot>,
@@ -1182,6 +1217,8 @@ pub struct Noteskin {
     pub lift_note_layers: Vec<Arc<[SpriteSlot]>>,
     pub receptor_off: Vec<SpriteSlot>,
     pub receptor_glow: Vec<Option<SpriteSlot>>,
+    pub receptor_off_reverse: Vec<ReceptorReverseBehavior>,
+    pub receptor_glow_reverse: Vec<ReceptorReverseBehavior>,
     pub mines: Vec<Option<SpriteSlot>>,
     pub mine_fill_slots: Vec<Option<SpriteSlot>>,
     pub mine_frames: Vec<Option<SpriteSlot>>,
@@ -2165,6 +2202,8 @@ fn load_itg_sprite_noteskin_compiled(
         Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
     let mut receptor_off = Vec::with_capacity(style.num_cols);
     let mut receptor_glow = Vec::with_capacity(style.num_cols);
+    let mut receptor_off_reverse = Vec::with_capacity(style.num_cols);
+    let mut receptor_glow_reverse = Vec::with_capacity(style.num_cols);
     let mut mines = Vec::with_capacity(style.num_cols);
     let mut mine_frames = Vec::with_capacity(style.num_cols);
     let mut hold_columns = Vec::with_capacity(style.num_cols);
@@ -2281,6 +2320,10 @@ fn load_itg_sprite_noteskin_compiled(
                 itg_find_texture_with_prefix(data, "_receptor").and_then(|p| itg_slot_from_path(&p))
             })
             .ok_or_else(|| format!("failed to resolve Receptor for button '{button}'"))?;
+        let receptor_reverse = receptor_sprites
+            .first()
+            .map(|s| itg_receptor_reverse_behavior(&s.commands))
+            .unwrap_or_default();
         let glow_slot = receptor_sprites
             .get(1)
             .map(|s| s.slot.clone())
@@ -2299,8 +2342,14 @@ fn load_itg_sprite_noteskin_compiled(
                     None
                 }
             });
+        let glow_reverse = receptor_sprites
+            .get(1)
+            .map(|s| itg_receptor_reverse_behavior(&s.commands))
+            .unwrap_or_default();
         receptor_off.push(receptor_slot);
         receptor_glow.push(glow_slot);
+        receptor_off_reverse.push(receptor_reverse);
+        receptor_glow_reverse.push(glow_reverse);
 
         let mut mine_sprites =
             itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Mine")
@@ -2857,6 +2906,8 @@ fn load_itg_sprite_noteskin_compiled(
         lift_note_layers,
         receptor_off,
         receptor_glow,
+        receptor_off_reverse,
+        receptor_glow_reverse,
         tap_explosions,
         mine_hit_explosion,
         hold,
@@ -3005,6 +3056,42 @@ fn itg_receptor_pulse_from_script(command: &str) -> ReceptorPulse {
     }
 
     pulse
+}
+
+fn itg_receptor_reverse_behavior(commands: &HashMap<String, String>) -> ReceptorReverseBehavior {
+    ReceptorReverseBehavior {
+        reverse_off: commands
+            .get("reverseoffcommand")
+            .map(|script| itg_receptor_reverse_state(script))
+            .unwrap_or_default(),
+        reverse_on: commands
+            .get("reverseoncommand")
+            .map(|script| itg_receptor_reverse_state(script))
+            .unwrap_or_default(),
+    }
+}
+
+fn itg_receptor_reverse_state(script: &str) -> ReceptorReverseState {
+    let mut out = ReceptorReverseState::default();
+    for raw_token in script.split(';') {
+        let token = raw_token.trim();
+        if token.is_empty() {
+            continue;
+        }
+        let Some((cmd, args)) = split_script_token(token) else {
+            continue;
+        };
+        match cmd.as_str() {
+            "baserotationz" => {
+                out.base_rotation_z = args.first().and_then(|v| parse_script_number(v));
+            }
+            "vertalign" | "valign" => {
+                out.vert_align = args.first().and_then(|v| parse_script_vertalign(v));
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -6729,6 +6816,93 @@ return t
                 "receptor pulse should ignore fallback InitCommand at beat {beat}, got {color:?}"
             );
         }
+
+        let _ = fs::remove_dir_all(&root);
+        clear_itg_runtime_caches();
+    }
+
+    #[test]
+    fn receptor_reverse_commands_are_kept_per_layer() {
+        clear_itg_runtime_caches();
+        let root = temp_noteskin_root("receptor-reverse-command");
+        let skin_dir = root.join("dance/revbar");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=revbar\n",
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+skin.ButtonRedir = { Up = "Down", Down = "Down", Left = "Down", Right = "Down" }
+
+function skin.Load()
+    local button = skin.ButtonRedir[Var "Button"] or Var "Button"
+    return LoadActor(NOTESKIN:GetPath(button, Var "Element"))
+end
+
+return skin
+"#,
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("Down Receptor.lua"),
+            r#"local t = Def.ActorFrame {
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath("_down", "go receptor");
+        Frame0000=0;
+        Delay0000=0;
+        ReverseOnCommand=function(self)
+            self:baserotationz(180)
+        end;
+        ReverseOffCommand=function(self)
+            self:baserotationz(0)
+        end;
+    };
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath("_down", "tap flash");
+        Frame0000=0;
+        Delay0000=1;
+        ReverseOnCommand=function(self)
+            self:baserotationz(180):vertalign("bottom")
+        end;
+        ReverseOffCommand=function(self)
+            self:baserotationz(0):vertalign("top")
+        end;
+    };
+};
+return t
+"#,
+        )
+        .unwrap();
+        write_noteskin_png(&skin_dir.join("Down Tap Note.png"));
+        write_noteskin_png(&skin_dir.join("_down go receptor.png"));
+        write_noteskin_png(&skin_dir.join("_down tap flash.png"));
+
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns =
+            load_itg(&root, "dance", "revbar", &style).expect("revbar test noteskin should load");
+        let off = ns
+            .receptor_off_reverse
+            .first()
+            .copied()
+            .expect("revbar should keep receptor reverse commands");
+        assert_eq!(off.state(false).base_rotation_z, Some(0.0));
+        assert_eq!(off.state(true).base_rotation_z, Some(180.0));
+
+        let glow = ns
+            .receptor_glow_reverse
+            .first()
+            .copied()
+            .expect("revbar should keep receptor glow reverse commands");
+        assert_eq!(glow.state(false).base_rotation_z, Some(0.0));
+        assert_eq!(glow.state(false).vert_align, Some(0.0));
+        assert_eq!(glow.state(true).base_rotation_z, Some(180.0));
+        assert_eq!(glow.state(true).vert_align, Some(1.0));
 
         let _ = fs::remove_dir_all(&root);
         clear_itg_runtime_caches();
