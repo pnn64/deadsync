@@ -579,22 +579,22 @@ pub fn prewarm_text_layout(
     }
 }
 
-pub fn build(
+pub fn push_step_stats(
+    actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
     playfield_center_x: f32,
     player_side: profile::PlayerSide,
-) -> Vec<Actor> {
+) {
     let wide = is_wide();
     let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
-    let mut actors = Vec::with_capacity(if wide { 48 } else { 1 });
-    build_banner(&mut actors, state, layout, wide, player_side);
-    build_pack_banner(&mut actors, state, layout, wide, player_side);
-    build_steps_info(&mut actors, state, layout, wide, player_side);
-    build_side_pane(&mut actors, state, asset_manager, layout, wide, player_side);
-    build_holds_mines_rolls_pane(&mut actors, state, asset_manager, layout, wide, player_side);
-    build_scorebox_pane(&mut actors, state, layout, wide, player_side);
-    actors
+    actors.reserve(if wide { 48 } else { 1 });
+    build_banner(actors, state, layout, wide, player_side);
+    build_pack_banner(actors, state, layout, wide, player_side);
+    build_steps_info(actors, state, layout, wide, player_side);
+    build_side_pane(actors, state, asset_manager, layout, wide, player_side);
+    build_holds_mines_rolls_pane(actors, state, asset_manager, layout, wide, player_side);
+    build_scorebox_pane(actors, state, layout, wide, player_side);
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -667,25 +667,29 @@ fn step_stats_pane_layout(
     }
 }
 
-pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+pub fn push_versus_step_stats(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+) {
     if !is_wide() {
-        return vec![];
+        return;
     }
     // Simply Love shows centered step stats in 2P versus on widescreen, but not on ultrawide
     // (ultrawide already has native per-player side panes).
     let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
     if is_ultrawide {
-        return vec![];
+        return;
     }
     if state.num_players < 2 || state.players.len() < 2 {
-        return vec![];
+        return;
     }
     let show_for: [bool; 2] = [
         state.player_profiles[0].data_visualizations == profile::DataVisualizations::StepStatistics,
         state.player_profiles[1].data_visualizations == profile::DataVisualizations::StepStatistics,
     ];
     if !show_for[0] && !show_for[1] {
-        return vec![];
+        return;
     }
 
     let center_x = screen_center_x();
@@ -715,7 +719,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
     let z_bg = 80i16;
     let z_fg = 110i16;
 
-    let mut actors = Vec::with_capacity(128);
+    actors.reserve(128);
     // Center black column behind the counters (SL: VersusStepStatistics.lua).
     actors.push(act!(quad:
         align(0.5, 0.5):
@@ -788,7 +792,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                             group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
                         let (dim_text, bright_text) = cached_padded_runs(count, digits);
                         push_versus_count_texts(
-                            &mut actors,
+                            actors,
                             is_p1,
                             anchor_x,
                             y,
@@ -816,7 +820,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                             group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
                         let (dim_text, bright_text) = cached_padded_runs(count, digits);
                         push_versus_count_texts(
-                            &mut actors,
+                            actors,
                             is_p1,
                             anchor_x,
                             y,
@@ -873,28 +877,27 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
             z(z_fg)
         ));
     }
-
-    actors
 }
 
-pub fn build_double_step_stats(
+pub fn push_double_step_stats(
+    actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
     playfield_center_x: f32,
-) -> Vec<Actor> {
+) {
     if !is_wide() {
-        return vec![];
+        return;
     }
     let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
     if is_ultrawide {
-        return vec![];
+        return;
     }
     if state.cols_per_player <= 4 {
-        return vec![];
+        return;
     }
 
     let Some(notefield_width) = notefield_width(state) else {
-        return vec![];
+        return;
     };
 
     // Simply Love: StepStatistics/default.lua
@@ -913,7 +916,7 @@ pub fn build_double_step_stats(
         1.0
     };
 
-    let mut actors = Vec::with_capacity(256);
+    actors.reserve(256);
 
     // DarkBackground.lua (double): two 200px-wide panels flanking the notefield.
     let nf_half_w = notefield_width * 0.5;
@@ -1164,7 +1167,7 @@ pub fn build_double_step_stats(
         let frame_cy = pane_cy + ((-10.0 + 0.8 * 28.0) * banner_data_zoom);
         let frame_zoom = 0.8 * banner_data_zoom;
 
-        actors.extend(build_holds_mines_rolls_pane_at(
+        actors.push(build_holds_mines_rolls_pane_at(
             state,
             asset_manager,
             frame_cx,
@@ -1298,8 +1301,6 @@ pub fn build_double_step_stats(
             z(200)
         ));
     }
-
-    actors
 }
 
 // --- Statics for Judgment Counter Display ---
@@ -1536,9 +1537,8 @@ fn build_holds_mines_rolls_pane_at(
     frame_cx: f32,
     frame_cy: f32,
     frame_zoom: f32,
-) -> Vec<Actor> {
+) -> Actor {
     let p = &state.players[0];
-    let mut actors = Vec::with_capacity(1);
 
     let categories = [
         (0usize, p.holds_held, state.holds_total[0]),
@@ -1635,15 +1635,14 @@ fn build_holds_mines_rolls_pane_at(
         });
     });
 
-    actors.push(Actor::Frame {
+    Actor::Frame {
         align: [0.5, 0.5],
         offset: [frame_cx, frame_cy],
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         children,
         background: None,
         z: 70,
-    });
-    actors
+    }
 }
 
 fn notefield_width(state: &State) -> Option<f32> {

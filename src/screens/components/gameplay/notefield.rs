@@ -3367,25 +3367,6 @@ pub fn build_bundles(
     play_style: profile::PlayStyle,
     center_1player_notefield: bool,
     capture_requests: ProxyCaptureRequests,
-) -> BuiltNotefield {
-    build_bundles_with_view(
-        state,
-        profile,
-        placement,
-        play_style,
-        center_1player_notefield,
-        capture_requests,
-        ViewOverride::default(),
-    )
-}
-
-pub fn build_bundles_with_view(
-    state: &State,
-    profile: &profile::Profile,
-    placement: FieldPlacement,
-    play_style: profile::PlayStyle,
-    center_1player_notefield: bool,
-    capture_requests: ProxyCaptureRequests,
     view: ViewOverride,
 ) -> BuiltNotefield {
     let hold_judgment_texture = resolved_hold_judgment_texture(profile);
@@ -7826,43 +7807,18 @@ pub fn build_bundles_with_view(
     } else {
         Vec::new()
     };
-    if hud_actors.is_empty() {
-        return BuiltNotefield {
-            actors,
-            layout_center_x,
-            field_actors,
-            judgment_actors,
-            combo_actors,
-        };
+    if !hud_actors.is_empty() {
+        hud_actors.reserve(actors.len());
+        hud_actors.extend(actors);
+        actors = hud_actors;
     }
-    let mut out: Vec<Actor> = Vec::with_capacity(hud_actors.len() + actors.len());
-    out.extend(hud_actors);
-    out.extend(actors);
     BuiltNotefield {
-        actors: out,
+        actors,
         layout_center_x,
         field_actors,
         judgment_actors,
         combo_actors,
     }
-}
-
-pub fn build(
-    state: &State,
-    profile: &profile::Profile,
-    placement: FieldPlacement,
-    play_style: profile::PlayStyle,
-    center_1player_notefield: bool,
-) -> (Vec<Actor>, f32) {
-    let built = build_bundles(
-        state,
-        profile,
-        placement,
-        play_style,
-        center_1player_notefield,
-        ProxyCaptureRequests::default(),
-    );
-    (built.actors, built.layout_center_x)
 }
 
 #[cfg(test)]

@@ -5785,7 +5785,8 @@ fn song_lua_player_target_x(
     })
 }
 
-fn build_song_lua_layer_actors(
+fn push_song_lua_layer_actors(
+    out: &mut Vec<Actor>,
     overlays: &[SongLuaOverlayActor],
     local_overlay_states: &[SongLuaOverlayState],
     overlay_states: &[SongLuaOverlayState],
@@ -5797,12 +5798,12 @@ fn build_song_lua_layer_actors(
     effect_time: f32,
     effect_beat: f32,
     total_elapsed: f32,
-) -> Vec<Actor> {
+) {
     let song_lua_overlay_base_z = song_lua_add_z(
         SONG_LUA_LAYER_Z_BASE,
         song_lua_rounded_z(song_foreground_state.z),
     );
-    let mut out = Vec::with_capacity(overlays.len());
+    out.reserve(overlays.len());
     for (draw_idx, idx) in song_lua_overlay_order(overlays, overlay_states, None)
         .into_iter()
         .enumerate()
@@ -5879,38 +5880,19 @@ fn build_song_lua_layer_actors(
             out.push(actor);
         }
     }
-    out
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
-    get_actors_with_view(state, asset_manager, ActorViewOverride::default())
-}
-
-pub fn get_actors_with_notefield_view(
-    state: &State,
-    asset_manager: &AssetManager,
-    notefield_view: NotefieldViewOverride,
-) -> Vec<Actor> {
-    get_actors_with_view(
-        state,
-        asset_manager,
-        ActorViewOverride {
-            notefield: notefield_view,
-            hide_gameplay_hud: false,
-        },
-    )
-}
-
-pub fn get_actors_with_view(
+pub fn push_actors(
+    mut actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
     view: ActorViewOverride,
-) -> Vec<Actor> {
+) {
     let notefield_view = view.notefield;
     let hide_gameplay_hud = view.hide_gameplay_hud;
     let cfg = crate::config::get();
     let hud_snapshot = profile::gameplay_hud_snapshot();
-    let mut actors = Vec::with_capacity(96);
+    actors.reserve(96);
     let play_style = hud_snapshot.play_style;
     let player_side = hud_snapshot.player_side;
     let is_p2_single =
@@ -5948,7 +5930,8 @@ pub fn get_actors_with_view(
             &layer.song_foreground,
             layer.song_foreground_events.as_slice(),
         );
-        actors.extend(build_song_lua_layer_actors(
+        push_song_lua_layer_actors(
+            &mut actors,
             &layer.overlays,
             &local_overlay_states,
             &overlay_states,
@@ -5960,7 +5943,7 @@ pub fn get_actors_with_view(
             state.current_music_time_display,
             state.current_beat,
             state.total_elapsed_in_screen,
-        ));
+        );
     }
     song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_start);
     let cover_alpha = |player_idx: usize| -> f32 {
@@ -6203,7 +6186,7 @@ pub fn get_actors_with_view(
             field_actors,
             judgment_actors,
             combo_actors,
-        } = notefield::build_bundles_with_view(
+        } = notefield::build_bundles(
             state,
             profile,
             placement,
@@ -7267,23 +7250,22 @@ pub fn get_actors_with_view(
         };
         if show_step_stats {
             if state.num_cols <= 4 && play_style != profile::PlayStyle::Versus {
-                actors.extend(gameplay_stats::build(
+                gameplay_stats::push_step_stats(
+                    &mut actors,
                     state,
                     asset_manager,
                     playfield_center_x,
                     player_side,
-                ));
+                );
             } else if play_style == profile::PlayStyle::Versus {
-                actors.extend(gameplay_stats::build_versus_step_stats(
-                    state,
-                    asset_manager,
-                ));
+                gameplay_stats::push_versus_step_stats(&mut actors, state, asset_manager);
             } else if play_style == profile::PlayStyle::Double {
-                actors.extend(gameplay_stats::build_double_step_stats(
+                gameplay_stats::push_double_step_stats(
+                    &mut actors,
                     state,
                     asset_manager,
                     playfield_center_x,
-                ));
+                );
             }
         }
         song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_tail_start);
@@ -7315,7 +7297,9 @@ pub fn get_actors_with_view(
             underlay_proxy_slice,
             overlay_proxy_slice,
         );
-        build_song_lua_layer_actors(
+        let mut out = Vec::new();
+        push_song_lua_layer_actors(
+            &mut out,
             &state.song_lua_overlays,
             &local_overlay_states,
             &overlay_states,
@@ -7327,7 +7311,8 @@ pub fn get_actors_with_view(
             state.current_music_time_display,
             state.current_beat,
             state.total_elapsed_in_screen,
-        )
+        );
+        out
     };
     actors.extend(main_layer_actors);
     if let Some(actor) = build_foreground_media(state, &overlay_states) {
@@ -7363,7 +7348,9 @@ pub fn get_actors_with_view(
                 underlay_proxy_slice,
                 overlay_proxy_slice,
             );
-            build_song_lua_layer_actors(
+            let mut out = Vec::new();
+            push_song_lua_layer_actors(
+                &mut out,
                 &layer.overlays,
                 &layer_local_states,
                 &layer_states,
@@ -7375,11 +7362,11 @@ pub fn get_actors_with_view(
                 state.current_music_time_display,
                 state.current_beat,
                 state.total_elapsed_in_screen,
-            )
+            );
+            out
         };
         actors.extend(layer_actors);
     }
-    actors
 }
 
 #[cfg(test)]

@@ -50,14 +50,16 @@ impl NotefieldBenchFixture {
                 cache.borrow_mut().clear();
             }
         }
-        notefield::build(
+        notefield::build_bundles(
             &self.state,
             &self.profile,
             FieldPlacement::P1,
             profile::PlayStyle::Single,
             false,
+            notefield::ProxyCaptureRequests::default(),
+            notefield::ViewOverride::default(),
         )
-        .0
+        .actors
     }
 }
 

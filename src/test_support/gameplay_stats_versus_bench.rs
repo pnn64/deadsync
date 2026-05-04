@@ -16,7 +16,9 @@ pub struct GameplayStatsVersusBenchFixture {
 
 impl GameplayStatsVersusBenchFixture {
     pub fn build(&self) -> Vec<Actor> {
-        gameplay_stats::build_versus_step_stats(&self.state, &self.asset_manager)
+        let mut actors = Vec::new();
+        gameplay_stats::push_versus_step_stats(&mut actors, &self.state, &self.asset_manager);
+        actors
     }
 }
 

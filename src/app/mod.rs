@@ -1965,7 +1965,13 @@ fn prewarm_gameplay_text_layout_cache(
 
     let fonts = assets.fonts();
     crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
-    let actors = gameplay::get_actors(state, assets);
+    let mut actors = Vec::with_capacity(256);
+    gameplay::push_actors(
+        &mut actors,
+        state,
+        assets,
+        gameplay::ActorViewOverride::default(),
+    );
     let _ = crate::engine::present::compose::build_screen_cached(
         &actors,
         [0.0, 0.0, 0.0, 1.0],
@@ -2592,6 +2598,7 @@ pub struct App {
     gameplay_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
     ui_compose_scratch: crate::engine::present::compose::ComposeScratch,
     gameplay_compose_scratch: crate::engine::present::compose::ComposeScratch,
+    gameplay_actor_scratch: Vec<Actor>,
     state: AppState,
     software_renderer_threads: u8,
     gfx_debug_enabled: bool,
@@ -2986,7 +2993,7 @@ impl App {
         self.sync_gameplay_background();
         self.sync_theme_background_video();
         let actor_build_started = Instant::now();
-        let (actors, clear_color) = self.get_current_actors();
+        let (mut actors, clear_color) = self.get_current_actors();
         let actor_build_us = elapsed_us_since(actor_build_started);
         self.update_fps_stats(redraw_started);
         let screens = &self.state.screens;
@@ -3247,6 +3254,10 @@ impl App {
             draw_us,
             draw_stats,
         );
+        if self.state.screens.current_screen == CurrentScreen::Gameplay {
+            actors.clear();
+            self.gameplay_actor_scratch = actors;
+        }
     }
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
@@ -3286,6 +3297,7 @@ impl App {
                 ),
             ui_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
             gameplay_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
+            gameplay_actor_scratch: Vec::with_capacity(256),
             state,
             software_renderer_threads,
             gfx_debug_enabled,
@@ -4705,12 +4717,18 @@ impl App {
                 menu::get_actors(&self.state.screens.menu_state, screen_alpha_multiplier)
             }
             CurrentScreen::Gameplay => {
+                let mut actors = std::mem::take(&mut self.gameplay_actor_scratch);
+                actors.clear();
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
-                    gameplay::get_actors(gs, &self.asset_manager)
-                } else {
-                    vec![]
+                    gameplay::push_actors(
+                        &mut actors,
+                        gs,
+                        &self.asset_manager,
+                        gameplay::ActorViewOverride::default(),
+                    );
                 }
+                actors
             }
             CurrentScreen::Practice => {
                 if let Some(ps) = &mut self.state.screens.practice_state {

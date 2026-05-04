@@ -8584,7 +8584,13 @@ return Def.ActorFrame{}
                             state.current_music_time_visible = [time; MAX_PLAYERS];
                             state.current_beat = state.timing.get_beat_for_time(time);
                             refresh_active_attack_masks(&mut state.gameplay, 0.0);
-                            let _ = crate::screens::gameplay::get_actors(&state, &assets);
+                            let mut actors = Vec::new();
+                            crate::screens::gameplay::push_actors(
+                                &mut actors,
+                                &state,
+                                &assets,
+                                crate::screens::gameplay::ActorViewOverride::default(),
+                            );
                         }
                     },
                 );

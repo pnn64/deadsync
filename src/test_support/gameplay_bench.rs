@@ -20,7 +20,14 @@ impl GameplayBenchFixture {
                 cache.borrow_mut().clear();
             }
         }
-        gameplay_screen::get_actors(&self.state, &self.asset_manager)
+        let mut actors = Vec::new();
+        gameplay_screen::push_actors(
+            &mut actors,
+            &self.state,
+            &self.asset_manager,
+            gameplay_screen::ActorViewOverride::default(),
+        );
+        actors
     }
 }
 
