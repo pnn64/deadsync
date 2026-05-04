@@ -1153,6 +1153,22 @@ fn hold_draw_span(y_head: f32, y_tail: f32) -> Option<(f32, f32)> {
     (bottom >= top).then_some((top, bottom))
 }
 
+const HOLD_BODY_LEGACY_SEGMENT_LIMIT: usize = 512;
+const HOLD_BODY_SEGMENT_SAFETY_MAX: usize = 65_536;
+
+#[inline(always)]
+fn hold_body_segment_budget(visible_span: f32, segment_height: f32) -> (usize, bool) {
+    let estimated = if visible_span <= f32::EPSILON || segment_height <= f32::EPSILON {
+        1
+    } else {
+        (visible_span / segment_height).ceil() as usize
+    };
+    let max_segments = estimated
+        .saturating_add(2)
+        .clamp(2048, HOLD_BODY_SEGMENT_SAFETY_MAX);
+    (max_segments, estimated <= HOLD_BODY_LEGACY_SEGMENT_LIMIT)
+}
+
 #[inline(always)]
 fn bottom_cap_uv_window(
     v_base0: f32,
@@ -4968,7 +4984,6 @@ pub fn build_bundles(
                     let natural_bottom = y_tail;
                     let hold_length = natural_bottom - natural_top;
                     const SEGMENT_PHASE_EPS: f32 = 1e-4;
-                    let max_segments = 2048;
                     if hold_length > f32::EPSILON
                         && let Some((clipped_top, clipped_bottom)) = clipped_hold_body_bounds(
                             body_top,
@@ -4979,6 +4994,9 @@ pub fn build_bundles(
                     {
                         let visible_top_distance = clipped_top - natural_top;
                         let visible_bottom_distance = clipped_bottom - natural_top;
+                        let visible_span = visible_bottom_distance - visible_top_distance;
+                        let (max_segments, allow_legacy_sprites) =
+                            hold_body_segment_budget(visible_span, segment_height);
                         let anchor_to_top =
                             lane_reverse && note_display.top_hold_anchor_when_reverse;
                         let phase_offset = if anchor_to_top {
@@ -5004,7 +5022,7 @@ pub fn build_bundles(
                             visible_bottom_distance / segment_height + phase_offset;
                         let mut emitted = 0;
 
-                        if use_legacy_hold_sprites {
+                        if use_legacy_hold_sprites && allow_legacy_sprites {
                             while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
                                 && emitted < max_segments
                             {
@@ -7912,9 +7930,9 @@ mod tests {
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, confusion_rotation_deg,
-        hallway_judgment_zoom, hold_draw_span, hold_head_render_flags, hold_segment_pose,
-        hold_strip_actor, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
-        judgment_actor_zoom, judgment_tilt_rotation_deg, let_go_head_beat,
+        hallway_judgment_zoom, hold_body_segment_budget, hold_draw_span, hold_head_render_flags,
+        hold_segment_pose, hold_strip_actor, hold_strip_row_3d, hold_tail_cap_bounds,
+        hud_layout_ys, hud_y, judgment_actor_zoom, judgment_tilt_rotation_deg, let_go_head_beat,
         maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_alpha,
         note_slot_base_size, note_world_z_for_bumpy, note_x_extra, offset_center,
         predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts,
@@ -8242,6 +8260,20 @@ mod tests {
     #[test]
     fn collapsed_hold_draw_span_still_draws_caps() {
         assert_eq!(hold_draw_span(120.0, 120.0), Some((120.0, 120.0)));
+    }
+
+    #[test]
+    fn tiny_hold_body_repeat_uses_mesh_budget() {
+        let (budget, allow_legacy) = hold_body_segment_budget(900.0, 0.25);
+        assert!(budget > 2048);
+        assert!(!allow_legacy);
+    }
+
+    #[test]
+    fn normal_hold_body_repeat_keeps_legacy_budget() {
+        let (budget, allow_legacy) = hold_body_segment_budget(900.0, 64.0);
+        assert_eq!(budget, 2048);
+        assert!(allow_legacy);
     }
 
     #[test]
