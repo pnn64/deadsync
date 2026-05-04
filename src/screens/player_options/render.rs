@@ -930,6 +930,11 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
                     ARCADE_NEXT_ROW_TEXT.to_string()
                 } else if rc.row.id == RowId::SpeedMod {
                     rc.fc.state.speed_mod[primary_player_idx].display()
+                } else if rc.row.id == RowId::TypeOfSpeedMod {
+                    let idx = rc.fc.state.speed_mod[primary_player_idx]
+                        .mod_type
+                        .choice_index();
+                    rc.row.choices.get(idx).cloned().unwrap_or_default()
                 } else {
                     choice_text.clone()
                 };

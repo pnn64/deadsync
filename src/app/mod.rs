@@ -3968,6 +3968,7 @@ impl App {
         po_state.music_rate = music_rate;
         po_state.speed_mod =
             std::array::from_fn(|i| player_options::SpeedMod::from(scroll_speed[i]));
+        player_options::sync_speed_mod_type_rows(&mut po_state);
         self.state.screens.player_options_state = Some(po_state);
         true
     }

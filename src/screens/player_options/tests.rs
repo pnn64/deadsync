@@ -10,7 +10,7 @@ pub(super) mod tests {
         ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event,
         hud_offset_choices, init_cycle_row_from_binding, init_numeric_row_from_binding,
         is_row_visible, judgment_tilt_options_visible, repeat_held_arcade_start, row_visibility,
-        session_active_players, sync_profile_scroll_speed,
+        session_active_players, sync_profile_scroll_speed, sync_speed_mod_type_row,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -103,6 +103,36 @@ pub(super) mod tests {
             },
         );
         assert_eq!(profile.scroll_speed, ScrollSpeedSetting::CMod(600.0));
+    }
+
+    #[test]
+    fn sync_speed_mod_type_row_uses_each_player_speed_mod() {
+        let mut row_map = test_row_map(vec![test_row(
+            RowId::TypeOfSpeedMod,
+            lookup_key("PlayerOptions", "TypeOfSpeedMod"),
+            &["x-mod", "c-mod", "m-mod"],
+            [2, 2],
+        )]);
+        let speed_mod = [
+            SpeedMod {
+                mod_type: SpeedModType::M,
+                value: 250.0,
+            },
+            SpeedMod {
+                mod_type: SpeedModType::X,
+                value: 2.0,
+            },
+        ];
+
+        sync_speed_mod_type_row(&mut row_map, &speed_mod);
+
+        assert_eq!(
+            row_map
+                .get(RowId::TypeOfSpeedMod)
+                .unwrap()
+                .selected_choice_index,
+            [2, 0],
+        );
     }
 
     #[test]
