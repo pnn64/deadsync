@@ -205,11 +205,6 @@ fn flush_sprite_run(sprite_run: &mut Option<SpriteRun>, ops: &mut Vec<DrawOp>) {
 }
 
 #[inline(always)]
-fn ensure_capacity(vec_len: usize, vec_capacity: usize) -> usize {
-    vec_len.saturating_sub(vec_capacity)
-}
-
-#[inline(always)]
 fn transient_tmesh_source(
     scratch: &mut DrawScratch,
     vertices: &[TexturedMeshVertex],
@@ -262,11 +257,11 @@ where
 
     scratch.sprite_instances.clear();
     if scratch.sprite_instances.capacity() < objects_len {
-        scratch.sprite_instances.reserve(ensure_capacity(
-            objects_len,
-            scratch.sprite_instances.capacity(),
-        ));
+        scratch
+            .sprite_instances
+            .reserve(objects_len - scratch.sprite_instances.len());
     }
+    debug_assert!(scratch.sprite_instances.capacity() >= objects_len);
 
     scratch.mesh_vertices.clear();
     scratch.tmesh_vertices.clear();
@@ -274,10 +269,9 @@ where
 
     scratch.ops.clear();
     if scratch.ops.capacity() < objects_len {
-        scratch
-            .ops
-            .reserve(ensure_capacity(objects_len, scratch.ops.capacity()));
+        scratch.ops.reserve(objects_len - scratch.ops.len());
     }
+    debug_assert!(scratch.ops.capacity() >= objects_len);
 
     let mut stats = PrepareStats::default();
     let mut tmesh_maps_cleared = false;
@@ -464,4 +458,50 @@ where
 
     flush_sprite_run(&mut sprite_run, &mut scratch.ops);
     stats
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DrawScratch, prepare};
+    use crate::engine::gfx::{
+        BlendMode, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, RenderObject,
+    };
+    use glam::Mat4 as Matrix4;
+
+    fn sprite_object(order: u32) -> RenderObject {
+        RenderObject {
+            object_type: ObjectType::Sprite {
+                center: [0.0, 0.0, 0.0, 1.0],
+                size: [1.0, 1.0],
+                rot_sin_cos: [0.0, 1.0],
+                tint: [1.0, 1.0, 1.0, 1.0],
+                uv_scale: [1.0, 1.0],
+                uv_offset: [0.0, 0.0],
+                local_offset: [0.0, 0.0],
+                local_offset_rot_sin_cos: [0.0, 1.0],
+                edge_fade: [0.0, 0.0, 0.0, 0.0],
+            },
+            texture_handle: INVALID_TEXTURE_HANDLE,
+            transform: Matrix4::IDENTITY,
+            blend: BlendMode::Alpha,
+            z: 0,
+            order,
+            camera: 0,
+        }
+    }
+
+    #[test]
+    fn prepare_reserves_scratch_buffers_from_len() {
+        let render_list = RenderList {
+            clear_color: [0.0, 0.0, 0.0, 1.0],
+            cameras: vec![Matrix4::IDENTITY],
+            objects: (0..101).map(sprite_object).collect(),
+        };
+        let mut scratch = DrawScratch::with_capacity(100, 0, 0, 0, 100);
+
+        prepare(&render_list, &mut scratch, |_, _| false);
+
+        assert!(scratch.sprite_instances.capacity() >= render_list.objects.len());
+        assert!(scratch.ops.capacity() >= render_list.objects.len());
+    }
 }

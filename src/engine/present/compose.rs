@@ -70,13 +70,15 @@ pub fn build_screen_cached_with_scratch(
     objects.clear();
     let object_capacity = actors.len().saturating_mul(4).max(64);
     if objects.capacity() < object_capacity {
-        objects.reserve(object_capacity - objects.capacity());
+        objects.reserve(object_capacity - objects.len());
     }
+    debug_assert!(objects.capacity() >= object_capacity);
     let mut cameras = std::mem::take(&mut scratch.cameras);
     cameras.clear();
     if cameras.capacity() < 4 {
-        cameras.reserve(4 - cameras.capacity());
+        cameras.reserve(4 - cameras.len());
     }
+    debug_assert!(cameras.capacity() >= 4);
     let mut texture_cache = std::mem::take(&mut scratch.texture_cache);
     texture_cache.begin_frame();
     cameras.push(Matrix4::orthographic_rh_gl(
@@ -86,8 +88,9 @@ pub fn build_screen_cached_with_scratch(
     let mut masks = std::mem::take(&mut scratch.masks);
     masks.clear();
     if masks.capacity() < 8 {
-        masks.reserve(8 - masks.capacity());
+        masks.reserve(8 - masks.len());
     }
+    debug_assert!(masks.capacity() >= 8);
 
     let root_rect = SmRect {
         x: 0.0,
@@ -4069,14 +4072,14 @@ mod tests {
     use super::{
         CachedTextLayout, CachedTextMeshVariants, ComposeScratch, TextAttrCursor, TextLayoutCache,
         TextLayoutKey, TextLayoutOverflowPolicy, TextureLookupCache, WorldRect,
-        build_cached_text_layout, build_screen, clip_object_to_world_masks,
-        clip_sprite_object_to_world_rect, fold_sprite_xy_rot, resolve_sprite_size_like_sm,
-        sort_render_objects, wrap_text_lines_by_words,
+        build_cached_text_layout, build_screen, build_screen_cached_with_scratch,
+        clip_object_to_world_masks, clip_sprite_object_to_world_rect, fold_sprite_xy_rot,
+        resolve_sprite_size_like_sm, sort_render_objects, wrap_text_lines_by_words,
     };
     use crate::assets;
     use crate::engine::gfx::{
-        BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, ObjectType, RenderObject, TMeshCacheKey,
-        TexturedMeshVertex,
+        BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, ObjectType, RenderObject,
+        TMeshCacheKey, TexturedMeshVertex,
     };
     use crate::engine::present::actors::{Actor, SizeSpec, TextAlign, TextAttribute, TextContent};
     use crate::engine::present::font::{Font, Glyph};
@@ -4121,6 +4124,46 @@ mod tests {
         let mut glyph = test_glyph(texture_key);
         glyph.stroke_texture_key = Some(Arc::clone(stroke_key));
         glyph
+    }
+
+    #[test]
+    fn build_screen_reserves_recycled_buffers_from_len() {
+        let actor = Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            vertices: Arc::from(vec![MeshVertex::default(); 3]),
+            mode: MeshMode::Triangles,
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 0,
+        };
+        let actors = vec![actor; 101];
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let fonts = HashMap::new();
+        let mut text_cache = TextLayoutCache::default();
+        let mut scratch = ComposeScratch::default();
+        scratch.objects = Vec::with_capacity(100);
+        scratch.cameras = Vec::with_capacity(2);
+        scratch.masks = Vec::with_capacity(4);
+
+        let render = build_screen_cached_with_scratch(
+            &actors,
+            [0.0, 0.0, 0.0, 1.0],
+            &metrics,
+            &fonts,
+            0.0,
+            &mut text_cache,
+            &mut scratch,
+        );
+
+        assert!(render.objects.capacity() >= actors.len().saturating_mul(4));
+        assert!(render.cameras.capacity() >= 4);
     }
 
     fn test_font() -> Font {

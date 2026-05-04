@@ -3491,9 +3491,11 @@ fn poll_past_presentation_timing(state: &mut State) {
     let host_minus_display_ns = state.present_telemetry.host_minus_display_ns;
     let timings = &mut state.present_telemetry.scratch_timings;
     timings.clear();
-    if timings.capacity() < count as usize {
-        timings.reserve(count as usize - timings.capacity());
+    let count_us = count as usize;
+    if timings.capacity() < count_us {
+        timings.reserve(count_us - timings.len());
     }
+    debug_assert!(timings.capacity() >= count_us);
     // SAFETY: `timings` has capacity for `count` elements and Vulkan writes at most that many
     // initialized records into the buffer before returning.
     let second = unsafe {
