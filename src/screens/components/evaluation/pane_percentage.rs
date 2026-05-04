@@ -75,6 +75,26 @@ pub(crate) fn build_pane_percentage_display(
             ));
         }
         EvalPane::FaPlus => {
+            let ex_color = color::JUDGMENT_RGBA[0];
+            let white = [1.0, 1.0, 1.0, 1.0];
+            let (main_text, main_color, bottom_label, bottom_text, bottom_color) =
+                if score_info.show_ex_score {
+                    (
+                        ex_percent_text.clone(),
+                        ex_color,
+                        "ITG",
+                        percent_text.clone(),
+                        white,
+                    )
+                } else {
+                    (
+                        percent_text.clone(),
+                        white,
+                        "EX",
+                        ex_percent_text.clone(),
+                        ex_color,
+                    )
+                };
             children.push(act!(quad:
                 align(bg_align_x, 0.5):
                 xy(bg_x, 14.0):
@@ -83,37 +103,40 @@ pub(crate) fn build_pane_percentage_display(
             ));
             children.push(act!(text:
                 font(current_machine_font_key(FontRole::Headline)):
-                settext(percent_text):
+                settext(main_text):
                 align(1.0, 0.5):
                 xy(percent_x, 0.0):
                 zoom(0.585):
-                horizalign(right)
+                horizalign(right):
+                diffuse(main_color[0], main_color[1], main_color[2], main_color[3])
             ));
 
-            let ex_color = color::JUDGMENT_RGBA[0];
-            let bottom_value_x = if controller == profile::PlayerSide::P1 {
-                0.0
+            // Simply Love Pane2 draws this companion score through
+            // JudgmentLabels.lua and JudgmentNumbers.lua. These are the final
+            // pane-local anchors after converting the label frame and the
+            // number frame's 0.8 zoom into this shared percentage frame.
+            let (bottom_label_x, bottom_value_x) = if controller == profile::PlayerSide::P1 {
+                (-110.0, -1.2)
             } else {
-                percent_x
+                (32.0, 138.8)
             };
-            let bottom_label_x = bottom_value_x - 108.0;
             children.push(act!(text:
-                font(current_machine_font_key(FontRole::Headline)):
-                settext("EX"):
+                font(current_machine_font_key(FontRole::Bold)):
+                settext(bottom_label):
                 align(1.0, 0.5):
                 xy(bottom_label_x, 40.0):
-                zoom(0.31):
+                zoom(0.5):
                 horizalign(right):
-                diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+                diffuse(bottom_color[0], bottom_color[1], bottom_color[2], bottom_color[3])
             ));
             children.push(act!(text:
                 font(current_machine_font_key(FontRole::Headline)):
-                settext(ex_percent_text):
+                settext(bottom_text):
                 align(1.0, 0.5):
-                xy(bottom_value_x, 40.0):
-                zoom(0.31):
+                xy(bottom_value_x, 39.6):
+                zoom(0.32):
                 horizalign(right):
-                diffuse(ex_color[0], ex_color[1], ex_color[2], ex_color[3])
+                diffuse(bottom_color[0], bottom_color[1], bottom_color[2], bottom_color[3])
             ));
         }
         EvalPane::HardEx => {
