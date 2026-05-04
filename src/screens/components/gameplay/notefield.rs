@@ -4409,7 +4409,7 @@ pub fn build_bundles(
         {
             if let Some(active) = active_opt.as_ref()
                 && let Some(tap_explosion_ns) = tap_explosion_ns
-                && let Some(explosion) = tap_explosion_ns.tap_explosions.get(&active.window)
+                && let Some(explosion) = tap_explosion_ns.tap_explosions.get(active.window)
             {
                 let receptor_y_lane = column_receptor_ys[i];
                 let receptor_center = receptor_row_center(

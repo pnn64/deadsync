@@ -2787,9 +2787,9 @@ pub struct HoldJudgmentRenderInfo {
     pub started_at_screen_s: f32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct ActiveTapExplosion {
-    pub window: String,
+    pub window: &'static str,
     pub elapsed: f32,
     pub start_beat: f32,
 }
@@ -6306,11 +6306,11 @@ pub(super) fn trigger_hold_explosion(state: &mut State, column: usize) {
     spawn_tap_explosion(state, column, "Held");
 }
 
-fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &str) {
+fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static str) {
     let player = player_for_col(state, column);
     let spawn_window = tap_explosion_noteskin_for_player(state, player).and_then(|ns| {
         if ns.tap_explosions.contains_key(window_key) {
-            Some(window_key.to_string())
+            Some(window_key)
         } else {
             None
         }

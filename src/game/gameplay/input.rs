@@ -756,7 +756,7 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
     for col in 0..state.tap_explosions.len() {
         let Some((window, elapsed)) = state.tap_explosions[col].as_mut().map(|active| {
             active.elapsed += delta_time;
-            (active.window.clone(), active.elapsed)
+            (active.window, active.elapsed)
         }) else {
             continue;
         };
@@ -766,7 +766,7 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
             (col / cols_per_player).min(num_players.saturating_sub(1))
         };
         let lifetime = tap_explosion_noteskin_for_player(state, player)
-            .and_then(|ns| ns.tap_explosions.get(&window))
+            .and_then(|ns| ns.tap_explosions.get(window))
             .map_or(0.0, |explosion| explosion.animation.duration());
         if lifetime <= 0.0 || elapsed >= lifetime {
             state.tap_explosions[col] = None;
