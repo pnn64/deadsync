@@ -6828,7 +6828,7 @@ fn render_provisional_early_rescore_feedback(
     hide_early_dw_flash: bool,
 ) {
     if !hide_early_dw_judgments {
-        set_last_judgment(state, player, judgment.clone());
+        set_last_judgment(state, player, *judgment);
         error_bar_register_tap(state, player, judgment, current_time);
     }
 
@@ -6916,7 +6916,7 @@ pub fn judge_a_tap(
         if state.notes[note_index].is_fake {
             let (judgment, judgment_event_time) =
                 build_final_note_hit_judgment(state, player, hit, rate);
-            set_final_note_result(state, player, note_index, judgment.clone());
+            set_final_note_result(state, player, note_index, judgment);
             log_timing_hit_detail(
                 timing_hit_log,
                 stream_pos_s,
@@ -6963,7 +6963,7 @@ pub fn judge_a_tap(
                         window: Some(hit.window),
                         miss_because_held: false,
                     };
-                    register_provisional_early_result(state, player, note_index, judgment.clone());
+                    register_provisional_early_result(state, player, note_index, judgment);
                     let life_delta = judge_life_delta(hit.grade);
                     let current_music_time = current_music_time_s(state);
                     {
@@ -7033,7 +7033,7 @@ pub fn judge_a_tap(
 
             let (judgment, judgment_event_time) =
                 build_final_note_hit_judgment(state, player, hit, rate);
-            set_final_note_result(state, player, note_index, judgment.clone());
+            set_final_note_result(state, player, note_index, judgment);
 
             log_timing_hit_detail(
                 timing_hit_log,
@@ -7089,7 +7089,7 @@ pub fn judge_a_tap(
             };
             let (judgment, judgment_event_time) =
                 build_final_note_hit_judgment(state, player, hit, rate);
-            set_final_note_result(state, player, idx, judgment.clone());
+            set_final_note_result(state, player, idx, judgment);
 
             log_timing_hit_detail(
                 timing_hit_log,
@@ -7222,7 +7222,7 @@ pub fn judge_a_lift(
                     window: Some(hit.window),
                     miss_because_held: false,
                 };
-                register_provisional_early_result(state, player, note_index, judgment.clone());
+                register_provisional_early_result(state, player, note_index, judgment);
                 let life_delta = judge_life_delta(hit.grade);
                 let current_music_time = current_music_time_s(state);
                 if !scoring_blocked {
@@ -7271,7 +7271,7 @@ pub fn judge_a_lift(
     }
 
     let (judgment, judgment_event_time) = build_final_note_hit_judgment(state, player, hit, rate);
-    set_final_note_result(state, player, note_index, judgment.clone());
+    set_final_note_result(state, player, note_index, judgment);
 
     log_timing_hit_detail(
         timing_hit_log,
@@ -7605,7 +7605,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                     window: None,
                     miss_because_held,
                 };
-                let judgment = state.notes[cursor].early_result.clone().unwrap_or(miss);
+                let judgment = state.notes[cursor].early_result.unwrap_or(miss);
                 let judgment_grade = judgment.grade;
                 let judgment_time_error_ms = judgment.time_error_ms;
                 let mut queue_missed_hold = false;
