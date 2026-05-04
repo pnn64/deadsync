@@ -6348,7 +6348,7 @@ impl App {
         self.state.screens.gameover_state.active_color_index = idx;
         if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
             gs.active_color_index = idx;
-            gs.player_color = color::simply_love_rgba(idx);
+            gs.player_color_index = idx;
         }
     }
 

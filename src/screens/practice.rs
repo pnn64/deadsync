@@ -1276,7 +1276,7 @@ fn append_main_menu(state: &State, actors: &mut Vec<Actor>) {
         return;
     };
     let row_count = menu_len(menu.kind);
-    let selected_color = state.gameplay.player_color;
+    let selected_color = practice_player_color(state);
     for idx in 0..row_count {
         append_menu_row(
             actors,

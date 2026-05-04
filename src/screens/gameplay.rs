@@ -892,7 +892,9 @@ pub fn in_transition(state: Option<&State>, asset_manager: &AssetManager) -> (Ve
     let text = state
         .map(|gs| gs.stage_intro_text.clone())
         .unwrap_or_else(|| Arc::from("EVENT"));
-    let intro_color = state.map_or(color::decorative_rgba(0), |gs| gs.player_color);
+    let intro_color = state.map_or(color::decorative_rgba(0), |gs| {
+        color::decorative_rgba(gs.player_color_index)
+    });
     let text_target_x = state.map_or(screen_center_x(), |gs| {
         intro_text_target_x(
             gs,
@@ -5920,11 +5922,7 @@ pub fn get_actors_with_view(
         && center_1player_notefield;
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
-    let player_color = if is_p2_single {
-        color::decorative_rgba(state.active_color_index - 2)
-    } else {
-        state.player_color
-    };
+    let player_color = color::decorative_rgba(state.player_color_index);
     let (local_overlay_states, overlay_states) = song_lua_overlay_state_sets(state);
     let proxy_requests = song_lua_proxy_requests(&state.song_lua_overlays, &overlay_states);
     let mut underlay_proxy_source = proxy_requests.underlay.then_some(Vec::new());

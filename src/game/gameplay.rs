@@ -1,7 +1,6 @@
 use crate::config::DefaultFailType;
 use crate::engine::audio;
 use crate::engine::input::{InputEdge, InputSource};
-use crate::engine::present::color;
 use crate::engine::space::{is_wide, screen_height, screen_width};
 use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::judgment::{
@@ -3657,7 +3656,7 @@ pub struct State {
     pub receptor_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
     pub tap_explosion_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
     pub active_color_index: i32,
-    pub player_color: [f32; 4],
+    pub player_color_index: i32,
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
     pub scroll_reference_bpm: f32,
     pub field_zoom: [f32; MAX_PLAYERS],
@@ -6115,7 +6114,7 @@ pub fn init(
         receptor_noteskin,
         tap_explosion_noteskin,
         active_color_index,
-        player_color: color::decorative_rgba(player_color_index),
+        player_color_index,
         scroll_speed,
         scroll_reference_bpm: reference_bpm,
         field_zoom,
@@ -8135,7 +8134,6 @@ mod tests {
         update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
-    use crate::engine::present::color;
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
     use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
@@ -8751,7 +8749,7 @@ return Def.ActorFrame{}
                     state.player_profiles[0].judgment_graphic,
                     p2.judgment_graphic
                 );
-                assert_eq!(state.player_color, color::decorative_rgba(3));
+                assert_eq!(state.player_color_index, 3);
             },
         );
     }

@@ -6801,7 +6801,7 @@ pub fn build_bundles_with_view(
     {
         let combo_center_x = playfield_center_x;
         let combo_center_y = zmod_layout.combo_y;
-        let player_color = state.player_color;
+        let player_color = color::decorative_rgba(state.player_color_index);
         let ease_out_quad = |t: f32| -> f32 {
             let t = t.clamp(0.0, 1.0);
             1.0 - (1.0 - t).powi(2)
