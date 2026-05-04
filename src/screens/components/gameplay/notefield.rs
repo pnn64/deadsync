@@ -1474,6 +1474,61 @@ fn note_x_extra(
 }
 
 #[inline(always)]
+fn tiny_spacing_scale(visual: VisualEffects) -> f32 {
+    if visual.tiny.abs() <= f32::EPSILON || !visual.tiny.is_finite() {
+        return 1.0;
+    }
+    0.5_f32.powf(visual.tiny).min(1.0)
+}
+
+#[inline(always)]
+fn move_x_extra(visual: VisualEffects, local_col: usize) -> f32 {
+    visual
+        .move_x_cols
+        .get(local_col)
+        .copied()
+        .filter(|value| value.is_finite())
+        .unwrap_or(0.0)
+        * ScrollSpeedSetting::ARROW_SPACING
+}
+
+#[inline(always)]
+fn move_y_extra(visual: VisualEffects, local_col: usize) -> f32 {
+    visual
+        .move_y_cols
+        .get(local_col)
+        .copied()
+        .filter(|value| value.is_finite())
+        .unwrap_or(0.0)
+        * ScrollSpeedSetting::ARROW_SPACING
+}
+
+#[inline(always)]
+fn note_x_offset(
+    local_col: usize,
+    y: f32,
+    elapsed: f32,
+    beat_factor: f32,
+    visual: VisualEffects,
+    col_offsets: &[f32],
+    invert_distances: &[f32],
+    tornado_bounds: &[TornadoBounds],
+) -> f32 {
+    let base = col_offsets[local_col]
+        + note_x_extra(
+            local_col,
+            y,
+            elapsed,
+            beat_factor,
+            visual,
+            col_offsets,
+            invert_distances,
+            tornado_bounds,
+        );
+    base * tiny_spacing_scale(visual) + move_x_extra(visual, local_col)
+}
+
+#[inline(always)]
 fn receptor_row_center(
     playfield_center_x: f32,
     local_col: usize,
@@ -1487,8 +1542,7 @@ fn receptor_row_center(
 ) -> [f32; 2] {
     [
         playfield_center_x
-            + col_offsets[local_col]
-            + note_x_extra(
+            + note_x_offset(
                 local_col,
                 0.0,
                 elapsed,
@@ -1498,7 +1552,9 @@ fn receptor_row_center(
                 invert_distances,
                 tornado_bounds,
             ),
-        receptor_y_lane + tipsy_y_extra(local_col, elapsed, visual),
+        receptor_y_lane
+            + tipsy_y_extra(local_col, elapsed, visual)
+            + move_y_extra(visual, local_col),
     ]
 }
 
@@ -1650,7 +1706,7 @@ fn bumpy_for_col(visual: &VisualEffects, local_col: usize) -> f32 {
 
 #[inline(always)]
 fn tiny_zoom_for_col(visual: &VisualEffects, local_col: usize) -> f32 {
-    let tiny = visual.tiny_cols.get(local_col).copied().unwrap_or(0.0);
+    let tiny = visual.tiny + visual.tiny_cols.get(local_col).copied().unwrap_or(0.0);
     if tiny.abs() <= f32::EPSILON || !tiny.is_finite() {
         return 1.0;
     }
@@ -1718,8 +1774,17 @@ fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
 }
 
 #[inline(always)]
-fn confusion_rotation_deg(song_beat: f32, visual: VisualEffects) -> f32 {
+fn confusion_rotation_deg(song_beat: f32, visual: VisualEffects, local_col: usize) -> f32 {
     let mut rotation = 0.0;
+    let col_offset = visual
+        .confusion_offset_cols
+        .get(local_col)
+        .copied()
+        .filter(|value| value.is_finite())
+        .unwrap_or(0.0);
+    if col_offset.abs() > f32::EPSILON {
+        rotation += col_offset * (180.0 / std::f32::consts::PI);
+    }
     if visual.confusion_offset.abs() > f32::EPSILON {
         rotation += visual.confusion_offset * (180.0 / std::f32::consts::PI);
     }
@@ -1745,8 +1810,9 @@ fn calc_note_rotation_z(
     note_beat: f32,
     song_beat: f32,
     is_hold_head: bool,
+    local_col: usize,
 ) -> f32 {
-    let mut r = confusion_rotation_deg(song_beat, visual);
+    let mut r = confusion_rotation_deg(song_beat, visual, local_col);
     if visual.dizzy > f32::EPSILON && !is_hold_head {
         r += dizzy_rotation_deg(note_beat, song_beat, visual);
     }
@@ -3623,7 +3689,6 @@ pub fn build_bundles(
         let current_time_ns = state.current_music_time_visible_ns[player_idx];
         let current_time = song_time_ns_to_seconds(current_time_ns);
         let current_beat = state.current_beat_visible[player_idx];
-        let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual);
         // The column swap for Step's hold-turn section is handled at the player bundle
         // level. Keep the actual note/receptor/ghost visuals on the normal noteskin
         // path here; applying an extra local Y turn breaks model-backed arrows and hit
@@ -3745,8 +3810,9 @@ pub fn build_bundles(
             )
         };
         let (note_start, note_end) = state.note_ranges[player_idx];
-        let tipsy_y_for_col =
-            |local_col: usize| -> f32 { tipsy_y_extra(local_col, elapsed_screen, visual) };
+        let tipsy_y_for_col = |local_col: usize| -> f32 {
+            tipsy_y_extra(local_col, elapsed_screen, visual) + move_y_extra(visual, local_col)
+        };
         let lane_y_from_travel =
             |local_col: usize, receptor_y_lane: f32, dir: f32, travel_offset: f32| -> f32 {
                 receptor_y_lane
@@ -3755,8 +3821,7 @@ pub fn build_bundles(
             };
         let lane_center_x_from_travel = |local_col: usize, travel_offset: f32| -> f32 {
             playfield_center_x
-                + col_offsets[local_col]
-                + note_x_extra(
+                + note_x_offset(
                     local_col,
                     adjusted_travel_offset(travel_offset),
                     elapsed_screen,
@@ -3769,8 +3834,7 @@ pub fn build_bundles(
         };
         let lane_center_x_from_adjusted_travel = |local_col: usize, adjusted_travel: f32| -> f32 {
             playfield_center_x
-                + col_offsets[local_col]
-                + note_x_extra(
+                + note_x_offset(
                     local_col,
                     adjusted_travel,
                     elapsed_screen,
@@ -4174,6 +4238,7 @@ pub fn build_bundles(
         // Receptors + glow
         for (i, &receptor_y_lane) in column_receptor_ys.iter().take(num_cols).enumerate() {
             let col = col_start + i;
+            let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual, i);
             let receptor_center = receptor_row_center(
                 playfield_center_x,
                 i,
@@ -4442,6 +4507,7 @@ pub fn build_bundles(
                     .get(i)
                     .map(|slot| slot.def.rotation_deg)
                     .unwrap_or(0);
+                let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual, i);
                 let glow = explosion_visual.glow;
                 let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
                 if explosion.animation.blend_add {
@@ -5898,7 +5964,8 @@ pub fn build_bundles(
                 if head_alpha <= f32::EPSILON {
                     return;
                 }
-                let hold_head_rot = calc_note_rotation_z(visual, note.beat, current_beat, true);
+                let hold_head_rot =
+                    calc_note_rotation_z(visual, note.beat, current_beat, true, local_col);
                 let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 let head_center_x = if (head_draw_y - receptor_draw_y).abs() <= 0.5 {
                     receptor_center_x
@@ -6278,7 +6345,8 @@ pub fn build_bundles(
                         let size = scale_mine_slot(slot);
                         [size[0] * col_effect_zoom, size[1] * col_effect_zoom]
                     };
-                    let note_rot = calc_note_rotation_z(visual, note.beat, current_beat, false);
+                    let note_rot =
+                        calc_note_rotation_z(visual, note.beat, current_beat, false, col_idx);
                     if matches!(note.note_type, NoteType::Mine) {
                         if fill_slot.is_none() && frame_slot.is_none() {
                             return;
@@ -7827,11 +7895,12 @@ mod tests {
         MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
-        calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, hallway_judgment_zoom,
-        hold_draw_span, hold_head_render_flags, hold_segment_pose, hold_strip_actor,
-        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
-        judgment_tilt_rotation_deg, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped,
-        note_alpha, note_slot_base_size, note_world_z_for_bumpy, note_x_extra, offset_center,
+        calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, confusion_rotation_deg,
+        hallway_judgment_zoom, hold_draw_span, hold_head_render_flags, hold_segment_pose,
+        hold_strip_actor, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
+        judgment_actor_zoom, judgment_tilt_rotation_deg, let_go_head_beat,
+        maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_alpha,
+        note_slot_base_size, note_world_z_for_bumpy, note_x_extra, offset_center,
         predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts,
         receptor_row_center, tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col,
         tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
@@ -8389,9 +8458,22 @@ mod tests {
     #[test]
     fn tiny_column_zoom_matches_itg_power_formula() {
         let mut visual = VisualEffects::default();
+        visual.tiny = -0.5;
         visual.tiny_cols[1] = 2.5;
-        assert!((tiny_zoom_for_col(&visual, 1) - 0.5_f32.powf(2.5)).abs() <= 1e-6);
-        assert!((tiny_zoom_for_col(&visual, 0) - 1.0).abs() <= 1e-6);
+        assert!((tiny_zoom_for_col(&visual, 1) - 0.5_f32.powf(2.0)).abs() <= 1e-6);
+        assert!((tiny_zoom_for_col(&visual, 0) - 0.5_f32.powf(-0.5)).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn move_and_confusion_column_mods_match_itg_scaling() {
+        let mut visual = VisualEffects::default();
+        visual.move_x_cols[1] = 0.5;
+        visual.move_y_cols[1] = -0.25;
+        visual.confusion_offset_cols[1] = std::f32::consts::FRAC_PI_2;
+
+        assert_eq!(move_x_extra(visual, 1), 32.0);
+        assert_eq!(move_y_extra(visual, 1), -16.0);
+        assert!((confusion_rotation_deg(0.0, visual, 1) - 90.0).abs() <= 1e-6);
     }
 
     #[test]
@@ -8476,7 +8558,7 @@ mod tests {
             confusion: 1.5,
             ..VisualEffects::default()
         };
-        let rotation = calc_note_rotation_z(visual, 12.0, 3.5, true);
+        let rotation = calc_note_rotation_z(visual, 12.0, 3.5, true, 0);
         let expected = (3.5 * visual.confusion).rem_euclid(std::f32::consts::TAU)
             * (-180.0 / std::f32::consts::PI);
         assert!((rotation - expected).abs() <= 1e-6);
@@ -8488,7 +8570,7 @@ mod tests {
             confusion_offset: std::f32::consts::PI,
             ..VisualEffects::default()
         };
-        let rotation = calc_note_rotation_z(visual, 12.0, 3.5, true);
+        let rotation = calc_note_rotation_z(visual, 12.0, 3.5, true, 0);
         assert!((rotation - 180.0).abs() <= 1e-6);
     }
 
@@ -8498,7 +8580,7 @@ mod tests {
             dizzy: 2.0,
             ..VisualEffects::default()
         };
-        let rotation = calc_note_rotation_z(visual, 6.75, 3.5, false);
+        let rotation = calc_note_rotation_z(visual, 6.75, 3.5, false, 0);
         let expected = ((6.75 - 3.5) * visual.dizzy).rem_euclid(std::f32::consts::TAU)
             * (180.0 / std::f32::consts::PI);
         assert!((rotation - expected).abs() <= 1e-6);

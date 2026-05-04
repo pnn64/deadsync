@@ -85,9 +85,9 @@ use self::util::{
     file_path_string, is_song_lua_audio_path, is_song_lua_image_path, is_song_lua_media_path,
     is_song_lua_video_path, lua_format_text, lua_text_value, lua_values_equal, make_color_table,
     message_event_cmp, method_arg, mod_window_cmp, player_index_from_value, player_number_name,
-    read_boolish, read_color_value, read_easing_name, read_f32, read_i32_value, read_player,
-    read_song_lua_sound_paths, read_span_mode, read_string, read_u32_value,
-    read_vertex_colors_value, song_dir_string, song_group_name, song_music_path,
+    preprocess_lua_cmd_syntax, read_boolish, read_color_value, read_easing_name, read_f32,
+    read_i32_value, read_player, read_song_lua_sound_paths, read_span_mode, read_string,
+    read_u32_value, read_vertex_colors_value, song_dir_string, song_group_name, song_music_path,
     song_named_image_path, song_simfile_path, truthy,
 };
 
@@ -698,12 +698,17 @@ pub fn compile_song_lua(
         push_song_lua_stage_time(&mut stage_times, "prefix_actions", &mut stage_started);
     }
 
+    let global_mods = globals
+        .get::<Option<Table>>("mods")
+        .map_err(|err| err.to_string())?;
     out.beat_mods.extend(read_mod_windows(
-        globals
-            .get::<Option<Table>>("mods")
-            .map_err(|err| err.to_string())?,
+        global_mods.clone(),
         SongLuaTimeUnit::Beat,
     )?);
+    let (runtime_eases, runtime_overlay_eases) =
+        read_runtime_mod_eases(global_mods, &host.easing_names, &mut overlays, context)?;
+    out.eases.extend(runtime_eases);
+    out.overlay_eases.extend(runtime_overlay_eases);
     out.time_mods.extend(read_mod_windows(
         globals
             .get::<Option<Table>>("mod_time")
@@ -2528,6 +2533,315 @@ fn read_mod_windows(
         });
     }
     Ok(out)
+}
+
+#[derive(Clone)]
+struct RuntimeModEaseEntry {
+    start: f32,
+    limit: f32,
+    easing: String,
+    to: f32,
+    target: String,
+    start_val: Option<f32>,
+    opt1: Option<f32>,
+    opt2: Option<f32>,
+    player: Option<u8>,
+    add: bool,
+}
+
+fn read_runtime_mod_eases(
+    table: Option<Table>,
+    easing_names: &HashMap<*const c_void, String>,
+    overlays: &mut [OverlayCompileActor],
+    context: &SongLuaCompileContext,
+) -> Result<(Vec<SongLuaEaseWindow>, Vec<SongLuaOverlayEase>), String> {
+    let Some(table) = table else {
+        return Ok((Vec::new(), Vec::new()));
+    };
+    let mut entries = Vec::new();
+    for value in table.sequence_values::<Value>() {
+        let Value::Table(entry) = value.map_err(|err| err.to_string())? else {
+            continue;
+        };
+        let Some(entry) = read_runtime_mod_ease_entry(entry, easing_names)? else {
+            continue;
+        };
+        if !entries
+            .iter()
+            .any(|other| runtime_mod_entries_equal(other, &entry))
+        {
+            entries.push(entry);
+        }
+    }
+    if entries.is_empty() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+
+    let mut current: [HashMap<String, f32>; LUA_PLAYERS] = std::array::from_fn(|_| HashMap::new());
+    let mut eases = Vec::new();
+    let mut overlay_eases = Vec::new();
+    let static_overlay = runtime_static_overlay_index(overlays);
+    let static_player = context
+        .players
+        .iter()
+        .position(|player| player.enabled)
+        .unwrap_or(0);
+
+    for entry in entries {
+        let key = runtime_mod_key(&entry.target);
+        let players = runtime_mod_entry_players(entry.player);
+        if key == "static" {
+            let mut static_window = None;
+            for player in players {
+                let from = runtime_mod_start_value(&mut current[player], &key, &entry);
+                let to = runtime_mod_end_value(from, &entry);
+                current[player].insert(key.clone(), to);
+                if player == static_player {
+                    static_window = Some((from, to));
+                }
+            }
+            if let (Some(overlay_index), Some((from, to))) = (static_overlay, static_window) {
+                overlay_eases.push(runtime_static_overlay_ease(overlay_index, &entry, from, to));
+            }
+            continue;
+        }
+
+        let Some(target) = runtime_mod_ease_target(&key, &entry.target) else {
+            continue;
+        };
+        for player in players {
+            let from = runtime_mod_start_value(&mut current[player], &key, &entry);
+            let to = runtime_mod_end_value(from, &entry);
+            current[player].insert(key.clone(), to);
+            eases.push(SongLuaEaseWindow {
+                unit: SongLuaTimeUnit::Beat,
+                start: entry.start,
+                limit: entry.limit,
+                span_mode: SongLuaSpanMode::Len,
+                from,
+                to,
+                target: target.clone(),
+                easing: Some(entry.easing.clone()),
+                player: Some((player + 1) as u8),
+                sustain: None,
+                opt1: entry.opt1,
+                opt2: entry.opt2,
+            });
+        }
+    }
+    extend_runtime_mod_sustains(&mut eases);
+    Ok((eases, overlay_eases))
+}
+
+fn read_runtime_mod_ease_entry(
+    entry: Table,
+    easing_names: &HashMap<*const c_void, String>,
+) -> Result<Option<RuntimeModEaseEntry>, String> {
+    let Some(start) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?) else {
+        return Ok(None);
+    };
+    let Some(mut limit) = read_f32(entry.raw_get::<Value>(2).map_err(|err| err.to_string())?)
+    else {
+        return Ok(None);
+    };
+    let Some(easing) = read_easing_name(
+        entry.raw_get::<Value>(3).map_err(|err| err.to_string())?,
+        easing_names,
+    ) else {
+        return Ok(None);
+    };
+    let Some(to) = read_f32(entry.raw_get::<Value>(4).map_err(|err| err.to_string())?) else {
+        return Ok(None);
+    };
+    let Some(target) = read_string(entry.raw_get::<Value>(5).map_err(|err| err.to_string())?)
+    else {
+        return Ok(None);
+    };
+    if read_string(
+        entry
+            .raw_get::<Value>("timing")
+            .map_err(|err| err.to_string())?,
+    )
+    .is_some_and(|value| value.eq_ignore_ascii_case("end"))
+    {
+        limit -= start;
+    }
+    if !start.is_finite() || !limit.is_finite() || limit < 0.0 || !to.is_finite() {
+        return Ok(None);
+    }
+    let player = read_player(
+        entry
+            .raw_get::<Value>("plr")
+            .map_err(|err| err.to_string())?,
+    );
+    let player = match player {
+        Some(player) => Some(player),
+        None => read_player(
+            entry
+                .raw_get::<Value>("pn")
+                .map_err(|err| err.to_string())?,
+        ),
+    };
+    Ok(Some(RuntimeModEaseEntry {
+        start,
+        limit,
+        easing,
+        to,
+        target,
+        start_val: read_f32(
+            entry
+                .raw_get::<Value>("startVal")
+                .map_err(|err| err.to_string())?,
+        ),
+        opt1: read_f32(
+            entry
+                .raw_get::<Value>("opt1")
+                .map_err(|err| err.to_string())?,
+        ),
+        opt2: read_f32(
+            entry
+                .raw_get::<Value>("opt2")
+                .map_err(|err| err.to_string())?,
+        ),
+        player,
+        add: truthy(
+            &entry
+                .raw_get::<Value>("add")
+                .map_err(|err| err.to_string())?,
+        ),
+    }))
+}
+
+fn runtime_mod_entries_equal(left: &RuntimeModEaseEntry, right: &RuntimeModEaseEntry) -> bool {
+    left.start.to_bits() == right.start.to_bits()
+        && left.limit.to_bits() == right.limit.to_bits()
+        && left.to.to_bits() == right.to.to_bits()
+        && left.target == right.target
+        && left.easing == right.easing
+        && left.start_val.map(f32::to_bits) == right.start_val.map(f32::to_bits)
+        && left.opt1.map(f32::to_bits) == right.opt1.map(f32::to_bits)
+        && left.opt2.map(f32::to_bits) == right.opt2.map(f32::to_bits)
+        && left.player == right.player
+        && left.add == right.add
+}
+
+fn runtime_mod_entry_players(player: Option<u8>) -> Vec<usize> {
+    match player {
+        Some(player) if (1..=LUA_PLAYERS as u8).contains(&player) => vec![(player - 1) as usize],
+        _ => (0..LUA_PLAYERS).collect(),
+    }
+}
+
+fn runtime_mod_key(target: &str) -> String {
+    target.to_ascii_lowercase()
+}
+
+fn runtime_mod_initial_value(key: &str) -> f32 {
+    if matches!(key, "zoom" | "zoomx" | "zoomy" | "zoomz") {
+        1.0
+    } else {
+        0.0
+    }
+}
+
+fn runtime_mod_start_value(
+    current: &mut HashMap<String, f32>,
+    key: &str,
+    entry: &RuntimeModEaseEntry,
+) -> f32 {
+    entry.start_val.unwrap_or_else(|| {
+        *current
+            .entry(key.to_string())
+            .or_insert_with(|| runtime_mod_initial_value(key))
+    })
+}
+
+fn runtime_mod_end_value(from: f32, entry: &RuntimeModEaseEntry) -> f32 {
+    if entry.add { from + entry.to } else { entry.to }
+}
+
+fn runtime_mod_ease_target(key: &str, original: &str) -> Option<SongLuaEaseTarget> {
+    Some(match key {
+        "z" => SongLuaEaseTarget::PlayerZ,
+        "rotationx" => SongLuaEaseTarget::PlayerRotationX,
+        "rotationy" => SongLuaEaseTarget::PlayerRotationY,
+        "rotationz" => SongLuaEaseTarget::PlayerRotationZ,
+        "zoom" => SongLuaEaseTarget::PlayerZoom,
+        "zoomx" => SongLuaEaseTarget::PlayerZoomX,
+        "zoomy" => SongLuaEaseTarget::PlayerZoomY,
+        "zoomz" => SongLuaEaseTarget::PlayerZoomZ,
+        "x" | "y" => return None,
+        _ => SongLuaEaseTarget::Mod(original.to_string()),
+    })
+}
+
+fn runtime_static_overlay_index(overlays: &[OverlayCompileActor]) -> Option<usize> {
+    overlays.iter().position(|overlay| {
+        let SongLuaOverlayKind::Sprite { texture_path, .. } = &overlay.actor.kind else {
+            return false;
+        };
+        texture_path.file_name().is_some_and(|name| {
+            name.to_string_lossy()
+                .eq_ignore_ascii_case("_static 4x1.png")
+        })
+    })
+}
+
+fn runtime_static_overlay_ease(
+    overlay_index: usize,
+    entry: &RuntimeModEaseEntry,
+    from: f32,
+    to: f32,
+) -> SongLuaOverlayEase {
+    SongLuaOverlayEase {
+        overlay_index,
+        unit: SongLuaTimeUnit::Beat,
+        start: entry.start,
+        limit: entry.limit,
+        span_mode: SongLuaSpanMode::Len,
+        from: SongLuaOverlayStateDelta {
+            diffuse: Some([1.0, 1.0, 1.0, from]),
+            ..SongLuaOverlayStateDelta::default()
+        },
+        to: SongLuaOverlayStateDelta {
+            diffuse: Some([1.0, 1.0, 1.0, to]),
+            ..SongLuaOverlayStateDelta::default()
+        },
+        easing: Some(entry.easing.clone()),
+        sustain: None,
+        opt1: entry.opt1,
+        opt2: entry.opt2,
+    }
+}
+
+fn extend_runtime_mod_sustains(windows: &mut [SongLuaEaseWindow]) {
+    const DEFAULT_SUSTAIN_BEATS: f32 = 1_000_000.0;
+    const SAME_TICK_EPSILON: f32 = 0.001;
+
+    for index in 0..windows.len() {
+        let end = windows[index].start + windows[index].limit;
+        let next_start = windows
+            .iter()
+            .enumerate()
+            .filter_map(|(other_index, other)| {
+                if other_index == index
+                    || other.player != windows[index].player
+                    || other.target != windows[index].target
+                    || other.start <= windows[index].start + SAME_TICK_EPSILON
+                {
+                    None
+                } else {
+                    Some(other.start)
+                }
+            })
+            .fold(None::<f32>, |acc, start| {
+                Some(acc.map_or(start, |current| current.min(start)))
+            })
+            .unwrap_or(DEFAULT_SUSTAIN_BEATS);
+        if next_start > end + SAME_TICK_EPSILON {
+            windows[index].sustain = Some(next_start - end);
+        }
+    }
 }
 
 fn read_eases(

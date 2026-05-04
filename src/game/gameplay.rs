@@ -272,16 +272,20 @@ pub struct VisualEffects {
     pub dizzy: f32,
     pub confusion: f32,
     pub confusion_offset: f32,
+    pub confusion_offset_cols: [f32; MAX_COLS],
     pub big: f32,
     pub flip: f32,
     pub invert: f32,
     pub tornado: f32,
     pub tipsy: f32,
+    pub tiny: f32,
     pub bumpy: f32,
     pub bumpy_offset: f32,
     pub bumpy_period: f32,
     pub bumpy_cols: [f32; MAX_COLS],
     pub tiny_cols: [f32; MAX_COLS],
+    pub move_x_cols: [f32; MAX_COLS],
+    pub move_y_cols: [f32; MAX_COLS],
     pub pulse_inner: f32,
     pub pulse_outer: f32,
     pub pulse_period: f32,
@@ -297,16 +301,20 @@ impl VisualEffects {
             dizzy: f32::from((mask & VISUAL_MASK_BIT_DIZZY) != 0),
             confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
             confusion_offset: 0.0,
+            confusion_offset_cols: [0.0; MAX_COLS],
             big: f32::from((mask & VISUAL_MASK_BIT_BIG) != 0),
             flip: f32::from((mask & VISUAL_MASK_BIT_FLIP) != 0),
             invert: f32::from((mask & VISUAL_MASK_BIT_INVERT) != 0),
             tornado: f32::from((mask & VISUAL_MASK_BIT_TORNADO) != 0),
             tipsy: f32::from((mask & VISUAL_MASK_BIT_TIPSY) != 0),
+            tiny: 0.0,
             bumpy: f32::from((mask & VISUAL_MASK_BIT_BUMPY) != 0),
             bumpy_offset: 0.0,
             bumpy_period: 0.0,
             bumpy_cols: [0.0; MAX_COLS],
             tiny_cols: [0.0; MAX_COLS],
+            move_x_cols: [0.0; MAX_COLS],
+            move_y_cols: [0.0; MAX_COLS],
             pulse_inner: 0.0,
             pulse_outer: 0.0,
             pulse_period: 0.0,
@@ -499,15 +507,19 @@ struct VisualOverrides {
     dizzy: Option<f32>,
     confusion: Option<f32>,
     confusion_offset: Option<f32>,
+    confusion_offset_cols: [Option<f32>; MAX_COLS],
     flip: Option<f32>,
     invert: Option<f32>,
     tornado: Option<f32>,
     tipsy: Option<f32>,
+    tiny: Option<f32>,
     bumpy: Option<f32>,
     bumpy_offset: Option<f32>,
     bumpy_period: Option<f32>,
     bumpy_cols: [Option<f32>; MAX_COLS],
     tiny_cols: [Option<f32>; MAX_COLS],
+    move_x_cols: [Option<f32>; MAX_COLS],
+    move_y_cols: [Option<f32>; MAX_COLS],
     pulse_inner: Option<f32>,
     pulse_outer: Option<f32>,
     pulse_period: Option<f32>,
@@ -522,15 +534,19 @@ impl VisualOverrides {
             || self.dizzy.is_some()
             || self.confusion.is_some()
             || self.confusion_offset.is_some()
+            || self.confusion_offset_cols.iter().any(Option::is_some)
             || self.flip.is_some()
             || self.invert.is_some()
             || self.tornado.is_some()
             || self.tipsy.is_some()
+            || self.tiny.is_some()
             || self.bumpy.is_some()
             || self.bumpy_offset.is_some()
             || self.bumpy_period.is_some()
             || self.bumpy_cols.iter().any(Option::is_some)
             || self.tiny_cols.iter().any(Option::is_some)
+            || self.move_x_cols.iter().any(Option::is_some)
+            || self.move_y_cols.iter().any(Option::is_some)
             || self.pulse_inner.is_some()
             || self.pulse_outer.is_some()
             || self.pulse_period.is_some()
@@ -10426,6 +10442,19 @@ return Def.ActorFrame{}
         assert_eq!(mods.visual.tiny_cols[1], Some(2.5));
         assert_eq!(mods.visual.bumpy_period, Some(-1.25));
         assert_eq!(mods.visual.pulse_outer, Some(1.0));
+    }
+
+    #[test]
+    fn song_lua_mod_parser_accepts_itgmania_column_moves() {
+        let mods = parse_song_lua_runtime_mods(
+            "*10000 -80 movey1,*10000 40 movex2,*10000 -314 confusionoffset3,*10000 -80 tiny",
+        );
+
+        assert_eq!(mods.visual.move_y_cols[0], Some(-0.8));
+        assert_eq!(mods.visual.move_x_cols[1], Some(0.4));
+        assert_eq!(mods.visual.confusion_offset_cols[2], Some(-3.14));
+        assert_eq!(mods.visual.tiny, Some(-0.8));
+        assert_eq!(mods.mini_percent, None);
     }
 
     #[test]

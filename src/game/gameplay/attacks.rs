@@ -123,15 +123,19 @@ pub(super) enum SongLuaEaseMaskTarget {
     VisualDizzy,
     VisualConfusion,
     VisualConfusionOffset,
+    VisualConfusionOffsetColumn(usize),
     VisualFlip,
     VisualInvert,
     VisualTornado,
     VisualTipsy,
+    VisualTiny,
     VisualBumpy,
     VisualBumpyOffset,
     VisualBumpyPeriod,
     VisualBumpyColumn(usize),
     VisualTinyColumn(usize),
+    VisualMoveXColumn(usize),
+    VisualMoveYColumn(usize),
     VisualPulseInner,
     VisualPulseOuter,
     VisualPulsePeriod,
@@ -415,6 +419,18 @@ fn apply_runtime_mod(
         out.visual.tiny_cols[col] = attack_level(percent_value);
         return;
     }
+    if let Some(col) = mod_column_suffix(key, "movex") {
+        out.visual.move_x_cols[col] = attack_level(percent_value);
+        return;
+    }
+    if let Some(col) = mod_column_suffix(key, "movey") {
+        out.visual.move_y_cols[col] = attack_level(percent_value);
+        return;
+    }
+    if let Some(col) = mod_column_suffix(key, "confusionoffset") {
+        out.visual.confusion_offset_cols[col] = attack_level(percent_value);
+        return;
+    }
 
     match key {
         "wide" => out.insert_mask |= INSERT_MASK_BIT_WIDE,
@@ -472,7 +488,8 @@ fn apply_runtime_mod(
         "pulseperiod" => out.visual.pulse_period = attack_level(percent_value),
         "pulseoffset" => out.visual.pulse_offset = attack_level(percent_value),
         "beat" => out.visual.beat = attack_level(percent_value),
-        "mini" | "tiny" => {
+        "tiny" => out.visual.tiny = attack_level(percent_value),
+        "mini" => {
             let mini = percent_value.unwrap_or(100.0);
             if mini.is_finite() {
                 out.mini_percent = Some(mini);
@@ -999,6 +1016,51 @@ fn append_song_lua_ease_targets(
         push_song_lua_ease_target(
             out,
             SongLuaEaseMaskTarget::VisualTinyColumn(col),
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        );
+        return true;
+    }
+    if let Some(col) = mod_column_suffix(&key, "movex") {
+        push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualMoveXColumn(col),
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        );
+        return true;
+    }
+    if let Some(col) = mod_column_suffix(&key, "movey") {
+        push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualMoveYColumn(col),
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        );
+        return true;
+    }
+    if let Some(col) = mod_column_suffix(&key, "confusionoffset") {
+        push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col),
             start_second,
             end_second,
             sustain_end_second,
@@ -1585,7 +1647,19 @@ fn append_song_lua_ease_targets(
             opt1,
             opt2,
         ),
-        "mini" | "tiny" => push_song_lua_ease_target(
+        "tiny" => push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::VisualTiny,
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from,
+            pct_to,
+            easing,
+            opt1,
+            opt2,
+        ),
+        "mini" => push_song_lua_ease_target(
             out,
             SongLuaEaseMaskTarget::MiniPercent,
             start_second,
@@ -3150,10 +3224,16 @@ pub(super) fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualDizzy => visual.dizzy = Some(value),
         SongLuaEaseMaskTarget::VisualConfusion => visual.confusion = Some(value),
         SongLuaEaseMaskTarget::VisualConfusionOffset => visual.confusion_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) => {
+            if col < MAX_COLS {
+                visual.confusion_offset_cols[col] = Some(value);
+            }
+        }
         SongLuaEaseMaskTarget::VisualFlip => visual.flip = Some(value),
         SongLuaEaseMaskTarget::VisualInvert => visual.invert = Some(value),
         SongLuaEaseMaskTarget::VisualTornado => visual.tornado = Some(value),
         SongLuaEaseMaskTarget::VisualTipsy => visual.tipsy = Some(value),
+        SongLuaEaseMaskTarget::VisualTiny => visual.tiny = Some(value),
         SongLuaEaseMaskTarget::VisualBumpy => visual.bumpy = Some(value),
         SongLuaEaseMaskTarget::VisualBumpyOffset => visual.bumpy_offset = Some(value),
         SongLuaEaseMaskTarget::VisualBumpyPeriod => visual.bumpy_period = Some(value),
@@ -3165,6 +3245,16 @@ pub(super) fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualTinyColumn(col) => {
             if col < MAX_COLS {
                 visual.tiny_cols[col] = Some(value);
+            }
+        }
+        SongLuaEaseMaskTarget::VisualMoveXColumn(col) => {
+            if col < MAX_COLS {
+                visual.move_x_cols[col] = Some(value);
+            }
+        }
+        SongLuaEaseMaskTarget::VisualMoveYColumn(col) => {
+            if col < MAX_COLS {
+                visual.move_y_cols[col] = Some(value);
             }
         }
         SongLuaEaseMaskTarget::VisualPulseInner => visual.pulse_inner = Some(value),
@@ -3619,6 +3709,15 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                 if let Some(v) = window.visual.confusion_offset {
                     visual.confusion_offset = Some(v);
                 }
+                for (dst, src) in visual
+                    .confusion_offset_cols
+                    .iter_mut()
+                    .zip(window.visual.confusion_offset_cols)
+                {
+                    if src.is_some() {
+                        *dst = src;
+                    }
+                }
                 if let Some(v) = window.visual.flip {
                     visual.flip = Some(v);
                 }
@@ -3630,6 +3729,9 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                 }
                 if let Some(v) = window.visual.tipsy {
                     visual.tipsy = Some(v);
+                }
+                if let Some(v) = window.visual.tiny {
+                    visual.tiny = Some(v);
                 }
                 if let Some(v) = window.visual.bumpy {
                     visual.bumpy = Some(v);
@@ -3646,6 +3748,16 @@ pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
                     }
                 }
                 for (dst, src) in visual.tiny_cols.iter_mut().zip(window.visual.tiny_cols) {
+                    if src.is_some() {
+                        *dst = src;
+                    }
+                }
+                for (dst, src) in visual.move_x_cols.iter_mut().zip(window.visual.move_x_cols) {
+                    if src.is_some() {
+                        *dst = src;
+                    }
+                }
+                for (dst, src) in visual.move_y_cols.iter_mut().zip(window.visual.move_y_cols) {
                     if src.is_some() {
                         *dst = src;
                     }
@@ -3833,14 +3945,26 @@ pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> 
         )
     };
     let attack = state.active_attack_visual[player_idx];
+    let mut confusion_offset_cols = base.confusion_offset_cols;
     let mut bumpy_cols = base.bumpy_cols;
     let mut tiny_cols = base.tiny_cols;
+    let mut move_x_cols = base.move_x_cols;
+    let mut move_y_cols = base.move_y_cols;
     for i in 0..MAX_COLS {
+        if let Some(v) = attack.confusion_offset_cols[i].filter(|v| v.is_finite()) {
+            confusion_offset_cols[i] = v;
+        }
         if let Some(v) = attack.bumpy_cols[i].filter(|v| v.is_finite()) {
             bumpy_cols[i] = v;
         }
         if let Some(v) = attack.tiny_cols[i].filter(|v| v.is_finite()) {
             tiny_cols[i] = v;
+        }
+        if let Some(v) = attack.move_x_cols[i].filter(|v| v.is_finite()) {
+            move_x_cols[i] = v;
+        }
+        if let Some(v) = attack.move_y_cols[i].filter(|v| v.is_finite()) {
+            move_y_cols[i] = v;
         }
     }
     VisualEffects {
@@ -3848,16 +3972,20 @@ pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> 
         dizzy: merge_attack_value(base.dizzy, attack.dizzy),
         confusion: merge_attack_value(base.confusion, attack.confusion),
         confusion_offset: merge_attack_value(base.confusion_offset, attack.confusion_offset),
+        confusion_offset_cols,
         big: base.big,
         flip: merge_attack_value(base.flip, attack.flip),
         invert: merge_attack_value(base.invert, attack.invert),
         tornado: merge_attack_value(base.tornado, attack.tornado),
         tipsy: merge_attack_value(base.tipsy, attack.tipsy),
+        tiny: merge_attack_value(base.tiny, attack.tiny),
         bumpy: merge_attack_value(base.bumpy, attack.bumpy),
         bumpy_offset: merge_attack_value(base.bumpy_offset, attack.bumpy_offset),
         bumpy_period: merge_attack_value(base.bumpy_period, attack.bumpy_period),
         bumpy_cols,
         tiny_cols,
+        move_x_cols,
+        move_y_cols,
         pulse_inner: merge_attack_value(base.pulse_inner, attack.pulse_inner),
         pulse_outer: merge_attack_value(base.pulse_outer, attack.pulse_outer),
         pulse_period: merge_attack_value(base.pulse_period, attack.pulse_period),

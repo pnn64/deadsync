@@ -12,8 +12,9 @@ use super::sl::{create_sl_streams, init_sl_streams, player_short_name};
 use super::theme_colors::install_theme_color_helpers;
 use super::util::{
     create_color_constants_table, create_string_array, file_path_string, lua_text_value,
-    lua_values_equal, make_color_table, method_arg, player_index_from_value, read_boolish,
-    read_color_call, read_color_value, read_f32, read_i32_value, read_string, truthy,
+    lua_values_equal, make_color_table, method_arg, player_index_from_value,
+    preprocess_lua_cmd_syntax, read_boolish, read_color_call, read_color_value, read_f32,
+    read_i32_value, read_string, truthy,
 };
 use super::{
     SONG_LUA_NOTE_COLUMNS, SONG_LUA_PRODUCT_VERSION, SONG_LUA_THEME_NAME,
@@ -645,6 +646,7 @@ pub(super) fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<
     globals.set(
         "loadstring",
         lua.create_function(|lua, (code, chunk_name): (String, Option<String>)| {
+            let code = preprocess_lua_cmd_syntax(&code).map_err(mlua::Error::external)?;
             let mut chunk = lua.load(&code);
             if let Some(chunk_name) = chunk_name.as_deref() {
                 chunk = chunk.set_name(chunk_name);

@@ -2043,6 +2043,7 @@ fn create_loader_function(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Resul
 
 fn load_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Function> {
     let source = fs::read_to_string(path).map_err(mlua::Error::external)?;
+    let source = preprocess_lua_cmd_syntax(&source).map_err(mlua::Error::external)?;
     let chunk_env = create_chunk_env_proxy(lua, initial_chunk_environment(lua, path)?)?;
     let chunk = lua
         .load(&source)

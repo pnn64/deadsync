@@ -689,8 +689,8 @@ local y = NOTESKIN:GetMetricFForNoteSkin("", "TapNoteNoteColorTextureCoordSpacin
 local xi = NOTESKIN:GetMetricI("", "TapNoteNoteColorTextureCoordSpacingX")
 local yi = NOTESKIN:GetMetricIForNoteSkin("", "TapNoteNoteColorTextureCoordSpacingY", "cyber")
 local vivid = NOTESKIN:GetMetricBForNoteSkin("", "TapNoteAnimationIsVivid", "cyber")
-local cmd = NOTESKIN:GetMetricA("", "OnCommand")
-local cmd_for_skin = NOTESKIN:GetMetricAForNoteSkin("", "OnCommand", "cyber")
+local metric_cmd = NOTESKIN:GetMetricA("", "OnCommand")
+local metric_cmd_for_skin = NOTESKIN:GetMetricAForNoteSkin("", "OnCommand", "cyber")
 local path = NOTESKIN:GetPathForNoteSkin("Down", "Tap Explosion Bright W1", "cyber")
 local actor = NOTESKIN:LoadActorForNoteSkin("Down", "Tap Explosion Bright W1", "cyber")
 local default_path = NOTESKIN:GetPath("Down", "Tap Explosion Bright W1")
@@ -712,7 +712,7 @@ end
 if NOTESKIN:DoesNoteSkinExist("cyber") ~= true then
     error("expected cyber noteskin to exist")
 end
-if cmd(metric_actor) ~= metric_actor or cmd_for_skin(metric_actor) ~= metric_actor then
+if metric_cmd(metric_actor) ~= metric_actor or metric_cmd_for_skin(metric_actor) ~= metric_actor then
     error("expected noteskin actor-command metrics to preserve actors")
 end
 if type(path) ~= "string" or path == "" then
@@ -9524,6 +9524,38 @@ return Def.ActorFrame{
 }
 
 #[test]
+fn compile_song_lua_runs_legacy_cmd_keyword() {
+    let song_dir = test_dir("legacy-cmd-keyword");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+return Def.ActorFrame{
+    Def.Quad{
+        Name="LegacyCmd",
+        OnCommand=cmd(x,SCREEN_CENTER_X;y,SCREEN_CENTER_Y;diffusealpha,0;scaletocover,0,0,SCREEN_WIDTH,SCREEN_HEIGHT),
+    },
+}
+"#,
+    )
+    .unwrap();
+
+    let compiled = compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&song_dir, "Legacy Cmd Keyword"),
+    )
+    .unwrap();
+    let actor = compiled
+        .overlays
+        .iter()
+        .find(|actor| actor.name.as_deref() == Some("LegacyCmd"))
+        .unwrap();
+    assert_eq!(actor.initial_state.x, 320.0);
+    assert_eq!(actor.initial_state.y, 240.0);
+    assert_eq!(actor.initial_state.diffuse[3], 0.0);
+}
+
+#[test]
 fn compile_song_lua_extracts_actorframetexture_capture_sprite_and_hidden_player() {
     let song_dir = test_dir("overlay-aft");
     let entry = song_dir.join("default.lua");
@@ -10688,6 +10720,62 @@ fn compile_song_lua_supports_media_offline_sample_if_present() {
             .iter()
             .any(|ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "tiny"))
     );
+}
+
+#[test]
+fn compile_song_lua_supports_cosmic_railroad_sample_if_present() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("songs/lua-songs/[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]");
+    let entry = root.join("lua/default.lua");
+    if !entry.is_file() {
+        return;
+    }
+
+    let mut context = SongLuaCompileContext::new(&root, "CO5M1C R4ILR0AD");
+    context.players = [
+        SongLuaPlayerContext {
+            enabled: true,
+            difficulty: SongLuaDifficulty::Hard,
+            speedmod: SongLuaSpeedMod::X(2.0),
+            ..SongLuaPlayerContext::default()
+        },
+        SongLuaPlayerContext {
+            enabled: false,
+            difficulty: SongLuaDifficulty::Hard,
+            speedmod: SongLuaSpeedMod::X(1.0),
+            ..SongLuaPlayerContext::default()
+        },
+    ];
+
+    let compiled = compile_song_lua(&entry, &context).unwrap();
+    assert_eq!(compiled.eases.len(), 548);
+    assert_eq!(compiled.overlay_eases.len(), 8);
+    assert!(compiled.eases.iter().all(|ease| ease.easing.is_some()));
+    for target in [
+        "tiny",
+        "drunk",
+        "tipsy",
+        "brake",
+        "beat",
+        "stealth",
+        "movey1",
+        "confusionoffset1",
+    ] {
+        assert!(
+            compiled.eases.iter().any(
+                |ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == target)
+            ),
+            "missing Cosmic runtime mod target {target}"
+        );
+    }
+    assert!(
+        compiled
+            .eases
+            .iter()
+            .any(|ease| matches!(ease.target, SongLuaEaseTarget::PlayerRotationZ))
+    );
+    assert_eq!(compiled.info.unsupported_function_eases, 0);
+    assert_eq!(compiled.info.unsupported_function_actions, 0);
 }
 
 #[test]
