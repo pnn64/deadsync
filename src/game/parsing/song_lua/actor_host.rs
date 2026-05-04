@@ -5,6 +5,9 @@ pub(super) struct TopScreenLuaTables {
     pub(super) players: [Table; LUA_PLAYERS],
 }
 
+const SONG_LUA_LOADER_ENVS_KEY: &str = "__songlua_loader_envs";
+const SONG_LUA_CHILD_GROUP_KEY: &str = "__songlua_child_group";
+
 #[inline(always)]
 fn song_lua_column_x(column_index: usize) -> f32 {
     SONG_LUA_COLUMN_X.get(column_index).copied().unwrap_or(0.0)
@@ -107,10 +110,7 @@ fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table>> {
         let Value::Table(child) = value else {
             continue;
         };
-        if child
-            .get::<Option<bool>>("__songlua_child_group")?
-            .unwrap_or(false)
-        {
+        if actor_is_child_group(&child)? {
             for group_value in child.sequence_values::<Value>() {
                 if let Value::Table(group_child) = group_value? {
                     push_unique_actor_child(&mut out, &mut seen, group_child);
@@ -152,23 +152,13 @@ fn merge_actor_sequence_children(lua: &Lua, actor: &Table, children: &Table) -> 
         let Value::Table(child) = value? else {
             continue;
         };
-        let Some(name) = child.get::<Option<String>>("Name")? else {
-            continue;
-        };
-        if name.trim().is_empty() {
-            continue;
-        }
+        let name = child.get::<Option<String>>("Name")?.unwrap_or_default();
         match children.get::<Option<Value>>(name.as_str())? {
-            Some(Value::Table(group))
-                if group
-                    .get::<Option<bool>>("__songlua_child_group")?
-                    .unwrap_or(false) =>
-            {
+            Some(Value::Table(group)) if actor_is_child_group(&group)? => {
                 group.raw_set(group.raw_len() + 1, child)?;
             }
             Some(Value::Table(existing)) => {
-                let group = lua.create_table()?;
-                group.set("__songlua_child_group", true)?;
+                let group = create_actor_child_group(lua)?;
                 group.raw_set(1, existing)?;
                 group.raw_set(2, child)?;
                 children.set(name.as_str(), group)?;
@@ -180,6 +170,22 @@ fn merge_actor_sequence_children(lua: &Lua, actor: &Table, children: &Table) -> 
         }
     }
     Ok(())
+}
+
+fn create_actor_child_group(lua: &Lua) -> mlua::Result<Table> {
+    let group = lua.create_table()?;
+    let mt = lua.create_table()?;
+    mt.set(SONG_LUA_CHILD_GROUP_KEY, true)?;
+    let _ = group.set_metatable(Some(mt));
+    Ok(group)
+}
+
+fn actor_is_child_group(table: &Table) -> mlua::Result<bool> {
+    table
+        .metatable()
+        .map(|mt| mt.get::<Option<bool>>(SONG_LUA_CHILD_GROUP_KEY))
+        .transpose()
+        .map(|value| value.flatten().unwrap_or(false))
 }
 
 fn actor_wrappers(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
@@ -1264,8 +1270,7 @@ fn create_option_row_frame(lua: &Lua, row_name: &str) -> mlua::Result<Table> {
     title.set("__songlua_parent", frame.clone())?;
     actor_children(lua, &frame)?.set("Title", title)?;
 
-    let items = lua.create_table()?;
-    items.set("__songlua_child_group", true)?;
+    let items = create_actor_child_group(lua)?;
     let item_text = option_row_default_text(row_name);
     for index in 1..=LUA_PLAYERS {
         let item = create_option_row_text_actor(lua, "Item", &item_text)?;
@@ -1581,8 +1586,7 @@ fn create_actorframe_class_table(lua: &Lua) -> mlua::Result<Table> {
 }
 
 fn install_graph_display_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
-    let body_group = lua.create_table()?;
-    body_group.set("__songlua_child_group", true)?;
+    let body_group = create_actor_child_group(lua)?;
     for index in 1..=2 {
         let child = create_dummy_actor(lua, "GraphDisplayBody")?;
         child.set("__songlua_parent", actor.clone())?;
@@ -2047,8 +2051,8 @@ fn load_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Fun
     let inner = chunk.into_function()?;
     let script_dir = path.parent().unwrap_or(song_dir).to_path_buf();
     let script_path = file_path_string(path);
-    let chunk_env_for_call = chunk_env;
-    lua.create_function(move |lua, args: MultiValue| {
+    let chunk_env_for_call = chunk_env.clone();
+    let wrapper = lua.create_function(move |lua, args: MultiValue| {
         call_with_script_dir(lua, &script_dir, || {
             call_with_script_path(lua, &script_path, || {
                 call_with_chunk_env(lua, &chunk_env_for_call, || {
@@ -2056,7 +2060,39 @@ fn load_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Fun
                 })
             })
         })
-    })
+    })?;
+    register_loader_env(lua, &wrapper, &chunk_env)?;
+    Ok(wrapper)
+}
+
+fn register_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua::Result<()> {
+    let globals = lua.globals();
+    let envs = match globals.get::<Option<Table>>(SONG_LUA_LOADER_ENVS_KEY)? {
+        Some(envs) => envs,
+        None => {
+            let envs = lua.create_table()?;
+            globals.set(SONG_LUA_LOADER_ENVS_KEY, envs.clone())?;
+            envs
+        }
+    };
+    envs.set(loader_env_key(function), env.clone())
+}
+
+pub(super) fn retarget_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua::Result<()> {
+    let Some(envs) = lua
+        .globals()
+        .get::<Option<Table>>(SONG_LUA_LOADER_ENVS_KEY)?
+    else {
+        return Ok(());
+    };
+    let Some(loader_env) = envs.get::<Option<Table>>(loader_env_key(function))? else {
+        return Ok(());
+    };
+    loader_env.set("__songlua_env_target", env.clone())
+}
+
+fn loader_env_key(function: &Function) -> String {
+    format!("{:p}", function.to_pointer())
 }
 
 pub(super) fn execute_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Value> {
@@ -2131,6 +2167,33 @@ pub(super) fn read_update_function_actions(
         &mut seen_tables,
         info,
     )
+}
+
+pub(super) fn read_update_function_tables(
+    lua: &Lua,
+    root: &Value,
+    names: &[&str],
+) -> Result<Vec<Table>, String> {
+    let Value::Table(root) = root else {
+        return Ok(Vec::new());
+    };
+    let globals = lua.globals();
+    let Some(debug) = globals
+        .get::<Option<Table>>("debug")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(Vec::new());
+    };
+    let Some(getupvalue) = debug
+        .get::<Option<Function>>("getupvalue")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    let mut seen_tables = HashSet::new();
+    read_update_function_tables_for_table(root, &getupvalue, names, &mut seen_tables, &mut out)?;
+    Ok(out)
 }
 
 fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -2282,7 +2345,12 @@ fn read_update_function_actions_for_table(
         .get::<Option<Function>>("__songlua_update_function")
         .map_err(|err| err.to_string())?
     {
-        for table in update_function_action_tables(getupvalue, &update, seen_tables)? {
+        for table in update_function_named_tables(
+            getupvalue,
+            &update,
+            &["mod_actions", "actions"],
+            seen_tables,
+        )? {
             read_actions(
                 lua,
                 Some(table),
@@ -2313,9 +2381,37 @@ fn read_update_function_actions_for_table(
     Ok(())
 }
 
-fn update_function_action_tables(
+fn read_update_function_tables_for_table(
+    actor: &Table,
+    getupvalue: &Function,
+    names: &[&str],
+    seen_tables: &mut HashSet<usize>,
+    out: &mut Vec<Table>,
+) -> Result<(), String> {
+    if let Some(update) = actor
+        .get::<Option<Function>>("__songlua_update_function")
+        .map_err(|err| err.to_string())?
+    {
+        out.extend(update_function_named_tables(
+            getupvalue,
+            &update,
+            names,
+            seen_tables,
+        )?);
+    }
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child.map_err(|err| err.to_string())? else {
+            continue;
+        };
+        read_update_function_tables_for_table(&child, getupvalue, names, seen_tables, out)?;
+    }
+    Ok(())
+}
+
+fn update_function_named_tables(
     getupvalue: &Function,
     function: &Function,
+    names: &[&str],
     seen_tables: &mut HashSet<usize>,
 ) -> Result<Vec<Table>, String> {
     let mut out = Vec::new();
@@ -2327,7 +2423,7 @@ fn update_function_action_tables(
             continue;
         };
         let name = name.to_str().map_err(|err| err.to_string())?;
-        if !matches!(name.as_ref(), "mod_actions" | "actions") {
+        if !names.iter().any(|candidate| name.as_ref() == *candidate) {
             continue;
         }
         let Value::Table(table) = value else {

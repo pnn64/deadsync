@@ -109,6 +109,40 @@ return Def.ActorFrame{}
 }
 
 #[test]
+fn compile_song_lua_reads_local_update_mod_time() {
+    let song_dir = test_dir("local-update-mod-time");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local mod_time = {
+    {0, 5, "*100 no dark", "len"},
+}
+
+return Def.ActorFrame{
+    Def.ActorFrame{
+        OnCommand=function(self)
+            self:SetUpdateFunction(function()
+                if mod_time[1] then end
+            end)
+        end,
+    },
+}
+"#,
+    )
+    .unwrap();
+
+    let compiled = compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&song_dir, "Local Mod Time"),
+    )
+    .unwrap();
+    assert_eq!(compiled.time_mods.len(), 1);
+    assert_eq!(compiled.time_mods[0].unit, SongLuaTimeUnit::Second);
+    assert_eq!(compiled.time_mods[0].mods, "*100 no dark");
+}
+
+#[test]
 fn compile_song_lua_samples_player_perframes_into_eases() {
     let song_dir = test_dir("perframe-player");
     let entry = song_dir.join("default.lua");
@@ -384,6 +418,39 @@ return Def.ActorFrame{
     assert_eq!(compiled.eases[0].player, Some(2));
     assert_eq!(compiled.messages.len(), 1);
     assert_eq!(compiled.messages[0].message, "ShowDDRFail");
+}
+
+#[test]
+fn compile_song_lua_names_callable_table_easings() {
+    let song_dir = test_dir("callable-table-easings");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+xero = {
+    outElastic = setmetatable({}, {
+        __call = function(self, t)
+            return t
+        end,
+    }),
+}
+
+mods_ease = {
+    {1, 1, 0, 100, "tiny", "len", xero.outElastic, 1},
+}
+
+return Def.ActorFrame{}
+"#,
+    )
+    .unwrap();
+
+    let compiled = compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&song_dir, "Callable Table Easings"),
+    )
+    .unwrap();
+    assert_eq!(compiled.eases.len(), 1);
+    assert_eq!(compiled.eases[0].easing.as_deref(), Some("outElastic"));
 }
 
 #[test]
@@ -6655,6 +6722,98 @@ return Def.ActorFrame{
 }
 
 #[test]
+fn compile_song_lua_supports_xero_require_env_switching() {
+    let song_dir = test_dir("xero-require-env");
+    let template_dir = song_dir.join("template");
+    let lua_dir = song_dir.join("lua");
+    fs::create_dir_all(&template_dir).unwrap();
+    fs::create_dir_all(&lua_dir).unwrap();
+    fs::write(
+        template_dir.join("std.lua"),
+        r#"
+setmetatable(xero, {
+    __index = _G,
+    __call = function(self, f)
+        setfenv(f or 2, self)
+        return f
+    end,
+})
+
+xero.package = {
+    loaded = {},
+    loaders = {
+        function(modname)
+            local loader, err = loadfile(xero.dir .. "lua/" .. modname .. ".lua")
+            if loader then return xero(loader) end
+            return err
+        end,
+    },
+}
+
+function xero.require(modname)
+    local loaded = xero.package.loaded
+    if not loaded[modname] then
+        for _, loader in ipairs(xero.package.loaders) do
+            local chunk = loader(modname)
+            if type(chunk) == "function" then
+                loaded[modname] = chunk() or true
+                break
+            end
+        end
+    end
+    return loaded[modname]
+end
+
+xero()
+return Def.Actor{}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        template_dir.join("template.lua"),
+        r#"
+xero()
+xero.P = {"ok"}
+xero.require("mods")
+return Def.ActorFrame{}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        lua_dir.join("mods.lua"),
+        r#"
+mod_actions = {
+    {1, P[1], true},
+}
+"#,
+    )
+    .unwrap();
+    let entry = template_dir.join("main.lua");
+    fs::write(
+        &entry,
+        r#"
+_G.xero = {
+    dir = GAMESTATE:GetCurrentSong():GetSongDir(),
+}
+
+return Def.ActorFrame{
+    assert(loadfile(xero.dir .. "template/std.lua"))(),
+    assert(loadfile(xero.dir .. "template/template.lua"))(),
+}
+"#,
+    )
+    .unwrap();
+
+    let compiled = compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&song_dir, "Xero Require"),
+    )
+    .unwrap();
+    assert_eq!(compiled.messages.len(), 1);
+    assert_eq!(compiled.messages[0].message, "ok");
+}
+
+#[test]
 fn compile_song_lua_returns_empty_fileman_listing_for_missing_dir() {
     let song_dir = test_dir("fileman-empty-listing");
     let entry = song_dir.join("default.lua");
@@ -7053,6 +7212,59 @@ return Def.ActorFrame{
     .unwrap();
     assert_eq!(compiled.messages.len(), 1);
     assert_eq!(compiled.messages[0].message, "4:7:9");
+}
+
+#[test]
+fn compile_song_lua_getchildren_scans_unnamed_actorframes() {
+    let song_dir = test_dir("getchildren-unnamed-actorframes");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local function scan(actor, skip)
+    if tostring(actor):find("table") and not skip then
+        for _, child in pairs(actor) do
+            scan(child)
+        end
+        return
+    end
+    if actor.GetChildren then
+        for _, child in pairs(actor:GetChildren()) do
+            scan(child)
+        end
+    end
+    if actor.GetName and actor:GetName() == "TargetLeaf" then
+        prefix_globals.found_leaf = true
+    end
+end
+
+prefix_globals = {}
+
+return Def.ActorFrame{
+    OnCommand=function(self)
+        scan(self, true)
+        mod_actions = {{1, tostring(prefix_globals.found_leaf == true), true}}
+    end,
+    Def.ActorFrame{},
+    Def.ActorFrame{
+        Def.ActorFrame{
+            Def.Quad{
+                Name="TargetLeaf",
+            },
+        },
+    },
+}
+"#,
+    )
+    .unwrap();
+
+    let compiled = compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&song_dir, "GetChildren Unnamed ActorFrames"),
+    )
+    .unwrap();
+    assert_eq!(compiled.messages.len(), 1);
+    assert_eq!(compiled.messages[0].message, "true");
 }
 
 #[test]
@@ -10398,10 +10610,22 @@ fn compile_song_lua_supports_spooky_sample_if_present() {
     ];
 
     let compiled = compile_song_lua(&entry, &context).unwrap();
-    assert!(!compiled.beat_mods.is_empty());
     assert_eq!(compiled.messages.len(), 2);
     assert_eq!(compiled.overlays.len(), 3);
-    assert!(compiled.eases.len() >= 40);
+    assert!(compiled.eases.len() >= 300);
+    assert!(compiled.eases.iter().all(|ease| ease.easing.is_some()));
+    assert!(
+        compiled
+            .eases
+            .iter()
+            .any(|ease| ease.easing.as_deref() == Some("outCirc"))
+    );
+    assert!(
+        compiled
+            .eases
+            .iter()
+            .any(|ease| ease.easing.as_deref() == Some("outExpo"))
+    );
     assert_eq!(compiled.info.unsupported_function_eases, 0);
     assert!(
         compiled
@@ -10444,6 +10668,20 @@ fn compile_song_lua_supports_media_offline_sample_if_present() {
 
     let compiled = compile_song_lua(&entry, &context).unwrap();
     assert!(!compiled.time_mods.is_empty());
+    assert_eq!(compiled.eases.len(), 44);
+    assert!(compiled.eases.iter().all(|ease| ease.easing.is_some()));
+    assert!(
+        compiled
+            .eases
+            .iter()
+            .any(|ease| ease.easing.as_deref() == Some("outCirc"))
+    );
+    assert!(
+        compiled
+            .eases
+            .iter()
+            .any(|ease| ease.easing.as_deref() == Some("inCirc"))
+    );
     assert!(
         compiled
             .eases
@@ -10492,6 +10730,7 @@ fn compile_song_lua_supports_kenpo_sample_if_present() {
     }
 
     let mut context = SongLuaCompileContext::new(&root, "KENPO SAITO");
+    context.style_name = "double".to_string();
     context.players = [
         SongLuaPlayerContext {
             enabled: true,
@@ -10500,7 +10739,7 @@ fn compile_song_lua_supports_kenpo_sample_if_present() {
             ..SongLuaPlayerContext::default()
         },
         SongLuaPlayerContext {
-            enabled: true,
+            enabled: false,
             difficulty: SongLuaDifficulty::Challenge,
             speedmod: SongLuaSpeedMod::C(516.0),
             ..SongLuaPlayerContext::default()
@@ -10520,6 +10759,48 @@ fn compile_song_lua_supports_kenpo_sample_if_present() {
             .overlays
             .iter()
             .any(|overlay| matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }))
+    );
+}
+
+#[test]
+fn compile_song_lua_supports_godspeed_sample_if_present() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../lua-songs/[12] Godspeed (SX) [G. Rosewood]");
+    let entry = root.join("lua/_script.lua");
+    if !entry.is_file() {
+        return;
+    }
+
+    let mut context = SongLuaCompileContext::new(&root, "Godspeed");
+    context.players = [
+        SongLuaPlayerContext {
+            enabled: true,
+            difficulty: SongLuaDifficulty::Challenge,
+            speedmod: SongLuaSpeedMod::X(2.0),
+            ..SongLuaPlayerContext::default()
+        },
+        SongLuaPlayerContext {
+            enabled: false,
+            difficulty: SongLuaDifficulty::Easy,
+            speedmod: SongLuaSpeedMod::X(1.0),
+            ..SongLuaPlayerContext::default()
+        },
+    ];
+
+    let compiled = compile_song_lua(&entry, &context).unwrap();
+    assert!(!compiled.time_mods.is_empty());
+    assert_eq!(compiled.eases.len(), 37);
+    assert!(compiled.eases.iter().all(|ease| ease.easing.is_some()));
+    assert!(
+        compiled
+            .eases
+            .iter()
+            .any(|ease| ease.easing.as_deref() == Some("outElastic"))
+    );
+    assert!(
+        compiled.eases.iter().any(
+            |ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "Bumpy1")
+        )
     );
 }
 

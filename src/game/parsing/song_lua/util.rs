@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use super::types::{SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow, SongLuaSpanMode};
 use super::{LUA_PLAYERS, SONG_LUA_SOUND_PATHS_KEY};
 
+pub(super) const SONG_LUA_EASING_NAME_KEY: &str = "__songlua_easing_name";
+
 #[inline(always)]
 pub(super) fn read_f32(value: Value) -> Option<f32> {
     match value {
@@ -428,6 +430,12 @@ pub(super) fn read_easing_name(
     match value {
         Value::String(text) => Some(text.to_str().ok()?.to_string()),
         Value::Function(function) => easing_names.get(&function.to_pointer()).cloned(),
+        Value::Table(table) => easing_names.get(&table.to_pointer()).cloned().or_else(|| {
+            table
+                .raw_get::<Option<String>>(SONG_LUA_EASING_NAME_KEY)
+                .ok()
+                .flatten()
+        }),
         _ => None,
     }
 }

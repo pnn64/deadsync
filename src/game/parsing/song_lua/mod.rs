@@ -30,8 +30,9 @@ use self::actor_host::{
     compile_overlay_function_ease, create_arrow_effects_table, create_top_screen_table,
     execute_script_file, install_def, install_file_loaders, probe_function_ease_target,
     read_overlay_actors, read_tracked_compile_actors, read_update_function_actions,
-    reset_overlay_capture_tables, reset_tracked_capture_tables, run_actor_draw_functions,
-    run_actor_init_commands, run_actor_startup_commands, run_actor_update_functions,
+    read_update_function_tables, reset_overlay_capture_tables, reset_tracked_capture_tables,
+    run_actor_draw_functions, run_actor_init_commands, run_actor_startup_commands,
+    run_actor_update_functions,
 };
 use self::compat::{
     create_chunk_env_proxy, create_gameplay_layout, initial_chunk_environment,
@@ -80,11 +81,11 @@ pub use self::types::{
     SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
 };
 use self::util::{
-    create_owned_string_array, create_string_array, ease_window_cmp, file_path_string,
-    is_song_lua_audio_path, is_song_lua_image_path, is_song_lua_media_path, is_song_lua_video_path,
-    lua_format_text, lua_text_value, lua_values_equal, make_color_table, message_event_cmp,
-    method_arg, mod_window_cmp, player_index_from_value, player_number_name, read_boolish,
-    read_color_value, read_easing_name, read_f32, read_i32_value, read_player,
+    SONG_LUA_EASING_NAME_KEY, create_owned_string_array, create_string_array, ease_window_cmp,
+    file_path_string, is_song_lua_audio_path, is_song_lua_image_path, is_song_lua_media_path,
+    is_song_lua_video_path, lua_format_text, lua_text_value, lua_values_equal, make_color_table,
+    message_event_cmp, method_arg, mod_window_cmp, player_index_from_value, player_number_name,
+    read_boolish, read_color_value, read_easing_name, read_f32, read_i32_value, read_player,
     read_song_lua_sound_paths, read_span_mode, read_string, read_u32_value,
     read_vertex_colors_value, song_dir_string, song_group_name, song_music_path,
     song_named_image_path, song_simfile_path, truthy,
@@ -113,6 +114,7 @@ const SONG_LUA_DANGER_LIFE: f32 = 0.2;
 const GRAPH_DISPLAY_VALUE_RESOLUTION: usize = 100;
 const SONG_LUA_SPRITE_STATE_CLEAR: u32 = u32::MAX;
 const EASING_NAMES: &[&str] = &[
+    "instant",
     "linear",
     "inQuad",
     "outQuad",
@@ -611,6 +613,8 @@ pub fn compile_song_lua(
     push_song_lua_stage_time(&mut stage_times, "update_functions", &mut stage_started);
     run_actor_draw_functions(&lua, &root);
     push_song_lua_stage_time(&mut stage_times, "draw_functions", &mut stage_started);
+    register_loaded_easing_names(&lua, &mut host).map_err(|err| err.to_string())?;
+    push_song_lua_stage_time(&mut stage_times, "easing_names", &mut stage_started);
 
     let globals = lua.globals();
     let mut out = CompiledSongLua {
@@ -706,6 +710,10 @@ pub fn compile_song_lua(
             .map_err(|err| err.to_string())?,
         SongLuaTimeUnit::Second,
     )?);
+    for table in read_update_function_tables(&lua, &root, &["mod_time"])? {
+        out.time_mods
+            .extend(read_mod_windows(Some(table), SongLuaTimeUnit::Second)?);
+    }
     push_song_lua_stage_time(&mut stage_times, "global_mods", &mut stage_started);
     let (global_eases, global_overlay_eases, global_info) = read_eases(
         &lua,
@@ -858,6 +866,35 @@ fn install_ease_table(lua: &Lua, host: &mut HostState) -> mlua::Result<()> {
         ease.set(name, function)?;
     }
     globals.set("ease", ease)?;
+    Ok(())
+}
+
+fn register_loaded_easing_names(lua: &Lua, host: &mut HostState) -> mlua::Result<()> {
+    let globals = lua.globals();
+    if let Some(ease) = globals.get::<Option<Table>>("ease")? {
+        register_easing_table(&ease, host)?;
+    }
+    if let Some(xero) = globals.get::<Option<Table>>("xero")? {
+        register_easing_table(&xero, host)?;
+    }
+    Ok(())
+}
+
+fn register_easing_table(table: &Table, host: &mut HostState) -> mlua::Result<()> {
+    for &name in EASING_NAMES {
+        match table.get::<Value>(name)? {
+            Value::Function(function) => {
+                host.easing_names
+                    .insert(function.to_pointer(), name.to_string());
+            }
+            Value::Table(table) => {
+                host.easing_names
+                    .insert(table.to_pointer(), name.to_string());
+                table.raw_set(SONG_LUA_EASING_NAME_KEY, name)?;
+            }
+            _ => {}
+        }
+    }
     Ok(())
 }
 

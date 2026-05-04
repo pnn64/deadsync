@@ -2924,6 +2924,7 @@ pub(crate) fn song_lua_ease_factor(
     let elastic_period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
     let elastic_tau = std::f32::consts::TAU / elastic_period;
     match easing.unwrap_or("linear") {
+        "instant" => 1.0,
         "linear" => t,
         "inQuad" => song_lua_pow_in(t, 2.0),
         "outQuad" => song_lua_pow_out(t, 2.0),

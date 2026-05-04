@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use super::actor_host::{
     current_gamestate_player_value, current_gamestate_value, current_song_value,
-    current_steps_value,
+    current_steps_value, retarget_loader_env,
 };
 use super::runtime::note_song_lua_side_effect;
 use super::sl::{create_sl_streams, init_sl_streams, player_short_name};
@@ -626,6 +626,7 @@ pub(super) fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<
         "setfenv",
         lua.create_function(|lua, (target, env): (Value, Table)| match target {
             Value::Function(function) => {
+                retarget_loader_env(lua, &function, &env)?;
                 let _ = function.set_environment(env.clone())?;
                 Ok(Value::Function(function))
             }
