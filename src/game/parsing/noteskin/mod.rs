@@ -2169,6 +2169,7 @@ fn load_itg_sprite_noteskin_compiled(
     let mut mine_frames = Vec::with_capacity(style.num_cols);
     let mut hold_columns = Vec::with_capacity(style.num_cols);
     let mut roll_columns = Vec::with_capacity(style.num_cols);
+    let mut receptor_pulse_command: Option<String> = None;
     let resolve_single_slot = |button: &str, element: &str| {
         let request = itg_load_request(compiled, button, element);
         itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, element)
@@ -2267,6 +2268,12 @@ fn load_itg_sprite_noteskin_compiled(
 
         let receptor_sprites =
             itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Receptor");
+        if receptor_pulse_command.is_none() {
+            receptor_pulse_command = receptor_sprites
+                .first()
+                .and_then(|s| s.commands.get("initcommand"))
+                .cloned();
+        }
         let receptor_slot = receptor_sprites
             .first()
             .map(|s| s.slot.clone())
@@ -2827,7 +2834,10 @@ fn load_itg_sprite_noteskin_compiled(
 
     let receptor_glow_behavior =
         itg_receptor_glow_behavior_compiled(data, compiled, compiled_actors);
-    let receptor_pulse = itg_receptor_pulse(&data.metrics);
+    let receptor_pulse = receptor_pulse_command
+        .as_deref()
+        .map(itg_receptor_pulse_from_script)
+        .unwrap_or_default();
     let mine_fill_slots = mine_fill_slots(&mines);
     let column_xs = if style.num_cols == 0 {
         Vec::new()
@@ -2962,12 +2972,8 @@ fn itg_note_display_metrics(metrics: &noteskin_itg::IniData) -> NoteDisplayMetri
     out
 }
 
-fn itg_receptor_pulse(metrics: &noteskin_itg::IniData) -> ReceptorPulse {
+fn itg_receptor_pulse_from_script(command: &str) -> ReceptorPulse {
     let mut pulse = ReceptorPulse::default();
-    let Some(command) = metrics.get("ReceptorArrow", "InitCommand") else {
-        return pulse;
-    };
-
     for raw_token in command.split(';') {
         let token = raw_token.trim();
         if token.is_empty() {
@@ -2976,23 +2982,6 @@ fn itg_receptor_pulse(metrics: &noteskin_itg::IniData) -> ReceptorPulse {
         let Some((cmd, args)) = split_script_token(token) else {
             continue;
         };
-        if cmd == "effecttiming" {
-            let values = args
-                .iter()
-                .filter_map(|arg| parse_script_number(arg))
-                .collect::<Vec<_>>();
-            if values.len() >= 4 {
-                // ITGmania compatibility:
-                // 4 args => (ramp_to_half, hold_at_half, ramp_to_full, hold_at_zero)
-                // 5 args => (..., hold_at_zero, hold_at_full)
-                pulse.ramp_to_half = values[0].max(0.0);
-                pulse.hold_at_half = values[1].max(0.0);
-                pulse.ramp_to_full = values[2].max(0.0);
-                pulse.hold_at_zero = values[3].max(0.0);
-                pulse.hold_at_full = values.get(4).copied().unwrap_or(0.0).max(0.0);
-            }
-            continue;
-        }
         if let Some(effect_mod) = parse_script_effect_mod(cmd.as_str(), &args) {
             match effect_mod {
                 ScriptEffectMod::EffectColor1(color) => pulse.effect_color1 = color,
@@ -3002,6 +2991,13 @@ fn itg_receptor_pulse(metrics: &noteskin_itg::IniData) -> ReceptorPulse {
                 }
                 ScriptEffectMod::EffectOffset(v) => {
                     pulse.effect_offset = v;
+                }
+                ScriptEffectMod::EffectTiming(v) => {
+                    pulse.ramp_to_half = v[0].max(0.0);
+                    pulse.hold_at_half = v[1].max(0.0);
+                    pulse.ramp_to_full = v[2].max(0.0);
+                    pulse.hold_at_full = v[3].max(0.0);
+                    pulse.hold_at_zero = v[4].max(0.0);
                 }
                 _ => {}
             }
@@ -6651,6 +6647,91 @@ Materials: 1
             [74.0, 74.0],
             "default overlay should preserve larger source-frame size than receptor"
         );
+    }
+
+    #[test]
+    fn receptor_pulse_uses_actor_init_command_not_fallback_metric() {
+        clear_itg_runtime_caches();
+        let root = temp_noteskin_root("receptor-init-command");
+        let skin_dir = root.join("dance/steady");
+        let common_dir = root.join("common/common");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::create_dir_all(&common_dir).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=common\n[ReceptorArrow]\nNoneCommand=\n",
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+skin.ButtonRedir = { Up = "Down", Down = "Down", Left = "Down", Right = "Down" }
+
+function skin.Load()
+    local button = skin.ButtonRedir[Var "Button"] or Var "Button"
+    return LoadActor(NOTESKIN:GetPath(button, Var "Element"))
+end
+
+return skin
+"#,
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("Down Receptor.lua"),
+            r#"local t = Def.ActorFrame {
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath("_down", "go receptor");
+        Frame0000=0;
+        Delay0000=0;
+        NoneCommand=NOTESKIN:GetMetricA("ReceptorArrow", "NoneCommand");
+    };
+};
+return t
+"#,
+        )
+        .unwrap();
+        fs::write(
+            common_dir.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=common\n[ReceptorArrow]\nInitCommand=effectclock,'beat';diffuseramp;effectcolor1,color(\"0,0,0,1\");effectcolor2,color(\"1,1,1,1\");effecttiming,.5,0,.5,0\n",
+        )
+        .unwrap();
+        write_noteskin_png(&skin_dir.join("Down Tap Note.png"));
+        write_noteskin_png(&skin_dir.join("_down go receptor.png"));
+
+        let data = load_itg_data_cached(&root, "dance", "steady")
+            .expect("steady test noteskin data should load");
+        assert!(
+            data.metrics
+                .get("ReceptorArrow", "InitCommand")
+                .is_some_and(|cmd| cmd.contains("diffuseramp")),
+            "test skin should inherit a pulsing fallback metric"
+        );
+
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns =
+            load_itg(&root, "dance", "steady", &style).expect("steady test noteskin should load");
+        let receptor = ns
+            .receptor_off
+            .first()
+            .expect("steady test noteskin should resolve a receptor");
+        assert_eq!(
+            receptor.source.frame_count(),
+            1,
+            "Frame0000-only receptor actor should stay on a single frame"
+        );
+        for beat in [0.0, 0.25, 0.5, 0.75] {
+            let color = ns.receptor_pulse.color_for_beat(beat);
+            assert!(
+                color.iter().all(|channel| (*channel - 1.0).abs() <= 1e-6),
+                "receptor pulse should ignore fallback InitCommand at beat {beat}, got {color:?}"
+            );
+        }
+
+        let _ = fs::remove_dir_all(&root);
+        clear_itg_runtime_caches();
     }
 
     #[test]
