@@ -2652,17 +2652,27 @@ fn load_itg_sprite_noteskin_compiled(
     for visuals in &mut roll_columns {
         visuals.explosion.clone_from(&roll.explosion);
     }
+    let dim_explosion_request = itg_load_request(compiled, "Down", "Tap Explosion Dim");
+    let bright_explosion_request = itg_load_request(compiled, "Down", "Tap Explosion Bright");
     let explosion_slot = dim_sprites
         .first()
         .map(|s| s.slot.clone())
         .or_else(|| bright_sprites.first().map(|s| s.slot.clone()))
         .or_else(|| {
-            data.resolve_path("Down", "Tap Explosion Dim")
-                .and_then(|p| itg_slot_from_path(&p))
+            if dim_explosion_request.blank {
+                None
+            } else {
+                data.resolve_path("Down", "Tap Explosion Dim")
+                    .and_then(|p| itg_slot_from_path(&p))
+            }
         })
         .or_else(|| {
-            data.resolve_path("Down", "Tap Explosion Bright")
-                .and_then(|p| itg_slot_from_path(&p))
+            if bright_explosion_request.blank {
+                None
+            } else {
+                data.resolve_path("Down", "Tap Explosion Bright")
+                    .and_then(|p| itg_slot_from_path(&p))
+            }
         });
     let mine_source = explosion_sprites
         .iter()
@@ -6171,7 +6181,8 @@ mod tests {
         AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode,
         ModelTweenSegment, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, Quantization,
         SpriteDefinition, SpriteSlot, SpriteSource, Style, clear_itg_runtime_caches,
-        itg_apply_state_properties_from_script, itg_model_draw_program, load_itg_data_cached,
+        itg_apply_state_properties_from_script, itg_model_draw_program,
+        itg_register_texture_dims_for_path, load_itg, load_itg_data_cached,
         load_itg_model_slots_from_path, load_itg_skin, parse_explosion_animation,
     };
     use std::collections::{HashMap, HashSet};
@@ -6217,6 +6228,16 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    fn write_noteskin_png(path: &Path) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        image::RgbaImage::from_pixel(64, 64, image::Rgba([255, 255, 255, 255]))
+            .save(path)
+            .unwrap();
+        itg_register_texture_dims_for_path(path);
     }
 
     #[test]
@@ -7086,6 +7107,70 @@ Materials: 1
             mine.animation.duration()
         );
     }
+
+    #[test]
+    fn blank_tap_explosions_do_not_fall_back_to_common() {
+        clear_itg_runtime_caches();
+        let root = temp_noteskin_root("blank-tap-explosion");
+        let skin_dir = root.join("dance/blanktap");
+        let common_dir = root.join("common/common");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::create_dir_all(&common_dir).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=common\n",
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+skin.ButtonRedir = { Up = "Down", Down = "Down", Left = "Down", Right = "Down" }
+skin.ElementRedir = { ["Tap Explosion Dim"] = "Tap Explosion Bright" }
+skin.Blank = { ["Tap Explosion Bright"] = true, ["Tap Explosion Dim"] = true }
+
+function skin.Load()
+    local button = skin.ButtonRedir[Var "Button"] or Var "Button"
+    local element = skin.ElementRedir[Var "Element"] or Var "Element"
+    local t = LoadActor(NOTESKIN:GetPath(button, element))
+    if skin.Blank[Var "Element"] then
+        t = Def.Actor {}
+        if Var "SpriteOnly" then
+            t = LoadActor(NOTESKIN:GetPath("", "_blank"))
+        end
+    end
+    return t
+end
+
+return skin
+"#,
+        )
+        .unwrap();
+        fs::write(
+            common_dir.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=common\n",
+        )
+        .unwrap();
+        write_noteskin_png(&skin_dir.join("Down Tap Note.png"));
+        write_noteskin_png(&skin_dir.join("Down Receptor.png"));
+        write_noteskin_png(&common_dir.join("Fallback Tap Explosion Dim.png"));
+        write_noteskin_png(&common_dir.join("Fallback Tap Explosion Bright.png"));
+
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg(&root, "dance", "blanktap", &style)
+            .expect("blanktap test noteskin should load");
+        assert!(
+            ns.tap_explosions.is_empty(),
+            "blank tap explosions should not leak common fallback sprites: {:?}",
+            ns.tap_explosions.keys().collect::<Vec<_>>()
+        );
+
+        let _ = fs::remove_dir_all(&root);
+        clear_itg_runtime_caches();
+    }
+
     #[test]
     fn cel_hold_heads_remap_to_tap_layers() {
         let style = Style {
