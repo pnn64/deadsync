@@ -1662,14 +1662,16 @@ fn build_course_summary_eval_state(
     state
 }
 
-fn push_song_lua_video_paths(
-    overlays: &[crate::game::parsing::song_lua::SongLuaOverlayActor],
-    seen: &mut HashSet<String>,
+fn push_song_lua_video_paths<'a>(
+    overlays: &'a [crate::game::parsing::song_lua::SongLuaOverlayActor],
+    seen: &mut HashSet<&'a str>,
     paths: &mut Vec<PathBuf>,
 ) {
     for overlay in overlays {
-        let crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } =
-            &overlay.kind
+        let crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite {
+            texture_path,
+            texture_key,
+        } = &overlay.kind
         else {
             continue;
         };
@@ -1679,8 +1681,7 @@ fn push_song_lua_video_paths(
         if !overlay.initial_state.decode_movie {
             continue;
         }
-        let key = texture_path.to_string_lossy().into_owned();
-        if seen.insert(key) {
+        if seen.insert(texture_key.as_ref()) {
             paths.push(texture_path.clone());
         }
     }
@@ -1860,15 +1861,18 @@ fn prewarm_gameplay_assets(
                             );
                         }
                     }
-                    crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } => {
-                        let key = texture_path.to_string_lossy().into_owned();
-                        let first_seen = seen.insert(key.clone());
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite {
+                        texture_path,
+                        texture_key,
+                    } => {
+                        let key = texture_key.as_ref();
+                        let first_seen = seen.insert(key.to_owned());
                         let sampler = song_lua_overlay_sampler(overlay);
                         if sampler != SamplerDesc::default() {
                             match media_cache::load_banner_source_rgba(texture_path) {
                                 Ok(rgba) => {
                                     if let Err(e) = assets.update_texture_for_key_with_sampler(
-                                        backend, &key, &rgba, sampler,
+                                        backend, key, &rgba, sampler,
                                     ) {
                                         warn!(
                                             "Failed to create custom-sampled GPU texture for image {texture_path:?}: {e}. Skipping."
@@ -1893,16 +1897,17 @@ fn prewarm_gameplay_assets(
                     }
                     crate::game::parsing::song_lua::SongLuaOverlayKind::ActorMultiVertex {
                         texture_path: Some(texture_path),
+                        texture_key: Some(texture_key),
                         ..
                     } => {
-                        let key = texture_path.to_string_lossy().into_owned();
-                        let first_seen = seen.insert(key.clone());
+                        let key = texture_key.as_ref();
+                        let first_seen = seen.insert(key.to_owned());
                         let sampler = song_lua_overlay_sampler(overlay);
                         if sampler != SamplerDesc::default() {
                             match media_cache::load_banner_source_rgba(texture_path) {
                                 Ok(rgba) => {
                                     if let Err(e) = assets.update_texture_for_key_with_sampler(
-                                        backend, &key, &rgba, sampler,
+                                        backend, key, &rgba, sampler,
                                     ) {
                                         warn!(
                                             "Failed to create custom-sampled GPU texture for image {texture_path:?}: {e}. Skipping."
@@ -7859,6 +7864,7 @@ mod tests {
             SongLuaOverlayActor {
                 kind: SongLuaOverlayKind::Sprite {
                     texture_path: movie.clone(),
+                    texture_key: Arc::from(movie.to_string_lossy().into_owned()),
                 },
                 name: None,
                 parent_index: None,
@@ -7871,6 +7877,7 @@ mod tests {
             SongLuaOverlayActor {
                 kind: SongLuaOverlayKind::Sprite {
                     texture_path: movie.clone(),
+                    texture_key: Arc::from(movie.to_string_lossy().into_owned()),
                 },
                 name: None,
                 parent_index: None,
@@ -7883,6 +7890,7 @@ mod tests {
             SongLuaOverlayActor {
                 kind: SongLuaOverlayKind::Sprite {
                     texture_path: PathBuf::from("panel.png"),
+                    texture_key: Arc::from("panel.png"),
                 },
                 name: None,
                 parent_index: None,
@@ -7907,6 +7915,7 @@ mod tests {
         let overlays = vec![SongLuaOverlayActor {
             kind: SongLuaOverlayKind::Sprite {
                 texture_path: movie.clone(),
+                texture_key: Arc::from(movie.to_string_lossy().into_owned()),
             },
             name: None,
             parent_index: None,

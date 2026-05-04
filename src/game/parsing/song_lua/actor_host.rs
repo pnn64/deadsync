@@ -2635,7 +2635,11 @@ fn read_overlay_actor(
                 let Some(texture_path) = resolve_actor_asset_path(actor, &texture).ok() else {
                     return Ok(None);
                 };
-                SongLuaOverlayKind::Sprite { texture_path }
+                let texture_key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
+                SongLuaOverlayKind::Sprite {
+                    texture_path,
+                    texture_key,
+                }
             }
         }
     } else if actor_type.eq_ignore_ascii_case("Sound") {
@@ -2685,9 +2689,14 @@ fn read_overlay_actor(
         let Some(vertices) = read_actor_multi_vertex_mesh(actor)? else {
             return Ok(None);
         };
+        let texture_path = read_actor_multi_vertex_texture_path(actor, aft_capture_names)?;
+        let texture_key = texture_path
+            .as_ref()
+            .map(|path| Arc::<str>::from(path.to_string_lossy().into_owned()));
         SongLuaOverlayKind::ActorMultiVertex {
             vertices,
-            texture_path: read_actor_multi_vertex_texture_path(actor, aft_capture_names)?,
+            texture_path,
+            texture_key,
         }
     } else if actor_type.eq_ignore_ascii_case("Model") {
         let Some(layers) = read_model_layers(actor)? else {

@@ -1001,7 +1001,7 @@ fn song_lua_has_visible_tex(
     overlays.iter().zip(overlay_states).any(|(overlay, state)| {
         matches!(
             &overlay.kind,
-            SongLuaOverlayKind::Sprite { texture_path } if texture_path.as_path() == path
+            SongLuaOverlayKind::Sprite { texture_path, .. } if texture_path.as_path() == path
         ) && state.visible
             && state.diffuse[3] > f32::EPSILON
     })
@@ -4371,13 +4371,13 @@ fn build_song_lua_overlay_actor(
         SongLuaOverlayKind::ActorProxy { .. } => None,
         SongLuaOverlayKind::AftSprite { .. } => None,
         SongLuaOverlayKind::Sound { .. } => None,
-        SongLuaOverlayKind::Sprite { texture_path } => {
-            let key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
-            if !asset_manager.has_texture_key(key.as_ref()) {
+        SongLuaOverlayKind::Sprite { texture_key, .. } => {
+            let key = texture_key.as_ref();
+            if !asset_manager.has_texture_key(key) {
                 return None;
             }
             if let Some(view_proj) = perspective_view_proj {
-                let size = song_lua_overlay_sprite_size(state, key.as_ref())?;
+                let size = song_lua_overlay_sprite_size(state, key)?;
                 let (center, size) = song_lua_overlay_rect(
                     state,
                     size,
@@ -4403,7 +4403,7 @@ fn build_song_lua_overlay_actor(
                     &mut rot_deg,
                 );
                 let actor = song_lua_projected_overlay_actor(
-                    key.clone(),
+                    Arc::clone(texture_key),
                     tint,
                     overlay_blend,
                     z,
@@ -4414,7 +4414,7 @@ fn build_song_lua_overlay_actor(
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
-                    song_lua_overlay_uvs(state, Some(key.as_ref()), flip_x, flip_y, total_elapsed),
+                    song_lua_overlay_uvs(state, Some(key), flip_x, flip_y, total_elapsed),
                     state,
                     flip_x,
                     flip_y,
@@ -4428,7 +4428,7 @@ fn build_song_lua_overlay_actor(
                 && !state.mask_source
                 && !state.mask_dest
             {
-                let size = song_lua_overlay_sprite_size(state, key.as_ref())?;
+                let size = song_lua_overlay_sprite_size(state, key)?;
                 let (center, size) = song_lua_overlay_rect(
                     state,
                     size,
@@ -4454,7 +4454,7 @@ fn build_song_lua_overlay_actor(
                     &mut rot_deg,
                 );
                 let actor = song_lua_flat_skewed_overlay_actor(
-                    key.clone(),
+                    Arc::clone(texture_key),
                     tint,
                     overlay_blend,
                     z,
@@ -4464,7 +4464,7 @@ fn build_song_lua_overlay_actor(
                     ],
                     [size[0] * effect_scale[0], size[1] * effect_scale[1]],
                     rot_deg,
-                    song_lua_overlay_uvs(state, Some(key.as_ref()), flip_x, flip_y, total_elapsed),
+                    song_lua_overlay_uvs(state, Some(key), flip_x, flip_y, total_elapsed),
                     state,
                     flip_x,
                     flip_y,
@@ -4473,7 +4473,7 @@ fn build_song_lua_overlay_actor(
                 return Some(finalize_actor(actor, glow));
             }
             let mut actor = if let Some([left, top, right, bottom]) = state.stretch_rect {
-                act!(sprite(key.clone()):
+                act!(sprite(Arc::clone(texture_key)):
                     align(0.0, 0.0):
                     xy(left * x_scale, top * y_scale):
                     setsize(
@@ -4483,8 +4483,8 @@ fn build_song_lua_overlay_actor(
                     z(z)
                 )
             } else {
-                let size = song_lua_overlay_sprite_size(state, key.as_ref())?;
-                act!(sprite(key.clone()):
+                let size = song_lua_overlay_sprite_size(state, key)?;
+                act!(sprite(Arc::clone(texture_key)):
                     align(state.halign, state.valign):
                     xy(state.x * x_scale, state.y * y_scale):
                     setsize(
@@ -4560,7 +4560,7 @@ fn build_song_lua_overlay_actor(
                 *world_z += song_lua_biased_world_z(state, effect_offset[2]);
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
-                *uv_rect = song_lua_overlay_uv_rect(state, Some(key.as_ref()), total_elapsed);
+                *uv_rect = song_lua_overlay_uv_rect(state, Some(key), total_elapsed);
                 *texcoordvelocity = state.texcoord_velocity;
                 *actor_effect = EffectState::default();
                 *actor_flip_x ^= flip_x;
@@ -4670,7 +4670,8 @@ fn build_song_lua_overlay_actor(
         }
         SongLuaOverlayKind::ActorMultiVertex {
             vertices,
-            texture_path,
+            texture_key,
+            ..
         } => {
             let mut tint = state.diffuse;
             let mut glow = state.glow;
@@ -4688,9 +4689,9 @@ fn build_song_lua_overlay_actor(
                 &mut effect_scale,
                 &mut effect_rot,
             );
-            if let Some(texture_path) = texture_path {
-                let key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
-                if !asset_manager.has_texture_key(key.as_ref()) {
+            if let Some(texture_key) = texture_key {
+                let key = texture_key.as_ref();
+                if !asset_manager.has_texture_key(key) {
                     return None;
                 }
                 let mesh = song_lua_actor_multi_vertex_textured_mesh(
@@ -4712,7 +4713,7 @@ fn build_song_lua_overlay_actor(
                         world_z: song_lua_biased_world_z(state, effect_offset[2]),
                         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                         local_transform: Matrix4::IDENTITY,
-                        texture: key,
+                        texture: Arc::clone(texture_key),
                         tint,
                         vertices: mesh,
                         geom_cache_key: INVALID_TMESH_CACHE_KEY,
@@ -7379,6 +7380,21 @@ mod tests {
     }
     use crate::engine::present::actors::{SizeSpec, TextAlign};
 
+    fn test_sprite_kind(key: &str) -> SongLuaOverlayKind {
+        SongLuaOverlayKind::Sprite {
+            texture_path: std::path::PathBuf::from(key),
+            texture_key: Arc::from(key),
+        }
+    }
+
+    fn test_sprite_path_kind(path: std::path::PathBuf) -> SongLuaOverlayKind {
+        let texture_key = Arc::from(path.to_string_lossy().into_owned());
+        SongLuaOverlayKind::Sprite {
+            texture_path: path,
+            texture_key,
+        }
+    }
+
     fn ensure_i18n() {
         crate::assets::i18n::init("en");
     }
@@ -7824,6 +7840,7 @@ mod tests {
                     },
                 ]),
                 texture_path: None,
+                texture_key: None,
             },
             name: None,
             parent_index: None,
@@ -7894,6 +7911,7 @@ mod tests {
                     },
                 ]),
                 texture_path: Some(std::path::PathBuf::from(&texture_key)),
+                texture_key: Some(Arc::from(texture_key.as_str())),
             },
             name: None,
             parent_index: None,
@@ -8568,9 +8586,7 @@ mod tests {
         let mut asset_manager = AssetManager::new();
         asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
         let overlay = SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: std::path::PathBuf::from(&key),
-            },
+            kind: test_sprite_kind(&key),
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -8621,9 +8637,7 @@ mod tests {
         let mut asset_manager = AssetManager::new();
         asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
         let overlay = SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: std::path::PathBuf::from(&key),
-            },
+            kind: test_sprite_kind(&key),
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -8667,9 +8681,7 @@ mod tests {
         let mut asset_manager = AssetManager::new();
         asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
         let overlay = SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: std::path::PathBuf::from(&key),
-            },
+            kind: test_sprite_kind(&key),
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -8713,9 +8725,7 @@ mod tests {
         let mut asset_manager = AssetManager::new();
         asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
         let overlay = SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: std::path::PathBuf::from(&key),
-            },
+            kind: test_sprite_kind(&key),
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -8756,9 +8766,7 @@ mod tests {
         let mut asset_manager = AssetManager::new();
         asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
         let overlay = SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: std::path::PathBuf::from(&key),
-            },
+            kind: test_sprite_kind(&key),
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -8807,9 +8815,7 @@ mod tests {
         let mut asset_manager = AssetManager::new();
         asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
         let overlay = SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: std::path::PathBuf::from(&key),
-            },
+            kind: test_sprite_kind(&key),
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -8862,9 +8868,7 @@ mod tests {
         let mut asset_manager = AssetManager::new();
         asset_manager.queue_texture_upload(key.clone(), image::RgbaImage::new(40, 30));
         let overlay = SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: std::path::PathBuf::from(&key),
-            },
+            kind: test_sprite_kind(&key),
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -9132,9 +9136,7 @@ mod tests {
         asset_manager.queue_texture_upload(sprite_key.clone(), image::RgbaImage::new(40, 30));
 
         let sprite = SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: std::path::PathBuf::from(&sprite_key),
-            },
+            kind: test_sprite_kind(&sprite_key),
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -9210,9 +9212,7 @@ mod tests {
         asset_manager.queue_texture_upload(sprite_key.clone(), image::RgbaImage::new(32, 24));
 
         let sprite = SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: std::path::PathBuf::from(&sprite_key),
-            },
+            kind: test_sprite_kind(&sprite_key),
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -9309,9 +9309,7 @@ mod tests {
         asset_manager.queue_texture_upload(sprite_key.clone(), image::RgbaImage::new(64, 32));
 
         let sprite = SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: std::path::PathBuf::from(&sprite_key),
-            },
+            kind: test_sprite_kind(&sprite_key),
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -9751,9 +9749,7 @@ mod tests {
     fn song_lua_layer_detects_visible_sprite_texture() {
         let path = std::path::PathBuf::from("badapple.avi");
         let overlays = vec![SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: path.clone(),
-            },
+            kind: test_sprite_path_kind(path.clone()),
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
@@ -9768,9 +9764,7 @@ mod tests {
     fn song_lua_layer_ignores_hidden_sprite_texture() {
         let path = std::path::PathBuf::from("badapple.avi");
         let overlays = vec![SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: path.clone(),
-            },
+            kind: test_sprite_path_kind(path.clone()),
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),

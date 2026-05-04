@@ -2270,7 +2270,7 @@ return Def.ActorFrame{
     assert_eq!(compiled.overlays.len(), 1);
     assert!(matches!(
         compiled.overlays[0].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("background.png")
     ));
 }
@@ -2671,7 +2671,7 @@ return Def.ActorFrame{
     assert_eq!(overlay.parent_index, None);
     assert!(matches!(
         overlay.kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("gfx/door.png")
     ));
     assert_eq!(overlay.initial_state.diffuse[3], 0.0);
@@ -4877,7 +4877,7 @@ return Def.ActorFrame{
     assert_eq!(compiled.overlays.len(), 3);
     assert!(matches!(
         compiled.overlays[0].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("sheet 2x2.png")
     ));
     assert_eq!(
@@ -4886,7 +4886,7 @@ return Def.ActorFrame{
     );
     assert!(matches!(
         compiled.overlays[1].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("cached-banner.png")
     ));
     assert!(matches!(
@@ -4955,12 +4955,12 @@ return Def.ActorFrame{
     assert_eq!(compiled.overlays.len(), 2);
     assert!(matches!(
         compiled.overlays[0].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("rank-banner.png")
     ));
     assert!(matches!(
         compiled.overlays[1].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("background.png")
     ));
 }
@@ -5039,22 +5039,22 @@ return Def.ActorFrame{
     assert_eq!(compiled.overlays.len(), 4);
     assert!(matches!(
         compiled.overlays[0].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("banner.png")
     ));
     assert!(matches!(
         compiled.overlays[1].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("background.png")
     ));
     assert!(matches!(
         compiled.overlays[2].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("banner.png")
     ));
     assert!(matches!(
         compiled.overlays[3].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("banner.png")
     ));
 }
@@ -5171,22 +5171,22 @@ return Def.ActorFrame{
     assert_eq!(compiled.overlays.len(), 4);
     assert!(matches!(
         compiled.overlays[0].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("icon.png")
     ));
     assert!(matches!(
         compiled.overlays[1].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("card.png")
     ));
     assert!(matches!(
         compiled.overlays[2].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("unlock-banner.png")
     ));
     assert!(matches!(
         compiled.overlays[3].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("unlock-bg.png")
     ));
 }
@@ -5696,6 +5696,7 @@ return Def.ActorFrame{
     let SongLuaOverlayKind::ActorMultiVertex {
         vertices,
         texture_path,
+        ..
     } = &compiled.overlays[0].kind
     else {
         panic!("expected ActorMultiVertex overlay");
@@ -5792,6 +5793,7 @@ return Def.ActorFrame{
     let SongLuaOverlayKind::ActorMultiVertex {
         vertices,
         texture_path: Some(actual_texture),
+        ..
     } = &compiled.overlays[0].kind
     else {
         panic!("expected textured ActorMultiVertex overlay");
@@ -8341,7 +8343,7 @@ return Def.ActorFrame{
     );
     assert!(matches!(
         compiled.overlays[1].kind,
-        SongLuaOverlayKind::Sprite { ref texture_path }
+        SongLuaOverlayKind::Sprite { ref texture_path, .. }
             if texture_path.ends_with("gfx/grid.png")
     ));
     assert_eq!(compiled.overlays[1].parent_index, Some(0));
