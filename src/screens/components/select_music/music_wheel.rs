@@ -283,6 +283,14 @@ fn chart_for_preferred_or_nearest_standard<'a>(
     best_chart
 }
 
+#[inline(always)]
+const fn steps_slot_for_side(play_style: profile::PlayStyle, side: profile::PlayerSide) -> usize {
+    match (play_style, side) {
+        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => 1,
+        _ => 0,
+    }
+}
+
 pub struct MusicWheelParams<'a> {
     pub entries: &'a [MusicWheelEntry],
     pub selected_index: usize,
@@ -308,7 +316,8 @@ pub struct MusicWheelParams<'a> {
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(NUM_WHEEL_SLOTS + 1);
     let translated_titles = crate::config::get().translated_titles;
-    let target_chart_type = profile::get_session_play_style().chart_type();
+    let play_style = profile::get_session_play_style();
+    let target_chart_type = play_style.chart_type();
     let song_box_color = p.song_box_color.unwrap_or_else(col_music_wheel_box);
     let default_song_text_color = p.song_text_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
 
@@ -370,10 +379,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
         let Some(MusicWheelEntry::Song(info)) = p.entries.get(p.selected_index) else {
             return None;
         };
-        let ix = match side {
-            profile::PlayerSide::P2 => 1,
-            _ => 0,
-        };
+        let ix = steps_slot_for_side(play_style, side);
         crate::screens::select_music::chart_for_steps_index(
             info,
             target_chart_type,
@@ -603,10 +609,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     }
 
                     let wheel_chart_for_side = |side: profile::PlayerSide| {
-                        let ix = match side {
-                            profile::PlayerSide::P2 => 1,
-                            _ => 0,
-                        };
+                        let ix = steps_slot_for_side(play_style, side);
                         if is_selected_slot {
                             crate::screens::select_music::chart_for_steps_index(
                                 info,
@@ -1093,10 +1096,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 mod tests {
     use super::{
         choose_itl_wheel_score, itl_rank_color, itl_wheel_mode_for_sides,
-        should_fetch_online_itl_score,
+        should_fetch_online_itl_score, steps_slot_for_side,
     };
     use crate::config::SelectMusicItlWheelMode;
     use crate::engine::present::color;
+    use crate::game::profile;
     use crate::game::scores::CachedItlScore;
 
     #[test]
@@ -1154,6 +1158,22 @@ mod tests {
         assert_eq!(
             itl_wheel_mode_for_sides(SelectMusicItlWheelMode::Off, 2),
             SelectMusicItlWheelMode::Off
+        );
+    }
+
+    #[test]
+    fn single_p2_uses_primary_steps_slot() {
+        assert_eq!(
+            steps_slot_for_side(profile::PlayStyle::Single, profile::PlayerSide::P2),
+            0
+        );
+        assert_eq!(
+            steps_slot_for_side(profile::PlayStyle::Double, profile::PlayerSide::P2),
+            0
+        );
+        assert_eq!(
+            steps_slot_for_side(profile::PlayStyle::Versus, profile::PlayerSide::P2),
+            1
         );
     }
 
