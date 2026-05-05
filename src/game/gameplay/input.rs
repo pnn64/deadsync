@@ -615,7 +615,6 @@ pub(super) fn process_input_edges(
             }
             continue;
         }
-        let event_music_time = song_time_ns_to_seconds(edge.event_music_time_ns);
         let lane_was_down = lane_is_pressed(state, lane_idx);
         let slot_was_down = input_slot_lane_is_down(state, edge.lane, edge.source, edge.input_slot);
         let edge_judges_tap = lane_edge_judges_tap(edge.pressed, slot_was_down);
@@ -630,13 +629,14 @@ pub(super) fn process_input_edges(
                 edge.source,
                 edge.input_slot,
                 edge.pressed,
-                event_music_time,
+                song_time_ns_to_seconds(edge.event_music_time_ns),
                 song_time_ns_to_seconds(song_clock.song_time_ns),
                 edge.captured_host_nanos,
                 current_music_time_s(state),
             );
         }
         if input_log {
+            let event_music_time = song_time_ns_to_seconds(edge.event_music_time_ns);
             if resolved_from_song_clock && !song_clock.mapped_audio {
                 debug!(
                     "GAMEPLAY INPUT CLOCK FALLBACK: reason=audio_map_unavailable lane={} source={:?} slot={} pressed={} edge_time_s={:.6} song_clock_time_s={:.6} captured_host_nanos={}",
@@ -719,7 +719,7 @@ pub(super) fn process_input_edges(
                     capture_to_process_us,
                     pending.len() + state.pending_edges.len() + 1,
                     current_music_time_s(state),
-                    event_music_time,
+                    song_time_ns_to_seconds(edge.event_music_time_ns),
                 );
             }
         }
@@ -767,11 +767,11 @@ pub(super) fn process_input_edges(
             let event_music_time_ns = edge.event_music_time_ns;
             let hit_note = if trace_enabled {
                 let started = Instant::now();
-                let hit_note = judge_a_tap(state, lane_idx, event_music_time, event_music_time_ns);
+                let hit_note = judge_a_tap(state, lane_idx, event_music_time_ns);
                 add_elapsed_us(&mut phase_timings.input_judge_us, started);
                 hit_note
             } else {
-                judge_a_tap(state, lane_idx, event_music_time, event_music_time_ns)
+                judge_a_tap(state, lane_idx, event_music_time_ns)
             };
             if trace_enabled {
                 let started = Instant::now();
@@ -788,8 +788,7 @@ pub(super) fn process_input_edges(
                 state.receptor_bop_timers[lane_idx] = 0.11;
             }
         } else if edge_judges_lift {
-            let hit_lift =
-                judge_a_lift(state, lane_idx, event_music_time, edge.event_music_time_ns);
+            let hit_lift = judge_a_lift(state, lane_idx, edge.event_music_time_ns);
             if hit_lift && state.tick_mode == TickMode::Hit {
                 audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
             }

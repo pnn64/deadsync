@@ -6315,8 +6315,8 @@ fn log_timing_hit_detail(
     beat: f32,
     song_offset_s: f32,
     global_offset_s: f32,
-    note_time_s: f32,
-    event_time_s: f32,
+    note_time_ns: SongTimeNs,
+    event_time_ns: SongTimeNs,
     music_now_s: f32,
     rate: f32,
     lead_in_s: f32,
@@ -6324,6 +6324,8 @@ fn log_timing_hit_detail(
     if !enabled {
         return;
     }
+    let note_time_s = song_time_ns_to_seconds(note_time_ns);
+    let event_time_s = song_time_ns_to_seconds(event_time_ns);
     let expected_stream_for_note_s =
         note_time_s / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
     let expected_stream_for_hit_s =
@@ -6909,12 +6911,7 @@ fn render_provisional_early_rescore_feedback(
     }
 }
 
-pub fn judge_a_tap(
-    state: &mut State,
-    column: usize,
-    current_time: f32,
-    current_time_ns: SongTimeNs,
-) -> bool {
+pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs) -> bool {
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -7060,8 +7057,8 @@ pub fn judge_a_tap(
                 state.notes[note_index].beat,
                 song_offset_s,
                 global_offset_s,
-                song_time_ns_to_seconds(hit.note_time_ns),
-                song_time_ns_to_seconds(judgment_event_time),
+                hit.note_time_ns,
+                judgment_event_time,
                 current_music_time_s(state),
                 rate,
                 lead_in_s,
@@ -7130,7 +7127,7 @@ pub fn judge_a_tap(
                         player,
                         note_col,
                         &judgment,
-                        current_time,
+                        song_time_ns_to_seconds(current_time_ns),
                         hide_early_dw_judgments,
                         hide_early_dw_flash,
                     );
@@ -7146,8 +7143,8 @@ pub fn judge_a_tap(
                         state.notes[note_index].beat,
                         song_offset_s,
                         global_offset_s,
-                        song_time_ns_to_seconds(hit.note_time_ns),
-                        current_time,
+                        hit.note_time_ns,
+                        current_time_ns,
                         current_music_time_s(state),
                         rate,
                         lead_in_s,
@@ -7218,8 +7215,8 @@ pub fn judge_a_tap(
                 state.notes[note_index].beat,
                 song_offset_s,
                 global_offset_s,
-                song_time_ns_to_seconds(hit.note_time_ns),
-                song_time_ns_to_seconds(judgment_event_time),
+                hit.note_time_ns,
+                judgment_event_time,
                 current_music_time_s(state),
                 rate,
                 lead_in_s,
@@ -7310,8 +7307,8 @@ pub fn judge_a_tap(
                 state.notes[idx].beat,
                 song_offset_s,
                 global_offset_s,
-                song_time_ns_to_seconds(hit.note_time_ns),
-                song_time_ns_to_seconds(judgment_event_time),
+                hit.note_time_ns,
+                judgment_event_time,
                 current_music_time_s(state),
                 rate,
                 lead_in_s,
@@ -7358,12 +7355,7 @@ pub fn judge_a_tap(
 
 /// Judge lift notes on button release. Mirrors tap judging's per-note path but
 /// only matches NoteType::Lift.
-pub fn judge_a_lift(
-    state: &mut State,
-    column: usize,
-    current_time: f32,
-    current_time_ns: SongTimeNs,
-) -> bool {
+pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeNs) -> bool {
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -7464,7 +7456,7 @@ pub fn judge_a_lift(
                     player,
                     note_col,
                     &judgment,
-                    current_time,
+                    song_time_ns_to_seconds(current_time_ns),
                     hide_early_dw_judgments,
                     hide_early_dw_flash,
                 );
@@ -7478,8 +7470,8 @@ pub fn judge_a_lift(
                     note_beat,
                     song_offset_s,
                     global_offset_s,
-                    song_time_ns_to_seconds(hit.note_time_ns),
-                    current_time,
+                    hit.note_time_ns,
+                    current_time_ns,
                     current_music_time_s(state),
                     rate,
                     lead_in_s,
@@ -7511,8 +7503,8 @@ pub fn judge_a_lift(
         note_beat,
         song_offset_s,
         global_offset_s,
-        song_time_ns_to_seconds(hit.note_time_ns),
-        song_time_ns_to_seconds(judgment_event_time),
+        hit.note_time_ns,
+        judgment_event_time,
         current_music_time_s(state),
         rate,
         lead_in_s,
