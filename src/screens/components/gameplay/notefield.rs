@@ -1316,8 +1316,13 @@ fn apply_accel_y(
 }
 
 #[inline(always)]
+fn signed_effect_active(value: f32) -> bool {
+    value.is_finite() && value.abs() > f32::EPSILON
+}
+
+#[inline(always)]
 fn tipsy_y_extra(local_col: usize, elapsed: f32, visual: VisualEffects) -> f32 {
-    if visual.tipsy <= f32::EPSILON {
+    if !signed_effect_active(visual.tipsy) {
         return 0.0;
     }
     let col = local_col as f32;
@@ -1327,7 +1332,7 @@ fn tipsy_y_extra(local_col: usize, elapsed: f32, visual: VisualEffects) -> f32 {
 
 #[inline(always)]
 fn beat_x_extra(y: f32, beat_factor: f32, visual: VisualEffects) -> f32 {
-    if visual.beat <= f32::EPSILON {
+    if !signed_effect_active(visual.beat) {
         return 0.0;
     }
     let shift =
@@ -1337,7 +1342,7 @@ fn beat_x_extra(y: f32, beat_factor: f32, visual: VisualEffects) -> f32 {
 
 #[inline(always)]
 fn drunk_x_extra(local_col: usize, y: f32, elapsed: f32, visual: VisualEffects) -> f32 {
-    if visual.drunk <= f32::EPSILON {
+    if !signed_effect_active(visual.drunk) {
         return 0.0;
     }
     let col = local_col as f32;
@@ -1354,7 +1359,7 @@ fn tornado_x_extra(
     bounds: TornadoBounds,
     visual: VisualEffects,
 ) -> f32 {
-    if visual.tornado <= f32::EPSILON {
+    if !signed_effect_active(visual.tornado) {
         return 0.0;
     }
     let position_between = sm_scale(base_x, bounds.min_x, bounds.max_x, -1.0, 1.0).clamp(-1.0, 1.0);
@@ -1480,20 +1485,20 @@ fn note_x_extra(
 ) -> f32 {
     let mut r = 0.0;
     let base_x = col_offsets[local_col];
-    if visual.tornado > f32::EPSILON {
+    if signed_effect_active(visual.tornado) {
         r += tornado_x_extra(local_col, y, base_x, tornado_bounds[local_col], visual);
     }
-    if visual.drunk > f32::EPSILON {
+    if signed_effect_active(visual.drunk) {
         r += drunk_x_extra(local_col, y, elapsed, visual);
     }
-    if visual.flip > f32::EPSILON {
+    if signed_effect_active(visual.flip) {
         let mirrored = col_offsets[col_offsets.len().saturating_sub(1) - local_col];
         r += (mirrored - base_x) * visual.flip;
     }
-    if visual.invert > f32::EPSILON {
+    if signed_effect_active(visual.invert) {
         r += invert_distances[local_col] * visual.invert;
     }
-    if visual.beat > f32::EPSILON {
+    if signed_effect_active(visual.beat) {
         r += beat_x_extra(y, beat_factor, visual);
     }
     r
@@ -2272,13 +2277,7 @@ fn hud_y(
     centered_percent: f32,
 ) -> f32 {
     let base_y = if reverse { reverse_y } else { normal_y };
-    sm_scale(
-        centered_percent.clamp(0.0, 1.0),
-        0.0,
-        1.0,
-        base_y,
-        centered_y,
-    )
+    sm_scale(centered_percent, 0.0, 1.0, base_y, centered_y)
 }
 
 #[inline(always)]
@@ -3629,7 +3628,7 @@ pub fn build_bundles(
     let centered_percent = if view.receptor_y.is_some() || view.center_receptors_y {
         1.0
     } else {
-        scroll.centered.clamp(0.0, 1.0)
+        scroll.centered
     };
     let receptor_y_centered = receptor_y_override.unwrap_or(screen_center_y() + notefield_offset_y);
     let column_reverse_percent: [f32; MAX_COLS] = from_fn(|i| {
@@ -5004,9 +5003,9 @@ pub fn build_bundles(
             let col_bumpy = bumpy_for_col(&visual, local_col);
             let hold_depth_test = col_bumpy.abs() > f32::EPSILON;
             let use_legacy_hold_sprites = col_bumpy.abs() <= f32::EPSILON
-                && visual.drunk <= f32::EPSILON
-                && visual.tornado <= f32::EPSILON
-                && visual.beat <= f32::EPSILON
+                && !signed_effect_active(visual.drunk)
+                && !signed_effect_active(visual.tornado)
+                && !signed_effect_active(visual.beat)
                 && visual.pulse_outer.abs() <= f32::EPSILON;
             let hold_y_rotation_active = note_rotation_y.abs() > f32::EPSILON;
             // ITG draws hold bodies from y_head to y_tail (top-to-bottom in screen space).
@@ -8008,9 +8007,9 @@ mod tests {
         judgment_tilt_rotation_deg, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped,
         move_x_extra, move_y_extra, note_alpha, note_slot_base_size, note_world_z_for_bumpy,
         note_x_extra, offset_center, predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y,
-        push_transform_parts, receptor_row_center, tap_judgment_rows, tap_part_for_note_type,
-        tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
-        zmod_subtractive_counter_state,
+        push_transform_parts, receptor_row_center, scroll_receptor_y, tap_judgment_rows,
+        tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg,
+        turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
     };
     use crate::engine::gfx::BlendMode;
     use crate::engine::present::actors::Actor;
@@ -8521,6 +8520,23 @@ mod tests {
     }
 
     #[test]
+    fn negative_position_mods_stay_active_like_itg() {
+        let col_offsets = [-96.0, -32.0, 32.0, 96.0];
+        let invert = [0.0; 4];
+        let tornado = [TornadoBounds::default(); 4];
+        let visual = VisualEffects {
+            drunk: -1.0,
+            tipsy: -1.0,
+            flip: -0.5,
+            ..VisualEffects::default()
+        };
+        let delta = note_x_extra(0, 0.0, 0.0, 0.0, visual, &col_offsets, &invert, &tornado);
+
+        assert!((delta + 128.0).abs() <= 1e-6);
+        assert!((tipsy_y_extra(0, 0.0, visual) + 25.6).abs() <= 1e-6);
+    }
+
+    #[test]
     fn bumpy_world_z_matches_itg_default_wave() {
         let z = note_world_z_for_bumpy(8.0 * std::f32::consts::PI, 1.0, 0.0, 0.0);
         assert!((z - 40.0).abs() <= 1e-4);
@@ -8798,6 +8814,12 @@ mod tests {
         let centered_y = 300.0;
         assert!((hud_y(normal_y, reverse_y, centered_y, false, 0.3) - 160.0).abs() <= 1e-6);
         assert!((hud_y(normal_y, reverse_y, centered_y, true, 0.3) - 230.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn centered_scroll_overshoots_like_itg() {
+        assert!((hud_y(100.0, 500.0, 300.0, false, 2.0) - 500.0).abs() <= 1e-6);
+        assert!((scroll_receptor_y(0.0, 2.0, 100.0, 500.0, 300.0) - 500.0).abs() <= 1e-6);
     }
 
     #[test]

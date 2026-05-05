@@ -4309,7 +4309,7 @@ pub fn scroll_receptor_y(
     centered_y: f32,
 ) -> f32 {
     let reverse_y = lerp(normal_y, reverse_y, reverse_percent.clamp(0.0, 1.0));
-    lerp(reverse_y, centered_y, centered_percent.clamp(0.0, 1.0))
+    lerp(reverse_y, centered_y, centered_percent)
 }
 
 fn refresh_live_notefield_options(state: &mut State, current_bpm: f32) {
