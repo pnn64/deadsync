@@ -164,6 +164,7 @@ pub enum Actor {
         local_transform: Matrix4,
         texture: Arc<str>,
         tint: [f32; 4],
+        glow: [f32; 4],
         vertices: Arc<[TexturedMeshVertex]>,
         geom_cache_key: TMeshCacheKey,
         mode: MeshMode,
@@ -206,9 +207,13 @@ impl Actor {
     pub fn mul_alpha(&mut self, alpha: f32) {
         match self {
             Self::Sprite {
-                tint, shadow_color, ..
+                tint,
+                glow,
+                shadow_color,
+                ..
             } => {
                 tint[3] *= alpha;
+                glow[3] *= alpha;
                 shadow_color[3] *= alpha;
             }
             Self::Text {
@@ -231,7 +236,10 @@ impl Actor {
                 }
                 *vertices = Arc::from(out);
             }
-            Self::TexturedMesh { tint, .. } => tint[3] *= alpha,
+            Self::TexturedMesh { tint, glow, .. } => {
+                tint[3] *= alpha;
+                glow[3] *= alpha;
+            }
             Self::Frame {
                 background,
                 children,

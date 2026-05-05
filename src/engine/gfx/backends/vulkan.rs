@@ -2465,7 +2465,7 @@ fn create_texture_descriptor_sets(
 #[inline(always)]
 fn vertex_input_descriptions_textured_instanced() -> (
     [vk::VertexInputBindingDescription; 2],
-    [vk::VertexInputAttributeDescription; 11],
+    [vk::VertexInputAttributeDescription; 12],
 ) {
     // binding 0: unit quad [x,y,u,v]
     let b0 = vk::VertexInputBindingDescription::default()
@@ -2537,6 +2537,11 @@ fn vertex_input_descriptions_textured_instanced() -> (
         .location(10)
         .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(80);
+    let i_texture_mask = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(11)
+        .format(vk::Format::R32_SFLOAT)
+        .offset(96);
 
     (
         [b0, b1],
@@ -2552,6 +2557,7 @@ fn vertex_input_descriptions_textured_instanced() -> (
             i_local_offset,
             i_local_offset_rot,
             i_fade,
+            i_texture_mask,
         ],
     )
 }
@@ -2583,7 +2589,7 @@ fn vertex_input_descriptions_mesh() -> (
 #[inline(always)]
 fn vertex_input_descriptions_tmesh() -> (
     [vk::VertexInputBindingDescription; 2],
-    [vk::VertexInputAttributeDescription; 12],
+    [vk::VertexInputAttributeDescription; 13],
 ) {
     let b0 = vk::VertexInputBindingDescription::default()
         .binding(0)
@@ -2654,6 +2660,11 @@ fn vertex_input_descriptions_tmesh() -> (
         .location(11)
         .format(vk::Format::R32G32_SFLOAT)
         .offset(96);
+    let a_texture_mask = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(12)
+        .format(vk::Format::R32_SFLOAT)
+        .offset(104);
 
     (
         [b0, b1],
@@ -2670,6 +2681,7 @@ fn vertex_input_descriptions_tmesh() -> (
             a_uv_scale,
             a_uv_offset,
             a_uv_tex_shift,
+            a_texture_mask,
         ],
     )
 }

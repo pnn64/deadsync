@@ -1222,6 +1222,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             local_transform: glam::Mat4::IDENTITY,
             texture: Arc::from(texture.as_str()),
             tint: *tint,
+            glow: [1.0, 1.0, 1.0, 0.0],
             vertices: Arc::from(vertices.clone()),
             geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
             mode: MeshMode::from(*mode),
@@ -1387,6 +1388,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                     local_offset: *local_offset,
                     local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
                     edge_fade: *edge_fade,
+                    texture_mask: false,
                 }
             }
             RenderObjectTypeSnapshot::Mesh {
@@ -1417,6 +1419,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                 uv_scale: *uv_scale,
                 uv_offset: *uv_offset,
                 uv_tex_shift: *uv_tex_shift,
+                texture_mask: false,
                 depth_test: *depth_test,
             },
         },

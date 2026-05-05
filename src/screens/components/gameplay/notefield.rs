@@ -25,7 +25,7 @@ use crate::game::gameplay::{
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{
-    ModelDrawState, ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
+    ModelDrawState, ModelEffectMode, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
 };
 use crate::game::{
     gameplay::{ActiveHold, PlayerRuntime, SongTimeNs, State},
@@ -1690,6 +1690,7 @@ fn hold_strip_actor(
         local_transform: Matrix4::IDENTITY,
         texture,
         tint: [1.0; 4],
+        glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
         geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
         mode: MeshMode::Triangles,
@@ -1807,6 +1808,88 @@ fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
         _ => {}
     }
     actor
+}
+
+struct NoteGlowDraw<'a> {
+    slot: &'a SpriteSlot,
+    draw: ModelDrawState,
+    model_center: [f32; 2],
+    sprite_center: [f32; 2],
+    size: [f32; 2],
+    uv: [f32; 4],
+    rotation_y: f32,
+    model_rotation_z: f32,
+    sprite_rotation_z: f32,
+    alpha: f32,
+    blend: BlendMode,
+    z: i16,
+    world_z: f32,
+    prefer_sprite: bool,
+}
+
+fn push_note_glow_actor(
+    actors: &mut Vec<Actor>,
+    spec: NoteGlowDraw<'_>,
+    model_cache: &mut ModelMeshCache,
+) {
+    if spec.alpha <= f32::EPSILON {
+        return;
+    }
+    if !spec.prefer_sprite
+        && let Some(glow_actor) = noteskin_model_actor_from_draw_cached(
+            spec.slot,
+            spec.draw,
+            spec.model_center,
+            spec.size,
+            spec.uv,
+            spec.model_rotation_z,
+            [1.0, 1.0, 1.0, 0.0],
+            spec.blend,
+            spec.z,
+            model_cache,
+        )
+    {
+        let mut glow_actor = glow_actor;
+        if let Actor::TexturedMesh { glow, .. } = &mut glow_actor {
+            *glow = [1.0, 1.0, 1.0, spec.alpha];
+        }
+        actors.push(actor_with_world_z(glow_actor, spec.world_z));
+        return;
+    }
+    // ITG Actor glow is a second white pass through TextureMode_Glow.
+    if spec.draw.blend_add {
+        actors.push(actor_with_world_z(
+            act!(sprite(spec.slot.texture_key_handle()):
+                align(0.5, 0.5):
+                xy(spec.sprite_center[0], spec.sprite_center[1]):
+                setsize(spec.size[0], spec.size[1]):
+                rotationy(spec.rotation_y):
+                rotationz(spec.sprite_rotation_z):
+                customtexturerect(spec.uv[0], spec.uv[1], spec.uv[2], spec.uv[3]):
+                diffuse(1.0, 1.0, 1.0, 0.0):
+                glow(1.0, 1.0, 1.0, spec.alpha):
+                blend(add):
+                z(spec.z as i32)
+            ),
+            spec.world_z,
+        ));
+    } else {
+        actors.push(actor_with_world_z(
+            act!(sprite(spec.slot.texture_key_handle()):
+                align(0.5, 0.5):
+                xy(spec.sprite_center[0], spec.sprite_center[1]):
+                setsize(spec.size[0], spec.size[1]):
+                rotationy(spec.rotation_y):
+                rotationz(spec.sprite_rotation_z):
+                customtexturerect(spec.uv[0], spec.uv[1], spec.uv[2], spec.uv[3]):
+                diffuse(1.0, 1.0, 1.0, 0.0):
+                glow(1.0, 1.0, 1.0, spec.alpha):
+                blend(normal):
+                z(spec.z as i32)
+            ),
+            spec.world_z,
+        ));
+    }
 }
 
 #[inline(always)]
@@ -3908,6 +3991,15 @@ pub fn build_bundles(
         let alpha_for_travel = |local_col: usize, travel_offset: f32| -> f32 {
             let adjusted = adjusted_travel_offset(travel_offset);
             note_alpha(
+                adjusted + tipsy_y_for_col(local_col),
+                elapsed_screen,
+                mini,
+                appearance,
+            )
+        };
+        let glow_for_travel = |local_col: usize, travel_offset: f32| -> f32 {
+            let adjusted = adjusted_travel_offset(travel_offset);
+            note_glow(
                 adjusted + tipsy_y_for_col(local_col),
                 elapsed_screen,
                 mini,
@@ -6067,7 +6159,8 @@ pub fn build_bundles(
                 && head_draw_delta <= draw_distance_before_targets
             {
                 let head_alpha = alpha_for_travel(local_col, head_anchor_travel);
-                if head_alpha <= f32::EPSILON {
+                let head_glow = glow_for_travel(local_col, head_anchor_travel);
+                if head_alpha <= f32::EPSILON && head_glow <= f32::EPSILON {
                     return;
                 }
                 let hold_head_rot =
@@ -6199,6 +6292,31 @@ pub fn build_bundles(
                             head_world_z,
                         ));
                     }
+                    push_note_glow_actor(
+                        &mut actors,
+                        NoteGlowDraw {
+                            slot: head_slot,
+                            draw,
+                            model_center,
+                            sprite_center: offset_center(
+                                head_center,
+                                local_offset,
+                                local_offset_rot_sin_cos,
+                            ),
+                            size,
+                            uv,
+                            rotation_y: flat_tap_face_rotation_y,
+                            model_rotation_z: -head_slot.def.rotation_deg as f32 + hold_head_rot,
+                            sprite_rotation_z: draw.rot[2] - head_slot.def.rotation_deg as f32
+                                + hold_head_rot,
+                            alpha: head_glow,
+                            blend,
+                            z: Z_TAP_NOTE as i16,
+                            world_z: head_world_z,
+                            prefer_sprite: prefer_sprite_note_path,
+                        },
+                        &mut model_cache,
+                    );
                 } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
                     let note_scale = hold_note_scale;
                     for note_slot in note_slots.iter() {
@@ -6302,6 +6420,32 @@ pub fn build_bundles(
                                 head_world_z,
                             ));
                         }
+                        push_note_glow_actor(
+                            &mut actors,
+                            NoteGlowDraw {
+                                slot: note_slot,
+                                draw,
+                                model_center,
+                                sprite_center: offset_center(
+                                    head_center,
+                                    local_offset,
+                                    local_offset_rot_sin_cos,
+                                ),
+                                size,
+                                uv,
+                                rotation_y: flat_tap_face_rotation_y,
+                                model_rotation_z: -note_slot.def.rotation_deg as f32
+                                    + hold_head_rot,
+                                sprite_rotation_z: draw.rot[2] - note_slot.def.rotation_deg as f32
+                                    + hold_head_rot,
+                                alpha: head_glow,
+                                blend,
+                                z: layer_z as i16,
+                                world_z: head_world_z,
+                                prefer_sprite: prefer_sprite_note_path,
+                            },
+                            &mut model_cache,
+                        );
                     }
                 } else if let Some(note_slot) = ns.notes.get(note_idx) {
                     let frame = note_slot.frame_index_from_phase(hold_part_phase);
@@ -6359,6 +6503,26 @@ pub fn build_bundles(
                             head_world_z,
                         ));
                     }
+                    push_note_glow_actor(
+                        &mut actors,
+                        NoteGlowDraw {
+                            slot: note_slot,
+                            draw,
+                            model_center: head_center,
+                            sprite_center: head_center,
+                            size,
+                            uv,
+                            rotation_y: flat_tap_face_rotation_y,
+                            model_rotation_z: -note_slot.def.rotation_deg as f32 + hold_head_rot,
+                            sprite_rotation_z: -note_slot.def.rotation_deg as f32 + hold_head_rot,
+                            alpha: head_glow,
+                            blend: BlendMode::Alpha,
+                            z: Z_TAP_NOTE as i16,
+                            world_z: head_world_z,
+                            prefer_sprite: prefer_sprite_note_path,
+                        },
+                        &mut model_cache,
+                    );
                 }
             }
         };
@@ -6438,7 +6602,12 @@ pub fn build_bundles(
                         return;
                     }
                     let note_alpha = alpha_for_travel(col_idx, raw_travel_offset);
-                    if note_alpha <= f32::EPSILON {
+                    let note_glow = if matches!(note.note_type, NoteType::Mine) {
+                        0.0
+                    } else {
+                        glow_for_travel(col_idx, raw_travel_offset)
+                    };
+                    if note_alpha <= f32::EPSILON && note_glow <= f32::EPSILON {
                         return;
                     }
                     let column_center_x = lane_center_x_from_travel(col_idx, raw_travel_offset);
@@ -6706,6 +6875,27 @@ pub fn build_bundles(
                                 note_world_z,
                             ));
                             }
+                            push_note_glow_actor(
+                                &mut actors,
+                                NoteGlowDraw {
+                                    slot: head_slot,
+                                    draw,
+                                    model_center: center,
+                                    sprite_center: center,
+                                    size: note_size,
+                                    uv: note_uv,
+                                    rotation_y: flat_tap_face_rotation_y,
+                                    model_rotation_z: -head_slot.def.rotation_deg as f32 + note_rot,
+                                    sprite_rotation_z: -head_slot.def.rotation_deg as f32
+                                        + note_rot,
+                                    alpha: note_glow,
+                                    blend: BlendMode::Alpha,
+                                    z: Z_TAP_NOTE as i16,
+                                    world_z: note_world_z,
+                                    prefer_sprite: prefer_sprite_note_path,
+                                },
+                                &mut model_cache,
+                            );
                             return;
                         }
                     }
@@ -6827,6 +7017,32 @@ pub fn build_bundles(
                                 ));
                                 }
                             }
+                            push_note_glow_actor(
+                                &mut actors,
+                                NoteGlowDraw {
+                                    slot: note_slot,
+                                    draw,
+                                    model_center,
+                                    sprite_center: offset_center(
+                                        note_center,
+                                        local_offset,
+                                        local_offset_rot_sin_cos,
+                                    ),
+                                    size: note_size,
+                                    uv: note_uv,
+                                    rotation_y: flat_tap_face_rotation_y,
+                                    model_rotation_z: -note_slot.def.rotation_deg as f32 + note_rot,
+                                    sprite_rotation_z: draw.rot[2]
+                                        - note_slot.def.rotation_deg as f32
+                                        + note_rot,
+                                    alpha: note_glow,
+                                    blend,
+                                    z: layer_z as i16,
+                                    world_z: note_world_z,
+                                    prefer_sprite: prefer_sprite_note_path,
+                                },
+                                &mut model_cache,
+                            );
                         }
                     } else if let Some(note_slot) = ns.notes.get(note_idx) {
                         let note_uv_phase =
@@ -6878,6 +7094,26 @@ pub fn build_bundles(
                             note_world_z,
                         ));
                         }
+                        push_note_glow_actor(
+                            &mut actors,
+                            NoteGlowDraw {
+                                slot: note_slot,
+                                draw,
+                                model_center: center,
+                                sprite_center: center,
+                                size: note_size,
+                                uv: note_uv,
+                                rotation_y: flat_tap_face_rotation_y,
+                                model_rotation_z: -note_slot.def.rotation_deg as f32 + note_rot,
+                                sprite_rotation_z: -note_slot.def.rotation_deg as f32 + note_rot,
+                                alpha: note_glow,
+                                blend: BlendMode::Alpha,
+                                z: Z_TAP_NOTE as i16,
+                                world_z: note_world_z,
+                                prefer_sprite: prefer_sprite_note_path,
+                            },
+                            &mut model_cache,
+                        );
                     }
                 },
             );
@@ -8005,11 +8241,12 @@ mod tests {
         hold_head_render_flags, hold_segment_pose, hold_strip_actor, hold_strip_row_3d,
         hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
         judgment_tilt_rotation_deg, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped,
-        move_x_extra, move_y_extra, note_alpha, note_slot_base_size, note_world_z_for_bumpy,
-        note_x_extra, offset_center, predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y,
-        push_transform_parts, receptor_row_center, scroll_receptor_y, tap_judgment_rows,
-        tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg,
-        turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
+        move_x_extra, move_y_extra, note_alpha, note_glow, note_slot_base_size,
+        note_world_z_for_bumpy, note_x_extra, offset_center, predictive_itg_percents,
+        pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts, receptor_row_center,
+        scroll_receptor_y, tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col,
+        tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
+        zmod_subtractive_counter_state,
     };
     use crate::engine::gfx::BlendMode;
     use crate::engine::present::actors::Actor;
@@ -8472,6 +8709,20 @@ mod tests {
             },
         );
         assert!((partial - full).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn stealth_glow_matches_itg_visibility_curve() {
+        let glow = note_glow(
+            100.0,
+            0.0,
+            0.0,
+            AppearanceEffects {
+                stealth: 0.25,
+                ..AppearanceEffects::default()
+            },
+        );
+        assert!((glow - 0.65).abs() <= 1e-6);
     }
 
     #[test]

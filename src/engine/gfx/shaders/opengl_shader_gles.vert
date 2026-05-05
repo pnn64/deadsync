@@ -12,11 +12,13 @@ layout (location = 7) in vec2 i_uv_offset;
 layout (location = 8) in vec2 i_local_offset;
 layout (location = 9) in vec2 i_local_offset_rot_sin_cos;
 layout (location = 10) in vec4 i_edge_fade;
+layout (location = 11) in float i_texture_mask;
 
 out vec2 v_tex_coord;
 out vec2 v_quad;
 flat out vec4 v_tint;
 flat out vec4 v_edge_fade;
+flat out float v_texture_mask;
 
 uniform mat4 u_model_view_proj;
 
@@ -43,4 +45,5 @@ void main() {
     v_tex_coord = a_tex_coord * i_uv_scale + i_uv_offset;
     v_tint = i_tint;
     v_edge_fade = i_edge_fade;
+    v_texture_mask = i_texture_mask;
 }

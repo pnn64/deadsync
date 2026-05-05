@@ -30,6 +30,7 @@ pub struct SpriteInstanceRaw {
     pub local_offset: [f32; 2],
     pub local_offset_rot_sin_cos: [f32; 2],
     pub edge_fade: [f32; 4],
+    pub texture_mask: f32,
 }
 
 #[repr(C)]
@@ -52,6 +53,7 @@ pub struct TexturedMeshInstanceRaw {
     pub uv_scale: [f32; 2],
     pub uv_offset: [f32; 2],
     pub uv_tex_shift: [f32; 2],
+    pub texture_mask: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -184,6 +186,7 @@ fn textured_instance_raw(
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
+    texture_mask: bool,
 ) -> TexturedMeshInstanceRaw {
     TexturedMeshInstanceRaw {
         model_col0: [m.x_axis.x, m.x_axis.y, m.x_axis.z, m.x_axis.w],
@@ -194,6 +197,7 @@ fn textured_instance_raw(
         uv_scale,
         uv_offset,
         uv_tex_shift,
+        texture_mask: texture_mask as u8 as f32,
     }
 }
 
@@ -288,6 +292,7 @@ where
                 local_offset,
                 local_offset_rot_sin_cos,
                 edge_fade,
+                texture_mask,
                 ..
             } => {
                 let texture_handle = obj.texture_handle;
@@ -306,6 +311,7 @@ where
                     local_offset: *local_offset,
                     local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
                     edge_fade: *edge_fade,
+                    texture_mask: *texture_mask as u8 as f32,
                 });
 
                 if let Some(last) = sprite_run.as_mut()
@@ -378,6 +384,7 @@ where
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
+                texture_mask,
                 depth_test,
                 ..
             } => {
@@ -427,6 +434,7 @@ where
                     *uv_scale,
                     *uv_offset,
                     *uv_tex_shift,
+                    *texture_mask,
                 ));
 
                 if let Some(DrawOp::TexturedMesh(last)) = scratch.ops.last_mut()
@@ -480,6 +488,7 @@ mod tests {
                 local_offset: [0.0, 0.0],
                 local_offset_rot_sin_cos: [0.0, 1.0],
                 edge_fade: [0.0, 0.0, 0.0, 0.0],
+                texture_mask: false,
             },
             texture_handle: INVALID_TEXTURE_HANDLE,
             transform: Matrix4::IDENTITY,

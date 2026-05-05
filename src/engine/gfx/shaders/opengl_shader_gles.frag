@@ -5,6 +5,7 @@ in vec2 v_tex_coord;
 in vec2 v_quad;
 flat in vec4 v_tint;
 flat in vec4 v_edge_fade;
+flat in float v_texture_mask;
 out vec4 FragColor;
 
 uniform sampler2D u_texture;
@@ -21,6 +22,10 @@ float edge_fade_factor(vec2 q, vec4 e) {
 void main() {
     vec4 s = texture(u_texture, v_tex_coord);
     float f = edge_fade_factor(v_quad, v_edge_fade);
-    s.a *= f;
-    FragColor = s * v_tint;
+    vec4 color = s * v_tint;
+    if (v_texture_mask > 0.5) {
+        color = vec4(v_tint.rgb, s.a * v_tint.a);
+    }
+    color.a *= f;
+    FragColor = color;
 }

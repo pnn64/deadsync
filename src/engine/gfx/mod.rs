@@ -181,6 +181,7 @@ pub enum ObjectType {
         local_offset: [f32; 2],
         local_offset_rot_sin_cos: [f32; 2],
         edge_fade: [f32; 4],
+        texture_mask: bool,
     },
     Mesh {
         tint: [f32; 4],
@@ -196,6 +197,7 @@ pub enum ObjectType {
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
+        texture_mask: bool,
         depth_test: bool,
     },
 }

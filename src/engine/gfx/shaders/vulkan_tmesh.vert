@@ -12,6 +12,7 @@ layout(location = 8) in vec4 i_tint;
 layout(location = 9) in vec2 i_uv_scale;
 layout(location = 10) in vec2 i_uv_offset;
 layout(location = 11) in vec2 i_uv_tex_shift;
+layout(location = 12) in float i_texture_mask;
 
 layout(push_constant) uniform ProjPush {
     mat4 proj;
@@ -19,6 +20,7 @@ layout(push_constant) uniform ProjPush {
 
 layout(location = 0) out vec2 v_uv;
 layout(location = 1) out vec4 v_color;
+layout(location = 2) flat out float v_texture_mask;
 
 void main() {
     mat4 model = mat4(i_model_col0, i_model_col1, i_model_col2, i_model_col3);
@@ -26,4 +28,5 @@ void main() {
     v_uv = a_uv * i_uv_scale + i_uv_offset
          + i_uv_tex_shift * (a_tex_matrix_scale - vec2(1.0, 1.0));
     v_color = a_color * i_tint;
+    v_texture_mask = i_texture_mask;
 }
