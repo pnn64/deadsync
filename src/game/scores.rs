@@ -3703,6 +3703,12 @@ fn spawn_player_leaderboard_fetch(
                                     key.chart_hash.as_str(),
                                     data.itl_self_score,
                                 );
+                                itl::set_cached_online_self_rank(
+                                    persistent_profile_id.as_deref(),
+                                    key.api_key.as_str(),
+                                    key.chart_hash.as_str(),
+                                    data.itl_self_rank,
+                                );
                             }
                             if should_auto_populate
                                 && let Some(profile_id) = auto_profile_id.as_deref()
@@ -3941,6 +3947,12 @@ pub fn invalidate_player_leaderboards_for_side(chart_hash: &str, side: profile::
     }
 
     itl::set_cached_online_self_score(
+        profile::active_local_profile_id_for_side(side).as_deref(),
+        gs_api_key,
+        chart_hash,
+        None,
+    );
+    itl::set_cached_online_self_rank(
         profile::active_local_profile_id_for_side(side).as_deref(),
         gs_api_key,
         chart_hash,
@@ -4669,6 +4681,13 @@ pub struct ScoreImportProgress {
     pub detail: String,
 }
 
+struct ScoreImportFetchResult {
+    score: Option<CachedScore>,
+    itl_self_score: Option<u32>,
+    itl_self_rank: Option<u32>,
+    itl_self_found: bool,
+}
+
 fn score_import_api_key_for_endpoint(endpoint: ScoreImportEndpoint, profile: &Profile) -> &str {
     match endpoint {
         ScoreImportEndpoint::GrooveStats | ScoreImportEndpoint::BoogieStats => {
@@ -4692,11 +4711,51 @@ fn score_entry_matches_profile(
     false
 }
 
+fn score_import_result_from_response(
+    decoded: LeaderboardsApiResponse,
+    endpoint: ScoreImportEndpoint,
+    username: &str,
+    chart_hash: &str,
+) -> ScoreImportFetchResult {
+    let mut result = ScoreImportFetchResult {
+        score: None,
+        itl_self_score: None,
+        itl_self_rank: None,
+        itl_self_found: false,
+    };
+    let Some(player) = decoded.player1 else {
+        return result;
+    };
+
+    result.score = player
+        .gs_leaderboard
+        .iter()
+        .find(|entry| score_entry_matches_profile(entry, endpoint, username))
+        .map(|entry| {
+            cached_score_from_gs(
+                entry.score,
+                entry.comments.as_deref(),
+                chart_hash,
+                entry.is_fail,
+            )
+        });
+
+    if let Some(itl) = player.itl
+        && !itl.itl_leaderboard.is_empty()
+    {
+        result.itl_self_found = leaderboard_self_entry(&itl.itl_leaderboard, username).is_some();
+        result.itl_self_score = leaderboard_self_score_10000(&itl.itl_leaderboard, username);
+        result.itl_self_rank = leaderboard_self_rank(&itl.itl_leaderboard, username);
+    }
+
+    result
+}
+
 fn fetch_player_score_from_endpoint(
     endpoint: ScoreImportEndpoint,
     profile: &Profile,
     chart_hash: &str,
-) -> Result<Option<CachedScore>, Box<dyn Error + Send + Sync>> {
+) -> Result<ScoreImportFetchResult, Box<dyn Error + Send + Sync>> {
     let chart_hash = chart_hash.trim();
     if chart_hash.is_empty() {
         return Err("Missing chart hash for score request.".into());
@@ -4737,21 +4796,9 @@ fn fetch_player_score_from_endpoint(
     }
 
     let decoded: LeaderboardsApiResponse = response.into_body().read_json()?;
-    let score_opt = decoded
-        .player1
-        .map_or_else(Vec::new, |p1| p1.gs_leaderboard)
-        .into_iter()
-        .find(|entry| score_entry_matches_profile(entry, endpoint, username))
-        .map(|entry| {
-            cached_score_from_gs(
-                entry.score,
-                entry.comments.as_deref(),
-                chart_hash,
-                entry.is_fail,
-            )
-        });
-
-    Ok(score_opt)
+    Ok(score_import_result_from_response(
+        decoded, endpoint, username, chart_hash,
+    ))
 }
 
 fn fetch_player_score_from_api(
@@ -4763,7 +4810,7 @@ fn fetch_player_score_from_api(
     } else {
         ScoreImportEndpoint::GrooveStats
     };
-    fetch_player_score_from_endpoint(endpoint, profile, chart_hash)
+    Ok(fetch_player_score_from_endpoint(endpoint, profile, chart_hash)?.score)
 }
 
 fn collect_chart_hashes_for_import(
@@ -5141,14 +5188,34 @@ where
             }
             last_request_started_at = Some(Instant::now());
             match fetch_player_score_from_endpoint(endpoint, &profile, chart_hash) {
-                Ok(Some(score)) => {
-                    cache_gs_score_for_profile(&profile_id, chart_hash, score, username.as_str());
-                    imported_scores += 1;
-                    pack_hits += 1;
-                }
-                Ok(None) => {
-                    missing_scores += 1;
-                    pack_misses += 1;
+                Ok(result) => {
+                    if result.itl_self_found {
+                        itl::set_cached_online_self_score(
+                            Some(profile_id.as_str()),
+                            api_key,
+                            chart_hash,
+                            result.itl_self_score,
+                        );
+                        itl::set_cached_online_self_rank(
+                            Some(profile_id.as_str()),
+                            api_key,
+                            chart_hash,
+                            result.itl_self_rank,
+                        );
+                    }
+                    if let Some(score) = result.score {
+                        cache_gs_score_for_profile(
+                            &profile_id,
+                            chart_hash,
+                            score,
+                            username.as_str(),
+                        );
+                        imported_scores += 1;
+                        pack_hits += 1;
+                    } else {
+                        missing_scores += 1;
+                        pack_misses += 1;
+                    }
                 }
                 Err(e) => {
                     failed_requests += 1;
@@ -5438,6 +5505,53 @@ mod tests {
         }];
 
         assert_eq!(leaderboard_self_rank(&entries, "perfecttaste"), None);
+    }
+
+    #[test]
+    fn score_import_result_includes_itl_self_data() {
+        let result = score_import_result_from_response(
+            LeaderboardsApiResponse {
+                player1: Some(LeaderboardApiPlayer {
+                    is_ranked: true,
+                    gs_leaderboard: vec![LeaderboardApiEntry {
+                        rank: 8,
+                        name: "PerfectTaste".to_string(),
+                        machine_tag: None,
+                        score: 9876.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: true,
+                        is_fail: false,
+                        comments: Some("[DS], 2e".to_string()),
+                    }],
+                    ex_leaderboard: Vec::new(),
+                    rpg: None,
+                    itl: Some(LeaderboardEventData {
+                        name: "ITL Online 2026".to_string(),
+                        rpg_leaderboard: Vec::new(),
+                        itl_leaderboard: vec![LeaderboardApiEntry {
+                            rank: 42,
+                            name: "PerfectTaste".to_string(),
+                            machine_tag: None,
+                            score: 9912.0,
+                            date: String::new(),
+                            is_rival: false,
+                            is_self: true,
+                            is_fail: false,
+                            comments: None,
+                        }],
+                    }),
+                }),
+            },
+            ScoreImportEndpoint::GrooveStats,
+            "perfecttaste",
+            "deadbeef",
+        );
+
+        assert!(result.score.is_some());
+        assert!(result.itl_self_found);
+        assert_eq!(result.itl_self_score, Some(9912));
+        assert_eq!(result.itl_self_rank, Some(42));
     }
 
     #[test]
