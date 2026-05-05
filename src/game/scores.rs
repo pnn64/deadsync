@@ -4154,14 +4154,15 @@ fn fetch_player_score_from_api(
 }
 
 fn collect_chart_hashes_for_import(
-    pack_group_filter: Option<&str>,
+    pack_groups_filter: &[String],
     profile_id: &str,
     only_missing_gs_scores: bool,
 ) -> Vec<String> {
-    let filter_norm = pack_group_filter
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(str::to_ascii_lowercase);
+    let filter_set: HashSet<String> = pack_groups_filter
+        .iter()
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect();
     let existing_scores = if only_missing_gs_scores {
         cached_gs_chart_hashes_for_profile(profile_id)
     } else {
@@ -4178,11 +4179,12 @@ fn collect_chart_hashes_for_import(
         } else {
             pack.name.trim()
         };
-        if let Some(filter) = filter_norm.as_deref()
-            && group_name.to_ascii_lowercase() != filter
-            && display_name.to_ascii_lowercase() != filter
-        {
-            continue;
+        if !filter_set.is_empty() {
+            let group_lc = group_name.to_ascii_lowercase();
+            let display_lc = display_name.to_ascii_lowercase();
+            if !filter_set.contains(&group_lc) && !filter_set.contains(&display_lc) {
+                continue;
+            }
         }
 
         for song in &pack.songs {
@@ -4218,7 +4220,7 @@ pub fn import_scores_for_profile<F>(
     endpoint: ScoreImportEndpoint,
     profile_id: String,
     profile: Profile,
-    pack_group: Option<String>,
+    pack_groups: Vec<String>,
     only_missing_gs_scores: bool,
     on_progress: F,
     should_cancel: impl Fn() -> bool,
@@ -4245,7 +4247,7 @@ where
 
     let username = profile.groovestats_username.trim().to_string();
     let chart_hashes =
-        collect_chart_hashes_for_import(pack_group.as_deref(), &profile_id, only_missing_gs_scores);
+        collect_chart_hashes_for_import(&pack_groups, &profile_id, only_missing_gs_scores);
     let requested_charts = chart_hashes.len();
     let filter_note = if only_missing_gs_scores {
         " (missing GS only)"

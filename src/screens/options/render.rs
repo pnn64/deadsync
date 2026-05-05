@@ -1216,6 +1216,12 @@ pub fn get_actors(
             }
         }
     }
+    if state.score_import_pack_picker.is_some() {
+        ui_actors.extend(build_score_import_pack_picker_actors(
+            state,
+            state.active_color_index,
+        ));
+    }
     if let Some(confirm) = &state.score_import_confirm {
         let prompt_text = format!(
             "Import ALL packs for {} / {}?\nOnly missing GS scores: {}.\nRate limit is hard-capped at 3 requests per second.\nFor many charts this can take more than one hour.\nSpamming APIs can be problematic.\n\nStart now?",
