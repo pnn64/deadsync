@@ -413,9 +413,9 @@ pub struct InputEdge {
     pub stored_at: Instant,
     pub emitted_at: Instant,
     pub queued_at: Instant,
-    // Integer song time for this edge, in nanoseconds. Gameplay treats this as
-    // the authoritative judgment-time clock and reconstructs seconds only at
-    // presentation/logging boundaries.
+    // Integer song time for this edge, in nanoseconds. Live input may leave this
+    // invalid until gameplay resolves the physical timestamp against the frame's
+    // song-clock snapshot.
     pub event_music_time_ns: i64,
 }
 

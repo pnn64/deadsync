@@ -9459,6 +9459,7 @@ return Def.ActorFrame{}
         let clock = super::SongClockSnapshot {
             song_time_ns: event_time_ns,
             seconds_per_second: 1.0,
+            mapped_audio: true,
             valid_at: now,
             valid_at_host_nanos: 0,
         };
@@ -9473,6 +9474,28 @@ return Def.ActorFrame{}
         let hold = state.notes[0].hold.as_ref().expect("roll hold data");
         assert_eq!(hold.result, None);
         assert_eq!(hold.life, super::MAX_HOLD_LIFE);
+    }
+
+    #[test]
+    fn live_input_resolves_invalid_edge_time_from_song_clock() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        let event_time_ns = song_time_ns_from_seconds(12.345);
+        let edge = test_input_edge_at(Lane::Left, true, super::INVALID_SONG_TIME_NS);
+        let captured_at = edge.captured_at;
+        state.pending_edges.push_back(edge);
+
+        let clock = super::SongClockSnapshot {
+            song_time_ns: event_time_ns,
+            seconds_per_second: 1.0,
+            mapped_audio: true,
+            valid_at: captured_at,
+            valid_at_host_nanos: 0,
+        };
+        let mut phase_timings = super::GameplayUpdatePhaseTimings::default();
+        process_input_edges(&mut state, false, &mut phase_timings, clock);
+
+        assert_eq!(state.lane_pressed_since_ns[0], Some(event_time_ns));
     }
 
     #[test]
@@ -9985,6 +10008,7 @@ return Def.ActorFrame{}
         let snapshot = SongClockSnapshot {
             song_time_ns: song_time_ns_from_seconds(120.0),
             seconds_per_second: 1.5,
+            mapped_audio: true,
             valid_at: base + Duration::from_millis(24),
             valid_at_host_nanos: 0,
         };
@@ -9998,6 +10022,7 @@ return Def.ActorFrame{}
         let snapshot = SongClockSnapshot {
             song_time_ns: song_time_ns_from_seconds(64.0),
             seconds_per_second: 2.0,
+            mapped_audio: true,
             valid_at: base,
             valid_at_host_nanos: 0,
         };
@@ -10014,6 +10039,7 @@ return Def.ActorFrame{}
         let snapshot = SongClockSnapshot {
             song_time_ns: song_time_ns_from_seconds(32.0),
             seconds_per_second: 1.0,
+            mapped_audio: true,
             valid_at: Instant::now(),
             valid_at_host_nanos: 2_000_000_000,
         };

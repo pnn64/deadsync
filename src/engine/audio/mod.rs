@@ -861,11 +861,18 @@ impl PlaybackPosMap {
 
     fn cleanup(&mut self) {
         while self.backlog_frames > MUSIC_POS_MAP_BACKLOG_FRAMES {
-            if let Some(front) = self.queue.pop_front() {
-                self.backlog_frames = self.backlog_frames.saturating_sub(front.frames);
-            } else {
+            let Some(front) = self.queue.front_mut() else {
                 self.backlog_frames = 0;
                 break;
+            };
+            let excess = self.backlog_frames - MUSIC_POS_MAP_BACKLOG_FRAMES;
+            let drop = excess.min(front.frames);
+            front.stream_frame_start += drop;
+            front.music_start_sec += front.music_sec_per_frame * drop as f64;
+            front.frames -= drop;
+            self.backlog_frames -= drop;
+            if front.frames <= 0 {
+                self.queue.pop_front();
             }
         }
     }
@@ -1117,7 +1124,8 @@ fn i16_to_f32(sample: i16) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        CallbackClockWindow, MusicMapSeg, PlaybackPosMap, stream_position_frames_from_window,
+        CallbackClockWindow, MUSIC_POS_MAP_BACKLOG_FRAMES, MusicMapSeg, PlaybackPosMap,
+        stream_position_frames_from_window,
     };
 
     #[test]
@@ -1136,6 +1144,32 @@ mod tests {
             (sec_per_frame - (1.0 / 48_000.0)).abs() <= 1e-12,
             "sec_per_frame={sec_per_frame}"
         );
+    }
+
+    #[test]
+    fn playback_pos_map_trims_large_segment_without_emptying() {
+        let mut map = PlaybackPosMap::default();
+        map.insert(MusicMapSeg {
+            stream_frame_start: 0,
+            frames: 48_000,
+            music_start_sec: 0.0,
+            music_sec_per_frame: 1.0 / 48_000.0,
+        });
+        map.insert(MusicMapSeg {
+            stream_frame_start: 48_000,
+            frames: 48_000,
+            music_start_sec: 1.0,
+            music_sec_per_frame: 1.0 / 48_000.0,
+        });
+
+        assert_eq!(map.backlog_frames, MUSIC_POS_MAP_BACKLOG_FRAMES);
+        assert_eq!(map.queue.len(), 1);
+        let seg = map.queue.front().unwrap();
+        assert_eq!(seg.stream_frame_start, 16_000);
+        assert_eq!(seg.frames, MUSIC_POS_MAP_BACKLOG_FRAMES);
+
+        let (music_sec, _) = map.search(95_000.0).unwrap();
+        assert!((music_sec - (95_000.0 / 48_000.0)).abs() <= 1e-9);
     }
 
     #[test]
@@ -1427,28 +1461,6 @@ fn music_stream_clock_snapshot_at_nanos(
     }
 }
 
-#[inline(always)]
-fn music_stream_clock_snapshot_at_host_nanos(host_nanos: u64) -> Option<MusicStreamClockSnapshot> {
-    if host_nanos == 0 || !MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire) {
-        return None;
-    }
-    let sample_rate = ENGINE.device_sample_rate.max(1);
-    let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
-    let (valid_at, _, source, window) = load_callback_clock_snapshot_now();
-    #[cfg(windows)]
-    if !matches!(source, CallbackClockSource::Qpc) {
-        return None;
-    }
-    Some(music_stream_clock_snapshot_at_nanos(
-        sample_rate,
-        start,
-        valid_at,
-        host_nanos,
-        source,
-        window,
-    ))
-}
-
 /// Returns the current stream position and the `Instant` it is valid for.
 pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
     let sample_rate = ENGINE.device_sample_rate.max(1);
@@ -1471,10 +1483,6 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
 
 pub fn get_music_stream_position_nanos() -> i64 {
     get_music_stream_clock_snapshot().music_nanos
-}
-
-pub fn get_music_stream_position_nanos_at_host_nanos(host_nanos: u64) -> Option<i64> {
-    music_stream_clock_snapshot_at_host_nanos(host_nanos).map(|snapshot| snapshot.music_nanos)
 }
 
 pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {

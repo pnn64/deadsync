@@ -4,8 +4,9 @@ use crate::engine::input::{
 };
 use crate::game::parsing::noteskin::{self, Noteskin};
 use crate::game::profile;
-use log::debug;
+use log::{debug, warn};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Instant;
 
 use super::{
@@ -21,6 +22,21 @@ use super::{
     refresh_roll_life_on_step, single_runtime_player_is_p2, song_time_ns_invalid,
     song_time_ns_to_seconds,
 };
+
+const UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS: SongTimeNs = 1_000_000_000;
+static LAST_UNMAPPED_INPUT_CLOCK_WARN_NS: AtomicI64 = AtomicI64::new(i64::MIN);
+
+#[inline(always)]
+fn should_warn_unmapped_input_clock(song_time_ns: SongTimeNs) -> bool {
+    let last = LAST_UNMAPPED_INPUT_CLOCK_WARN_NS.load(Ordering::Relaxed);
+    let should_warn = last == i64::MIN
+        || song_time_ns < last
+        || song_time_ns.saturating_sub(last) >= UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS;
+    if should_warn {
+        LAST_UNMAPPED_INPUT_CLOCK_WARN_NS.store(song_time_ns, Ordering::Relaxed);
+    }
+    should_warn
+}
 
 #[inline(always)]
 pub(super) const fn input_queue_cap(num_cols: usize) -> usize {
@@ -360,10 +376,10 @@ pub fn queue_input_edge(
         return;
     }
 
-    let event_music_time_ns =
-        audio::get_music_stream_position_nanos_at_host_nanos(timestamp_host_nanos)
-            .unwrap_or(INVALID_SONG_TIME_NS);
     let queued_at = Instant::now();
+    // Live input keeps the physical timestamp and is converted against the
+    // frame's authoritative song clock when processed. Do not pre-resolve it
+    // through the raw audio stream clock.
     push_input_edge_timed(
         state,
         source,
@@ -375,7 +391,7 @@ pub fn queue_input_edge(
         stored_at,
         emitted_at,
         queued_at,
-        event_music_time_ns,
+        INVALID_SONG_TIME_NS,
         state.replay_capture_enabled,
     );
 }
@@ -574,21 +590,16 @@ pub(super) fn process_input_edges(
             }
             continue;
         }
-        let mut event_time_source = "queued_audio";
+        let mut event_time_source = "precomputed";
+        let mut resolved_from_song_clock = false;
         if song_time_ns_invalid(edge.event_music_time_ns) {
-            if let Some(music_time_ns) =
-                audio::get_music_stream_position_nanos_at_host_nanos(edge.captured_host_nanos)
-            {
-                edge.event_music_time_ns = music_time_ns;
-                event_time_source = "process_audio";
-            } else {
-                edge.event_music_time_ns = music_time_ns_from_song_clock(
-                    song_clock,
-                    edge.captured_at,
-                    edge.captured_host_nanos,
-                );
-                event_time_source = "song_clock";
-            }
+            edge.event_music_time_ns = music_time_ns_from_song_clock(
+                song_clock,
+                edge.captured_at,
+                edge.captured_host_nanos,
+            );
+            event_time_source = "song_clock";
+            resolved_from_song_clock = true;
         }
         if song_time_ns_invalid(edge.event_music_time_ns) {
             if input_log {
@@ -609,7 +620,35 @@ pub(super) fn process_input_edges(
         let slot_was_down = input_slot_lane_is_down(state, edge.lane, edge.source, edge.input_slot);
         let edge_judges_tap = lane_edge_judges_tap(edge.pressed, slot_was_down);
         let edge_judges_lift = lane_edge_judges_lift(edge.pressed, slot_was_down);
+        if resolved_from_song_clock
+            && !song_clock.mapped_audio
+            && should_warn_unmapped_input_clock(edge.event_music_time_ns)
+        {
+            warn!(
+                "GAMEPLAY INPUT CLOCK WARNING: reason=audio_map_unavailable lane={} source={:?} slot={} pressed={} edge_time_s={:.6} song_clock_time_s={:.6} captured_host_nanos={} current_time_s={:.6}",
+                lane_idx,
+                edge.source,
+                edge.input_slot,
+                edge.pressed,
+                event_music_time,
+                song_time_ns_to_seconds(song_clock.song_time_ns),
+                edge.captured_host_nanos,
+                current_music_time_s(state),
+            );
+        }
         if input_log {
+            if resolved_from_song_clock && !song_clock.mapped_audio {
+                debug!(
+                    "GAMEPLAY INPUT CLOCK FALLBACK: reason=audio_map_unavailable lane={} source={:?} slot={} pressed={} edge_time_s={:.6} song_clock_time_s={:.6} captured_host_nanos={}",
+                    lane_idx,
+                    edge.source,
+                    edge.input_slot,
+                    edge.pressed,
+                    event_music_time,
+                    song_time_ns_to_seconds(song_clock.song_time_ns),
+                    edge.captured_host_nanos,
+                );
+            }
             let processed_at = Instant::now();
             let capture_to_queue_us = elapsed_us_between(edge.queued_at, edge.captured_at);
             let queue_to_process_us = elapsed_us_between(processed_at, edge.queued_at);
@@ -618,7 +657,7 @@ pub(super) fn process_input_edges(
                 concat!(
                     "GAMEPLAY INPUT EDGE: lane={} source={:?} slot={} pressed={} ",
                     "lane_was_down={} slot_was_down={} judges_tap={} judges_lift={} ",
-                    "time_source={} edge_time_s={:.6} current_time_s={:.6} ",
+                    "time_source={} song_clock_mapped={} edge_time_s={:.6} current_time_s={:.6} ",
                     "capture_queue_us={} queue_process_us={} capture_process_us={} pending={}"
                 ),
                 lane_idx,
@@ -630,6 +669,7 @@ pub(super) fn process_input_edges(
                 edge_judges_tap,
                 edge_judges_lift,
                 event_time_source,
+                song_clock.mapped_audio,
                 event_music_time,
                 current_music_time_s(state),
                 capture_to_queue_us,
