@@ -847,7 +847,7 @@ mod compiled {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    pub const CACHE_SCHEMA_VERSION: u32 = 1;
+    pub const CACHE_SCHEMA_VERSION: u32 = 2;
     static CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     #[derive(Debug, Clone, Encode, Decode, Default, PartialEq, Eq)]
@@ -866,6 +866,7 @@ mod compiled {
         pub load_element: String,
         pub blank: bool,
         pub rotation_z: Option<i32>,
+        pub init_command: Option<String>,
     }
 
     #[derive(Debug, Clone, Encode, Decode, Default)]
@@ -1010,7 +1011,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 2;
+const COMPILER_VERSION: u32 = 3;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const DANCE_BUTTONS: [&str; 6] = ["UpLeft", "UpRight", "Left", "Down", "Up", "Right"];
@@ -1263,6 +1264,42 @@ fn compile_actor_files(
 fn install_host(lua: &Lua) -> mlua::Result<()> {
     let globals = lua.globals();
     let actor_mt = lua.create_table()?;
+    let actor_methods = lua.create_table()?;
+    for name in [
+        "x",
+        "y",
+        "z",
+        "addx",
+        "addy",
+        "addz",
+        "rotationx",
+        "rotationy",
+        "rotationz",
+        "addrotationx",
+        "addrotationy",
+        "addrotationz",
+        "zoom",
+        "zoomx",
+        "zoomy",
+        "zoomz",
+        "diffuse",
+        "diffusealpha",
+        "glow",
+        "vertalign",
+        "valign",
+        "blend",
+        "visible",
+    ] {
+        let command = name.to_string();
+        actor_methods.set(
+            name,
+            lua.create_function(move |lua, (actor, args): (Table, MultiValue)| {
+                append_actor_command(lua, &actor, &command, args)?;
+                Ok(actor)
+            })?,
+        )?;
+    }
+    actor_mt.set("__index", actor_methods)?;
     actor_mt.set(
         "__concat",
         lua.create_function(|_, (lhs, _rhs): (Table, Value)| Ok(lhs))?,
@@ -1350,6 +1387,35 @@ fn install_host(lua: &Lua) -> mlua::Result<()> {
     def.set("Actor", actor_fn)?;
     globals.set("Def", def)?;
     Ok(())
+}
+
+fn append_actor_command(
+    lua: &Lua,
+    actor: &Table,
+    command: &str,
+    args: MultiValue,
+) -> mlua::Result<()> {
+    let commands = actor
+        .get::<Option<Table>>("__loader_commands")?
+        .unwrap_or(lua.create_table()?);
+    let mut token = command.to_string();
+    for arg in args {
+        token.push(',');
+        token.push_str(&lua_command_arg(arg)?);
+    }
+    commands.raw_set(commands.raw_len() + 1, token)?;
+    actor.set("__loader_commands", commands)
+}
+
+fn lua_command_arg(value: Value) -> mlua::Result<String> {
+    Ok(match value {
+        Value::Nil => String::new(),
+        Value::Boolean(v) => v.to_string(),
+        Value::Integer(v) => v.to_string(),
+        Value::Number(v) => v.to_string(),
+        Value::String(v) => v.to_str()?.to_string(),
+        _ => String::new(),
+    })
 }
 
 fn load_noteskin_table(lua: &Lua, paths: &[PathBuf]) -> Result<Table, String> {
@@ -1554,6 +1620,38 @@ fn digits_only(text: &str) -> bool {
     !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
 }
 
+fn actor_loader_command(actor: &Table) -> Result<Option<String>, String> {
+    let value = actor
+        .get::<Value>("InitCommand")
+        .map_err(|err| err.to_string())?;
+    match value {
+        Value::Function(f) => {
+            f.call::<()>(actor.clone()).map_err(|err| err.to_string())?;
+        }
+        Value::String(s) => {
+            let command = s.to_str().map_err(|err| err.to_string())?.to_string();
+            if !command.trim().is_empty() {
+                return Ok(Some(command));
+            }
+        }
+        _ => {}
+    }
+    let Some(commands) = actor
+        .get::<Option<Table>>("__loader_commands")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let mut out = Vec::with_capacity(commands.raw_len());
+    for command in commands.sequence_values::<String>() {
+        let command = command.map_err(|err| err.to_string())?;
+        if !command.trim().is_empty() {
+            out.push(command);
+        }
+    }
+    Ok((!out.is_empty()).then(|| out.join(";")))
+}
+
 fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoaderEntry, String> {
     let blank = actor.get::<bool>("__blank").unwrap_or(false);
     let load_button = actor
@@ -1565,6 +1663,7 @@ fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoad
         .map_err(|err| err.to_string())?
         .unwrap_or_else(|| element.to_string());
     let rotation_z = actor.get::<Option<i32>>("BaseRotationZ").unwrap_or(None);
+    let init_command = actor_loader_command(actor)?;
     Ok(CompiledLoaderEntry {
         button: button.to_string(),
         element: element.to_string(),
@@ -1572,6 +1671,7 @@ fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoad
         load_element,
         blank,
         rotation_z,
+        init_command,
     })
 }
 

@@ -1417,6 +1417,16 @@ fn draw_mine_preview(actors: &mut Vec<Actor>, rc: &RowCtx, mine_ns: &Noteskin, c
     }
 }
 
+#[inline(always)]
+fn slot_preview_zoom_x(slot: &SpriteSlot, zoom: f32) -> f32 {
+    if slot.def.mirror_h { -zoom } else { zoom }
+}
+
+#[inline(always)]
+fn slot_preview_zoom_y(slot: &SpriteSlot, zoom: f32) -> f32 {
+    if slot.def.mirror_v { -zoom } else { zoom }
+}
+
 fn draw_receptor_preview(
     actors: &mut Vec<Actor>,
     rc: &RowCtx,
@@ -1439,6 +1449,10 @@ fn draw_receptor_preview(
         };
         let frame = receptor_slot.frame_index(rc.fc.state.preview_time, rc.fc.state.preview_beat);
         let uv = receptor_slot.uv_for_frame_at(frame, rc.fc.state.preview_time);
+        let draw = receptor_slot.model_draw_at(rc.fc.state.preview_time, rc.fc.state.preview_beat);
+        if !draw.visible {
+            continue;
+        }
         let logical = receptor_slot.logical_size();
         let width = logical[0].max(1.0);
         let height = logical[1].max(1.0);
@@ -1463,13 +1477,29 @@ fn draw_receptor_preview(
         ) {
             actors.push(model_actor);
         } else {
+            let [sin_r, cos_r] = receptor_slot.base_rot_sin_cos();
+            let offset = [
+                draw.pos[0] * scale * cos_r - draw.pos[1] * scale * sin_r,
+                draw.pos[0] * scale * sin_r + draw.pos[1] * scale * cos_r,
+            ];
+            let sprite_size = [size[0] * draw.zoom[0].abs(), size[1] * draw.zoom[1].abs()];
+            if sprite_size[0] <= f32::EPSILON || sprite_size[1] <= f32::EPSILON {
+                continue;
+            }
             actors.push(act!(sprite(receptor_slot.texture_key_shared()):
                 align(0.5, 0.5):
-                xy(center[0], center[1]):
-                setsize(size[0], size[1]):
-                rotationz(-receptor_slot.def.rotation_deg as f32):
+                xy(center[0] + offset[0], center[1] + offset[1]):
+                setsize(sprite_size[0], sprite_size[1]):
+                zoomx(slot_preview_zoom_x(receptor_slot, 1.0)):
+                zoomy(slot_preview_zoom_y(receptor_slot, 1.0)):
+                rotationz(draw.rot[2] - receptor_slot.def.rotation_deg as f32):
                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                diffuse(color[0], color[1], color[2], color[3]):
+                diffuse(
+                    color[0] * draw.tint[0],
+                    color[1] * draw.tint[1],
+                    color[2] * draw.tint[2],
+                    color[3] * draw.tint[3]
+                ):
                 z(Z_RECEPTOR_PREVIEW)
             ));
         }

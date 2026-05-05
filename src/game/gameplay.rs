@@ -6324,8 +6324,13 @@ pub(super) fn trigger_hold_explosion(state: &mut State, column: usize) {
 
 fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static str) {
     let player = player_for_col(state, column);
+    let local_col = if state.cols_per_player == 0 {
+        column
+    } else {
+        column % state.cols_per_player
+    };
     let spawn_window = tap_explosion_noteskin_for_player(state, player).and_then(|ns| {
-        if ns.tap_explosions.contains_key(window_key) {
+        if ns.tap_explosion_for_col(local_col, window_key).is_some() {
             Some(window_key)
         } else {
             None

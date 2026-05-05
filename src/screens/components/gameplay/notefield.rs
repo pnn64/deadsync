@@ -1071,6 +1071,16 @@ fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
 }
 
 #[inline(always)]
+fn slot_zoom_x(slot: &SpriteSlot, zoom: f32) -> f32 {
+    if slot.def.mirror_h { -zoom } else { zoom }
+}
+
+#[inline(always)]
+fn slot_zoom_y(slot: &SpriteSlot, zoom: f32) -> f32 {
+    if slot.def.mirror_v { -zoom } else { zoom }
+}
+
+#[inline(always)]
 fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
     let width = size[0].max(0) as f32;
     let height = size[1].max(0) as f32;
@@ -4287,26 +4297,48 @@ pub fn build_bundles(
                     receptor_slot.frame_index(state.total_elapsed_in_screen, current_beat);
                 let receptor_uv =
                     receptor_slot.uv_for_frame_at(receptor_frame, state.total_elapsed_in_screen);
+                let receptor_draw =
+                    receptor_slot.model_draw_at(state.total_elapsed_in_screen, current_beat);
                 // ITG Sprite::SetTexture uses source-frame dimensions for draw size,
                 // so receptor and overlay keep their authored ratio (e.g. 64 vs 74 in
                 // dance/default) instead of being normalized to arrow height.
-                let receptor_size = scale_explosion(logical_slot_size(receptor_slot));
+                let base_receptor_size = scale_explosion(logical_slot_size(receptor_slot));
+                let receptor_size = [
+                    base_receptor_size[0] * receptor_draw.zoom[0],
+                    base_receptor_size[1] * receptor_draw.zoom[1],
+                ];
                 let receptor_color = receptor_ns.receptor_pulse.color_for_beat(current_beat);
-                let alpha = receptor_color[3] * receptor_alpha;
-                if alpha > f32::EPSILON {
+                let alpha = receptor_color[3] * receptor_draw.tint[3] * receptor_alpha;
+                if receptor_draw.visible
+                    && alpha > f32::EPSILON
+                    && receptor_size[0] > f32::EPSILON
+                    && receptor_size[1] > f32::EPSILON
+                {
+                    let [sin_r, cos_r] = receptor_slot.base_rot_sin_cos();
+                    let offset = [
+                        receptor_draw.pos[0] * field_zoom * cos_r
+                            - receptor_draw.pos[1] * field_zoom * sin_r,
+                        receptor_draw.pos[0] * field_zoom * sin_r
+                            + receptor_draw.pos[1] * field_zoom * cos_r,
+                    ];
+                    let center = [
+                        receptor_center[0] + offset[0],
+                        receptor_center[1] + offset[1],
+                    ];
                     actors.push(act!(sprite(receptor_slot.texture_key_handle()):
                         align(0.5, receptor_reverse.vert_align()):
-                        xy(receptor_center[0], receptor_center[1]):
+                        xy(center[0], center[1]):
                         setsize(receptor_size[0], receptor_size[1]):
-                        zoom(bop_zoom):
+                        zoomx(slot_zoom_x(receptor_slot, bop_zoom)):
+                        zoomy(slot_zoom_y(receptor_slot, bop_zoom)):
                         diffuse(
-                            receptor_color[0],
-                            receptor_color[1],
-                            receptor_color[2],
+                            receptor_color[0] * receptor_draw.tint[0],
+                            receptor_color[1] * receptor_draw.tint[1],
+                            receptor_color[2] * receptor_draw.tint[2],
                             alpha
                         ):
                         rotationy(note_rotation_y):
-                        rotationz(-receptor_rotation + confusion_receptor_rot):
+                        rotationz(receptor_draw.rot[2] - receptor_rotation + confusion_receptor_rot):
                         customtexturerect(
                             receptor_uv[0],
                             receptor_uv[1],
@@ -4346,14 +4378,8 @@ pub fn build_bundles(
                 if hold_size[0] <= f32::EPSILON || hold_size[1] <= f32::EPSILON {
                     continue;
                 }
-                let receptor_rotation = receptor_ns
-                    .receptor_off
-                    .get(i)
-                    .map(|slot| slot.def.rotation_deg as f32)
-                    .unwrap_or(0.0);
                 let base_rotation = hold_slot.def.rotation_deg as f32;
-                let final_rotation =
-                    base_rotation + receptor_rotation - draw.rot[2] - confusion_receptor_rot;
+                let final_rotation = base_rotation - draw.rot[2] - confusion_receptor_rot;
                 let center = receptor_center;
                 let color = draw.tint;
                 let glow = hold_slot.model_glow_with_draw(
@@ -4458,7 +4484,9 @@ pub fn build_bundles(
                         glow_slot.frame_index(state.total_elapsed_in_screen, current_beat);
                     let glow_uv =
                         glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen);
-                    let glow_size = scale_explosion(logical_slot_size(glow_slot));
+                    let glow_draw =
+                        glow_slot.model_draw_at(state.total_elapsed_in_screen, current_beat);
+                    let base_glow_size = scale_explosion(logical_slot_size(glow_slot));
                     let behavior = receptor_ns.receptor_glow_behavior;
                     let glow_reverse = receptor_ns
                         .receptor_glow_reverse
@@ -4468,32 +4496,55 @@ pub fn build_bundles(
                         .state(column_reverse_percent[i] > 0.5);
                     let glow_rotation =
                         glow_slot.def.rotation_deg as f32 + glow_reverse.base_rotation_z();
-                    let width = glow_size[0] * zoom;
-                    let height = glow_size[1] * zoom;
-                    if behavior.blend_add {
-                        actors.push(act!(sprite(glow_slot.texture_key_handle()):
-                            align(0.5, glow_reverse.vert_align()):
-                            xy(receptor_center[0], receptor_center[1]):
-                            setsize(width, height):
-                            rotationy(note_rotation_y):
-                            rotationz(-glow_rotation + confusion_receptor_rot):
-                            customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
-                            diffuse(1.0, 1.0, 1.0, alpha):
-                            blend(add):
-                            z(Z_HOLD_GLOW)
-                        ));
-                    } else {
-                        actors.push(act!(sprite(glow_slot.texture_key_handle()):
-                            align(0.5, glow_reverse.vert_align()):
-                            xy(receptor_center[0], receptor_center[1]):
-                            setsize(width, height):
-                            rotationy(note_rotation_y):
-                            rotationz(-glow_rotation + confusion_receptor_rot):
-                            customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
-                            diffuse(1.0, 1.0, 1.0, alpha):
-                            blend(normal):
-                            z(Z_HOLD_GLOW)
-                        ));
+                    let width = base_glow_size[0] * zoom * glow_draw.zoom[0];
+                    let height = base_glow_size[1] * zoom * glow_draw.zoom[1];
+                    if glow_draw.visible && width > f32::EPSILON && height > f32::EPSILON {
+                        let [sin_r, cos_r] = glow_slot.base_rot_sin_cos();
+                        let offset = [
+                            glow_draw.pos[0] * field_zoom * cos_r
+                                - glow_draw.pos[1] * field_zoom * sin_r,
+                            glow_draw.pos[0] * field_zoom * sin_r
+                                + glow_draw.pos[1] * field_zoom * cos_r,
+                        ];
+                        let center = [
+                            receptor_center[0] + offset[0],
+                            receptor_center[1] + offset[1],
+                        ];
+                        let color = [
+                            glow_draw.tint[0],
+                            glow_draw.tint[1],
+                            glow_draw.tint[2],
+                            alpha * glow_draw.tint[3],
+                        ];
+                        if behavior.blend_add {
+                            actors.push(act!(sprite(glow_slot.texture_key_handle()):
+                                align(0.5, glow_reverse.vert_align()):
+                                xy(center[0], center[1]):
+                                setsize(width, height):
+                                zoomx(slot_zoom_x(glow_slot, 1.0)):
+                                zoomy(slot_zoom_y(glow_slot, 1.0)):
+                                rotationy(note_rotation_y):
+                                rotationz(glow_draw.rot[2] - glow_rotation + confusion_receptor_rot):
+                                customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
+                                diffuse(color[0], color[1], color[2], color[3]):
+                                blend(add):
+                                z(Z_HOLD_GLOW)
+                            ));
+                        } else {
+                            actors.push(act!(sprite(glow_slot.texture_key_handle()):
+                                align(0.5, glow_reverse.vert_align()):
+                                xy(center[0], center[1]):
+                                setsize(width, height):
+                                zoomx(slot_zoom_x(glow_slot, 1.0)):
+                                zoomy(slot_zoom_y(glow_slot, 1.0)):
+                                rotationy(note_rotation_y):
+                                rotationz(glow_draw.rot[2] - glow_rotation + confusion_receptor_rot):
+                                customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
+                                diffuse(color[0], color[1], color[2], color[3]):
+                                blend(normal):
+                                z(Z_HOLD_GLOW)
+                            ));
+                        }
                     }
                 }
             }
@@ -4506,7 +4557,7 @@ pub fn build_bundles(
         {
             if let Some(active) = active_opt.as_ref()
                 && let Some(tap_explosion_ns) = tap_explosion_ns
-                && let Some(explosion) = tap_explosion_ns.tap_explosions.get(active.window)
+                && let Some(explosion) = tap_explosion_ns.tap_explosion_for_col(i, active.window)
             {
                 let receptor_y_lane = column_receptor_ys[i];
                 let receptor_center = receptor_row_center(
@@ -4534,11 +4585,6 @@ pub fn build_bundles(
                 if !explosion_visual.visible {
                     continue;
                 }
-                let rotation_deg = receptor_ns
-                    .receptor_off
-                    .get(i)
-                    .map(|slot| slot.def.rotation_deg)
-                    .unwrap_or(0);
                 let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual, i);
                 let glow = explosion_visual.glow;
                 let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
@@ -4556,7 +4602,7 @@ pub fn build_bundles(
                             explosion_visual.diffuse[3]
                         ):
                         rotationy(flat_tap_face_rotation_y):
-                        rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
+                        rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
                         blend(add):
                         z(Z_TAP_EXPLOSION)
                     ));
@@ -4569,7 +4615,7 @@ pub fn build_bundles(
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             diffuse(glow[0], glow[1], glow[2], glow[3]):
                             rotationy(flat_tap_face_rotation_y):
-                            rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
+                            rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
                             blend(add):
                             z(Z_TAP_EXPLOSION)
                         ));
@@ -4588,7 +4634,7 @@ pub fn build_bundles(
                             explosion_visual.diffuse[3]
                         ):
                         rotationy(flat_tap_face_rotation_y):
-                        rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
+                        rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
                         blend(normal):
                         z(Z_TAP_EXPLOSION)
                     ));
@@ -4601,7 +4647,7 @@ pub fn build_bundles(
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             diffuse(glow[0], glow[1], glow[2], glow[3]):
                             rotationy(flat_tap_face_rotation_y):
-                            rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
+                            rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
                             blend(normal):
                             z(Z_TAP_EXPLOSION)
                         ));

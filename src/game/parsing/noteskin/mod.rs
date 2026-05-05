@@ -1224,6 +1224,7 @@ pub struct Noteskin {
     pub mine_frames: Vec<Option<SpriteSlot>>,
     pub column_xs: Vec<i32>,
     pub tap_explosions: HashMap<String, TapExplosion>,
+    pub tap_explosions_by_col: Vec<HashMap<String, TapExplosion>>,
     pub mine_hit_explosion: Option<TapExplosion>,
     pub receptor_glow_behavior: ReceptorGlowBehavior,
     pub receptor_pulse: ReceptorPulse,
@@ -1237,6 +1238,14 @@ pub struct Noteskin {
 }
 
 impl Noteskin {
+    #[inline(always)]
+    pub fn tap_explosion_for_col(&self, col: usize, window: &str) -> Option<&TapExplosion> {
+        self.tap_explosions_by_col
+            .get(col)
+            .and_then(|by_window| by_window.get(window))
+            .or_else(|| self.tap_explosions.get(window))
+    }
+
     #[inline(always)]
     fn for_each_slot(&self, mut visit: impl FnMut(&SpriteSlot)) {
         for slot in &self.notes {
@@ -1277,6 +1286,11 @@ impl Noteskin {
         }
         for explosion in self.tap_explosions.values() {
             visit(&explosion.slot);
+        }
+        for by_col in &self.tap_explosions_by_col {
+            for explosion in by_col.values() {
+                visit(&explosion.slot);
+            }
         }
         if let Some(explosion) = self.mine_hit_explosion.as_ref() {
             visit(&explosion.slot);
@@ -2500,22 +2514,6 @@ fn load_itg_sprite_noteskin_compiled(
 
     let explosion_sprites =
         itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, "Down", "Explosion");
-    let dim_sprites = explosion_sprites
-        .iter()
-        .filter(|s| {
-            s.element
-                .to_ascii_lowercase()
-                .starts_with("tap explosion dim")
-        })
-        .collect::<Vec<_>>();
-    let bright_sprites = explosion_sprites
-        .iter()
-        .filter(|s| {
-            s.element
-                .to_ascii_lowercase()
-                .starts_with("tap explosion bright")
-        })
-        .collect::<Vec<_>>();
     let slot_with_active_cmd =
         |slot: &SpriteSlot, commands: &HashMap<String, String>, active_key: &str| {
             let mut with_fx = slot.clone();
@@ -2702,34 +2700,103 @@ fn load_itg_sprite_noteskin_compiled(
             }
         }
     }
-    for visuals in &mut hold_columns {
-        visuals.explosion.clone_from(&hold.explosion);
-    }
-    for visuals in &mut roll_columns {
-        visuals.explosion.clone_from(&roll.explosion);
-    }
-    let dim_explosion_request = itg_load_request(compiled, "Down", "Tap Explosion Dim");
-    let bright_explosion_request = itg_load_request(compiled, "Down", "Tap Explosion Bright");
-    let explosion_slot = dim_sprites
-        .first()
-        .map(|s| s.slot.clone())
-        .or_else(|| bright_sprites.first().map(|s| s.slot.clone()))
-        .or_else(|| {
-            if dim_explosion_request.blank {
-                None
+    let resolve_hold_explosion_for_button =
+        |button: &str,
+         active_key: &str,
+         element_hint: &str,
+         request_element: &str,
+         fallback: Option<&SpriteSlot>| {
+            let column_explosion_sprites = if button.eq_ignore_ascii_case("Down") {
+                explosion_sprites.clone()
             } else {
-                data.resolve_path("Down", "Tap Explosion Dim")
-                    .and_then(|p| itg_slot_from_path(&p))
+                itg_resolve_actor_sprites_compiled(
+                    data,
+                    compiled,
+                    compiled_actors,
+                    button,
+                    "Explosion",
+                )
+            };
+            let wrapper = column_explosion_sprites
+                .iter()
+                .find(|sprite| sprite.commands.contains_key(active_key))
+                .or_else(|| {
+                    column_explosion_sprites
+                        .iter()
+                        .find(|sprite| sprite.element.to_ascii_lowercase().contains(element_hint))
+                });
+            if let Some(sprite) = wrapper.filter(|sprite| sprite.commands.contains_key(active_key))
+            {
+                return Some(slot_with_active_cmd(
+                    &sprite.slot,
+                    &sprite.commands,
+                    active_key,
+                ));
             }
-        })
-        .or_else(|| {
-            if bright_explosion_request.blank {
-                None
-            } else {
-                data.resolve_path("Down", "Tap Explosion Bright")
-                    .and_then(|p| itg_slot_from_path(&p))
+
+            let request = itg_load_request(compiled, button, request_element);
+            if request.blank {
+                return None;
             }
-        });
+            let source_sprites = itg_resolve_actor_sprites_compiled(
+                data,
+                compiled,
+                compiled_actors,
+                button,
+                request_element,
+            );
+            let source = source_sprites
+                .iter()
+                .find(|sprite| sprite.commands.contains_key(active_key))
+                .or_else(|| source_sprites.first());
+            source
+                .map(|sprite| {
+                    let cmd = wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
+                    slot_with_active_cmd(&sprite.slot, cmd, active_key)
+                })
+                .or_else(|| {
+                    wrapper.map(|sprite| {
+                        slot_with_active_cmd(&sprite.slot, &sprite.commands, active_key)
+                    })
+                })
+                .or_else(|| fallback.cloned())
+        };
+    for (col, visuals) in hold_columns.iter_mut().enumerate() {
+        let button = itg_button_for_col(col);
+        visuals.explosion = resolve_hold_explosion_for_button(
+            button,
+            "holdingoncommand",
+            "hold explosion",
+            "Hold Explosion",
+            hold.explosion.as_ref(),
+        );
+    }
+    for (col, visuals) in roll_columns.iter_mut().enumerate() {
+        let button = itg_button_for_col(col);
+        visuals.explosion = resolve_hold_explosion_for_button(
+            button,
+            "rolloncommand",
+            "roll explosion",
+            "Roll Explosion",
+            roll.explosion.as_ref(),
+        );
+    }
+    let mut tap_explosions_by_col = Vec::with_capacity(style.num_cols);
+    for col in 0..style.num_cols {
+        let button = itg_button_for_col(col);
+        let column_explosion_sprites = if button.eq_ignore_ascii_case("Down") {
+            explosion_sprites.clone()
+        } else {
+            itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Explosion")
+        };
+        tap_explosions_by_col.push(itg_tap_explosion_map_compiled(
+            data,
+            compiled,
+            compiled_actors,
+            button,
+            &column_explosion_sprites,
+        ));
+    }
     let mine_source = explosion_sprites
         .iter()
         .find(|sprite| sprite.commands.contains_key("hitminecommand"))
@@ -2785,97 +2852,17 @@ fn load_itg_sprite_noteskin_compiled(
             .unwrap_or_default(),
     });
 
-    let mut tap_explosions = HashMap::new();
-    if let Some(slot) = explosion_slot {
-        let select_tap_explosion_source = |window: &str| {
-            let key = format!("{}command", window.to_ascii_lowercase());
-            dim_sprites
+    let tap_explosions = tap_explosions_by_col
+        .get(down_col)
+        .filter(|by_window| !by_window.is_empty())
+        .cloned()
+        .or_else(|| {
+            tap_explosions_by_col
                 .iter()
-                .find(|sprite| {
-                    let sprite = **sprite;
-                    sprite.commands.contains_key(&key)
-                })
-                .copied()
-                .or_else(|| {
-                    bright_sprites
-                        .iter()
-                        .find(|sprite| {
-                            let sprite = **sprite;
-                            sprite.commands.contains_key(&key)
-                        })
-                        .copied()
-                })
-                .or_else(|| dim_sprites.first().copied())
-                .or_else(|| bright_sprites.first().copied())
-        };
-
-        for window in ["W1", "W2", "W3", "W4", "W5", "Held"] {
-            let key = format!("{}command", window.to_ascii_lowercase());
-            let source = select_tap_explosion_source(window);
-            let command = source
-                .and_then(|s| s.commands.get(&key))
+                .find(|by_window| !by_window.is_empty())
                 .cloned()
-                .or_else(|| {
-                    let metric_key = format!("{window}Command");
-                    data.metrics
-                        .get("GhostArrowDim", &metric_key)
-                        .or_else(|| data.metrics.get("GhostArrowBright", &metric_key))
-                        .map(str::to_string)
-                });
-            // The "Held" pseudo-window is only populated when the noteskin
-            // actually defines a HeldCommand; otherwise hold-success explosions
-            // would silently fall back to a default 0.3s flash on every hold,
-            // which is not what unmodified ITGMania-style noteskins expect.
-            if window == "Held" && command.as_deref().map_or(true, |c| c.trim().is_empty()) {
-                continue;
-            }
-            let command_with_init = command.and_then(|cmd| {
-                if cmd.trim().is_empty() {
-                    return None;
-                }
-                let mut sequence = Vec::with_capacity(4);
-                let mut push_command = |raw: Option<&String>| {
-                    if let Some(value) = raw {
-                        let trimmed = value.trim();
-                        if !trimmed.is_empty() {
-                            sequence.push(trimmed.to_string());
-                        }
-                    }
-                };
-                push_command(source.and_then(|s| s.commands.get("initcommand")));
-                push_command(source.and_then(|s| s.commands.get("judgmentcommand")));
-                let mode_command = source.and_then(|s| {
-                    if dim_sprites.iter().any(|d| std::ptr::eq(*d, s)) {
-                        s.commands.get("dimcommand")
-                    } else {
-                        s.commands.get("brightcommand")
-                    }
-                });
-                push_command(mode_command);
-                sequence.push(cmd);
-                if sequence.is_empty() {
-                    None
-                } else {
-                    Some(sequence.join(";"))
-                }
-            });
-            let animation = command_with_init
-                .as_deref()
-                .filter(|v| !v.trim().is_empty())
-                .map(parse_explosion_animation)
-                .unwrap_or_default();
-            let slot_for_window = source
-                .map(|s| s.slot.clone())
-                .unwrap_or_else(|| slot.clone());
-            tap_explosions.insert(
-                window.to_string(),
-                TapExplosion {
-                    slot: slot_for_window,
-                    animation,
-                },
-            );
-        }
-    }
+        })
+        .unwrap_or_default();
 
     let hold_let_go_gray_percent = note_display_metrics
         .hold_let_go_gray_percent
@@ -2909,6 +2896,7 @@ fn load_itg_sprite_noteskin_compiled(
         receptor_off_reverse,
         receptor_glow_reverse,
         tap_explosions,
+        tap_explosions_by_col,
         mine_hit_explosion,
         hold,
         roll,
@@ -2924,6 +2912,143 @@ fn load_itg_sprite_noteskin_compiled(
         animation_is_beat_based,
         hold_let_go_gray_percent,
     })
+}
+
+fn itg_tap_explosion_map_compiled(
+    data: &noteskin_itg::NoteskinData,
+    compiled: &noteskin_compiled::CompiledLoader,
+    compiled_actors: &noteskin_compiled::CompiledActors,
+    button: &str,
+    explosion_sprites: &[ItgLuaResolvedSprite],
+) -> HashMap<String, TapExplosion> {
+    let mut dim_sprites = explosion_sprites
+        .iter()
+        .filter(|s| {
+            s.element
+                .to_ascii_lowercase()
+                .starts_with("tap explosion dim")
+        })
+        .collect::<Vec<_>>();
+    let mut bright_sprites = explosion_sprites
+        .iter()
+        .filter(|s| {
+            s.element
+                .to_ascii_lowercase()
+                .starts_with("tap explosion bright")
+        })
+        .collect::<Vec<_>>();
+
+    let dim_request = itg_load_request(compiled, button, "Tap Explosion Dim");
+    let bright_request = itg_load_request(compiled, button, "Tap Explosion Bright");
+    let direct_dim_sprites = if dim_sprites.is_empty() && !dim_request.blank {
+        itg_resolve_actor_sprites_compiled(
+            data,
+            compiled,
+            compiled_actors,
+            button,
+            "Tap Explosion Dim",
+        )
+    } else {
+        Vec::new()
+    };
+    let direct_bright_sprites = if bright_sprites.is_empty() && !bright_request.blank {
+        itg_resolve_actor_sprites_compiled(
+            data,
+            compiled,
+            compiled_actors,
+            button,
+            "Tap Explosion Bright",
+        )
+    } else {
+        Vec::new()
+    };
+    dim_sprites.extend(direct_dim_sprites.iter());
+    bright_sprites.extend(direct_bright_sprites.iter());
+    if dim_sprites.is_empty() && bright_sprites.is_empty() {
+        return HashMap::new();
+    }
+
+    let select_tap_explosion_source = |window: &str| {
+        let key = format!("{}command", window.to_ascii_lowercase());
+        dim_sprites
+            .iter()
+            .copied()
+            .find(|sprite| sprite.commands.contains_key(&key))
+            .or_else(|| {
+                bright_sprites
+                    .iter()
+                    .copied()
+                    .find(|sprite| sprite.commands.contains_key(&key))
+            })
+            .or_else(|| dim_sprites.first().copied())
+            .or_else(|| bright_sprites.first().copied())
+    };
+
+    let mut tap_explosions = HashMap::new();
+    for window in ["W1", "W2", "W3", "W4", "W5", "Held"] {
+        let key = format!("{}command", window.to_ascii_lowercase());
+        let source = select_tap_explosion_source(window);
+        let command = source
+            .and_then(|s| s.commands.get(&key))
+            .cloned()
+            .or_else(|| {
+                let metric_key = format!("{window}Command");
+                data.metrics
+                    .get("GhostArrowDim", &metric_key)
+                    .or_else(|| data.metrics.get("GhostArrowBright", &metric_key))
+                    .map(str::to_string)
+            });
+        // The "Held" pseudo-window is only populated when the noteskin
+        // actually defines a HeldCommand; otherwise hold-success explosions
+        // would silently fall back to a default 0.3s flash on every hold,
+        // which is not what unmodified ITGMania-style noteskins expect.
+        if window == "Held" && command.as_deref().map_or(true, |c| c.trim().is_empty()) {
+            continue;
+        }
+
+        let command_with_init = command.and_then(|cmd| {
+            if cmd.trim().is_empty() {
+                return None;
+            }
+            let mut sequence = Vec::with_capacity(4);
+            let mut push_command = |raw: Option<&String>| {
+                if let Some(value) = raw {
+                    let trimmed = value.trim();
+                    if !trimmed.is_empty() {
+                        sequence.push(trimmed.to_string());
+                    }
+                }
+            };
+            push_command(source.and_then(|s| s.commands.get("initcommand")));
+            push_command(source.and_then(|s| s.commands.get("judgmentcommand")));
+            let mode_command = source.and_then(|s| {
+                if dim_sprites.iter().any(|d| std::ptr::eq(*d, s)) {
+                    s.commands.get("dimcommand")
+                } else {
+                    s.commands.get("brightcommand")
+                }
+            });
+            push_command(mode_command);
+            sequence.push(cmd);
+            (!sequence.is_empty()).then(|| sequence.join(";"))
+        });
+        let Some(source) = source else {
+            continue;
+        };
+        let animation = command_with_init
+            .as_deref()
+            .filter(|v| !v.trim().is_empty())
+            .map(parse_explosion_animation)
+            .unwrap_or_default();
+        tap_explosions.insert(
+            window.to_string(),
+            TapExplosion {
+                slot: source.slot.clone(),
+                animation,
+            },
+        );
+    }
+    tap_explosions
 }
 
 fn itg_note_display_metrics(metrics: &noteskin_itg::IniData) -> NoteDisplayMetrics {
@@ -3753,6 +3878,76 @@ fn itg_apply_actor_mods(state: &mut ModelDrawState, mods: &[ItgActorMod]) {
     }
 }
 
+fn itg_apply_parent_zoom(slot: &mut SpriteSlot, axis: usize, zoom: f32) {
+    if zoom < 0.0 {
+        match axis {
+            0 => slot.def.mirror_h = !slot.def.mirror_h,
+            1 => slot.def.mirror_v = !slot.def.mirror_v,
+            _ => {}
+        }
+    }
+    slot.model_draw.zoom[axis] *= zoom.abs();
+}
+
+fn itg_apply_parent_actor_mod(slot: &mut SpriteSlot, actor_mod: ScriptActorMod) {
+    match actor_mod {
+        ScriptActorMod::X(v) | ScriptActorMod::AddX(v) => slot.model_draw.pos[0] += v,
+        ScriptActorMod::Y(v) | ScriptActorMod::AddY(v) => slot.model_draw.pos[1] += v,
+        ScriptActorMod::Z(v) | ScriptActorMod::AddZ(v) => slot.model_draw.pos[2] += v,
+        ScriptActorMod::RotationX(v) | ScriptActorMod::AddRotationX(v) => {
+            slot.model_draw.rot[0] += v
+        }
+        ScriptActorMod::RotationY(v) | ScriptActorMod::AddRotationY(v) => {
+            slot.model_draw.rot[1] += v
+        }
+        ScriptActorMod::RotationZ(v) | ScriptActorMod::AddRotationZ(v) => {
+            slot.model_draw.rot[2] += v
+        }
+        ScriptActorMod::Zoom(v) => {
+            itg_apply_parent_zoom(slot, 0, v);
+            itg_apply_parent_zoom(slot, 1, v);
+            itg_apply_parent_zoom(slot, 2, v);
+        }
+        ScriptActorMod::ZoomX(v) => itg_apply_parent_zoom(slot, 0, v),
+        ScriptActorMod::ZoomY(v) => itg_apply_parent_zoom(slot, 1, v),
+        ScriptActorMod::ZoomZ(v) => itg_apply_parent_zoom(slot, 2, v),
+        ScriptActorMod::Diffuse(color) => {
+            for (dst, src) in slot.model_draw.tint.iter_mut().zip(color) {
+                *dst *= src;
+            }
+        }
+        ScriptActorMod::DiffuseAlpha(alpha) => slot.model_draw.tint[3] *= alpha,
+        ScriptActorMod::Glow(color) => slot.model_draw.glow = color,
+        ScriptActorMod::VertAlign(v) => slot.model_draw.vert_align = v,
+        ScriptActorMod::BlendAdd(v) => slot.model_draw.blend_add = v,
+        ScriptActorMod::Visible(v) => slot.model_draw.visible &= v,
+    }
+}
+
+fn itg_apply_parent_command(slot: &mut SpriteSlot, script: &str) {
+    for raw_token in script.split(';') {
+        let token = raw_token.trim();
+        if token.is_empty() {
+            continue;
+        }
+        let Some((command, args)) = split_script_token(token) else {
+            continue;
+        };
+        if let Some(actor_mod) = parse_script_actor_mod(&command, &args) {
+            itg_apply_parent_actor_mod(slot, actor_mod);
+        }
+    }
+}
+
+fn itg_apply_loader_command(sprites: &mut [ItgLuaResolvedSprite], command: Option<&str>) {
+    let Some(command) = command.filter(|cmd| !cmd.trim().is_empty()) else {
+        return;
+    };
+    for sprite in sprites {
+        itg_apply_parent_command(&mut sprite.slot, command);
+    }
+}
+
 fn itg_model_draw_program(
     commands: &HashMap<String, String>,
 ) -> (ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState) {
@@ -4133,6 +4328,7 @@ struct ItgLoadRequest {
     load_button: String,
     load_element: String,
     rotation_z: Option<i32>,
+    init_command: Option<String>,
 }
 
 impl From<noteskin_actor::ItgLuaSpriteDecl> for ItgLuaSpriteDecl {
@@ -4214,6 +4410,7 @@ fn itg_load_request(
             load_button: entry.load_button.clone(),
             load_element: entry.load_element.clone(),
             rotation_z: entry.rotation_z,
+            init_command: entry.init_command.clone(),
         };
     }
     warn!("compiled noteskin loader is missing '{button} {element}'");
@@ -4222,6 +4419,7 @@ fn itg_load_request(
         load_button: button.to_string(),
         load_element: element.to_string(),
         rotation_z: None,
+        init_command: None,
     }
 }
 
@@ -4796,7 +4994,7 @@ fn itg_resolve_actor_sprites_inner_compiled(
         return Vec::new();
     };
 
-    let out = itg_resolve_actor_file_compiled(
+    let mut out = itg_resolve_actor_file_compiled(
         data,
         compiled,
         compiled_actors,
@@ -4808,6 +5006,7 @@ fn itg_resolve_actor_sprites_inner_compiled(
         visiting,
         None,
     );
+    itg_apply_loader_command(&mut out, request.init_command.as_deref());
 
     visiting.remove(&visit_key);
     out
@@ -6816,6 +7015,172 @@ return t
                 "receptor pulse should ignore fallback InitCommand at beat {beat}, got {color:?}"
             );
         }
+
+        let _ = fs::remove_dir_all(&root);
+        clear_itg_runtime_caches();
+    }
+
+    #[test]
+    fn loader_init_command_applies_to_resolved_receptor() {
+        clear_itg_runtime_caches();
+        let root = temp_noteskin_root("loader-init-command");
+        let skin_dir = root.join("dance/mirror");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=mirror\n",
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+
+function skin.Load()
+    local button = Var "Button"
+    local element = Var "Element"
+    if element == "Receptor" and button == "Right" then
+        local t = LoadActor(NOTESKIN:GetPath("Left", "Receptor"))
+        t.InitCommand=function(self) self:y(1); self:zoomx(-1); end
+        return t
+    end
+    if element == "Receptor" and button == "Left" then
+        return LoadActor(NOTESKIN:GetPath("Left", "Receptor"))
+    end
+    return LoadActor(NOTESKIN:GetPath("Down", element))
+end
+
+return skin
+"#,
+        )
+        .unwrap();
+        write_noteskin_png(&skin_dir.join("Down Tap Note.png"));
+        write_noteskin_png(&skin_dir.join("Down Receptor.png"));
+        write_noteskin_png(&skin_dir.join("Left Receptor.png"));
+
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns =
+            load_itg(&root, "dance", "mirror", &style).expect("mirror test noteskin should load");
+        let left = ns
+            .receptor_off
+            .first()
+            .expect("left receptor should resolve");
+        let right = ns
+            .receptor_off
+            .get(3)
+            .expect("right receptor should resolve");
+
+        assert!(!left.def.mirror_h);
+        assert!(right.def.mirror_h);
+        assert!((right.model_draw.pos[1] - 1.0).abs() <= f32::EPSILON);
+        let uv = right.uv_for_frame_at(0, 0.0);
+        assert!(
+            uv[0] < uv[2],
+            "mirroring stays as actor scale, not a reversed UV rect; got {uv:?}"
+        );
+
+        let _ = fs::remove_dir_all(&root);
+        clear_itg_runtime_caches();
+    }
+
+    #[test]
+    fn explosion_children_keep_per_button_rotation() {
+        clear_itg_runtime_caches();
+        let root = temp_noteskin_root("explosion-child-rotation");
+        let skin_dir = root.join("dance/ghostrot");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=ghostrot\n",
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+skin.ButtonRedir = { Up = "Down", Down = "Down", Left = "Down", Right = "Down" }
+skin.PartsToRotate = { ["Tap Explosion Dim W1"] = true, ["Hold Explosion"] = true }
+skin.Rotate = { Up = 180, Down = 0, Left = 90, Right = -90 }
+
+function skin.Load()
+    local button = Var "Button"
+    local element = Var "Element"
+    local load_button = skin.ButtonRedir[button] or button
+    local path = element == "Explosion" and NOTESKIN:GetPath("", "Fallback Explosion") or NOTESKIN:GetPath(load_button, element)
+    local t = LoadActor(path)
+    if skin.PartsToRotate[element] then
+        t.BaseRotationZ = skin.Rotate[button]
+    end
+    return t
+end
+
+return skin
+"#,
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("Fallback Explosion.lua"),
+            r#"return Def.ActorFrame {
+    NOTESKIN:LoadActor(Var "Button", "Tap Explosion Dim W1") .. {
+        InitCommand=cmd(diffusealpha,0);
+        W1Command=cmd(diffusealpha,1);
+        JudgmentCommand=cmd(finishtweening);
+        DimCommand=cmd(visible,true);
+    };
+    NOTESKIN:LoadActor(Var "Button", "Hold Explosion") .. {
+        InitCommand=cmd(diffusealpha,0);
+        HoldingOnCommand=cmd(diffusealpha,1);
+    };
+    NOTESKIN:LoadActor(Var "Button", "Hold Explosion") .. {
+        InitCommand=cmd(diffusealpha,0);
+        RollOnCommand=cmd(diffusealpha,1);
+    };
+}"#,
+        )
+        .unwrap();
+        write_noteskin_png(&skin_dir.join("Down Tap Note.png"));
+        write_noteskin_png(&skin_dir.join("Down Receptor.png"));
+        write_noteskin_png(&skin_dir.join("Down Tap Explosion Dim W1.png"));
+        write_noteskin_png(&skin_dir.join("Down Hold Explosion.png"));
+
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg(&root, "dance", "ghostrot", &style).expect("test noteskin should load");
+        let rotations = (0..4)
+            .map(|col| {
+                ns.tap_explosion_for_col(col, "W1")
+                    .expect("W1 explosion should resolve for each column")
+                    .slot
+                    .def
+                    .rotation_deg
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rotations, vec![90, 0, 180, -90]);
+        let hold_rotations = (0..4)
+            .map(|col| {
+                ns.hold_visuals_for_col(col, false)
+                    .explosion
+                    .as_ref()
+                    .expect("hold explosion should resolve for each column")
+                    .def
+                    .rotation_deg
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(hold_rotations, vec![90, 0, 180, -90]);
+        let roll_rotations = (0..4)
+            .map(|col| {
+                ns.hold_visuals_for_col(col, true)
+                    .explosion
+                    .as_ref()
+                    .expect("roll explosion should resolve for each column")
+                    .def
+                    .rotation_deg
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(roll_rotations, vec![90, 0, 180, -90]);
 
         let _ = fs::remove_dir_all(&root);
         clear_itg_runtime_caches();

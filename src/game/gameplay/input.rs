@@ -765,8 +765,13 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
         } else {
             (col / cols_per_player).min(num_players.saturating_sub(1))
         };
+        let local_col = if cols_per_player == 0 {
+            col
+        } else {
+            col % cols_per_player
+        };
         let lifetime = tap_explosion_noteskin_for_player(state, player)
-            .and_then(|ns| ns.tap_explosions.get(window))
+            .and_then(|ns| ns.tap_explosion_for_col(local_col, window))
             .map_or(0.0, |explosion| explosion.animation.duration());
         if lifetime <= 0.0 || elapsed >= lifetime {
             state.tap_explosions[col] = None;
