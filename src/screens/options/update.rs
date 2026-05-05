@@ -185,7 +185,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         return None;
     }
     if let Some(score_import) = state.score_import_ui.as_mut() {
-        poll_score_import_ui(score_import);
+        poll_score_import_ui(score_import, dt);
         if score_import.done
             && score_import
                 .done_since

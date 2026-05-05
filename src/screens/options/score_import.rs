@@ -30,6 +30,10 @@ pub(super) struct ScoreImportUiState {
     pub(super) pack_label: String,
     pub(super) total_charts: usize,
     pub(super) processed_charts: usize,
+    /// Smoothed `processed_charts` (eased toward the integer target each
+    /// frame). Used for the bar fill and the displayed speed so progress
+    /// doesn't jump in big steps when a bulk request lands.
+    pub(super) displayed_done: f32,
     pub(super) imported_scores: usize,
     pub(super) missing_scores: usize,
     pub(super) failed_requests: usize,
@@ -56,6 +60,7 @@ impl ScoreImportUiState {
             pack_label,
             total_charts: 0,
             processed_charts: 0,
+            displayed_done: 0.0,
             imported_scores: 0,
             missing_scores: 0,
             failed_requests: 0,
@@ -70,6 +75,11 @@ impl ScoreImportUiState {
     }
 }
 
+/// Time constant (seconds) for the exponential ease applied to `displayed_done`.
+/// Smaller = snappier, larger = smoother. ~0.4s feels close to instant on
+/// chunks that arrive in <1s but visibly fills across multi-second waits.
+const SCORE_IMPORT_PROGRESS_TAU: f32 = 0.4;
+
 #[inline(always)]
 pub(super) fn score_import_progress(
     score_import: &ScoreImportUiState,
@@ -79,8 +89,11 @@ pub(super) fn score_import_progress(
     if total < done {
         total = done;
     }
+    let smoothed = score_import
+        .displayed_done
+        .clamp(0.0, total.max(done) as f32);
     let mut progress = if total > 0 {
-        (done as f32 / total as f32).clamp(0.0, 1.0)
+        (smoothed / total as f32).clamp(0.0, 1.0)
     } else {
         0.0
     };
@@ -103,8 +116,12 @@ pub(super) fn build_score_import_overlay_actors(
     };
     let show_speed_row = total > 0 || done > 0;
     let speed_text = if show_speed_row {
+        // Use the smoothed displayed value so the speed readout doesn't spike
+        // every time a bulk chunk lands. Once `done` is set the smoothing
+        // snaps to truth so the final number matches the summary.
+        let smoothed_done = score_import.displayed_done.max(0.0);
         let rate = if elapsed > 0.0 {
-            done as f32 / elapsed
+            smoothed_done / elapsed
         } else {
             0.0
         };
@@ -610,7 +627,7 @@ pub(super) fn begin_score_import_from_confirm(state: &mut State) {
     begin_score_import(state, confirm.selection);
 }
 
-pub(super) fn poll_score_import_ui(score_import: &mut ScoreImportUiState) {
+pub(super) fn poll_score_import_ui(score_import: &mut ScoreImportUiState, dt: f32) {
     while let Ok(msg) = score_import.rx.try_recv() {
         match msg {
             ScoreImportMsg::Progress(progress) => {
@@ -656,5 +673,21 @@ pub(super) fn poll_score_import_ui(score_import: &mut ScoreImportUiState) {
                 };
             }
         }
+    }
+
+    // Ease the displayed progress toward the latest integer target. On `done`
+    // we snap so the bar fills completely and the final speed readout matches
+    // the summary's rate exactly.
+    let target = score_import.processed_charts as f32;
+    if score_import.done {
+        score_import.displayed_done = target;
+    } else if dt > 0.0 && SCORE_IMPORT_PROGRESS_TAU > 0.0 {
+        let alpha = 1.0 - (-dt / SCORE_IMPORT_PROGRESS_TAU).exp();
+        score_import.displayed_done += (target - score_import.displayed_done) * alpha;
+    } else {
+        score_import.displayed_done = target;
+    }
+    if score_import.displayed_done > target {
+        score_import.displayed_done = target;
     }
 }

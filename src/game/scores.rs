@@ -4980,6 +4980,7 @@ where
             last_request_started_at = Some(Instant::now());
 
             let chunk_vec = chunk.to_vec();
+            let request_started = Instant::now();
             let detail = match fetch_arrowcloud_bulk_scores(
                 &api_key,
                 user_id.as_deref(),
@@ -4987,6 +4988,7 @@ where
                 &ArrowCloudLeaderboard::ALL_GLOBAL,
             ) {
                 Ok(scores_by_chart) => {
+                    let request_elapsed = request_started.elapsed();
                     let hits = scores_by_chart.len();
                     let misses = chunk_vec.len().saturating_sub(hits);
                     if !scores_by_chart.is_empty() {
@@ -4997,16 +4999,27 @@ where
                     }
                     imported_scores += hits;
                     missing_scores += misses;
+                    debug!(
+                        "ArrowCloud /v1/retrieve-scores chunk={} took={:.0}ms hits={} misses={} pack='{}'",
+                        chunk_vec.len(),
+                        request_elapsed.as_secs_f32() * 1000.0,
+                        hits,
+                        misses,
+                        pack_name,
+                    );
                     format!(
-                        "ArrowCloud: pack '{pack_name}' chunk of {} charts -> {hits} hit, {misses} missing.",
-                        chunk_vec.len()
+                        "ArrowCloud: pack '{pack_name}' chunk of {} charts -> {hits} hit, {misses} missing ({:.0}ms).",
+                        chunk_vec.len(),
+                        request_elapsed.as_secs_f32() * 1000.0,
                     )
                 }
                 Err(e) => {
+                    let request_elapsed = request_started.elapsed();
                     failed_requests += 1;
                     let msg = format!(
-                        "ArrowCloud bulk request failed for pack '{pack_name}' (chunk of {} charts): {e}",
-                        chunk_vec.len()
+                        "ArrowCloud bulk request failed for pack '{pack_name}' (chunk of {} charts, {:.0}ms): {e}",
+                        chunk_vec.len(),
+                        request_elapsed.as_secs_f32() * 1000.0,
                     );
                     warn!("{msg}");
                     msg
