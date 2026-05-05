@@ -4,7 +4,7 @@ use crate::game::note::NoteType;
 use super::input::{lane_from_column, push_input_edge};
 use super::{
     MAX_COLS, SongTimeNs, State, handle_hold_let_go, handle_hold_success, judge_a_lift,
-    judge_a_tap, player_note_range, refresh_roll_life_on_step, song_time_ns_to_seconds,
+    judge_a_tap, player_note_range, refresh_roll_life_on_step,
 };
 
 #[inline(always)]
@@ -71,7 +71,6 @@ pub(super) fn run_autoplay(state: &mut State, now_music_time_ns: SongTimeNs) {
             if row_time_ns > now_music_time_ns {
                 break;
             }
-            let row_time = song_time_ns_to_seconds(row_time_ns);
             // Finalize any already-ended autoplay holds before a new warped
             // row on the same lane can replace the active hold slot.
             settle_due_autoplay_active_holds(state, row_time_ns);
@@ -104,10 +103,10 @@ pub(super) fn run_autoplay(state: &mut State, now_music_time_ns: SongTimeNs) {
                 state.autoplay_used = true;
                 match note_type {
                     NoteType::Lift => {
-                        let _ = judge_a_lift(state, col, row_time, row_time_ns);
+                        let _ = judge_a_lift(state, col, row_time_ns);
                     }
                     NoteType::Tap | NoteType::Hold | NoteType::Roll => {
-                        let _ = judge_a_tap(state, col, row_time, row_time_ns);
+                        let _ = judge_a_tap(state, col, row_time_ns);
                     }
                     NoteType::Mine | NoteType::Fake => {}
                 }

@@ -6256,6 +6256,56 @@ fn timing_hit_log_enabled() -> bool {
 }
 
 #[inline(always)]
+pub(super) fn gameplay_input_log_enabled() -> bool {
+    log::log_enabled!(log::Level::Debug)
+}
+
+#[inline(always)]
+fn log_tap_judge_candidate(
+    enabled: bool,
+    reason: &str,
+    player: usize,
+    column: usize,
+    current_row_index: usize,
+    current_time_ns: SongTimeNs,
+    note_index: usize,
+    note: &Note,
+    note_time_ns: SongTimeNs,
+    rate: f32,
+) {
+    if !enabled {
+        return;
+    }
+    let offset_music_ns = current_time_ns.saturating_sub(note_time_ns);
+    debug!(
+        concat!(
+            "GAMEPLAY TAP JUDGE: reason={}, player={}, lane={}, note_index={}, ",
+            "note_col={}, note_type={:?}, note_row={}, current_row={}, beat={:.3}, ",
+            "quant={}, fake={}, can_be_judged={}, result_set={}, early_result_set={}, ",
+            "note_time_s={:.6}, event_time_s={:.6}, offset_ms={:.2}, rate={:.3}"
+        ),
+        reason,
+        player,
+        column,
+        note_index,
+        note.column,
+        note.note_type,
+        note.row_index,
+        current_row_index,
+        note.beat,
+        note.quantization_idx,
+        note.is_fake,
+        note.can_be_judged,
+        note.result.is_some(),
+        note.early_result.is_some(),
+        song_time_ns_to_seconds(note_time_ns),
+        song_time_ns_to_seconds(current_time_ns),
+        judgment_time_error_ms_from_music_ns(offset_music_ns, rate),
+        rate,
+    );
+}
+
+#[inline(always)]
 fn log_timing_hit_detail(
     enabled: bool,
     stream_pos_s: f32,
@@ -6265,8 +6315,8 @@ fn log_timing_hit_detail(
     beat: f32,
     song_offset_s: f32,
     global_offset_s: f32,
-    note_time_s: f32,
-    event_time_s: f32,
+    note_time_ns: SongTimeNs,
+    event_time_ns: SongTimeNs,
     music_now_s: f32,
     rate: f32,
     lead_in_s: f32,
@@ -6274,6 +6324,8 @@ fn log_timing_hit_detail(
     if !enabled {
         return;
     }
+    let note_time_s = song_time_ns_to_seconds(note_time_ns);
+    let event_time_s = song_time_ns_to_seconds(event_time_ns);
     let expected_stream_for_note_s =
         note_time_s / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
     let expected_stream_for_hit_s =
@@ -6324,8 +6376,13 @@ pub(super) fn trigger_hold_explosion(state: &mut State, column: usize) {
 
 fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static str) {
     let player = player_for_col(state, column);
+    let local_col = if state.cols_per_player == 0 {
+        column
+    } else {
+        column % state.cols_per_player
+    };
     let spawn_window = tap_explosion_noteskin_for_player(state, player).and_then(|ns| {
-        if ns.tap_explosions.contains_key(window_key) {
+        if ns.tap_explosion_for_col(local_col, window_key).is_some() {
             Some(window_key)
         } else {
             None
@@ -6854,18 +6911,14 @@ fn render_provisional_early_rescore_feedback(
     }
 }
 
-pub fn judge_a_tap(
-    state: &mut State,
-    column: usize,
-    current_time: f32,
-    current_time_ns: SongTimeNs,
-) -> bool {
+pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs) -> bool {
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
         1.0
     };
     let timing_hit_log = timing_hit_log_enabled();
+    let input_log = gameplay_input_log_enabled();
     let player = player_for_col(state, column);
     let rescore_early_hits = state.player_profiles[player].rescore_early_hits;
     let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
@@ -6900,14 +6953,52 @@ pub fn judge_a_tap(
 
         if matches!(note_type, NoteType::Mine) {
             if state.notes[note_index].is_fake {
+                log_tap_judge_candidate(
+                    input_log,
+                    "fake_mine_ignored",
+                    player,
+                    column,
+                    current_row_index,
+                    current_time_ns,
+                    note_index,
+                    &state.notes[note_index],
+                    state.note_time_cache_ns[note_index],
+                    rate,
+                );
                 return false;
             }
-            if hit_mine(state, column, note_index, time_error_music_ns) {
-                return true;
-            }
-            return false;
+            let hit = hit_mine(state, column, note_index, time_error_music_ns);
+            log_tap_judge_candidate(
+                input_log,
+                if hit {
+                    "mine_hit"
+                } else {
+                    "mine_outside_window"
+                },
+                player,
+                column,
+                current_row_index,
+                current_time_ns,
+                note_index,
+                &state.notes[note_index],
+                state.note_time_cache_ns[note_index],
+                rate,
+            );
+            return hit;
         }
         if !lane_edge_matches_note_type(true, note_type) {
+            log_tap_judge_candidate(
+                input_log,
+                "note_type_mismatch",
+                player,
+                column,
+                current_row_index,
+                current_time_ns,
+                note_index,
+                &state.notes[note_index],
+                state.note_time_cache_ns[note_index],
+                rate,
+            );
             return false;
         }
 
@@ -6917,6 +7008,18 @@ pub fn judge_a_tap(
             state.note_time_cache_ns[note_index],
             current_time_ns,
         ) else {
+            log_tap_judge_candidate(
+                input_log,
+                "outside_tap_window",
+                player,
+                column,
+                current_row_index,
+                current_time_ns,
+                note_index,
+                &state.notes[note_index],
+                state.note_time_cache_ns[note_index],
+                rate,
+            );
             return false;
         };
         let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
@@ -6930,6 +7033,18 @@ pub fn judge_a_tap(
             (0.0, 0.0, 0.0, 0.0)
         };
         if state.notes[note_index].is_fake {
+            log_tap_judge_candidate(
+                input_log,
+                "fake_hit",
+                player,
+                column,
+                current_row_index,
+                current_time_ns,
+                note_index,
+                &state.notes[note_index],
+                state.note_time_cache_ns[note_index],
+                rate,
+            );
             let (judgment, judgment_event_time) =
                 build_final_note_hit_judgment(state, player, hit, rate);
             set_final_note_result(state, player, note_index, judgment);
@@ -6942,8 +7057,8 @@ pub fn judge_a_tap(
                 state.notes[note_index].beat,
                 song_offset_s,
                 global_offset_s,
-                song_time_ns_to_seconds(hit.note_time_ns),
-                song_time_ns_to_seconds(judgment_event_time),
+                hit.note_time_ns,
+                judgment_event_time,
                 current_music_time_s(state),
                 rate,
                 lead_in_s,
@@ -6968,6 +7083,22 @@ pub fn judge_a_tap(
             let is_bad = matches!(hit.grade, JudgeGrade::Decent | JudgeGrade::WayOff);
 
             if is_early && is_bad {
+                log_tap_judge_candidate(
+                    input_log,
+                    if state.notes[note_index].early_result.is_some() {
+                        "provisional_early_duplicate"
+                    } else {
+                        "provisional_early_hit"
+                    },
+                    player,
+                    column,
+                    current_row_index,
+                    current_time_ns,
+                    note_index,
+                    &state.notes[note_index],
+                    state.note_time_cache_ns[note_index],
+                    rate,
+                );
                 if state.notes[note_index].early_result.is_none() {
                     let judgment = Judgment {
                         time_error_ms: judgment_time_error_ms_from_music_ns(
@@ -6996,7 +7127,7 @@ pub fn judge_a_tap(
                         player,
                         note_col,
                         &judgment,
-                        current_time,
+                        song_time_ns_to_seconds(current_time_ns),
                         hide_early_dw_judgments,
                         hide_early_dw_flash,
                     );
@@ -7012,8 +7143,8 @@ pub fn judge_a_tap(
                         state.notes[note_index].beat,
                         song_offset_s,
                         global_offset_s,
-                        song_time_ns_to_seconds(hit.note_time_ns),
-                        current_time,
+                        hit.note_time_ns,
+                        current_time_ns,
                         current_music_time_s(state),
                         rate,
                         lead_in_s,
@@ -7044,9 +7175,33 @@ pub fn judge_a_tap(
                     JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
                 )
             {
+                log_tap_judge_candidate(
+                    input_log,
+                    "provisional_bad_rehit_ignored",
+                    player,
+                    column,
+                    current_row_index,
+                    current_time_ns,
+                    note_index,
+                    &state.notes[note_index],
+                    state.note_time_cache_ns[note_index],
+                    rate,
+                );
                 return true;
             }
 
+            log_tap_judge_candidate(
+                input_log,
+                "hit",
+                player,
+                column,
+                current_row_index,
+                current_time_ns,
+                note_index,
+                &state.notes[note_index],
+                state.note_time_cache_ns[note_index],
+                rate,
+            );
             let (judgment, judgment_event_time) =
                 build_final_note_hit_judgment(state, player, hit, rate);
             set_final_note_result(state, player, note_index, judgment);
@@ -7060,8 +7215,8 @@ pub fn judge_a_tap(
                 state.notes[note_index].beat,
                 song_offset_s,
                 global_offset_s,
-                song_time_ns_to_seconds(hit.note_time_ns),
-                song_time_ns_to_seconds(judgment_event_time),
+                hit.note_time_ns,
+                judgment_event_time,
                 current_music_time_s(state),
                 rate,
                 lead_in_s,
@@ -7090,6 +7245,18 @@ pub fn judge_a_tap(
         let Some((judge_indices, judge_count)) =
             collect_edge_judge_indices(row_note_count, note_index)
         else {
+            log_tap_judge_candidate(
+                input_log,
+                "no_row_judge_indices",
+                player,
+                column,
+                current_row_index,
+                current_time_ns,
+                note_index,
+                &state.notes[note_index],
+                state.note_time_cache_ns[note_index],
+                rate,
+            );
             return false;
         };
 
@@ -7101,8 +7268,32 @@ pub fn judge_a_tap(
                 state.note_time_cache_ns[idx],
                 current_time_ns,
             ) else {
+                log_tap_judge_candidate(
+                    input_log,
+                    "row_sibling_outside_tap_window",
+                    player,
+                    column,
+                    current_row_index,
+                    current_time_ns,
+                    idx,
+                    &state.notes[idx],
+                    state.note_time_cache_ns[idx],
+                    rate,
+                );
                 continue;
             };
+            log_tap_judge_candidate(
+                input_log,
+                "hit",
+                player,
+                column,
+                current_row_index,
+                current_time_ns,
+                idx,
+                &state.notes[idx],
+                state.note_time_cache_ns[idx],
+                rate,
+            );
             let (judgment, judgment_event_time) =
                 build_final_note_hit_judgment(state, player, hit, rate);
             set_final_note_result(state, player, idx, judgment);
@@ -7116,8 +7307,8 @@ pub fn judge_a_tap(
                 state.notes[idx].beat,
                 song_offset_s,
                 global_offset_s,
-                song_time_ns_to_seconds(hit.note_time_ns),
-                song_time_ns_to_seconds(judgment_event_time),
+                hit.note_time_ns,
+                judgment_event_time,
                 current_music_time_s(state),
                 rate,
                 lead_in_s,
@@ -7140,17 +7331,31 @@ pub fn judge_a_tap(
         }
         return true;
     }
+    if input_log {
+        debug!(
+            concat!(
+                "GAMEPLAY TAP JUDGE: reason=no_candidate, player={}, lane={}, ",
+                "current_row={}, search_rows={}..{}, search_indices={}..{}, ",
+                "lane_notes={}, event_time_s={:.6}, current_time_s={:.6}"
+            ),
+            player,
+            column,
+            current_row_index,
+            search_start_row,
+            search_end_row,
+            search_start_idx,
+            search_end_idx,
+            lane_notes.len(),
+            song_time_ns_to_seconds(current_time_ns),
+            current_music_time_s(state),
+        );
+    }
     false
 }
 
 /// Judge lift notes on button release. Mirrors tap judging's per-note path but
 /// only matches NoteType::Lift.
-pub fn judge_a_lift(
-    state: &mut State,
-    column: usize,
-    current_time: f32,
-    current_time_ns: SongTimeNs,
-) -> bool {
+pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeNs) -> bool {
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -7251,7 +7456,7 @@ pub fn judge_a_lift(
                     player,
                     note_col,
                     &judgment,
-                    current_time,
+                    song_time_ns_to_seconds(current_time_ns),
                     hide_early_dw_judgments,
                     hide_early_dw_flash,
                 );
@@ -7265,8 +7470,8 @@ pub fn judge_a_lift(
                     note_beat,
                     song_offset_s,
                     global_offset_s,
-                    song_time_ns_to_seconds(hit.note_time_ns),
-                    current_time,
+                    hit.note_time_ns,
+                    current_time_ns,
                     current_music_time_s(state),
                     rate,
                     lead_in_s,
@@ -7298,8 +7503,8 @@ pub fn judge_a_lift(
         note_beat,
         song_offset_s,
         global_offset_s,
-        song_time_ns_to_seconds(hit.note_time_ns),
-        song_time_ns_to_seconds(judgment_event_time),
+        hit.note_time_ns,
+        judgment_event_time,
         current_music_time_s(state),
         rate,
         lead_in_s,
@@ -7665,7 +7870,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                             "TIMING MISS: row={}, col={}, beat={:.3}, ",
                             "song_offset_s={:.4}, global_offset_s={:.4}, ",
                             "note_time_s={:.6}, miss_time_s={:.6}, ",
-                            "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
+                            "offset_ms={:.2}, miss_because_held={}, rate={:.3}, lead_in_s={:.4}, ",
                             "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
                             "stream_miss_s={:.6}, stream_delta_miss_ms={:.2}"
                         ),
@@ -7677,6 +7882,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                         note_time,
                         music_time_sec,
                         judgment_time_error_ms,
+                        miss_because_held,
                         rate,
                         lead_in_s,
                         stream_pos_s,
@@ -9245,6 +9451,7 @@ return Def.ActorFrame{}
         let clock = super::SongClockSnapshot {
             song_time_ns: event_time_ns,
             seconds_per_second: 1.0,
+            mapped_audio: true,
             valid_at: now,
             valid_at_host_nanos: 0,
         };
@@ -9259,6 +9466,28 @@ return Def.ActorFrame{}
         let hold = state.notes[0].hold.as_ref().expect("roll hold data");
         assert_eq!(hold.result, None);
         assert_eq!(hold.life, super::MAX_HOLD_LIFE);
+    }
+
+    #[test]
+    fn live_input_resolves_invalid_edge_time_from_song_clock() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        let event_time_ns = song_time_ns_from_seconds(12.345);
+        let edge = test_input_edge_at(Lane::Left, true, super::INVALID_SONG_TIME_NS);
+        let captured_at = edge.captured_at;
+        state.pending_edges.push_back(edge);
+
+        let clock = super::SongClockSnapshot {
+            song_time_ns: event_time_ns,
+            seconds_per_second: 1.0,
+            mapped_audio: true,
+            valid_at: captured_at,
+            valid_at_host_nanos: 0,
+        };
+        let mut phase_timings = super::GameplayUpdatePhaseTimings::default();
+        process_input_edges(&mut state, false, &mut phase_timings, clock);
+
+        assert_eq!(state.lane_pressed_since_ns[0], Some(event_time_ns));
     }
 
     #[test]
@@ -9771,6 +10000,7 @@ return Def.ActorFrame{}
         let snapshot = SongClockSnapshot {
             song_time_ns: song_time_ns_from_seconds(120.0),
             seconds_per_second: 1.5,
+            mapped_audio: true,
             valid_at: base + Duration::from_millis(24),
             valid_at_host_nanos: 0,
         };
@@ -9784,6 +10014,7 @@ return Def.ActorFrame{}
         let snapshot = SongClockSnapshot {
             song_time_ns: song_time_ns_from_seconds(64.0),
             seconds_per_second: 2.0,
+            mapped_audio: true,
             valid_at: base,
             valid_at_host_nanos: 0,
         };
@@ -9800,6 +10031,7 @@ return Def.ActorFrame{}
         let snapshot = SongClockSnapshot {
             song_time_ns: song_time_ns_from_seconds(32.0),
             seconds_per_second: 1.0,
+            mapped_audio: true,
             valid_at: Instant::now(),
             valid_at_host_nanos: 2_000_000_000,
         };

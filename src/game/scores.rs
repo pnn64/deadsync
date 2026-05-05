@@ -4768,7 +4768,7 @@ fn fetch_player_score_from_api(
 }
 
 fn collect_chart_hashes_for_import(
-    pack_group_filter: Option<&str>,
+    pack_groups_filter: &[String],
     profile_id: &str,
     only_missing_gs_scores: bool,
 ) -> Vec<(String, Vec<String>)> {
@@ -4806,11 +4806,12 @@ fn collect_chart_hashes_per_pack_for_import(
         } else {
             pack.name.trim()
         };
-        if let Some(filter) = filter_norm.as_deref()
-            && group_name.to_ascii_lowercase() != filter
-            && display_name.to_ascii_lowercase() != filter
-        {
-            continue;
+        if !filter_set.is_empty() {
+            let group_lc = group_name.to_ascii_lowercase();
+            let display_lc = display_name.to_ascii_lowercase();
+            if !filter_set.contains(&group_lc) && !filter_set.contains(&display_lc) {
+                continue;
+            }
         }
 
         let mut hashes = Vec::new();
@@ -5041,7 +5042,7 @@ pub fn import_scores_for_profile<F>(
     endpoint: ScoreImportEndpoint,
     profile_id: String,
     profile: Profile,
-    pack_group: Option<String>,
+    pack_groups: Vec<String>,
     only_missing_gs_scores: bool,
     on_progress: F,
     should_cancel: impl Fn() -> bool,

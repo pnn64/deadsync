@@ -151,6 +151,20 @@ impl DebounceWindows {
 }
 
 #[inline(always)]
+fn instant_delta_us(target: Instant, now: Instant) -> i128 {
+    if target >= now {
+        target.duration_since(now).as_micros() as i128
+    } else {
+        -(now.duration_since(target).as_micros() as i128)
+    }
+}
+
+#[inline(always)]
+fn due_delta_us(due_at: Option<Instant>, now: Instant) -> Option<i128> {
+    due_at.map(|due_at| instant_delta_us(due_at, now))
+}
+
+#[inline(always)]
 fn debounced_edge(
     state: DebounceState,
     input_slot: u32,
@@ -217,6 +231,69 @@ pub(super) fn debounce_step(
     DebounceEdges { first, second }
 }
 
+#[cold]
+fn log_debounce_store(
+    slot: usize,
+    action_mask: u32,
+    source: InputSource,
+    pressed: bool,
+    before_state: Option<DebounceState>,
+    after_state: Option<DebounceState>,
+    edges: DebounceEdges,
+    due_at: Option<Instant>,
+    active_len: usize,
+    now: Instant,
+) {
+    log::debug!(
+        concat!(
+            "INPUT DEBOUNCE EDGE: slot={} source={:?} action_mask={:#010x} raw_pressed={} ",
+            "before_held_raw={:?} before_held_reported={:?} ",
+            "after_held_raw={:?} after_held_reported={:?} ",
+            "emitted_first={} emitted_second={} first_pressed={:?} second_pressed={:?} ",
+            "due_us={:?} active_len={}"
+        ),
+        slot,
+        source,
+        action_mask,
+        pressed,
+        before_state.map(|state| state.held_raw),
+        before_state.map(|state| state.held_reported),
+        after_state.map(|state| state.held_raw),
+        after_state.map(|state| state.held_reported),
+        edges.first.is_some(),
+        edges.second.is_some(),
+        edges.first.map(|edge| edge.pressed),
+        edges.second.map(|edge| edge.pressed),
+        due_delta_us(due_at, now),
+        active_len,
+    );
+}
+
+#[cold]
+fn log_debounce_due(
+    slot: usize,
+    edge: DebouncedEdge,
+    after_state: Option<DebounceState>,
+    due_at: Option<Instant>,
+    active_len: usize,
+    now: Instant,
+) {
+    log::debug!(
+        concat!(
+            "INPUT DEBOUNCE DUE: slot={} source={:?} action_mask={:#010x} pressed={} ",
+            "after_held_raw={:?} after_held_reported={:?} next_due_us={:?} active_len={}"
+        ),
+        slot,
+        edge.source,
+        edge.action_mask,
+        edge.pressed,
+        after_state.map(|state| state.held_raw),
+        after_state.map(|state| state.held_reported),
+        due_delta_us(due_at, now),
+        active_len,
+    );
+}
+
 #[inline(always)]
 fn should_prune_debounce_state(
     state: DebounceState,
@@ -278,8 +355,14 @@ pub(super) fn debounce_input_edge_in_store_mut(
     let now = Instant::now();
     states.ensure_slot(slot);
     let input_slot = slot.min(u32::MAX as usize) as u32;
+    let debug_log = log::log_enabled!(log::Level::Debug);
     let was_empty = states.slots[slot].state.is_none();
     let old_due_at = states.slots[slot].due_at;
+    let before_state = if debug_log {
+        states.slots[slot].state
+    } else {
+        None
+    };
 
     let (edges, prune, new_due_at) = {
         let slot_state = &mut states.slots[slot];
@@ -323,6 +406,20 @@ pub(super) fn debounce_input_edge_in_store_mut(
         states.active_len = states.active_len.saturating_sub(1);
     }
     states.refresh_due_slot(slot, old_due_at, new_due_at);
+    if debug_log {
+        log_debounce_store(
+            slot,
+            action_mask,
+            source,
+            pressed,
+            before_state,
+            states.slots[slot].state,
+            edges,
+            states.slots[slot].due_at,
+            states.active_len,
+            now,
+        );
+    }
     edges
 }
 
@@ -356,7 +453,7 @@ pub(super) fn emit_due_debounce_edges_from_mut(
             continue;
         }
 
-        let (edge, remove, old_due_at, new_due_at) = {
+        let (edge, remove, old_due_at, new_due_at, after_state) = {
             let slot_state = &mut states.slots[next.slot];
             if slot_state.generation != next.generation || slot_state.due_at != Some(next.due_at) {
                 continue;
@@ -376,7 +473,7 @@ pub(super) fn emit_due_debounce_edges_from_mut(
                 slot_state.state = Some(state);
                 debounce_due_at(state, windows)
             };
-            (edge, remove, old_due_at, new_due_at)
+            (edge, remove, old_due_at, new_due_at, slot_state.state)
         };
 
         if let Some(edge) = edge {
@@ -387,6 +484,18 @@ pub(super) fn emit_due_debounce_edges_from_mut(
             states.active_len = states.active_len.saturating_sub(1);
         }
         states.refresh_due_slot(next.slot, old_due_at, new_due_at);
+        if let Some(edge) = edge
+            && log::log_enabled!(log::Level::Debug)
+        {
+            log_debounce_due(
+                next.slot,
+                edge,
+                after_state,
+                states.slots[next.slot].due_at,
+                states.active_len,
+                now,
+            );
+        }
     }
     flushed
 }

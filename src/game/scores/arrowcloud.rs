@@ -1,5 +1,6 @@
 use super::{
-    RejectReason, gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
+    GROOVESTATS_SUBMIT_MAX_ENTRIES, RejectReason, gameplay_run_failed, gameplay_run_passed,
+    gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
     invalidate_player_leaderboards_for_side, log_body_snippet, submit_side_ix,
 };
 use crate::engine::network;
@@ -852,6 +853,11 @@ fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
                 }
             }
             invalidate_player_leaderboards_for_side(job.payload.hash.as_str(), job.side);
+            get_or_fetch_player_leaderboards_for_side(
+                job.payload.hash.as_str(),
+                job.side,
+                GROOVESTATS_SUBMIT_MAX_ENTRIES,
+            );
         }
     });
 }

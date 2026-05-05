@@ -1176,6 +1176,12 @@ pub fn get_actors(
             }
         }
     }
+    if state.score_import_pack_picker.is_some() {
+        ui_actors.extend(build_score_import_pack_picker_actors(
+            state,
+            state.active_color_index,
+        ));
+    }
     if let Some(confirm) = &state.score_import_confirm {
         let endpoint = confirm.selection.endpoint;
         let profile_name = if confirm.selection.profile.display_name.is_empty() {

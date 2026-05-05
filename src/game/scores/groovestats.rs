@@ -4,8 +4,9 @@ use super::{
     GS_INVALID_REMOVE_MASK, ItlEventProgress, RejectReason, cache_gs_score_for_profile,
     cached_score_from_gs, compact_f32_text, de_i32_from_string_or_number,
     de_string_from_string_or_number, de_u32_from_string_or_number, gameplay_run_failed,
-    gameplay_run_passed, gameplay_side_for_player, invalidate_player_leaderboards_for_side, itl,
-    log_body_snippet, submit_record_banner, submit_side_ix,
+    gameplay_run_passed, gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
+    invalidate_player_leaderboards_for_side, itl, log_body_snippet, submit_record_banner,
+    submit_side_ix,
 };
 use crate::engine::network;
 use crate::game::gameplay;
@@ -1013,6 +1014,11 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                         player.chart_hash.as_str(),
                         player.side,
                     );
+                    get_or_fetch_player_leaderboards_for_side(
+                        player.chart_hash.as_str(),
+                        player.side,
+                        GROOVESTATS_SUBMIT_MAX_ENTRIES,
+                    );
                     continue;
                 };
                 if !player_response.chart_hash.trim().is_empty()
@@ -1038,6 +1044,11 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     invalidate_player_leaderboards_for_side(
                         player.chart_hash.as_str(),
                         player.side,
+                    );
+                    get_or_fetch_player_leaderboards_for_side(
+                        player.chart_hash.as_str(),
+                        player.side,
+                        GROOVESTATS_SUBMIT_MAX_ENTRIES,
                     );
                     continue;
                 }
@@ -1081,6 +1092,11 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     player_response.result
                 );
                 invalidate_player_leaderboards_for_side(player.chart_hash.as_str(), player.side);
+                get_or_fetch_player_leaderboards_for_side(
+                    player.chart_hash.as_str(),
+                    player.side,
+                    GROOVESTATS_SUBMIT_MAX_ENTRIES,
+                );
             }
         }
         Err(err) => {
@@ -1108,6 +1124,11 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     );
                 }
                 invalidate_player_leaderboards_for_side(player.chart_hash.as_str(), player.side);
+                get_or_fetch_player_leaderboards_for_side(
+                    player.chart_hash.as_str(),
+                    player.side,
+                    GROOVESTATS_SUBMIT_MAX_ENTRIES,
+                );
             }
         }
     });
