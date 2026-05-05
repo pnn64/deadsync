@@ -16,9 +16,10 @@ use super::{
     MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION, REPLAY_EDGE_FLOOR_PER_LANE,
     REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, SongClockSnapshot, SongTimeNs, State, TickMode,
     abort_hold_to_exit, add_elapsed_us, current_music_time_s, elapsed_us_between,
-    integrate_active_hold_to_time, judge_a_lift, judge_a_tap, live_autoplay_enabled,
-    music_time_ns_from_song_clock, record_step_calories, refresh_roll_life_on_step,
-    single_runtime_player_is_p2, song_time_ns_invalid, song_time_ns_to_seconds,
+    gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift, judge_a_tap,
+    live_autoplay_enabled, music_time_ns_from_song_clock, record_step_calories,
+    refresh_roll_life_on_step, single_runtime_player_is_p2, song_time_ns_invalid,
+    song_time_ns_to_seconds,
 };
 
 #[inline(always)]
@@ -561,9 +562,16 @@ pub(super) fn process_input_edges(
         std::mem::swap(&mut pending, &mut state.pending_edges);
     }
 
+    let input_log = gameplay_input_log_enabled();
     while let Some(mut edge) = pending.pop_front() {
         let lane_idx = edge.lane.index();
         if lane_idx >= state.num_cols {
+            if input_log {
+                debug!(
+                    "GAMEPLAY INPUT EDGE DROP: reason=lane_out_of_range lane={} num_cols={} source={:?} slot={} pressed={}",
+                    lane_idx, state.num_cols, edge.source, edge.input_slot, edge.pressed,
+                );
+            }
             continue;
         }
         if song_time_ns_invalid(edge.event_music_time_ns) {
@@ -578,12 +586,44 @@ pub(super) fn process_input_edges(
                     });
         }
         if song_time_ns_invalid(edge.event_music_time_ns) {
+            if input_log {
+                debug!(
+                    "GAMEPLAY INPUT EDGE DROP: reason=invalid_song_time lane={} source={:?} slot={} pressed={} captured_host_nanos={} pending={}",
+                    lane_idx,
+                    edge.source,
+                    edge.input_slot,
+                    edge.pressed,
+                    edge.captured_host_nanos,
+                    pending.len() + state.pending_edges.len(),
+                );
+            }
             continue;
         }
         let event_music_time = song_time_ns_to_seconds(edge.event_music_time_ns);
+        let lane_was_down = lane_is_pressed(state, lane_idx);
         let slot_was_down = input_slot_lane_is_down(state, edge.lane, edge.source, edge.input_slot);
         let edge_judges_tap = lane_edge_judges_tap(edge.pressed, slot_was_down);
         let edge_judges_lift = lane_edge_judges_lift(edge.pressed, slot_was_down);
+        if input_log {
+            debug!(
+                concat!(
+                    "GAMEPLAY INPUT EDGE: lane={} source={:?} slot={} pressed={} ",
+                    "lane_was_down={} slot_was_down={} judges_tap={} judges_lift={} ",
+                    "edge_time_s={:.6} current_time_s={:.6} pending={}"
+                ),
+                lane_idx,
+                edge.source,
+                edge.input_slot,
+                edge.pressed,
+                lane_was_down,
+                slot_was_down,
+                edge_judges_tap,
+                edge_judges_lift,
+                event_music_time,
+                current_music_time_s(state),
+                pending.len() + state.pending_edges.len(),
+            );
+        }
         if edge_judges_tap {
             refresh_roll_life_on_step(state, lane_idx, edge.event_music_time_ns);
         }
