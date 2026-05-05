@@ -788,6 +788,13 @@ pub fn clear_debounce_state() {
     let (key_slot_count, pad_slot_count) =
         with_compiled_keymap(|compiled| (compiled.key_slot_count, compiled.pad_slot_count));
     reset_debounce_state(key_slot_count, pad_slot_count);
+    if log::log_enabled!(log::Level::Debug) {
+        log::debug!(
+            "INPUT DEBOUNCE CLEAR: key_slots={} pad_slots={}",
+            key_slot_count,
+            pad_slot_count
+        );
+    }
 }
 
 #[inline(always)]
