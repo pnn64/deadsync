@@ -129,7 +129,6 @@ pub(super) const INPUT_BACKEND_INLINE: bool = true;
 #[cfg(not(target_os = "windows"))]
 pub(super) const INPUT_BACKEND_INLINE: bool = false;
 
-pub(super) const SCORE_IMPORT_DONE_OVERLAY_SECONDS: f32 = 1.5;
 pub(super) const SCORE_IMPORT_ROW_ENDPOINT_INDEX: usize = 0;
 pub(super) const SCORE_IMPORT_ROW_PROFILE_INDEX: usize = 1;
 pub(super) const SCORE_IMPORT_ROW_PACK_INDEX: usize = 2;

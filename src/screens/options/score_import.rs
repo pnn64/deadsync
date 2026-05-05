@@ -117,18 +117,22 @@ pub(super) fn build_score_import_overlay_actors(
     let show_speed_row = total > 0 || done > 0;
     let speed_text = if show_speed_row {
         // Use the smoothed displayed value so the speed readout doesn't spike
-        // every time a bulk chunk lands. Once `done` is set the smoothing
-        // snaps to truth so the final number matches the summary.
-        let smoothed_done = score_import.displayed_done.max(0.0);
-        let rate = if elapsed > 0.0 {
-            smoothed_done / elapsed
-        } else {
+        // every time a bulk chunk lands. Once `done` is set the worker has
+        // stopped, so report 0 immediately rather than the historical average.
+        let rate = if score_import.done {
             0.0
+        } else {
+            let smoothed_done = score_import.displayed_done.max(0.0);
+            if elapsed > 0.0 {
+                smoothed_done / elapsed
+            } else {
+                0.0
+            }
         };
         tr_fmt(
             "SelectMusic",
             "LoadingSpeed",
-            &[("speed", &format!("{rate:.1}"))],
+            &[("speed", &format!("{rate:.0}"))],
         )
         .to_string()
     } else {
@@ -267,6 +271,17 @@ pub(super) fn build_score_import_overlay_actors(
         horizalign(center):
         z(301)
     ));
+    if score_import.done {
+        out.push(act!(text:
+            font("miso"):
+            settext(tr("OptionsScoreImport", "PressStartToDismiss")):
+            align(0.5, 0.5):
+            xy(screen_width() * 0.5, bar_cy + 92.0):
+            zoom(0.9):
+            horizalign(center):
+            z(301)
+        ));
+    }
     out
 }
 

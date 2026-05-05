@@ -4961,6 +4961,11 @@ where
     let mut canceled = false;
 
     'packs: for (pack_idx, (pack_name, hashes)) in pack_chart_groups.into_iter().enumerate() {
+        let pack_chart_count = hashes.len();
+        let mut pack_hits = 0usize;
+        let mut pack_misses = 0usize;
+        let mut pack_failures = 0usize;
+
         for chunk in hashes.chunks(ARROWCLOUD_BULK_MAX_HASHES) {
             if should_cancel() {
                 canceled = true;
@@ -4999,25 +5004,33 @@ where
                     }
                     imported_scores += hits;
                     missing_scores += misses;
+                    pack_hits += hits;
+                    pack_misses += misses;
                     debug!(
-                        "ArrowCloud /v1/retrieve-scores chunk={} took={:.0}ms hits={} misses={} pack='{}'",
+                        "ArrowCloud /v1/retrieve-scores pack={}/{} pack_name='{}' chunk={} took={:.0}ms hits={} misses={}",
+                        pack_idx + 1,
+                        total_packs,
+                        pack_name,
                         chunk_vec.len(),
                         request_elapsed.as_secs_f32() * 1000.0,
                         hits,
                         misses,
-                        pack_name,
                     );
                     format!(
-                        "ArrowCloud: pack '{pack_name}' chunk of {} charts -> {hits} hit, {misses} missing ({:.0}ms).",
-                        chunk_vec.len(),
+                        "Pack {}/{}: {pack_name} -> {hits} hit, {misses} missing ({:.0}ms)",
+                        pack_idx + 1,
+                        total_packs,
                         request_elapsed.as_secs_f32() * 1000.0,
                     )
                 }
                 Err(e) => {
                     let request_elapsed = request_started.elapsed();
                     failed_requests += 1;
+                    pack_failures += 1;
                     let msg = format!(
-                        "ArrowCloud bulk request failed for pack '{pack_name}' (chunk of {} charts, {:.0}ms): {e}",
+                        "Pack {}/{}: {pack_name} request failed ({} charts, {:.0}ms): {e}",
+                        pack_idx + 1,
+                        total_packs,
                         chunk_vec.len(),
                         request_elapsed.as_secs_f32() * 1000.0,
                     );
@@ -5037,6 +5050,17 @@ where
             });
             debug!("{detail}");
         }
+
+        debug!(
+            "Pack {}/{} complete: {pack_name} ({pack_chart_count} charts -> {pack_hits} hit, {pack_misses} missing{}).",
+            pack_idx + 1,
+            total_packs,
+            if pack_failures > 0 {
+                format!(", {pack_failures} failed")
+            } else {
+                String::new()
+            },
+        );
     }
 
     Ok(ScoreBulkImportSummary {

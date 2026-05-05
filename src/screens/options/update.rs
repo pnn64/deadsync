@@ -186,13 +186,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     }
     if let Some(score_import) = state.score_import_ui.as_mut() {
         poll_score_import_ui(score_import, dt);
-        if score_import.done
-            && score_import
-                .done_since
-                .is_some_and(|at| at.elapsed().as_secs_f32() >= SCORE_IMPORT_DONE_OVERLAY_SECONDS)
-        {
-            state.score_import_ui = None;
-        }
+        // No auto-dismiss: once `done`, the overlay sits until the user
+        // confirms via input (handled in input.rs).
         return None;
     }
     if shared_pack_sync::poll(&mut state.pack_sync_overlay) {
