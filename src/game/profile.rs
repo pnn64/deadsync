@@ -4705,6 +4705,162 @@ pub fn rename_local_profile(id: &str, display_name: &str) -> Result<(), std::io:
     Ok(())
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ProfileCredentials {
+    pub display_name: String,
+    pub gs_api_key: String,
+    pub gs_username: String,
+    pub gs_is_pad_player: bool,
+    pub ac_api_key: String,
+}
+
+/// Reads the on-disk credential fields for a local profile id.
+pub fn read_local_profile_credentials(
+    id: &str,
+) -> Result<ProfileCredentials, std::io::Error> {
+    if !is_local_profile_id(id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Invalid local profile id",
+        ));
+    }
+    let profile_ini = profile_ini_path(id);
+    if !profile_ini.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Profile does not exist",
+        ));
+    }
+    let mut creds = ProfileCredentials::default();
+
+    let mut profile_conf = SimpleIni::new();
+    if profile_conf.load(&profile_ini).is_ok() {
+        creds.display_name = profile_conf
+            .get("userprofile", "DisplayName")
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+    }
+
+    let mut gs = SimpleIni::new();
+    if gs.load(groovestats_ini_path(id)).is_ok() {
+        creds.gs_api_key = gs
+            .get("GrooveStats", "ApiKey")
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        creds.gs_username = gs
+            .get("GrooveStats", "Username")
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        creds.gs_is_pad_player =
+            parse_groovestats_is_pad_player(gs.get("GrooveStats", "IsPadPlayer"), false);
+    }
+
+    let mut ac = SimpleIni::new();
+    if ac.load(arrowcloud_ini_path(id)).is_ok() {
+        creds.ac_api_key = ac
+            .get("ArrowCloud", "ApiKey")
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+    }
+
+    Ok(creds)
+}
+
+/// Persists credential fields for a local profile id. Rewrites
+/// `groovestats.ini` and `arrowcloud.ini` while preserving unknown keys
+/// outside the canonical `[GrooveStats]` / `[ArrowCloud]` sections, and
+/// renames the profile via `rename_local_profile` when the display name
+/// has changed. If the profile is currently active for either side, the
+/// in-memory `Profile` is also updated so subsequent network requests use
+/// the new credentials immediately.
+pub fn write_local_profile_credentials(
+    id: &str,
+    creds: &ProfileCredentials,
+) -> Result<(), std::io::Error> {
+    if !is_local_profile_id(id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Invalid local profile id",
+        ));
+    }
+    let profile_ini = profile_ini_path(id);
+    if !profile_ini.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Profile does not exist",
+        ));
+    }
+
+    let new_display_name = creds.display_name.trim();
+    if new_display_name.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Display name is empty",
+        ));
+    }
+
+    let current_display_name = SimpleIni::new()
+        .load(&profile_ini)
+        .ok()
+        .and_then(|()| {
+            let mut conf = SimpleIni::new();
+            conf.load(&profile_ini).ok()?;
+            conf.get("userprofile", "DisplayName")
+                .map(|s| s.trim().to_string())
+        })
+        .unwrap_or_default();
+    if new_display_name != current_display_name {
+        rename_local_profile(id, new_display_name)?;
+    }
+
+    let mut gs_content = String::new();
+    gs_content.push_str("[GrooveStats]\n");
+    gs_content.push_str(&format!("ApiKey={}\n", creds.gs_api_key.trim()));
+    gs_content.push_str(&format!(
+        "IsPadPlayer={}\n",
+        if creds.gs_is_pad_player { "1" } else { "0" }
+    ));
+    gs_content.push_str(&format!("Username={}\n", creds.gs_username.trim()));
+    gs_content.push('\n');
+    fs::write(groovestats_ini_path(id), gs_content)?;
+
+    let mut ac_content = String::new();
+    ac_content.push_str("[ArrowCloud]\n");
+    ac_content.push_str(&format!("ApiKey={}\n", creds.ac_api_key.trim()));
+    ac_content.push('\n');
+    fs::write(arrowcloud_ini_path(id), ac_content)?;
+
+    // If this profile is currently the active P1 or P2 profile, mirror the
+    // new credentials into the in-memory Profile so subsequent network
+    // requests pick them up without restarting.
+    let mut sides_to_update: Vec<PlayerSide> = Vec::new();
+    if active_local_profile_id_for_side(PlayerSide::P1)
+        .as_deref()
+        .is_some_and(|active_id| active_id == id)
+    {
+        sides_to_update.push(PlayerSide::P1);
+    }
+    if active_local_profile_id_for_side(PlayerSide::P2)
+        .as_deref()
+        .is_some_and(|active_id| active_id == id)
+    {
+        sides_to_update.push(PlayerSide::P2);
+    }
+    if !sides_to_update.is_empty() {
+        let mut profiles = lock_profiles();
+        for side in sides_to_update {
+            let p = &mut profiles[side_ix(side)];
+            p.display_name = new_display_name.to_string();
+            p.groovestats_api_key.clone_from(&creds.gs_api_key);
+            p.groovestats_username.clone_from(&creds.gs_username);
+            p.groovestats_is_pad_player = creds.gs_is_pad_player;
+            p.arrowcloud_api_key.clone_from(&creds.ac_api_key);
+        }
+    }
+
+    Ok(())
+}
+
 pub fn delete_local_profile(id: &str) -> Result<(), std::io::Error> {
     if !is_local_profile_id(id) {
         return Err(std::io::Error::new(

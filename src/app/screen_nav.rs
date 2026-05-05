@@ -1,8 +1,8 @@
 use super::{
     App, Command, CurrentScreen, FADE_OUT_DURATION, MENU_TO_SELECT_COLOR_OUT_DURATION, credits,
-    evaluation, evaluation_summary, gameover, gameplay, init, initials, input_screen,
-    manage_local_profiles, mappings, menu, options, player_options, profile_load, sandbox,
-    select_color, select_course, select_mode, select_music, select_profile, select_style,
+    edit_profile, evaluation, evaluation_summary, gameover, gameplay, init, initials,
+    input_screen, manage_local_profiles, mappings, menu, options, player_options, profile_load,
+    sandbox, select_color, select_course, select_mode, select_music, select_profile, select_style,
 };
 use crate::assets::visual_styles;
 use crate::config;
@@ -139,6 +139,7 @@ impl App {
             CurrentScreen::Menu
                 | CurrentScreen::Options
                 | CurrentScreen::ManageLocalProfiles
+                | CurrentScreen::EditProfile
                 | CurrentScreen::Mappings
                 | CurrentScreen::Input
         )
@@ -209,6 +210,10 @@ impl App {
                 .screens
                 .manage_local_profiles_state
                 .active_color_index = color_index;
+        } else if target_screen == CurrentScreen::EditProfile {
+            let color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.edit_profile_state = edit_profile::init();
+            self.state.screens.edit_profile_state.active_color_index = color_index;
         } else if target_screen == CurrentScreen::SelectProfile {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
             self.state.screens.select_profile_state = select_profile::init();
@@ -377,6 +382,8 @@ impl App {
             || (from == CurrentScreen::Mappings && to == CurrentScreen::Options)
             || (from == CurrentScreen::Options && to == CurrentScreen::ManageLocalProfiles)
             || (from == CurrentScreen::ManageLocalProfiles && to == CurrentScreen::Options)
+            || (from == CurrentScreen::ManageLocalProfiles && to == CurrentScreen::EditProfile)
+            || (from == CurrentScreen::EditProfile && to == CurrentScreen::ManageLocalProfiles)
     }
 
     fn start_actor_fade(&mut self, from: CurrentScreen, target: CurrentScreen) {
@@ -485,6 +492,7 @@ impl App {
             CurrentScreen::Options => options::out_transition(),
             CurrentScreen::Credits => credits::out_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::out_transition(),
+            CurrentScreen::EditProfile => edit_profile::out_transition(),
             CurrentScreen::Mappings => mappings::out_transition(),
             CurrentScreen::PlayerOptions => player_options::out_transition(),
             CurrentScreen::SelectProfile => select_profile::out_transition(),
@@ -522,6 +530,7 @@ impl App {
             CurrentScreen::Options => options::in_transition(),
             CurrentScreen::Credits => credits::in_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),
+            CurrentScreen::EditProfile => edit_profile::in_transition(),
             CurrentScreen::Mappings => mappings::in_transition(),
             CurrentScreen::PlayerOptions => player_options::in_transition(),
             CurrentScreen::SelectProfile => select_profile::in_transition(),
