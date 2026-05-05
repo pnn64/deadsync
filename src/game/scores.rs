@@ -609,6 +609,83 @@ fn set_cached_ac_scores_for_profile_bulk(
     save_ac_score_index(&ac_score_index_path_for_profile(profile_id), &snapshot);
 }
 
+/// Update the AC cache after a successful score submit.
+///
+/// Builds an `ArrowCloudScores` from the gameplay-computed ITG / EX / HardEX
+/// percents and merges it with the existing cached entry, keeping the higher
+/// percent per leaderboard so a worse follow-up play doesn't overwrite a
+/// better stored score (parity with [`cache_gs_score_for_profile`]).
+pub(super) fn cache_arrowcloud_scores_from_submit(
+    profile_id: &str,
+    chart_hash: &str,
+    itg_percent: f64,
+    ex_percent: f64,
+    hard_ex_percent: f64,
+    is_fail: bool,
+    submitted_at: chrono::DateTime<chrono::Utc>,
+) {
+    let make_score = |percent: f64| -> Option<ArrowCloudScore> {
+        if !percent.is_finite() {
+            return None;
+        }
+        let clamped = percent.clamp(0.0, 100.0);
+        Some(ArrowCloudScore {
+            score_percent: clamped / 100.0,
+            server_grade: None, // The submit response is best-effort: we
+            // don't decode the server's chosen grade here.
+            played_at: Some(submitted_at),
+            play_id: None,
+            is_fail,
+        })
+    };
+
+    let new_scores = ArrowCloudScores {
+        itg: make_score(itg_percent),
+        ex: make_score(ex_percent),
+        hard_ex: make_score(hard_ex_percent),
+    };
+
+    ensure_ac_score_cache_loaded_for_profile(profile_id);
+    let merged = {
+        let mut state = AC_SCORE_CACHE.lock().unwrap();
+        let Some(map) = state.loaded_profiles.get_mut(profile_id) else {
+            return;
+        };
+        let entry = map.entry(chart_hash.to_string()).or_default();
+        merge_arrowcloud_score_slot(&mut entry.itg, new_scores.itg);
+        merge_arrowcloud_score_slot(&mut entry.ex, new_scores.ex);
+        merge_arrowcloud_score_slot(&mut entry.hard_ex, new_scores.hard_ex);
+        map.clone()
+    };
+    save_ac_score_index(&ac_score_index_path_for_profile(profile_id), &merged);
+}
+
+#[inline]
+fn merge_arrowcloud_score_slot(
+    existing: &mut Option<ArrowCloudScore>,
+    incoming: Option<ArrowCloudScore>,
+) {
+    let Some(new_score) = incoming else {
+        return;
+    };
+    match existing {
+        None => *existing = Some(new_score),
+        Some(prev) => {
+            // Failed scores never overwrite a non-failed score with the same
+            // or higher percent. Otherwise, keep whichever percent is higher.
+            let prev_failed = prev.is_fail;
+            let new_failed = new_score.is_fail;
+            if prev_failed && !new_failed {
+                *prev = new_score;
+            } else if !prev_failed && new_failed {
+                // Keep prev: the existing non-failed score wins.
+            } else if new_score.score_percent > prev.score_percent {
+                *prev = new_score;
+            }
+        }
+    }
+}
+
 // --- Local score cache (on-disk, one file per play) ---
 
 #[derive(Clone, Copy, Debug, Encode, Decode)]
@@ -6085,6 +6162,59 @@ mod tests {
         let (decoded, _): (ArrowCloudScore, _) =
             bincode::decode_from_slice(&bytes, cfg).unwrap();
         assert_eq!(decoded, original);
+    }
+
+    fn ac_score(percent_0_1: f64, is_fail: bool) -> ArrowCloudScore {
+        ArrowCloudScore {
+            score_percent: percent_0_1,
+            server_grade: None,
+            played_at: None,
+            play_id: None,
+            is_fail,
+        }
+    }
+
+    #[test]
+    fn merge_arrowcloud_score_slot_inserts_when_empty() {
+        let mut slot: Option<ArrowCloudScore> = None;
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.95, false)));
+        assert!(slot.is_some());
+        assert!((slot.unwrap().score_percent - 0.95).abs() < 1e-9);
+    }
+
+    #[test]
+    fn merge_arrowcloud_score_slot_keeps_higher_percent() {
+        let mut slot = Some(ac_score(0.99, false));
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.97, false)));
+        assert!((slot.unwrap().score_percent - 0.99).abs() < 1e-9);
+    }
+
+    #[test]
+    fn merge_arrowcloud_score_slot_overwrites_lower_percent() {
+        let mut slot = Some(ac_score(0.90, false));
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.92, false)));
+        assert!((slot.unwrap().score_percent - 0.92).abs() < 1e-9);
+    }
+
+    #[test]
+    fn merge_arrowcloud_score_slot_failed_does_not_overwrite_passed() {
+        let mut slot = Some(ac_score(0.85, false));
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.95, true)));
+        assert!(!slot.unwrap().is_fail, "failed score must not overwrite passed");
+    }
+
+    #[test]
+    fn merge_arrowcloud_score_slot_passed_overwrites_failed() {
+        let mut slot = Some(ac_score(0.85, true));
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.50, false)));
+        assert!(!slot.unwrap().is_fail, "non-failed score must replace failed");
+    }
+
+    #[test]
+    fn merge_arrowcloud_score_slot_ignores_none() {
+        let mut slot = Some(ac_score(0.85, false));
+        merge_arrowcloud_score_slot(&mut slot, None);
+        assert!((slot.unwrap().score_percent - 0.85).abs() < 1e-9);
     }
 
     #[test]
