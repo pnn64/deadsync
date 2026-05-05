@@ -1151,12 +1151,14 @@ pub fn prewarm_select_music_score_caches() {
     if let Some(profile_id) = p1_profile_id.as_deref() {
         ensure_local_score_cache_loaded(profile_id);
         ensure_gs_score_cache_loaded_for_profile(profile_id);
+        ensure_ac_score_cache_loaded_for_profile(profile_id);
     }
     if let Some(profile_id) = p2_profile_id.as_deref()
         && p1_profile_id.as_deref() != Some(profile_id)
     {
         ensure_local_score_cache_loaded(profile_id);
         ensure_gs_score_cache_loaded_for_profile(profile_id);
+        ensure_ac_score_cache_loaded_for_profile(profile_id);
     }
 
     ensure_machine_local_score_cache_loaded();
