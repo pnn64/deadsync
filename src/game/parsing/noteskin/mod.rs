@@ -1502,8 +1502,7 @@ impl ReceptorPulse {
         if cycle <= f32::EPSILON {
             return self.effect_color2;
         }
-        let period = self.effect_period.max(f32::EPSILON);
-        let phase = (beat + self.effect_offset).rem_euclid(period) / period * cycle;
+        let phase = (beat + self.effect_offset).rem_euclid(cycle);
 
         let ramp_to_half = self.ramp_to_half.max(0.0);
         let hold_at_half = self.hold_at_half.max(0.0);
@@ -1541,12 +1540,12 @@ impl Default for ReceptorPulse {
             effect_color1: [1.0, 1.0, 1.0, 1.0],
             effect_color2: [1.0, 1.0, 1.0, 1.0],
             effect_period: 1.0,
-            ramp_to_half: 0.25,
-            hold_at_half: 0.5,
-            ramp_to_full: 0.0,
+            ramp_to_half: 0.5,
+            hold_at_half: 0.0,
+            ramp_to_full: 0.5,
             hold_at_full: 0.0,
-            hold_at_zero: 0.25,
-            effect_offset: -0.25,
+            hold_at_zero: 0.0,
+            effect_offset: 0.0,
         }
     }
 }
@@ -3163,7 +3162,13 @@ fn itg_receptor_pulse_from_script(command: &str) -> ReceptorPulse {
                 ScriptEffectMod::EffectColor1(color) => pulse.effect_color1 = color,
                 ScriptEffectMod::EffectColor2(color) => pulse.effect_color2 = color,
                 ScriptEffectMod::EffectPeriod(v) => {
-                    pulse.effect_period = v.max(f32::EPSILON);
+                    let period = v.max(f32::EPSILON);
+                    pulse.effect_period = period;
+                    pulse.ramp_to_half = period * 0.5;
+                    pulse.hold_at_half = 0.0;
+                    pulse.ramp_to_full = period * 0.5;
+                    pulse.hold_at_full = 0.0;
+                    pulse.hold_at_zero = 0.0;
                 }
                 ScriptEffectMod::EffectOffset(v) => {
                     pulse.effect_offset = v;
@@ -3174,6 +3179,7 @@ fn itg_receptor_pulse_from_script(command: &str) -> ReceptorPulse {
                     pulse.ramp_to_full = v[2].max(0.0);
                     pulse.hold_at_full = v[3].max(0.0);
                     pulse.hold_at_zero = v[4].max(0.0);
+                    pulse.effect_period = pulse.total_period().max(f32::EPSILON);
                 }
                 _ => {}
             }
@@ -6464,8 +6470,9 @@ mod tests {
         ModelTweenSegment, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, Quantization,
         SpriteDefinition, SpriteSlot, SpriteSource, Style, clear_itg_runtime_caches,
         itg_apply_state_properties_from_script, itg_model_draw_program,
-        itg_register_texture_dims_for_path, load_itg, load_itg_data_cached,
-        load_itg_model_slots_from_path, load_itg_skin, parse_explosion_animation,
+        itg_receptor_pulse_from_script, itg_register_texture_dims_for_path, load_itg,
+        load_itg_data_cached, load_itg_model_slots_from_path, load_itg_skin,
+        parse_explosion_animation,
     };
     use std::collections::{HashMap, HashSet};
     use std::fs;
@@ -7018,6 +7025,31 @@ return t
 
         let _ = fs::remove_dir_all(&root);
         clear_itg_runtime_caches();
+    }
+
+    #[test]
+    fn receptor_pulse_effecttiming_recalculates_period() {
+        let pulse = itg_receptor_pulse_from_script(
+            "effectclock,'beat';diffuseramp;effectcolor1,0.1,0.1,0.1,1;\
+             effectcolor2,1,1,1,1;effectperiod,0.5;\
+             effecttiming,0.25,0.50,0,0.25;effectoffset,-0.25",
+        );
+
+        assert!(
+            (pulse.effect_period - 1.0).abs() <= 1e-6,
+            "ITG SetEffectTiming should replace the prior effectperiod"
+        );
+        let beat_0 = pulse.color_for_beat(0.0);
+        let beat_half = pulse.color_for_beat(0.5);
+        let beat_1 = pulse.color_for_beat(1.0);
+        assert!(
+            (beat_0[0] - beat_1[0]).abs() <= 1e-6,
+            "one full cycle should take one beat"
+        );
+        assert!(
+            (beat_0[0] - beat_half[0]).abs() > 0.2,
+            "half a beat should not complete the cycle; got {beat_0:?} and {beat_half:?}"
+        );
     }
 
     #[test]
