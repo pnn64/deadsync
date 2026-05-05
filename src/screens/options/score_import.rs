@@ -80,6 +80,25 @@ impl ScoreImportUiState {
 /// chunks that arrive in <1s but visibly fills across multi-second waits.
 const SCORE_IMPORT_PROGRESS_TAU: f32 = 0.4;
 
+/// Format an ETA in seconds as a compact human string (e.g. ``45s``,
+/// ``2m 13s``, ``1h 04m``). Returns ``--`` for absurdly large values.
+fn format_eta(secs: u64) -> String {
+    if secs >= 24 * 60 * 60 {
+        return "--".to_string();
+    }
+    if secs < 60 {
+        return format!("{secs}s");
+    }
+    let mins = secs / 60;
+    let rem_s = secs % 60;
+    if mins < 60 {
+        return format!("{mins}m {rem_s:02}s");
+    }
+    let hours = mins / 60;
+    let rem_m = mins % 60;
+    format!("{hours}h {rem_m:02}m")
+}
+
 #[inline(always)]
 pub(super) fn score_import_progress(
     score_import: &ScoreImportUiState,
@@ -129,12 +148,27 @@ pub(super) fn build_score_import_overlay_actors(
                 0.0
             }
         };
-        tr_fmt(
+        let mut text = tr_fmt(
             "SelectMusic",
             "LoadingSpeed",
             &[("speed", &format!("{rate:.0}"))],
         )
-        .to_string()
+        .to_string();
+        if !score_import.done && total > 0 && rate > 0.0 {
+            let remaining = total.saturating_sub(done) as f32;
+            if remaining > 0.0 {
+                let eta_secs = (remaining / rate).round() as u64;
+                text = format!(
+                    "{text}  \u{2022}  {}",
+                    tr_fmt(
+                        "OptionsScoreImport",
+                        "ImportEta",
+                        &[("eta", &format_eta(eta_secs))],
+                    ),
+                );
+            }
+        }
+        text
     } else {
         String::new()
     };
