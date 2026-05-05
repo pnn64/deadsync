@@ -1788,6 +1788,11 @@ fn pulse_zoom_for_y(y: f32, visual: &VisualEffects) -> f32 {
 }
 
 #[inline(always)]
+fn arrow_effect_zoom(visual: &VisualEffects, local_col: usize, y: f32) -> f32 {
+    tiny_zoom_for_col(visual, local_col) * pulse_zoom_for_y(y, visual)
+}
+
+#[inline(always)]
 fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
     if world_z.abs() <= f32::EPSILON {
         return actor;
@@ -4304,6 +4309,7 @@ pub fn build_bundles(
                 } else {
                     1.0
                 };
+                let receptor_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
                 let receptor_slot = &receptor_ns.receptor_off[i];
                 let receptor_reverse = receptor_ns
                     .receptor_off_reverse
@@ -4324,8 +4330,8 @@ pub fn build_bundles(
                 // dance/default) instead of being normalized to arrow height.
                 let base_receptor_size = scale_explosion(logical_slot_size(receptor_slot));
                 let receptor_size = [
-                    base_receptor_size[0] * receptor_draw.zoom[0],
-                    base_receptor_size[1] * receptor_draw.zoom[1],
+                    base_receptor_size[0] * receptor_effect_zoom * receptor_draw.zoom[0],
+                    base_receptor_size[1] * receptor_effect_zoom * receptor_draw.zoom[1],
                 ];
                 let receptor_color = receptor_ns.receptor_pulse.color_for_beat(current_beat);
                 let alpha = receptor_color[3] * receptor_draw.tint[3] * receptor_alpha;
@@ -4335,11 +4341,12 @@ pub fn build_bundles(
                     && receptor_size[1] > f32::EPSILON
                 {
                     let [sin_r, cos_r] = receptor_slot.base_rot_sin_cos();
+                    let offset_scale = field_zoom * receptor_effect_zoom;
                     let offset = [
-                        receptor_draw.pos[0] * field_zoom * cos_r
-                            - receptor_draw.pos[1] * field_zoom * sin_r,
-                        receptor_draw.pos[0] * field_zoom * sin_r
-                            + receptor_draw.pos[1] * field_zoom * cos_r,
+                        receptor_draw.pos[0] * offset_scale * cos_r
+                            - receptor_draw.pos[1] * offset_scale * sin_r,
+                        receptor_draw.pos[0] * offset_scale * sin_r
+                            + receptor_draw.pos[1] * offset_scale * cos_r,
                     ];
                     let center = [
                         receptor_center[0] + offset[0],
@@ -6437,8 +6444,7 @@ pub fn build_bundles(
                     }
                     let column_center_x = lane_center_x_from_travel(col_idx, raw_travel_offset);
                     let note_world_z = world_z_for_adjusted_travel(col_idx, travel_offset);
-                    let col_tiny_zoom = tiny_zoom_for_col(&visual, col_idx);
-                    let col_effect_zoom = col_tiny_zoom * pulse_zoom_for_y(travel_offset, &visual);
+                    let col_effect_zoom = arrow_effect_zoom(&visual, col_idx, travel_offset);
                     let col_note_scale = field_zoom * col_effect_zoom;
                     let col_target_arrow_px = target_arrow_px * col_effect_zoom;
                     let scale_mine_slot_for_note = |slot: &SpriteSlot| -> [f32; 2] {
@@ -7994,16 +8000,16 @@ mod tests {
     use super::{
         MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
-        append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
-        calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom, confusion_rotation_deg,
-        hallway_judgment_zoom, hold_body_segment_budget, hold_draw_span, hold_head_render_flags,
-        hold_segment_pose, hold_strip_actor, hold_strip_row_3d, hold_tail_cap_bounds,
-        hud_layout_ys, hud_y, judgment_actor_zoom, judgment_tilt_rotation_deg, let_go_head_beat,
-        maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_alpha,
-        note_slot_base_size, note_world_z_for_bumpy, note_x_extra, offset_center,
-        predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts,
-        receptor_row_center, tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col,
-        tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
+        append_mini_part, append_perspective_parts, append_turn_parts, arrow_effect_zoom,
+        bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
+        confusion_rotation_deg, hallway_judgment_zoom, hold_body_segment_budget, hold_draw_span,
+        hold_head_render_flags, hold_segment_pose, hold_strip_actor, hold_strip_row_3d,
+        hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
+        judgment_tilt_rotation_deg, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped,
+        move_x_extra, move_y_extra, note_alpha, note_slot_base_size, note_world_z_for_bumpy,
+        note_x_extra, offset_center, predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y,
+        push_transform_parts, receptor_row_center, tap_judgment_rows, tap_part_for_note_type,
+        tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
         zmod_subtractive_counter_state,
     };
     use crate::engine::gfx::BlendMode;
@@ -8588,6 +8594,16 @@ mod tests {
         visual.tiny_cols[1] = 2.5;
         assert!((tiny_zoom_for_col(&visual, 1) - 0.5_f32.powf(2.0)).abs() <= 1e-6);
         assert!((tiny_zoom_for_col(&visual, 0) - 0.5_f32.powf(-0.5)).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn receptor_arrow_effect_zoom_matches_note_zoom_at_targets() {
+        let visual = VisualEffects {
+            tiny: 1.0,
+            pulse_outer: 1.0,
+            ..VisualEffects::default()
+        };
+        assert!((arrow_effect_zoom(&visual, 0, 0.0) - 0.5).abs() <= 1e-6);
     }
 
     #[test]
