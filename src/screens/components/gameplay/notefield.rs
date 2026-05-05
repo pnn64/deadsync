@@ -2054,6 +2054,27 @@ fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
 }
 
 #[inline(always)]
+fn column_cue_height() -> f32 {
+    (screen_height() - COLUMN_CUE_Y_OFFSET).max(0.0)
+}
+
+#[inline(always)]
+fn column_cue_reverse_bottom_y(lane_width: f32, notefield_offset_y: f32) -> f32 {
+    // Simply Love rotates a top-aligned quad around the actor origin. DeadSync's
+    // sprite fast path rotates around the rect center, so reverse cues are drawn
+    // unrotated from their equivalent top edge instead.
+    COLUMN_CUE_Y_OFFSET * 3.0
+        + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE
+        + lane_width * 0.5
+        + notefield_offset_y
+}
+
+#[inline(always)]
+fn column_cue_reverse_top_y(lane_width: f32, cue_height: f32, notefield_offset_y: f32) -> f32 {
+    column_cue_reverse_bottom_y(lane_width, notefield_offset_y) - cue_height
+}
+
+#[inline(always)]
 const fn timing_window_from_num(n: usize) -> TimingWindow {
     match n {
         0 => TimingWindow::W0,
@@ -4180,7 +4201,7 @@ pub fn build_bundles(
                 let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
                 if alpha_mul > 0.0 {
                     let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-                    let cue_height = (screen_height() - COLUMN_CUE_Y_OFFSET).max(0.0);
+                    let cue_height = column_cue_height();
                     let mut countdown_text: Option<(f32, f32, i32)> = None;
 
                     if duration_real >= 5.0 {
@@ -4220,17 +4241,16 @@ pub fn build_bundles(
                             [0.3, 1.0, 1.0, alpha]
                         };
                         if column_dirs[local_col] < 0.0 {
-                            let reverse_y = COLUMN_CUE_Y_OFFSET
-                                + COLUMN_CUE_Y_OFFSET * 2.0
-                                + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE
-                                + lane_width * 0.5
-                                + notefield_offset_y;
+                            let reverse_y = column_cue_reverse_top_y(
+                                lane_width,
+                                cue_height,
+                                notefield_offset_y,
+                            );
                             actors.push(act!(quad:
                                 align(0.5, 0.0):
                                 xy(x, reverse_y):
                                 zoomto(lane_width, cue_height):
-                                fadebottom(0.333):
-                                rotationz(180):
+                                fadetop(0.333):
                                 diffuse(color[0], color[1], color[2], color[3]):
                                 z(Z_COLUMN_CUE)
                             ));
@@ -8247,6 +8267,18 @@ mod tests {
     fn receptor_glow_draws_under_hold_body() {
         assert!(Z_RECEPTOR < Z_HOLD_BODY);
         assert!(Z_HOLD_GLOW < Z_HOLD_BODY);
+    }
+
+    #[test]
+    fn reverse_column_cue_bounds_match_simply_love() {
+        let lane_width = 64.0;
+        let cue_height = super::column_cue_height();
+        let top = super::column_cue_reverse_top_y(lane_width, cue_height, 0.0);
+        let bottom = top + cue_height;
+
+        assert!((cue_height - 400.0).abs() <= 1e-6);
+        assert!((top - 17.0).abs() <= 1e-6);
+        assert!((bottom - 417.0).abs() <= 1e-6);
     }
 
     #[test]
