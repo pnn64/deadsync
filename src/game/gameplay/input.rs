@@ -574,16 +574,21 @@ pub(super) fn process_input_edges(
             }
             continue;
         }
+        let mut event_time_source = "queued_audio";
         if song_time_ns_invalid(edge.event_music_time_ns) {
-            edge.event_music_time_ns =
+            if let Some(music_time_ns) =
                 audio::get_music_stream_position_nanos_at_host_nanos(edge.captured_host_nanos)
-                    .unwrap_or_else(|| {
-                        music_time_ns_from_song_clock(
-                            song_clock,
-                            edge.captured_at,
-                            edge.captured_host_nanos,
-                        )
-                    });
+            {
+                edge.event_music_time_ns = music_time_ns;
+                event_time_source = "process_audio";
+            } else {
+                edge.event_music_time_ns = music_time_ns_from_song_clock(
+                    song_clock,
+                    edge.captured_at,
+                    edge.captured_host_nanos,
+                );
+                event_time_source = "song_clock";
+            }
         }
         if song_time_ns_invalid(edge.event_music_time_ns) {
             if input_log {
@@ -605,11 +610,16 @@ pub(super) fn process_input_edges(
         let edge_judges_tap = lane_edge_judges_tap(edge.pressed, slot_was_down);
         let edge_judges_lift = lane_edge_judges_lift(edge.pressed, slot_was_down);
         if input_log {
+            let processed_at = Instant::now();
+            let capture_to_queue_us = elapsed_us_between(edge.queued_at, edge.captured_at);
+            let queue_to_process_us = elapsed_us_between(processed_at, edge.queued_at);
+            let capture_to_process_us = elapsed_us_between(processed_at, edge.captured_at);
             debug!(
                 concat!(
                     "GAMEPLAY INPUT EDGE: lane={} source={:?} slot={} pressed={} ",
                     "lane_was_down={} slot_was_down={} judges_tap={} judges_lift={} ",
-                    "edge_time_s={:.6} current_time_s={:.6} pending={}"
+                    "time_source={} edge_time_s={:.6} current_time_s={:.6} ",
+                    "capture_queue_us={} queue_process_us={} capture_process_us={} pending={}"
                 ),
                 lane_idx,
                 edge.source,
@@ -619,8 +629,12 @@ pub(super) fn process_input_edges(
                 slot_was_down,
                 edge_judges_tap,
                 edge_judges_lift,
+                event_time_source,
                 event_music_time,
                 current_music_time_s(state),
+                capture_to_queue_us,
+                queue_to_process_us,
+                capture_to_process_us,
                 pending.len() + state.pending_edges.len(),
             );
         }
