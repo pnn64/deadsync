@@ -1481,10 +1481,6 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
     music_stream_clock_snapshot_at_nanos(sample_rate, start, valid_at, at_nanos, source, window)
 }
 
-pub fn get_music_stream_position_nanos() -> i64 {
-    get_music_stream_clock_snapshot().music_nanos
-}
-
 pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
     OutputTimingSnapshot {
         backend: OutputTelemetryBackend::load(),
