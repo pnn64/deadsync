@@ -28,10 +28,10 @@ use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
-    SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
-    initials, input as input_screen, manage_local_profiles, mappings, menu, options,
-    player_options, practice, profile_load, sandbox, select_color, select_course, select_mode,
-    select_music, select_profile, select_style,
+    SongOffsetSyncChange, credits, edit_profile, evaluation, evaluation_summary, gameover,
+    gameplay, init, initials, input as input_screen, manage_local_profiles, mappings, menu,
+    options, player_options, practice, profile_load, sandbox, select_color, select_course,
+    select_mode, select_music, select_profile, select_style,
 };
 use winit::{
     application::ApplicationHandler,
@@ -843,6 +843,7 @@ pub struct ScreensState {
     options_state: options::State,
     credits_state: credits::State,
     manage_local_profiles_state: manage_local_profiles::State,
+    edit_profile_state: edit_profile::State,
     mappings_state: mappings::State,
     input_state: input_screen::State,
     player_options_state: Option<player_options::State>,
@@ -2342,6 +2343,9 @@ impl ScreensState {
         let mut manage_local_profiles_state = manage_local_profiles::init();
         manage_local_profiles_state.active_color_index = color_index;
 
+        let mut edit_profile_state = edit_profile::init();
+        edit_profile_state.active_color_index = color_index;
+
         let mut mappings_state = mappings::init();
         mappings_state.active_color_index = color_index;
 
@@ -2371,6 +2375,7 @@ impl ScreensState {
             options_state,
             credits_state,
             manage_local_profiles_state,
+            edit_profile_state,
             mappings_state,
             input_state,
             player_options_state: None,
@@ -2421,6 +2426,10 @@ impl ScreensState {
                 manage_local_profiles::update(&mut self.manage_local_profiles_state, delta_time),
                 false,
             ),
+            CurrentScreen::EditProfile => {
+                edit_profile::update(&mut self.edit_profile_state, delta_time);
+                (None, false)
+            }
             CurrentScreen::Mappings => {
                 mappings::update(&mut self.mappings_state, delta_time);
                 (None, false)
@@ -4436,6 +4445,10 @@ impl App {
                     &ev,
                 )
             }
+            CurrentScreen::EditProfile => crate::screens::edit_profile::handle_input(
+                &mut self.state.screens.edit_profile_state,
+                &ev,
+            ),
             CurrentScreen::Mappings => {
                 crate::screens::mappings::handle_input(&mut self.state.screens.mappings_state, &ev)
             }
@@ -4755,6 +4768,10 @@ impl App {
                 &self.state.screens.manage_local_profiles_state,
                 &self.asset_manager,
                 screen_alpha_multiplier,
+            ),
+            CurrentScreen::EditProfile => edit_profile::get_actors(
+                &self.state.screens.edit_profile_state,
+                &self.asset_manager,
             ),
             CurrentScreen::Mappings => mappings::get_actors(
                 &self.state.screens.mappings_state,
@@ -5615,6 +5632,12 @@ impl App {
                 None,
                 Some(text),
             )
+        } else if self.state.screens.current_screen == CurrentScreen::EditProfile {
+            crate::screens::edit_profile::handle_raw_key_event(
+                &mut self.state.screens.edit_profile_state,
+                None,
+                Some(text),
+            )
         } else if self.state.screens.current_screen == CurrentScreen::SelectMusic {
             crate::screens::select_music::handle_raw_key_event(
                 &mut self.state.screens.select_music_state,
@@ -5700,6 +5723,18 @@ impl App {
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle ManageLocalProfiles raw key action: {e}");
+                }
+                return true;
+            }
+        } else if self.state.screens.current_screen == CurrentScreen::EditProfile {
+            let action = crate::screens::edit_profile::handle_raw_key_event(
+                &mut self.state.screens.edit_profile_state,
+                Some(&raw_key),
+                None,
+            );
+            if !matches!(action, ScreenAction::None) {
+                if let Err(e) = self.handle_action(action, event_loop) {
+                    log::error!("Failed to handle EditProfile raw key action: {e}");
                 }
                 return true;
             }
@@ -6157,6 +6192,10 @@ impl App {
                 .screens
                 .manage_local_profiles_state
                 .active_color_index = color_index;
+        } else if target == CurrentScreen::EditProfile {
+            let color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.edit_profile_state = edit_profile::init();
+            self.state.screens.edit_profile_state.active_color_index = color_index;
         } else if target == CurrentScreen::Mappings {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.mappings_state = mappings::init();
@@ -6363,6 +6402,7 @@ impl App {
             .screens
             .manage_local_profiles_state
             .active_color_index = idx;
+        self.state.screens.edit_profile_state.active_color_index = idx;
         self.state.screens.input_state.active_color_index = idx;
         self.state
             .screens

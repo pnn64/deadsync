@@ -105,6 +105,7 @@ enum NameEntryMode {
 enum ProfileMenuAction {
     SetP1,
     SetP2,
+    Edit,
     Rename,
     Delete,
 }
@@ -113,14 +114,16 @@ fn profile_menu_action_label(action: ProfileMenuAction) -> Arc<str> {
     match action {
         ProfileMenuAction::SetP1 => tr("Profiles", "SetP1"),
         ProfileMenuAction::SetP2 => tr("Profiles", "SetP2"),
+        ProfileMenuAction::Edit => tr("Profiles", "Edit"),
         ProfileMenuAction::Rename => tr("Profiles", "Rename"),
         ProfileMenuAction::Delete => tr("Profiles", "Delete"),
     }
 }
 
-const PROFILE_MENU_ACTIONS: [ProfileMenuAction; 4] = [
+const PROFILE_MENU_ACTIONS: [ProfileMenuAction; 5] = [
     ProfileMenuAction::SetP1,
     ProfileMenuAction::SetP2,
+    ProfileMenuAction::Edit,
     ProfileMenuAction::Rename,
     ProfileMenuAction::Delete,
 ];
@@ -455,12 +458,12 @@ fn move_profile_menu_selected(state: &mut State, dir: NavDirection) {
     };
 }
 
-fn confirm_profile_menu(state: &mut State) {
+fn confirm_profile_menu(state: &mut State) -> ScreenAction {
     let Some(menu) = state.profile_menu.clone() else {
-        return;
+        return ScreenAction::None;
     };
     let Some(action) = PROFILE_MENU_ACTIONS.get(menu.selected_action).copied() else {
-        return;
+        return ScreenAction::None;
     };
 
     match action {
@@ -474,6 +477,7 @@ fn confirm_profile_menu(state: &mut State) {
             refresh_rows(state);
             cancel_profile_menu(state);
             audio::play_sfx("assets/sounds/start.ogg");
+            ScreenAction::None
         }
         ProfileMenuAction::SetP2 => {
             let _ = profile::set_active_profile_for_side(
@@ -485,16 +489,25 @@ fn confirm_profile_menu(state: &mut State) {
             refresh_rows(state);
             cancel_profile_menu(state);
             audio::play_sfx("assets/sounds/start.ogg");
+            ScreenAction::None
+        }
+        ProfileMenuAction::Edit => {
+            cancel_profile_menu(state);
+            crate::screens::edit_profile::set_pending_profile_id(menu.id.clone());
+            audio::play_sfx("assets/sounds/start.ogg");
+            ScreenAction::Navigate(Screen::EditProfile)
         }
         ProfileMenuAction::Rename => {
             state.profile_menu = None;
             begin_name_entry_rename(state, &menu.id, &menu.display_name);
             audio::play_sfx("assets/sounds/start.ogg");
+            ScreenAction::None
         }
         ProfileMenuAction::Delete => {
             state.profile_menu = None;
             begin_delete_confirm(state, &menu.id, &menu.display_name);
             audio::play_sfx("assets/sounds/start.ogg");
+            ScreenAction::None
         }
     }
 }
@@ -655,8 +668,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     }
                     screen_input::ThreeKeyMenuAction::Confirm => {
                         state.menu_lr_undo = 0;
-                        confirm_profile_menu(state);
-                        ScreenAction::None
+                        confirm_profile_menu(state)
                     }
                     screen_input::ThreeKeyMenuAction::Cancel => {
                         undo_profile_menu_move(state, state.menu_lr_undo);
@@ -741,7 +753,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 audio::play_sfx("assets/sounds/change.ogg");
             }
             VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {
-                confirm_profile_menu(state)
+                let action = confirm_profile_menu(state);
+                if !matches!(action, ScreenAction::None) {
+                    return action;
+                }
             }
             _ => {}
         }

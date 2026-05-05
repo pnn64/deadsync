@@ -1,5 +1,6 @@
 pub mod components;
 pub mod credits;
+pub mod edit_profile;
 pub mod evaluation;
 pub mod evaluation_summary;
 pub(crate) mod favorite_code;
@@ -100,6 +101,7 @@ pub enum Screen {
     Options,
     Credits,
     ManageLocalProfiles,
+    EditProfile,
     Init,
     Initials,
     GameOver,
@@ -128,6 +130,7 @@ impl Screen {
             Self::Options => "ScreenOptionsService",
             Self::Credits => "ScreenCredits",
             Self::ManageLocalProfiles => "ScreenOptionsManageProfiles",
+            Self::EditProfile => "ScreenEditProfile",
             Self::Init => "ScreenInit",
             Self::Initials => "ScreenNameEntryTraditional",
             Self::GameOver => "ScreenGameOver",
