@@ -5671,6 +5671,12 @@ fn song_lua_player_transform_matrix(
 
     let pivot_x = playfield_center_x - 0.5 * screen_width();
     let pivot_y = 0.5 * screen_height() - screen_center_y();
+    // ITGmania actor transforms are authored in screen coordinates (Y down).
+    // This matrix is applied in DeadSync world space (Y up), so Z rotation and
+    // actor skews flip sign across the Y axis.
+    let rotation_z_deg = -rotation_z_deg;
+    let skew_x = -skew_x;
+    let skew_y = -skew_y;
     Some(
         Matrix4::from_translation(Vector3::new(translate_x, translate_y, 0.0))
             * Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
@@ -7529,6 +7535,11 @@ mod tests {
         [center[0] + x, center[1] + y]
     }
 
+    fn test_transform_point(matrix: Matrix4, local: [f32; 2]) -> [f32; 2] {
+        let point = matrix * Vector4::new(local[0], local[1], 0.0, 1.0);
+        [point.x, point.y]
+    }
+
     fn test_lobby_player(
         screen_name: &str,
         ready: bool,
@@ -7541,6 +7552,63 @@ mod tests {
             score: None,
             ex_score: None,
         }
+    }
+
+    #[test]
+    fn song_lua_player_rotation_z_matches_itg_screen_space() {
+        let matrix = song_lua_player_transform_matrix(
+            screen_center_x(),
+            screen_center_x(),
+            screen_center_y(),
+            0.0,
+            90.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+        )
+        .expect("rotation should produce a player transform");
+        let point = test_transform_point(matrix, [10.0, 0.0]);
+        assert!(point[0].abs() <= 0.000_1);
+        assert!((point[1] + 10.0).abs() <= 0.000_1);
+    }
+
+    #[test]
+    fn song_lua_player_skews_match_itg_screen_space() {
+        let skew_x_matrix = song_lua_player_transform_matrix(
+            screen_center_x(),
+            screen_center_x(),
+            screen_center_y(),
+            0.0,
+            0.0,
+            0.5,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+        )
+        .expect("skewx should produce a player transform");
+        let point = test_transform_point(skew_x_matrix, [0.0, -20.0]);
+        assert!((point[0] - 10.0).abs() <= 0.000_1);
+        assert!((point[1] + 20.0).abs() <= 0.000_1);
+
+        let skew_y_matrix = song_lua_player_transform_matrix(
+            screen_center_x(),
+            screen_center_x(),
+            screen_center_y(),
+            0.0,
+            0.0,
+            0.0,
+            0.5,
+            1.0,
+            1.0,
+            1.0,
+        )
+        .expect("skewy should produce a player transform");
+        let point = test_transform_point(skew_y_matrix, [20.0, 0.0]);
+        assert!((point[0] - 20.0).abs() <= 0.000_1);
+        assert!((point[1] + 10.0).abs() <= 0.000_1);
     }
 
     fn test_joined_lobby(

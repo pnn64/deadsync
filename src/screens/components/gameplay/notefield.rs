@@ -1893,8 +1893,15 @@ fn push_note_glow_actor(
 }
 
 #[inline(always)]
+fn itg_actor_rotation_z(deg: f32) -> f32 {
+    // ITGmania ArrowEffects returns Actor::rotationz degrees in screen space.
+    // DeadSync applies sprite rotations in world space, where Y is inverted.
+    -deg
+}
+
+#[inline(always)]
 fn confusion_rotation_deg(song_beat: f32, visual: VisualEffects, local_col: usize) -> f32 {
-    let mut rotation = 0.0;
+    let mut itg_rotation = 0.0;
     let col_offset = visual
         .confusion_offset_cols
         .get(local_col)
@@ -1902,16 +1909,16 @@ fn confusion_rotation_deg(song_beat: f32, visual: VisualEffects, local_col: usiz
         .filter(|value| value.is_finite())
         .unwrap_or(0.0);
     if col_offset.abs() > f32::EPSILON {
-        rotation += col_offset * (180.0 / std::f32::consts::PI);
+        itg_rotation += col_offset * (180.0 / std::f32::consts::PI);
     }
     if visual.confusion_offset.abs() > f32::EPSILON {
-        rotation += visual.confusion_offset * (180.0 / std::f32::consts::PI);
+        itg_rotation += visual.confusion_offset * (180.0 / std::f32::consts::PI);
     }
     if visual.confusion.abs() > f32::EPSILON {
         let confusion = (song_beat * visual.confusion).rem_euclid(std::f32::consts::TAU);
-        rotation += confusion * (-180.0 / std::f32::consts::PI);
+        itg_rotation += confusion * (-180.0 / std::f32::consts::PI);
     }
-    rotation
+    itg_actor_rotation_z(itg_rotation)
 }
 
 #[inline(always)]
@@ -1933,7 +1940,7 @@ fn calc_note_rotation_z(
 ) -> f32 {
     let mut r = confusion_rotation_deg(song_beat, visual, local_col);
     if visual.dizzy > f32::EPSILON && !is_hold_head {
-        r += dizzy_rotation_deg(note_beat, song_beat, visual);
+        r += itg_actor_rotation_z(dizzy_rotation_deg(note_beat, song_beat, visual));
     }
     r
 }
@@ -8882,7 +8889,7 @@ mod tests {
 
         assert_eq!(move_x_extra(visual, 1), 32.0);
         assert_eq!(move_y_extra(visual, 1), -16.0);
-        assert!((confusion_rotation_deg(0.0, visual, 1) - 90.0).abs() <= 1e-6);
+        assert!((confusion_rotation_deg(0.0, visual, 1) + 90.0).abs() <= 1e-6);
     }
 
     #[test]
@@ -8962,37 +8969,37 @@ mod tests {
     }
 
     #[test]
-    fn confusion_rotation_matches_itg_scaled_formula() {
+    fn confusion_rotation_converts_itg_formula_to_actor_space() {
         let visual = VisualEffects {
             confusion: 1.5,
             ..VisualEffects::default()
         };
         let rotation = calc_note_rotation_z(visual, 12.0, 3.5, true, 0);
-        let expected = (3.5 * visual.confusion).rem_euclid(std::f32::consts::TAU)
+        let itg_expected = (3.5 * visual.confusion).rem_euclid(std::f32::consts::TAU)
             * (-180.0 / std::f32::consts::PI);
-        assert!((rotation - expected).abs() <= 1e-6);
+        assert!((rotation + itg_expected).abs() <= 1e-6);
     }
 
     #[test]
-    fn confusion_offset_adds_static_rotation() {
+    fn confusion_offset_converts_static_rotation_to_actor_space() {
         let visual = VisualEffects {
-            confusion_offset: std::f32::consts::PI,
+            confusion_offset: std::f32::consts::FRAC_PI_2,
             ..VisualEffects::default()
         };
         let rotation = calc_note_rotation_z(visual, 12.0, 3.5, true, 0);
-        assert!((rotation - 180.0).abs() <= 1e-6);
+        assert!((rotation + 90.0).abs() <= 1e-6);
     }
 
     #[test]
-    fn dizzy_rotation_matches_itg_scaled_formula() {
+    fn dizzy_rotation_converts_itg_formula_to_actor_space() {
         let visual = VisualEffects {
             dizzy: 2.0,
             ..VisualEffects::default()
         };
         let rotation = calc_note_rotation_z(visual, 6.75, 3.5, false, 0);
-        let expected = ((6.75 - 3.5) * visual.dizzy).rem_euclid(std::f32::consts::TAU)
+        let itg_expected = ((6.75 - 3.5) * visual.dizzy).rem_euclid(std::f32::consts::TAU)
             * (180.0 / std::f32::consts::PI);
-        assert!((rotation - expected).abs() <= 1e-6);
+        assert!((rotation + itg_expected).abs() <= 1e-6);
     }
 
     #[test]
