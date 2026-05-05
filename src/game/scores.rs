@@ -4771,72 +4771,30 @@ fn collect_chart_hashes_for_import(
     pack_group_filter: Option<&str>,
     profile_id: &str,
     only_missing_gs_scores: bool,
-) -> Vec<String> {
-    let filter_norm = pack_group_filter
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(str::to_ascii_lowercase);
+) -> Vec<(String, Vec<String>)> {
     let existing_scores = if only_missing_gs_scores {
         cached_gs_chart_hashes_for_profile(profile_id)
     } else {
         HashSet::new()
     };
-
-    let mut chart_hashes = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
-    let song_cache = get_song_cache();
-    for pack in song_cache.iter() {
-        let group_name = pack.group_name.trim();
-        let display_name = if pack.name.trim().is_empty() {
-            group_name
-        } else {
-            pack.name.trim()
-        };
-        if let Some(filter) = filter_norm.as_deref()
-            && group_name.to_ascii_lowercase() != filter
-            && display_name.to_ascii_lowercase() != filter
-        {
-            continue;
-        }
-
-        for song in &pack.songs {
-            for chart in &song.charts {
-                let chart_hash = chart.short_hash.trim();
-                if chart_hash.is_empty() {
-                    continue;
-                }
-                if only_missing_gs_scores && existing_scores.contains(chart_hash) {
-                    continue;
-                }
-                if seen.insert(chart_hash.to_string()) {
-                    chart_hashes.push(chart_hash.to_string());
-                }
-            }
-        }
-    }
-    chart_hashes
+    collect_chart_hashes_per_pack_for_import(pack_group_filter, &existing_scores)
 }
 
-/// Per-pack chart-hash collection for the AC bulk import path.
+/// Per-pack chart-hash collection for score import.
 ///
 /// Returns a vector of `(pack_display_name, chart_hashes)` pairs preserving
 /// song-cache iteration order. Globally deduplicates chart hashes across packs
 /// (first pack wins). Optionally filters by pack group / display name and
-/// skips charts already present in the AC ITG cache when `only_missing` is set.
+/// skips charts present in `existing_scores` (caller supplies the right cache
+/// for the endpoint they're importing into).
 fn collect_chart_hashes_per_pack_for_import(
     pack_group_filter: Option<&str>,
-    profile_id: &str,
-    only_missing: bool,
+    existing_scores: &HashSet<String>,
 ) -> Vec<(String, Vec<String>)> {
     let filter_norm = pack_group_filter
         .map(str::trim)
         .filter(|v| !v.is_empty())
         .map(str::to_ascii_lowercase);
-    let existing_scores = if only_missing {
-        cached_ac_chart_hashes_with_itg_for_profile(profile_id)
-    } else {
-        HashSet::new()
-    };
 
     let mut out: Vec<(String, Vec<String>)> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
@@ -4862,7 +4820,7 @@ fn collect_chart_hashes_per_pack_for_import(
                 if chart_hash.is_empty() {
                     continue;
                 }
-                if only_missing && existing_scores.contains(chart_hash) {
+                if existing_scores.contains(chart_hash) {
                     continue;
                 }
                 if seen.insert(chart_hash.to_string()) {
@@ -4921,8 +4879,13 @@ where
         }
     };
 
+    let existing_scores = if only_missing_scores {
+        cached_ac_chart_hashes_with_itg_for_profile(&profile_id)
+    } else {
+        HashSet::new()
+    };
     let pack_chart_groups =
-        collect_chart_hashes_per_pack_for_import(pack_group.as_deref(), &profile_id, only_missing_scores);
+        collect_chart_hashes_per_pack_for_import(pack_group.as_deref(), &existing_scores);
     let requested_charts: usize = pack_chart_groups.iter().map(|(_, h)| h.len()).sum();
     let total_packs = pack_chart_groups.len();
     let filter_note = if only_missing_scores {
@@ -5115,9 +5078,10 @@ where
     }
 
     let username = profile.groovestats_username.trim().to_string();
-    let chart_hashes =
+    let pack_chart_groups =
         collect_chart_hashes_for_import(pack_group.as_deref(), &profile_id, only_missing_gs_scores);
-    let requested_charts = chart_hashes.len();
+    let requested_charts: usize = pack_chart_groups.iter().map(|(_, h)| h.len()).sum();
+    let total_packs = pack_chart_groups.len();
     let filter_note = if only_missing_gs_scores {
         " (missing GS only)"
     } else {
@@ -5130,9 +5094,8 @@ where
         missing_scores: 0,
         failed_requests: 0,
         detail: format!(
-            "Queued {requested_charts} chart hashes for {} import{}.",
+            "Queued {requested_charts} chart hashes across {total_packs} pack(s) for {} import{filter_note}.",
             endpoint.display_name(),
-            filter_note
         ),
     });
     if requested_charts == 0 {
@@ -5152,80 +5115,98 @@ where
     let mut imported_scores = 0usize;
     let mut missing_scores = 0usize;
     let mut failed_requests = 0usize;
+    let mut processed_charts = 0usize;
     let mut canceled = false;
 
-    for (idx, chart_hash) in chart_hashes.iter().enumerate() {
-        if should_cancel() {
-            canceled = true;
-            debug!(
-                "{} score import canceled after {idx}/{requested_charts} charts.",
-                endpoint.display_name()
-            );
-            break;
-        }
-        wait_for_next_import_request(last_request_started_at);
-        if should_cancel() {
-            canceled = true;
-            debug!(
-                "{} score import canceled after {idx}/{requested_charts} charts.",
-                endpoint.display_name()
-            );
-            break;
-        }
-        last_request_started_at = Some(Instant::now());
-        let detail = match fetch_player_score_from_endpoint(endpoint, &profile, chart_hash) {
-            Ok(Some(score)) => {
-                cache_gs_score_for_profile(&profile_id, chart_hash, score, username.as_str());
-                imported_scores += 1;
-                format!(
-                    "Found {} score for {} on {}.",
-                    endpoint.display_name(),
-                    username,
-                    chart_hash
-                )
-            }
-            Ok(None) => {
-                missing_scores += 1;
-                format!(
-                    "No {} score for {} on {}.",
-                    endpoint.display_name(),
-                    username,
-                    chart_hash
-                )
-            }
-            Err(e) => {
-                failed_requests += 1;
-                let msg = format!(
-                    "{} import request failed for chart {}: {}",
-                    endpoint.display_name(),
-                    chart_hash,
-                    e
-                );
-                warn!("{msg}");
-                msg
-            }
-        };
+    'packs: for (pack_idx, (pack_name, hashes)) in pack_chart_groups.into_iter().enumerate() {
+        let pack_chart_count = hashes.len();
+        let mut pack_hits = 0usize;
+        let mut pack_misses = 0usize;
+        let mut pack_failures = 0usize;
 
-        let done = idx + 1;
-        on_progress(ScoreImportProgress {
-            processed_charts: done,
-            total_charts: requested_charts,
-            imported_scores,
-            missing_scores,
-            failed_requests,
-            detail: detail.clone(),
-        });
-        if done == requested_charts || done % SCORE_IMPORT_PROGRESS_LOG_EVERY == 0 || done == 1 {
-            debug!(
-                "{} bulk import progress for '{}': {done}/{requested_charts} charts (imported={}, missing={}, failed={})",
-                endpoint.display_name(),
-                username,
+        for chart_hash in &hashes {
+            if should_cancel() {
+                canceled = true;
+                debug!(
+                    "{} score import canceled at pack {}/{} after {processed_charts}/{requested_charts} charts.",
+                    endpoint.display_name(),
+                    pack_idx + 1,
+                    total_packs,
+                );
+                break 'packs;
+            }
+            wait_for_next_import_request(last_request_started_at);
+            if should_cancel() {
+                canceled = true;
+                break 'packs;
+            }
+            last_request_started_at = Some(Instant::now());
+            match fetch_player_score_from_endpoint(endpoint, &profile, chart_hash) {
+                Ok(Some(score)) => {
+                    cache_gs_score_for_profile(&profile_id, chart_hash, score, username.as_str());
+                    imported_scores += 1;
+                    pack_hits += 1;
+                }
+                Ok(None) => {
+                    missing_scores += 1;
+                    pack_misses += 1;
+                }
+                Err(e) => {
+                    failed_requests += 1;
+                    pack_failures += 1;
+                    warn!(
+                        "{} import request failed for chart {}: {}",
+                        endpoint.display_name(),
+                        chart_hash,
+                        e,
+                    );
+                }
+            }
+
+            processed_charts += 1;
+            let detail = format!(
+                "Pack {}/{}: {pack_name} -> {pack_hits} hit, {pack_misses} missing{}",
+                pack_idx + 1,
+                total_packs,
+                if pack_failures > 0 {
+                    format!(", {pack_failures} failed")
+                } else {
+                    String::new()
+                },
+            );
+            on_progress(ScoreImportProgress {
+                processed_charts,
+                total_charts: requested_charts,
                 imported_scores,
                 missing_scores,
-                failed_requests
-            );
+                failed_requests,
+                detail,
+            });
+            if processed_charts == requested_charts
+                || processed_charts % SCORE_IMPORT_PROGRESS_LOG_EVERY == 0
+                || processed_charts == 1
+            {
+                debug!(
+                    "{} import progress for '{}': {processed_charts}/{requested_charts} charts (imported={}, missing={}, failed={})",
+                    endpoint.display_name(),
+                    username,
+                    imported_scores,
+                    missing_scores,
+                    failed_requests,
+                );
+            }
         }
-        debug!("{detail}");
+
+        debug!(
+            "Pack {}/{} complete: {pack_name} ({pack_chart_count} charts -> {pack_hits} hit, {pack_misses} missing{}).",
+            pack_idx + 1,
+            total_packs,
+            if pack_failures > 0 {
+                format!(", {pack_failures} failed")
+            } else {
+                String::new()
+            },
+        );
     }
 
     Ok(ScoreBulkImportSummary {
