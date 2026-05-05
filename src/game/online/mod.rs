@@ -8,7 +8,8 @@ pub use arrowcloud::{
     api_base_url as arrowcloud_api_base_url, get_status as get_arrowcloud_status,
     leaderboards_url as arrowcloud_leaderboards_url,
     legacy_leaderboards_url as arrowcloud_legacy_leaderboards_url,
-    submit_url as arrowcloud_submit_url, user_url as arrowcloud_user_url,
+    retrieve_scores_url as arrowcloud_retrieve_scores_url, submit_url as arrowcloud_submit_url,
+    user_url as arrowcloud_user_url,
 };
 pub use groovestats::{
     ConnectionError as GrooveStatsError, ConnectionStatus, Services,

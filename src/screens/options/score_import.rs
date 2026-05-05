@@ -563,11 +563,16 @@ pub(super) fn begin_score_import(state: &mut State, selection: ScoreImportSelect
     let only_missing_gs_scores = selection.only_missing_gs_scores;
 
     log::warn!(
-        "{} score import starting for '{}' (pack: {}, only_missing_gs={}). Hard-limited to 3 requests/sec. For many charts this can take more than one hour.",
+        "{} score import starting for '{}' (pack: {}, only_missing_gs={}). {}",
         endpoint.display_name(),
         profile_name,
         pack_label,
-        if only_missing_gs_scores { "yes" } else { "no" }
+        if only_missing_gs_scores { "yes" } else { "no" },
+        match endpoint {
+            scores::ScoreImportEndpoint::ArrowCloud =>
+                "Bulk-imported per pack at 3 requests/sec (up to 1000 charts per request).",
+            _ => "Hard-limited to 3 requests/sec. For many charts this can take more than one hour.",
+        }
     );
 
     let cancel_requested = Arc::new(AtomicBool::new(false));
