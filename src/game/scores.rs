@@ -4889,7 +4889,7 @@ where
     let requested_charts: usize = pack_chart_groups.iter().map(|(_, h)| h.len()).sum();
     let total_packs = pack_chart_groups.len();
     let filter_note = if only_missing_scores {
-        " (missing AC only)"
+        " (missing only)"
     } else {
         ""
     };
@@ -5083,7 +5083,7 @@ where
     let requested_charts: usize = pack_chart_groups.iter().map(|(_, h)| h.len()).sum();
     let total_packs = pack_chart_groups.len();
     let filter_note = if only_missing_gs_scores {
-        " (missing GS only)"
+        " (missing only)"
     } else {
         ""
     };

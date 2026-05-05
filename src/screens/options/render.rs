@@ -1177,19 +1177,35 @@ pub fn get_actors(
         }
     }
     if let Some(confirm) = &state.score_import_confirm {
-        let prompt_text = format!(
-            "Import ALL packs for {} / {}?\nOnly missing GS scores: {}.\nRate limit is hard-capped at 3 requests per second.\nFor many charts this can take more than one hour.\nSpamming APIs can be problematic.\n\nStart now?",
-            confirm.selection.endpoint.display_name(),
-            if confirm.selection.profile.display_name.is_empty() {
-                confirm.selection.profile.id.as_str()
-            } else {
-                confirm.selection.profile.display_name.as_str()
-            },
-            if confirm.selection.only_missing_gs_scores {
-                "Yes"
-            } else {
-                "No"
+        let endpoint = confirm.selection.endpoint;
+        let profile_name = if confirm.selection.profile.display_name.is_empty() {
+            confirm.selection.profile.id.as_str()
+        } else {
+            confirm.selection.profile.display_name.as_str()
+        };
+        let only_missing = if confirm.selection.only_missing_gs_scores {
+            "Yes"
+        } else {
+            "No"
+        };
+        let pace_lines = match endpoint {
+            scores::ScoreImportEndpoint::ArrowCloud => {
+                "Uses the bulk endpoint (up to 1000 charts per request),\n\
+                 so a full library typically completes in under a minute.\n\
+                 Spamming APIs can be problematic."
             }
+            _ => {
+                "Rate limit is hard-capped at 3 requests per second.\n\
+                 For many charts this can take more than one hour.\n\
+                 Spamming APIs can be problematic."
+            }
+        };
+        let prompt_text = format!(
+            "Import ALL packs for {} / {}?\nOnly missing scores: {}.\n{}\n\nStart now?",
+            endpoint.display_name(),
+            profile_name,
+            only_missing,
+            pace_lines,
         );
         ui_actors.extend(build_yes_no_confirm_overlay(
             prompt_text,
