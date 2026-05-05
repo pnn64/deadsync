@@ -10885,7 +10885,7 @@ return Def.ActorFrame{}
     }
 
     #[test]
-    fn song_lua_player_transform_eases_persist_until_later_override() {
+    fn song_lua_eases_persist_until_later_override() {
         let timing_segments = TimingSegments {
             bpms: vec![(0.0, 60.0)],
             ..TimingSegments::default()
@@ -10922,6 +10922,38 @@ return Def.ActorFrame{}
                     opt1: None,
                     opt2: None,
                 },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 1.0,
+                    limit: 0.25,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(
+                        "dark".to_string(),
+                    ),
+                    from: 0.0,
+                    to: 100.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
+                crate::game::parsing::song_lua::SongLuaEaseWindow {
+                    player: Some(1),
+                    unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                    start: 4.0,
+                    limit: 2.0,
+                    span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                    target: crate::game::parsing::song_lua::SongLuaEaseTarget::Mod(
+                        "dark".to_string(),
+                    ),
+                    from: 100.0,
+                    to: 0.0,
+                    easing: Some("linear".to_string()),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                },
             ],
             ..Default::default()
         };
@@ -10930,7 +10962,7 @@ return Def.ActorFrame{}
             super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0);
 
         assert_eq!(unsupported, 0);
-        assert_eq!(windows.len(), 2);
+        assert_eq!(windows.len(), 4);
         assert_eq!(windows[0].sustain_end_second, 8.0);
         assert!(
             super::song_lua_ease_window_value(&windows[0], 6.0)
@@ -10940,6 +10972,16 @@ return Def.ActorFrame{}
         assert!(
             super::song_lua_ease_window_value(&windows[1], 20.0)
                 .is_some_and(|value| (value - 1.0).abs() <= 0.000_1)
+        );
+        assert_eq!(windows[2].sustain_end_second, 4.0);
+        assert!(
+            super::song_lua_ease_window_value(&windows[2], 3.0)
+                .is_some_and(|value| (value - 1.0).abs() <= 0.000_1)
+        );
+        assert_eq!(windows[3].sustain_end_second, f32::MAX);
+        assert!(
+            super::song_lua_ease_window_value(&windows[3], 7.0)
+                .is_some_and(|value| value.abs() <= 0.000_1)
         );
     }
 

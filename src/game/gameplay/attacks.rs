@@ -1688,34 +1688,11 @@ fn append_song_lua_ease_targets(
     true
 }
 
-#[inline(always)]
-fn song_lua_persistent_player_transform_target(target: SongLuaEaseMaskTarget) -> bool {
-    matches!(
-        target,
-        SongLuaEaseMaskTarget::PlayerX
-            | SongLuaEaseMaskTarget::PlayerY
-            | SongLuaEaseMaskTarget::PlayerZ
-            | SongLuaEaseMaskTarget::PlayerRotationX
-            | SongLuaEaseMaskTarget::PlayerRotationZ
-            | SongLuaEaseMaskTarget::PlayerRotationY
-            | SongLuaEaseMaskTarget::PlayerSkewX
-            | SongLuaEaseMaskTarget::PlayerSkewY
-            | SongLuaEaseMaskTarget::PlayerZoom
-            | SongLuaEaseMaskTarget::PlayerZoomX
-            | SongLuaEaseMaskTarget::PlayerZoomY
-            | SongLuaEaseMaskTarget::PlayerZoomZ
-            | SongLuaEaseMaskTarget::ConfusionYOffsetY
-    )
-}
-
-fn song_lua_extend_player_transform_tails(out: &mut [SongLuaEaseMaskWindow]) {
+fn song_lua_extend_ease_tails(out: &mut [SongLuaEaseMaskWindow]) {
     const SAME_TICK_EPSILON: f32 = 0.001;
 
     for i in 0..out.len() {
         let window = &out[i];
-        if !song_lua_persistent_player_transform_target(window.target) {
-            continue;
-        }
         let default_end = if window.sustain_end_second > window.end_second + SAME_TICK_EPSILON {
             window.sustain_end_second
         } else {
@@ -1936,7 +1913,7 @@ pub(super) fn build_song_lua_ease_windows_for_player(
             SongLuaEaseTarget::Function => {}
         }
     }
-    song_lua_extend_player_transform_tails(&mut out);
+    song_lua_extend_ease_tails(&mut out);
     (out, unsupported_targets)
 }
 
