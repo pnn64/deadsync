@@ -175,12 +175,7 @@ pub(super) fn row_choices(
                 .collect();
         }
         if row.id == SubRowId::ScoreImportPack {
-            return state
-                .score_import_pack_choices
-                .iter()
-                .cloned()
-                .map(Cow::Owned)
-                .collect();
+            return vec![Cow::Owned(score_import_pack_summary(state))];
         }
     }
     if let Some(row) = rows.get(row_idx)

@@ -920,26 +920,35 @@ pub(super) fn activate_current_selection(
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
                     return ScreenAction::None;
                 };
-                if let Some(row) = rows.get(row_idx)
-                    && row.id == SubRowId::ScoreImportStart
-                {
-                    audio::play_sfx("assets/sounds/start.ogg");
-                    if let Some(selection) = selected_score_import_selection(state) {
-                        if selection.pack_group.is_none() {
-                            clear_navigation_holds(state);
-                            state.score_import_confirm = Some(ScoreImportConfirmState {
-                                selection,
-                                active_choice: 1,
-                            });
-                        } else {
-                            begin_score_import(state, selection);
+                if let Some(row) = rows.get(row_idx) {
+                    match row.id {
+                        SubRowId::ScoreImportPack => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            refresh_score_import_pack_options(state);
+                            open_score_import_pack_picker(state);
+                            return ScreenAction::None;
                         }
-                    } else {
-                        log::warn!(
-                            "Score import start requested, but no eligible profile is selected."
-                        );
+                        SubRowId::ScoreImportStart => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            if let Some(selection) = selected_score_import_selection(state) {
+                                if selection.pack_groups.is_empty() {
+                                    clear_navigation_holds(state);
+                                    state.score_import_confirm = Some(ScoreImportConfirmState {
+                                        selection,
+                                        active_choice: 1,
+                                    });
+                                } else {
+                                    begin_score_import(state, selection);
+                                }
+                            } else {
+                                log::warn!(
+                                    "Score import start requested, but no eligible profile is selected."
+                                );
+                            }
+                            return ScreenAction::None;
+                        }
+                        _ => {}
                     }
-                    return ScreenAction::None;
                 }
             } else if matches!(kind, SubmenuKind::SyncPacks) {
                 let rows = submenu_rows(kind);
@@ -1007,6 +1016,96 @@ pub fn handle_input(
             }
             _ => {}
         }
+    }
+    if state.score_import_pack_picker.is_some() {
+        if let Some((_, nav)) = three_key_action {
+            match nav {
+                screen_input::ThreeKeyMenuAction::Prev => {
+                    pack_picker_step(state, -1);
+                    audio::play_sfx("assets/sounds/change.ogg");
+                }
+                screen_input::ThreeKeyMenuAction::Next => {
+                    pack_picker_step(state, 1);
+                    audio::play_sfx("assets/sounds/change.ogg");
+                }
+                screen_input::ThreeKeyMenuAction::Confirm => {
+                    if pack_picker_toggle_current(state) {
+                        audio::play_sfx("assets/sounds/start.ogg");
+                    }
+                }
+                screen_input::ThreeKeyMenuAction::Cancel => {
+                    close_score_import_pack_picker(state);
+                    audio::play_sfx("assets/sounds/change.ogg");
+                }
+            }
+            return ScreenAction::None;
+        }
+        if !ev.pressed {
+            // Track release to disable hold-repeat.
+            match ev.action {
+                VirtualAction::p1_up
+                | VirtualAction::p1_menu_up
+                | VirtualAction::p2_up
+                | VirtualAction::p2_menu_up => {
+                    on_nav_release(state, NavDirection::Up);
+                }
+                VirtualAction::p1_down
+                | VirtualAction::p1_menu_down
+                | VirtualAction::p2_down
+                | VirtualAction::p2_menu_down => {
+                    on_nav_release(state, NavDirection::Down);
+                }
+                _ => {}
+            }
+            return ScreenAction::None;
+        }
+        match ev.action {
+            VirtualAction::p1_up
+            | VirtualAction::p1_menu_up
+            | VirtualAction::p2_up
+            | VirtualAction::p2_menu_up => {
+                pack_picker_step(state, -1);
+                on_nav_press(state, NavDirection::Up);
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+            VirtualAction::p1_down
+            | VirtualAction::p1_menu_down
+            | VirtualAction::p2_down
+            | VirtualAction::p2_menu_down => {
+                pack_picker_step(state, 1);
+                on_nav_press(state, NavDirection::Down);
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+            VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left => {
+                pack_picker_page(state, -1);
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+            VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right => {
+                pack_picker_page(state, 1);
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+            VirtualAction::p1_start | VirtualAction::p2_start => {
+                if pack_picker_toggle_current(state) {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                }
+            }
+            VirtualAction::p1_select | VirtualAction::p2_select => {
+                toggle_all_score_import_packs(state);
+                audio::play_sfx("assets/sounds/start.ogg");
+            }
+            VirtualAction::p1_back | VirtualAction::p2_back => {
+                close_score_import_pack_picker(state);
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+            _ => {}
+        }
+        return ScreenAction::None;
     }
     if let Some(score_import) = state.score_import_ui.as_ref() {
         let cancel_requested = matches!(
