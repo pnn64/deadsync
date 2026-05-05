@@ -10,8 +10,8 @@ use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
 use chrono::{DateTime, Local, TimeZone, Utc};
 use log::{debug, warn};
-use serde::{Deserialize, Serialize};
 use serde::de::{DeserializeOwned, Deserializer};
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -417,7 +417,9 @@ impl Encode for ArrowCloudScore {
     ) -> Result<(), bincode::error::EncodeError> {
         self.score_percent.encode(encoder)?;
         self.server_grade.encode(encoder)?;
-        self.played_at.map(|d| d.timestamp_millis()).encode(encoder)?;
+        self.played_at
+            .map(|d| d.timestamp_millis())
+            .encode(encoder)?;
         self.play_id.encode(encoder)?;
         self.is_fail.encode(encoder)?;
         Ok(())
@@ -1294,13 +1296,10 @@ pub fn get_cached_score_for_side(
     // Merge by picking the "best ITG" entry; failed scores win when their
     // numeric percent matches a cached non-failed score (parity with prior
     // local+gs merge semantics).
-    [local, gs, ac]
-        .into_iter()
-        .flatten()
-        .reduce(|a, b| {
-            authoritative_failed_score(&a, &b)
-                .unwrap_or_else(|| if is_better_itg(&a, &b) { a } else { b })
-        })
+    [local, gs, ac].into_iter().flatten().reduce(|a, b| {
+        authoritative_failed_score(&a, &b)
+            .unwrap_or_else(|| if is_better_itg(&a, &b) { a } else { b })
+    })
 }
 
 fn get_cached_local_scalar_score_for_side(
@@ -4777,7 +4776,7 @@ fn collect_chart_hashes_for_import(
     } else {
         HashSet::new()
     };
-    collect_chart_hashes_per_pack_for_import(pack_group_filter, &existing_scores)
+    collect_chart_hashes_per_pack_for_import(pack_groups_filter, &existing_scores)
 }
 
 /// Per-pack chart-hash collection for score import.
@@ -4788,13 +4787,14 @@ fn collect_chart_hashes_for_import(
 /// skips charts present in `existing_scores` (caller supplies the right cache
 /// for the endpoint they're importing into).
 fn collect_chart_hashes_per_pack_for_import(
-    pack_group_filter: Option<&str>,
+    pack_groups_filter: &[String],
     existing_scores: &HashSet<String>,
 ) -> Vec<(String, Vec<String>)> {
-    let filter_norm = pack_group_filter
-        .map(str::trim)
+    let filter_set: HashSet<String> = pack_groups_filter
+        .iter()
+        .map(|v| v.trim().to_ascii_lowercase())
         .filter(|v| !v.is_empty())
-        .map(str::to_ascii_lowercase);
+        .collect();
 
     let mut out: Vec<(String, Vec<String>)> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
@@ -4854,7 +4854,7 @@ fn wait_for_next_import_request(last_request_started_at: Option<Instant>) {
 fn import_scores_for_profile_arrowcloud_bulk<F>(
     profile_id: String,
     profile: Profile,
-    pack_group: Option<String>,
+    pack_groups: Vec<String>,
     only_missing_scores: bool,
     on_progress: F,
     should_cancel: impl Fn() -> bool,
@@ -4886,7 +4886,7 @@ where
         HashSet::new()
     };
     let pack_chart_groups =
-        collect_chart_hashes_per_pack_for_import(pack_group.as_deref(), &existing_scores);
+        collect_chart_hashes_per_pack_for_import(&pack_groups, &existing_scores);
     let requested_charts: usize = pack_chart_groups.iter().map(|(_, h)| h.len()).sum();
     let total_packs = pack_chart_groups.len();
     let filter_note = if only_missing_scores {
@@ -4935,9 +4935,7 @@ where
                 canceled = true;
                 debug!(
                     "ArrowCloud bulk import canceled at pack {} ({}/{}).",
-                    pack_name,
-                    pack_idx,
-                    total_packs
+                    pack_name, pack_idx, total_packs
                 );
                 break 'packs;
             }
@@ -5054,7 +5052,7 @@ where
         return import_scores_for_profile_arrowcloud_bulk(
             profile_id,
             profile,
-            pack_group,
+            pack_groups,
             only_missing_gs_scores,
             on_progress,
             should_cancel,
@@ -5080,7 +5078,7 @@ where
 
     let username = profile.groovestats_username.trim().to_string();
     let pack_chart_groups =
-        collect_chart_hashes_for_import(pack_group.as_deref(), &profile_id, only_missing_gs_scores);
+        collect_chart_hashes_for_import(&pack_groups, &profile_id, only_missing_gs_scores);
     let requested_charts: usize = pack_chart_groups.iter().map(|(_, h)| h.len()).sum();
     let total_packs = pack_chart_groups.len();
     let filter_note = if only_missing_gs_scores {
@@ -6178,8 +6176,7 @@ mod tests {
         };
         let cfg = bincode::config::standard();
         let bytes = bincode::encode_to_vec(original, cfg).unwrap();
-        let (decoded, _): (ArrowCloudScore, _) =
-            bincode::decode_from_slice(&bytes, cfg).unwrap();
+        let (decoded, _): (ArrowCloudScore, _) = bincode::decode_from_slice(&bytes, cfg).unwrap();
         assert_eq!(decoded, original);
     }
 
@@ -6219,14 +6216,20 @@ mod tests {
     fn merge_arrowcloud_score_slot_failed_does_not_overwrite_passed() {
         let mut slot = Some(ac_score(0.85, false));
         merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.95, true)));
-        assert!(!slot.unwrap().is_fail, "failed score must not overwrite passed");
+        assert!(
+            !slot.unwrap().is_fail,
+            "failed score must not overwrite passed"
+        );
     }
 
     #[test]
     fn merge_arrowcloud_score_slot_passed_overwrites_failed() {
         let mut slot = Some(ac_score(0.85, true));
         merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.50, false)));
-        assert!(!slot.unwrap().is_fail, "non-failed score must replace failed");
+        assert!(
+            !slot.unwrap().is_fail,
+            "non-failed score must replace failed"
+        );
     }
 
     #[test]

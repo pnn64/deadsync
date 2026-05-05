@@ -10,10 +10,21 @@ pub(super) struct ScoreImportProfileConfig {
 }
 
 #[derive(Clone, Debug)]
+pub(super) struct ScoreImportPackOption {
+    pub(super) label: String,
+    pub(super) group: String,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct ScoreImportPackPicker {
+    pub(super) cursor: usize,
+}
+
+#[derive(Clone, Debug)]
 pub(super) struct ScoreImportSelection {
     pub(super) endpoint: scores::ScoreImportEndpoint,
     pub(super) profile: ScoreImportProfileConfig,
-    pub(super) pack_group: Option<String>,
+    pub(super) pack_groups: Vec<String>,
     pub(super) pack_label: String,
     pub(super) only_missing_gs_scores: bool,
 }
@@ -100,9 +111,7 @@ fn format_eta(secs: u64) -> String {
 }
 
 #[inline(always)]
-pub(super) fn score_import_progress(
-    score_import: &ScoreImportUiState,
-) -> (usize, usize, f32) {
+pub(super) fn score_import_progress(score_import: &ScoreImportUiState) -> (usize, usize, f32) {
     let done = score_import.processed_charts;
     let mut total = score_import.total_charts;
     if total < done {
@@ -191,9 +200,7 @@ pub(super) fn build_score_import_overlay_actors(
     };
     let stats_line = format!(
         "found={}  missing={}  failed={}",
-        score_import.imported_scores,
-        score_import.missing_scores,
-        score_import.failed_requests,
+        score_import.imported_scores, score_import.missing_scores, score_import.failed_requests,
     );
 
     let fill = color::decorative_rgba(active_color_index);
@@ -346,7 +353,7 @@ pub(super) fn score_import_selected_endpoint(state: &State) -> scores::ScoreImpo
     score_import_endpoint_from_choice_index(idx)
 }
 
-pub(super) fn installed_pack_options(all_label: &str) -> (Vec<String>, Vec<Option<String>>) {
+fn installed_pack_entries() -> Vec<(String, String)> {
     let cache = crate::game::song::get_song_cache();
     let mut packs: Vec<(String, String)> = Vec::with_capacity(cache.len());
     let mut seen_groups: HashSet<String> = HashSet::with_capacity(cache.len());
@@ -374,6 +381,18 @@ pub(super) fn installed_pack_options(all_label: &str) -> (Vec<String>, Vec<Optio
             .then_with(|| a.1.cmp(&b.1))
     });
 
+    packs
+}
+
+pub(super) fn score_import_pack_options() -> Vec<ScoreImportPackOption> {
+    installed_pack_entries()
+        .into_iter()
+        .map(|(label, group)| ScoreImportPackOption { label, group })
+        .collect()
+}
+
+pub(super) fn installed_pack_options(all_label: &str) -> (Vec<String>, Vec<Option<String>>) {
+    let packs = installed_pack_entries();
     let mut choices = Vec::with_capacity(packs.len() + 1);
     let mut filters = Vec::with_capacity(packs.len() + 1);
     choices.push(all_label.to_string());
@@ -383,10 +402,6 @@ pub(super) fn installed_pack_options(all_label: &str) -> (Vec<String>, Vec<Optio
         filters.push(Some(group_name));
     }
     (choices, filters)
-}
-
-pub(super) fn score_import_pack_options() -> (Vec<String>, Vec<Option<String>>) {
-    installed_pack_options(&tr("OptionsScoreImport", "AllPacks"))
 }
 
 pub(super) fn sync_pack_options() -> (Vec<String>, Vec<Option<String>>) {
@@ -487,21 +502,33 @@ pub(super) fn refresh_score_import_profile_options(state: &mut State) {
 }
 
 pub(super) fn refresh_score_import_pack_options(state: &mut State) {
-    let (choices, filters) = score_import_pack_options();
-    state.score_import_pack_choices = choices;
-    state.score_import_pack_filters = filters;
-    let max_idx = state.score_import_pack_choices.len().saturating_sub(1);
+    state.score_import_pack_options = score_import_pack_options();
+    let valid_groups: HashSet<String> = state
+        .score_import_pack_options
+        .iter()
+        .map(|opt| opt.group.to_ascii_lowercase())
+        .collect();
+    state
+        .score_import_pack_selected
+        .retain(|group| valid_groups.contains(&group.to_ascii_lowercase()));
+    if score_import_selected_pack_count(state) >= state.score_import_pack_options.len() {
+        state.score_import_pack_selected.clear();
+    }
+    let max_idx = state.score_import_pack_options.len().saturating_sub(1);
+    if let Some(picker) = state.score_import_pack_picker.as_mut() {
+        picker.cursor = picker.cursor.min(max_idx);
+    }
     if let Some(slot) = state.sub[SubmenuKind::ScoreImport]
         .choice_indices
         .get_mut(SCORE_IMPORT_ROW_PACK_INDEX)
     {
-        *slot = (*slot).min(max_idx);
+        *slot = 0;
     }
     if let Some(slot) = state.sub[SubmenuKind::ScoreImport]
         .cursor_indices
         .get_mut(SCORE_IMPORT_ROW_PACK_INDEX)
     {
-        *slot = (*slot).min(max_idx);
+        *slot = 0;
     }
 }
 
@@ -534,18 +561,255 @@ pub(super) fn refresh_null_or_die_options(state: &mut State) {
     refresh_sync_pack_options(state);
 }
 
-pub(super) fn selected_score_import_pack_group(state: &State) -> Option<String> {
-    let pack_idx = state.sub[SubmenuKind::ScoreImport]
-        .choice_indices
-        .get(SCORE_IMPORT_ROW_PACK_INDEX)
-        .copied()
-        .unwrap_or(0)
-        .min(state.score_import_pack_filters.len().saturating_sub(1));
+fn selected_pack_group_keys(state: &State) -> HashSet<String> {
     state
-        .score_import_pack_filters
-        .get(pack_idx)
-        .cloned()
-        .flatten()
+        .score_import_pack_selected
+        .iter()
+        .map(|group| group.to_ascii_lowercase())
+        .collect()
+}
+
+fn score_import_selected_pack_count(state: &State) -> usize {
+    if state.score_import_pack_selected.is_empty() {
+        return state.score_import_pack_options.len();
+    }
+    let selected = selected_pack_group_keys(state);
+    state
+        .score_import_pack_options
+        .iter()
+        .filter(|opt| selected.contains(&opt.group.to_ascii_lowercase()))
+        .count()
+}
+
+fn all_score_import_packs_selected(state: &State) -> bool {
+    state.score_import_pack_options.is_empty()
+        || state.score_import_pack_selected.is_empty()
+        || score_import_selected_pack_count(state) >= state.score_import_pack_options.len()
+}
+
+pub(super) fn selected_score_import_pack_groups(state: &State) -> Vec<String> {
+    if all_score_import_packs_selected(state) {
+        return Vec::new();
+    }
+    let selected = selected_pack_group_keys(state);
+    state
+        .score_import_pack_options
+        .iter()
+        .filter(|opt| selected.contains(&opt.group.to_ascii_lowercase()))
+        .map(|opt| opt.group.clone())
+        .collect()
+}
+
+pub(super) fn score_import_pack_summary(state: &State) -> String {
+    if all_score_import_packs_selected(state) {
+        return tr("OptionsScoreImport", "AllPacks").to_string();
+    }
+    let selected = selected_pack_group_keys(state);
+    let mut labels = state
+        .score_import_pack_options
+        .iter()
+        .filter(|opt| selected.contains(&opt.group.to_ascii_lowercase()))
+        .map(|opt| opt.label.as_str());
+    let Some(first) = labels.next() else {
+        return tr("OptionsScoreImport", "AllPacks").to_string();
+    };
+    if labels.next().is_none() {
+        first.to_string()
+    } else {
+        format!("{} Packs", score_import_selected_pack_count(state))
+    }
+}
+
+pub(super) fn open_score_import_pack_picker(state: &mut State) {
+    refresh_score_import_pack_options(state);
+    let max_idx = state.score_import_pack_options.len().saturating_sub(1);
+    let cursor = state
+        .score_import_pack_picker
+        .as_ref()
+        .map_or(0, |picker| picker.cursor.min(max_idx));
+    state.score_import_pack_picker = Some(ScoreImportPackPicker { cursor });
+    clear_navigation_holds(state);
+    clear_render_cache(state);
+}
+
+pub(super) fn close_score_import_pack_picker(state: &mut State) {
+    state.score_import_pack_picker = None;
+    clear_navigation_holds(state);
+    clear_render_cache(state);
+}
+
+pub(super) fn pack_picker_step(state: &mut State, delta: isize) {
+    let len = state.score_import_pack_options.len();
+    let Some(picker) = state.score_import_pack_picker.as_mut() else {
+        return;
+    };
+    if len == 0 {
+        picker.cursor = 0;
+        return;
+    }
+    let last = len.saturating_sub(1) as isize;
+    picker.cursor = (picker.cursor as isize + delta).clamp(0, last) as usize;
+}
+
+pub(super) fn pack_picker_page(state: &mut State, delta: isize) {
+    pack_picker_step(state, delta * 8);
+}
+
+pub(super) fn pack_picker_toggle_current(state: &mut State) -> bool {
+    let Some(picker) = state.score_import_pack_picker.as_ref() else {
+        return false;
+    };
+    let Some(option) = state.score_import_pack_options.get(picker.cursor) else {
+        return false;
+    };
+    let group = option.group.clone();
+    if state.score_import_pack_selected.is_empty() {
+        state.score_import_pack_selected.insert(group);
+    } else if !state.score_import_pack_selected.remove(&group) {
+        state.score_import_pack_selected.insert(group);
+    }
+    if score_import_selected_pack_count(state) >= state.score_import_pack_options.len() {
+        state.score_import_pack_selected.clear();
+    }
+    clear_render_cache(state);
+    true
+}
+
+pub(super) fn toggle_all_score_import_packs(state: &mut State) {
+    if all_score_import_packs_selected(state) {
+        state.score_import_pack_selected.clear();
+    } else {
+        state.score_import_pack_selected = state
+            .score_import_pack_options
+            .iter()
+            .map(|opt| opt.group.clone())
+            .collect();
+    }
+    clear_render_cache(state);
+}
+
+pub(super) fn build_score_import_pack_picker_actors(
+    state: &State,
+    active_color_index: i32,
+) -> Vec<Actor> {
+    let Some(picker) = state.score_import_pack_picker.as_ref() else {
+        return Vec::new();
+    };
+
+    let w = screen_width();
+    let h = screen_height();
+    let cx = w * 0.5;
+    let cy = h * 0.5;
+    let row_h = 27.0;
+    let max_visible = ((h - 190.0) / row_h).floor().max(1.0) as usize;
+    let visible_rows = state
+        .score_import_pack_options
+        .len()
+        .max(1)
+        .min(max_visible.min(14));
+    let panel_w = widescale(520.0, 700.0).min(w - 60.0);
+    let panel_h = 116.0 + row_h * visible_rows as f32;
+    let panel_top = cy - panel_h * 0.5;
+    let list_top = panel_top + 74.0;
+    let list_left = cx - panel_w * 0.5 + 34.0;
+    let list_w = panel_w - 68.0;
+    let cursor_color = color::simply_love_rgba(active_color_index);
+
+    let len = state.score_import_pack_options.len();
+    let start = if len > visible_rows {
+        picker
+            .cursor
+            .saturating_sub(visible_rows / 2)
+            .min(len - visible_rows)
+    } else {
+        0
+    };
+    let selected = selected_pack_group_keys(state);
+    let all_selected = all_score_import_packs_selected(state);
+
+    let mut out = Vec::with_capacity(5 + visible_rows * 3);
+    out.push(act!(quad:
+        align(0.0, 0.0):
+        xy(0.0, 0.0):
+        zoomto(w, h):
+        diffuse(0.0, 0.0, 0.0, 0.82):
+        z(690)
+    ));
+    out.push(act!(quad:
+        align(0.5, 0.5):
+        xy(cx, cy):
+        setsize(panel_w, panel_h):
+        diffuse(0.02, 0.02, 0.02, 0.96):
+        z(691)
+    ));
+    out.push(act!(text:
+        align(0.5, 0.5):
+        xy(cx, panel_top + 28.0):
+        font(current_machine_font_key(FontRole::Header)):
+        zoom(0.72):
+        maxwidth(panel_w - 52.0):
+        settext(score_import_pack_summary(state)):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(692):
+        horizalign(center)
+    ));
+
+    if len == 0 {
+        out.push(act!(text:
+            align(0.5, 0.5):
+            xy(cx, list_top + row_h * 0.5):
+            font("miso"):
+            zoom(0.9):
+            maxwidth(list_w):
+            settext("No packs installed"):
+            diffuse(1.0, 1.0, 1.0, 0.85):
+            z(692):
+            horizalign(center)
+        ));
+        return out;
+    }
+
+    for row in 0..visible_rows {
+        let idx = start + row;
+        let Some(option) = state.score_import_pack_options.get(idx) else {
+            break;
+        };
+        let y = list_top + row_h * (row as f32 + 0.5);
+        if idx == picker.cursor {
+            out.push(act!(quad:
+                align(0.5, 0.5):
+                xy(cx, y):
+                setsize(list_w + 18.0, row_h - 3.0):
+                diffuse(cursor_color[0], cursor_color[1], cursor_color[2], 0.95):
+                z(692)
+            ));
+        }
+        let checked = all_selected || selected.contains(&option.group.to_ascii_lowercase());
+        let mark = if checked { "[x]" } else { "[ ]" };
+        out.push(act!(text:
+            align(0.0, 0.5):
+            xy(list_left, y):
+            font("miso"):
+            zoom(0.88):
+            maxwidth(list_w):
+            settext(format!("{mark} {}", option.label)):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(693):
+            horizalign(left)
+        ));
+    }
+
+    out.push(act!(text:
+        align(0.5, 0.5):
+        xy(cx, panel_top + panel_h - 22.0):
+        font("miso"):
+        zoom(0.78):
+        settext(format!("{}/{}", picker.cursor + 1, len)):
+        diffuse(1.0, 1.0, 1.0, 0.7):
+        z(692):
+        horizalign(center)
+    ));
+    out
 }
 
 pub(super) fn selected_score_import_profile(state: &State) -> Option<ScoreImportProfileConfig> {
@@ -583,16 +847,13 @@ pub(super) fn selected_score_import_selection(state: &State) -> Option<ScoreImpo
     if !score_import_profile_eligible(endpoint, &profile_cfg) {
         return None;
     }
-    let pack_group = selected_score_import_pack_group(state);
-    let pack_label = pack_group
-        .as_ref()
-        .cloned()
-        .unwrap_or_else(|| tr("OptionsScoreImport", "AllPacks").to_string());
+    let pack_groups = selected_score_import_pack_groups(state);
+    let pack_label = score_import_pack_summary(state);
     let only_missing_gs_scores = score_import_only_missing_gs_scores(state);
     Some(ScoreImportSelection {
         endpoint,
         profile: profile_cfg,
-        pack_group,
+        pack_groups,
         pack_label,
         only_missing_gs_scores,
     })
@@ -624,7 +885,7 @@ pub(super) fn begin_score_import(state: &mut State, selection: ScoreImportSelect
     } else {
         selection.profile.display_name.clone()
     };
-    let pack_group = selection.pack_group.clone();
+    let pack_groups = selection.pack_groups.clone();
     let pack_label = selection.pack_label.clone();
     let only_missing_gs_scores = selection.only_missing_gs_scores;
 
@@ -637,7 +898,8 @@ pub(super) fn begin_score_import(state: &mut State, selection: ScoreImportSelect
         match endpoint {
             scores::ScoreImportEndpoint::ArrowCloud =>
                 "Bulk-imported per pack at 3 requests/sec (up to 1000 charts per request).",
-            _ => "Hard-limited to 3 requests/sec. For many charts this can take more than one hour.",
+            _ =>
+                "Hard-limited to 3 requests/sec. For many charts this can take more than one hour.",
         }
     );
 
@@ -657,7 +919,7 @@ pub(super) fn begin_score_import(state: &mut State, selection: ScoreImportSelect
             endpoint,
             profile_id,
             profile_cfg,
-            pack_group,
+            pack_groups,
             only_missing_gs_scores,
             |progress| {
                 let _ = tx.send(ScoreImportMsg::Progress(progress));

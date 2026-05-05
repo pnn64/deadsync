@@ -438,36 +438,36 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 state.nav_key_last_scrolled_at = Some(now);
             } else {
                 match state.view {
-                OptionsView::Main => {
-                    let total = ITEMS.len();
-                    if total > 0 {
-                        let last = total - 1;
-                        match direction {
-                            NavDirection::Up => {
-                                if state.selected > 0 {
-                                    state.selected -= 1;
+                    OptionsView::Main => {
+                        let total = ITEMS.len();
+                        if total > 0 {
+                            let last = total - 1;
+                            match direction {
+                                NavDirection::Up => {
+                                    if state.selected > 0 {
+                                        state.selected -= 1;
+                                    }
+                                }
+                                NavDirection::Down => {
+                                    if state.selected < last {
+                                        state.selected += 1;
+                                    }
                                 }
                             }
-                            NavDirection::Down => {
-                                if state.selected < last {
-                                    state.selected += 1;
-                                }
-                            }
+                            state.nav_key_last_scrolled_at = Some(now);
                         }
+                    }
+                    OptionsView::Submenu(kind) => {
+                        move_submenu_selection_vertical(
+                            state,
+                            asset_manager,
+                            kind,
+                            direction,
+                            NavWrap::Clamp,
+                        );
                         state.nav_key_last_scrolled_at = Some(now);
                     }
                 }
-                OptionsView::Submenu(kind) => {
-                    move_submenu_selection_vertical(
-                        state,
-                        asset_manager,
-                        kind,
-                        direction,
-                        NavWrap::Clamp,
-                    );
-                    state.nav_key_last_scrolled_at = Some(now);
-                }
-            }
             }
         }
     }

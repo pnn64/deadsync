@@ -927,10 +927,8 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
             continue;
         }
         let profile_id = profile::active_local_profile_id_for_side(side);
-        let itg_percent =
-            gameplay::display_itg_score_percent(gs, player_idx).clamp(0.0, 100.0);
-        let ex_percent =
-            gameplay::display_ex_score_percent(gs, player_idx).clamp(0.0, 100.0);
+        let itg_percent = gameplay::display_itg_score_percent(gs, player_idx).clamp(0.0, 100.0);
+        let ex_percent = gameplay::display_ex_score_percent(gs, player_idx).clamp(0.0, 100.0);
         let hard_ex_percent =
             gameplay::display_hard_ex_score_percent(gs, player_idx).clamp(0.0, 100.0);
 
