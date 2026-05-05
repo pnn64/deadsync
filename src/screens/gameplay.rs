@@ -2724,7 +2724,8 @@ fn song_lua_add_z(z: i16, delta: i16) -> i16 {
     (i32::from(z) + i32::from(delta)).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
 }
 
-const SONG_LUA_LAYER_Z_BASE: i16 = 1100;
+const SONG_LUA_PLAYER_LAYER_Z_BASE: i16 = 900;
+const SONG_LUA_OVERLAY_LAYER_Z_BASE: i16 = 1100;
 
 fn song_lua_rounded_z(value: f32) -> i16 {
     if !value.is_finite() {
@@ -2746,7 +2747,7 @@ fn song_lua_player_layer_z(
     }
     let _ = actor;
     song_lua_add_z(
-        SONG_LUA_LAYER_Z_BASE,
+        SONG_LUA_PLAYER_LAYER_Z_BASE,
         song_lua_rounded_z(current.z + runtime_z),
     )
 }
@@ -5810,7 +5811,7 @@ fn push_song_lua_layer_actors(
     total_elapsed: f32,
 ) {
     let song_lua_overlay_base_z = song_lua_add_z(
-        SONG_LUA_LAYER_Z_BASE,
+        SONG_LUA_OVERLAY_LAYER_Z_BASE,
         song_lua_rounded_z(song_foreground_state.z),
     );
     out.reserve(overlays.len());
@@ -9838,6 +9839,23 @@ mod tests {
         assert_eq!(
             song_lua_overlay_order(&overlays, &states, None),
             [0, 1, 3, 2]
+        );
+    }
+
+    #[test]
+    fn song_lua_foreground_overlays_cover_notefield_layer() {
+        let player_layer = song_lua_player_layer_z(
+            true,
+            &SongLuaCapturedActor::default(),
+            SongLuaOverlayState::default(),
+            0.0,
+        );
+        let highest_notefield_layer = song_lua_add_z(player_layer, 200);
+        let foreground_layer = song_lua_add_z(SONG_LUA_OVERLAY_LAYER_Z_BASE, 0);
+
+        assert!(
+            highest_notefield_layer <= foreground_layer,
+            "foreground Lua should draw over the isolated player/notefield subtree"
         );
     }
 
