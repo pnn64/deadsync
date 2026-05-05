@@ -370,48 +370,8 @@ pub fn get_actors(
         return actors;
     }
     if let Some(score_import) = &state.score_import_ui {
-        let header = if score_import.done {
-            "Score import complete"
-        } else {
-            "Importing scores..."
-        };
-        let total = score_import.total_charts.max(score_import.processed_charts);
-        let progress_line = format!(
-            "Endpoint: {}   Profile: {}\nPack: {}\nProgress: {}/{} (found={}, missing={}, failed={})",
-            score_import.endpoint.display_name(),
-            score_import.profile_name,
-            score_import.pack_label,
-            score_import.processed_charts,
-            total,
-            score_import.imported_scores,
-            score_import.missing_scores,
-            score_import.failed_requests
-        );
-        let detail_line = if score_import.done {
-            score_import.done_message.as_str()
-        } else {
-            score_import.detail_line.as_str()
-        };
-        let text = format!("{header}\n{progress_line}\n{detail_line}");
-
-        let mut ui_actors: Vec<Actor> = Vec::with_capacity(2);
-        ui_actors.push(act!(quad:
-            align(0.0, 0.0):
-            xy(0.0, 0.0):
-            zoomto(screen_width(), screen_height()):
-            diffuse(0.0, 0.0, 0.0, 0.7):
-            z(300)
-        ));
-        ui_actors.push(act!(text:
-            align(0.5, 0.5):
-            xy(screen_width() * 0.5, screen_height() * 0.5):
-            zoom(0.95):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            font("miso"):
-            settext(text):
-            horizalign(center):
-            z(301)
-        ));
+        let mut ui_actors =
+            build_score_import_overlay_actors(score_import, state.active_color_index);
         for actor in &mut ui_actors {
             actor.mul_alpha(alpha_multiplier);
         }

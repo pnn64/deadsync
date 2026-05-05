@@ -37,6 +37,7 @@ pub(super) struct ScoreImportUiState {
     pub(super) done: bool,
     pub(super) done_message: String,
     pub(super) done_since: Option<Instant>,
+    pub(super) started_at: Instant,
     pub(super) cancel_requested: Arc<AtomicBool>,
     pub(super) rx: std::sync::mpsc::Receiver<ScoreImportMsg>,
 }
@@ -62,10 +63,194 @@ impl ScoreImportUiState {
             done: false,
             done_message: String::new(),
             done_since: None,
+            started_at: Instant::now(),
             cancel_requested,
             rx,
         }
     }
+}
+
+#[inline(always)]
+pub(super) fn score_import_progress(
+    score_import: &ScoreImportUiState,
+) -> (usize, usize, f32) {
+    let done = score_import.processed_charts;
+    let mut total = score_import.total_charts;
+    if total < done {
+        total = done;
+    }
+    let mut progress = if total > 0 {
+        (done as f32 / total as f32).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    if !score_import.done && total > 0 && progress >= 1.0 {
+        progress = 0.999;
+    }
+    (done, total, progress)
+}
+
+pub(super) fn build_score_import_overlay_actors(
+    score_import: &ScoreImportUiState,
+    active_color_index: i32,
+) -> Vec<Actor> {
+    let (done, total, progress) = score_import_progress(score_import);
+    let elapsed = score_import.started_at.elapsed().as_secs_f32().max(0.0);
+    let count_text = if total == 0 {
+        String::new()
+    } else {
+        crate::screens::progress_count_text(done, total)
+    };
+    let show_speed_row = total > 0 || done > 0;
+    let speed_text = if show_speed_row {
+        let rate = if elapsed > 0.0 {
+            done as f32 / elapsed
+        } else {
+            0.0
+        };
+        tr_fmt(
+            "SelectMusic",
+            "LoadingSpeed",
+            &[("speed", &format!("{rate:.1}"))],
+        )
+        .to_string()
+    } else {
+        String::new()
+    };
+
+    let header = if score_import.done {
+        tr("OptionsScoreImport", "ImportComplete")
+    } else {
+        tr("OptionsScoreImport", "ImportingScores")
+    };
+    let line2 = format!(
+        "{} \u{2022} {} \u{2022} {}",
+        score_import.endpoint.display_name(),
+        score_import.profile_name,
+        score_import.pack_label,
+    );
+    let line3 = if score_import.done {
+        score_import.done_message.clone()
+    } else {
+        score_import.detail_line.clone()
+    };
+    let stats_line = format!(
+        "found={}  missing={}  failed={}",
+        score_import.imported_scores,
+        score_import.missing_scores,
+        score_import.failed_requests,
+    );
+
+    let fill = color::decorative_rgba(active_color_index);
+    let bar_w = widescale(360.0, 520.0);
+    let bar_h = RELOAD_BAR_H;
+    let bar_cx = screen_width() * 0.5;
+    let bar_cy = screen_height() * 0.5 + 34.0;
+    let fill_w = (bar_w - 4.0) * progress.clamp(0.0, 1.0);
+
+    let mut out: Vec<Actor> = Vec::with_capacity(8);
+    out.push(act!(quad:
+        align(0.0, 0.0):
+        xy(0.0, 0.0):
+        zoomto(screen_width(), screen_height()):
+        diffuse(0.0, 0.0, 0.0, 0.65):
+        z(300)
+    ));
+    out.push(act!(text:
+        font("miso"):
+        settext(header):
+        align(0.5, 0.5):
+        xy(screen_width() * 0.5, bar_cy - 98.0):
+        zoom(1.05):
+        horizalign(center):
+        z(301)
+    ));
+    out.push(act!(text:
+        font("miso"):
+        settext(line2):
+        align(0.5, 0.5):
+        xy(screen_width() * 0.5, bar_cy - 74.0):
+        zoom(0.95):
+        maxwidth(screen_width() * 0.9):
+        horizalign(center):
+        z(301)
+    ));
+    if !line3.is_empty() {
+        out.push(act!(text:
+            font("miso"):
+            settext(line3):
+            align(0.5, 0.5):
+            xy(screen_width() * 0.5, bar_cy - 50.0):
+            zoom(0.95):
+            maxwidth(screen_width() * 0.9):
+            horizalign(center):
+            z(301)
+        ));
+    }
+
+    let mut bar_children = Vec::with_capacity(4);
+    bar_children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(bar_w / 2.0, bar_h / 2.0):
+        zoomto(bar_w, bar_h):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(0)
+    ));
+    bar_children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(bar_w / 2.0, bar_h / 2.0):
+        zoomto(bar_w - 4.0, bar_h - 4.0):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        z(1)
+    ));
+    if fill_w > 0.0 {
+        bar_children.push(act!(quad:
+            align(0.0, 0.5):
+            xy(2.0, bar_h / 2.0):
+            zoomto(fill_w, bar_h - 4.0):
+            diffuse(fill[0], fill[1], fill[2], 1.0):
+            z(2)
+        ));
+    }
+    bar_children.push(act!(text:
+        font("miso"):
+        settext(count_text):
+        align(0.5, 0.5):
+        xy(bar_w / 2.0, bar_h / 2.0):
+        zoom(0.9):
+        horizalign(center):
+        z(3)
+    ));
+    out.push(Actor::Frame {
+        align: [0.5, 0.5],
+        offset: [bar_cx, bar_cy],
+        size: [actors::SizeSpec::Px(bar_w), actors::SizeSpec::Px(bar_h)],
+        background: None,
+        z: 301,
+        children: bar_children,
+    });
+
+    if show_speed_row {
+        out.push(act!(text:
+            font("miso"):
+            settext(speed_text):
+            align(0.5, 0.5):
+            xy(screen_width() * 0.5, bar_cy + 36.0):
+            zoom(0.9):
+            horizalign(center):
+            z(301)
+        ));
+    }
+    out.push(act!(text:
+        font("miso"):
+        settext(stats_line):
+        align(0.5, 0.5):
+        xy(screen_width() * 0.5, bar_cy + 60.0):
+        zoom(0.85):
+        horizalign(center):
+        z(301)
+    ));
+    out
 }
 
 #[derive(Clone, Debug)]
