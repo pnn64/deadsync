@@ -1108,6 +1108,31 @@ pub fn handle_input(
         return ScreenAction::None;
     }
     if let Some(score_import) = state.score_import_ui.as_ref() {
+        // After completion, any Confirm or Cancel input dismisses the overlay
+        // — the worker has already finished, so no cancel signal is needed.
+        if score_import.done {
+            let dismiss = matches!(
+                three_key_action,
+                Some((
+                    _,
+                    screen_input::ThreeKeyMenuAction::Cancel
+                        | screen_input::ThreeKeyMenuAction::Confirm
+                ))
+            ) || (ev.pressed
+                && matches!(
+                    ev.action,
+                    VirtualAction::p1_back
+                        | VirtualAction::p2_back
+                        | VirtualAction::p1_start
+                        | VirtualAction::p2_start
+                ));
+            if dismiss {
+                clear_navigation_holds(state);
+                state.score_import_ui = None;
+                audio::play_sfx("assets/sounds/start.ogg");
+            }
+            return ScreenAction::None;
+        }
         let cancel_requested = matches!(
             three_key_action,
             Some((_, screen_input::ThreeKeyMenuAction::Cancel))
