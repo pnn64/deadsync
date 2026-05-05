@@ -59,6 +59,22 @@ pub(crate) use submit_status::{
     SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs, submit_retry_delay_secs,
 };
 
+// Lua charts stay blocked from online submit unless their effects have been
+// verified closely enough to match ITGmania for scoring purposes.
+const LUA_SCORE_SUBMIT_ALLOWLIST: [&str; 1] = ["d5bd4dd7224f68ff"];
+
+pub fn lua_chart_submit_allowed(chart_hash: &str) -> bool {
+    let hash = chart_hash.trim();
+    !hash.is_empty()
+        && LUA_SCORE_SUBMIT_ALLOWLIST
+            .iter()
+            .any(|allowed| allowed.eq_ignore_ascii_case(hash))
+}
+
+pub fn lua_submit_allowed(song_has_lua: bool, chart_hash: &str) -> bool {
+    !song_has_lua || lua_chart_submit_allowed(chart_hash)
+}
+
 // --- Grade Definitions ---
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
@@ -5323,6 +5339,16 @@ pub fn fetch_and_store_grade(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lua_chart_submit_allowlist_matches_spooky_hash() {
+        assert!(lua_chart_submit_allowed("d5bd4dd7224f68ff"));
+        assert!(lua_chart_submit_allowed(" D5BD4DD7224F68FF "));
+        assert!(!lua_chart_submit_allowed("deadbeefcafebabe"));
+        assert!(lua_submit_allowed(false, "deadbeefcafebabe"));
+        assert!(!lua_submit_allowed(true, "deadbeefcafebabe"));
+        assert!(lua_submit_allowed(true, "d5bd4dd7224f68ff"));
+    }
 
     #[test]
     fn groovestats_comment_counts_ignore_ds_prefix() {

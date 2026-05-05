@@ -5,8 +5,8 @@ use super::{
     cached_score_from_gs, compact_f32_text, de_i32_from_string_or_number,
     de_string_from_string_or_number, de_u32_from_string_or_number, gameplay_run_failed,
     gameplay_run_passed, gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
-    invalidate_player_leaderboards_for_side, itl, log_body_snippet, submit_record_banner,
-    submit_side_ix,
+    invalidate_player_leaderboards_for_side, itl, log_body_snippet, lua_chart_submit_allowed,
+    submit_record_banner, submit_side_ix,
 };
 use crate::engine::network;
 use crate::game::gameplay;
@@ -686,6 +686,14 @@ pub fn groovestats_eval_state_from_gameplay(
         gs.autoplay_used,
         gs.course_display_totals.is_some(),
     );
+    if state.valid
+        && gs.song.has_lua
+        && !lua_chart_submit_allowed(gs.charts[player_idx].short_hash.as_str())
+    {
+        state.valid = false;
+        state.reason_lines.push("simfile relies on lua".to_string());
+        return state;
+    }
     let failed = gameplay_run_failed(
         gs.players[player_idx].is_failing,
         gs.players[player_idx].fail_time.is_some(),
@@ -723,7 +731,7 @@ fn groovestats_submit_invalid_reason(
     profile: &Profile,
     music_rate: f32,
 ) -> Option<String> {
-    if song_has_lua {
+    if song_has_lua && !lua_chart_submit_allowed(chart.short_hash.as_str()) {
         return Some("simfile relies on lua".to_string());
     }
     groovestats_eval_state(chart, profile, music_rate, false, false)
@@ -1202,14 +1210,6 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         );
         return;
     }
-    if gs.song.has_lua {
-        debug!(
-            "Skipping {} submit: simfile relies on lua.",
-            online::groovestats_service_name()
-        );
-        return;
-    }
-
     let mut body = JsonMap::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
     let mut headers = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
     let mut query = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS) + 1);
@@ -1709,6 +1709,12 @@ mod tests {
 
     #[test]
     fn groovestats_validity_rejects_lua_simfiles() {
+        let mut allowed = sample_chart("dance-single");
+        allowed.short_hash = "d5bd4dd7224f68ff".to_string();
+        assert_eq!(
+            groovestats_submit_invalid_reason(&allowed, true, &Profile::default(), 1.0),
+            None
+        );
         assert_eq!(
             groovestats_submit_invalid_reason(
                 &sample_chart("dance-single"),

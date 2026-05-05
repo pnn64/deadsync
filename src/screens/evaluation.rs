@@ -1774,6 +1774,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 p.life,
                 p.fail_time.is_some(),
             );
+            let chart_hash = gs.charts[player_idx].short_hash.as_str();
+            let lua_submit_allowed = scores::lua_submit_allowed(gs.song.has_lua, chart_hash);
             let expected_groovestats_submit = cfg.enable_groovestats
                 && passed
                 && groovestats.valid
@@ -1782,7 +1784,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let expected_arrowcloud_submit = cfg.enable_arrowcloud
                 && !disqualified
                 && (passed || (failed && cfg.submit_arrowcloud_fails))
-                && !gs.song.has_lua
+                && lua_submit_allowed
                 && (gs.course_display_totals.is_none()
                     || cfg.autosubmit_course_scores_individually)
                 && !prof.arrowcloud_api_key.trim().is_empty();

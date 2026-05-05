@@ -49,6 +49,7 @@ const LOCK_COLOR_P1: [f32; 4] = [1.0, 1.0, 0.0, 1.0]; // yellow
 const LOCK_COLOR_P2: [f32; 4] = [1.0, 0.5, 0.0, 1.0]; // orange
 const LOCK_ZOOM_SINGLE: f32 = 0.039; // 512 * 0.039 ≈ 20px
 const LOCK_ZOOM_DUAL: f32 = 0.029; // 512 * 0.029 ≈ 15px
+const WHEEL_BADGE_ZOOM: f32 = 0.1875;
 const ITL_RANK_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
@@ -535,11 +536,46 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 && c.difficulty.eq_ignore_ascii_case("edit")
                         })
                     };
+                    let wheel_chart_for_side = |side: profile::PlayerSide| {
+                        let ix = steps_slot_for_side(play_style, side);
+                        if is_selected_slot {
+                            crate::screens::select_music::chart_for_steps_index(
+                                info,
+                                target_chart_type,
+                                p.selected_steps_index[ix],
+                            )
+                        } else {
+                            chart_for_preferred_or_nearest_standard(
+                                info,
+                                target_chart_type,
+                                p.preferred_difficulty_index[ix],
+                            )
+                        }
+                    };
                     let has_lua = info.has_lua;
+                    let lua_submit_allowed = has_lua
+                        && if joined_sides == 0 {
+                            wheel_chart_for_side(profile::PlayerSide::P1).is_some_and(|chart| {
+                                scores::lua_chart_submit_allowed(chart.short_hash.as_str())
+                            })
+                        } else {
+                            [profile::PlayerSide::P1, profile::PlayerSide::P2]
+                                .iter()
+                                .copied()
+                                .any(|side| {
+                                    profile::is_session_side_joined(side)
+                                        && wheel_chart_for_side(side).is_some_and(|chart| {
+                                            scores::lua_chart_submit_allowed(
+                                                chart.short_hash.as_str(),
+                                            )
+                                        })
+                                })
+                        };
                     let mut slot_capacity = 4
                         + usize::from(has_subtitle)
                         + usize::from(has_edit)
-                        + usize::from(has_lua);
+                        + usize::from(has_lua)
+                        + usize::from(lua_submit_allowed);
                     if p.show_music_wheel_grades {
                         slot_capacity += 2;
                     }
@@ -592,38 +628,29 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         } else {
                             badge_right_x_local
                         };
+                        if lua_submit_allowed {
+                            slot_children.push(act!(sprite("GrooveStats.png"):
+                                align(1.0, 0.5):
+                                xy(lua_x, half_item_h):
+                                zoom(WHEEL_BADGE_ZOOM):
+                                z(2)
+                            ));
+                        }
                         slot_children.push(act!(sprite("has_lua.png"):
                             align(1.0, 0.5):
                             xy(lua_x, half_item_h):
-                            zoom(0.1875):
-                            z(2)
+                            zoom(WHEEL_BADGE_ZOOM):
+                            z(3)
                         ));
                     }
                     if has_edit {
                         slot_children.push(act!(sprite("has_edit.png"):
                             align(1.0, 0.5):
                             xy(badge_right_x_local, half_item_h):
-                            zoom(0.1875):
+                            zoom(WHEEL_BADGE_ZOOM):
                             z(2)
                         ));
                     }
-
-                    let wheel_chart_for_side = |side: profile::PlayerSide| {
-                        let ix = steps_slot_for_side(play_style, side);
-                        if is_selected_slot {
-                            crate::screens::select_music::chart_for_steps_index(
-                                info,
-                                target_chart_type,
-                                p.selected_steps_index[ix],
-                            )
-                        } else {
-                            chart_for_preferred_or_nearest_standard(
-                                info,
-                                target_chart_type,
-                                p.preferred_difficulty_index[ix],
-                            )
-                        }
-                    };
                     if p.show_music_wheel_grades || p.show_music_wheel_lamps {
                         for (side, grade_x) in [
                             (profile::PlayerSide::P1, grade_x_p1),

@@ -1,7 +1,8 @@
 use super::{
     GROOVESTATS_SUBMIT_MAX_ENTRIES, RejectReason, gameplay_run_failed, gameplay_run_passed,
     gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
-    invalidate_player_leaderboards_for_side, log_body_snippet, submit_side_ix,
+    invalidate_player_leaderboards_for_side, log_body_snippet, lua_chart_submit_allowed,
+    submit_side_ix,
 };
 use crate::engine::network;
 use crate::game::gameplay;
@@ -882,14 +883,17 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
         debug!("Skipping ArrowCloud submit: course per-song autosubmit is disabled.");
         return;
     }
-    if gs.song.has_lua {
-        debug!("Skipping ArrowCloud submit: simfile relies on lua.");
-        return;
-    }
     let mut jobs = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
     for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         let chart_hash = gs.charts[player_idx].short_hash.as_str();
+        if gs.song.has_lua && !lua_chart_submit_allowed(chart_hash) {
+            debug!(
+                "Skipping ArrowCloud submit for {:?} ({}): simfile relies on lua.",
+                side, chart_hash
+            );
+            continue;
+        }
         let failed = gameplay_run_failed(
             gs.players[player_idx].is_failing,
             gs.players[player_idx].fail_time.is_some(),
