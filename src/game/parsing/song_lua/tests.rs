@@ -1,9 +1,9 @@
 use super::{
     EffectClock, EffectMode, GRAPH_DISPLAY_VALUE_RESOLUTION, SONG_LUA_INITIAL_LIFE,
     SONG_LUA_STARTUP_MESSAGE, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
-    SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaPlayerContext, SongLuaProxyTarget,
-    SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_STD,
-    compile_song_lua, file_path_string,
+    SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaOverlayState, SongLuaPlayerContext,
+    SongLuaProxyTarget, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit,
+    THEME_RECEPTOR_Y_STD, compile_song_lua, file_path_string, push_overlay_sample_eases,
 };
 use crate::engine::present::actors::TextAlign;
 use chrono::{Datelike, Local};
@@ -773,12 +773,12 @@ fn compile_song_lua_reuses_noteskin_tap_model_slots() {
     fs::write(
         &entry,
         r#"
-return Def.ActorFrame{
-    NOTESKIN:LoadActorForNoteSkin("Down", "Tap Note", "ddr-note")..{
-        Name="NoteskinTap",
-    },
-}
-"#,
+	return Def.ActorFrame{
+	    NOTESKIN:LoadActorForNoteSkin("Down", "Tap Note", "ddr-note")..{
+	        Name="NoteskinTap",
+	    },
+	}
+	"#,
     )
     .unwrap();
 
@@ -810,6 +810,71 @@ return Def.ActorFrame{
                 .iter()
                 .any(|vertex| vertex.tex_matrix_scale == [0.0, 0.0])
         })
+    }));
+}
+
+#[test]
+fn multitap_sample_eases_step_visibility_edges() {
+    let baseline = SongLuaOverlayState {
+        visible: false,
+        ..SongLuaOverlayState::default()
+    };
+    let hidden = baseline;
+    let visible_a = SongLuaOverlayState {
+        visible: true,
+        x: 100.0,
+        y: -20.0,
+        rot_z_deg: 90.0,
+        ..SongLuaOverlayState::default()
+    };
+    let visible_b = SongLuaOverlayState {
+        visible: true,
+        x: 120.0,
+        y: -10.0,
+        rot_z_deg: 90.0,
+        ..SongLuaOverlayState::default()
+    };
+    let samples = [
+        (0.0, hidden),
+        (0.125, visible_a),
+        (0.25, visible_b),
+        (0.375, hidden),
+    ];
+    let mut eases = Vec::new();
+
+    push_overlay_sample_eases(&mut eases, 7, baseline, &samples);
+
+    assert!(eases.iter().any(|ease| {
+        ease.overlay_index == 7
+            && ease.start == 0.125
+            && ease.limit == 0.0
+            && ease.to.visible == Some(true)
+            && ease.to.x == Some(100.0)
+            && ease.to.y == Some(-20.0)
+    }));
+    assert!(eases.iter().any(|ease| {
+        ease.overlay_index == 7
+            && ease.start == 0.125
+            && ease.limit == 0.125
+            && ease.from.x == Some(100.0)
+            && ease.to.x == Some(120.0)
+            && ease.to.visible == Some(true)
+    }));
+    let hide = eases
+        .iter()
+        .find(|ease| {
+            ease.overlay_index == 7
+                && ease.start == 0.375
+                && ease.limit == 0.0
+                && ease.to.visible == Some(false)
+        })
+        .expect("visibility should step off instead of tweening to the baseline");
+    assert_eq!(hide.to.x, None);
+    assert_eq!(hide.to.y, None);
+    assert!(!eases.iter().any(|ease| {
+        ease.to.visible == Some(false)
+            && ease.limit > 0.0
+            && (ease.to.x.is_some() || ease.to.y.is_some())
     }));
 }
 

@@ -3673,7 +3673,7 @@ fn song_lua_noteskin_actor(
                 center,
                 size,
                 uv,
-                -slot.def.rotation_deg as f32 + effect_rot[2],
+                -(slot.def.rotation_deg as f32 + effect_rot[2]),
                 tint,
                 blend,
                 layer_z,
@@ -3798,7 +3798,7 @@ fn song_lua_noteskin_sprite_actor(
         mask_dest: false,
         rot_x_deg: draw.rot[0],
         rot_y_deg: draw.rot[1],
-        rot_z_deg: rotation_z + draw.rot[2] - slot.def.rotation_deg as f32,
+        rot_z_deg: draw.rot[2] - slot.def.rotation_deg as f32 - rotation_z,
         local_offset: [0.0, 0.0],
         local_offset_rot_sin_cos: [0.0, 1.0],
         texcoordvelocity: None,
@@ -7795,6 +7795,24 @@ mod tests {
         [point.x, point.y]
     }
 
+    fn first_textured_mesh_transform(actor: &Actor) -> Matrix4 {
+        match actor {
+            Actor::TexturedMesh {
+                local_transform, ..
+            } => *local_transform,
+            Actor::Frame { children, .. } => children
+                .iter()
+                .find_map(|child| match child {
+                    Actor::TexturedMesh {
+                        local_transform, ..
+                    } => Some(*local_transform),
+                    _ => None,
+                })
+                .expect("expected textured mesh child"),
+            _ => panic!("expected textured mesh actor"),
+        }
+    }
+
     fn test_lobby_player(
         screen_name: &str,
         ready: bool,
@@ -8409,6 +8427,75 @@ mod tests {
         assert_eq!(*uv_offset, [0.375, -0.375]);
         assert_eq!(*uv_tex_shift, [0.25, -0.625]);
         assert_eq!(vertices.len(), 3);
+    }
+
+    #[test]
+    fn song_lua_noteskin_actor_rotation_matches_noteskin_base_rotation() {
+        let model_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("assets/noteskins/dance/ddr-note/_down tap note model.txt");
+        let slots = crate::game::parsing::noteskin::load_itg_model_slots_from_path(&model_path)
+            .expect("ddr-note tap model should load");
+        let mut rotated_slots = slots.iter().cloned().collect::<Vec<_>>();
+        for slot in &mut rotated_slots {
+            slot.set_rotation_deg(90);
+        }
+        let rotated_slots = Arc::<[SpriteSlot]>::from(rotated_slots.into_boxed_slice());
+        let mut asset_manager = AssetManager::new();
+        for slot in slots.iter().chain(rotated_slots.iter()) {
+            asset_manager
+                .queue_texture_upload(slot.texture_key().to_owned(), image::RgbaImage::new(16, 16));
+        }
+
+        let actor_rotation = song_lua_noteskin_actor(
+            &slots,
+            SongLuaOverlayState {
+                rot_z_deg: 90.0,
+                ..SongLuaOverlayState::default()
+            },
+            &asset_manager,
+            323,
+            1.0,
+            1.0,
+            [1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [0.0, 0.0, 90.0],
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [0.0, 0.0, 0.0, 0.0],
+            BlendMode::Alpha,
+            0.0,
+            0.0,
+        )
+        .expect("noteskin actor with song-lua rotation should render");
+        let base_rotation = song_lua_noteskin_actor(
+            &rotated_slots,
+            SongLuaOverlayState::default(),
+            &asset_manager,
+            323,
+            1.0,
+            1.0,
+            [1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [0.0, 0.0, 0.0, 0.0],
+            BlendMode::Alpha,
+            0.0,
+            0.0,
+        )
+        .expect("noteskin actor with pre-rotated slots should render");
+        let actor_matrix = first_textured_mesh_transform(&actor_rotation);
+        let base_matrix = first_textured_mesh_transform(&base_rotation);
+        let actor_cols = actor_matrix.to_cols_array();
+        let base_cols = base_matrix.to_cols_array();
+
+        assert!(
+            actor_cols
+                .iter()
+                .zip(base_cols.iter())
+                .all(|(left, right)| (left - right).abs() <= 0.000_1)
+        );
     }
 
     #[test]

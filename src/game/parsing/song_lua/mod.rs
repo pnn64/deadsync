@@ -3793,28 +3793,110 @@ fn push_overlay_sample_eases(
     baseline: SongLuaOverlayState,
     samples: &[(f32, SongLuaOverlayState)],
 ) {
+    if let Some((start, state)) = samples.first().copied() {
+        push_overlay_sample_instant_state(out, overlay_index, start, baseline, state);
+    }
     for window in samples.windows(2) {
         let [(start, from), (end, to)] = [window[0], window[1]];
-        if end <= start || from == to {
+        if end <= start {
             continue;
         }
-        let Some((from, to)) = overlay_delta_pair_from_states(baseline, from, to) else {
-            continue;
-        };
-        out.push(SongLuaOverlayEase {
-            overlay_index,
-            unit: SongLuaTimeUnit::Beat,
-            start,
-            limit: end - start,
-            span_mode: SongLuaSpanMode::Len,
-            from,
-            to,
-            easing: Some("linear".to_string()),
-            sustain: None,
-            opt1: None,
-            opt2: None,
-        });
+        match (from.visible, to.visible) {
+            (true, true) => {
+                push_overlay_sample_linear_ease(out, overlay_index, baseline, start, end, from, to)
+            }
+            (false, true) => {
+                push_overlay_sample_instant_state(out, overlay_index, end, baseline, to)
+            }
+            (true, false) => push_overlay_sample_instant_visible(out, overlay_index, end, false),
+            (false, false) => {}
+        }
     }
+}
+
+fn push_overlay_sample_linear_ease(
+    out: &mut Vec<SongLuaOverlayEase>,
+    overlay_index: usize,
+    baseline: SongLuaOverlayState,
+    start: f32,
+    end: f32,
+    from: SongLuaOverlayState,
+    to: SongLuaOverlayState,
+) {
+    if from == to {
+        return;
+    }
+    let Some((from, to)) = overlay_delta_pair_from_states(baseline, from, to) else {
+        return;
+    };
+    out.push(SongLuaOverlayEase {
+        overlay_index,
+        unit: SongLuaTimeUnit::Beat,
+        start,
+        limit: end - start,
+        span_mode: SongLuaSpanMode::Len,
+        from,
+        to,
+        easing: Some("linear".to_string()),
+        sustain: None,
+        opt1: None,
+        opt2: None,
+    });
+}
+
+fn push_overlay_sample_instant_state(
+    out: &mut Vec<SongLuaOverlayEase>,
+    overlay_index: usize,
+    start: f32,
+    baseline: SongLuaOverlayState,
+    state: SongLuaOverlayState,
+) {
+    if state == baseline {
+        return;
+    }
+    let Some((from, to)) = overlay_delta_pair_from_states(baseline, state, state) else {
+        return;
+    };
+    out.push(SongLuaOverlayEase {
+        overlay_index,
+        unit: SongLuaTimeUnit::Beat,
+        start,
+        limit: 0.0,
+        span_mode: SongLuaSpanMode::Len,
+        from,
+        to,
+        easing: None,
+        sustain: None,
+        opt1: None,
+        opt2: None,
+    });
+}
+
+fn push_overlay_sample_instant_visible(
+    out: &mut Vec<SongLuaOverlayEase>,
+    overlay_index: usize,
+    start: f32,
+    visible: bool,
+) {
+    out.push(SongLuaOverlayEase {
+        overlay_index,
+        unit: SongLuaTimeUnit::Beat,
+        start,
+        limit: 0.0,
+        span_mode: SongLuaSpanMode::Len,
+        from: SongLuaOverlayStateDelta {
+            visible: Some(visible),
+            ..SongLuaOverlayStateDelta::default()
+        },
+        to: SongLuaOverlayStateDelta {
+            visible: Some(visible),
+            ..SongLuaOverlayStateDelta::default()
+        },
+        easing: None,
+        sustain: None,
+        opt1: None,
+        opt2: None,
+    });
 }
 
 fn calc_multitap_phase(desc: &MultitapDesc, beat: f32) -> MultitapPhase {
@@ -4146,7 +4228,7 @@ fn multitap_qtzn_color_table(noteskin: &str) -> &'static [MultitapColorPair; 8] 
         }
     }
     for key in [
-        "ascii", "default", "easy", "exact", "lambda", "retro", "trax",
+        "ascii", "default", "easy", "exact", "lambda", "note", "retro", "trax",
     ] {
         if noteskin.contains(key) {
             return &MULTITAP_QTZN_NOTE;
@@ -4165,7 +4247,9 @@ fn install_multitap_explosion_messages(
 ) {
     let message = format!("__songlua_multitap_explosion_p{pn}_{lane}");
     let mut installed = false;
-    for overlay_index in overlay_descendants(overlays, explosion_index) {
+    let mut targets = vec![explosion_index];
+    targets.extend(overlay_descendants(overlays, explosion_index));
+    for overlay_index in targets {
         let blocks = multitap_explosion_command_blocks(&overlays[overlay_index].actor);
         if blocks.is_empty() {
             continue;
