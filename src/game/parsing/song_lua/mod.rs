@@ -3365,6 +3365,7 @@ fn compile_multitap_update_overlays(
                 arrow_index,
                 deco_index,
                 context,
+                player,
                 desc,
             );
         }
@@ -3482,6 +3483,7 @@ fn push_multitap_actor_eases(
     arrow_index: usize,
     deco_index: usize,
     context: &SongLuaCompileContext,
+    player: usize,
     desc: &MultitapDesc,
 ) {
     let start = desc.taps[0] - MULTITAP_PREVISIBLE_BEATS;
@@ -3497,6 +3499,7 @@ fn push_multitap_actor_eases(
             multitap_frame_state(
                 overlays[frame_index].actor.initial_state,
                 context,
+                player,
                 desc.lane,
                 phase,
             ),
@@ -3651,6 +3654,7 @@ fn calc_multitap_phase(desc: &MultitapDesc, beat: f32) -> MultitapPhase {
 fn multitap_frame_state(
     baseline: SongLuaOverlayState,
     context: &SongLuaCompileContext,
+    player: usize,
     lane: usize,
     phase: MultitapPhase,
 ) -> SongLuaOverlayState {
@@ -3660,13 +3664,38 @@ fn multitap_frame_state(
     let mut state = baseline;
     state.visible = true;
     state.x = song_lua_style_column_x(&context.style_name, lane - 1);
-    state.y = 64.0 * phase.pos;
+    state.y = THEME_RECEPTOR_Y_STD + multitap_y_offset(context, player, phase.pos);
     state.z = 0.0;
     state.zoom_x = 1.0;
     state.zoom_y = 1.0 + phase.squish;
     state.zoom_z = 1.0;
     state.diffuse[3] = 1.0;
     state
+}
+
+fn multitap_y_offset(context: &SongLuaCompileContext, player: usize, pos_beats: f32) -> f32 {
+    pos_beats * 64.0 * song_lua_speedmod_multiplier(context, player)
+}
+
+fn song_lua_speedmod_multiplier(context: &SongLuaCompileContext, player: usize) -> f32 {
+    let player = &context.players[player];
+    let reference_bpm = player.display_bpms[1].max(player.display_bpms[0]).max(1.0);
+    let music_rate = if context.song_music_rate.is_finite() && context.song_music_rate > 0.0 {
+        context.song_music_rate
+    } else {
+        1.0
+    };
+    let multiplier = match player.speedmod {
+        SongLuaSpeedMod::X(value) => value,
+        SongLuaSpeedMod::C(value) | SongLuaSpeedMod::M(value) | SongLuaSpeedMod::A(value) => {
+            value / reference_bpm / music_rate
+        }
+    };
+    if multiplier.is_finite() && multiplier > 0.0 {
+        multiplier
+    } else {
+        1.0
+    }
 }
 
 fn multitap_arrow_state(
@@ -3710,7 +3739,7 @@ fn multitap_explosion_state(
     let mut state = baseline;
     state.visible = visible;
     state.x = song_lua_style_column_x(&context.style_name, lane - 1);
-    state.y = 0.0;
+    state.y = THEME_RECEPTOR_Y_STD;
     state.z = 0.0;
     state.rot_z_deg = MULTITAP_LANE_ROTATION[lane - 1];
     state

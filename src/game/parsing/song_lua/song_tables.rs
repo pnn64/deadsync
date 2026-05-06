@@ -392,6 +392,10 @@ fn difficulty_meter(difficulty: SongLuaDifficulty) -> i32 {
 
 fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
+    table.set(
+        "__songlua_reference_bpm",
+        player.display_bpms[1].max(player.display_bpms[0]).max(1.0),
+    )?;
     install_speedmod_method(lua, &table, "CMod", player.speedmod, SongLuaSpeedMod::C)?;
     install_speedmod_state_method(lua, &table, "CAMod", Value::Nil)?;
     install_speedmod_method(lua, &table, "MMod", player.speedmod, SongLuaSpeedMod::M)?;

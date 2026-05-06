@@ -22,23 +22,83 @@ fn current_song_lua_style_name(lua: &Lua) -> String {
         .unwrap_or_else(|| "single".to_string())
 }
 
+fn arrow_effects_player_options(args: &MultiValue) -> mlua::Result<Option<Table>> {
+    let Some(Value::Table(player_state)) = args.front() else {
+        return Ok(None);
+    };
+    let Some(method) = player_state.get::<Option<Function>>("GetPlayerOptions")? else {
+        return Ok(None);
+    };
+    method.call::<Table>(player_state.clone()).map(Some)
+}
+
+fn arrow_effects_speedmod_value(options: &Table, name: &str) -> mlua::Result<Option<f32>> {
+    let Some(method) = options.get::<Option<Function>>(name)? else {
+        return Ok(None);
+    };
+    Ok(read_f32(method.call::<Value>(options.clone())?)
+        .filter(|value| value.is_finite() && *value > 0.0))
+}
+
+fn arrow_effects_speed_multiplier(args: &MultiValue) -> mlua::Result<f32> {
+    let Some(options) = arrow_effects_player_options(args)? else {
+        return Ok(1.0);
+    };
+    if let Some(value) = arrow_effects_speedmod_value(&options, "XMod")? {
+        return Ok(value);
+    }
+    let reference_bpm = options
+        .get::<Option<f32>>("__songlua_reference_bpm")?
+        .filter(|value| value.is_finite() && *value > 0.0)
+        .unwrap_or(1.0);
+    for name in ["CMod", "MMod", "AMod"] {
+        if let Some(value) = arrow_effects_speedmod_value(&options, name)? {
+            return Ok(value / reference_bpm);
+        }
+    }
+    Ok(1.0)
+}
+
+fn arrow_effects_reverse_percent(args: &MultiValue) -> mlua::Result<f32> {
+    let Some(options) = arrow_effects_player_options(args)? else {
+        return Ok(0.0);
+    };
+    let Some(method) = options.get::<Option<Function>>("GetReversePercentForColumn")? else {
+        return Ok(0.0);
+    };
+    let column = args
+        .get(1)
+        .cloned()
+        .and_then(read_f32)
+        .map(|value| value - 1.0)
+        .unwrap_or(0.0);
+    Ok(read_f32(method.call::<Value>((options, column))?)
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0))
+}
+
 pub(super) fn create_arrow_effects_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
         "GetYOffset",
         lua.create_function(|_, args: MultiValue| {
+            let speed = arrow_effects_speed_multiplier(&args)?;
             Ok(args
                 .get(2)
                 .cloned()
                 .and_then(read_f32)
-                .map(|beat| 64.0 * beat)
+                .map(|beat| 64.0 * beat * speed)
                 .unwrap_or(0.0_f32))
         })?,
     )?;
     table.set(
         "GetYPos",
         lua.create_function(|_, args: MultiValue| {
-            Ok(args.get(2).cloned().and_then(read_f32).unwrap_or(0.0_f32))
+            let y_offset = args.get(2).cloned().and_then(read_f32).unwrap_or(0.0_f32);
+            let reverse = arrow_effects_reverse_percent(&args)?;
+            let receptor_y = (THEME_RECEPTOR_Y_REV - THEME_RECEPTOR_Y_STD)
+                .mul_add(reverse, THEME_RECEPTOR_Y_STD);
+            Ok(receptor_y + y_offset * (1.0 - 2.0 * reverse))
         })?,
     )?;
     table.set(

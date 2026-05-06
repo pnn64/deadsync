@@ -941,6 +941,21 @@ pub fn row_hides_completed_note(state: &State, player: usize, row_index: usize) 
 }
 
 #[inline(always)]
+fn song_lua_hides_note_visual(state: &State, player: usize, column: usize, beat: f32) -> bool {
+    const EPS: f32 = 1.0e-4;
+    let local_col = if state.cols_per_player == 0 {
+        column
+    } else {
+        column % state.cols_per_player
+    };
+    state.song_lua_note_hides[player].iter().any(|window| {
+        window.column == local_col
+            && beat + EPS >= window.start_beat
+            && beat <= window.end_beat + EPS
+    })
+}
+
+#[inline(always)]
 fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_index: usize) {
     let Some((flash_note_indices, flash_count, flash_grade)) = ({
         let Some(row_entry) =
@@ -954,7 +969,11 @@ fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_in
     };
 
     for &note_index in &flash_note_indices[..flash_count] {
-        let column = state.notes[note_index].column;
+        let note = &state.notes[note_index];
+        let column = note.column;
+        if song_lua_hides_note_visual(state, player, column, note.beat) {
+            continue;
+        }
         trigger_tap_explosion(state, column, flash_grade);
     }
 }

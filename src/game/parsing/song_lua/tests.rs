@@ -2,8 +2,8 @@ use super::{
     EffectClock, EffectMode, GRAPH_DISPLAY_VALUE_RESOLUTION, SONG_LUA_INITIAL_LIFE,
     SONG_LUA_STARTUP_MESSAGE, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
     SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaPlayerContext, SongLuaProxyTarget,
-    SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit, compile_song_lua,
-    file_path_string,
+    SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_STD,
+    compile_song_lua, file_path_string,
 };
 use crate::engine::present::actors::TextAlign;
 use chrono::{Datelike, Local};
@@ -7780,7 +7780,7 @@ return Def.ActorFrame{
     )
     .unwrap();
     assert_eq!(compiled.messages.len(), 1);
-    assert_eq!(compiled.messages[0].message, "-96:0");
+    assert_eq!(compiled.messages[0].message, "-96:-125");
     assert_eq!(compiled.note_hides.len(), 1);
     assert_eq!(compiled.note_hides[0].player, 0);
     assert_eq!(compiled.note_hides[0].column, 0);
@@ -10956,6 +10956,18 @@ fn compile_song_lua_supports_flip69_sample_if_present() {
             .iter()
             .any(|ease| { ease.overlay_index == first_arrow && ease.to.rot_z_deg == Some(90.0) })
     );
+    let first_frame = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("MultitapP1_1"))
+        .unwrap();
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == first_frame
+            && ease
+                .to
+                .y
+                .is_some_and(|y| (y - THEME_RECEPTOR_Y_STD).abs() <= 0.01)
+    }));
 }
 
 #[test]
