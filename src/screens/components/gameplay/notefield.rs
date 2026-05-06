@@ -3561,6 +3561,16 @@ fn hold_overlaps_visible_window(
 }
 
 #[inline(always)]
+fn song_lua_hides_note(state: &State, player: usize, local_col: usize, beat: f32) -> bool {
+    const EPS: f32 = 1.0e-4;
+    state.song_lua_note_hides[player].iter().any(|window| {
+        window.column == local_col
+            && beat + EPS >= window.start_beat
+            && beat <= window.end_beat + EPS
+    })
+}
+
+#[inline(always)]
 const fn mine_hides_after_resolution(mine_result: Option<MineResult>) -> bool {
     // ITG hides mines once they have received any final mine judgment, not
     // only after a hit explosion.
@@ -4882,6 +4892,9 @@ pub fn build_bundles(
             }
             let local_col = note.column - col_start;
             if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                return;
+            }
+            if song_lua_hides_note(state, player_idx, local_col, note.beat) {
                 return;
             }
             let Some(hold) = &note.hold else {
@@ -6586,6 +6599,9 @@ pub fn build_bundles(
                 |note_index| {
                     let note = &state.notes[note_index];
                     if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                        return;
+                    }
+                    if song_lua_hides_note(state, player_idx, col_idx, note.beat) {
                         return;
                     }
                     if !note.is_fake {

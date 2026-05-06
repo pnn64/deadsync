@@ -642,6 +642,7 @@ fn create_note_column_actor(
     let actor = create_dummy_actor(lua, "NoteColumnRenderer")?;
     actor.set("__songlua_parent", note_field.clone())?;
     actor.set("__songlua_player_index", player_index as i64)?;
+    actor.set("__songlua_column_index", column_index as i64)?;
     actor.set(
         "__songlua_state_x",
         song_lua_style_column_x(style_name, column_index),
@@ -652,6 +653,9 @@ fn create_note_column_actor(
     let pos_handler = create_note_column_spline_handler(lua)?;
     let rot_handler = create_note_column_spline_handler(lua)?;
     let zoom_handler = create_note_column_spline_handler(lua)?;
+    actor.set("__songlua_pos_handler", pos_handler.clone())?;
+    actor.set("__songlua_rot_handler", rot_handler.clone())?;
+    actor.set("__songlua_zoom_handler", zoom_handler.clone())?;
     actor.set(
         "GetPosHandler",
         lua.create_function(move |_, _args: MultiValue| Ok(pos_handler.clone()))?,
@@ -670,6 +674,7 @@ fn create_note_column_actor(
 fn create_note_column_spline_handler(lua: &Lua) -> mlua::Result<Table> {
     let handler = lua.create_table()?;
     let spline = create_cubic_spline_table(lua)?;
+    handler.set("__songlua_spline", spline.clone())?;
     handler.set("__songlua_spline_mode", "NoteColumnSplineMode_Offset")?;
     handler.set("__songlua_subtract_song_beat", false)?;
     handler.set("__songlua_receptor_t", 0.0_f32)?;
@@ -2147,10 +2152,25 @@ pub(super) fn run_actor_startup_commands(lua: &Lua, root: &Value) -> mlua::Resul
 }
 
 pub(super) fn run_actor_update_functions(lua: &Lua, root: &Value) -> mlua::Result<()> {
+    run_actor_update_functions_with_delta(lua, root, 1.0_f64 / 60.0)
+}
+
+pub(super) fn run_actor_update_functions_with_delta(
+    lua: &Lua,
+    root: &Value,
+    delta_seconds: f64,
+) -> mlua::Result<()> {
     let Value::Table(root) = root else {
         return Ok(());
     };
-    run_actor_update_functions_for_table(lua, root, 1.0_f64 / 60.0)
+    run_actor_update_functions_for_table(lua, root, delta_seconds)
+}
+
+pub(super) fn actor_tree_has_update_functions(lua: &Lua, root: &Value) -> mlua::Result<bool> {
+    let Value::Table(root) = root else {
+        return Ok(false);
+    };
+    actor_table_has_update_functions(lua, root)
 }
 
 pub(super) fn run_actor_draw_functions(lua: &Lua, root: &Value) {
@@ -2225,6 +2245,56 @@ pub(super) fn read_update_function_tables(
     let mut out = Vec::new();
     let mut seen_tables = HashSet::new();
     read_update_function_tables_for_table(root, &getupvalue, names, &mut seen_tables, &mut out)?;
+    Ok(out)
+}
+
+pub(super) fn read_note_column_zoom_hides(lua: &Lua) -> Result<Vec<SongLuaNoteHideWindow>, String> {
+    let globals = lua.globals();
+    let mut out = Vec::new();
+    for player in 0..LUA_PLAYERS {
+        let key = if player == 0 {
+            "__songlua_top_screen_player_1"
+        } else {
+            "__songlua_top_screen_player_2"
+        };
+        let Some(player_actor) = globals
+            .get::<Option<Table>>(key)
+            .map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        let Some(note_field) = actor_named_children(lua, &player_actor)
+            .map_err(|err| err.to_string())?
+            .get::<Option<Table>>("NoteField")
+            .map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        let Some(columns) = note_field
+            .get::<Option<Table>>("__songlua_note_columns")
+            .map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        for column in columns.sequence_values::<Table>() {
+            let column = column.map_err(|err| err.to_string())?;
+            let Some(local_col) = column
+                .get::<Option<i64>>("__songlua_column_index")
+                .map_err(|err| err.to_string())?
+                .and_then(|value| usize::try_from(value).ok())
+            else {
+                continue;
+            };
+            read_note_column_zoom_hides_for(player, local_col, &column, &mut out)?;
+        }
+    }
+    out.sort_by(|left, right| {
+        left.player
+            .cmp(&right.player)
+            .then_with(|| left.column.cmp(&right.column))
+            .then_with(|| left.start_beat.total_cmp(&right.start_beat))
+            .then_with(|| left.end_beat.total_cmp(&right.end_beat))
+    });
     Ok(out)
 }
 
@@ -2331,6 +2401,129 @@ fn run_actor_update_functions_for_table(
         run_actor_update_functions_for_table(lua, &stream, delta_seconds)?;
     }
     Ok(())
+}
+
+fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Result<bool> {
+    if actor
+        .get::<Option<Function>>("__songlua_update_function")?
+        .is_some()
+    {
+        return Ok(true);
+    }
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child? else {
+            continue;
+        };
+        if actor_table_has_update_functions(lua, &child)? {
+            return Ok(true);
+        }
+    }
+    if let Some(stream) = song_meter_stream_child(lua, actor)? {
+        return actor_table_has_update_functions(lua, &stream);
+    }
+    Ok(false)
+}
+
+fn read_note_column_zoom_hides_for(
+    player: usize,
+    column: usize,
+    actor: &Table,
+    out: &mut Vec<SongLuaNoteHideWindow>,
+) -> Result<(), String> {
+    let Some(handler) = actor
+        .get::<Option<Table>>("__songlua_zoom_handler")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(());
+    };
+    let mode = handler
+        .get::<Option<String>>("__songlua_spline_mode")
+        .map_err(|err| err.to_string())?
+        .unwrap_or_default();
+    if !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Offset") {
+        return Ok(());
+    }
+    if handler
+        .get::<Option<bool>>("__songlua_subtract_song_beat")
+        .map_err(|err| err.to_string())?
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+    let beats_per_t = handler
+        .get::<Option<f32>>("__songlua_beats_per_t")
+        .map_err(|err| err.to_string())?
+        .unwrap_or(1.0);
+    if !beats_per_t.is_finite() || beats_per_t <= 0.0 {
+        return Ok(());
+    }
+    let Some(spline) = handler
+        .get::<Option<Table>>("__songlua_spline")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(());
+    };
+    let size = spline
+        .get::<Option<i64>>("__songlua_spline_size")
+        .map_err(|err| err.to_string())?
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or(0);
+    let points = spline
+        .get::<Table>("__songlua_spline_points")
+        .map_err(|err| err.to_string())?;
+    let mut run_start = None::<usize>;
+    for index in 1..=size {
+        let hidden = points
+            .raw_get::<Option<Table>>(index)
+            .map_err(|err| err.to_string())?
+            .is_some_and(|point| note_zoom_point_hides(&point));
+        match (run_start, hidden) {
+            (None, true) => run_start = Some(index),
+            (Some(start), false) => {
+                push_note_hide_window(out, player, column, beats_per_t, start, index - 1);
+                run_start = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(start) = run_start {
+        push_note_hide_window(out, player, column, beats_per_t, start, size);
+    }
+    Ok(())
+}
+
+fn note_zoom_point_hides(point: &Table) -> bool {
+    let zoom_x = point.raw_get::<Value>(1).ok().and_then(read_f32);
+    let zoom_y = point.raw_get::<Value>(2).ok().and_then(read_f32);
+    let zoom_z = point.raw_get::<Value>(3).ok().and_then(read_f32);
+    match (zoom_x, zoom_y, zoom_z) {
+        (Some(x), Some(y), Some(z)) => x <= -0.99 && y <= -0.99 && z <= -0.99,
+        _ => false,
+    }
+}
+
+fn push_note_hide_window(
+    out: &mut Vec<SongLuaNoteHideWindow>,
+    player: usize,
+    column: usize,
+    beats_per_t: f32,
+    start_index: usize,
+    end_index: usize,
+) {
+    if start_index == 0 || end_index < start_index {
+        return;
+    }
+    let start_beat = (start_index - 1) as f32 * beats_per_t;
+    let end_beat = (end_index - 1) as f32 * beats_per_t;
+    if !start_beat.is_finite() || !end_beat.is_finite() || end_beat < start_beat {
+        return;
+    }
+    out.push(SongLuaNoteHideWindow {
+        player,
+        column,
+        start_beat,
+        end_beat,
+    });
 }
 
 fn run_actor_draw_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {

@@ -2483,6 +2483,53 @@ return Def.ActorFrame{
 }
 
 #[test]
+fn compile_song_lua_samples_update_function_overlay_motion() {
+    let song_dir = test_dir("set-update-function-overlay-motion");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local target
+return Def.ActorFrame{
+    Def.Quad{
+        InitCommand=function(self)
+            target = self
+            self:visible(false):zoomto(16, 16)
+        end,
+    },
+    Def.ActorFrame{
+        OnCommand=function(self)
+            self:SetUpdateFunction(function()
+                local beat = GAMESTATE:GetSongBeat()
+                target:visible(beat >= 2 and beat <= 4)
+                target:x(beat * 10)
+                target:rotationz(beat * 15)
+            end)
+        end,
+    },
+}
+"#,
+    )
+    .unwrap();
+
+    let mut context = SongLuaCompileContext::new(&song_dir, "SetUpdateFunction Overlay Motion");
+    context.music_length_seconds = 6.0;
+    let compiled = compile_song_lua(&entry, &context).unwrap();
+    assert_eq!(compiled.overlays.len(), 1);
+    assert!(
+        compiled.overlay_eases.iter().any(|ease| {
+            ease.overlay_index == 0 && ease.from.x.is_some() && ease.to.x.is_some()
+        })
+    );
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == 0 && ease.from.rot_z_deg.is_some() && ease.to.rot_z_deg.is_some()
+    }));
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == 0 && ease.from.visible.is_some() && ease.to.visible.is_some()
+    }));
+}
+
+#[test]
 fn compile_song_lua_clears_update_function_with_nil() {
     let song_dir = test_dir("set-update-function-clear");
     let entry = song_dir.join("default.lua");
@@ -7734,6 +7781,9 @@ return Def.ActorFrame{
     .unwrap();
     assert_eq!(compiled.messages.len(), 1);
     assert_eq!(compiled.messages[0].message, "-96:0");
+    assert_eq!(compiled.note_hides.len(), 1);
+    assert_eq!(compiled.note_hides[0].player, 0);
+    assert_eq!(compiled.note_hides[0].column, 0);
 }
 
 #[test]
@@ -10868,6 +10918,7 @@ fn compile_song_lua_supports_flip69_sample_if_present() {
 
     let mut context = SongLuaCompileContext::new(&root, "[5604] [10] flip69");
     context.style_name = "double".to_string();
+    context.music_length_seconds = 48.0;
     context.players = [
         SongLuaPlayerContext {
             enabled: true,
@@ -10885,6 +10936,8 @@ fn compile_song_lua_supports_flip69_sample_if_present() {
 
     let compiled = compile_song_lua(&entry, &context).unwrap();
     assert!(!compiled.overlays.is_empty());
+    assert!(!compiled.overlay_eases.is_empty());
+    assert!(!compiled.note_hides.is_empty());
 }
 
 #[test]
