@@ -534,6 +534,7 @@ pub(super) mod tests {
                 },
                 cursor: CursorInit::FirstActiveBit,
             }),
+            writeback: None,
         };
         let mut advanced_rows = test_row_map(vec![test_bitmask_row(
             RowId::Scroll,
@@ -625,6 +626,7 @@ pub(super) mod tests {
                 },
                 cursor: CursorInit::FirstActiveBit,
             }),
+            writeback: None,
         };
         let mut hide_rows = test_row_map(vec![test_bitmask_row(
             RowId::Hide,
@@ -694,6 +696,7 @@ pub(super) mod tests {
                 },
                 cursor: CursorInit::Fixed(0),
             }),
+            writeback: None,
         };
         let mut fa_plus_rows = test_row_map(vec![test_bitmask_row(
             RowId::FAPlusOptions,
@@ -759,6 +762,7 @@ pub(super) mod tests {
                 },
                 cursor: CursorInit::FirstActiveBit,
             }),
+            writeback: None,
         };
         let mut rows = test_row_map(vec![test_bitmask_row(
             RowId::GameplayExtras,
@@ -1020,6 +1024,7 @@ pub(super) mod tests {
             behavior: super::RowBehavior::Bitmask(super::BitmaskBinding {
                 toggle: super::choice::toggle_scroll_row,
                 init: None,
+                writeback: None,
             }),
             name: lookup_key("PlayerOptions", "Scroll"),
             choices: ["Reverse", "Split", "Alternate", "Cross", "Centered"]
@@ -1368,6 +1373,7 @@ pub(super) mod tests {
             behavior: super::RowBehavior::Bitmask(super::BitmaskBinding {
                 toggle: super::choice::toggle_scroll_row,
                 init: None,
+                writeback: None,
             }),
             name: lookup_key("PlayerOptions", "Scroll"),
             choices: ["Reverse", "Split", "Alternate", "Cross", "Centered"]

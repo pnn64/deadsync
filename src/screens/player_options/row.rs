@@ -178,15 +178,54 @@ pub struct ChoiceBinding<T: Copy + 'static> {
 ///      preserved, matching legacy direct-assignment semantics).
 ///    - `cursor: CursorInit::FirstActiveBit` for normal rows, or
 ///      `CursorInit::Fixed(0)` for pinned-cursor rows like FA+ Options.
-/// 4. Write the matching `toggle_my_row` helper in `choice.rs`.
+/// 4. Either:
+///    - Add a `writeback: Some(BitmaskWriteback { ... })` so the generic
+///      `toggle_bitmask_row_generic` in `choice.rs` handles input. This
+///      is the preferred path for "clean" rows that just project a single
+///      mask field onto the profile and persist for one side. Set
+///      `toggle: |_, _| {}` (a noop); it is unused when `writeback` is
+///      `Some`.
+///    - Or write a hand-rolled `toggle_my_row` helper in `choice.rs` and
+///      point `toggle` at it (used for rows that fan out to multiple
+///      profile fields, recompute derived values, or call
+///      `sync_selected_rows_with_visibility`).
 #[derive(Clone, Copy, Debug)]
 pub struct BitmaskBinding {
+    /// Hand-rolled toggle. Called by `dispatch_behavior_toggle` only when
+    /// `writeback` is `None`. For `writeback`-driven bindings, set this to
+    /// `|_, _| {}`.
     pub toggle: fn(&mut State, usize),
     /// Opt-in init contract. When `Some`, a row's initial mask bits and
     /// cursor position are derived directly from a `Profile` via the
     /// helpers in `BitmaskInit`. Every production binding currently opts
     /// in; `None` is reserved for synthetic bindings used in tests.
     pub init: Option<BitmaskInit>,
+    /// Opt-in declarative toggle contract. When `Some`, the input
+    /// dispatcher routes the focused row's toggle through
+    /// `toggle_bitmask_row_generic`, which uses `init.get_active`/
+    /// `init.set_active` to flip a bit and then calls these callbacks to
+    /// project the new bits onto the in-memory profile and (conditionally)
+    /// persist them for the given side. `init` must also be `Some` for
+    /// `writeback` to take effect.
+    pub writeback: Option<BitmaskWriteback>,
+}
+
+/// Declarative writeback contract for a `BitmaskBinding`. Together with
+/// `BitmaskInit`, this lets the generic toggle fully replace a hand-rolled
+/// `toggle_*_row` for "clean" bitmask rows that have no fan-out and no
+/// visibility-sync side effects.
+#[derive(Clone, Copy, Debug)]
+pub struct BitmaskWriteback {
+    /// Project the row's bits onto the in-memory profile. Implementations
+    /// typically reconstruct the typed mask via `from_bits_truncate`.
+    pub project_to_profile: fn(&mut Profile, u32),
+    /// Persist the row's bits for the given side. Called only when
+    /// `persist_ctx` says the active player_idx should write through.
+    pub persist_for_side: fn(PlayerSide, u32),
+    /// Map the focused row's selected choice index to the bit to toggle,
+    /// or `None` if the index is out of the row's bit width. Returning a
+    /// nonzero `Some(bit)` causes a toggle; `None` or `Some(0)` is a noop.
+    pub bit_for_choice: fn(usize, &Row) -> Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug)]
