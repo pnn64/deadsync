@@ -10968,6 +10968,43 @@ fn compile_song_lua_supports_flip69_sample_if_present() {
                 .y
                 .is_some_and(|y| (y - THEME_RECEPTOR_Y_STD).abs() <= 0.01)
     }));
+    let first_deco = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("MultitapDeco1_1"))
+        .unwrap();
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == first_deco
+            && ease
+                .to
+                .effect_color1
+                .is_some_and(|color| color[0] > 0.99 && color[1] < 0.6 && color[2] < 0.6)
+    }));
+    let first_deco_child = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.parent_index == Some(first_deco))
+        .unwrap();
+    assert!(compiled.overlay_eases.iter().any(|ease| {
+        ease.overlay_index == first_deco_child
+            && ease
+                .to
+                .effect_color1
+                .is_some_and(|color| color[0] > 0.99 && color[1] < 0.6 && color[2] < 0.6)
+    }));
+    let explosion_message = "__songlua_multitap_explosion_p1_4";
+    assert!(compiled.messages.iter().any(|message| {
+        message.message == explosion_message && (message.beat - 40.0).abs() <= 0.01
+    }));
+    assert!(compiled.overlays.iter().any(|overlay| {
+        overlay.message_commands.iter().any(|command| {
+            command.message == explosion_message
+                && command
+                    .blocks
+                    .iter()
+                    .any(|block| block.delta.visible.is_some() || block.delta.diffuse.is_some())
+        })
+    }));
 }
 
 #[test]
