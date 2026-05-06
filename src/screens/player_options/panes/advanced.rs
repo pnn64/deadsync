@@ -1,6 +1,12 @@
+use super::super::choice;
 use super::super::constants::MINI_INDICATOR_VARIANTS;
 use super::super::row::index_binding;
 use super::super::row::{BitmaskInit, CursorInit, CycleInit, NumericInit};
+use super::super::state::{
+    EarlyDwMask, ErrorBarOptionsMask, FaPlusMask, GameplayExtrasMask, HideMask,
+    LifeBarOptionsMask, MeasureCounterOptionsMask, PlayerOptionMasks, ResultsExtrasMask,
+    ScrollMask,
+};
 use super::*;
 use crate::game::profile as gp;
 
@@ -282,21 +288,21 @@ const SCROLL: BitmaskBinding = BitmaskBinding::HandRolled {
             // invariant. We translate per-flag rather than copying ``.0`` so
             // any future divergence is caught here.
             use crate::game::profile::ScrollOption;
-            let mut bits = super::super::state::ScrollMask::empty();
+            let mut bits = ScrollMask::empty();
             if p.scroll_option.contains(ScrollOption::Reverse) {
-                bits.insert(super::super::state::ScrollMask::from_bits_retain(1u8 << 0));
+                bits.insert(ScrollMask::from_bits_retain(1u8 << 0));
             }
             if p.scroll_option.contains(ScrollOption::Split) {
-                bits.insert(super::super::state::ScrollMask::from_bits_retain(1u8 << 1));
+                bits.insert(ScrollMask::from_bits_retain(1u8 << 1));
             }
             if p.scroll_option.contains(ScrollOption::Alternate) {
-                bits.insert(super::super::state::ScrollMask::from_bits_retain(1u8 << 2));
+                bits.insert(ScrollMask::from_bits_retain(1u8 << 2));
             }
             if p.scroll_option.contains(ScrollOption::Cross) {
-                bits.insert(super::super::state::ScrollMask::from_bits_retain(1u8 << 3));
+                bits.insert(ScrollMask::from_bits_retain(1u8 << 3));
             }
             if p.scroll_option.contains(ScrollOption::Centered) {
-                bits.insert(super::super::state::ScrollMask::from_bits_retain(1u8 << 4));
+                bits.insert(ScrollMask::from_bits_retain(1u8 << 4));
             }
             bits.bits() as u32
         },
@@ -307,36 +313,36 @@ const SCROLL: BitmaskBinding = BitmaskBinding::HandRolled {
                 0,
                 "ScrollMask init bits exceed u8 width"
             );
-            m.scroll = super::super::state::ScrollMask::from_bits_retain(b as u8);
+            m.scroll = ScrollMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    toggle: super::super::choice::toggle_scroll_row,
+    toggle: choice::toggle_scroll_row,
 };
 const HIDE: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
-            let mut bits = super::super::state::HideMask::empty();
+            let mut bits = HideMask::empty();
             if p.hide_targets {
-                bits.insert(super::super::state::HideMask::TARGETS);
+                bits.insert(HideMask::TARGETS);
             }
             if p.hide_song_bg {
-                bits.insert(super::super::state::HideMask::BACKGROUND);
+                bits.insert(HideMask::BACKGROUND);
             }
             if p.hide_combo {
-                bits.insert(super::super::state::HideMask::COMBO);
+                bits.insert(HideMask::COMBO);
             }
             if p.hide_lifebar {
-                bits.insert(super::super::state::HideMask::LIFE);
+                bits.insert(HideMask::LIFE);
             }
             if p.hide_score {
-                bits.insert(super::super::state::HideMask::SCORE);
+                bits.insert(HideMask::SCORE);
             }
             if p.hide_danger {
-                bits.insert(super::super::state::HideMask::DANGER);
+                bits.insert(HideMask::DANGER);
             }
             if p.hide_combo_explosions {
-                bits.insert(super::super::state::HideMask::COMBO_EXPLOSIONS);
+                bits.insert(HideMask::COMBO_EXPLOSIONS);
             }
             bits.bits() as u32
         },
@@ -347,24 +353,24 @@ const HIDE: BitmaskBinding = BitmaskBinding::HandRolled {
                 0,
                 "HideMask init bits exceed u8 width"
             );
-            m.hide = super::super::state::HideMask::from_bits_retain(b as u8);
+            m.hide = HideMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    toggle: super::super::choice::toggle_hide_row,
+    toggle: choice::toggle_hide_row,
 };
 const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
-            let mut bits = super::super::state::LifeBarOptionsMask::empty();
+            let mut bits = LifeBarOptionsMask::empty();
             if p.rainbow_max {
-                bits.insert(super::super::state::LifeBarOptionsMask::RAINBOW_MAX);
+                bits.insert(LifeBarOptionsMask::RAINBOW_MAX);
             }
             if p.responsive_colors {
-                bits.insert(super::super::state::LifeBarOptionsMask::RESPONSIVE_COLORS);
+                bits.insert(LifeBarOptionsMask::RESPONSIVE_COLORS);
             }
             if p.show_life_percent {
-                bits.insert(super::super::state::LifeBarOptionsMask::SHOW_LIFE_PERCENT);
+                bits.insert(LifeBarOptionsMask::SHOW_LIFE_PERCENT);
             }
             bits.bits() as u32
         },
@@ -375,27 +381,27 @@ const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
                 0,
                 "LifeBarOptionsMask init bits exceed u8 width",
             );
-            m.life_bar_options = super::super::state::LifeBarOptionsMask::from_bits_retain(b as u8);
+            m.life_bar_options = LifeBarOptionsMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    toggle: super::super::choice::toggle_life_bar_options_row,
+    toggle: choice::toggle_life_bar_options_row,
 };
 const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
-            let mut bits = super::super::state::GameplayExtrasMask::empty();
+            let mut bits = GameplayExtrasMask::empty();
             if p.column_flash_on_miss {
-                bits.insert(super::super::state::GameplayExtrasMask::FLASH_COLUMN_FOR_MISS);
+                bits.insert(GameplayExtrasMask::FLASH_COLUMN_FOR_MISS);
             }
             if p.nps_graph_at_top {
-                bits.insert(super::super::state::GameplayExtrasMask::DENSITY_GRAPH_AT_TOP);
+                bits.insert(GameplayExtrasMask::DENSITY_GRAPH_AT_TOP);
             }
             if p.column_cues {
-                bits.insert(super::super::state::GameplayExtrasMask::COLUMN_CUES);
+                bits.insert(GameplayExtrasMask::COLUMN_CUES);
             }
             if p.display_scorebox {
-                bits.insert(super::super::state::GameplayExtrasMask::DISPLAY_SCOREBOX);
+                bits.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
             }
             bits.bits() as u32
         },
@@ -406,11 +412,11 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::HandRolled {
                 0,
                 "GameplayExtrasMask init bits exceed u8 width",
             );
-            m.gameplay_extras = super::super::state::GameplayExtrasMask::from_bits_retain(b as u8);
+            m.gameplay_extras = GameplayExtrasMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    toggle: super::super::choice::toggle_gameplay_extras_row,
+    toggle: choice::toggle_gameplay_extras_row,
 };
 const ERROR_BAR: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
@@ -436,17 +442,17 @@ const ERROR_BAR: BitmaskBinding = BitmaskBinding::HandRolled {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    toggle: super::super::choice::toggle_error_bar_row,
+    toggle: choice::toggle_error_bar_row,
 };
 const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
-            let mut bits = super::super::state::ErrorBarOptionsMask::empty();
+            let mut bits = ErrorBarOptionsMask::empty();
             if p.error_bar_up {
-                bits.insert(super::super::state::ErrorBarOptionsMask::MOVE_UP);
+                bits.insert(ErrorBarOptionsMask::MOVE_UP);
             }
             if p.error_bar_multi_tick {
-                bits.insert(super::super::state::ErrorBarOptionsMask::MULTI_TICK);
+                bits.insert(ErrorBarOptionsMask::MULTI_TICK);
             }
             bits.bits() as u32
         },
@@ -458,30 +464,30 @@ const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
                 "ErrorBarOptionsMask init bits exceed u8 width",
             );
             m.error_bar_options =
-                super::super::state::ErrorBarOptionsMask::from_bits_retain(b as u8);
+                ErrorBarOptionsMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    toggle: super::super::choice::toggle_error_bar_options_row,
+    toggle: choice::toggle_error_bar_options_row,
 };
 const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
-            let mut bits = super::super::state::MeasureCounterOptionsMask::empty();
+            let mut bits = MeasureCounterOptionsMask::empty();
             if p.measure_counter_left {
-                bits.insert(super::super::state::MeasureCounterOptionsMask::MOVE_LEFT);
+                bits.insert(MeasureCounterOptionsMask::MOVE_LEFT);
             }
             if p.measure_counter_up {
-                bits.insert(super::super::state::MeasureCounterOptionsMask::MOVE_UP);
+                bits.insert(MeasureCounterOptionsMask::MOVE_UP);
             }
             if p.measure_counter_vert {
-                bits.insert(super::super::state::MeasureCounterOptionsMask::VERTICAL_LOOKAHEAD);
+                bits.insert(MeasureCounterOptionsMask::VERTICAL_LOOKAHEAD);
             }
             if p.broken_run {
-                bits.insert(super::super::state::MeasureCounterOptionsMask::BROKEN_RUN_TOTAL);
+                bits.insert(MeasureCounterOptionsMask::BROKEN_RUN_TOTAL);
             }
             if p.run_timer {
-                bits.insert(super::super::state::MeasureCounterOptionsMask::RUN_TIMER);
+                bits.insert(MeasureCounterOptionsMask::RUN_TIMER);
             }
             bits.bits() as u32
         },
@@ -493,42 +499,42 @@ const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
                 "MeasureCounterOptionsMask init bits exceed u8 width",
             );
             m.measure_counter_options =
-                super::super::state::MeasureCounterOptionsMask::from_bits_retain(b as u8);
+                MeasureCounterOptionsMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    toggle: super::super::choice::toggle_measure_counter_options_row,
+    toggle: choice::toggle_measure_counter_options_row,
 };
 fn fa_plus_bits_from_profile(p: &gp::Profile) -> u32 {
-    let mut bits = super::super::state::FaPlusMask::empty();
+    let mut bits = FaPlusMask::empty();
     if p.show_fa_plus_window {
-        bits.insert(super::super::state::FaPlusMask::WINDOW);
+        bits.insert(FaPlusMask::WINDOW);
     }
     if p.show_ex_score {
-        bits.insert(super::super::state::FaPlusMask::EX_SCORE);
+        bits.insert(FaPlusMask::EX_SCORE);
     }
     if p.show_hard_ex_score {
-        bits.insert(super::super::state::FaPlusMask::HARD_EX_SCORE);
+        bits.insert(FaPlusMask::HARD_EX_SCORE);
     }
     if p.show_fa_plus_pane {
-        bits.insert(super::super::state::FaPlusMask::PANE);
+        bits.insert(FaPlusMask::PANE);
     }
     if p.fa_plus_10ms_blue_window {
-        bits.insert(super::super::state::FaPlusMask::BLUE_WINDOW_10MS);
+        bits.insert(FaPlusMask::BLUE_WINDOW_10MS);
     }
     if p.split_15_10ms {
-        bits.insert(super::super::state::FaPlusMask::SPLIT_15_10MS);
+        bits.insert(FaPlusMask::SPLIT_15_10MS);
     }
     bits.bits() as u32
 }
 
-fn set_fa_plus_bits(m: &mut super::super::state::PlayerOptionMasks, b: u32) {
+fn set_fa_plus_bits(m: &mut PlayerOptionMasks, b: u32) {
     debug_assert_eq!(
         b & !(u8::MAX as u32),
         0,
         "FaPlusMask init bits exceed u8 width"
     );
-    m.fa_plus = super::super::state::FaPlusMask::from_bits_retain(b as u8);
+    m.fa_plus = FaPlusMask::from_bits_retain(b as u8);
 }
 
 const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
@@ -538,7 +544,7 @@ const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
         set_active: set_fa_plus_bits,
         cursor: CursorInit::Fixed(0),
     }),
-    toggle: super::super::choice::toggle_fa_plus_row,
+    toggle: choice::toggle_fa_plus_row,
 };
 
 const FA_PLUS_WINDOW_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
@@ -548,17 +554,17 @@ const FA_PLUS_WINDOW_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
         set_active: set_fa_plus_bits,
         cursor: CursorInit::FirstActiveBit,
     }),
-    toggle: super::super::choice::toggle_fa_plus_row,
+    toggle: choice::toggle_fa_plus_row,
 };
 const EARLY_DW_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
-            let mut bits = super::super::state::EarlyDwMask::empty();
+            let mut bits = EarlyDwMask::empty();
             if p.hide_early_dw_judgments {
-                bits.insert(super::super::state::EarlyDwMask::HIDE_JUDGMENTS);
+                bits.insert(EarlyDwMask::HIDE_JUDGMENTS);
             }
             if p.hide_early_dw_flash {
-                bits.insert(super::super::state::EarlyDwMask::HIDE_FLASH);
+                bits.insert(EarlyDwMask::HIDE_FLASH);
             }
             bits.bits() as u32
         },
@@ -569,21 +575,21 @@ const EARLY_DW_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
                 0,
                 "EarlyDwMask init bits exceed u8 width"
             );
-            m.early_dw = super::super::state::EarlyDwMask::from_bits_retain(b as u8);
+            m.early_dw = EarlyDwMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    toggle: super::super::choice::toggle_early_dw_row,
+    toggle: choice::toggle_early_dw_row,
 };
 const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
-            let mut bits = super::super::state::ResultsExtrasMask::empty();
+            let mut bits = ResultsExtrasMask::empty();
             if p.track_early_judgments {
-                bits.insert(super::super::state::ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
+                bits.insert(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
             }
             if p.scale_scatterplot {
-                bits.insert(super::super::state::ResultsExtrasMask::SCALE_SCATTERPLOT);
+                bits.insert(ResultsExtrasMask::SCALE_SCATTERPLOT);
             }
             bits.bits() as u32
         },
@@ -594,16 +600,16 @@ const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding::HandRolled {
                 0,
                 "ResultsExtrasMask init bits exceed u8 width",
             );
-            m.results_extras = super::super::state::ResultsExtrasMask::from_bits_retain(b as u8);
+            m.results_extras = ResultsExtrasMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    toggle: super::super::choice::toggle_results_extras_row,
+    toggle: choice::toggle_results_extras_row,
 };
 
 const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        if super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        if choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
             .is_none()
         {
             return Outcome::NONE;
@@ -615,7 +621,7 @@ const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {
 const MINI_INDICATOR: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -628,7 +634,7 @@ const MINI_INDICATOR: CustomBinding = CustomBinding {
         state.player_profiles[player_idx].mini_indicator = mini_indicator;
         state.player_profiles[player_idx].subtractive_scoring = subtractive_scoring;
         state.player_profiles[player_idx].pacemaker = pacemaker;
-        let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
             let profile_ref = &state.player_profiles[player_idx];
             gp::update_mini_indicator_for_side(side, mini_indicator);
@@ -647,7 +653,7 @@ const MINI_INDICATOR: CustomBinding = CustomBinding {
 const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -666,7 +672,7 @@ const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
         let mult =
             round_to_step(mult, TILT_INTENSITY_STEP).clamp(TILT_INTENSITY_MIN, TILT_INTENSITY_MAX);
         state.player_profiles[player_idx].tilt_multiplier = mult;
-        let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
             gp::update_tilt_multiplier_for_side(side, mult);
         }
@@ -682,7 +688,7 @@ fn chosen_tilt_threshold_ms(
     wrap: NavWrap,
 ) -> Option<u32> {
     let new_index =
-        super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)?;
+        choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)?;
     let choice = state
         .pane()
         .row_map
@@ -714,7 +720,7 @@ const JUDGMENT_TILT_MIN_THRESHOLD: CustomBinding = CustomBinding {
             (min_ms, max_ms)
         };
         set_tilt_threshold_row(state, player_idx, RowId::JudgmentTiltMaxThreshold, max_ms);
-        let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
             gp::update_tilt_thresholds_for_side(side, min_ms, max_ms);
         }
@@ -736,7 +742,7 @@ const JUDGMENT_TILT_MAX_THRESHOLD: CustomBinding = CustomBinding {
             (min_ms, max_ms)
         };
         set_tilt_threshold_row(state, player_idx, RowId::JudgmentTiltMinThreshold, min_ms);
-        let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
             gp::update_tilt_thresholds_for_side(side, min_ms, max_ms);
         }
@@ -747,13 +753,13 @@ const JUDGMENT_TILT_MAX_THRESHOLD: CustomBinding = CustomBinding {
 const MEASURE_COUNTER_LOOKAHEAD: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
         let lookahead = (new_index as u8).min(4);
         state.player_profiles[player_idx].measure_counter_lookahead = lookahead;
-        let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
             gp::update_measure_counter_lookahead_for_side(side, lookahead);
         }
@@ -764,7 +770,7 @@ const MEASURE_COUNTER_LOOKAHEAD: CustomBinding = CustomBinding {
 const CUSTOM_BLUE_FANTASTIC_WINDOW_MS: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
         let Some(new_index) =
-            super::super::choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -782,7 +788,7 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW_MS: CustomBinding = CustomBinding {
         };
         let ms = gp::clamp_custom_fantastic_window_ms(raw);
         state.player_profiles[player_idx].custom_fantastic_window_ms = ms;
-        let (should_persist, side) = super::super::choice::persist_ctx(player_idx);
+        let (should_persist, side) = choice::persist_ctx(player_idx);
         if should_persist {
             gp::update_custom_fantastic_window_ms_for_side(side, ms);
         }

@@ -2,6 +2,7 @@ use super::*;
 
 #[cfg(test)]
 pub(super) mod tests {
+    use super::super::{choice, panes};
     use super::{
         BitmaskBinding, BitmaskInit, ChoiceBinding, CursorInit, CycleInit, ErrorBarMask,
         FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
@@ -533,7 +534,7 @@ pub(super) mod tests {
                 },
                 cursor: CursorInit::FirstActiveBit,
             }),
-            toggle: super::super::choice::toggle_scroll_row,
+            toggle: choice::toggle_scroll_row,
         };
         let mut advanced_rows = test_row_map(vec![test_bitmask_row(
             RowId::Scroll,
@@ -549,20 +550,20 @@ pub(super) mod tests {
         )]);
 
         let mut main = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut main);
+        panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut main);
         // Main alone: Scroll row absent, mask comes back empty (the bug source).
         assert_eq!(main.scroll, ScrollMask::empty());
 
         // Accumulated across all three panes (the fix): Reverse + Cross preserved.
         let mut combined = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut combined);
-        super::super::panes::apply_profile_defaults(
+        panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut combined);
+        panes::apply_profile_defaults(
             &mut advanced_rows,
             &profile,
             P1,
             &mut combined,
         );
-        super::super::panes::apply_profile_defaults(
+        panes::apply_profile_defaults(
             &mut uncommon_rows,
             &profile,
             P1,
@@ -624,7 +625,7 @@ pub(super) mod tests {
                 },
                 cursor: CursorInit::FirstActiveBit,
             }),
-            toggle: super::super::choice::toggle_hide_row,
+            toggle: choice::toggle_hide_row,
         };
         let mut hide_rows = test_row_map(vec![test_bitmask_row(
             RowId::Hide,
@@ -636,7 +637,7 @@ pub(super) mod tests {
         )]);
 
         let mut masks = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut hide_rows, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut hide_rows, &profile, P1, &mut masks);
 
         assert_eq!(
             masks.hide,
@@ -693,7 +694,7 @@ pub(super) mod tests {
                 },
                 cursor: CursorInit::Fixed(0),
             }),
-            toggle: super::super::choice::toggle_fa_plus_row,
+            toggle: choice::toggle_fa_plus_row,
         };
         let mut fa_plus_rows = test_row_map(vec![test_bitmask_row(
             RowId::FAPlusOptions,
@@ -703,7 +704,7 @@ pub(super) mod tests {
         )]);
 
         let mut masks = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut fa_plus_rows, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut fa_plus_rows, &profile, P1, &mut masks);
 
         assert_eq!(
             masks.fa_plus,
@@ -758,7 +759,7 @@ pub(super) mod tests {
                 },
                 cursor: CursorInit::FirstActiveBit,
             }),
-            toggle: super::super::choice::toggle_gameplay_extras_row,
+            toggle: choice::toggle_gameplay_extras_row,
         };
         let mut rows = test_row_map(vec![test_bitmask_row(
             RowId::GameplayExtras,
@@ -768,7 +769,7 @@ pub(super) mod tests {
         )]);
 
         let mut masks = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut rows, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut rows, &profile, P1, &mut masks);
 
         assert!(
             masks
@@ -1796,7 +1797,7 @@ pub(super) mod tests {
             state.fixed_stepchart.as_ref(),
         );
         let mut masks = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
 
         // Cycle rows: assert the selected variant matches the profile value.
         assert_variant_at_cursor(
@@ -1856,7 +1857,7 @@ pub(super) mod tests {
             state.fixed_stepchart.as_ref(),
         );
         let mut masks = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
 
         assert_choice_at_cursor(
             &row_map,
@@ -1913,7 +1914,7 @@ pub(super) mod tests {
             state.fixed_stepchart.as_ref(),
         );
         let mut masks = PlayerOptionMasks::default();
-        super::super::panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
+        panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
 
         assert_variant_at_cursor(
             &row_map,
