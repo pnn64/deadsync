@@ -232,6 +232,7 @@ fn draw_rows(
                 local_offset,
                 local_offset_rot_sin_cos,
                 edge_fade: _,
+                texture_mask,
                 ..
             } => {
                 let Some(RendererTexture::Software(tex)) = textures.get(&obj.texture_handle) else {
@@ -247,6 +248,7 @@ fn draw_rows(
                     *uv_offset,
                     *local_offset,
                     *local_offset_rot_sin_cos,
+                    *texture_mask,
                     obj.blend,
                     &tex.image,
                     tex.sampler,
@@ -282,6 +284,7 @@ fn draw_rows(
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
+                texture_mask,
                 ..
             } => match mode {
                 MeshMode::Triangles => {
@@ -297,6 +300,7 @@ fn draw_rows(
                         *uv_scale,
                         *uv_offset,
                         *uv_tex_shift,
+                        *texture_mask,
                         obj.blend,
                         &tex.image,
                         tex.sampler,
@@ -377,6 +381,7 @@ fn rasterize_sprite(
     uv_offset: [f32; 2],
     local_offset: [f32; 2],
     local_offset_rot_sin_cos: [f32; 2],
+    texture_mask: bool,
     blend: BlendMode,
     image: &RgbaImage,
     sampler: SamplerDesc,
@@ -447,6 +452,7 @@ fn rasterize_sprite(
         &v[1],
         &v[2],
         tint,
+        texture_mask,
         blend,
         image,
         sampler,
@@ -461,6 +467,7 @@ fn rasterize_sprite(
         &v[2],
         &v[3],
         tint,
+        texture_mask,
         blend,
         image,
         sampler,
@@ -550,6 +557,7 @@ fn rasterize_textured_mesh_triangles(
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
+    texture_mask: bool,
     blend: BlendMode,
     image: &RgbaImage,
     sampler: SamplerDesc,
@@ -611,6 +619,7 @@ fn rasterize_textured_mesh_triangles(
             &tri[1],
             &tri[2],
             blend,
+            texture_mask,
             image,
             sampler,
             width,
@@ -631,6 +640,7 @@ fn rasterize_triangle(
     v1: &ScreenVertex,
     v2: &ScreenVertex,
     tint: [f32; 4],
+    texture_mask: bool,
     blend: BlendMode,
     image: &RgbaImage,
     sampler: SamplerDesc,
@@ -646,6 +656,7 @@ fn rasterize_triangle(
             v1,
             v2,
             tint,
+            texture_mask,
             image,
             sampler,
             width,
@@ -659,6 +670,7 @@ fn rasterize_triangle(
             v1,
             v2,
             tint,
+            texture_mask,
             image,
             sampler,
             width,
@@ -672,6 +684,7 @@ fn rasterize_triangle(
             v1,
             v2,
             tint,
+            texture_mask,
             image,
             sampler,
             width,
@@ -685,6 +698,7 @@ fn rasterize_triangle(
             v1,
             v2,
             tint,
+            texture_mask,
             image,
             sampler,
             width,
@@ -702,6 +716,7 @@ fn rasterize_triangle_tex_color(
     v1: &ScreenVertexTexColor,
     v2: &ScreenVertexTexColor,
     blend: BlendMode,
+    texture_mask: bool,
     image: &RgbaImage,
     sampler: SamplerDesc,
     width: usize,
@@ -715,6 +730,7 @@ fn rasterize_triangle_tex_color(
             v0,
             v1,
             v2,
+            texture_mask,
             image,
             sampler,
             width,
@@ -727,6 +743,7 @@ fn rasterize_triangle_tex_color(
             v0,
             v1,
             v2,
+            texture_mask,
             image,
             sampler,
             width,
@@ -739,6 +756,7 @@ fn rasterize_triangle_tex_color(
             v0,
             v1,
             v2,
+            texture_mask,
             image,
             sampler,
             width,
@@ -751,6 +769,7 @@ fn rasterize_triangle_tex_color(
             v0,
             v1,
             v2,
+            texture_mask,
             image,
             sampler,
             width,
@@ -1000,6 +1019,7 @@ fn rasterize_triangle_impl<const LINEAR: bool, const ADD: bool>(
     v1: &ScreenVertex,
     v2: &ScreenVertex,
     tint: [f32; 4],
+    texture_mask: bool,
     image: &RgbaImage,
     sampler: SamplerDesc,
     width: usize,
@@ -1056,9 +1076,21 @@ fn rasterize_triangle_impl<const LINEAR: bool, const ADD: bool>(
                 continue;
             }
 
-            let sr = clamp01(sampled[0] * tint[0]);
-            let sg = clamp01(sampled[1] * tint[1]);
-            let sb = clamp01(sampled[2] * tint[2]);
+            let sr = clamp01(if texture_mask {
+                tint[0]
+            } else {
+                sampled[0] * tint[0]
+            });
+            let sg = clamp01(if texture_mask {
+                tint[1]
+            } else {
+                sampled[1] * tint[1]
+            });
+            let sb = clamp01(if texture_mask {
+                tint[2]
+            } else {
+                sampled[2] * tint[2]
+            });
             let sa = clamp01(sampled[3] * tint[3]);
             if sa <= 0.0 {
                 continue;
@@ -1079,6 +1111,7 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const ADD: bool>(
     v0: &ScreenVertexTexColor,
     v1: &ScreenVertexTexColor,
     v2: &ScreenVertexTexColor,
+    texture_mask: bool,
     image: &RgbaImage,
     sampler: SamplerDesc,
     width: usize,
@@ -1140,9 +1173,9 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const ADD: bool>(
             let cb = clamp01(v0.color[2].mul_add(w0, v1.color[2] * w1) + v2.color[2] * w2);
             let ca = clamp01(v0.color[3].mul_add(w0, v1.color[3] * w1) + v2.color[3] * w2);
 
-            let sr = clamp01(sampled[0] * cr);
-            let sg = clamp01(sampled[1] * cg);
-            let sb = clamp01(sampled[2] * cb);
+            let sr = clamp01(if texture_mask { cr } else { sampled[0] * cr });
+            let sg = clamp01(if texture_mask { cg } else { sampled[1] * cg });
+            let sb = clamp01(if texture_mask { cb } else { sampled[2] * cb });
             let sa = clamp01(sampled[3] * ca);
             if sa <= 0.0 {
                 continue;

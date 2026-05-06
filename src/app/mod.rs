@@ -1662,14 +1662,16 @@ fn build_course_summary_eval_state(
     state
 }
 
-fn push_song_lua_video_paths(
-    overlays: &[crate::game::parsing::song_lua::SongLuaOverlayActor],
-    seen: &mut HashSet<String>,
+fn push_song_lua_video_paths<'a>(
+    overlays: &'a [crate::game::parsing::song_lua::SongLuaOverlayActor],
+    seen: &mut HashSet<&'a str>,
     paths: &mut Vec<PathBuf>,
 ) {
     for overlay in overlays {
-        let crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } =
-            &overlay.kind
+        let crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite {
+            texture_path,
+            texture_key,
+        } = &overlay.kind
         else {
             continue;
         };
@@ -1679,8 +1681,7 @@ fn push_song_lua_video_paths(
         if !overlay.initial_state.decode_movie {
             continue;
         }
-        let key = texture_path.to_string_lossy().into_owned();
-        if seen.insert(key) {
+        if seen.insert(texture_key.as_ref()) {
             paths.push(texture_path.clone());
         }
     }
@@ -1860,15 +1861,18 @@ fn prewarm_gameplay_assets(
                             );
                         }
                     }
-                    crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } => {
-                        let key = texture_path.to_string_lossy().into_owned();
-                        let first_seen = seen.insert(key.clone());
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite {
+                        texture_path,
+                        texture_key,
+                    } => {
+                        let key = texture_key.as_ref();
+                        let first_seen = seen.insert(key.to_owned());
                         let sampler = song_lua_overlay_sampler(overlay);
                         if sampler != SamplerDesc::default() {
                             match media_cache::load_banner_source_rgba(texture_path) {
                                 Ok(rgba) => {
                                     if let Err(e) = assets.update_texture_for_key_with_sampler(
-                                        backend, &key, &rgba, sampler,
+                                        backend, key, &rgba, sampler,
                                     ) {
                                         warn!(
                                             "Failed to create custom-sampled GPU texture for image {texture_path:?}: {e}. Skipping."
@@ -1893,16 +1897,17 @@ fn prewarm_gameplay_assets(
                     }
                     crate::game::parsing::song_lua::SongLuaOverlayKind::ActorMultiVertex {
                         texture_path: Some(texture_path),
+                        texture_key: Some(texture_key),
                         ..
                     } => {
-                        let key = texture_path.to_string_lossy().into_owned();
-                        let first_seen = seen.insert(key.clone());
+                        let key = texture_key.as_ref();
+                        let first_seen = seen.insert(key.to_owned());
                         let sampler = song_lua_overlay_sampler(overlay);
                         if sampler != SamplerDesc::default() {
                             match media_cache::load_banner_source_rgba(texture_path) {
                                 Ok(rgba) => {
                                     if let Err(e) = assets.update_texture_for_key_with_sampler(
-                                        backend, &key, &rgba, sampler,
+                                        backend, key, &rgba, sampler,
                                     ) {
                                         warn!(
                                             "Failed to create custom-sampled GPU texture for image {texture_path:?}: {e}. Skipping."
@@ -1965,7 +1970,13 @@ fn prewarm_gameplay_text_layout_cache(
 
     let fonts = assets.fonts();
     crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
-    let actors = gameplay::get_actors(state, assets);
+    let mut actors = Vec::with_capacity(256);
+    gameplay::push_actors(
+        &mut actors,
+        state,
+        assets,
+        gameplay::ActorViewOverride::default(),
+    );
     let _ = crate::engine::present::compose::build_screen_cached(
         &actors,
         [0.0, 0.0, 0.0, 1.0],
@@ -2592,6 +2603,7 @@ pub struct App {
     gameplay_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
     ui_compose_scratch: crate::engine::present::compose::ComposeScratch,
     gameplay_compose_scratch: crate::engine::present::compose::ComposeScratch,
+    gameplay_actor_scratch: Vec<Actor>,
     state: AppState,
     software_renderer_threads: u8,
     gfx_debug_enabled: bool,
@@ -2986,7 +2998,7 @@ impl App {
         self.sync_gameplay_background();
         self.sync_theme_background_video();
         let actor_build_started = Instant::now();
-        let (actors, clear_color) = self.get_current_actors();
+        let (mut actors, clear_color) = self.get_current_actors();
         let actor_build_us = elapsed_us_since(actor_build_started);
         self.update_fps_stats(redraw_started);
         let screens = &self.state.screens;
@@ -3247,6 +3259,10 @@ impl App {
             draw_us,
             draw_stats,
         );
+        if self.state.screens.current_screen == CurrentScreen::Gameplay {
+            actors.clear();
+            self.gameplay_actor_scratch = actors;
+        }
     }
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
@@ -3286,6 +3302,7 @@ impl App {
                 ),
             ui_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
             gameplay_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
+            gameplay_actor_scratch: Vec::with_capacity(256),
             state,
             software_renderer_threads,
             gfx_debug_enabled,
@@ -3968,6 +3985,7 @@ impl App {
         po_state.music_rate = music_rate;
         po_state.speed_mod =
             std::array::from_fn(|i| player_options::SpeedMod::from(scroll_speed[i]));
+        player_options::sync_speed_mod_type_rows(&mut po_state);
         self.state.screens.player_options_state = Some(po_state);
         true
     }
@@ -4704,12 +4722,18 @@ impl App {
                 menu::get_actors(&self.state.screens.menu_state, screen_alpha_multiplier)
             }
             CurrentScreen::Gameplay => {
+                let mut actors = std::mem::take(&mut self.gameplay_actor_scratch);
+                actors.clear();
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
-                    gameplay::get_actors(gs, &self.asset_manager)
-                } else {
-                    vec![]
+                    gameplay::push_actors(
+                        &mut actors,
+                        gs,
+                        &self.asset_manager,
+                        gameplay::ActorViewOverride::default(),
+                    );
                 }
+                actors
             }
             CurrentScreen::Practice => {
                 if let Some(ps) = &mut self.state.screens.practice_state {
@@ -6103,30 +6127,10 @@ impl App {
     fn handle_screen_state_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.screens.select_color_state.active_color_index;
-            self.state.screens.menu_state.active_color_index = idx;
-            self.state.screens.select_profile_state.active_color_index = idx;
-            self.state.screens.select_style_state.active_color_index = idx;
-            self.state.screens.select_play_mode_state.active_color_index = idx;
-            self.state.screens.profile_load_state.active_color_index = idx;
-            self.state.screens.select_music_state.active_color_index = idx;
-            self.state.screens.select_course_state.active_color_index = idx;
-            self.state.screens.options_state.active_color_index = idx;
-            self.state.screens.credits_state.active_color_index = idx;
-            self.state
-                .screens
-                .manage_local_profiles_state
-                .active_color_index = idx;
-            self.state.screens.input_state.active_color_index = idx;
-            self.state
-                .screens
-                .evaluation_summary_state
-                .active_color_index = idx;
-            self.state.screens.initials_state.active_color_index = idx;
-            self.state.screens.gameover_state.active_color_index = idx;
-            if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                gs.active_color_index = idx;
-                gs.player_color = color::simply_love_rgba(idx);
-            }
+            self.sync_screen_color_index(idx);
+        } else if prev == CurrentScreen::Options {
+            let idx = self.state.screens.options_state.active_color_index;
+            self.sync_screen_color_index(idx);
         }
 
         if target == CurrentScreen::Menu {
@@ -6342,6 +6346,33 @@ impl App {
                     None,
                 ));
             }
+        }
+    }
+
+    fn sync_screen_color_index(&mut self, idx: i32) {
+        self.state.screens.menu_state.active_color_index = idx;
+        self.state.screens.select_profile_state.active_color_index = idx;
+        self.state.screens.select_style_state.active_color_index = idx;
+        self.state.screens.select_play_mode_state.active_color_index = idx;
+        self.state.screens.profile_load_state.active_color_index = idx;
+        self.state.screens.select_music_state.active_color_index = idx;
+        self.state.screens.select_course_state.active_color_index = idx;
+        self.state.screens.options_state.active_color_index = idx;
+        self.state.screens.credits_state.active_color_index = idx;
+        self.state
+            .screens
+            .manage_local_profiles_state
+            .active_color_index = idx;
+        self.state.screens.input_state.active_color_index = idx;
+        self.state
+            .screens
+            .evaluation_summary_state
+            .active_color_index = idx;
+        self.state.screens.initials_state.active_color_index = idx;
+        self.state.screens.gameover_state.active_color_index = idx;
+        if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+            gs.active_color_index = idx;
+            gs.player_color_index = idx;
         }
     }
 
@@ -7833,6 +7864,7 @@ mod tests {
             SongLuaOverlayActor {
                 kind: SongLuaOverlayKind::Sprite {
                     texture_path: movie.clone(),
+                    texture_key: Arc::from(movie.to_string_lossy().into_owned()),
                 },
                 name: None,
                 parent_index: None,
@@ -7845,6 +7877,7 @@ mod tests {
             SongLuaOverlayActor {
                 kind: SongLuaOverlayKind::Sprite {
                     texture_path: movie.clone(),
+                    texture_key: Arc::from(movie.to_string_lossy().into_owned()),
                 },
                 name: None,
                 parent_index: None,
@@ -7857,6 +7890,7 @@ mod tests {
             SongLuaOverlayActor {
                 kind: SongLuaOverlayKind::Sprite {
                     texture_path: PathBuf::from("panel.png"),
+                    texture_key: Arc::from("panel.png"),
                 },
                 name: None,
                 parent_index: None,
@@ -7881,6 +7915,7 @@ mod tests {
         let overlays = vec![SongLuaOverlayActor {
             kind: SongLuaOverlayKind::Sprite {
                 texture_path: movie.clone(),
+                texture_key: Arc::from(movie.to_string_lossy().into_owned()),
             },
             name: None,
             parent_index: None,

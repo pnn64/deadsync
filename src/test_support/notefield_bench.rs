@@ -50,14 +50,16 @@ impl NotefieldBenchFixture {
                 cache.borrow_mut().clear();
             }
         }
-        notefield::build(
+        notefield::build_bundles(
             &self.state,
             &self.profile,
             FieldPlacement::P1,
             profile::PlayStyle::Single,
             false,
+            notefield::ProxyCaptureRequests::default(),
+            notefield::ViewOverride::default(),
         )
-        .0
+        .actors
     }
 }
 
@@ -178,7 +180,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
     }
 
     state.tap_explosions[0] = Some(ActiveTapExplosion {
-        window: "W1".to_string(),
+        window: "W1",
         elapsed: 0.08,
         start_beat: beat,
     });

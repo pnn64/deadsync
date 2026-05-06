@@ -55,6 +55,7 @@ pub enum SubRowId {
     // Machine Options
     SelectProfile,
     SelectColor,
+    PreferredColor,
     SelectStyle,
     PreferredStyle,
     SelectPlayMode,
@@ -84,6 +85,7 @@ pub enum SubRowId {
     ShowNativeLanguage,
     MusicWheelSpeed,
     MusicWheelStyle,
+    SwitchProfile,
     ShowCdTitles,
     ShowWheelGrades,
     ShowWheelLamps,

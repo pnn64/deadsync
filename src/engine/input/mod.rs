@@ -413,9 +413,9 @@ pub struct InputEdge {
     pub stored_at: Instant,
     pub emitted_at: Instant,
     pub queued_at: Instant,
-    // Integer song time for this edge, in nanoseconds. Gameplay treats this as
-    // the authoritative judgment-time clock and reconstructs seconds only at
-    // presentation/logging boundaries.
+    // Integer song time for this edge, in nanoseconds. Live input may leave this
+    // invalid until gameplay resolves the physical timestamp against the frame's
+    // song-clock snapshot.
     pub event_music_time_ns: i64,
 }
 
@@ -788,6 +788,13 @@ pub fn clear_debounce_state() {
     let (key_slot_count, pad_slot_count) =
         with_compiled_keymap(|compiled| (compiled.key_slot_count, compiled.pad_slot_count));
     reset_debounce_state(key_slot_count, pad_slot_count);
+    if log::log_enabled!(log::Level::Debug) {
+        log::debug!(
+            "INPUT DEBOUNCE CLEAR: key_slots={} pad_slots={}",
+            key_slot_count,
+            pad_slot_count
+        );
+    }
 }
 
 #[inline(always)]

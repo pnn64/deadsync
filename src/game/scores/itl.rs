@@ -51,6 +51,15 @@ static ONLINE_ITL_SELF_SCORE_CACHE: std::sync::LazyLock<Mutex<OnlineItlSelfScore
     std::sync::LazyLock::new(|| Mutex::new(OnlineItlSelfScoreCacheState::default()));
 static ONLINE_ITL_SELF_SCORE_GENERATION: AtomicU64 = AtomicU64::new(1);
 
+#[derive(Default)]
+struct OnlineItlSelfRankCacheState {
+    session_by_key: HashMap<OnlineItlSelfScoreKey, u32>,
+    loaded_profiles: HashMap<String, HashMap<OnlineItlSelfScoreKey, u32>>,
+}
+
+static ONLINE_ITL_SELF_RANK_CACHE: std::sync::LazyLock<Mutex<OnlineItlSelfRankCacheState>> =
+    std::sync::LazyLock::new(|| Mutex::new(OnlineItlSelfRankCacheState::default()));
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct OnlineItlOverallRankCacheKey {
     api_key: String,
@@ -242,6 +251,15 @@ fn online_itl_self_score_index_path_for_profile(profile_id: &str) -> PathBuf {
         .join("itl_self.bin")
 }
 
+fn online_itl_self_rank_index_path_for_profile(profile_id: &str) -> PathBuf {
+    dirs::app_dirs()
+        .profiles_root()
+        .join(profile_id)
+        .join("scores")
+        .join("gs")
+        .join("itl_rank.bin")
+}
+
 fn load_online_itl_self_score_index(path: &Path) -> Option<HashMap<OnlineItlSelfScoreKey, u32>> {
     let bytes = fs::read(path).ok()?;
     let (by_key, _) = bincode::decode_from_slice::<HashMap<OnlineItlSelfScoreKey, u32>, _>(
@@ -273,6 +291,14 @@ fn save_online_itl_self_score_index(path: &Path, by_key: &HashMap<OnlineItlSelfS
         warn!("Failed to commit ITL self-score cache {path:?}: {error}");
         let _ = fs::remove_file(&tmp_path);
     }
+}
+
+fn load_online_itl_self_rank_index(path: &Path) -> Option<HashMap<OnlineItlSelfScoreKey, u32>> {
+    load_online_itl_self_score_index(path)
+}
+
+fn save_online_itl_self_rank_index(path: &Path, by_key: &HashMap<OnlineItlSelfScoreKey, u32>) {
+    save_online_itl_self_score_index(path, by_key);
 }
 
 #[inline(always)]
@@ -310,6 +336,26 @@ fn ensure_online_itl_self_score_cache_loaded_for_profile(profile_id: &str) {
         load_online_itl_self_score_index(&online_itl_self_score_index_path_for_profile(profile_id))
             .unwrap_or_default();
     ONLINE_ITL_SELF_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .entry(profile_id.to_string())
+        .or_insert(by_key);
+}
+
+fn ensure_online_itl_self_rank_cache_loaded_for_profile(profile_id: &str) {
+    let needs_load = {
+        let state = ONLINE_ITL_SELF_RANK_CACHE.lock().unwrap();
+        !state.loaded_profiles.contains_key(profile_id)
+    };
+    if !needs_load {
+        return;
+    }
+
+    let by_key =
+        load_online_itl_self_rank_index(&online_itl_self_rank_index_path_for_profile(profile_id))
+            .unwrap_or_default();
+    ONLINE_ITL_SELF_RANK_CACHE
         .lock()
         .unwrap()
         .loaded_profiles
@@ -374,6 +420,57 @@ pub(super) fn set_cached_online_self_score(
     if let Some((profile_id, by_key)) = snapshot {
         save_online_itl_self_score_index(
             &online_itl_self_score_index_path_for_profile(profile_id.as_str()),
+            &by_key,
+        );
+    }
+}
+
+pub(super) fn set_cached_online_self_rank(
+    profile_id: Option<&str>,
+    api_key: &str,
+    chart_hash: &str,
+    rank: Option<u32>,
+) {
+    let api_key = api_key.trim();
+    let chart_hash = chart_hash.trim();
+    if api_key.is_empty() || chart_hash.is_empty() {
+        return;
+    }
+    let key = OnlineItlSelfScoreKey {
+        chart_hash: chart_hash.to_string(),
+        api_key: api_key.to_string(),
+    };
+    let profile_id = profile_id.map(str::trim).filter(|id| !id.is_empty());
+    let snapshot = if let Some(profile_id) = profile_id {
+        ensure_online_itl_self_rank_cache_loaded_for_profile(profile_id);
+        let mut state = ONLINE_ITL_SELF_RANK_CACHE.lock().unwrap();
+        if let Some(rank) = rank {
+            state.session_by_key.insert(key.clone(), rank);
+        } else {
+            state.session_by_key.remove(&key);
+        }
+        let Some(profile_ranks) = state.loaded_profiles.get_mut(profile_id) else {
+            return;
+        };
+        let changed = if let Some(rank) = rank {
+            profile_ranks.insert(key, rank) != Some(rank)
+        } else {
+            profile_ranks.remove(&key).is_some()
+        };
+        changed.then(|| (profile_id.to_string(), profile_ranks.clone()))
+    } else {
+        let mut state = ONLINE_ITL_SELF_RANK_CACHE.lock().unwrap();
+        if let Some(rank) = rank {
+            state.session_by_key.insert(key, rank);
+        } else {
+            state.session_by_key.remove(&key);
+        }
+        None
+    };
+
+    if let Some((profile_id, by_key)) = snapshot {
+        save_online_itl_self_rank_index(
+            &online_itl_self_rank_index_path_for_profile(profile_id.as_str()),
             &by_key,
         );
     }
@@ -448,6 +545,24 @@ pub fn get_cached_itl_tournament_rank_for_side(
     side: profile::PlayerSide,
 ) -> Option<u32> {
     get_cached_player_leaderboard_itl_self_rank_for_side(chart_hash, side)
+        .or_else(|| get_cached_online_self_rank_for_side(chart_hash, side))
+}
+
+fn get_cached_online_self_rank_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<u32> {
+    let key = online_itl_self_score_key_for_side(chart_hash, side)?;
+    let profile_id = profile::active_local_profile_id_for_side(side);
+    if let Some(profile_id) = profile_id.as_deref() {
+        ensure_online_itl_self_rank_cache_loaded_for_profile(profile_id);
+    }
+    let cache = ONLINE_ITL_SELF_RANK_CACHE.lock().unwrap();
+    profile_id
+        .as_deref()
+        .and_then(|profile_id| cache.loaded_profiles.get(profile_id))
+        .and_then(|ranks| ranks.get(&key).copied())
+        .or_else(|| cache.session_by_key.get(&key).copied())
 }
 
 fn online_itl_overall_rank_cache_key_for_side(

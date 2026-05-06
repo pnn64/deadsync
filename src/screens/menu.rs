@@ -20,7 +20,7 @@ use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use winit::keyboard::KeyCode;
 
-use crate::engine::space::{screen_center_x, screen_width};
+use crate::engine::space::screen_center_x;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
@@ -40,6 +40,11 @@ const MENU_ROW_SPACING: f32 = 28.0;
 const INFO_PX: f32 = 15.0;
 const INFO_GAP: f32 = 5.0;
 const INFO_MARGIN_ABOVE: f32 = 20.0;
+const STATUS_BASE_X: f32 = 10.0;
+const STATUS_BASE_Y: f32 = 15.0;
+const STATUS_ZOOM: f32 = 0.8;
+const STATUS_LINE_HEIGHT: f32 = 18.0;
+const STATUS_BLOCK_GAP: f32 = 6.0;
 
 #[derive(Clone)]
 struct StatusTextCache<K, const N: usize> {
@@ -471,59 +476,53 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     }));
 
     // --- GrooveStats Info Pane (top-left) ---
-    let frame_zoom = 0.8;
-    let base_x = 10.0;
-    let base_y = 15.0;
     let gs_text = groovestats_text(state);
     actors.push(status_text_actor(
         gs_text.main.clone(),
         0.0,
-        base_x,
-        base_y,
-        frame_zoom,
+        STATUS_BASE_X,
+        STATUS_BASE_Y,
+        STATUS_ZOOM,
         alpha_multiplier,
         TextAlign::Left,
     ));
-    let line_height_offset = 18.0;
     for line_idx in 0..gs_text.line_count {
         if let Some(text) = gs_text.lines[line_idx].as_ref() {
             actors.push(status_text_actor(
                 text.clone(),
                 0.0,
-                base_x,
-                (line_height_offset * (line_idx as f32 + 1.0)).mul_add(frame_zoom, base_y),
-                frame_zoom,
+                STATUS_BASE_X,
+                (STATUS_LINE_HEIGHT * (line_idx as f32 + 1.0)).mul_add(STATUS_ZOOM, STATUS_BASE_Y),
+                STATUS_ZOOM,
                 alpha_multiplier,
                 TextAlign::Left,
             ));
         }
     }
 
-    // --- Arrow Cloud Info Pane (top-right) ---
-    let ac_frame_zoom = 0.8;
-    let ac_base_x = screen_width() - 10.0;
-    let ac_base_y = 15.0;
+    // --- Arrow Cloud Info Pane (below GrooveStats/BoogieStats) ---
+    let ac_base_y = (STATUS_LINE_HEIGHT * (gs_text.line_count as f32 + 1.0))
+        .mul_add(STATUS_ZOOM, STATUS_BASE_Y + STATUS_BLOCK_GAP);
     let ac_text = arrowcloud_text(state);
     actors.push(status_text_actor(
         ac_text.main.clone(),
-        1.0,
-        ac_base_x,
+        0.0,
+        STATUS_BASE_X,
         ac_base_y,
-        ac_frame_zoom,
+        STATUS_ZOOM,
         alpha_multiplier,
-        TextAlign::Right,
+        TextAlign::Left,
     ));
-    let ac_line_height_offset = 18.0;
     for line_idx in 0..ac_text.line_count {
         if let Some(text) = ac_text.lines[line_idx].as_ref() {
             actors.push(status_text_actor(
                 text.clone(),
-                1.0,
-                ac_base_x,
-                (ac_line_height_offset * (line_idx as f32 + 1.0)).mul_add(ac_frame_zoom, ac_base_y),
-                ac_frame_zoom,
+                0.0,
+                STATUS_BASE_X,
+                (STATUS_LINE_HEIGHT * (line_idx as f32 + 1.0)).mul_add(STATUS_ZOOM, ac_base_y),
+                STATUS_ZOOM,
                 alpha_multiplier,
-                TextAlign::Right,
+                TextAlign::Left,
             ));
         }
     }

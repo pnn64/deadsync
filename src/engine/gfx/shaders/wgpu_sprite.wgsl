@@ -18,6 +18,7 @@ struct VertexIn {
     @location(8) local_offset: vec2<f32>,
     @location(9) local_offset_rot_sin_cos: vec2<f32>,
     @location(10) edge_fade: vec4<f32>,
+    @location(11) texture_mask: f32,
 };
 
 struct VertexOut {
@@ -25,6 +26,7 @@ struct VertexOut {
     @location(0) uv: vec2<f32>,
     @location(1) tint: vec4<f32>,
     @location(2) edge_fade: vec4<f32>,
+    @location(3) texture_mask: f32,
 };
 
 @vertex
@@ -46,6 +48,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
     out.uv = input.uv * input.uv_scale + input.uv_offset;
     out.tint = input.tint;
     out.edge_fade = input.edge_fade;
+    out.texture_mask = input.texture_mask;
     return out;
 }
 
@@ -68,6 +71,9 @@ fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     let fade_y = edge_factor(input.uv.y, input.edge_fade.z, input.edge_fade.w);
     let fade = min(fade_x, fade_y);
     var color = texel * input.tint;
+    if input.texture_mask > 0.5 {
+        color = vec4<f32>(input.tint.rgb, texel.a * input.tint.a);
+    }
     color.a = color.a * fade;
     return color;
 }

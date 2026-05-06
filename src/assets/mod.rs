@@ -28,8 +28,8 @@ pub use self::textures::{
     texture_source_dims_from_real, texture_source_frame_dims_from_real,
 };
 use self::textures::{
-    apply_texture_hints, clear_texture_handles, generated_texture, register_texture_handle,
-    remove_texture_handle, take_pending_generated_texture_keys,
+    apply_texture_hints, clear_texture_handles, fix_hidden_alpha, generated_texture,
+    register_texture_handle, remove_texture_handle, take_pending_generated_texture_keys,
 };
 
 #[derive(Debug)]
@@ -247,6 +247,7 @@ impl AssetManager {
                 if !hints.is_default() {
                     apply_texture_hints(&mut image_data, &hints);
                 }
+                fix_hidden_alpha(&mut image_data);
                 let texture = backend.create_texture(&image_data, hints.sampler_desc())?;
                 register_texture_dims(&key, image_data.width(), image_data.height());
                 self.insert_texture(

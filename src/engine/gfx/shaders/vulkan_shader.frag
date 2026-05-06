@@ -5,6 +5,7 @@ layout(set = 0, binding = 0) uniform sampler2D u_tex;
 layout(location = 0) in vec2 v_uv;
 layout(location = 1) flat in vec4 v_tint;
 layout(location = 2) flat in vec4 v_edgeFade; // (left, right, bottom, top) in UV units
+layout(location = 3) flat in float v_texture_mask;
 
 layout(location = 0) out vec4 outColor;
 
@@ -25,5 +26,8 @@ void main() {
     float fade  = min(fadeX, fadeY);
 
     outColor = texel * v_tint;
+    if (v_texture_mask > 0.5) {
+        outColor = vec4(v_tint.rgb, texel.a * v_tint.a);
+    }
     outColor.a *= fade;
 }

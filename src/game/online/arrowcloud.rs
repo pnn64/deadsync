@@ -77,6 +77,14 @@ pub fn legacy_leaderboards_url(chart_hash: &str) -> Option<String> {
     ))
 }
 
+#[inline(always)]
+pub fn retrieve_scores_url() -> String {
+    format!(
+        "{}/v1/retrieve-scores",
+        ARROWCLOUD_API_BASE_URL.trim_end_matches('/')
+    )
+}
+
 pub fn init() {
     refresh_status();
 }

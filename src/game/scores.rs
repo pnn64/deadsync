@@ -8,10 +8,10 @@ use crate::game::online;
 use crate::game::profile::{self, Profile};
 use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
-use chrono::{Local, TimeZone};
+use chrono::{DateTime, Local, TimeZone, Utc};
 use log::{debug, warn};
-use serde::Deserialize;
 use serde::de::{DeserializeOwned, Deserializer};
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -58,6 +58,22 @@ pub use submit_status::RejectReason;
 pub(crate) use submit_status::{
     SUBMIT_RETRY_MAX_ATTEMPTS, duration_to_ceil_secs, submit_retry_delay_secs,
 };
+
+// Lua charts stay blocked from online submit unless their effects have been
+// verified closely enough to match ITGmania for scoring purposes.
+const LUA_SCORE_SUBMIT_ALLOWLIST: [&str; 1] = ["d5bd4dd7224f68ff"];
+
+pub fn lua_chart_submit_allowed(chart_hash: &str) -> bool {
+    let hash = chart_hash.trim();
+    !hash.is_empty()
+        && LUA_SCORE_SUBMIT_ALLOWLIST
+            .iter()
+            .any(|allowed| allowed.eq_ignore_ascii_case(hash))
+}
+
+pub fn lua_submit_allowed(song_has_lua: bool, chart_hash: &str) -> bool {
+    !song_has_lua || lua_chart_submit_allowed(chart_hash)
+}
 
 // --- Grade Definitions ---
 
@@ -294,6 +310,398 @@ fn set_cached_gs_score_for_profile(profile_id: &str, chart_hash: String, score: 
         map.clone()
     };
     save_gs_score_index(&gs_score_index_path_for_profile(profile_id), &snapshot);
+}
+
+// --- ArrowCloud score cache (on-disk, all 3 leaderboards per chart) ---
+
+/// Server-side grade name returned by ArrowCloud's grading systems
+/// (ITG / EX / HardEX). Source of truth:
+/// `arrow-cloud/api/src/utils/scoring/index.ts:223-260`.
+///
+/// `Quint` and `Sex` are the EX and HardEX top-tier grades respectively;
+/// `Quad` is the ITG top tier. `Failed` corresponds to AC's `failingGrade: 'F'`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
+pub enum ArrowCloudServerGrade {
+    Sex,
+    Quint,
+    Quad,
+    Tristar,
+    Twostar,
+    Star,
+    SPlus,
+    S,
+    SMinus,
+    APlus,
+    A,
+    AMinus,
+    BPlus,
+    B,
+    BMinus,
+    CPlus,
+    C,
+    CMinus,
+    D,
+    Failed,
+}
+
+impl ArrowCloudServerGrade {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Sex => "Sex",
+            Self::Quint => "Quint",
+            Self::Quad => "Quad",
+            Self::Tristar => "Tristar",
+            Self::Twostar => "Twostar",
+            Self::Star => "Star",
+            Self::SPlus => "S+",
+            Self::S => "S",
+            Self::SMinus => "S-",
+            Self::APlus => "A+",
+            Self::A => "A",
+            Self::AMinus => "A-",
+            Self::BPlus => "B+",
+            Self::B => "B",
+            Self::BMinus => "B-",
+            Self::CPlus => "C+",
+            Self::C => "C",
+            Self::CMinus => "C-",
+            Self::D => "D",
+            Self::Failed => "F",
+        }
+    }
+
+    /// Parse the canonical AC grade string. Case-sensitive (matches the
+    /// server's grading-system keys); whitespace is trimmed. Unrecognised
+    /// strings (e.g. event-only grades) yield `None`.
+    pub fn from_server_str(s: &str) -> Option<Self> {
+        match s.trim() {
+            "Sex" => Some(Self::Sex),
+            "Quint" => Some(Self::Quint),
+            "Quad" => Some(Self::Quad),
+            "Tristar" => Some(Self::Tristar),
+            "Twostar" => Some(Self::Twostar),
+            "Star" => Some(Self::Star),
+            "S+" => Some(Self::SPlus),
+            "S" => Some(Self::S),
+            "S-" => Some(Self::SMinus),
+            "A+" => Some(Self::APlus),
+            "A" => Some(Self::A),
+            "A-" => Some(Self::AMinus),
+            "B+" => Some(Self::BPlus),
+            "B" => Some(Self::B),
+            "B-" => Some(Self::BMinus),
+            "C+" => Some(Self::CPlus),
+            "C" => Some(Self::C),
+            "C-" => Some(Self::CMinus),
+            "D" => Some(Self::D),
+            "F" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+
+/// A single ArrowCloud score for one (chart, leaderboard) pair.
+///
+/// Holds AC-native fields rather than reusing `CachedScore`, because the AC
+/// bulk endpoint returns data the GS-style cache cannot represent (e.g. the
+/// canonical server grade string for events that don't map to ITG tiers, the
+/// play timestamp, the AC `playId`) and lacks data the GS cache requires
+/// (judgment counts for FA+/lamp computation).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ArrowCloudScore {
+    /// 0.0..=1.0 (the percent value from the API divided by 100).
+    pub score_percent: f64,
+    /// Canonical server grade name. `None` if the API returned an
+    /// unrecognised string (e.g. an event-specific grade).
+    pub server_grade: Option<ArrowCloudServerGrade>,
+    /// UTC timestamp of the play. `None` if the API omitted the field or
+    /// returned an unparseable string.
+    pub played_at: Option<DateTime<Utc>>,
+    /// Opaque AC play id used for linking back to the play detail page.
+    pub play_id: Option<i64>,
+    /// `true` if the play was marked as a fail by the server.
+    pub is_fail: bool,
+}
+
+// `chrono::DateTime` does not implement `bincode::Encode/Decode`. Persist the
+// timestamp as UTC milliseconds since the unix epoch so the on-disk index
+// stays compact and round-trips cleanly across timezones.
+impl Encode for ArrowCloudScore {
+    fn encode<E: bincode::enc::Encoder>(
+        &self,
+        encoder: &mut E,
+    ) -> Result<(), bincode::error::EncodeError> {
+        self.score_percent.encode(encoder)?;
+        self.server_grade.encode(encoder)?;
+        self.played_at
+            .map(|d| d.timestamp_millis())
+            .encode(encoder)?;
+        self.play_id.encode(encoder)?;
+        self.is_fail.encode(encoder)?;
+        Ok(())
+    }
+}
+
+impl<C> Decode<C> for ArrowCloudScore {
+    fn decode<D: bincode::de::Decoder<Context = C>>(
+        decoder: &mut D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        let score_percent = f64::decode(decoder)?;
+        let server_grade = Option::<ArrowCloudServerGrade>::decode(decoder)?;
+        let played_at_ms = Option::<i64>::decode(decoder)?;
+        let play_id = Option::<i64>::decode(decoder)?;
+        let is_fail = bool::decode(decoder)?;
+        let played_at = played_at_ms.and_then(|ms| Utc.timestamp_millis_opt(ms).single());
+        Ok(Self {
+            score_percent,
+            server_grade,
+            played_at,
+            play_id,
+            is_fail,
+        })
+    }
+}
+
+impl<'de, C> bincode::BorrowDecode<'de, C> for ArrowCloudScore {
+    fn borrow_decode<D: bincode::de::BorrowDecoder<'de, Context = C>>(
+        decoder: &mut D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        Self::decode(decoder)
+    }
+}
+
+impl ArrowCloudScore {
+    /// Adapter used by `get_cached_score_for_side` to merge AC scores with
+    /// local + GS scores in the same `CachedScore` slot. Recomputes the
+    /// internal `Grade` tier from the score percent because the server's
+    /// grade enum (e.g. `Tristar`) does not align with our `Tier01..Tier17`
+    /// scheme. AC entries carry no FA+/lamp data, so the lamp fields stay
+    /// `None`.
+    pub fn to_cached_score(&self) -> CachedScore {
+        let percent_0_100 = (self.score_percent * 100.0).clamp(0.0, 100.0);
+        let score_10000 = percent_0_100 * 100.0;
+        cached_score_from_gs(score_10000, None, "", self.is_fail)
+    }
+}
+
+/// Cached AC scores for a single chart, one entry per global leaderboard.
+///
+/// Fields correspond to AC `Leaderboard.id`:
+/// - `itg`     -> `GLOBAL_MONEY_LEADERBOARD_ID = 3`
+/// - `ex`      -> `GLOBAL_EX_LEADERBOARD_ID = 2`
+/// - `hard_ex` -> `GLOBAL_HARD_EX_LEADERBOARD_ID = 4`
+#[derive(Debug, Clone, Copy, Default, PartialEq, Encode, Decode)]
+pub struct ArrowCloudScores {
+    pub itg: Option<ArrowCloudScore>,
+    pub ex: Option<ArrowCloudScore>,
+    pub hard_ex: Option<ArrowCloudScore>,
+}
+
+#[derive(Default)]
+struct AcScoreCacheState {
+    loaded_profiles: HashMap<String, HashMap<String, ArrowCloudScores>>,
+}
+
+static AC_SCORE_CACHE: std::sync::LazyLock<Mutex<AcScoreCacheState>> =
+    std::sync::LazyLock::new(|| Mutex::new(AcScoreCacheState::default()));
+
+fn ac_scores_dir_for_profile(profile_id: &str) -> PathBuf {
+    profile::local_profile_dir_for_id(profile_id)
+        .join("scores")
+        .join("ac")
+}
+
+fn ac_score_index_path_for_profile(profile_id: &str) -> PathBuf {
+    ac_scores_dir_for_profile(profile_id).join("index.bin")
+}
+
+fn load_ac_score_index(path: &Path) -> Option<HashMap<String, ArrowCloudScores>> {
+    let bytes = fs::read(path).ok()?;
+    let (by_chart, _) = bincode::decode_from_slice::<HashMap<String, ArrowCloudScores>, _>(
+        &bytes,
+        bincode::config::standard(),
+    )
+    .ok()?;
+    Some(by_chart)
+}
+
+fn save_ac_score_index(path: &Path, by_chart: &HashMap<String, ArrowCloudScores>) {
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    if let Err(e) = fs::create_dir_all(parent) {
+        warn!("Failed to create AC score index dir {parent:?}: {e}");
+        return;
+    }
+    let Ok(buf) = bincode::encode_to_vec(by_chart, bincode::config::standard()) else {
+        warn!("Failed to encode AC score index at {path:?}");
+        return;
+    };
+    let tmp_path = path.with_extension("tmp");
+    if let Err(e) = fs::write(&tmp_path, buf) {
+        warn!("Failed to write AC score index temp file {tmp_path:?}: {e}");
+        return;
+    }
+    if let Err(e) = fs::rename(&tmp_path, path) {
+        warn!("Failed to commit AC score index file {path:?}: {e}");
+        let _ = fs::remove_file(&tmp_path);
+    }
+}
+
+fn ensure_ac_score_cache_loaded_for_profile(profile_id: &str) {
+    let needs_load = {
+        let state = AC_SCORE_CACHE.lock().unwrap();
+        !state.loaded_profiles.contains_key(profile_id)
+    };
+    if !needs_load {
+        return;
+    }
+    let index_path = ac_score_index_path_for_profile(profile_id);
+    let disk_cache = load_ac_score_index(&index_path).unwrap_or_default();
+    let mut state = AC_SCORE_CACHE.lock().unwrap();
+    state
+        .loaded_profiles
+        .entry(profile_id.to_string())
+        .or_insert(disk_cache);
+}
+
+fn get_cached_ac_scores_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+) -> Option<ArrowCloudScores> {
+    if profile_id.trim().is_empty() {
+        return None;
+    }
+    ensure_ac_score_cache_loaded_for_profile(profile_id);
+    AC_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(profile_id)
+        .and_then(|m| m.get(chart_hash).copied())
+}
+
+/// Public side-aware accessor for the wheel/gameplay layer to read AC scores.
+pub fn get_cached_ac_scores_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<ArrowCloudScores> {
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    get_cached_ac_scores_for_profile(&profile_id, chart_hash)
+}
+
+fn cached_ac_chart_hashes_with_itg_for_profile(profile_id: &str) -> HashSet<String> {
+    if profile_id.trim().is_empty() {
+        return HashSet::new();
+    }
+    ensure_ac_score_cache_loaded_for_profile(profile_id);
+    AC_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(profile_id)
+        .map_or_else(HashSet::new, |scores| {
+            scores
+                .iter()
+                .filter_map(|(hash, ac)| ac.itg.is_some().then(|| hash.clone()))
+                .collect()
+        })
+}
+
+/// Bulk-write multiple AC score entries with a single index save.
+fn set_cached_ac_scores_for_profile_bulk(
+    profile_id: &str,
+    entries: impl IntoIterator<Item = (String, ArrowCloudScores)>,
+) {
+    ensure_ac_score_cache_loaded_for_profile(profile_id);
+    let snapshot = {
+        let mut state = AC_SCORE_CACHE.lock().unwrap();
+        let Some(map) = state.loaded_profiles.get_mut(profile_id) else {
+            return;
+        };
+        for (hash, scores) in entries {
+            map.insert(hash, scores);
+        }
+        map.clone()
+    };
+    save_ac_score_index(&ac_score_index_path_for_profile(profile_id), &snapshot);
+}
+
+/// Update the AC cache after a successful score submit.
+///
+/// Builds an `ArrowCloudScores` from the gameplay-computed ITG / EX / HardEX
+/// percents and merges it with the existing cached entry, keeping the higher
+/// percent per leaderboard so a worse follow-up play doesn't overwrite a
+/// better stored score (parity with [`cache_gs_score_for_profile`]).
+pub(super) fn cache_arrowcloud_scores_from_submit(
+    profile_id: &str,
+    chart_hash: &str,
+    itg_percent: f64,
+    ex_percent: f64,
+    hard_ex_percent: f64,
+    is_fail: bool,
+    submitted_at: chrono::DateTime<chrono::Utc>,
+) {
+    let make_score = |percent: f64| -> Option<ArrowCloudScore> {
+        if !percent.is_finite() {
+            return None;
+        }
+        let clamped = percent.clamp(0.0, 100.0);
+        Some(ArrowCloudScore {
+            score_percent: clamped / 100.0,
+            server_grade: None, // The submit response is best-effort: we
+            // don't decode the server's chosen grade here.
+            played_at: Some(submitted_at),
+            play_id: None,
+            is_fail,
+        })
+    };
+
+    let new_scores = ArrowCloudScores {
+        itg: make_score(itg_percent),
+        ex: make_score(ex_percent),
+        hard_ex: make_score(hard_ex_percent),
+    };
+
+    ensure_ac_score_cache_loaded_for_profile(profile_id);
+    let merged = {
+        let mut state = AC_SCORE_CACHE.lock().unwrap();
+        let Some(map) = state.loaded_profiles.get_mut(profile_id) else {
+            return;
+        };
+        let entry = map.entry(chart_hash.to_string()).or_default();
+        merge_arrowcloud_score_slot(&mut entry.itg, new_scores.itg);
+        merge_arrowcloud_score_slot(&mut entry.ex, new_scores.ex);
+        merge_arrowcloud_score_slot(&mut entry.hard_ex, new_scores.hard_ex);
+        map.clone()
+    };
+    save_ac_score_index(&ac_score_index_path_for_profile(profile_id), &merged);
+}
+
+#[inline]
+fn merge_arrowcloud_score_slot(
+    existing: &mut Option<ArrowCloudScore>,
+    incoming: Option<ArrowCloudScore>,
+) {
+    let Some(new_score) = incoming else {
+        return;
+    };
+    match existing {
+        None => *existing = Some(new_score),
+        Some(prev) => {
+            // Failed scores never overwrite a non-failed score with the same
+            // or higher percent. Otherwise, keep whichever percent is higher.
+            let prev_failed = prev.is_fail;
+            let new_failed = new_score.is_fail;
+            if prev_failed && !new_failed {
+                *prev = new_score;
+            } else if !prev_failed && new_failed {
+                // Keep prev: the existing non-failed score wins.
+            } else if new_score.score_percent > prev.score_percent {
+                *prev = new_score;
+            }
+        }
+    }
 }
 
 // --- Local score cache (on-disk, one file per play) ---
@@ -838,12 +1246,14 @@ pub fn prewarm_select_music_score_caches() {
     if let Some(profile_id) = p1_profile_id.as_deref() {
         ensure_local_score_cache_loaded(profile_id);
         ensure_gs_score_cache_loaded_for_profile(profile_id);
+        ensure_ac_score_cache_loaded_for_profile(profile_id);
     }
     if let Some(profile_id) = p2_profile_id.as_deref()
         && p1_profile_id.as_deref() != Some(profile_id)
     {
         ensure_local_score_cache_loaded(profile_id);
         ensure_gs_score_cache_loaded_for_profile(profile_id);
+        ensure_ac_score_cache_loaded_for_profile(profile_id);
     }
 
     ensure_machine_local_score_cache_loaded();
@@ -896,13 +1306,16 @@ pub fn get_cached_score_for_side(
 ) -> Option<CachedScore> {
     let local = get_cached_local_score_for_side(chart_hash, side);
     let gs = get_cached_gs_score_for_side(chart_hash, side);
-    match (local, gs) {
-        (None, None) => None,
-        (Some(a), None) => Some(a),
-        (None, Some(b)) => Some(b),
-        (Some(a), Some(b)) => authoritative_failed_score(&a, &b)
-            .or_else(|| Some(if is_better_itg(&a, &b) { a } else { b })),
-    }
+    let ac = get_cached_ac_scores_for_side(chart_hash, side)
+        .and_then(|s| s.itg)
+        .map(|ac| ac.to_cached_score());
+    // Merge by picking the "best ITG" entry; failed scores win when their
+    // numeric percent matches a cached non-failed score (parity with prior
+    // local+gs merge semantics).
+    [local, gs, ac].into_iter().flatten().reduce(|a, b| {
+        authoritative_failed_score(&a, &b)
+            .unwrap_or_else(|| if is_better_itg(&a, &b) { a } else { b })
+    })
 }
 
 fn get_cached_local_scalar_score_for_side(
@@ -2283,6 +2696,41 @@ where
     }
 }
 
+/// `Option<f64>` variant of [`de_f64_from_string_or_number`]. Returns `None`
+/// for missing fields or unparseable strings instead of defaulting to `0.0`,
+/// so callers can distinguish "no score" from "actual 0% score".
+fn de_optional_f64_from_string_or_number<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<F64OrString>::deserialize(deserializer)? {
+        Some(F64OrString::F64(v)) => Ok(Some(v)),
+        Some(F64OrString::String(text)) => Ok(text.trim().parse::<f64>().ok()),
+        None => Ok(None),
+    }
+}
+
+/// `Option<i64>` variant accepting either a JSON number or a numeric string.
+/// Returns `None` for missing fields or unparseable strings.
+fn de_optional_i64_from_string_or_number<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<StringOrNumber>::deserialize(deserializer)? {
+        Some(StringOrNumber::I64(v)) => Ok(Some(v)),
+        Some(StringOrNumber::U64(v)) => Ok(i64::try_from(v).ok()),
+        Some(StringOrNumber::F64(v)) => {
+            if v.is_finite() && v >= i64::MIN as f64 && v <= i64::MAX as f64 {
+                Ok(Some(v as i64))
+            } else {
+                Ok(None)
+            }
+        }
+        Some(StringOrNumber::String(text)) => Ok(text.trim().parse::<i64>().ok()),
+        None => Ok(None),
+    }
+}
+
 fn de_string_from_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: Deserializer<'de>,
@@ -2777,6 +3225,187 @@ fn fetch_arrowcloud_user_context(
     .map(|response| response.map(|response| arrowcloud_user_context_from_api(response.user)))
 }
 
+// --- ArrowCloud bulk score retrieval (POST /v1/retrieve-scores) ---
+
+/// Maximum chart hashes per `/v1/retrieve-scores` request, server-enforced.
+pub const ARROWCLOUD_BULK_MAX_HASHES: usize = 1000;
+
+/// Global ArrowCloud leaderboard variants. Numeric values match the
+/// `Leaderboard.id` rows seeded by ArrowCloud:
+/// `2 = EX`, `3 = ITG / Money`, `4 = HardEX`. See
+/// `arrow-cloud/api/src/utils/leaderboard/index.ts` (`GLOBAL_*_LEADERBOARD_ID`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u32)]
+pub enum ArrowCloudLeaderboard {
+    Ex = 2,
+    Itg = 3,
+    HardEx = 4,
+}
+
+impl ArrowCloudLeaderboard {
+    pub const ALL_GLOBAL: [Self; 3] = [Self::HardEx, Self::Ex, Self::Itg];
+
+    #[inline(always)]
+    pub const fn id(self) -> u32 {
+        self as u32
+    }
+
+    #[inline(always)]
+    pub const fn from_id(id: u32) -> Option<Self> {
+        match id {
+            2 => Some(Self::Ex),
+            3 => Some(Self::Itg),
+            4 => Some(Self::HardEx),
+            _ => None,
+        }
+    }
+}
+
+impl serde::Serialize for ArrowCloudLeaderboard {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u32(self.id())
+    }
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ArrowCloudRetrieveScoresRequest<'a> {
+    chart_hashes: &'a [String],
+    leaderboard_ids: &'a [ArrowCloudLeaderboard],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user_id: Option<&'a str>,
+}
+
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+struct ArrowCloudRetrieveScoresResponse {
+    #[serde(default)]
+    scores: HashMap<String, HashMap<String, ArrowCloudRetrieveScoreEntry>>,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ArrowCloudRetrieveScoreEntry {
+    /// Score percent on a 0..100 scale (string in JSON, e.g. `"99.12"`).
+    /// `None` means the server returned an entry without a score field; we
+    /// treat such rows as "no score" rather than caching a fake 0.00%.
+    #[serde(default, deserialize_with = "de_optional_f64_from_string_or_number")]
+    score: Option<f64>,
+    #[serde(default)]
+    grade: Option<String>,
+    /// ISO-8601 / RFC-3339 timestamp string, e.g. `"2026-05-03T19:10:17.504Z"`.
+    #[serde(default)]
+    date: Option<String>,
+    #[serde(default, deserialize_with = "de_optional_i64_from_string_or_number")]
+    play_id: Option<i64>,
+    #[serde(default)]
+    is_fail: bool,
+}
+
+/// Convert a single bulk-API entry into our internal `ArrowCloudScore`.
+///
+/// Returns `None` if the entry has no usable `score` field; otherwise
+/// preserves AC-native fields (server grade enum, played-at timestamp, play
+/// id) rather than collapsing into the GS-shaped `CachedScore`.
+fn arrowcloud_score_from_entry(entry: &ArrowCloudRetrieveScoreEntry) -> Option<ArrowCloudScore> {
+    let percent_0_100 = entry.score?.clamp(0.0, 100.0);
+    let server_grade = entry
+        .grade
+        .as_deref()
+        .and_then(ArrowCloudServerGrade::from_server_str);
+    let played_at = entry
+        .date
+        .as_deref()
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Utc));
+    Some(ArrowCloudScore {
+        score_percent: percent_0_100 / 100.0,
+        server_grade,
+        played_at,
+        play_id: entry.play_id,
+        is_fail: entry.is_fail,
+    })
+}
+
+fn arrowcloud_scores_from_entry_map(
+    leaderboards: &HashMap<String, ArrowCloudRetrieveScoreEntry>,
+) -> ArrowCloudScores {
+    let mut out = ArrowCloudScores::default();
+    for (lb_id_raw, entry) in leaderboards {
+        let Ok(lb_id) = lb_id_raw.parse::<u32>() else {
+            continue;
+        };
+        let Some(variant) = ArrowCloudLeaderboard::from_id(lb_id) else {
+            continue; // Ignore event/non-global leaderboards.
+        };
+        let Some(score) = arrowcloud_score_from_entry(entry) else {
+            continue; // Ignore malformed entries with no score field.
+        };
+        match variant {
+            ArrowCloudLeaderboard::Itg => out.itg = Some(score),
+            ArrowCloudLeaderboard::Ex => out.ex = Some(score),
+            ArrowCloudLeaderboard::HardEx => out.hard_ex = Some(score),
+        }
+    }
+    out
+}
+
+/// POST `chart_hashes` to `/v1/retrieve-scores` and return parsed results.
+///
+/// `user_id` may be `None` to let the server resolve the bearer-token user.
+/// `chart_hashes` MUST contain ≤ `ARROWCLOUD_BULK_MAX_HASHES` entries.
+fn fetch_arrowcloud_bulk_scores(
+    api_key: &str,
+    user_id: Option<&str>,
+    chart_hashes: &[String],
+    leaderboards: &[ArrowCloudLeaderboard],
+) -> Result<HashMap<String, ArrowCloudScores>, Box<dyn Error + Send + Sync>> {
+    let api_key = api_key.trim();
+    if api_key.is_empty() {
+        return Err("ArrowCloud API key is missing.".into());
+    }
+    if chart_hashes.is_empty() {
+        return Ok(HashMap::new());
+    }
+    if chart_hashes.len() > ARROWCLOUD_BULK_MAX_HASHES {
+        return Err(format!(
+            "ArrowCloud bulk request exceeds {ARROWCLOUD_BULK_MAX_HASHES} chart hashes."
+        )
+        .into());
+    }
+
+    let body = ArrowCloudRetrieveScoresRequest {
+        chart_hashes,
+        leaderboard_ids: leaderboards,
+        user_id,
+    };
+    let bearer = format!("Bearer {api_key}");
+    let url = online::arrowcloud_retrieve_scores_url();
+    let response = network::get_agent()
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header("Authorization", &bearer)
+        .send_json(&body)?;
+
+    if response.status() != 200 {
+        return Err(format!(
+            "ArrowCloud /v1/retrieve-scores returned status {}",
+            response.status()
+        )
+        .into());
+    }
+
+    let decoded: ArrowCloudRetrieveScoresResponse = response.into_body().read_json()?;
+    let mut out = HashMap::with_capacity(decoded.scores.len());
+    for (chart_hash, leaderboards) in decoded.scores {
+        let entries = arrowcloud_scores_from_entry_map(&leaderboards);
+        if entries.itg.is_some() || entries.ex.is_some() || entries.hard_ex.is_some() {
+            out.insert(chart_hash, entries);
+        }
+    }
+    Ok(out)
+}
+
 fn fetch_arrowcloud_panes(
     chart_hash: &str,
     api_key: &str,
@@ -3090,6 +3719,12 @@ fn spawn_player_leaderboard_fetch(
                                     key.chart_hash.as_str(),
                                     data.itl_self_score,
                                 );
+                                itl::set_cached_online_self_rank(
+                                    persistent_profile_id.as_deref(),
+                                    key.api_key.as_str(),
+                                    key.chart_hash.as_str(),
+                                    data.itl_self_rank,
+                                );
                             }
                             if should_auto_populate
                                 && let Some(profile_id) = auto_profile_id.as_deref()
@@ -3328,6 +3963,12 @@ pub fn invalidate_player_leaderboards_for_side(chart_hash: &str, side: profile::
     }
 
     itl::set_cached_online_self_score(
+        profile::active_local_profile_id_for_side(side).as_deref(),
+        gs_api_key,
+        chart_hash,
+        None,
+    );
+    itl::set_cached_online_self_rank(
         profile::active_local_profile_id_for_side(side).as_deref(),
         gs_api_key,
         chart_hash,
@@ -4056,6 +4697,13 @@ pub struct ScoreImportProgress {
     pub detail: String,
 }
 
+struct ScoreImportFetchResult {
+    score: Option<CachedScore>,
+    itl_self_score: Option<u32>,
+    itl_self_rank: Option<u32>,
+    itl_self_found: bool,
+}
+
 fn score_import_api_key_for_endpoint(endpoint: ScoreImportEndpoint, profile: &Profile) -> &str {
     match endpoint {
         ScoreImportEndpoint::GrooveStats | ScoreImportEndpoint::BoogieStats => {
@@ -4079,11 +4727,51 @@ fn score_entry_matches_profile(
     false
 }
 
+fn score_import_result_from_response(
+    decoded: LeaderboardsApiResponse,
+    endpoint: ScoreImportEndpoint,
+    username: &str,
+    chart_hash: &str,
+) -> ScoreImportFetchResult {
+    let mut result = ScoreImportFetchResult {
+        score: None,
+        itl_self_score: None,
+        itl_self_rank: None,
+        itl_self_found: false,
+    };
+    let Some(player) = decoded.player1 else {
+        return result;
+    };
+
+    result.score = player
+        .gs_leaderboard
+        .iter()
+        .find(|entry| score_entry_matches_profile(entry, endpoint, username))
+        .map(|entry| {
+            cached_score_from_gs(
+                entry.score,
+                entry.comments.as_deref(),
+                chart_hash,
+                entry.is_fail,
+            )
+        });
+
+    if let Some(itl) = player.itl
+        && !itl.itl_leaderboard.is_empty()
+    {
+        result.itl_self_found = leaderboard_self_entry(&itl.itl_leaderboard, username).is_some();
+        result.itl_self_score = leaderboard_self_score_10000(&itl.itl_leaderboard, username);
+        result.itl_self_rank = leaderboard_self_rank(&itl.itl_leaderboard, username);
+    }
+
+    result
+}
+
 fn fetch_player_score_from_endpoint(
     endpoint: ScoreImportEndpoint,
     profile: &Profile,
     chart_hash: &str,
-) -> Result<Option<CachedScore>, Box<dyn Error + Send + Sync>> {
+) -> Result<ScoreImportFetchResult, Box<dyn Error + Send + Sync>> {
     let chart_hash = chart_hash.trim();
     if chart_hash.is_empty() {
         return Err("Missing chart hash for score request.".into());
@@ -4124,21 +4812,9 @@ fn fetch_player_score_from_endpoint(
     }
 
     let decoded: LeaderboardsApiResponse = response.into_body().read_json()?;
-    let score_opt = decoded
-        .player1
-        .map_or_else(Vec::new, |p1| p1.gs_leaderboard)
-        .into_iter()
-        .find(|entry| score_entry_matches_profile(entry, endpoint, username))
-        .map(|entry| {
-            cached_score_from_gs(
-                entry.score,
-                entry.comments.as_deref(),
-                chart_hash,
-                entry.is_fail,
-            )
-        });
-
-    Ok(score_opt)
+    Ok(score_import_result_from_response(
+        decoded, endpoint, username, chart_hash,
+    ))
 }
 
 fn fetch_player_score_from_api(
@@ -4150,25 +4826,40 @@ fn fetch_player_score_from_api(
     } else {
         ScoreImportEndpoint::GrooveStats
     };
-    fetch_player_score_from_endpoint(endpoint, profile, chart_hash)
+    Ok(fetch_player_score_from_endpoint(endpoint, profile, chart_hash)?.score)
 }
 
 fn collect_chart_hashes_for_import(
-    pack_group_filter: Option<&str>,
+    pack_groups_filter: &[String],
     profile_id: &str,
     only_missing_gs_scores: bool,
-) -> Vec<String> {
-    let filter_norm = pack_group_filter
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(str::to_ascii_lowercase);
+) -> Vec<(String, Vec<String>)> {
     let existing_scores = if only_missing_gs_scores {
         cached_gs_chart_hashes_for_profile(profile_id)
     } else {
         HashSet::new()
     };
+    collect_chart_hashes_per_pack_for_import(pack_groups_filter, &existing_scores)
+}
 
-    let mut chart_hashes = Vec::new();
+/// Per-pack chart-hash collection for score import.
+///
+/// Returns a vector of `(pack_display_name, chart_hashes)` pairs preserving
+/// song-cache iteration order. Globally deduplicates chart hashes across packs
+/// (first pack wins). Optionally filters by pack group / display name and
+/// skips charts present in `existing_scores` (caller supplies the right cache
+/// for the endpoint they're importing into).
+fn collect_chart_hashes_per_pack_for_import(
+    pack_groups_filter: &[String],
+    existing_scores: &HashSet<String>,
+) -> Vec<(String, Vec<String>)> {
+    let filter_set: HashSet<String> = pack_groups_filter
+        .iter()
+        .map(|v| v.trim().to_ascii_lowercase())
+        .filter(|v| !v.is_empty())
+        .collect();
+
+    let mut out: Vec<(String, Vec<String>)> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
     let song_cache = get_song_cache();
     for pack in song_cache.iter() {
@@ -4178,29 +4869,34 @@ fn collect_chart_hashes_for_import(
         } else {
             pack.name.trim()
         };
-        if let Some(filter) = filter_norm.as_deref()
-            && group_name.to_ascii_lowercase() != filter
-            && display_name.to_ascii_lowercase() != filter
-        {
-            continue;
+        if !filter_set.is_empty() {
+            let group_lc = group_name.to_ascii_lowercase();
+            let display_lc = display_name.to_ascii_lowercase();
+            if !filter_set.contains(&group_lc) && !filter_set.contains(&display_lc) {
+                continue;
+            }
         }
 
+        let mut hashes = Vec::new();
         for song in &pack.songs {
             for chart in &song.charts {
                 let chart_hash = chart.short_hash.trim();
                 if chart_hash.is_empty() {
                     continue;
                 }
-                if only_missing_gs_scores && existing_scores.contains(chart_hash) {
+                if existing_scores.contains(chart_hash) {
                     continue;
                 }
                 if seen.insert(chart_hash.to_string()) {
-                    chart_hashes.push(chart_hash.to_string());
+                    hashes.push(chart_hash.to_string());
                 }
             }
         }
+        if !hashes.is_empty() {
+            out.push((display_name.to_string(), hashes));
+        }
     }
-    chart_hashes
+    out
 }
 
 #[inline(always)]
@@ -4214,12 +4910,15 @@ fn wait_for_next_import_request(last_request_started_at: Option<Instant>) {
     }
 }
 
-pub fn import_scores_for_profile<F>(
-    endpoint: ScoreImportEndpoint,
+/// AC-specific bulk import orchestrator. Sends one POST per pack to
+/// `/v1/retrieve-scores`, splitting any pack with > [`ARROWCLOUD_BULK_MAX_HASHES`]
+/// charts into chunks. Throttled to [`SCORE_IMPORT_RATE_LIMIT_PER_SECOND`]
+/// requests per second to match the per-chart paths.
+fn import_scores_for_profile_arrowcloud_bulk<F>(
     profile_id: String,
     profile: Profile,
-    pack_group: Option<String>,
-    only_missing_gs_scores: bool,
+    pack_groups: Vec<String>,
+    only_missing_scores: bool,
     on_progress: F,
     should_cancel: impl Fn() -> bool,
 ) -> Result<ScoreBulkImportSummary, Box<dyn Error + Send + Sync>>
@@ -4227,28 +4926,34 @@ where
     F: FnMut(ScoreImportProgress),
 {
     let mut on_progress = on_progress;
-    let api_key = score_import_api_key_for_endpoint(endpoint, &profile);
+    let api_key = profile.arrowcloud_api_key.trim().to_string();
     if api_key.is_empty() {
-        return Err(format!(
-            "{} API key is not set in profile configuration.",
-            endpoint.display_name()
-        )
-        .into());
-    }
-    if endpoint.requires_username() && profile.groovestats_username.trim().is_empty() {
-        return Err(format!(
-            "{} username is not set in profile configuration.",
-            endpoint.display_name()
-        )
-        .into());
+        return Err("ArrowCloud API key is not set in profile configuration.".into());
     }
 
-    let username = profile.groovestats_username.trim().to_string();
-    let chart_hashes =
-        collect_chart_hashes_for_import(pack_group.as_deref(), &profile_id, only_missing_gs_scores);
-    let requested_charts = chart_hashes.len();
-    let filter_note = if only_missing_gs_scores {
-        " (missing GS only)"
+    // Resolve our user id once up front. The bulk endpoint accepts a missing
+    // userId (it'll resolve from the bearer token), but sending it explicitly
+    // is preferred and matches the documented contract.
+    let user_id = match fetch_arrowcloud_user_context(&api_key) {
+        Ok(Some(ctx)) => ctx.self_user_id,
+        Ok(None) => None,
+        Err(e) => {
+            warn!("Could not resolve ArrowCloud user id, sending without it: {e}");
+            None
+        }
+    };
+
+    let existing_scores = if only_missing_scores {
+        cached_ac_chart_hashes_with_itg_for_profile(&profile_id)
+    } else {
+        HashSet::new()
+    };
+    let pack_chart_groups =
+        collect_chart_hashes_per_pack_for_import(&pack_groups, &existing_scores);
+    let requested_charts: usize = pack_chart_groups.iter().map(|(_, h)| h.len()).sum();
+    let total_packs = pack_chart_groups.len();
+    let filter_note = if only_missing_scores {
+        " (missing only)"
     } else {
         ""
     };
@@ -4259,9 +4964,7 @@ where
         missing_scores: 0,
         failed_requests: 0,
         detail: format!(
-            "Queued {requested_charts} chart hashes for {} import{}.",
-            endpoint.display_name(),
-            filter_note
+            "Queued {requested_charts} chart hashes across {total_packs} pack(s) for ArrowCloud bulk import{filter_note}."
         ),
     });
     if requested_charts == 0 {
@@ -4281,80 +4984,311 @@ where
     let mut imported_scores = 0usize;
     let mut missing_scores = 0usize;
     let mut failed_requests = 0usize;
+    let mut processed_charts = 0usize;
     let mut canceled = false;
 
-    for (idx, chart_hash) in chart_hashes.iter().enumerate() {
-        if should_cancel() {
-            canceled = true;
-            debug!(
-                "{} score import canceled after {idx}/{requested_charts} charts.",
-                endpoint.display_name()
-            );
-            break;
-        }
-        wait_for_next_import_request(last_request_started_at);
-        if should_cancel() {
-            canceled = true;
-            debug!(
-                "{} score import canceled after {idx}/{requested_charts} charts.",
-                endpoint.display_name()
-            );
-            break;
-        }
-        last_request_started_at = Some(Instant::now());
-        let detail = match fetch_player_score_from_endpoint(endpoint, &profile, chart_hash) {
-            Ok(Some(score)) => {
-                cache_gs_score_for_profile(&profile_id, chart_hash, score, username.as_str());
-                imported_scores += 1;
-                format!(
-                    "Found {} score for {} on {}.",
-                    endpoint.display_name(),
-                    username,
-                    chart_hash
-                )
-            }
-            Ok(None) => {
-                missing_scores += 1;
-                format!(
-                    "No {} score for {} on {}.",
-                    endpoint.display_name(),
-                    username,
-                    chart_hash
-                )
-            }
-            Err(e) => {
-                failed_requests += 1;
-                let msg = format!(
-                    "{} import request failed for chart {}: {}",
-                    endpoint.display_name(),
-                    chart_hash,
-                    e
-                );
-                warn!("{msg}");
-                msg
-            }
-        };
+    'packs: for (pack_idx, (pack_name, hashes)) in pack_chart_groups.into_iter().enumerate() {
+        let pack_chart_count = hashes.len();
+        let mut pack_hits = 0usize;
+        let mut pack_misses = 0usize;
+        let mut pack_failures = 0usize;
 
-        let done = idx + 1;
-        on_progress(ScoreImportProgress {
-            processed_charts: done,
-            total_charts: requested_charts,
-            imported_scores,
-            missing_scores,
-            failed_requests,
-            detail: detail.clone(),
-        });
-        if done == requested_charts || done % SCORE_IMPORT_PROGRESS_LOG_EVERY == 0 || done == 1 {
-            debug!(
-                "{} bulk import progress for '{}': {done}/{requested_charts} charts (imported={}, missing={}, failed={})",
-                endpoint.display_name(),
-                username,
+        for chunk in hashes.chunks(ARROWCLOUD_BULK_MAX_HASHES) {
+            if should_cancel() {
+                canceled = true;
+                debug!(
+                    "ArrowCloud bulk import canceled at pack {} ({}/{}).",
+                    pack_name, pack_idx, total_packs
+                );
+                break 'packs;
+            }
+            wait_for_next_import_request(last_request_started_at);
+            if should_cancel() {
+                canceled = true;
+                break 'packs;
+            }
+            last_request_started_at = Some(Instant::now());
+
+            let chunk_vec = chunk.to_vec();
+            let request_started = Instant::now();
+            let detail = match fetch_arrowcloud_bulk_scores(
+                &api_key,
+                user_id.as_deref(),
+                &chunk_vec,
+                &ArrowCloudLeaderboard::ALL_GLOBAL,
+            ) {
+                Ok(scores_by_chart) => {
+                    let request_elapsed = request_started.elapsed();
+                    let hits = scores_by_chart.len();
+                    let misses = chunk_vec.len().saturating_sub(hits);
+                    if !scores_by_chart.is_empty() {
+                        set_cached_ac_scores_for_profile_bulk(
+                            &profile_id,
+                            scores_by_chart.into_iter(),
+                        );
+                    }
+                    imported_scores += hits;
+                    missing_scores += misses;
+                    pack_hits += hits;
+                    pack_misses += misses;
+                    debug!(
+                        "ArrowCloud /v1/retrieve-scores pack={}/{} pack_name='{}' chunk={} took={:.0}ms hits={} misses={}",
+                        pack_idx + 1,
+                        total_packs,
+                        pack_name,
+                        chunk_vec.len(),
+                        request_elapsed.as_secs_f32() * 1000.0,
+                        hits,
+                        misses,
+                    );
+                    format!(
+                        "Pack {}/{}: {pack_name} -> {hits} hit, {misses} missing ({:.0}ms)",
+                        pack_idx + 1,
+                        total_packs,
+                        request_elapsed.as_secs_f32() * 1000.0,
+                    )
+                }
+                Err(e) => {
+                    let request_elapsed = request_started.elapsed();
+                    failed_requests += 1;
+                    pack_failures += 1;
+                    let msg = format!(
+                        "Pack {}/{}: {pack_name} request failed ({} charts, {:.0}ms): {e}",
+                        pack_idx + 1,
+                        total_packs,
+                        chunk_vec.len(),
+                        request_elapsed.as_secs_f32() * 1000.0,
+                    );
+                    warn!("{msg}");
+                    msg
+                }
+            };
+
+            processed_charts += chunk_vec.len();
+            on_progress(ScoreImportProgress {
+                processed_charts,
+                total_charts: requested_charts,
                 imported_scores,
                 missing_scores,
-                failed_requests
-            );
+                failed_requests,
+                detail: detail.clone(),
+            });
+            debug!("{detail}");
         }
-        debug!("{detail}");
+
+        debug!(
+            "Pack {}/{} complete: {pack_name} ({pack_chart_count} charts -> {pack_hits} hit, {pack_misses} missing{}).",
+            pack_idx + 1,
+            total_packs,
+            if pack_failures > 0 {
+                format!(", {pack_failures} failed")
+            } else {
+                String::new()
+            },
+        );
+    }
+
+    Ok(ScoreBulkImportSummary {
+        requested_charts,
+        imported_scores,
+        missing_scores,
+        failed_requests,
+        rate_limit_per_second: SCORE_IMPORT_RATE_LIMIT_PER_SECOND,
+        elapsed_seconds: import_started.elapsed().as_secs_f32(),
+        canceled,
+    })
+}
+
+pub fn import_scores_for_profile<F>(
+    endpoint: ScoreImportEndpoint,
+    profile_id: String,
+    profile: Profile,
+    pack_groups: Vec<String>,
+    only_missing_gs_scores: bool,
+    on_progress: F,
+    should_cancel: impl Fn() -> bool,
+) -> Result<ScoreBulkImportSummary, Box<dyn Error + Send + Sync>>
+where
+    F: FnMut(ScoreImportProgress),
+{
+    if endpoint == ScoreImportEndpoint::ArrowCloud {
+        return import_scores_for_profile_arrowcloud_bulk(
+            profile_id,
+            profile,
+            pack_groups,
+            only_missing_gs_scores,
+            on_progress,
+            should_cancel,
+        );
+    }
+
+    let mut on_progress = on_progress;
+    let api_key = score_import_api_key_for_endpoint(endpoint, &profile);
+    if api_key.is_empty() {
+        return Err(format!(
+            "{} API key is not set in profile configuration.",
+            endpoint.display_name()
+        )
+        .into());
+    }
+    if endpoint.requires_username() && profile.groovestats_username.trim().is_empty() {
+        return Err(format!(
+            "{} username is not set in profile configuration.",
+            endpoint.display_name()
+        )
+        .into());
+    }
+
+    let username = profile.groovestats_username.trim().to_string();
+    let pack_chart_groups =
+        collect_chart_hashes_for_import(&pack_groups, &profile_id, only_missing_gs_scores);
+    let requested_charts: usize = pack_chart_groups.iter().map(|(_, h)| h.len()).sum();
+    let total_packs = pack_chart_groups.len();
+    let filter_note = if only_missing_gs_scores {
+        " (missing only)"
+    } else {
+        ""
+    };
+    on_progress(ScoreImportProgress {
+        processed_charts: 0,
+        total_charts: requested_charts,
+        imported_scores: 0,
+        missing_scores: 0,
+        failed_requests: 0,
+        detail: format!(
+            "Queued {requested_charts} chart hashes across {total_packs} pack(s) for {} import{filter_note}.",
+            endpoint.display_name(),
+        ),
+    });
+    if requested_charts == 0 {
+        return Ok(ScoreBulkImportSummary {
+            requested_charts: 0,
+            imported_scores: 0,
+            missing_scores: 0,
+            failed_requests: 0,
+            rate_limit_per_second: SCORE_IMPORT_RATE_LIMIT_PER_SECOND,
+            elapsed_seconds: 0.0,
+            canceled: false,
+        });
+    }
+
+    let import_started = Instant::now();
+    let mut last_request_started_at: Option<Instant> = None;
+    let mut imported_scores = 0usize;
+    let mut missing_scores = 0usize;
+    let mut failed_requests = 0usize;
+    let mut processed_charts = 0usize;
+    let mut canceled = false;
+
+    'packs: for (pack_idx, (pack_name, hashes)) in pack_chart_groups.into_iter().enumerate() {
+        let pack_chart_count = hashes.len();
+        let mut pack_hits = 0usize;
+        let mut pack_misses = 0usize;
+        let mut pack_failures = 0usize;
+
+        for chart_hash in &hashes {
+            if should_cancel() {
+                canceled = true;
+                debug!(
+                    "{} score import canceled at pack {}/{} after {processed_charts}/{requested_charts} charts.",
+                    endpoint.display_name(),
+                    pack_idx + 1,
+                    total_packs,
+                );
+                break 'packs;
+            }
+            wait_for_next_import_request(last_request_started_at);
+            if should_cancel() {
+                canceled = true;
+                break 'packs;
+            }
+            last_request_started_at = Some(Instant::now());
+            match fetch_player_score_from_endpoint(endpoint, &profile, chart_hash) {
+                Ok(result) => {
+                    if result.itl_self_found {
+                        itl::set_cached_online_self_score(
+                            Some(profile_id.as_str()),
+                            api_key,
+                            chart_hash,
+                            result.itl_self_score,
+                        );
+                        itl::set_cached_online_self_rank(
+                            Some(profile_id.as_str()),
+                            api_key,
+                            chart_hash,
+                            result.itl_self_rank,
+                        );
+                    }
+                    if let Some(score) = result.score {
+                        cache_gs_score_for_profile(
+                            &profile_id,
+                            chart_hash,
+                            score,
+                            username.as_str(),
+                        );
+                        imported_scores += 1;
+                        pack_hits += 1;
+                    } else {
+                        missing_scores += 1;
+                        pack_misses += 1;
+                    }
+                }
+                Err(e) => {
+                    failed_requests += 1;
+                    pack_failures += 1;
+                    warn!(
+                        "{} import request failed for chart {}: {}",
+                        endpoint.display_name(),
+                        chart_hash,
+                        e,
+                    );
+                }
+            }
+
+            processed_charts += 1;
+            let detail = format!(
+                "Pack {}/{}: {pack_name} -> {pack_hits} hit, {pack_misses} missing{}",
+                pack_idx + 1,
+                total_packs,
+                if pack_failures > 0 {
+                    format!(", {pack_failures} failed")
+                } else {
+                    String::new()
+                },
+            );
+            on_progress(ScoreImportProgress {
+                processed_charts,
+                total_charts: requested_charts,
+                imported_scores,
+                missing_scores,
+                failed_requests,
+                detail,
+            });
+            if processed_charts == requested_charts
+                || processed_charts % SCORE_IMPORT_PROGRESS_LOG_EVERY == 0
+                || processed_charts == 1
+            {
+                debug!(
+                    "{} import progress for '{}': {processed_charts}/{requested_charts} charts (imported={}, missing={}, failed={})",
+                    endpoint.display_name(),
+                    username,
+                    imported_scores,
+                    missing_scores,
+                    failed_requests,
+                );
+            }
+        }
+
+        debug!(
+            "Pack {}/{} complete: {pack_name} ({pack_chart_count} charts -> {pack_hits} hit, {pack_misses} missing{}).",
+            pack_idx + 1,
+            total_packs,
+            if pack_failures > 0 {
+                format!(", {pack_failures} failed")
+            } else {
+                String::new()
+            },
+        );
     }
 
     Ok(ScoreBulkImportSummary {
@@ -4405,6 +5339,16 @@ pub fn fetch_and_store_grade(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lua_chart_submit_allowlist_matches_spooky_hash() {
+        assert!(lua_chart_submit_allowed("d5bd4dd7224f68ff"));
+        assert!(lua_chart_submit_allowed(" D5BD4DD7224F68FF "));
+        assert!(!lua_chart_submit_allowed("deadbeefcafebabe"));
+        assert!(lua_submit_allowed(false, "deadbeefcafebabe"));
+        assert!(!lua_submit_allowed(true, "deadbeefcafebabe"));
+        assert!(lua_submit_allowed(true, "d5bd4dd7224f68ff"));
+    }
 
     #[test]
     fn groovestats_comment_counts_ignore_ds_prefix() {
@@ -4587,6 +5531,53 @@ mod tests {
         }];
 
         assert_eq!(leaderboard_self_rank(&entries, "perfecttaste"), None);
+    }
+
+    #[test]
+    fn score_import_result_includes_itl_self_data() {
+        let result = score_import_result_from_response(
+            LeaderboardsApiResponse {
+                player1: Some(LeaderboardApiPlayer {
+                    is_ranked: true,
+                    gs_leaderboard: vec![LeaderboardApiEntry {
+                        rank: 8,
+                        name: "PerfectTaste".to_string(),
+                        machine_tag: None,
+                        score: 9876.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: true,
+                        is_fail: false,
+                        comments: Some("[DS], 2e".to_string()),
+                    }],
+                    ex_leaderboard: Vec::new(),
+                    rpg: None,
+                    itl: Some(LeaderboardEventData {
+                        name: "ITL Online 2026".to_string(),
+                        rpg_leaderboard: Vec::new(),
+                        itl_leaderboard: vec![LeaderboardApiEntry {
+                            rank: 42,
+                            name: "PerfectTaste".to_string(),
+                            machine_tag: None,
+                            score: 9912.0,
+                            date: String::new(),
+                            is_rival: false,
+                            is_self: true,
+                            is_fail: false,
+                            comments: None,
+                        }],
+                    }),
+                }),
+            },
+            ScoreImportEndpoint::GrooveStats,
+            "perfecttaste",
+            "deadbeef",
+        );
+
+        assert!(result.score.is_some());
+        assert!(result.itl_self_found);
+        assert_eq!(result.itl_self_score, Some(9912));
+        assert_eq!(result.itl_self_rank, Some(42));
     }
 
     #[test]
@@ -5154,5 +6145,287 @@ mod tests {
     #[test]
     fn leaderboard_rank_for_score_rejects_non_finite_scores() {
         assert_eq!(leaderboard_rank_for_score(&[], f64::NAN), None);
+    }
+
+    // --- ArrowCloud bulk score import tests ---
+
+    fn ac_entry(score: f64, is_fail: bool) -> ArrowCloudRetrieveScoreEntry {
+        ArrowCloudRetrieveScoreEntry {
+            score: Some(score),
+            grade: None,
+            date: None,
+            play_id: None,
+            is_fail,
+        }
+    }
+
+    fn ac_entry_full(
+        score: f64,
+        grade: Option<&str>,
+        date: Option<&str>,
+        play_id: Option<i64>,
+        is_fail: bool,
+    ) -> ArrowCloudRetrieveScoreEntry {
+        ArrowCloudRetrieveScoreEntry {
+            score: Some(score),
+            grade: grade.map(str::to_string),
+            date: date.map(str::to_string),
+            play_id,
+            is_fail,
+        }
+    }
+
+    #[test]
+    fn arrowcloud_leaderboard_id_round_trips() {
+        for v in ArrowCloudLeaderboard::ALL_GLOBAL {
+            assert_eq!(ArrowCloudLeaderboard::from_id(v.id()), Some(v));
+        }
+        assert_eq!(ArrowCloudLeaderboard::from_id(0), None);
+        assert_eq!(ArrowCloudLeaderboard::from_id(9), None);
+    }
+
+    #[test]
+    fn arrowcloud_leaderboard_serializes_as_integer() {
+        let json = serde_json::to_string(&ArrowCloudLeaderboard::Itg).unwrap();
+        assert_eq!(json, "3");
+        let json = serde_json::to_string(&ArrowCloudLeaderboard::ALL_GLOBAL).unwrap();
+        assert_eq!(json, "[4,2,3]");
+    }
+
+    #[test]
+    fn arrowcloud_scores_from_entry_map_assigns_global_leaderboards() {
+        let mut map = HashMap::new();
+        map.insert("4".to_string(), ac_entry(99.51, false));
+        map.insert("2".to_string(), ac_entry(98.10, false));
+        map.insert("3".to_string(), ac_entry(99.89, false));
+        let scores = arrowcloud_scores_from_entry_map(&map);
+        assert!(scores.itg.is_some());
+        assert!(scores.ex.is_some());
+        assert!(scores.hard_ex.is_some());
+        assert!((scores.itg.unwrap().score_percent - 0.9989).abs() < 1e-6);
+        assert!((scores.ex.unwrap().score_percent - 0.9810).abs() < 1e-6);
+        assert!((scores.hard_ex.unwrap().score_percent - 0.9951).abs() < 1e-6);
+    }
+
+    #[test]
+    fn arrowcloud_scores_from_entry_map_ignores_unknown_leaderboard_ids() {
+        let mut map = HashMap::new();
+        map.insert("3".to_string(), ac_entry(99.0, false));
+        // Event-specific leaderboard (e.g. BlueShift) – should be dropped.
+        map.insert("9".to_string(), ac_entry(95.0, false));
+        let scores = arrowcloud_scores_from_entry_map(&map);
+        assert!(scores.itg.is_some());
+        assert!(scores.ex.is_none());
+        assert!(scores.hard_ex.is_none());
+    }
+
+    #[test]
+    fn arrowcloud_scores_from_entry_map_ignores_unparseable_keys() {
+        let mut map = HashMap::new();
+        map.insert("itg".to_string(), ac_entry(99.0, false));
+        let scores = arrowcloud_scores_from_entry_map(&map);
+        assert!(scores.itg.is_none());
+    }
+
+    #[test]
+    fn arrowcloud_scores_from_entry_map_drops_entries_without_score_field() {
+        let mut map = HashMap::new();
+        map.insert(
+            "3".to_string(),
+            ArrowCloudRetrieveScoreEntry {
+                score: None,
+                grade: None,
+                date: None,
+                play_id: None,
+                is_fail: false,
+            },
+        );
+        let scores = arrowcloud_scores_from_entry_map(&map);
+        assert!(scores.itg.is_none(), "missing score must not cache as 0%");
+    }
+
+    #[test]
+    fn arrowcloud_scores_from_entry_preserves_grade_and_date() {
+        let mut map = HashMap::new();
+        map.insert(
+            "3".to_string(),
+            ac_entry_full(
+                99.89,
+                Some("Tristar"),
+                Some("2026-05-03T19:10:17.504Z"),
+                Some(12345),
+                false,
+            ),
+        );
+        let scores = arrowcloud_scores_from_entry_map(&map);
+        let itg = scores.itg.unwrap();
+        assert_eq!(itg.server_grade, Some(ArrowCloudServerGrade::Tristar));
+        assert_eq!(itg.play_id, Some(12345));
+        let played_at = itg.played_at.expect("played_at parsed");
+        assert_eq!(played_at.timestamp_millis(), 1_777_835_417_504);
+    }
+
+    #[test]
+    fn arrowcloud_scores_from_entry_drops_unknown_grade() {
+        let mut map = HashMap::new();
+        map.insert(
+            "3".to_string(),
+            ac_entry_full(98.0, Some("Mythic"), None, None, false),
+        );
+        let scores = arrowcloud_scores_from_entry_map(&map);
+        assert_eq!(scores.itg.unwrap().server_grade, None);
+    }
+
+    #[test]
+    fn arrowcloud_scores_from_entry_drops_unparseable_date() {
+        let mut map = HashMap::new();
+        map.insert(
+            "3".to_string(),
+            ac_entry_full(98.0, None, Some("not-a-date"), None, false),
+        );
+        let scores = arrowcloud_scores_from_entry_map(&map);
+        assert_eq!(scores.itg.unwrap().played_at, None);
+    }
+
+    #[test]
+    fn arrowcloud_server_grade_round_trips_through_str() {
+        for grade in [
+            ArrowCloudServerGrade::Sex,
+            ArrowCloudServerGrade::Quint,
+            ArrowCloudServerGrade::Quad,
+            ArrowCloudServerGrade::Tristar,
+            ArrowCloudServerGrade::SPlus,
+            ArrowCloudServerGrade::SMinus,
+            ArrowCloudServerGrade::Failed,
+        ] {
+            assert_eq!(
+                ArrowCloudServerGrade::from_server_str(grade.as_str()),
+                Some(grade)
+            );
+        }
+    }
+
+    #[test]
+    fn arrowcloud_score_bincode_round_trip_preserves_date() {
+        let original = ArrowCloudScore {
+            score_percent: 0.9989,
+            server_grade: Some(ArrowCloudServerGrade::Tristar),
+            played_at: Some(Utc.timestamp_millis_opt(1_777_835_417_504).unwrap()),
+            play_id: Some(12345),
+            is_fail: false,
+        };
+        let cfg = bincode::config::standard();
+        let bytes = bincode::encode_to_vec(original, cfg).unwrap();
+        let (decoded, _): (ArrowCloudScore, _) = bincode::decode_from_slice(&bytes, cfg).unwrap();
+        assert_eq!(decoded, original);
+    }
+
+    fn ac_score(percent_0_1: f64, is_fail: bool) -> ArrowCloudScore {
+        ArrowCloudScore {
+            score_percent: percent_0_1,
+            server_grade: None,
+            played_at: None,
+            play_id: None,
+            is_fail,
+        }
+    }
+
+    #[test]
+    fn merge_arrowcloud_score_slot_inserts_when_empty() {
+        let mut slot: Option<ArrowCloudScore> = None;
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.95, false)));
+        assert!(slot.is_some());
+        assert!((slot.unwrap().score_percent - 0.95).abs() < 1e-9);
+    }
+
+    #[test]
+    fn merge_arrowcloud_score_slot_keeps_higher_percent() {
+        let mut slot = Some(ac_score(0.99, false));
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.97, false)));
+        assert!((slot.unwrap().score_percent - 0.99).abs() < 1e-9);
+    }
+
+    #[test]
+    fn merge_arrowcloud_score_slot_overwrites_lower_percent() {
+        let mut slot = Some(ac_score(0.90, false));
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.92, false)));
+        assert!((slot.unwrap().score_percent - 0.92).abs() < 1e-9);
+    }
+
+    #[test]
+    fn merge_arrowcloud_score_slot_failed_does_not_overwrite_passed() {
+        let mut slot = Some(ac_score(0.85, false));
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.95, true)));
+        assert!(
+            !slot.unwrap().is_fail,
+            "failed score must not overwrite passed"
+        );
+    }
+
+    #[test]
+    fn merge_arrowcloud_score_slot_passed_overwrites_failed() {
+        let mut slot = Some(ac_score(0.85, true));
+        merge_arrowcloud_score_slot(&mut slot, Some(ac_score(0.50, false)));
+        assert!(
+            !slot.unwrap().is_fail,
+            "non-failed score must replace failed"
+        );
+    }
+
+    #[test]
+    fn merge_arrowcloud_score_slot_ignores_none() {
+        let mut slot = Some(ac_score(0.85, false));
+        merge_arrowcloud_score_slot(&mut slot, None);
+        assert!((slot.unwrap().score_percent - 0.85).abs() < 1e-9);
+    }
+
+    #[test]
+    fn arrowcloud_retrieve_response_decodes_full_shape() {
+        // Mirrors the documented bulk response shape.
+        let raw = r#"{
+            "scores": {
+                "006fb5c4890e98a2": {
+                    "2": { "score": "99.12", "grade": "Tristar", "date": "2026-05-03T19:10:17.504Z" },
+                    "3": { "score": "99.89", "grade": "Tristar", "date": "2026-05-03T19:10:17.504Z" }
+                },
+                "0092bb246527b2ec": {
+                    "2": { "score": "97.44", "grade": "Twostar", "date": "2026-05-02T11:03:42.000Z" }
+                }
+            }
+        }"#;
+        let decoded: ArrowCloudRetrieveScoresResponse = serde_json::from_str(raw).unwrap();
+        assert_eq!(decoded.scores.len(), 2);
+        assert!(decoded.scores["006fb5c4890e98a2"].contains_key("2"));
+        assert!(decoded.scores["006fb5c4890e98a2"].contains_key("3"));
+        assert_eq!(decoded.scores["0092bb246527b2ec"]["2"].score, Some(97.44));
+    }
+
+    #[test]
+    fn arrowcloud_retrieve_response_ignores_unknown_top_level_fields() {
+        let raw = r#"{ "scores": {}, "extra": 42, "meta": { "x": 1 } }"#;
+        let decoded: ArrowCloudRetrieveScoresResponse = serde_json::from_str(raw).unwrap();
+        assert!(decoded.scores.is_empty());
+    }
+
+    #[test]
+    fn arrowcloud_retrieve_response_treats_missing_score_field_as_none() {
+        let raw = r#"{
+            "scores": {
+                "abc": { "3": { "grade": "n/a" } }
+            }
+        }"#;
+        let decoded: ArrowCloudRetrieveScoresResponse = serde_json::from_str(raw).unwrap();
+        assert_eq!(decoded.scores["abc"]["3"].score, None);
+    }
+
+    #[test]
+    fn arrowcloud_global_leaderboard_set_is_hardex_ex_itg() {
+        // Order matters for the request body payload; the server is
+        // order-insensitive but we send HardEX first to mirror display priority.
+        let ids: Vec<u32> = ArrowCloudLeaderboard::ALL_GLOBAL
+            .iter()
+            .map(|v| v.id())
+            .collect();
+        assert_eq!(ids, vec![4, 2, 3]);
     }
 }

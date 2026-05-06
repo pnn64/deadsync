@@ -36,7 +36,6 @@ pub(crate) struct PlayerTotals {
     pub(crate) holds: u32,
     pub(crate) rolls: u32,
     pub(crate) mines: u32,
-    pub(crate) jumps: u32,
     pub(crate) hands: u32,
 }
 
@@ -102,9 +101,6 @@ pub(crate) fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)
         }
         let notes_on_row = row_mask.count_ones();
         let carried_holds = hold_start_ix.saturating_sub(hold_end_ix) as u32;
-        if notes_on_row >= 2 {
-            totals.jumps = totals.jumps.saturating_add(1);
-        }
         if notes_on_row + carried_holds >= 3 {
             totals.hands = totals.hands.saturating_add(1);
         }
@@ -265,6 +261,19 @@ pub(crate) fn compute_possible_grade_points(
         + (u64::from(holds_total) * judgment::HOLD_SCORE_HELD as u64)
         + (u64::from(rolls_total) * judgment::HOLD_SCORE_HELD as u64);
     pts as i32
+}
+
+#[inline(always)]
+pub(crate) fn max_grade_points(
+    notes: &[Note],
+    note_range: (usize, usize),
+    holds_total: u32,
+    rolls_total: u32,
+    base_points: i32,
+) -> i32 {
+    // ITGmania scores note-changing mods against max(pre, post): inserted notes
+    // count, and removed notes still count as misses.
+    compute_possible_grade_points(notes, note_range, holds_total, rolls_total).max(base_points)
 }
 
 #[derive(Clone, Copy, Debug, Default)]

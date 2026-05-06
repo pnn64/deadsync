@@ -36,7 +36,7 @@ pub(super) fn finalize_row_judgment(
             row_has_wayoff |= judgment.grade == JudgeGrade::WayOff;
             Some(judgment)
         }))
-        .cloned()
+        .copied()
     else {
         return;
     };
@@ -94,7 +94,7 @@ pub(super) fn finalize_row_judgment(
     if show_final_visual {
         // Arrow Cloud's gameplay HUD uses the row-final JudgmentMessage for
         // offset/error-bar visuals, not individual note hits inside a chord.
-        set_last_judgment(state, player, final_judgment.clone());
+        set_last_judgment(state, player, final_judgment);
         error_bar_register_tap(state, player, &final_judgment, current_music_time_s(state));
     }
     if !skip_life_change {

@@ -13,6 +13,7 @@ use crate::game::{
         default_time_signatures,
     },
 };
+use image::image_dimensions;
 use log::{debug, info, warn};
 use rssp::parse::{decode_bytes, extract_bgchanges_values, unescape_tag};
 use rssp::patterns::{PatternVariant, compute_box_counts, count_pattern};
@@ -23,9 +24,7 @@ use std::sync::Arc;
 
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
-use std::hash::Hasher;
 use std::time::{Duration, Instant};
-use twox_hash::XxHash64;
 
 mod cache;
 mod scan;
@@ -37,7 +36,7 @@ pub use scan::{
 };
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
-const SONG_CACHE_VERSION: u8 = 7;
+const SONG_CACHE_VERSION: u8 = 9;
 const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
@@ -1219,7 +1218,7 @@ struct CachedSong {
     cache_version: u8,
     rssp_version: String,
     mono_threshold: usize,
-    source_hash: u64,
+    directory_hash: u64,
     data: CachedSongMeta,
     chart_payloads: Vec<CachedChartPayloadIndex>,
 }
@@ -1301,9 +1300,10 @@ fn process_song(
         None
     };
 
-    if fastload
+    let allow_cache_read = fastload || cachesongs;
+    if allow_cache_read
         && let Some(cp) = cache_path.as_deref()
-        && let Some(song_data) = cache::load_song_from_cache(&simfile_path, cp)
+        && let Some(song_data) = cache::load_song_from_cache(&simfile_path, cp, !fastload)
     {
         return Ok((song_data, true));
     }
@@ -1326,10 +1326,14 @@ pub fn reload_song_in_cache(simfile_path: &Path) -> Result<Arc<SongData>, String
     let config = crate::config::get();
     let global_offset_seconds = config.global_offset_seconds;
     let cachesongs = config.cachesongs;
-    let (song_data, _) = process_song(
-        simfile_path.to_path_buf(),
+    let cache_path = cachesongs
+        .then(|| cache::compute_song_cache_path(simfile_path))
+        .flatten();
+    let song_data = parse_song_and_maybe_write_cache(
+        simfile_path,
         false,
         cachesongs,
+        cache_path.as_deref(),
         global_offset_seconds,
     )?;
     let updated = Arc::new(song_data);
@@ -1385,14 +1389,13 @@ fn load_gameplay_song_data(
     let cache_path = allow_cache_write
         .then(|| cache::compute_song_cache_path(simfile_path))
         .flatten();
-    let need_hash = allow_cache_write && cache_path.is_some();
     let parse_started = Instant::now();
-    let (mut song_data, content_hash) = parse_and_process_song_file(simfile_path, need_hash)?;
+    let mut song_data = parse_and_process_song_file(simfile_path)?;
     let parse_ms = parse_started.elapsed().as_secs_f64() * 1000.0;
     update_precise_last_second(&mut song_data, global_offset_seconds);
     let write_started = Instant::now();
-    if allow_cache_write && let (Some(cp), Some(ch)) = (cache_path.as_deref(), content_hash) {
-        cache::write_song_cache(cp, ch, &song_data, global_offset_seconds);
+    if allow_cache_write && let Some(cp) = cache_path.as_deref() {
+        cache::write_song_cache(cp, &song_data, global_offset_seconds);
     }
     let write_ms = write_started.elapsed().as_secs_f64() * 1000.0;
     let total_ms = started.elapsed().as_secs_f64() * 1000.0;
@@ -1419,10 +1422,15 @@ pub fn load_gameplay_charts(
     let config = crate::config::get();
     let allow_cache_read = config.fastload || config.cachesongs;
     let allow_cache_write = config.cachesongs;
+    let verify_cache_freshness = !config.fastload;
     let load_started = Instant::now();
     if allow_cache_read
-        && let Some(charts) =
-            cache::load_gameplay_charts_from_cache(song, requested_chart_ixs, global_offset_seconds)
+        && let Some(charts) = cache::load_gameplay_charts_from_cache(
+            song,
+            requested_chart_ixs,
+            global_offset_seconds,
+            verify_cache_freshness,
+        )
     {
         let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
         let total_ms = started.elapsed().as_secs_f64() * 1000.0;
@@ -1481,12 +1489,21 @@ fn parse_song_and_maybe_write_cache(
             path.file_name().unwrap_or_default()
         );
     }
-    let need_hash = cachesongs && cache_path.is_some();
-    let (mut song_data, content_hash) = parse_and_process_song_file(path, need_hash)?;
+    let mut song_data = parse_and_process_song_file(path)?;
     update_precise_last_second(&mut song_data, global_offset_seconds);
-    if cachesongs && let (Some(cp), Some(ch)) = (cache_path, content_hash) {
-        cache::write_song_cache(cp, ch, &song_data, global_offset_seconds);
+    if cachesongs && let Some(cp) = cache_path {
+        cache::write_song_cache(cp, &song_data, global_offset_seconds);
     }
+    Ok(build_song_meta(song_data, global_offset_seconds))
+}
+
+#[cfg(test)]
+pub(crate) fn parse_song_for_test(
+    path: &Path,
+    global_offset_seconds: f32,
+) -> Result<SongData, String> {
+    let mut song_data = parse_and_process_song_file(path)?;
+    update_precise_last_second(&mut song_data, global_offset_seconds);
     Ok(build_song_meta(song_data, global_offset_seconds))
 }
 
@@ -1639,6 +1656,215 @@ fn resolve_song_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBu
 #[inline(always)]
 fn resolve_song_asset_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBuf> {
     resolve_song_path_like_itg(song_dir, asset_tag).filter(|path| path.is_file())
+}
+
+#[derive(Default)]
+struct ResolvedSongArtwork {
+    banner_path: Option<PathBuf>,
+    background_path: Option<PathBuf>,
+    cdtitle_path: Option<PathBuf>,
+}
+
+#[inline(always)]
+fn song_art_file_key(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase()
+}
+
+#[inline(always)]
+fn song_art_file_stem(path: &Path) -> Option<String> {
+    Some(path.file_stem()?.to_string_lossy().to_ascii_lowercase())
+}
+
+#[inline(always)]
+fn is_song_art_image(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "png" | "jpg" | "jpeg" | "gif" | "bmp"
+            )
+        })
+}
+
+fn list_song_art_images(song_dir: &Path) -> Vec<PathBuf> {
+    let Ok(read_dir) = fs::read_dir(song_dir) else {
+        return Vec::new();
+    };
+    let mut paths = read_dir
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file() && is_song_art_image(path))
+        .collect::<Vec<_>>();
+    paths.sort_by_cached_key(|path| {
+        path.file_name()
+            .map(|name| name.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default()
+    });
+    paths
+}
+
+fn find_song_art_hint(
+    images: &[PathBuf],
+    starts_with: &[&str],
+    contains: &[&str],
+    ends_with: &[&str],
+) -> Option<PathBuf> {
+    for image in images {
+        let Some(stem) = song_art_file_stem(image) else {
+            continue;
+        };
+        if starts_with.iter().any(|needle| stem.starts_with(needle)) {
+            return Some(image.clone());
+        }
+        if ends_with.iter().any(|needle| stem.ends_with(needle)) {
+            return Some(image.clone());
+        }
+        if contains.iter().any(|needle| stem.contains(needle)) {
+            return Some(image.clone());
+        }
+    }
+    None
+}
+
+#[inline(always)]
+fn song_art_matches(candidate: &Path, selected: &Option<PathBuf>) -> bool {
+    selected
+        .as_ref()
+        .is_some_and(|path| song_art_file_key(path) == song_art_file_key(candidate))
+}
+
+#[inline(always)]
+fn song_art_is_classified(
+    image: &Path,
+    banner: &Option<PathBuf>,
+    background: &Option<PathBuf>,
+    cdtitle: &Option<PathBuf>,
+    jacket: &Option<PathBuf>,
+    cdimage: &Option<PathBuf>,
+    disc: &Option<PathBuf>,
+) -> bool {
+    song_art_matches(image, banner)
+        || song_art_matches(image, background)
+        || song_art_matches(image, cdtitle)
+        || song_art_matches(image, jacket)
+        || song_art_matches(image, cdimage)
+        || song_art_matches(image, disc)
+}
+
+fn latest_simfile_tag_value(simfile_data: &[u8], tag: &[u8]) -> String {
+    extract_named_tag_values(simfile_data, &[tag])
+        .last()
+        .copied()
+        .map(|raw| unescape_tag(decode_bytes(raw).as_ref()).into_owned())
+        .unwrap_or_default()
+}
+
+fn resolve_song_artwork_like_itg(
+    song_dir: &Path,
+    simfile_data: &[u8],
+    banner_tag: &str,
+    background_tag: &str,
+    cdtitle_tag: &str,
+    jacket_tag: &str,
+) -> ResolvedSongArtwork {
+    let mut banner = resolve_song_asset_path_like_itg(song_dir, banner_tag);
+    let mut background = resolve_song_asset_path_like_itg(song_dir, background_tag);
+    let mut cdtitle = resolve_song_asset_path_like_itg(song_dir, cdtitle_tag);
+    let mut jacket = resolve_song_asset_path_like_itg(song_dir, jacket_tag);
+    let mut cdimage = resolve_song_asset_path_like_itg(
+        song_dir,
+        &latest_simfile_tag_value(simfile_data, b"#CDIMAGE:"),
+    );
+    let mut disc = resolve_song_asset_path_like_itg(
+        song_dir,
+        &latest_simfile_tag_value(simfile_data, b"#DISCIMAGE:"),
+    );
+
+    if banner.is_some() && background.is_some() && cdtitle.is_some() {
+        return ResolvedSongArtwork {
+            banner_path: banner,
+            background_path: background,
+            cdtitle_path: cdtitle,
+        };
+    }
+
+    let images = list_song_art_images(song_dir);
+    if banner.is_none() {
+        banner = find_song_art_hint(&images, &[], &["banner"], &[" bn"]);
+    }
+    if background.is_none() {
+        background = find_song_art_hint(&images, &[], &["background"], &["bg"]);
+    }
+    if jacket.is_none() {
+        jacket = find_song_art_hint(&images, &["jk_"], &["jacket", "albumart"], &[]);
+    }
+    if cdimage.is_none() {
+        cdimage = find_song_art_hint(&images, &[], &[], &["-cd"]);
+    }
+    if disc.is_none() {
+        disc = find_song_art_hint(&images, &[], &[], &[" disc", " title"]);
+    }
+    if cdtitle.is_none() {
+        cdtitle = find_song_art_hint(&images, &[], &["cdtitle"], &[]);
+    }
+
+    for image in &images {
+        if banner.is_some() && background.is_some() && cdtitle.is_some() {
+            break;
+        }
+        if song_art_is_classified(
+            image,
+            &banner,
+            &background,
+            &cdtitle,
+            &jacket,
+            &cdimage,
+            &disc,
+        ) {
+            continue;
+        }
+
+        let Ok((width, height)) = image_dimensions(image) else {
+            continue;
+        };
+        if background.is_none() && width >= 320 && height >= 240 {
+            background = Some(image.clone());
+            continue;
+        }
+        if banner.is_none() && (100..=320).contains(&width) && (50..=240).contains(&height) {
+            banner = Some(image.clone());
+            continue;
+        }
+        if banner.is_none() && width > 200 && height > 0 && width as f32 / height as f32 > 2.0 {
+            banner = Some(image.clone());
+            continue;
+        }
+        if cdtitle.is_none() && width <= 100 && height <= 48 {
+            cdtitle = Some(image.clone());
+            continue;
+        }
+        if jacket.is_none() && width == height {
+            jacket = Some(image.clone());
+            continue;
+        }
+        if disc.is_none() && width > height && banner.is_some() && !song_art_matches(image, &banner)
+        {
+            disc = Some(image.clone());
+            continue;
+        }
+        if cdimage.is_none() && width == height {
+            cdimage = Some(image.clone());
+        }
+    }
+
+    ResolvedSongArtwork {
+        banner_path: banner,
+        background_path: background,
+        cdtitle_path: cdtitle,
+    }
 }
 
 #[inline(always)]
@@ -2151,16 +2377,8 @@ fn convert_background_change(
 }
 
 /// The original parsing logic, now separated to be called on a cache miss.
-fn parse_and_process_song_file(
-    path: &Path,
-    need_hash: bool,
-) -> Result<(SerializableSongData, Option<u64>), String> {
+fn parse_and_process_song_file(path: &Path) -> Result<SerializableSongData, String> {
     let simfile_data = fs::read(path).map_err(|e| format!("Could not read file: {e}"))?;
-    let content_hash = need_hash.then(|| {
-        let mut hasher = XxHash64::with_seed(0);
-        hasher.write(&simfile_data);
-        hasher.finish()
-    });
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
     let options = AnalysisOptions {
         mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
@@ -2265,10 +2483,13 @@ fn parse_and_process_song_file(
         })
         .collect();
 
-    let (banner_path, background_path_opt) = rssp::assets::resolve_song_assets(
+    let artwork = resolve_song_artwork_like_itg(
         simfile_dir,
+        &simfile_data,
         &summary.banner_path,
         &summary.background_path,
+        &summary.cdtitle_path,
+        &summary.jacket_path,
     );
     let has_lua = simfile_uses_lua(simfile_dir, &simfile_data, &summary.background_path);
     let background_lua_changes =
@@ -2281,7 +2502,6 @@ fn parse_and_process_song_file(
             .map(convert_background_change)
             .map(|change| SerializableSongBackgroundChange::from(&change))
             .collect();
-    let cdtitle_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.cdtitle_path);
 
     // Compute audio length (music file duration) in seconds, mirroring ITGmania's
     // m_fMusicLengthSeconds. This intentionally measures the full OGG length,
@@ -2301,46 +2521,49 @@ fn parse_and_process_song_file(
         music_length_seconds = chart_length_seconds;
     }
 
-    Ok((
-        SerializableSongData {
-            simfile_path: path.to_string_lossy().into_owned(),
-            title: summary.title_str,
-            subtitle: summary.subtitle_str,
-            translit_title: summary.titletranslit_str,
-            translit_subtitle: summary.subtitletranslit_str,
-            artist: summary.artist_str,
-            genre: summary.genre_str,
-            banner_path: banner_path.map(|p| p.to_string_lossy().into_owned()),
-            background_path: background_path_opt.map(|p| p.to_string_lossy().into_owned()),
-            background_changes,
-            foreground_changes,
-            background_lua_changes,
-            foreground_lua_changes,
-            has_lua,
-            cdtitle_path: cdtitle_path.map(|p| p.to_string_lossy().into_owned()),
-            display_bpm: summary.display_bpm_str,
-            offset: summary.offset as f32,
-            sample_start: if summary.sample_start > 0.0 {
-                Some(summary.sample_start as f32)
-            } else {
-                None
-            },
-            sample_length: if summary.sample_length > 0.0 {
-                Some(summary.sample_length as f32)
-            } else {
-                None
-            },
-            min_bpm: summary.min_bpm,
-            max_bpm: summary.max_bpm,
-            normalized_bpms: summary.normalized_bpms,
-            music_path: song_music_path.map(|p| p.to_string_lossy().into_owned()),
-            music_length_seconds,
-            total_length_seconds: summary.total_length,
-            precise_last_second_seconds: summary.total_length.max(0) as f32,
-            charts,
+    Ok(SerializableSongData {
+        simfile_path: path.to_string_lossy().into_owned(),
+        title: summary.title_str,
+        subtitle: summary.subtitle_str,
+        translit_title: summary.titletranslit_str,
+        translit_subtitle: summary.subtitletranslit_str,
+        artist: summary.artist_str,
+        genre: summary.genre_str,
+        banner_path: artwork
+            .banner_path
+            .map(|p| p.to_string_lossy().into_owned()),
+        background_path: artwork
+            .background_path
+            .map(|p| p.to_string_lossy().into_owned()),
+        background_changes,
+        foreground_changes,
+        background_lua_changes,
+        foreground_lua_changes,
+        has_lua,
+        cdtitle_path: artwork
+            .cdtitle_path
+            .map(|p| p.to_string_lossy().into_owned()),
+        display_bpm: summary.display_bpm_str,
+        offset: summary.offset as f32,
+        sample_start: if summary.sample_start > 0.0 {
+            Some(summary.sample_start as f32)
+        } else {
+            None
         },
-        content_hash,
-    ))
+        sample_length: if summary.sample_length > 0.0 {
+            Some(summary.sample_length as f32)
+        } else {
+            None
+        },
+        min_bpm: summary.min_bpm,
+        max_bpm: summary.max_bpm,
+        normalized_bpms: summary.normalized_bpms,
+        music_path: song_music_path.map(|p| p.to_string_lossy().into_owned()),
+        music_length_seconds,
+        total_length_seconds: summary.total_length,
+        precise_last_second_seconds: summary.total_length.max(0) as f32,
+        charts,
+    })
 }
 
 /// Computes the length of the music file in seconds when the decode layer supports it.
@@ -2362,7 +2585,7 @@ fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
 mod tests {
     use super::{
         extract_background_lua_changes, extract_foreground_changes, extract_foreground_lua_changes,
-        simfile_uses_lua,
+        resolve_song_artwork_like_itg, simfile_uses_lua,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -2387,6 +2610,45 @@ mod tests {
             b"#TITLE:Lua Test;#BACKGROUND:modchart.lua;",
             "modchart.lua",
         ));
+    }
+
+    #[test]
+    fn resolve_song_artwork_does_not_use_tagged_cdtitle_as_background() {
+        let root = test_dir("tagged-cdtitle-not-background");
+        let song_dir = root.join("Song");
+        fs::create_dir_all(&song_dir).unwrap();
+        let banner_path = song_dir.join("godspeed.png");
+        let cdtitle_path = song_dir.join("cdtitle.png");
+        image::RgbImage::new(1024, 400).save(&banner_path).unwrap();
+        image::RgbaImage::new(512, 512).save(&cdtitle_path).unwrap();
+
+        let artwork = resolve_song_artwork_like_itg(
+            &song_dir,
+            b"#CDIMAGE:;#DISCIMAGE:;",
+            "godspeed.png",
+            "",
+            "cdtitle.png",
+            "",
+        );
+
+        assert_eq!(artwork.banner_path, Some(banner_path));
+        assert_eq!(artwork.background_path, None);
+        assert_eq!(artwork.cdtitle_path, Some(cdtitle_path));
+    }
+
+    #[test]
+    fn resolve_song_artwork_skips_cdtitle_hint_before_dimension_fallback() {
+        let root = test_dir("cdtitle-hint-not-background");
+        let song_dir = root.join("Song");
+        fs::create_dir_all(&song_dir).unwrap();
+        let cdtitle_path = song_dir.join("cdtitle.png");
+        image::RgbaImage::new(512, 512).save(&cdtitle_path).unwrap();
+
+        let artwork = resolve_song_artwork_like_itg(&song_dir, b"", "", "", "", "");
+
+        assert_eq!(artwork.banner_path, None);
+        assert_eq!(artwork.background_path, None);
+        assert_eq!(artwork.cdtitle_path, Some(cdtitle_path));
     }
 
     #[test]

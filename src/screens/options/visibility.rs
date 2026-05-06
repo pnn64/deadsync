@@ -179,6 +179,13 @@ pub(super) fn submenu_visible_row_indices(
                 .collect()
         }
         SubmenuKind::Machine => {
+            let show_preferred_color = get_choice_by_id(
+                &state.sub[SubmenuKind::Machine].choice_indices,
+                MACHINE_OPTIONS_ROWS,
+                SubRowId::SelectColor,
+            )
+            .unwrap_or(1)
+                == 0;
             let show_preferred_style = get_choice_by_id(
                 &state.sub[SubmenuKind::Machine].choice_indices,
                 MACHINE_OPTIONS_ROWS,
@@ -196,7 +203,9 @@ pub(super) fn submenu_visible_row_indices(
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
-                    if row.id == SubRowId::PreferredStyle && !show_preferred_style {
+                    if row.id == SubRowId::PreferredColor && !show_preferred_color {
+                        None
+                    } else if row.id == SubRowId::PreferredStyle && !show_preferred_style {
                         None
                     } else if row.id == SubRowId::PreferredMode && !show_preferred_mode {
                         None

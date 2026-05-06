@@ -44,6 +44,7 @@ pub enum SongLuaOverlayKind {
     },
     Sprite {
         texture_path: PathBuf,
+        texture_key: Arc<str>,
     },
     Sound {
         sound_path: PathBuf,
@@ -58,6 +59,7 @@ pub enum SongLuaOverlayKind {
     ActorMultiVertex {
         vertices: Arc<[SongLuaOverlayMeshVertex]>,
         texture_path: Option<PathBuf>,
+        texture_key: Option<Arc<str>>,
     },
     Model {
         layers: Arc<[SongLuaOverlayModelLayer]>,

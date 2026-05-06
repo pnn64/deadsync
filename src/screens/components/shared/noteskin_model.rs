@@ -149,6 +149,7 @@ fn actor_from_vertices(
         local_transform,
         texture: slot.texture_key_shared(),
         tint,
+        glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
         geom_cache_key,
         mode: MeshMode::Triangles,

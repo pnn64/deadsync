@@ -139,7 +139,6 @@ pub struct State {
     pub gl: glow::Context,
     gl_surface: Surface<WindowSurface>,
     gl_context: PossiblyCurrentContext,
-    api: GlApi,
     program: glow::Program,
     mesh_program: glow::Program,
     tmesh_program: glow::Program,
@@ -317,6 +316,16 @@ pub fn init(
             2 * vec4_size + 6 * vec2_size,
         );
         gl.vertex_attrib_divisor(10, 1);
+        gl.enable_vertex_attrib_array(11);
+        gl.vertex_attrib_pointer_f32(
+            11,
+            1,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            3 * vec4_size + 6 * vec2_size,
+        );
+        gl.vertex_attrib_divisor(11, 1);
 
         gl.bind_vertex_array(None);
 
@@ -394,7 +403,7 @@ pub fn init(
         );
 
         // i_model_col0..i_model_col3 (locations 4..7), i_tint (8),
-        // i_uv_scale/i_uv_offset/i_uv_tex_shift (9..11)
+        // i_uv_scale/i_uv_offset/i_uv_tex_shift/i_texture_mask (9..12)
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
         gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
 
@@ -439,6 +448,16 @@ pub fn init(
             5 * col_size + 2 * uv_size,
         );
         gl.vertex_attrib_divisor(11, 1);
+        gl.enable_vertex_attrib_array(12);
+        gl.vertex_attrib_pointer_f32(
+            12,
+            1,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            5 * col_size + 3 * uv_size,
+        );
+        gl.vertex_attrib_divisor(12, 1);
 
         gl.bind_vertex_array(None);
         (vao, vbo, instance_vbo)
@@ -472,7 +491,6 @@ pub fn init(
         gl,
         gl_surface,
         gl_context,
-        api,
         program,
         mesh_program,
         tmesh_program,
@@ -749,6 +767,26 @@ pub fn draw(
         *last = Some(want);
     }
 
+    #[inline(always)]
+    fn apply_depth_test(gl: &glow::Context, want: bool, last: &mut Option<bool>) {
+        if *last == Some(want) {
+            return;
+        }
+        // SAFETY: depth-state calls only mutate GL state on the current context and
+        // do not retain Rust pointers.
+        unsafe {
+            if want {
+                gl.enable(glow::DEPTH_TEST);
+                gl.depth_func(glow::LEQUAL);
+                gl.depth_mask(true);
+            } else {
+                gl.depth_mask(false);
+                gl.disable(glow::DEPTH_TEST);
+            }
+        }
+        *last = Some(want);
+    }
+
     let backend_prepare_started = Instant::now();
     {
         let prep = &mut state.prep;
@@ -774,7 +812,11 @@ pub fn draw(
         let c = render_list.clear_color;
         gl.color_mask(true, true, true, true);
         gl.clear_color(c[0], c[1], c[2], 1.0);
-        gl.clear(glow::COLOR_BUFFER_BIT);
+        gl.clear_depth_f32(1.0);
+        gl.depth_mask(true);
+        gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+        gl.depth_mask(false);
+        gl.disable(glow::DEPTH_TEST);
         // Keep the presented window surface opaque even when EGL hands us an
         // alpha-bearing default framebuffer. Otherwise Linux compositors can
         // treat the game as translucent and the whole scene looks ghosted.
@@ -792,6 +834,7 @@ pub fn draw(
         let mut last_sprite_instance_start: Option<u32> = None;
         let mut last_tmesh_instance_start: Option<u32> = None;
         let mut last_tmesh_source: Option<TexturedMeshSource> = None;
+        let mut last_depth_test = Some(false);
 
         if !state.prep.sprite_instances.is_empty() {
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_instance_vbo));
@@ -830,6 +873,7 @@ pub fn draw(
             match op {
                 DrawOp::Sprite(run) => {
                     apply_blend(gl, run.blend, &mut last_blend);
+                    apply_depth_test(gl, false, &mut last_depth_test);
 
                     let cam = render_list
                         .cameras
@@ -917,6 +961,14 @@ pub fn draw(
                             inst_stride,
                             base + 2 * vec4_size + 6 * vec2_size,
                         );
+                        gl.vertex_attrib_pointer_f32(
+                            11,
+                            1,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 3 * vec4_size + 6 * vec2_size,
+                        );
                         last_sprite_instance_start = Some(run.instance_start);
                     }
 
@@ -957,6 +1009,7 @@ pub fn draw(
                     }
 
                     apply_blend(gl, run.blend, &mut last_blend);
+                    apply_depth_test(gl, false, &mut last_depth_test);
 
                     let cam = render_list
                         .cameras
@@ -986,6 +1039,7 @@ pub fn draw(
                 }
                 DrawOp::TexturedMesh(run) => {
                     apply_blend(gl, run.blend, &mut last_blend);
+                    apply_depth_test(gl, run.depth_test, &mut last_depth_test);
 
                     if last_prog != Some(2) {
                         gl.use_program(Some(state.tmesh_program));
@@ -1098,6 +1152,14 @@ pub fn draw(
                             inst_stride,
                             base + 5 * col_size + 2 * uv_size,
                         );
+                        gl.vertex_attrib_pointer_f32(
+                            12,
+                            1,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 5 * col_size + 3 * uv_size,
+                        );
                         last_tmesh_instance_start = Some(run.instance_start);
                     }
 
@@ -1145,6 +1207,7 @@ pub fn draw(
                 }
             }
         }
+        apply_depth_test(gl, false, &mut last_depth_test);
         gl.bind_vertex_array(None);
         gl.use_program(None);
     }
@@ -1646,7 +1709,7 @@ fn find_config(
     let template = ConfigTemplateBuilder::new()
         .with_api(api)
         .with_alpha_size(0)
-        .with_depth_size(0)
+        .with_depth_size(24)
         .with_stencil_size(0)
         .with_transparency(false)
         .compatible_with_native_window(raw_window_handle)

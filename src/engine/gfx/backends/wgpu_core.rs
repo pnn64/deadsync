@@ -84,6 +84,7 @@ struct InstanceRaw {
     local_offset: [f32; 2],
     local_offset_rot_sin_cos: [f32; 2],
     edge_fade: [f32; 4],
+    texture_mask: f32,
 }
 
 #[repr(C)]
@@ -97,6 +98,7 @@ struct TexturedMeshInstanceRaw {
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
+    texture_mask: f32,
 }
 
 struct PipelineSet {
@@ -2237,7 +2239,7 @@ const TMESH_ATTRS: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
     3 => Float32x2, // tex-matrix scale
 ];
 
-const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_array![
+const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
     4 => Float32x4, // model column 0
     5 => Float32x4, // model column 1
     6 => Float32x4, // model column 2
@@ -2246,9 +2248,10 @@ const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_array
     9 => Float32x2, // uv scale
     10 => Float32x2, // uv offset
     11 => Float32x2, // uv texture-matrix shift
+    12 => Float32, // texture alpha-mask mode
 ];
 
-const INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
+const INSTANCE_ATTRS: [wgpu::VertexAttribute; 10] = wgpu::vertex_attr_array![
     2 => Float32x4, // center xyz + pad
     3 => Float32x2, // size
     4 => Float32x2, // sin/cos
@@ -2258,6 +2261,7 @@ const INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
     8 => Float32x2, // local offset
     9 => Float32x2, // local offset sin/cos
     10 => Float32x4, // edge fade
+    11 => Float32, // texture alpha-mask mode
 ];
 
 const PROJ_BYTES: u64 = mem::size_of::<[[f32; 4]; 4]>() as u64;

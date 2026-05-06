@@ -9,9 +9,15 @@ pub(super) fn sync_i18n_cache(state: &mut State) {
     state.i18n_revision = rev;
     state.display_mode_choices = build_display_mode_choices(&state.monitor_specs);
     state.software_thread_labels = software_thread_choice_labels(&state.software_thread_choices);
-    let (si_packs, si_filters) = score_import_pack_options();
-    state.score_import_pack_choices = si_packs;
-    state.score_import_pack_filters = si_filters;
+    state.score_import_pack_options = score_import_pack_options();
+    let new_groups_lc: HashSet<String> = state
+        .score_import_pack_options
+        .iter()
+        .map(|opt| opt.group.to_ascii_lowercase())
+        .collect();
+    state
+        .score_import_pack_selected
+        .retain(|key| new_groups_lc.contains(&key.to_ascii_lowercase()));
     let (sp_packs, sp_filters) = sync_pack_options();
     state.sync_pack_choices = sp_packs;
     state.sync_pack_filters = sp_filters;
@@ -185,14 +191,9 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         return None;
     }
     if let Some(score_import) = state.score_import_ui.as_mut() {
-        poll_score_import_ui(score_import);
-        if score_import.done
-            && score_import
-                .done_since
-                .is_some_and(|at| at.elapsed().as_secs_f32() >= SCORE_IMPORT_DONE_OVERLAY_SECONDS)
-        {
-            state.score_import_ui = None;
-        }
+        poll_score_import_ui(score_import, dt);
+        // No auto-dismiss: once `done`, the overlay sits until the user
+        // confirms via input (handled in input.rs).
         return None;
     }
     if shared_pack_sync::poll(&mut state.pack_sync_overlay) {
@@ -428,35 +429,44 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
             && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL
         {
-            match state.view {
-                OptionsView::Main => {
-                    let total = visible_items().len();
-                    if total > 0 {
-                        let last = total - 1;
-                        match direction {
-                            NavDirection::Up => {
-                                if state.selected > 0 {
-                                    state.selected -= 1;
+            if state.score_import_pack_picker.is_some() {
+                let delta = match direction {
+                    NavDirection::Up => -1,
+                    NavDirection::Down => 1,
+                };
+                pack_picker_step(state, delta);
+                state.nav_key_last_scrolled_at = Some(now);
+            } else {
+                match state.view {
+                    OptionsView::Main => {
+                        let total = visible_items().len();
+                        if total > 0 {
+                            let last = total - 1;
+                            match direction {
+                                NavDirection::Up => {
+                                    if state.selected > 0 {
+                                        state.selected -= 1;
+                                    }
+                                }
+                                NavDirection::Down => {
+                                    if state.selected < last {
+                                        state.selected += 1;
+                                    }
                                 }
                             }
-                            NavDirection::Down => {
-                                if state.selected < last {
-                                    state.selected += 1;
-                                }
-                            }
+                            state.nav_key_last_scrolled_at = Some(now);
                         }
+                    }
+                    OptionsView::Submenu(kind) => {
+                        move_submenu_selection_vertical(
+                            state,
+                            asset_manager,
+                            kind,
+                            direction,
+                            NavWrap::Clamp,
+                        );
                         state.nav_key_last_scrolled_at = Some(now);
                     }
-                }
-                OptionsView::Submenu(kind) => {
-                    move_submenu_selection_vertical(
-                        state,
-                        asset_manager,
-                        kind,
-                        direction,
-                        NavWrap::Clamp,
-                    );
-                    state.nav_key_last_scrolled_at = Some(now);
                 }
             }
         }

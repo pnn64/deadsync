@@ -4,8 +4,9 @@ use crate::engine::input::{
 };
 use crate::game::parsing::noteskin::{self, Noteskin};
 use crate::game::profile;
-use log::debug;
+use log::{debug, warn};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Instant;
 
 use super::{
@@ -16,10 +17,26 @@ use super::{
     MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION, REPLAY_EDGE_FLOOR_PER_LANE,
     REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, SongClockSnapshot, SongTimeNs, State, TickMode,
     abort_hold_to_exit, add_elapsed_us, current_music_time_s, elapsed_us_between,
-    integrate_active_hold_to_time, judge_a_lift, judge_a_tap, live_autoplay_enabled,
-    music_time_ns_from_song_clock, record_step_calories, refresh_roll_life_on_step,
-    single_runtime_player_is_p2, song_time_ns_invalid, song_time_ns_to_seconds,
+    gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift, judge_a_tap,
+    live_autoplay_enabled, music_time_ns_from_song_clock, record_step_calories,
+    refresh_roll_life_on_step, single_runtime_player_is_p2, song_time_ns_invalid,
+    song_time_ns_to_seconds,
 };
+
+const UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS: SongTimeNs = 1_000_000_000;
+static LAST_UNMAPPED_INPUT_CLOCK_WARN_NS: AtomicI64 = AtomicI64::new(i64::MIN);
+
+#[inline(always)]
+fn should_warn_unmapped_input_clock(song_time_ns: SongTimeNs) -> bool {
+    let last = LAST_UNMAPPED_INPUT_CLOCK_WARN_NS.load(Ordering::Relaxed);
+    let should_warn = last == i64::MIN
+        || song_time_ns < last
+        || song_time_ns.saturating_sub(last) >= UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS;
+    if should_warn {
+        LAST_UNMAPPED_INPUT_CLOCK_WARN_NS.store(song_time_ns, Ordering::Relaxed);
+    }
+    should_warn
+}
 
 #[inline(always)]
 pub(super) const fn input_queue_cap(num_cols: usize) -> usize {
@@ -168,6 +185,19 @@ fn remove_input_slot_if_empty(state: &mut State, idx: usize) {
     if idx < state.input_slot_count {
         state.input_slots[idx] = state.input_slots[state.input_slot_count];
     }
+}
+
+#[inline(always)]
+fn input_slot_lane_is_down(
+    state: &State,
+    lane: Lane,
+    source: InputSource,
+    input_slot: u32,
+) -> bool {
+    let input_slot = normalized_input_slot(lane, input_slot);
+    let bit = lane_bit(lane.index());
+    find_input_slot(state, source, input_slot)
+        .is_some_and(|idx| state.input_slots[idx].lane_mask & bit != 0)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -346,10 +376,10 @@ pub fn queue_input_edge(
         return;
     }
 
-    let event_music_time_ns =
-        audio::get_music_stream_position_nanos_at_host_nanos(timestamp_host_nanos)
-            .unwrap_or(INVALID_SONG_TIME_NS);
     let queued_at = Instant::now();
+    // Live input keeps the physical timestamp and is converted against the
+    // frame's authoritative song clock when processed. Do not pre-resolve it
+    // through the raw audio stream clock.
     push_input_edge_timed(
         state,
         source,
@@ -361,7 +391,7 @@ pub fn queue_input_edge(
         stored_at,
         emitted_at,
         queued_at,
-        event_music_time_ns,
+        INVALID_SONG_TIME_NS,
         state.replay_capture_enabled,
     );
 }
@@ -548,26 +578,109 @@ pub(super) fn process_input_edges(
         std::mem::swap(&mut pending, &mut state.pending_edges);
     }
 
+    let input_log = gameplay_input_log_enabled();
     while let Some(mut edge) = pending.pop_front() {
         let lane_idx = edge.lane.index();
         if lane_idx >= state.num_cols {
+            if input_log {
+                debug!(
+                    "GAMEPLAY INPUT EDGE DROP: reason=lane_out_of_range lane={} num_cols={} source={:?} slot={} pressed={}",
+                    lane_idx, state.num_cols, edge.source, edge.input_slot, edge.pressed,
+                );
+            }
             continue;
         }
+        let mut event_time_source = "precomputed";
+        let mut resolved_from_song_clock = false;
         if song_time_ns_invalid(edge.event_music_time_ns) {
-            edge.event_music_time_ns =
-                audio::get_music_stream_position_nanos_at_host_nanos(edge.captured_host_nanos)
-                    .unwrap_or_else(|| {
-                        music_time_ns_from_song_clock(
-                            song_clock,
-                            edge.captured_at,
-                            edge.captured_host_nanos,
-                        )
-                    });
+            edge.event_music_time_ns = music_time_ns_from_song_clock(
+                song_clock,
+                edge.captured_at,
+                edge.captured_host_nanos,
+            );
+            event_time_source = "song_clock";
+            resolved_from_song_clock = true;
         }
         if song_time_ns_invalid(edge.event_music_time_ns) {
+            if input_log {
+                debug!(
+                    "GAMEPLAY INPUT EDGE DROP: reason=invalid_song_time lane={} source={:?} slot={} pressed={} captured_host_nanos={} pending={}",
+                    lane_idx,
+                    edge.source,
+                    edge.input_slot,
+                    edge.pressed,
+                    edge.captured_host_nanos,
+                    pending.len() + state.pending_edges.len(),
+                );
+            }
             continue;
         }
-        let event_music_time = song_time_ns_to_seconds(edge.event_music_time_ns);
+        let lane_was_down = lane_is_pressed(state, lane_idx);
+        let slot_was_down = input_slot_lane_is_down(state, edge.lane, edge.source, edge.input_slot);
+        let edge_judges_tap = lane_edge_judges_tap(edge.pressed, slot_was_down);
+        let edge_judges_lift = lane_edge_judges_lift(edge.pressed, slot_was_down);
+        if resolved_from_song_clock
+            && !song_clock.mapped_audio
+            && should_warn_unmapped_input_clock(edge.event_music_time_ns)
+        {
+            warn!(
+                "GAMEPLAY INPUT CLOCK WARNING: reason=audio_map_unavailable lane={} source={:?} slot={} pressed={} edge_time_s={:.6} song_clock_time_s={:.6} captured_host_nanos={} current_time_s={:.6}",
+                lane_idx,
+                edge.source,
+                edge.input_slot,
+                edge.pressed,
+                song_time_ns_to_seconds(edge.event_music_time_ns),
+                song_time_ns_to_seconds(song_clock.song_time_ns),
+                edge.captured_host_nanos,
+                current_music_time_s(state),
+            );
+        }
+        if input_log {
+            let event_music_time = song_time_ns_to_seconds(edge.event_music_time_ns);
+            if resolved_from_song_clock && !song_clock.mapped_audio {
+                debug!(
+                    "GAMEPLAY INPUT CLOCK FALLBACK: reason=audio_map_unavailable lane={} source={:?} slot={} pressed={} edge_time_s={:.6} song_clock_time_s={:.6} captured_host_nanos={}",
+                    lane_idx,
+                    edge.source,
+                    edge.input_slot,
+                    edge.pressed,
+                    event_music_time,
+                    song_time_ns_to_seconds(song_clock.song_time_ns),
+                    edge.captured_host_nanos,
+                );
+            }
+            let processed_at = Instant::now();
+            let capture_to_queue_us = elapsed_us_between(edge.queued_at, edge.captured_at);
+            let queue_to_process_us = elapsed_us_between(processed_at, edge.queued_at);
+            let capture_to_process_us = elapsed_us_between(processed_at, edge.captured_at);
+            debug!(
+                concat!(
+                    "GAMEPLAY INPUT EDGE: lane={} source={:?} slot={} pressed={} ",
+                    "lane_was_down={} slot_was_down={} judges_tap={} judges_lift={} ",
+                    "time_source={} song_clock_mapped={} edge_time_s={:.6} current_time_s={:.6} ",
+                    "capture_queue_us={} queue_process_us={} capture_process_us={} pending={}"
+                ),
+                lane_idx,
+                edge.source,
+                edge.input_slot,
+                edge.pressed,
+                lane_was_down,
+                slot_was_down,
+                edge_judges_tap,
+                edge_judges_lift,
+                event_time_source,
+                song_clock.mapped_audio,
+                event_music_time,
+                current_music_time_s(state),
+                capture_to_queue_us,
+                queue_to_process_us,
+                capture_to_process_us,
+                pending.len() + state.pending_edges.len(),
+            );
+        }
+        if edge_judges_tap {
+            refresh_roll_life_on_step(state, lane_idx, edge.event_music_time_ns);
+        }
         integrate_active_hold_to_time(state, lane_idx, edge.event_music_time_ns);
         if edge.record_replay {
             state.replay_edges.push(RecordedLaneEdge {
@@ -606,7 +719,7 @@ pub(super) fn process_input_edges(
                     capture_to_process_us,
                     pending.len() + state.pending_edges.len() + 1,
                     current_music_time_s(state),
-                    event_music_time,
+                    song_time_ns_to_seconds(edge.event_music_time_ns),
                 );
             }
         }
@@ -618,6 +731,7 @@ pub(super) fn process_input_edges(
         };
         let lane_update =
             update_lane_input_slot(state, edge.lane, edge.source, edge.input_slot, edge.pressed);
+        debug_assert_eq!(lane_update.slot_was_down, slot_was_down);
         if let Some(started) = state_started {
             add_elapsed_us(&mut phase_timings.input_state_us, started);
         }
@@ -649,15 +763,15 @@ pub(super) fn process_input_edges(
             }
         }
 
-        if lane_edge_judges_tap(edge.pressed, lane_update.slot_was_down) {
+        if edge_judges_tap {
             let event_music_time_ns = edge.event_music_time_ns;
             let hit_note = if trace_enabled {
                 let started = Instant::now();
-                let hit_note = judge_a_tap(state, lane_idx, event_music_time, event_music_time_ns);
+                let hit_note = judge_a_tap(state, lane_idx, event_music_time_ns);
                 add_elapsed_us(&mut phase_timings.input_judge_us, started);
                 hit_note
             } else {
-                judge_a_tap(state, lane_idx, event_music_time, event_music_time_ns)
+                judge_a_tap(state, lane_idx, event_music_time_ns)
             };
             if trace_enabled {
                 let started = Instant::now();
@@ -673,9 +787,8 @@ pub(super) fn process_input_edges(
             } else {
                 state.receptor_bop_timers[lane_idx] = 0.11;
             }
-        } else if lane_edge_judges_lift(edge.pressed, lane_update.slot_was_down) {
-            let hit_lift =
-                judge_a_lift(state, lane_idx, event_music_time, edge.event_music_time_ns);
+        } else if edge_judges_lift {
+            let hit_lift = judge_a_lift(state, lane_idx, edge.event_music_time_ns);
             if hit_lift && state.tick_mode == TickMode::Hit {
                 audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
             }
@@ -736,7 +849,7 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
     for col in 0..state.tap_explosions.len() {
         let Some((window, elapsed)) = state.tap_explosions[col].as_mut().map(|active| {
             active.elapsed += delta_time;
-            (active.window.clone(), active.elapsed)
+            (active.window, active.elapsed)
         }) else {
             continue;
         };
@@ -745,8 +858,13 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
         } else {
             (col / cols_per_player).min(num_players.saturating_sub(1))
         };
+        let local_col = if cols_per_player == 0 {
+            col
+        } else {
+            col % cols_per_player
+        };
         let lifetime = tap_explosion_noteskin_for_player(state, player)
-            .and_then(|ns| ns.tap_explosions.get(&window))
+            .and_then(|ns| ns.tap_explosion_for_col(local_col, window))
             .map_or(0.0, |explosion| explosion.animation.duration());
         if lifetime <= 0.0 || elapsed >= lifetime {
             state.tap_explosions[col] = None;

@@ -23,6 +23,8 @@ pub(super) const INLINE_SPACING: f32 = 15.75;
 pub(super) const SUBMENU_VALUE_ZOOM: f32 = 0.835;
 pub(super) const VISUAL_STYLE_VALUE_ZOOM: f32 = 0.75;
 pub(super) const VISUAL_STYLE_INLINE_SPACING: f32 = 13.0;
+pub(super) const COLOR_CHOICE_ICON_H: f32 = 18.0;
+pub(super) const COLOR_CHOICE_INLINE_SPACING: f32 = 7.0;
 
 // Match Simply Love operator menu ranges (±1000 ms) for these calibrations.
 pub(super) const GLOBAL_OFFSET_MIN_MS: i32 = -1000;
@@ -127,7 +129,6 @@ pub(super) const INPUT_BACKEND_INLINE: bool = true;
 #[cfg(not(target_os = "windows"))]
 pub(super) const INPUT_BACKEND_INLINE: bool = false;
 
-pub(super) const SCORE_IMPORT_DONE_OVERLAY_SECONDS: f32 = 1.5;
 pub(super) const SCORE_IMPORT_ROW_ENDPOINT_INDEX: usize = 0;
 pub(super) const SCORE_IMPORT_ROW_PROFILE_INDEX: usize = 1;
 pub(super) const SCORE_IMPORT_ROW_PACK_INDEX: usize = 2;

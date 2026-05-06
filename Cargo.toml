@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.908"
+version = "0.4.1"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -97,7 +97,7 @@ twox-hash = "2.1.2"
 rust-ini = "0.21.3"
 sys-locale = "0.3.2"
 semver = "1.0.27"
-tokio = { version = "1.52.1", features = ["rt"] }
+tokio = { version = "1.52.2", features = ["rt"] }
 bitflags = "2.11.1"
 
 # DirectX + Input (Windows)
@@ -137,16 +137,16 @@ ash = { version = "0.38.0", features = ["linked"] }
 ash-window = "0.13.0"
 
 [target.'cfg(all(not(target_pointer_width = "32"), target_os = "windows"))'.dependencies]
-wgpu = { version = "29.0.1", features = ["dx12", "vulkan", "gles"] }
+wgpu = { version = "29.0.3", features = ["dx12", "vulkan", "gles"] }
 
 [target.'cfg(all(not(target_pointer_width = "32"), not(target_os = "windows")))'.dependencies]
-wgpu = { version = "29.0.1", features = ["vulkan", "gles"] }
+wgpu = { version = "29.0.3", features = ["vulkan", "gles"] }
 
 [target.'cfg(all(target_pointer_width = "32", target_os = "windows"))'.dependencies]
-wgpu = { version = "29.0.1", features = ["dx12", "gles"] }
+wgpu = { version = "29.0.3", features = ["dx12", "gles"] }
 
 [target.'cfg(all(target_pointer_width = "32", not(target_os = "windows")))'.dependencies]
-wgpu = { version = "29.0.1", features = ["gles"] }
+wgpu = { version = "29.0.3", features = ["gles"] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 libc = "0.2.186"

@@ -456,6 +456,15 @@ pub(super) fn selection_border_width() -> f32 {
     widescale(2.0, 2.5)
 }
 
+/// Simply Love / Arrow Cloud offset stacked P1/P2 cursors by one pixel.
+#[inline(always)]
+pub(super) fn cursor_stack_y(active: [bool; PLAYER_SLOTS], player_idx: usize) -> f32 {
+    if !active[P1] || !active[P2] {
+        return 0.0;
+    }
+    if player_idx == P2 { 1.0 } else { -1.0 }
+}
+
 /// Resolved profile + session flags for one side, used by `get_actors`
 /// to populate the screen footer.
 pub(super) struct PlayerCardInfo {
@@ -729,6 +738,7 @@ pub(super) fn draw_cursor_ring(
         else {
             continue;
         };
+        let center_y = center_y + cursor_stack_y(active, player_idx);
 
         let left = center_x - ring_w * 0.5;
         let right = center_x + ring_w * 0.5;
@@ -920,6 +930,11 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
                     ARCADE_NEXT_ROW_TEXT.to_string()
                 } else if rc.row.id == RowId::SpeedMod {
                     rc.fc.state.speed_mod[primary_player_idx].display()
+                } else if rc.row.id == RowId::TypeOfSpeedMod {
+                    let idx = rc.fc.state.speed_mod[primary_player_idx]
+                        .mod_type
+                        .choice_index();
+                    rc.row.choices.get(idx).cloned().unwrap_or_default()
                 } else {
                     choice_text.clone()
                 };
@@ -956,47 +971,6 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
                 diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
                 z(Z_ROW_FOREGROUND)
             ));
-            // Encircling cursor around the rc.fc.active option value (programmatic border)
-            if rc.fc.active[primary_player_idx]
-                && rc.fc.state.pane().selected_row[primary_player_idx] == rc.item_idx
-            {
-                let border_w = selection_border_width();
-                if let Some((center_x, center_y, ring_w, ring_h)) =
-                    cursor_for_player(rc.fc.state, primary_player_idx)
-                {
-                    let left = center_x - ring_w * 0.5;
-                    let right = center_x + ring_w * 0.5;
-                    let top = center_y - ring_h * 0.5;
-                    let bottom = center_y + ring_h * 0.5;
-                    let mut ring_color =
-                        color::decorative_rgba(player_color_index(rc.fc.state, primary_player_idx));
-                    ring_color[3] *= rc.a;
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
-                        zoomto(ring_w, border_w):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5):
-                        zoomto(ring_w, border_w):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(left + border_w * 0.5, center_y):
-                        zoomto(border_w, ring_h):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                    actors.push(act!(quad:
-                        align(0.5, 0.5): xy(right - border_w * 0.5, center_y):
-                        zoomto(border_w, ring_h):
-                        diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                        z(Z_ROW_FOREGROUND)
-                    ));
-                }
-            }
             let p2_text = if rc.fc.show_p2 && rc.row.id != RowId::MusicRate {
                 if arcade_row_focuses_next_row(rc.fc.state, P2, rc.item_idx) {
                     ARCADE_NEXT_ROW_TEXT.to_string()
@@ -1043,45 +1017,8 @@ fn draw_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usi
                     diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
                     z(Z_ROW_FOREGROUND)
                 ));
-                if rc.fc.active[P2] && rc.fc.state.pane().selected_row[P2] == rc.item_idx {
-                    let border_w = selection_border_width();
-                    if let Some((center_x, center_y, ring_w, ring_h)) =
-                        cursor_for_player(rc.fc.state, P2)
-                    {
-                        let left = center_x - ring_w * 0.5;
-                        let right = center_x + ring_w * 0.5;
-                        let top = center_y - ring_h * 0.5;
-                        let bottom = center_y + ring_h * 0.5;
-                        let mut ring_color =
-                            color::decorative_rgba(player_color_index(rc.fc.state, P2));
-                        ring_color[3] *= rc.a;
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(center_x, top + border_w * 0.5):
-                            zoomto(ring_w, border_w):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(Z_ROW_FOREGROUND)
-                        ));
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(center_x, bottom - border_w * 0.5):
-                            zoomto(ring_w, border_w):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(Z_ROW_FOREGROUND)
-                        ));
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(left + border_w * 0.5, center_y):
-                            zoomto(border_w, ring_h):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(Z_ROW_FOREGROUND)
-                        ));
-                        actors.push(act!(quad:
-                            align(0.5, 0.5): xy(right - border_w * 0.5, center_y):
-                            zoomto(border_w, ring_h):
-                            diffuse(ring_color[0], ring_color[1], ring_color[2], ring_color[3]):
-                            z(Z_ROW_FOREGROUND)
-                        ));
-                    }
-                }
             }
+            draw_cursor_ring(actors, rc.fc.state, rc.fc.active, rc.item_idx, rc.a);
         });
     });
 }
@@ -1480,6 +1417,16 @@ fn draw_mine_preview(actors: &mut Vec<Actor>, rc: &RowCtx, mine_ns: &Noteskin, c
     }
 }
 
+#[inline(always)]
+fn slot_preview_zoom_x(slot: &SpriteSlot, zoom: f32) -> f32 {
+    if slot.def.mirror_h { -zoom } else { zoom }
+}
+
+#[inline(always)]
+fn slot_preview_zoom_y(slot: &SpriteSlot, zoom: f32) -> f32 {
+    if slot.def.mirror_v { -zoom } else { zoom }
+}
+
 fn draw_receptor_preview(
     actors: &mut Vec<Actor>,
     rc: &RowCtx,
@@ -1502,6 +1449,10 @@ fn draw_receptor_preview(
         };
         let frame = receptor_slot.frame_index(rc.fc.state.preview_time, rc.fc.state.preview_beat);
         let uv = receptor_slot.uv_for_frame_at(frame, rc.fc.state.preview_time);
+        let draw = receptor_slot.model_draw_at(rc.fc.state.preview_time, rc.fc.state.preview_beat);
+        if !draw.visible {
+            continue;
+        }
         let logical = receptor_slot.logical_size();
         let width = logical[0].max(1.0);
         let height = logical[1].max(1.0);
@@ -1526,13 +1477,29 @@ fn draw_receptor_preview(
         ) {
             actors.push(model_actor);
         } else {
+            let [sin_r, cos_r] = receptor_slot.base_rot_sin_cos();
+            let offset = [
+                draw.pos[0] * scale * cos_r - draw.pos[1] * scale * sin_r,
+                draw.pos[0] * scale * sin_r + draw.pos[1] * scale * cos_r,
+            ];
+            let sprite_size = [size[0] * draw.zoom[0].abs(), size[1] * draw.zoom[1].abs()];
+            if sprite_size[0] <= f32::EPSILON || sprite_size[1] <= f32::EPSILON {
+                continue;
+            }
             actors.push(act!(sprite(receptor_slot.texture_key_shared()):
                 align(0.5, 0.5):
-                xy(center[0], center[1]):
-                setsize(size[0], size[1]):
-                rotationz(-receptor_slot.def.rotation_deg as f32):
+                xy(center[0] + offset[0], center[1] + offset[1]):
+                setsize(sprite_size[0], sprite_size[1]):
+                zoomx(slot_preview_zoom_x(receptor_slot, 1.0)):
+                zoomy(slot_preview_zoom_y(receptor_slot, 1.0)):
+                rotationz(draw.rot[2] - receptor_slot.def.rotation_deg as f32):
                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                diffuse(color[0], color[1], color[2], color[3]):
+                diffuse(
+                    color[0] * draw.tint[0],
+                    color[1] * draw.tint[1],
+                    color[2] * draw.tint[2],
+                    color[3] * draw.tint[3]
+                ):
                 z(Z_RECEPTOR_PREVIEW)
             ));
         }

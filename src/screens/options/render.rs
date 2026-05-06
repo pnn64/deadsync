@@ -370,48 +370,8 @@ pub fn get_actors(
         return actors;
     }
     if let Some(score_import) = &state.score_import_ui {
-        let header = if score_import.done {
-            "Score import complete"
-        } else {
-            "Importing scores..."
-        };
-        let total = score_import.total_charts.max(score_import.processed_charts);
-        let progress_line = format!(
-            "Endpoint: {}   Profile: {}\nPack: {}\nProgress: {}/{} (found={}, missing={}, failed={})",
-            score_import.endpoint.display_name(),
-            score_import.profile_name,
-            score_import.pack_label,
-            score_import.processed_charts,
-            total,
-            score_import.imported_scores,
-            score_import.missing_scores,
-            score_import.failed_requests
-        );
-        let detail_line = if score_import.done {
-            score_import.done_message.as_str()
-        } else {
-            score_import.detail_line.as_str()
-        };
-        let text = format!("{header}\n{progress_line}\n{detail_line}");
-
-        let mut ui_actors: Vec<Actor> = Vec::with_capacity(2);
-        ui_actors.push(act!(quad:
-            align(0.0, 0.0):
-            xy(0.0, 0.0):
-            zoomto(screen_width(), screen_height()):
-            diffuse(0.0, 0.0, 0.0, 0.7):
-            z(300)
-        ));
-        ui_actors.push(act!(text:
-            align(0.5, 0.5):
-            xy(screen_width() * 0.5, screen_height() * 0.5):
-            zoom(0.95):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            font("miso"):
-            settext(text):
-            horizalign(center):
-            z(301)
-        ));
+        let mut ui_actors =
+            build_score_import_overlay_actors(score_import, state.active_color_index);
         for actor in &mut ui_actors {
             actor.mul_alpha(alpha_multiplier);
         }
@@ -474,6 +434,7 @@ pub fn get_actors(
     let desc_h = DESC_H * s;
     let visual_style = visual_styles::current_style();
     let select_color_texture = visual_styles::select_color_texture_key();
+    let select_color_aspect = visual_styles::select_color_aspect(visual_style);
     let select_color_zoom = HEART_ZOOM * visual_styles::select_color_zoom_scale(visual_style);
 
     // Separator immediately to the RIGHT of the rows, aligned to the FIRST row top
@@ -874,6 +835,8 @@ pub fn get_actors(
                                 && row.id == SubRowId::GsBoxLeaderboards;
                             let is_auto_screenshot_row = matches!(kind, SubmenuKind::Gameplay)
                                 && row.id == SubRowId::AutoScreenshot;
+                            let is_color_choice_row = matches!(kind, SubmenuKind::Machine)
+                                && row.id == SubRowId::PreferredColor;
                             let is_multi_toggle_row = is_chart_info_row
                                 || is_scorebox_cycle_row
                                 || is_auto_screenshot_row;
@@ -933,15 +896,30 @@ pub fn get_actors(
                                         sl_gray
                                     };
                                     choice_color[3] *= row_alpha;
-                                    ui_actors.push(act!(text:
-                                        align(0.0, 0.5):
-                                        xy(x, row_mid_y):
-                                        zoom(value_zoom):
-                                        diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                                        font("miso"):
-                                        settext(choice):
-                                        horizalign(left)
-                                    ));
+                                    if is_color_choice_row {
+                                        let icon_w =
+                                            layout.widths.get(idx).copied().unwrap_or(
+                                                COLOR_CHOICE_ICON_H * select_color_aspect,
+                                            );
+                                        let mut tint = color::decorative_rgba(idx as i32);
+                                        tint[3] *= row_alpha;
+                                        ui_actors.push(act!(sprite(select_color_texture):
+                                            align(0.5, 0.5):
+                                            xy(x + icon_w * 0.5, row_mid_y):
+                                            setsize(icon_w, COLOR_CHOICE_ICON_H):
+                                            diffuse(tint[0], tint[1], tint[2], tint[3])
+                                        ));
+                                    } else {
+                                        ui_actors.push(act!(text:
+                                            align(0.0, 0.5):
+                                            xy(x, row_mid_y):
+                                            zoom(value_zoom):
+                                            diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                                            font("miso"):
+                                            settext(choice):
+                                            horizalign(left)
+                                        ));
+                                    }
                                 }
                             } else {
                                 let mut choice_color = if is_active { col_white } else { sl_gray };
@@ -950,20 +928,31 @@ pub fn get_actors(
                                 let draw_w =
                                     layout.widths.get(selected_choice).copied().unwrap_or(40.0);
                                 selected_left_x = Some(choice_center_x - draw_w * 0.5);
-                                let choice_text = layout
-                                    .texts
-                                    .get(selected_choice)
-                                    .cloned()
-                                    .unwrap_or_else(|| Arc::<str>::from("??"));
-                                ui_actors.push(act!(text:
-                                    align(0.5, 0.5):
-                                    xy(choice_center_x, row_mid_y):
-                                    zoom(value_zoom):
-                                    diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                                    font("miso"):
-                                    settext(choice_text):
-                                    horizalign(center)
-                                ));
+                                if is_color_choice_row {
+                                    let mut tint = color::decorative_rgba(selected_choice as i32);
+                                    tint[3] *= row_alpha;
+                                    ui_actors.push(act!(sprite(select_color_texture):
+                                        align(0.5, 0.5):
+                                        xy(choice_center_x, row_mid_y):
+                                        setsize(draw_w, COLOR_CHOICE_ICON_H):
+                                        diffuse(tint[0], tint[1], tint[2], tint[3])
+                                    ));
+                                } else {
+                                    let choice_text = layout
+                                        .texts
+                                        .get(selected_choice)
+                                        .cloned()
+                                        .unwrap_or_else(|| Arc::<str>::from("??"));
+                                    ui_actors.push(act!(text:
+                                        align(0.5, 0.5):
+                                        xy(choice_center_x, row_mid_y):
+                                        zoom(value_zoom):
+                                        diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                                        font("miso"):
+                                        settext(choice_text):
+                                        horizalign(center)
+                                    ));
+                                }
                             }
 
                             // For normal rows, underline the selected option.
@@ -1188,20 +1177,42 @@ pub fn get_actors(
             }
         }
     }
+    if state.score_import_pack_picker.is_some() {
+        ui_actors.extend(build_score_import_pack_picker_actors(
+            state,
+            state.active_color_index,
+        ));
+    }
     if let Some(confirm) = &state.score_import_confirm {
-        let prompt_text = format!(
-            "Import ALL packs for {} / {}?\nOnly missing GS scores: {}.\nRate limit is hard-capped at 3 requests per second.\nFor many charts this can take more than one hour.\nSpamming APIs can be problematic.\n\nStart now?",
-            confirm.selection.endpoint.display_name(),
-            if confirm.selection.profile.display_name.is_empty() {
-                confirm.selection.profile.id.as_str()
-            } else {
-                confirm.selection.profile.display_name.as_str()
-            },
-            if confirm.selection.only_missing_gs_scores {
-                "Yes"
-            } else {
-                "No"
+        let endpoint = confirm.selection.endpoint;
+        let profile_name = if confirm.selection.profile.display_name.is_empty() {
+            confirm.selection.profile.id.as_str()
+        } else {
+            confirm.selection.profile.display_name.as_str()
+        };
+        let only_missing = if confirm.selection.only_missing_gs_scores {
+            "Yes"
+        } else {
+            "No"
+        };
+        let pace_lines = match endpoint {
+            scores::ScoreImportEndpoint::ArrowCloud => {
+                "Uses the bulk endpoint (up to 1000 charts per request),\n\
+                 so a full library typically completes in under a minute.\n\
+                 Spamming APIs can be problematic."
             }
+            _ => {
+                "Rate limit is hard-capped at 3 requests per second.\n\
+                 For many charts this can take more than one hour.\n\
+                 Spamming APIs can be problematic."
+            }
+        };
+        let prompt_text = format!(
+            "Import ALL packs for {} / {}?\nOnly missing scores: {}.\n{}\n\nStart now?",
+            endpoint.display_name(),
+            profile_name,
+            only_missing,
+            pace_lines,
         );
         ui_actors.extend(build_yes_no_confirm_overlay(
             prompt_text,

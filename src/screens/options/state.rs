@@ -172,8 +172,9 @@ pub struct State {
     pub(super) score_import_profiles: Vec<ScoreImportProfileConfig>,
     pub(super) score_import_profile_choices: Vec<String>,
     pub(super) score_import_profile_ids: Vec<Option<String>>,
-    pub(super) score_import_pack_choices: Vec<String>,
-    pub(super) score_import_pack_filters: Vec<Option<String>>,
+    pub(super) score_import_pack_options: Vec<ScoreImportPackOption>,
+    pub(super) score_import_pack_selected: HashSet<String>,
+    pub(super) score_import_pack_picker: Option<ScoreImportPackPicker>,
     pub(super) sync_pack_choices: Vec<String>,
     pub(super) sync_pack_filters: Vec<Option<String>>,
     pub(super) sound_device_options: Vec<SoundDeviceOption>,
@@ -286,8 +287,9 @@ pub fn init() -> State {
             tr("OptionsScoreImport", "NoEligibleProfiles").to_string(),
         ],
         score_import_profile_ids: vec![None],
-        score_import_pack_choices: vec![tr("OptionsScoreImport", "AllPacks").to_string()],
-        score_import_pack_filters: vec![None],
+        score_import_pack_options: Vec::new(),
+        score_import_pack_selected: HashSet::new(),
+        score_import_pack_picker: None,
         sync_pack_choices: vec![tr("OptionsSyncPack", "AllPacks").to_string()],
         sync_pack_filters: vec![None],
         sound_device_options,
@@ -494,6 +496,13 @@ pub fn init() -> State {
         MACHINE_OPTIONS_ROWS,
         SubRowId::SelectColor,
         usize::from(cfg.machine_show_select_color),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::PreferredColor,
+        cfg.simply_love_color
+            .rem_euclid(color::DECORATIVE_RGBA.len() as i32) as usize,
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
@@ -814,6 +823,12 @@ pub fn init() -> State {
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::MusicWheelStyle,
         cfg.select_music_wheel_style.choice_index(),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::SwitchProfile,
+        yes_no_choice_index(cfg.allow_switch_profile_in_menu),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,

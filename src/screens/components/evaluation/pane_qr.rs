@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
-use crate::game::{profile, scores};
+use crate::game::profile;
 use crate::screens::components::shared::qr_code;
 use crate::screens::evaluation::ScoreInfo;
 
@@ -13,21 +13,11 @@ const GS_QR_INVALID_URL: &str = "https://www.youtube.com/watch?v=FMABVVk4Ge4";
 const GS_QR_TITLE: &str = "GrooveStats QR";
 const GS_QR_HELP_TEXT_VALID: &str =
     "Scan with your phone\nto upload this score\nto your GrooveStats\naccount.";
-const GS_QR_HELP_TEXT_SUBMITTED: &str = "Score has already been submitted :)";
 const GS_QR_FALLBACK_TEXT: &str = "QR Unavailable";
 
 pub fn build_gs_qr_pane(score_info: &ScoreInfo, controller: profile::PlayerSide) -> Vec<Actor> {
     let gs_valid = score_info.groovestats.valid;
-    let already_submitted = matches!(
-        scores::get_groovestats_submit_ui_status_for_side(
-            score_info.chart.short_hash.as_str(),
-            score_info.side,
-        ),
-        Some(scores::GrooveStatsSubmitUiStatus::Submitted)
-    );
-    let help_text = if already_submitted {
-        GS_QR_HELP_TEXT_SUBMITTED.to_string()
-    } else if gs_valid {
+    let help_text = if gs_valid {
         GS_QR_HELP_TEXT_VALID.to_string()
     } else if score_info.groovestats.reason_lines.is_empty() {
         "This score is invalid for GrooveStats.".to_string()
@@ -103,9 +93,7 @@ pub fn build_gs_qr_pane(score_info: &ScoreInfo, controller: profile::PlayerSide)
         diffuse(1.0, 1.0, 1.0, 1.0)
     ));
 
-    let qr_content = if already_submitted {
-        None
-    } else if gs_valid {
+    let qr_content = if gs_valid {
         score_info.groovestats.manual_qr_url.as_deref()
     } else {
         Some(GS_QR_INVALID_URL)

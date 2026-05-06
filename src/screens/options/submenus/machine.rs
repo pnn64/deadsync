@@ -26,6 +26,12 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::PreferredColor,
+        label: lookup_key("OptionsMachine", "PreferredColor"),
+        choices: COLOR_CHOICES,
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SelectStyle,
         label: lookup_key("OptionsMachine", "SelectStyle"),
         choices: &[
@@ -177,6 +183,14 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "SelectColorHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::MchPreferredColor,
+        name: lookup_key("OptionsMachine", "PreferredColor"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "PreferredColorHelp",
         ))],
     },
     Item {
@@ -345,6 +359,21 @@ pub(in crate::screens::options) const VISUAL_STYLE_CHOICES: &[Choice] = &[
     literal_choice("🤔"),
     literal_choice("🌀"),
     literal_choice("💪"),
+];
+
+pub(in crate::screens::options) const COLOR_CHOICES: &[Choice] = &[
+    literal_choice("0"),
+    literal_choice("1"),
+    literal_choice("2"),
+    literal_choice("3"),
+    literal_choice("4"),
+    literal_choice("5"),
+    literal_choice("6"),
+    literal_choice("7"),
+    literal_choice("8"),
+    literal_choice("9"),
+    literal_choice("10"),
+    literal_choice("11"),
 ];
 
 impl ChoiceEnum for LogLevel {

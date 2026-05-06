@@ -1,6 +1,8 @@
 use super::{
-    RejectReason, gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
-    invalidate_player_leaderboards_for_side, log_body_snippet, submit_side_ix,
+    GROOVESTATS_SUBMIT_MAX_ENTRIES, RejectReason, gameplay_run_failed, gameplay_run_passed,
+    gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
+    invalidate_player_leaderboards_for_side, log_body_snippet, lua_chart_submit_allowed,
+    submit_side_ix,
 };
 use crate::engine::network;
 use crate::game::gameplay;
@@ -59,6 +61,11 @@ struct ArrowCloudSubmitRetryEntry {
     side: profile::PlayerSide,
     api_key: String,
     payload: ArrowCloudPayload,
+    profile_id: Option<String>,
+    itg_percent: f64,
+    ex_percent: f64,
+    hard_ex_percent: f64,
+    is_fail: bool,
     /// Consecutive failures, capped at `SUBMIT_RETRY_MAX_ATTEMPTS`. Drives
     /// the shared backoff schedule so mixed failure kinds keep ratcheting the
     /// same curve. Reset only on a successful submit.
@@ -366,6 +373,16 @@ struct ArrowCloudSubmitJob {
     api_key: String,
     token: u64,
     payload: ArrowCloudPayload,
+    /// Active local profile id whose AC cache should be updated on submit
+    /// success. `None` if the submitting side is in Guest mode.
+    profile_id: Option<String>,
+    /// Gameplay-computed score percents (0..=100) captured at job creation
+    /// time so we can populate the AC cache without round-tripping through
+    /// the server response.
+    itg_percent: f64,
+    ex_percent: f64,
+    hard_ex_percent: f64,
+    is_fail: bool,
 }
 
 #[derive(Debug)]
@@ -803,6 +820,17 @@ fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
                     );
                     if accepted {
                         arrowcloud_record_submit_success(job.side, job.payload.hash.as_str());
+                        if let Some(profile_id) = job.profile_id.as_deref() {
+                            super::cache_arrowcloud_scores_from_submit(
+                                profile_id,
+                                job.payload.hash.as_str(),
+                                job.itg_percent,
+                                job.ex_percent,
+                                job.hard_ex_percent,
+                                job.is_fail,
+                                chrono::Utc::now(),
+                            );
+                        }
                     }
                 }
                 Err(err) => {
@@ -826,6 +854,11 @@ fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
                 }
             }
             invalidate_player_leaderboards_for_side(job.payload.hash.as_str(), job.side);
+            get_or_fetch_player_leaderboards_for_side(
+                job.payload.hash.as_str(),
+                job.side,
+                GROOVESTATS_SUBMIT_MAX_ENTRIES,
+            );
         }
     });
 }
@@ -850,14 +883,17 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
         debug!("Skipping ArrowCloud submit: course per-song autosubmit is disabled.");
         return;
     }
-    if gs.song.has_lua {
-        debug!("Skipping ArrowCloud submit: simfile relies on lua.");
-        return;
-    }
     let mut jobs = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
     for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         let chart_hash = gs.charts[player_idx].short_hash.as_str();
+        if gs.song.has_lua && !lua_chart_submit_allowed(chart_hash) {
+            debug!(
+                "Skipping ArrowCloud submit for {:?} ({}): simfile relies on lua.",
+                side, chart_hash
+            );
+            continue;
+        }
         let failed = gameplay_run_failed(
             gs.players[player_idx].is_failing,
             gs.players[player_idx].fail_time.is_some(),
@@ -894,10 +930,21 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
             );
             continue;
         }
+        let profile_id = profile::active_local_profile_id_for_side(side);
+        let itg_percent = gameplay::display_itg_score_percent(gs, player_idx).clamp(0.0, 100.0);
+        let ex_percent = gameplay::display_ex_score_percent(gs, player_idx).clamp(0.0, 100.0);
+        let hard_ex_percent =
+            gameplay::display_hard_ex_score_percent(gs, player_idx).clamp(0.0, 100.0);
+
         arrowcloud_store_submit_retry(ArrowCloudSubmitRetryEntry {
             side,
             api_key: api_key.to_string(),
             payload: payload.clone(),
+            profile_id: profile_id.clone(),
+            itg_percent,
+            ex_percent,
+            hard_ex_percent,
+            is_fail: failed,
             retry_attempt: 0,
             next_retry_at: None,
         });
@@ -913,6 +960,11 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
             api_key: api_key.to_string(),
             token,
             payload,
+            profile_id,
+            itg_percent,
+            ex_percent,
+            hard_ex_percent,
+            is_fail: failed,
         });
     }
     if jobs.is_empty() {
@@ -974,6 +1026,11 @@ fn retry_arrowcloud_submit_inner(
         api_key: entry.api_key,
         token,
         payload: entry.payload,
+        profile_id: entry.profile_id,
+        itg_percent: entry.itg_percent,
+        ex_percent: entry.ex_percent,
+        hard_ex_percent: entry.hard_ex_percent,
+        is_fail: entry.is_fail,
     }]);
     true
 }

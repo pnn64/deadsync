@@ -2465,7 +2465,7 @@ fn create_texture_descriptor_sets(
 #[inline(always)]
 fn vertex_input_descriptions_textured_instanced() -> (
     [vk::VertexInputBindingDescription; 2],
-    [vk::VertexInputAttributeDescription; 11],
+    [vk::VertexInputAttributeDescription; 12],
 ) {
     // binding 0: unit quad [x,y,u,v]
     let b0 = vk::VertexInputBindingDescription::default()
@@ -2537,6 +2537,11 @@ fn vertex_input_descriptions_textured_instanced() -> (
         .location(10)
         .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(80);
+    let i_texture_mask = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(11)
+        .format(vk::Format::R32_SFLOAT)
+        .offset(96);
 
     (
         [b0, b1],
@@ -2552,6 +2557,7 @@ fn vertex_input_descriptions_textured_instanced() -> (
             i_local_offset,
             i_local_offset_rot,
             i_fade,
+            i_texture_mask,
         ],
     )
 }
@@ -2583,7 +2589,7 @@ fn vertex_input_descriptions_mesh() -> (
 #[inline(always)]
 fn vertex_input_descriptions_tmesh() -> (
     [vk::VertexInputBindingDescription; 2],
-    [vk::VertexInputAttributeDescription; 12],
+    [vk::VertexInputAttributeDescription; 13],
 ) {
     let b0 = vk::VertexInputBindingDescription::default()
         .binding(0)
@@ -2654,6 +2660,11 @@ fn vertex_input_descriptions_tmesh() -> (
         .location(11)
         .format(vk::Format::R32G32_SFLOAT)
         .offset(96);
+    let a_texture_mask = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(12)
+        .format(vk::Format::R32_SFLOAT)
+        .offset(104);
 
     (
         [b0, b1],
@@ -2670,6 +2681,7 @@ fn vertex_input_descriptions_tmesh() -> (
             a_uv_scale,
             a_uv_offset,
             a_uv_tex_shift,
+            a_texture_mask,
         ],
     )
 }
@@ -3491,9 +3503,11 @@ fn poll_past_presentation_timing(state: &mut State) {
     let host_minus_display_ns = state.present_telemetry.host_minus_display_ns;
     let timings = &mut state.present_telemetry.scratch_timings;
     timings.clear();
-    if timings.capacity() < count as usize {
-        timings.reserve(count as usize - timings.capacity());
+    let count_us = count as usize;
+    if timings.capacity() < count_us {
+        timings.reserve(count_us - timings.len());
     }
+    debug_assert!(timings.capacity() >= count_us);
     // SAFETY: `timings` has capacity for `count` elements and Vulkan writes at most that many
     // initialized records into the buffer before returning.
     let second = unsafe {

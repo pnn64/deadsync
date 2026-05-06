@@ -239,7 +239,7 @@ pub fn init(
     ];
     panes[OptionsPane::Main.index()].row_tweens = main_row_tweens;
     panes[OptionsPane::Main.index()].arcade_row_focus = [true; PLAYER_SLOTS];
-    State {
+    let mut state = State {
         song,
         return_screen,
         fixed_stepchart,
@@ -264,6 +264,27 @@ pub fn init(
         combo_preview_elapsed: 0.0,
         pane_transition: PaneTransition::None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+    };
+    sync_speed_mod_type_rows(&mut state);
+    state
+}
+
+fn sync_speed_mod_type_row(row_map: &mut RowMap, speed_mod: &[SpeedMod; PLAYER_SLOTS]) {
+    let Some(row) = row_map.get_mut(RowId::TypeOfSpeedMod) else {
+        return;
+    };
+    for player_idx in 0..PLAYER_SLOTS {
+        row.selected_choice_index[player_idx] = speed_mod[player_idx]
+            .mod_type
+            .choice_index()
+            .min(row.choices.len().saturating_sub(1));
+    }
+}
+
+pub(crate) fn sync_speed_mod_type_rows(state: &mut State) {
+    let speed_mod = state.speed_mod.clone();
+    for pane in &mut state.panes {
+        sync_speed_mod_type_row(&mut pane.row_map, &speed_mod);
     }
 }
 

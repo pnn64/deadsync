@@ -22,7 +22,14 @@ pub struct GameplayStatsDoubleBenchFixture {
 
 impl GameplayStatsDoubleBenchFixture {
     pub fn build(&self) -> Vec<Actor> {
-        gameplay_stats::build_double_step_stats(&self.state, &self.asset_manager, screen_center_x())
+        let mut actors = Vec::new();
+        gameplay_stats::push_double_step_stats(
+            &mut actors,
+            &self.state,
+            &self.asset_manager,
+            screen_center_x(),
+        );
+        actors
     }
 }
 

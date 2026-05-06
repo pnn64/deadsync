@@ -175,12 +175,7 @@ pub(super) fn row_choices(
                 .collect();
         }
         if row.id == SubRowId::ScoreImportPack {
-            return state
-                .score_import_pack_choices
-                .iter()
-                .cloned()
-                .map(Cow::Owned)
-                .collect();
+            return vec![Cow::Owned(score_import_pack_summary(state))];
         }
     }
     if let Some(row) = rows.get(row_idx)
@@ -256,6 +251,7 @@ pub(super) fn build_submenu_row_layout(
         return None;
     }
     let is_visual_style = row.id == SubRowId::VisualStyle;
+    let is_color_choice = row.id == SubRowId::PreferredColor;
     let value_zoom = if is_visual_style {
         VISUAL_STYLE_VALUE_ZOOM
     } else {
@@ -263,6 +259,8 @@ pub(super) fn build_submenu_row_layout(
     };
     let inline_spacing = if is_visual_style {
         VISUAL_STYLE_INLINE_SPACING
+    } else if is_color_choice {
+        COLOR_CHOICE_INLINE_SPACING
     } else {
         INLINE_SPACING
     };
@@ -272,19 +270,26 @@ pub(super) fn build_submenu_row_layout(
         .collect();
     let mut widths: Vec<f32> = Vec::with_capacity(choice_texts.len());
     let mut text_h = 16.0_f32;
-    asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font("miso", |metrics_font| {
-            text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-            for text in &texts {
-                let mut w =
-                    font::measure_line_width_logical(metrics_font, text.as_ref(), all_fonts) as f32;
-                if !w.is_finite() || w <= 0.0 {
-                    w = 1.0;
+    if is_color_choice {
+        let aspect = visual_styles::select_color_aspect(visual_styles::current_style());
+        text_h = COLOR_CHOICE_ICON_H;
+        widths.resize(texts.len(), COLOR_CHOICE_ICON_H * aspect);
+    } else {
+        asset_manager.with_fonts(|all_fonts| {
+            asset_manager.with_font("miso", |metrics_font| {
+                text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
+                for text in &texts {
+                    let mut w =
+                        font::measure_line_width_logical(metrics_font, text.as_ref(), all_fonts)
+                            as f32;
+                    if !w.is_finite() || w <= 0.0 {
+                        w = 1.0;
+                    }
+                    widths.push(w * value_zoom);
                 }
-                widths.push(w * value_zoom);
-            }
+            });
         });
-    });
+    }
     if widths.len() != texts.len() {
         widths.clear();
         widths.extend(

@@ -259,12 +259,11 @@ pub(super) fn integrate_active_hold_to_time(
                             body_to_ns.saturating_sub(body_from_ns),
                             music_rate,
                         );
-                        let progress_time_ns = match advance.zero_elapsed_music_ns {
-                            Some(zero_elapsed_music_ns) => {
-                                body_from_ns.saturating_add(zero_elapsed_music_ns)
-                            }
-                            None => body_to_ns,
-                        };
+                        // ITG updates iLastHeldRow before subtracting hold life
+                        // for the frame. If this interval drains life to zero,
+                        // keep the visual last-held row at the frame target
+                        // while still resolving the LetGo at the exact crossing.
+                        let progress_time_ns = body_to_ns;
                         let progress_time = song_time_ns_to_seconds(progress_time_ns);
                         if progress_time_ns > body_from_ns && progress_time.is_finite() {
                             let current_beat = timing.get_beat_for_time(progress_time);
@@ -387,6 +386,7 @@ pub(super) fn refresh_roll_life_on_step(
     };
     if !matches!(active.note_type, NoteType::Roll)
         || active.let_go
+        || active.life <= 0.0
         || song_time_ns_invalid(event_time_ns)
         || event_time_ns < active.start_time_ns
     {

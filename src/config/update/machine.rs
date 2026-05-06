@@ -124,6 +124,17 @@ pub fn update_machine_show_select_profile(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_allow_switch_profile_in_menu(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.allow_switch_profile_in_menu == enabled {
+            return;
+        }
+        cfg.allow_switch_profile_in_menu = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_video_backgrounds(enabled: bool) {
     {
         let mut cfg = lock_config();

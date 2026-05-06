@@ -38,7 +38,7 @@ pub const fn judge_grade_ix(grade: JudgeGrade) -> usize {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Judgment {
     pub time_error_ms: f32,
     // Signed offset in music-time nanoseconds; authoritative gameplay timing unit.

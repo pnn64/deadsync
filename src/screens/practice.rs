@@ -382,8 +382,13 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
-    let mut actors =
-        gameplay_screen::get_actors_with_view(&state.gameplay, asset_manager, practice_view(state));
+    let mut actors = Vec::with_capacity(128);
+    gameplay_screen::push_actors(
+        &mut actors,
+        &state.gameplay,
+        asset_manager,
+        practice_view(state),
+    );
     if matches!(state.mode, Mode::Editing) {
         append_edit_markers(state, &mut actors);
         append_edit_overlay(state, &mut actors);
@@ -1276,7 +1281,7 @@ fn append_main_menu(state: &State, actors: &mut Vec<Actor>) {
         return;
     };
     let row_count = menu_len(menu.kind);
-    let selected_color = state.gameplay.player_color;
+    let selected_color = practice_player_color(state);
     for idx in 0..row_count {
         append_menu_row(
             actors,

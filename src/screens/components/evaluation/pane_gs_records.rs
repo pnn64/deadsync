@@ -20,6 +20,63 @@ const GS_ROW_PLACEHOLDER_DATE: &str = "----------";
 const GS_RIVAL_COLOR: [f32; 4] = color::rgba_hex("#BD94FF");
 const GS_SELF_COLOR: [f32; 4] = color::rgba_hex("#A1FF94");
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RecordsPaneKind {
+    GrooveStatsItg,
+    GrooveStatsEx,
+    ItlEx,
+    ArrowCloudHardEx,
+}
+
+impl RecordsPaneKind {
+    #[inline(always)]
+    fn matches(self, pane: &scores::LeaderboardPane) -> bool {
+        match self {
+            Self::GrooveStatsItg => pane.is_groovestats() && !pane.is_ex,
+            Self::GrooveStatsEx => pane.is_groovestats() && pane.is_ex,
+            Self::ItlEx => pane.name.to_ascii_lowercase().contains("itl") && pane.is_ex,
+            Self::ArrowCloudHardEx => pane.is_arrowcloud() && pane.is_hard_ex(),
+        }
+    }
+
+    #[inline(always)]
+    const fn logo(self) -> &'static str {
+        match self {
+            Self::ItlEx => "ITL.png",
+            Self::ArrowCloudHardEx => "arrowcloud.png",
+            Self::GrooveStatsItg | Self::GrooveStatsEx => "GrooveStats.png",
+        }
+    }
+
+    #[inline(always)]
+    const fn logo_zoom(self, pane_zoom: f32) -> f32 {
+        match self {
+            Self::ArrowCloudHardEx => 0.22,
+            Self::ItlEx => 0.45,
+            Self::GrooveStatsItg | Self::GrooveStatsEx => 1.5 * pane_zoom,
+        }
+    }
+
+    #[inline(always)]
+    const fn mode_text(self) -> &'static str {
+        match self {
+            Self::GrooveStatsItg => "ITG",
+            Self::GrooveStatsEx => "EX",
+            Self::ItlEx => "ITL EX",
+            Self::ArrowCloudHardEx => "H.EX",
+        }
+    }
+
+    #[inline(always)]
+    const fn mode_color(self) -> [f32; 4] {
+        match self {
+            Self::GrooveStatsEx | Self::ItlEx => color::JUDGMENT_RGBA[0],
+            Self::ArrowCloudHardEx => color::HARD_EX_SCORE_RGBA,
+            Self::GrooveStatsItg => [1.0, 1.0, 1.0, 1.0],
+        }
+    }
+}
+
 fn format_gs_error_text(error: &str) -> String {
     if error.eq_ignore_ascii_case("disabled") {
         return GS_ERROR_DISABLED.to_string();
@@ -122,7 +179,7 @@ fn build_records_pane(
     score_side: profile::PlayerSide,
     chart_hash: Option<&str>,
     snapshot: Option<&scores::CachedPlayerLeaderboardData>,
-    arrowcloud: bool,
+    kind: RecordsPaneKind,
 ) -> Vec<Actor> {
     let pane_origin_x = pane_origin_x(controller);
     let pane_origin_y = crate::engine::space::screen_center_y() - 62.0;
@@ -172,15 +229,10 @@ fn build_records_pane(
             ));
         }
         Some(snapshot) => {
-            let records_pane = snapshot.data.as_ref().and_then(|data| {
-                data.panes.iter().find(|pane| {
-                    if arrowcloud {
-                        pane.is_arrowcloud()
-                    } else {
-                        pane.is_groovestats()
-                    }
-                })
-            });
+            let records_pane = snapshot
+                .data
+                .as_ref()
+                .and_then(|data| data.panes.iter().find(|pane| kind.matches(pane)));
             if let Some(pane) = records_pane {
                 let display_entries = pane_display_entries(score_side, chart_hash, pane);
                 if display_entries.is_empty() {
@@ -245,17 +297,21 @@ fn build_records_pane(
         ));
     }
 
-    let mut children = Vec::with_capacity(GS_RECORD_ROWS * 4 + 1);
-    let logo = if arrowcloud {
-        "arrowcloud.png"
-    } else {
-        "GrooveStats.png"
-    };
-    let logo_zoom = if arrowcloud { 0.22 } else { 1.5 * pane_zoom };
-    children.push(act!(sprite(logo):
+    let mut children = Vec::with_capacity(GS_RECORD_ROWS * 4 + 2);
+    let mode_col = kind.mode_color();
+    children.push(act!(text:
+        font("miso"):
+        settext(kind.mode_text()):
+        align(0.5, 0.5):
+        xy(0.0, -4.0):
+        zoom(0.5 * pane_zoom):
+        diffuse(mode_col[0], mode_col[1], mode_col[2], mode_col[3]):
+        z(102)
+    ));
+    children.push(act!(sprite(kind.logo()):
         align(0.5, 0.5):
         xy(0.0, 100.0 * pane_zoom):
-        zoom(logo_zoom):
+        zoom(kind.logo_zoom(pane_zoom)):
         diffuse(1.0, 1.0, 1.0, 0.5):
         z(100)
     ));
@@ -321,7 +377,43 @@ pub fn build_gs_records_pane(
     chart_hash: Option<&str>,
     snapshot: Option<&scores::CachedPlayerLeaderboardData>,
 ) -> Vec<Actor> {
-    build_records_pane(controller, score_side, chart_hash, snapshot, false)
+    build_records_pane(
+        controller,
+        score_side,
+        chart_hash,
+        snapshot,
+        RecordsPaneKind::GrooveStatsItg,
+    )
+}
+
+pub fn build_gs_ex_records_pane(
+    controller: profile::PlayerSide,
+    score_side: profile::PlayerSide,
+    chart_hash: Option<&str>,
+    snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+) -> Vec<Actor> {
+    build_records_pane(
+        controller,
+        score_side,
+        chart_hash,
+        snapshot,
+        RecordsPaneKind::GrooveStatsEx,
+    )
+}
+
+pub fn build_itl_records_pane(
+    controller: profile::PlayerSide,
+    score_side: profile::PlayerSide,
+    chart_hash: Option<&str>,
+    snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+) -> Vec<Actor> {
+    build_records_pane(
+        controller,
+        score_side,
+        chart_hash,
+        snapshot,
+        RecordsPaneKind::ItlEx,
+    )
 }
 
 pub fn build_arrowcloud_records_pane(
@@ -330,7 +422,13 @@ pub fn build_arrowcloud_records_pane(
     chart_hash: Option<&str>,
     snapshot: Option<&scores::CachedPlayerLeaderboardData>,
 ) -> Vec<Actor> {
-    build_records_pane(controller, score_side, chart_hash, snapshot, true)
+    build_records_pane(
+        controller,
+        score_side,
+        chart_hash,
+        snapshot,
+        RecordsPaneKind::ArrowCloudHardEx,
+    )
 }
 
 #[cfg(test)]
@@ -350,6 +448,21 @@ mod tests {
         }
     }
 
+    fn pane(
+        name: &str,
+        is_ex: bool,
+        arrowcloud_kind: Option<scores::ArrowCloudPaneKind>,
+    ) -> scores::LeaderboardPane {
+        scores::LeaderboardPane {
+            name: name.to_string(),
+            entries: vec![entry(1, name, false, false)],
+            is_ex,
+            disabled: false,
+            personalized: true,
+            arrowcloud_kind,
+        }
+    }
+
     #[test]
     fn prioritized_entries_keep_self_and_rivals_visible() {
         let mut entries = (1..=12)
@@ -363,5 +476,29 @@ mod tests {
         let ranks = selected.iter().map(|entry| entry.rank).collect::<Vec<_>>();
 
         assert_eq!(ranks, vec![1, 2, 3, 4, 5, 6, 7, 20, 30, 40]);
+    }
+
+    #[test]
+    fn records_pane_kind_selects_distinct_online_boards() {
+        let panes = [
+            pane("GrooveStats", false, None),
+            pane("GrooveStats", true, None),
+            pane("ITL Online 2026", true, None),
+            pane(
+                "ArrowCloud",
+                false,
+                Some(scores::ArrowCloudPaneKind::HardEx),
+            ),
+        ];
+
+        assert!(RecordsPaneKind::GrooveStatsItg.matches(&panes[0]));
+        assert!(RecordsPaneKind::GrooveStatsEx.matches(&panes[1]));
+        assert!(RecordsPaneKind::ItlEx.matches(&panes[2]));
+        assert!(RecordsPaneKind::ArrowCloudHardEx.matches(&panes[3]));
+
+        assert!(!RecordsPaneKind::GrooveStatsItg.matches(&panes[1]));
+        assert!(!RecordsPaneKind::GrooveStatsEx.matches(&panes[0]));
+        assert!(!RecordsPaneKind::ItlEx.matches(&panes[1]));
+        assert!(!RecordsPaneKind::ArrowCloudHardEx.matches(&panes[2]));
     }
 }

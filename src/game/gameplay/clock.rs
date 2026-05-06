@@ -13,6 +13,7 @@ use super::{
 pub(crate) struct SongClockSnapshot {
     pub(crate) song_time_ns: SongTimeNs,
     pub(crate) seconds_per_second: f32,
+    pub(crate) mapped_audio: bool,
     pub(crate) valid_at: Instant,
     pub(crate) valid_at_host_nanos: u64,
 }
@@ -204,6 +205,7 @@ pub(crate) fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
             } else {
                 fallback_rate
             },
+            mapped_audio: true,
             valid_at: stream_clock.valid_at,
             valid_at_host_nanos: stream_clock.valid_at_host_nanos,
         }
@@ -212,6 +214,7 @@ pub(crate) fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
         SongClockSnapshot {
             song_time_ns: song_time_ns_from_seconds(song_time),
             seconds_per_second: fallback_rate,
+            mapped_audio: false,
             valid_at: stream_clock.valid_at,
             valid_at_host_nanos: stream_clock.valid_at_host_nanos,
         }
