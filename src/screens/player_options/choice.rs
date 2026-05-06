@@ -147,32 +147,35 @@ pub(super) fn dispatch_behavior_delta(
 /// Returns true if the dispatcher handled the row (Bitmask behavior), false
 /// otherwise.
 ///
-/// When the binding declares a `writeback` (and `init`), the row is routed
-/// through the generic `toggle_bitmask_row_generic` path; otherwise the
-/// hand-rolled `toggle` fn pointer is invoked.
+/// `BitmaskBinding::Generic` rows route through
+/// `toggle_bitmask_row_generic`; `BitmaskBinding::HandRolled` rows invoke
+/// the bound `toggle` fn pointer directly.
 pub(super) fn dispatch_behavior_toggle(state: &mut State, player_idx: usize, id: RowId) -> bool {
     let Some(RowBehavior::Bitmask(b)) = state.pane().row_map.get(id).map(|r| r.behavior) else {
         return false;
     };
-    if b.writeback.is_some() && b.init.is_some() {
-        toggle_bitmask_row_generic(state, player_idx, id);
-    } else {
-        (b.toggle)(state, player_idx);
+    match b {
+        BitmaskBinding::Generic { .. } => {
+            toggle_bitmask_row_generic(state, player_idx, id);
+        }
+        BitmaskBinding::HandRolled { toggle, .. } => {
+            (toggle)(state, player_idx);
+        }
     }
     true
 }
 
-/// Generic bitmask toggle for `BitmaskBinding`s that declare both `init`
-/// and `writeback`. Verifies the focused row matches `id`, computes the
-/// target bit via `writeback.bit_for_choice`, flips it through
+/// Generic bitmask toggle for `BitmaskBinding::Generic` bindings. Verifies
+/// the focused row matches `id`, computes the target bit via
+/// `writeback.bit_mapping.bit_for_choice`, flips it through
 /// `init.get_active`/`init.set_active`, projects the resulting bits onto
 /// the in-memory profile via `writeback.project_to_profile`, and
 /// (conditionally) persists them for the active side via
 /// `writeback.persist_for_side`. Plays the change-value SFX on success.
 ///
 /// Returns `true` when a toggle was applied; `false` when the row was not
-/// focused, the binding lacked the required contracts, or the choice
-/// index produced no bit.
+/// focused, the binding was not `Generic`, or the choice index produced
+/// no bit.
 pub(super) fn toggle_bitmask_row_generic(
     state: &mut State,
     player_idx: usize,
@@ -189,16 +192,15 @@ pub(super) fn toggle_bitmask_row_generic(
     }
 
     let (init, writeback) = match state.pane().row_map.get(id).map(|r| r.behavior) {
-        Some(RowBehavior::Bitmask(b)) => match (b.init, b.writeback) {
-            (Some(i), Some(w)) => (i, w),
-            _ => return false,
-        },
+        Some(RowBehavior::Bitmask(BitmaskBinding::Generic { init, writeback })) => {
+            (init, writeback)
+        }
         _ => return false,
     };
 
     let row = state.pane().row_map.row(id);
     let choice_index = row.selected_choice_index[idx];
-    let bit = match (writeback.bit_for_choice)(choice_index, row) {
+    let bit = match writeback.bit_mapping.bit_for_choice(choice_index) {
         Some(b) if b != 0 => b,
         _ => return false,
     };

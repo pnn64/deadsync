@@ -272,8 +272,7 @@ const ERROR_BAR_OFFSET_Y: NumericBinding = NumericBinding {
     }),
 };
 
-const SCROLL: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_scroll_row,
+const SCROLL: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
             // The Scroll row's choice indices are fixed by build order
@@ -312,10 +311,9 @@ const SCROLL: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    writeback: None,
+    toggle: super::super::choice::toggle_scroll_row,
 };
-const HIDE: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_hide_row,
+const HIDE: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
             let mut bits = super::super::state::HideMask::empty();
@@ -353,10 +351,9 @@ const HIDE: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    writeback: None,
+    toggle: super::super::choice::toggle_hide_row,
 };
-const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_life_bar_options_row,
+const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
             let mut bits = super::super::state::LifeBarOptionsMask::empty();
@@ -382,10 +379,9 @@ const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    writeback: None,
+    toggle: super::super::choice::toggle_life_bar_options_row,
 };
-const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_gameplay_extras_row,
+const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
             let mut bits = super::super::state::GameplayExtrasMask::empty();
@@ -414,10 +410,9 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    writeback: None,
+    toggle: super::super::choice::toggle_gameplay_extras_row,
 };
-const ERROR_BAR: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_error_bar_row,
+const ERROR_BAR: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
             // Profile already stores the desired mask; if it's empty (e.g.
@@ -441,10 +436,9 @@ const ERROR_BAR: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    writeback: None,
+    toggle: super::super::choice::toggle_error_bar_row,
 };
-const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_error_bar_options_row,
+const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
             let mut bits = super::super::state::ErrorBarOptionsMask::empty();
@@ -468,10 +462,9 @@ const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    writeback: None,
+    toggle: super::super::choice::toggle_error_bar_options_row,
 };
-const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_measure_counter_options_row,
+const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
             let mut bits = super::super::state::MeasureCounterOptionsMask::empty();
@@ -504,7 +497,7 @@ const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    writeback: None,
+    toggle: super::super::choice::toggle_measure_counter_options_row,
 };
 fn fa_plus_bits_from_profile(p: &gp::Profile) -> u32 {
     let mut bits = super::super::state::FaPlusMask::empty();
@@ -538,29 +531,26 @@ fn set_fa_plus_bits(m: &mut super::super::state::PlayerOptionMasks, b: u32) {
     m.fa_plus = super::super::state::FaPlusMask::from_bits_retain(b as u8);
 }
 
-const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_fa_plus_row,
+const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: fa_plus_bits_from_profile,
         get_active: |m| (m.fa_plus.bits() & 0b0000_1111) as u32,
         set_active: set_fa_plus_bits,
         cursor: CursorInit::Fixed(0),
     }),
-    writeback: None,
+    toggle: super::super::choice::toggle_fa_plus_row,
 };
 
-const FA_PLUS_WINDOW_OPTIONS: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_fa_plus_row,
+const FA_PLUS_WINDOW_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: fa_plus_bits_from_profile,
         get_active: |m| ((m.fa_plus.bits() >> 4) & 0b0000_0011) as u32,
         set_active: set_fa_plus_bits,
         cursor: CursorInit::FirstActiveBit,
     }),
-    writeback: None,
+    toggle: super::super::choice::toggle_fa_plus_row,
 };
-const EARLY_DW_OPTIONS: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_early_dw_row,
+const EARLY_DW_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
             let mut bits = super::super::state::EarlyDwMask::empty();
@@ -583,10 +573,9 @@ const EARLY_DW_OPTIONS: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    writeback: None,
+    toggle: super::super::choice::toggle_early_dw_row,
 };
-const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_results_extras_row,
+const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {
         from_profile: |p| {
             let mut bits = super::super::state::ResultsExtrasMask::empty();
@@ -609,7 +598,7 @@ const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
-    writeback: None,
+    toggle: super::super::choice::toggle_results_extras_row,
 };
 
 const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {
@@ -1279,10 +1268,9 @@ mod bitmask_binding_init_tests {
     fn make_bitmask_row(id: RowId, name: LookupKey, choices: &[&str]) -> Row {
         Row {
             id,
-            behavior: RowBehavior::Bitmask(BitmaskBinding {
-                toggle: |_, _| {},
+            behavior: RowBehavior::Bitmask(BitmaskBinding::HandRolled {
                 init: None,
-                writeback: None,
+                toggle: |_, _| {},
             }),
             name,
             choices: choices.iter().map(ToString::to_string).collect(),
@@ -1401,10 +1389,9 @@ mod bitmask_binding_init_tests {
         row.selected_choice_index = [3, 4];
         let mut masks = PlayerOptionMasks::default();
         let profile = Profile::default();
-        let init_less = BitmaskBinding {
-            toggle: |_, _| {},
+        let init_less = BitmaskBinding::HandRolled {
             init: None,
-            writeback: None,
+            toggle: |_, _| {},
         };
         let applied = init_bitmask_row_from_binding(&mut row, &init_less, &profile, &mut masks, 0);
         assert!(!applied, "init-less binding must short-circuit");

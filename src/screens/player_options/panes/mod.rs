@@ -288,7 +288,7 @@ fn init_opted_in_bitmask_rows(
         let RowBehavior::Bitmask(binding) = row.behavior else {
             continue;
         };
-        if binding.init.is_none() {
+        if binding.init().is_none() {
             continue;
         }
         let row = row_map.get_mut(id).expect("row was just observed");
