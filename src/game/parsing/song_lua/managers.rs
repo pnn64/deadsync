@@ -12,6 +12,8 @@ use super::actor_host::{
 };
 use super::song_tables::create_steps_table;
 use super::*;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub(super) fn create_theme_table(
     lua: &Lua,
@@ -3400,12 +3402,18 @@ fn song_lua_noteskin_actor(
 ) -> mlua::Result<Table> {
     let resolved =
         crate::game::parsing::noteskin::song_lua_noteskin_resolve_path(skin, button, element);
+    let model_path = resolved
+        .as_ref()
+        .and_then(|path| song_lua_noteskin_model_template_path(skin, path));
     let sprite_path = resolved
         .as_ref()
+        .filter(|_| model_path.is_none())
         .filter(|path| is_song_lua_image_path(path));
     let actor = create_dummy_actor(
         lua,
-        if sprite_path.is_some() {
+        if model_path.is_some() {
+            "Model"
+        } else if sprite_path.is_some() {
             "Sprite"
         } else {
             "Actor"
@@ -3415,7 +3423,97 @@ fn song_lua_noteskin_actor(
     if let Some(path) = sprite_path {
         actor.set("Texture", file_path_string(path.as_path()))?;
     }
+    if let Some(path) = model_path {
+        let path = file_path_string(path.as_path());
+        actor.set("Meshes", path.clone())?;
+        actor.set("Materials", path.clone())?;
+        actor.set("Bones", path)?;
+    }
     Ok(actor)
+}
+
+fn song_lua_noteskin_model_template_path(skin: &str, template_path: &Path) -> Option<PathBuf> {
+    if !template_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
+    {
+        return None;
+    }
+    let script = fs::read_to_string(template_path).ok()?;
+    if !script.to_ascii_lowercase().contains("def.model") {
+        return None;
+    }
+    if let Some((button, element)) = first_noteskin_get_path_args(&script) {
+        return crate::game::parsing::noteskin::song_lua_noteskin_resolve_path(
+            skin, &button, &element,
+        );
+    }
+    let raw = first_lua_field_string(&script, "Meshes")
+        .or_else(|| first_lua_field_string(&script, "Materials"))
+        .or_else(|| first_lua_field_string(&script, "Bones"))?;
+    resolve_noteskin_template_relative_path(template_path, &raw)
+}
+
+fn first_noteskin_get_path_args(script: &str) -> Option<(String, String)> {
+    let lower = script.to_ascii_lowercase();
+    if let Some(start) = lower.find("noteskin:getpath") {
+        let open = script[start..].find('(').map(|idx| start + idx + 1)?;
+        let (button, next) = parse_lua_string(script, open)?;
+        let comma = script[next..].find(',').map(|idx| next + idx + 1)?;
+        let (element, _) = parse_lua_string(script, comma)?;
+        return Some((button, element));
+    }
+    None
+}
+
+fn first_lua_field_string(script: &str, field: &str) -> Option<String> {
+    let lower = script.to_ascii_lowercase();
+    let needle = field.to_ascii_lowercase();
+    let start = lower.find(&needle)?;
+    let eq = script[start + field.len()..]
+        .find('=')
+        .map(|idx| start + field.len() + idx + 1)?;
+    parse_lua_string(script, eq).map(|(value, _)| value)
+}
+
+fn parse_lua_string(script: &str, mut cursor: usize) -> Option<(String, usize)> {
+    let bytes = script.as_bytes();
+    while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+        cursor += 1;
+    }
+    let quote = *bytes.get(cursor)?;
+    if quote != b'\'' && quote != b'"' {
+        return None;
+    }
+    cursor += 1;
+    let mut out = String::new();
+    while cursor < bytes.len() {
+        let byte = bytes[cursor];
+        cursor += 1;
+        if byte == quote {
+            return Some((out, cursor));
+        }
+        if byte == b'\\' {
+            if let Some(next) = bytes.get(cursor).copied() {
+                cursor += 1;
+                out.push(next as char);
+            }
+        } else {
+            out.push(byte as char);
+        }
+    }
+    None
+}
+
+fn resolve_noteskin_template_relative_path(template_path: &Path, raw: &str) -> Option<PathBuf> {
+    let normalized = raw.replace('\\', "/");
+    let raw_path = Path::new(normalized.trim());
+    if raw_path.is_absolute() && raw_path.is_file() {
+        return Some(raw_path.to_path_buf());
+    }
+    let candidate = template_path.parent()?.join(raw_path);
+    candidate.is_file().then_some(candidate)
 }
 
 fn tag_song_lua_noteskin_actor(

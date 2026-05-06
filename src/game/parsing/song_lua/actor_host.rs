@@ -3083,10 +3083,14 @@ fn read_overlay_actor(
             texture_key,
         }
     } else if actor_type.eq_ignore_ascii_case("Model") {
-        let Some(layers) = read_model_layers(actor)? else {
-            return Ok(None);
-        };
-        SongLuaOverlayKind::Model { layers }
+        if let Some(slots) = read_noteskin_tap_actor_slots(actor, context)? {
+            SongLuaOverlayKind::NoteskinActor { slots }
+        } else {
+            let Some(layers) = read_model_layers(actor)? else {
+                return Ok(None);
+            };
+            SongLuaOverlayKind::Model { layers }
+        }
     } else if actor_type.eq_ignore_ascii_case("SongMeterDisplay") {
         let Some((stream_width, stream_state)) = read_song_meter_display_state(lua, actor)? else {
             return Ok(None);
@@ -3167,6 +3171,8 @@ fn read_model_layers(actor: &Table) -> Result<Option<Arc<[SongLuaOverlayModelLay
             uv_scale,
             uv_offset,
             uv_tex_shift,
+            uv_velocity: slot.uv_velocity,
+            uv_cycle_seconds: slot.uv_cycle_seconds,
             draw: song_lua_model_draw(slot.model_draw_at(0.0, 0.0)),
         });
     }
@@ -3175,6 +3181,32 @@ fn read_model_layers(actor: &Table) -> Result<Option<Arc<[SongLuaOverlayModelLay
     } else {
         Ok(Some(Arc::from(layers.into_boxed_slice())))
     }
+}
+
+fn read_noteskin_tap_actor_slots(
+    actor: &Table,
+    _context: &SongLuaCompileContext,
+) -> Result<Option<Arc<[crate::game::parsing::noteskin::SpriteSlot]>>, String> {
+    let Some(skin) = actor
+        .get::<Option<String>>("__songlua_noteskin_name")
+        .map_err(|err| err.to_string())?
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(None);
+    };
+    let Some(element) = actor
+        .get::<Option<String>>("__songlua_noteskin_element")
+        .map_err(|err| err.to_string())?
+        .filter(|value| value.eq_ignore_ascii_case("Tap Note"))
+    else {
+        return Ok(None);
+    };
+    let Some(model_path) = read_model_path(actor)? else {
+        return Ok(None);
+    };
+    crate::game::parsing::noteskin::load_itg_model_slots_from_path(&model_path)
+        .map(Some)
+        .map_err(|err| format!("failed to load noteskin actor '{skin} {element}': {err}"))
 }
 
 fn read_model_path(actor: &Table) -> Result<Option<PathBuf>, String> {

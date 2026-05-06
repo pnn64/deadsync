@@ -4221,8 +4221,10 @@ fn itg_texture_key(path: &Path) -> Option<String> {
     } else {
         return None;
     };
-    while key.starts_with('/') {
-        key.remove(0);
+    if !path.is_absolute() {
+        while key.starts_with('/') {
+            key.remove(0);
+        }
     }
     Some(key)
 }
@@ -6470,8 +6472,8 @@ mod tests {
         ModelTweenSegment, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, Quantization,
         SpriteDefinition, SpriteSlot, SpriteSource, Style, clear_itg_runtime_caches,
         itg_apply_state_properties_from_script, itg_model_draw_program,
-        itg_receptor_pulse_from_script, itg_register_texture_dims_for_path, load_itg,
-        load_itg_data_cached, load_itg_model_slots_from_path, load_itg_skin,
+        itg_receptor_pulse_from_script, itg_register_texture_dims_for_path, itg_texture_key,
+        load_itg, load_itg_data_cached, load_itg_model_slots_from_path, load_itg_skin,
         parse_explosion_animation,
     };
     use std::collections::{HashMap, HashSet};
@@ -6527,6 +6529,25 @@ mod tests {
             .save(path)
             .unwrap();
         itg_register_texture_dims_for_path(path);
+    }
+
+    #[test]
+    fn itg_texture_key_preserves_absolute_external_paths() {
+        let root = temp_noteskin_root("absolute-texture-key");
+        let texture = root.join("Tap Note parts (mipmaps).png");
+        write_noteskin_png(&texture);
+
+        let key = itg_texture_key(&texture).unwrap();
+        assert!(
+            Path::new(&key).is_absolute(),
+            "external model texture keys must stay absolute; got {key}"
+        );
+        assert!(
+            Path::new(&key).is_file(),
+            "absolute texture key should still resolve to the source file"
+        );
+
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

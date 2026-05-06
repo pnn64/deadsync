@@ -3370,7 +3370,7 @@ fn compile_multitap_update_overlays(
                 .texcoord_offset
                 .get_or_insert([0.0, 0.0]);
             let noteskin = multitap_arrow_noteskin(overlays, arrow_index, context, player)?;
-            ensure_multitap_arrow_sprite(lua, overlays, arrow_index, context, &noteskin)?;
+            ensure_multitap_arrow_visual(lua, overlays, arrow_index, context, &noteskin)?;
             push_multitap_actor_eases(
                 &mut out,
                 overlays,
@@ -3410,36 +3410,38 @@ fn compile_multitap_update_overlays(
     Ok(Some(out))
 }
 
-fn ensure_multitap_arrow_sprite(
+fn ensure_multitap_arrow_visual(
     lua: &Lua,
     overlays: &mut Vec<OverlayCompileActor>,
     arrow_index: usize,
     context: &SongLuaCompileContext,
     noteskin: &str,
 ) -> Result<(), String> {
-    if overlay_descendants(overlays, arrow_index)
+    if matches!(
+        overlays[arrow_index].actor.kind,
+        SongLuaOverlayKind::Sprite { .. }
+            | SongLuaOverlayKind::Model { .. }
+            | SongLuaOverlayKind::NoteskinActor { .. }
+    ) || overlay_descendants(overlays, arrow_index)
         .into_iter()
         .any(|index| {
             matches!(
                 overlays[index].actor.kind,
                 SongLuaOverlayKind::Sprite { .. }
+                    | SongLuaOverlayKind::Model { .. }
+                    | SongLuaOverlayKind::NoteskinActor { .. }
             )
         })
     {
         return Ok(());
     }
-    let Some((texture_key, texture_path, initial_state)) =
-        multitap_arrow_sprite_spec(noteskin, context)
-    else {
+    let Some((kind, initial_state)) = multitap_arrow_visual_spec(noteskin, context) else {
         return Ok(());
     };
     overlays.push(OverlayCompileActor {
-        table: create_dummy_actor(lua, "Sprite").map_err(|err| err.to_string())?,
+        table: create_dummy_actor(lua, "Model").map_err(|err| err.to_string())?,
         actor: SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_key,
-                texture_path,
-            },
+            kind,
             name: None,
             parent_index: Some(arrow_index),
             initial_state,
@@ -3466,10 +3468,10 @@ fn multitap_arrow_noteskin(
         })
 }
 
-fn multitap_arrow_sprite_spec(
+fn multitap_arrow_visual_spec(
     noteskin: &str,
     context: &SongLuaCompileContext,
-) -> Option<(Arc<str>, PathBuf, SongLuaOverlayState)> {
+) -> Option<(SongLuaOverlayKind, SongLuaOverlayState)> {
     let style = crate::game::parsing::noteskin::Style {
         num_cols: song_lua_style_info(&context.style_name).columns,
         num_players: song_lua_human_player_count(context).max(1),
@@ -3478,10 +3480,15 @@ fn multitap_arrow_sprite_spec(
     let down_col = 1.min(style.num_cols.saturating_sub(1));
     let note_idx = down_col * crate::game::parsing::noteskin::NUM_QUANTIZATIONS;
     let layers = ns.note_layers.get(note_idx)?;
-    let slot = layers
-        .iter()
-        .find(|slot| slot.model.is_none())
-        .or_else(|| layers.first())?;
+    if let Some(model_layers) = multitap_arrow_model_layers(layers) {
+        return Some((
+            SongLuaOverlayKind::Model {
+                layers: model_layers,
+            },
+            SongLuaOverlayState::default(),
+        ));
+    }
+    let slot = layers.iter().find(|slot| slot.model.is_none())?;
     let texture_key = slot.texture_key_shared();
     let mut state = SongLuaOverlayState {
         custom_texture_rect: Some(slot.uv_for_frame_at(slot.frame_index_from_phase(0.0), 0.0)),
@@ -3496,10 +3503,66 @@ fn multitap_arrow_sprite_spec(
         state.size = None;
     }
     Some((
-        Arc::clone(&texture_key),
-        PathBuf::from(texture_key.as_ref()),
+        SongLuaOverlayKind::Sprite {
+            texture_path: PathBuf::from(texture_key.as_ref()),
+            texture_key,
+        },
         state,
     ))
+}
+
+fn multitap_arrow_model_layers(
+    slots: &[crate::game::parsing::noteskin::SpriteSlot],
+) -> Option<Arc<[SongLuaOverlayModelLayer]>> {
+    let mut out = Vec::new();
+    for slot in slots.iter().filter(|slot| slot.model.is_some()) {
+        let model = slot.model.as_ref()?;
+        if model.vertices.is_empty() {
+            continue;
+        }
+        let uv_rect = slot.uv_for_frame_at(slot.frame_index_from_phase(0.0), 0.0);
+        let (uv_scale, uv_offset, uv_tex_shift) = multitap_arrow_model_uv_params(slot, uv_rect);
+        let draw = slot.model_draw_at(0.0, 0.0);
+        out.push(SongLuaOverlayModelLayer {
+            texture_key: slot.texture_key_shared(),
+            vertices: crate::game::parsing::noteskin::build_model_geometry(slot),
+            model_size: model.size(),
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            uv_velocity: slot.uv_velocity,
+            uv_cycle_seconds: slot.uv_cycle_seconds,
+            draw: SongLuaOverlayModelDraw {
+                pos: draw.pos,
+                rot: draw.rot,
+                zoom: draw.zoom,
+                tint: draw.tint,
+                vert_align: draw.vert_align,
+                blend_add: draw.blend_add,
+                visible: draw.visible,
+            },
+        });
+    }
+    (!out.is_empty()).then(|| Arc::from(out.into_boxed_slice()))
+}
+
+fn multitap_arrow_model_uv_params(
+    slot: &crate::game::parsing::noteskin::SpriteSlot,
+    uv_rect: [f32; 4],
+) -> ([f32; 2], [f32; 2], [f32; 2]) {
+    let uv_scale = [uv_rect[2] - uv_rect[0], uv_rect[3] - uv_rect[1]];
+    let uv_offset = [uv_rect[0], uv_rect[1]];
+    let uv_tex_shift = match slot.source.as_ref() {
+        crate::game::parsing::noteskin::SpriteSource::Atlas { tex_dims, .. } => {
+            let tw = tex_dims.0.max(1) as f32;
+            let th = tex_dims.1.max(1) as f32;
+            let base_u0 = slot.def.src[0] as f32 / tw;
+            let base_v0 = slot.def.src[1] as f32 / th;
+            [uv_offset[0] - base_u0, uv_offset[1] - base_v0]
+        }
+        crate::game::parsing::noteskin::SpriteSource::Animated { .. } => [0.0, 0.0],
+    };
+    (uv_scale, uv_offset, uv_tex_shift)
 }
 
 fn apply_multitap_field_state(

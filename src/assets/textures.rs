@@ -676,6 +676,27 @@ pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
     rel.to_string_lossy().replace('\\', "/")
 }
 
+fn direct_texture_key_path(raw: &str, key: &str) -> Option<PathBuf> {
+    for candidate in [Path::new(raw), Path::new(key)] {
+        if candidate.is_absolute() && candidate.is_file() {
+            return Some(candidate.to_path_buf());
+        }
+    }
+
+    #[cfg(unix)]
+    for candidate in [raw, key] {
+        if candidate.starts_with('/') {
+            continue;
+        }
+        let absolute = PathBuf::from(format!("/{candidate}"));
+        if absolute.is_file() {
+            return Some(absolute);
+        }
+    }
+
+    None
+}
+
 fn open_image_fallback_mode(
     path: &Path,
     warn_mismatch: bool,
@@ -1236,17 +1257,38 @@ impl AssetManager {
     }
 
     pub(crate) fn ensure_texture_for_key(&mut self, backend: &mut Backend, texture_key: &str) {
+        self.load_texture_key(backend, texture_key, None, false);
+    }
+
+    pub(crate) fn ensure_texture_for_key_with_sampler(
+        &mut self,
+        backend: &mut Backend,
+        texture_key: &str,
+        sampler: SamplerDesc,
+    ) {
+        self.load_texture_key(backend, texture_key, Some(sampler), true);
+    }
+
+    fn load_texture_key(
+        &mut self,
+        backend: &mut Backend,
+        texture_key: &str,
+        sampler_override: Option<SamplerDesc>,
+        force_reload: bool,
+    ) {
         if texture_key.is_empty() {
             return;
         }
         let key = canonical_texture_key(texture_key);
-        if self.has_texture_key(&key) {
+        if !force_reload && self.has_texture_key(&key) {
             return;
         }
         if let Some(generated) = generated_texture(&key) {
-            match backend.create_texture(generated.image.as_ref(), generated.sampler) {
+            let sampler = sampler_override.unwrap_or(generated.sampler);
+            match backend.create_texture(generated.image.as_ref(), sampler) {
                 Ok(texture) => {
-                    self.insert_texture(
+                    self.set_texture_for_key(
+                        backend,
                         key,
                         texture,
                         generated.image.width(),
@@ -1263,25 +1305,31 @@ impl AssetManager {
             return;
         }
 
-        let dirs = dirs::app_dirs();
-        let mut path = dirs.resolve_asset_path(&format!("assets/{key}"));
-        if !path.is_file() {
-            path = dirs.resolve_asset_path(&format!("assets/graphics/{key}"));
-        }
+        let path = direct_texture_key_path(texture_key, &key).unwrap_or_else(|| {
+            let dirs = dirs::app_dirs();
+            let path = dirs.resolve_asset_path(&format!("assets/{key}"));
+            if path.is_file() {
+                path
+            } else {
+                dirs.resolve_asset_path(&format!("assets/graphics/{key}"))
+            }
+        });
         if !path.is_file() {
             warn!("Failed to resolve texture key '{key}' for preload.");
             return;
         }
 
         let hints = parse_texture_hints(&key);
-        let sampler = if needs_repeat_sampler(&key) {
-            SamplerDesc {
-                wrap: SamplerWrap::Repeat,
-                ..hints.sampler_desc()
+        let sampler = sampler_override.unwrap_or_else(|| {
+            if needs_repeat_sampler(&key) {
+                SamplerDesc {
+                    wrap: SamplerWrap::Repeat,
+                    ..hints.sampler_desc()
+                }
+            } else {
+                hints.sampler_desc()
             }
-        } else {
-            hints.sampler_desc()
-        };
+        });
         match open_image_fallback(&path) {
             Ok(img) => {
                 let mut rgba = img.to_rgba8();
@@ -1291,7 +1339,13 @@ impl AssetManager {
                 fix_hidden_alpha(&mut rgba);
                 match backend.create_texture(&rgba, sampler) {
                     Ok(texture) => {
-                        self.insert_texture(key.clone(), texture, rgba.width(), rgba.height());
+                        self.set_texture_for_key(
+                            backend,
+                            key.clone(),
+                            texture,
+                            rgba.width(),
+                            rgba.height(),
+                        );
                         register_texture_dims(&key, rgba.width(), rgba.height());
                     }
                     Err(e) => {
@@ -1309,6 +1363,38 @@ impl AssetManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn direct_texture_key_path_accepts_absolute_keys() {
+        let dir = std::env::temp_dir().join(format!(
+            "deadsync-texture-key-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("Tap Note parts (mipmaps).png");
+        fs::write(&path, [0u8]).unwrap();
+
+        let key = path.to_string_lossy().replace('\\', "/");
+        let resolved = direct_texture_key_path(&key, &key).unwrap();
+        assert!(resolved.is_file());
+        assert_eq!(resolved.file_name(), path.file_name());
+
+        #[cfg(unix)]
+        {
+            let stripped = key.trim_start_matches('/');
+            assert_eq!(
+                direct_texture_key_path(stripped, stripped).as_deref(),
+                Some(path.as_path())
+            );
+        }
+
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_dir(&dir);
+    }
 
     #[test]
     fn texture_handle_lookup_tracks_registry_lifecycle() {

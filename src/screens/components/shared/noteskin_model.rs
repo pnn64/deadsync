@@ -203,6 +203,21 @@ fn actor_from_draw(
 }
 
 #[inline(always)]
+pub(crate) fn noteskin_model_actor_from_draw(
+    slot: &SpriteSlot,
+    draw: ModelDrawState,
+    xy: [f32; 2],
+    size: [f32; 2],
+    uv_rect: [f32; 4],
+    rotation_deg: f32,
+    color: [f32; 4],
+    blend: BlendMode,
+    z: i16,
+) -> Option<Actor> {
+    actor_from_draw(slot, draw, xy, size, uv_rect, rotation_deg, color, blend, z)
+}
+
+#[inline(always)]
 pub(crate) fn noteskin_model_actor_from_draw_cached(
     slot: &SpriteSlot,
     draw: ModelDrawState,

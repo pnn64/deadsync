@@ -7,7 +7,7 @@ use crate::engine::gfx::{
     BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, TexturedMeshVertex,
 };
 use crate::engine::input::{InputEvent, VirtualAction};
-use crate::engine::present::actors::{Actor, SizeSpec, TextAttribute, TextContent};
+use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextAttribute, TextContent};
 use crate::engine::present::anim::EffectState;
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
@@ -17,6 +17,7 @@ use crate::engine::present::font;
 use crate::engine::space::widescale;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::chart::{ChartData, GameplayChartData};
+use crate::game::parsing::noteskin::{ModelDrawState, SpriteSlot};
 use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock,
     SongLuaOverlayKind, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
@@ -27,6 +28,7 @@ use crate::game::{profile, scroll::ScrollSpeedSetting, song::SongData};
 use crate::screens::components::gameplay::{gameplay_stats, notefield};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::lobby_hud;
+use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ScreenAction};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
@@ -3534,6 +3536,7 @@ fn song_lua_model_actor(
     tint: [f32; 4],
     glow: [f32; 4],
     blend: BlendMode,
+    total_elapsed: f32,
 ) -> Option<Actor> {
     let mut children = Vec::with_capacity(layers.len());
     let offset = [
@@ -3544,6 +3547,16 @@ fn song_lua_model_actor(
         if !layer.draw.visible || !asset_manager.has_texture_key(layer.texture_key.as_ref()) {
             continue;
         }
+        let scroll = song_lua_model_layer_scroll(layer, total_elapsed);
+        let shift = match state.texcoord_offset {
+            Some([dx, dy]) => [scroll[0] + dx, scroll[1] + dy],
+            None => scroll,
+        };
+        let uv_offset = [layer.uv_offset[0] + shift[0], layer.uv_offset[1] + shift[1]];
+        let uv_tex_shift = [
+            layer.uv_tex_shift[0] + shift[0],
+            layer.uv_tex_shift[1] + shift[1],
+        ];
         let actor = Actor::TexturedMesh {
             align: [0.0, 0.0],
             offset,
@@ -3566,8 +3579,8 @@ fn song_lua_model_actor(
             geom_cache_key: INVALID_TMESH_CACHE_KEY,
             mode: MeshMode::Triangles,
             uv_scale: layer.uv_scale,
-            uv_offset: layer.uv_offset,
-            uv_tex_shift: layer.uv_tex_shift,
+            uv_offset,
+            uv_tex_shift,
             depth_test: state.depth_test,
             visible: true,
             blend: if layer.draw.blend_add {
@@ -3595,6 +3608,207 @@ fn song_lua_model_actor(
             z: 0,
         })
     }
+}
+
+fn song_lua_model_layer_scroll(layer: &SongLuaOverlayModelLayer, total_elapsed: f32) -> [f32; 2] {
+    if layer.uv_velocity == [0.0, 0.0] {
+        return [0.0, 0.0];
+    }
+    let clock = layer
+        .uv_cycle_seconds
+        .filter(|total| *total > f32::EPSILON && total.is_finite())
+        .map_or(total_elapsed, |total| {
+            total_elapsed.rem_euclid(total) / total
+        });
+    [layer.uv_velocity[0] * clock, layer.uv_velocity[1] * clock]
+}
+
+fn song_lua_noteskin_actor(
+    slots: &[SpriteSlot],
+    state: SongLuaOverlayState,
+    asset_manager: &AssetManager,
+    z: i16,
+    x_scale: f32,
+    y_scale: f32,
+    actor_scale: [f32; 2],
+    effect_scale: [f32; 3],
+    effect_rot: [f32; 3],
+    effect_offset: [f32; 3],
+    tint: [f32; 4],
+    glow: [f32; 4],
+    blend: BlendMode,
+    total_elapsed: f32,
+    effect_beat: f32,
+) -> Option<Actor> {
+    let mut children = Vec::with_capacity(slots.len() * 2);
+    let center = [
+        state.x * x_scale + effect_offset[0] * x_scale,
+        state.y * y_scale + effect_offset[1] * y_scale,
+    ];
+    for (idx, slot) in slots.iter().enumerate() {
+        if !asset_manager.has_texture_key(slot.texture_key()) {
+            continue;
+        }
+        let mut draw = slot.model_draw_at(total_elapsed, effect_beat);
+        draw.pos[0] *= x_scale * actor_scale[0] * effect_scale[0];
+        draw.pos[1] *= y_scale * actor_scale[1] * effect_scale[1];
+        draw.pos[2] *= actor_scale[1].abs() * effect_scale[2];
+        draw.rot[0] += effect_rot[0];
+        draw.rot[1] += effect_rot[1];
+        let frame = slot.frame_index(total_elapsed, effect_beat);
+        let uv = song_lua_noteskin_slot_uv(slot, frame, total_elapsed, state.texcoord_offset);
+        let base_size = song_lua_noteskin_slot_size(slot);
+        let size = [
+            base_size[0] * x_scale * actor_scale[0] * effect_scale[0],
+            base_size[1] * y_scale * actor_scale[1] * effect_scale[1],
+        ];
+        if size[0].abs() <= f32::EPSILON || size[1].abs() <= f32::EPSILON {
+            continue;
+        }
+        let layer_z = song_lua_add_z(z, idx.min(i16::MAX as usize) as i16);
+        let actor = if slot.model.is_some() {
+            noteskin_model_actor_from_draw(
+                slot,
+                draw,
+                center,
+                size,
+                uv,
+                -slot.def.rotation_deg as f32 + effect_rot[2],
+                tint,
+                blend,
+                layer_z,
+            )
+        } else {
+            song_lua_noteskin_sprite_actor(
+                slot,
+                draw,
+                center,
+                size,
+                uv,
+                effect_rot[2],
+                tint,
+                blend,
+                layer_z,
+            )
+        };
+        let Some(actor) = actor else {
+            continue;
+        };
+        let glow_actor = song_lua_overlay_glow_actor(&actor, glow, state.text_glow_mode);
+        children.push(actor);
+        if let Some(glow_actor) = glow_actor {
+            children.push(glow_actor);
+        }
+    }
+    if children.is_empty() {
+        None
+    } else {
+        Some(Actor::Frame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children,
+            background: None,
+            z: 0,
+        })
+    }
+}
+
+fn song_lua_noteskin_slot_uv(
+    slot: &SpriteSlot,
+    frame: usize,
+    total_elapsed: f32,
+    texcoord_offset: Option<[f32; 2]>,
+) -> [f32; 4] {
+    let mut uv = slot.uv_for_frame_at(frame, total_elapsed);
+    if let Some([dx, dy]) = texcoord_offset {
+        uv[0] += dx;
+        uv[1] += dy;
+        uv[2] += dx;
+        uv[3] += dy;
+    }
+    uv
+}
+
+fn song_lua_noteskin_slot_size(slot: &SpriteSlot) -> [f32; 2] {
+    if let Some(model) = slot.model.as_ref() {
+        let size = model.size();
+        if size[0] > f32::EPSILON && size[1] > f32::EPSILON {
+            return size;
+        }
+    }
+    slot.logical_size()
+}
+
+fn song_lua_noteskin_sprite_actor(
+    slot: &SpriteSlot,
+    draw: ModelDrawState,
+    center: [f32; 2],
+    size: [f32; 2],
+    uv: [f32; 4],
+    rotation_z: f32,
+    tint: [f32; 4],
+    blend: BlendMode,
+    z: i16,
+) -> Option<Actor> {
+    if !draw.visible {
+        return None;
+    }
+    let size = [
+        size[0] * draw.zoom[0].max(0.0),
+        size[1] * draw.zoom[1].max(0.0),
+    ];
+    if size[0].abs() <= f32::EPSILON || size[1].abs() <= f32::EPSILON {
+        return None;
+    }
+    Some(Actor::Sprite {
+        align: [0.5, 0.5],
+        offset: [center[0] + draw.pos[0], center[1] - draw.pos[1]],
+        world_z: 0.0,
+        size: [SizeSpec::Px(size[0]), SizeSpec::Px(size[1])],
+        source: SpriteSource::Texture(slot.texture_key_shared()),
+        tint: [
+            tint[0] * draw.tint[0],
+            tint[1] * draw.tint[1],
+            tint[2] * draw.tint[2],
+            tint[3] * draw.tint[3],
+        ],
+        glow: [1.0, 1.0, 1.0, 0.0],
+        z,
+        cell: None,
+        grid: None,
+        uv_rect: Some(uv),
+        visible: true,
+        flip_x: false,
+        flip_y: false,
+        cropleft: 0.0,
+        cropright: 0.0,
+        croptop: 0.0,
+        cropbottom: 0.0,
+        fadeleft: 0.0,
+        faderight: 0.0,
+        fadetop: 0.0,
+        fadebottom: 0.0,
+        blend: if draw.blend_add {
+            BlendMode::Add
+        } else {
+            blend
+        },
+        mask_source: false,
+        mask_dest: false,
+        rot_x_deg: draw.rot[0],
+        rot_y_deg: draw.rot[1],
+        rot_z_deg: rotation_z + draw.rot[2] - slot.def.rotation_deg as f32,
+        local_offset: [0.0, 0.0],
+        local_offset_rot_sin_cos: [0.0, 1.0],
+        texcoordvelocity: None,
+        animate: false,
+        state_delay: 0.1,
+        scale: [1.0, 1.0],
+        shadow_len: [0.0, 0.0],
+        shadow_color: [0.0, 0.0, 0.0, 0.5],
+        effect: EffectState::default(),
+    })
 }
 
 fn song_lua_model_local_transform(
@@ -4799,6 +5013,42 @@ fn build_song_lua_overlay_actor(
                 tint,
                 glow,
                 overlay_blend,
+                total_elapsed,
+            )
+        }
+        SongLuaOverlayKind::NoteskinActor { slots } => {
+            let mut tint = state.diffuse;
+            let mut glow = state.glow;
+            let mut effect_offset = [0.0, 0.0, 0.0];
+            let mut effect_scale = [1.0, 1.0, 1.0];
+            let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+            song_lua_apply_overlay_effect(
+                effect,
+                state.rainbow,
+                effect_time,
+                effect_beat,
+                &mut tint,
+                &mut glow,
+                &mut effect_offset,
+                &mut effect_scale,
+                &mut effect_rot,
+            );
+            song_lua_noteskin_actor(
+                slots,
+                state,
+                asset_manager,
+                z,
+                x_scale,
+                y_scale,
+                [size_scale_x, size_scale_y],
+                effect_scale,
+                effect_rot,
+                effect_offset,
+                tint,
+                glow,
+                overlay_blend,
+                total_elapsed,
+                effect_beat,
             )
         }
         SongLuaOverlayKind::SongMeterDisplay {
@@ -8093,8 +8343,10 @@ mod tests {
                     ]),
                     model_size: [16.0, 16.0],
                     uv_scale: [1.0, 1.0],
-                    uv_offset: [0.0, 0.0],
+                    uv_offset: [0.125, 0.25],
                     uv_tex_shift: [0.0, 0.0],
+                    uv_velocity: [0.0, -1.0],
+                    uv_cycle_seconds: Some(2.0),
                     draw: SongLuaOverlayModelDraw {
                         pos: [2.0, 3.0, 4.0],
                         rot: [0.0, 0.0, 0.0],
@@ -8116,6 +8368,7 @@ mod tests {
             SongLuaOverlayState {
                 x: 12.0,
                 y: 24.0,
+                texcoord_offset: Some([0.25, -0.125]),
                 diffuse: [0.5, 0.25, 0.75, 0.5],
                 ..SongLuaOverlayState::default()
             },
@@ -8126,7 +8379,7 @@ mod tests {
             screen_height(),
             0.0,
             0.0,
-            0.0,
+            1.0,
         )
         .expect("Model overlay should render");
 
@@ -8141,6 +8394,8 @@ mod tests {
             vertices,
             z,
             blend,
+            uv_offset,
+            uv_tex_shift,
             ..
         } = &children[0]
         else {
@@ -8151,6 +8406,8 @@ mod tests {
         assert_eq!(*tint, [0.5, 0.125, 0.1875, 0.375]);
         assert_eq!(*z, 323);
         assert_eq!(*blend, BlendMode::Alpha);
+        assert_eq!(*uv_offset, [0.375, -0.375]);
+        assert_eq!(*uv_tex_shift, [0.25, -0.625]);
         assert_eq!(vertices.len(), 3);
     }
 

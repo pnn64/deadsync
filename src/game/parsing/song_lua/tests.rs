@@ -767,6 +767,53 @@ return Def.ActorFrame{
 }
 
 #[test]
+fn compile_song_lua_reuses_noteskin_tap_model_slots() {
+    let song_dir = test_dir("noteskin-tap-model-slots");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+return Def.ActorFrame{
+    NOTESKIN:LoadActorForNoteSkin("Down", "Tap Note", "ddr-note")..{
+        Name="NoteskinTap",
+    },
+}
+"#,
+    )
+    .unwrap();
+
+    let compiled = compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&song_dir, "Noteskin Tap Model Slots"),
+    )
+    .unwrap();
+    let overlay = compiled
+        .overlays
+        .iter()
+        .find(|overlay| overlay.name.as_deref() == Some("NoteskinTap"))
+        .unwrap();
+    let SongLuaOverlayKind::NoteskinActor { slots } = &overlay.kind else {
+        panic!("tap note model should keep loaded noteskin slots");
+    };
+    assert!(slots.len() >= 2);
+    assert!(slots.iter().any(|slot| {
+        slot.texture_key().to_ascii_lowercase().contains("ddr-note")
+            && slot
+                .model
+                .as_ref()
+                .is_some_and(|model| model.vertices.len() > 6)
+    }));
+    assert!(slots.iter().any(|slot| {
+        slot.model.as_ref().is_some_and(|model| {
+            model
+                .vertices
+                .iter()
+                .any(|vertex| vertex.tex_matrix_scale == [0.0, 0.0])
+        })
+    }));
+}
+
+#[test]
 fn compile_song_lua_exposes_hooks_and_noteskin_variant_helpers() {
     let song_dir = test_dir("hooks-noteskin-variant-helpers");
     let entry = song_dir.join("default.lua");
@@ -10957,18 +11004,34 @@ fn compile_song_lua_supports_flip69_sample_if_present() {
             .iter()
             .any(|ease| { ease.overlay_index == first_arrow && ease.to.rot_z_deg == Some(90.0) })
     );
-    assert!(compiled.overlays.iter().any(|overlay| {
-        overlay.parent_index == Some(first_arrow)
-            && overlay
-                .initial_state
-                .custom_texture_rect
-                .is_some_and(|[u0, v0, u1, v1]| (u1 - u0).abs() < 1.0 || (v1 - v0).abs() < 1.0)
-            && matches!(
-                &overlay.kind,
-                SongLuaOverlayKind::Sprite { texture_key, .. }
-                    if texture_key.as_ref().to_ascii_lowercase().contains("ddr-note")
-            )
+    let SongLuaOverlayKind::NoteskinActor { slots } = &compiled.overlays[first_arrow].kind else {
+        panic!("ddr-note multitap arrow should reuse the loaded noteskin actor");
+    };
+    assert!(slots.len() >= 2);
+    assert!(slots.iter().any(|slot| {
+        slot.texture_key().to_ascii_lowercase().contains("ddr-note")
+            && slot
+                .model
+                .as_ref()
+                .is_some_and(|model| model.vertices.len() > 6)
     }));
+    assert!(slots.iter().any(|slot| {
+        slot.model.as_ref().is_some_and(|model| {
+            model
+                .vertices
+                .iter()
+                .any(|vertex| vertex.tex_matrix_scale == [1.0, 1.0])
+        })
+    }));
+    assert!(slots.iter().any(|slot| {
+        slot.model.as_ref().is_some_and(|model| {
+            model
+                .vertices
+                .iter()
+                .any(|vertex| vertex.tex_matrix_scale == [0.0, 0.0])
+        })
+    }));
+    assert!(slots.iter().any(|slot| slot.uv_velocity[1] < -0.5));
     let first_frame = compiled
         .overlays
         .iter()

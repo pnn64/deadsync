@@ -1721,6 +1721,13 @@ fn gameplay_overlay_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
     paths
 }
 
+fn model_texture_sampler(key: &str) -> SamplerDesc {
+    SamplerDesc {
+        wrap: SamplerWrap::Repeat,
+        ..crate::assets::parse_texture_hints(key).sampler_desc()
+    }
+}
+
 fn prewarm_gameplay_assets(
     assets: &mut AssetManager,
     backend: &mut renderer::Backend,
@@ -1804,35 +1811,82 @@ fn prewarm_gameplay_assets(
         paths
     }
 
+    fn prewarm_model_texture_key(
+        assets: &mut AssetManager,
+        backend: &mut renderer::Backend,
+        seen: &mut HashSet<String>,
+        seen_model_textures: &mut HashSet<String>,
+        key: &str,
+    ) {
+        let key = crate::assets::canonical_texture_key(key);
+        if !seen_model_textures.insert(key.clone()) {
+            return;
+        }
+        assets.ensure_texture_for_key_with_sampler(backend, &key, model_texture_sampler(&key));
+        seen.insert(key);
+    }
+
+    fn prewarm_noteskin_textures(
+        assets: &mut AssetManager,
+        backend: &mut renderer::Backend,
+        seen: &mut HashSet<String>,
+        seen_model_textures: &mut HashSet<String>,
+        noteskin: &crate::game::parsing::noteskin::Noteskin,
+    ) {
+        noteskin.for_each_texture_key(|key| {
+            if seen.insert(key.to_owned()) {
+                assets.ensure_texture_for_key(backend, key);
+            }
+        });
+        noteskin.for_each_model_slot(|slot| {
+            prewarm_model_texture_key(
+                assets,
+                backend,
+                seen,
+                seen_model_textures,
+                slot.texture_key(),
+            )
+        });
+    }
+
     let mut seen = HashSet::<String>::with_capacity(256);
+    let mut seen_model_textures = HashSet::<String>::with_capacity(64);
     let mut seen_song_lua_fonts = HashSet::<&'static str>::with_capacity(8);
     for noteskin in state.noteskin.iter().flatten() {
-        noteskin.for_each_texture_key(|key| {
-            if seen.insert(key.to_owned()) {
-                assets.ensure_texture_for_key(backend, key);
-            }
-        });
+        prewarm_noteskin_textures(
+            assets,
+            backend,
+            &mut seen,
+            &mut seen_model_textures,
+            noteskin,
+        );
     }
     for noteskin in state.mine_noteskin.iter().flatten() {
-        noteskin.for_each_texture_key(|key| {
-            if seen.insert(key.to_owned()) {
-                assets.ensure_texture_for_key(backend, key);
-            }
-        });
+        prewarm_noteskin_textures(
+            assets,
+            backend,
+            &mut seen,
+            &mut seen_model_textures,
+            noteskin,
+        );
     }
     for noteskin in state.receptor_noteskin.iter().flatten() {
-        noteskin.for_each_texture_key(|key| {
-            if seen.insert(key.to_owned()) {
-                assets.ensure_texture_for_key(backend, key);
-            }
-        });
+        prewarm_noteskin_textures(
+            assets,
+            backend,
+            &mut seen,
+            &mut seen_model_textures,
+            noteskin,
+        );
     }
     for noteskin in state.tap_explosion_noteskin.iter().flatten() {
-        noteskin.for_each_texture_key(|key| {
-            if seen.insert(key.to_owned()) {
-                assets.ensure_texture_for_key(backend, key);
-            }
-        });
+        prewarm_noteskin_textures(
+            assets,
+            backend,
+            &mut seen,
+            &mut seen_model_textures,
+            noteskin,
+        );
     }
     for path in gameplay_media_paths(state) {
         let key = path.to_string_lossy().into_owned();
@@ -1926,8 +1980,27 @@ fn prewarm_gameplay_assets(
                     }
                     crate::game::parsing::song_lua::SongLuaOverlayKind::Model { layers } => {
                         for layer in layers.iter() {
-                            if seen.insert(layer.texture_key.to_string()) {
-                                assets.ensure_texture_for_key(backend, layer.texture_key.as_ref());
+                            prewarm_model_texture_key(
+                                assets,
+                                backend,
+                                &mut seen,
+                                &mut seen_model_textures,
+                                layer.texture_key.as_ref(),
+                            );
+                        }
+                    }
+                    crate::game::parsing::song_lua::SongLuaOverlayKind::NoteskinActor { slots } => {
+                        for slot in slots.iter() {
+                            if slot.model.is_some() {
+                                prewarm_model_texture_key(
+                                    assets,
+                                    backend,
+                                    &mut seen,
+                                    &mut seen_model_textures,
+                                    slot.texture_key(),
+                                );
+                            } else if seen.insert(slot.texture_key().to_owned()) {
+                                assets.ensure_texture_for_key(backend, slot.texture_key());
                             }
                         }
                     }
@@ -7927,6 +8000,25 @@ mod tests {
         }];
 
         assert!(song_lua_video_paths(&overlays).is_empty());
+    }
+
+    #[test]
+    fn model_texture_sampler_forces_repeat_for_plain_textures() {
+        let key = "noteskins/dance/custom/textures/Tap Note parts.png";
+        let sampler = model_texture_sampler(key);
+
+        assert_eq!(sampler.wrap, SamplerWrap::Repeat);
+        assert_eq!(sampler.filter, SamplerFilter::Linear);
+    }
+
+    #[test]
+    fn model_texture_sampler_preserves_texture_hints() {
+        let key = "noteskins/dance/custom/textures/Tap Note parts (nearest mipmaps).png";
+        let sampler = model_texture_sampler(key);
+
+        assert_eq!(sampler.wrap, SamplerWrap::Repeat);
+        assert_eq!(sampler.filter, SamplerFilter::Nearest);
+        assert!(sampler.mipmaps);
     }
 
     fn test_score_info(
