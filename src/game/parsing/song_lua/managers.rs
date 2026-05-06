@@ -3411,13 +3411,22 @@ fn song_lua_noteskin_actor(
             "Actor"
         },
     )?;
-    actor.set("__songlua_noteskin_name", skin.trim().to_ascii_lowercase())?;
-    actor.set("__songlua_noteskin_button", button)?;
-    actor.set("__songlua_noteskin_element", element)?;
+    tag_song_lua_noteskin_actor(&actor, skin, button, element)?;
     if let Some(path) = sprite_path {
         actor.set("Texture", file_path_string(path.as_path()))?;
     }
     Ok(actor)
+}
+
+fn tag_song_lua_noteskin_actor(
+    actor: &Table,
+    skin: &str,
+    button: &str,
+    element: &str,
+) -> mlua::Result<()> {
+    actor.set("__songlua_noteskin_name", skin.trim().to_ascii_lowercase())?;
+    actor.set("__songlua_noteskin_button", button)?;
+    actor.set("__songlua_noteskin_element", element)
 }
 
 pub(super) fn theme_string(section: &str, name: &str) -> String {

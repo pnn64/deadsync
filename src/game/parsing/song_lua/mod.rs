@@ -26,12 +26,12 @@ mod util;
 use self::actor_host::{
     actor_overlay_initial_state, actor_tree_has_update_functions, broadcast_song_lua_message,
     compile_function_action, compile_overlay_function_ease, create_arrow_effects_table,
-    create_top_screen_table, execute_script_file, install_def, install_file_loaders,
-    probe_function_ease_target, read_note_column_zoom_hides, read_overlay_actors,
-    read_tracked_compile_actors, read_update_function_actions, read_update_function_tables,
-    reset_overlay_capture_tables, reset_tracked_capture_tables, run_actor_draw_functions,
-    run_actor_init_commands, run_actor_startup_commands, run_actor_update_functions,
-    run_actor_update_functions_with_delta,
+    create_dummy_actor, create_top_screen_table, execute_script_file, install_def,
+    install_file_loaders, probe_function_ease_target, read_note_column_zoom_hides,
+    read_overlay_actors, read_tracked_compile_actors, read_update_function_actions,
+    read_update_function_tables, reset_overlay_capture_tables, reset_tracked_capture_tables,
+    run_actor_draw_functions, run_actor_init_commands, run_actor_startup_commands,
+    run_actor_update_functions, run_actor_update_functions_with_delta,
 };
 use self::compat::{
     create_chunk_env_proxy, create_gameplay_layout, initial_chunk_environment,
@@ -3324,7 +3324,7 @@ struct MultitapPhase {
 fn compile_multitap_update_overlays(
     lua: &Lua,
     context: &SongLuaCompileContext,
-    overlays: &mut [OverlayCompileActor],
+    overlays: &mut Vec<OverlayCompileActor>,
     messages: &mut Vec<SongLuaMessageEvent>,
 ) -> Result<Option<Vec<SongLuaOverlayEase>>, String> {
     let Some(multitaps) = read_multitap_descs(lua, context)? else {
@@ -3369,6 +3369,8 @@ fn compile_multitap_update_overlays(
                 .initial_state
                 .texcoord_offset
                 .get_or_insert([0.0, 0.0]);
+            let noteskin = multitap_arrow_noteskin(overlays, arrow_index, context, player)?;
+            ensure_multitap_arrow_sprite(lua, overlays, arrow_index, context, &noteskin)?;
             push_multitap_actor_eases(
                 &mut out,
                 overlays,
@@ -3377,6 +3379,7 @@ fn compile_multitap_update_overlays(
                 deco_index,
                 context,
                 player,
+                &noteskin,
                 desc,
             );
         }
@@ -3405,6 +3408,98 @@ fn compile_multitap_update_overlays(
         }
     }
     Ok(Some(out))
+}
+
+fn ensure_multitap_arrow_sprite(
+    lua: &Lua,
+    overlays: &mut Vec<OverlayCompileActor>,
+    arrow_index: usize,
+    context: &SongLuaCompileContext,
+    noteskin: &str,
+) -> Result<(), String> {
+    if overlay_descendants(overlays, arrow_index)
+        .into_iter()
+        .any(|index| {
+            matches!(
+                overlays[index].actor.kind,
+                SongLuaOverlayKind::Sprite { .. }
+            )
+        })
+    {
+        return Ok(());
+    }
+    let Some((texture_key, texture_path, initial_state)) =
+        multitap_arrow_sprite_spec(noteskin, context)
+    else {
+        return Ok(());
+    };
+    overlays.push(OverlayCompileActor {
+        table: create_dummy_actor(lua, "Sprite").map_err(|err| err.to_string())?,
+        actor: SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_key,
+                texture_path,
+            },
+            name: None,
+            parent_index: Some(arrow_index),
+            initial_state,
+            message_commands: Vec::new(),
+        },
+    });
+    Ok(())
+}
+
+fn multitap_arrow_noteskin(
+    overlays: &[OverlayCompileActor],
+    arrow_index: usize,
+    context: &SongLuaCompileContext,
+    player: usize,
+) -> Result<String, String> {
+    overlays[arrow_index]
+        .table
+        .get::<Option<String>>("__songlua_noteskin_name")
+        .map_err(|err| err.to_string())
+        .map(|noteskin| {
+            noteskin
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| context.players[player].noteskin_name.clone())
+        })
+}
+
+fn multitap_arrow_sprite_spec(
+    noteskin: &str,
+    context: &SongLuaCompileContext,
+) -> Option<(Arc<str>, PathBuf, SongLuaOverlayState)> {
+    let style = crate::game::parsing::noteskin::Style {
+        num_cols: song_lua_style_info(&context.style_name).columns,
+        num_players: song_lua_human_player_count(context).max(1),
+    };
+    let ns = crate::game::parsing::noteskin::load_itg_skin_cached(&style, noteskin).ok()?;
+    let down_col = 1.min(style.num_cols.saturating_sub(1));
+    let note_idx = down_col * crate::game::parsing::noteskin::NUM_QUANTIZATIONS;
+    let layers = ns.note_layers.get(note_idx)?;
+    let slot = layers
+        .iter()
+        .find(|slot| slot.model.is_none())
+        .or_else(|| layers.first())?;
+    let texture_key = slot.texture_key_shared();
+    let mut state = SongLuaOverlayState {
+        custom_texture_rect: Some(slot.uv_for_frame_at(slot.frame_index_from_phase(0.0), 0.0)),
+        size: Some(slot.logical_size()),
+        rot_z_deg: -slot.def.rotation_deg as f32,
+        ..SongLuaOverlayState::default()
+    };
+    if state
+        .size
+        .is_some_and(|size| size[0] <= 0.0 || size[1] <= 0.0)
+    {
+        state.size = None;
+    }
+    Some((
+        Arc::clone(&texture_key),
+        PathBuf::from(texture_key.as_ref()),
+        state,
+    ))
 }
 
 fn apply_multitap_field_state(
@@ -3503,6 +3598,7 @@ fn push_multitap_actor_eases(
     deco_index: usize,
     context: &SongLuaCompileContext,
     player: usize,
+    noteskin: &str,
     desc: &MultitapDesc,
 ) {
     let start = desc.taps[0] - MULTITAP_PREVISIBLE_BEATS;
@@ -3531,28 +3627,21 @@ fn push_multitap_actor_eases(
             beat,
             multitap_arrow_state(
                 overlays[arrow_index].actor.initial_state,
-                context,
-                player,
+                noteskin,
                 desc.lane,
                 phase,
             ),
         ));
         deco_samples.push((
             beat,
-            multitap_deco_state(
-                overlays[deco_index].actor.initial_state,
-                context,
-                player,
-                phase,
-            ),
+            multitap_deco_state(overlays[deco_index].actor.initial_state, noteskin, phase),
         ));
         for (child_index, samples) in &mut deco_child_samples {
             samples.push((
                 beat,
                 multitap_deco_child_state(
                     overlays[*child_index].actor.initial_state,
-                    context,
-                    player,
+                    noteskin,
                     phase,
                 ),
             ));
@@ -3775,8 +3864,7 @@ fn song_lua_speedmod_multiplier(context: &SongLuaCompileContext, player: usize) 
 
 fn multitap_arrow_state(
     baseline: SongLuaOverlayState,
-    context: &SongLuaCompileContext,
-    player: usize,
+    noteskin: &str,
     lane: usize,
     phase: MultitapPhase,
 ) -> SongLuaOverlayState {
@@ -3787,21 +3875,19 @@ fn multitap_arrow_state(
     state.visible = true;
     state.rot_z_deg = MULTITAP_LANE_ROTATION[lane - 1];
     state.diffuse = [0.4, 0.4, 0.4, 1.0];
-    state.texcoord_offset = Some(multitap_qtzn_texcoord_offset(context, player, phase.qtc));
+    state.texcoord_offset = Some(multitap_qtzn_texcoord_offset(noteskin, phase.qtc));
     state
 }
 
 fn multitap_deco_state(
     baseline: SongLuaOverlayState,
-    context: &SongLuaCompileContext,
-    player: usize,
+    noteskin: &str,
     phase: MultitapPhase,
 ) -> SongLuaOverlayState {
     if !phase.visible {
         return baseline;
     }
-    let (effect_color1, effect_color2) =
-        multitap_deco_color_pair(&context.players[player].noteskin_name, phase.qtc);
+    let (effect_color1, effect_color2) = multitap_deco_color_pair(noteskin, phase.qtc);
     let mut state = baseline;
     state.visible = true;
     state.zoom = 1.0;
@@ -3817,15 +3903,13 @@ fn multitap_deco_state(
 
 fn multitap_deco_child_state(
     baseline: SongLuaOverlayState,
-    context: &SongLuaCompileContext,
-    player: usize,
+    noteskin: &str,
     phase: MultitapPhase,
 ) -> SongLuaOverlayState {
     if !phase.visible {
         return baseline;
     }
-    let (effect_color1, effect_color2) =
-        multitap_deco_color_pair(&context.players[player].noteskin_name, phase.qtc);
+    let (effect_color1, effect_color2) = multitap_deco_color_pair(noteskin, phase.qtc);
     let mut state = baseline;
     state.effect_mode = EffectMode::DiffuseRamp;
     state.effect_clock = EffectClock::Beat;
@@ -3939,12 +4023,7 @@ fn multitap_qtzn_tex(qtzn: u8) -> usize {
     }
 }
 
-fn multitap_qtzn_texcoord_offset(
-    context: &SongLuaCompileContext,
-    player: usize,
-    qtzn: u8,
-) -> [f32; 2] {
-    let noteskin = &context.players[player].noteskin_name;
+fn multitap_qtzn_texcoord_offset(noteskin: &str, qtzn: u8) -> [f32; 2] {
     let tex = multitap_qtzn_tex(qtzn) as f32;
     let x = crate::game::parsing::noteskin::song_lua_noteskin_metric_f(
         noteskin,

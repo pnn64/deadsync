@@ -1807,6 +1807,11 @@ fn song_lua_overlay_compose_state(
     for i in 0..4 {
         child.diffuse[i] *= parent.diffuse[i];
     }
+    child.texcoord_offset = match (parent.texcoord_offset, child.texcoord_offset) {
+        (Some(parent), Some(child)) => Some([parent[0] + child[0], parent[1] + child[1]]),
+        (Some(parent), None) => Some(parent),
+        (None, child) => child,
+    };
     child.visible = parent.visible && child.visible;
     child.mask_source |= parent.mask_source;
     child.mask_dest |= parent.mask_dest;
@@ -7764,6 +7769,26 @@ mod tests {
         );
         assert_eq!(composed.x, 247.0);
         assert_eq!(composed.y, 240.0);
+    }
+
+    #[test]
+    fn song_lua_overlay_texture_translate_stacks_from_parent() {
+        let parent = SongLuaOverlayState {
+            texcoord_offset: Some([0.25, 0.5]),
+            ..SongLuaOverlayState::default()
+        };
+        let child = SongLuaOverlayState {
+            texcoord_offset: Some([0.125, -0.25]),
+            ..SongLuaOverlayState::default()
+        };
+        let composed = song_lua_overlay_compose_state(
+            &SongLuaOverlayKind::ActorFrame,
+            parent,
+            child,
+            854.0,
+            480.0,
+        );
+        assert_eq!(composed.texcoord_offset, Some([0.375, 0.25]));
     }
 
     #[test]

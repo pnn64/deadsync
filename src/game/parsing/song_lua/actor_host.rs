@@ -7,6 +7,9 @@ pub(super) struct TopScreenLuaTables {
 
 const SONG_LUA_LOADER_ENVS_KEY: &str = "__songlua_loader_envs";
 const SONG_LUA_CHILD_GROUP_KEY: &str = "__songlua_child_group";
+type ActorAssetPrefixKey = (String, String);
+type ActorAssetPrefixCache = Mutex<HashMap<ActorAssetPrefixKey, Option<PathBuf>>>;
+static ACTOR_ASSET_PREFIX_CACHE: OnceLock<ActorAssetPrefixCache> = OnceLock::new();
 
 fn current_song_lua_style_name(lua: &Lua) -> String {
     let Ok(Value::Table(style)) = current_gamestate_value(lua, "GetCurrentStyle") else {
@@ -4216,8 +4219,72 @@ fn resolve_actor_asset_path(actor: &Table, raw: &str) -> Result<PathBuf, String>
         if candidate.is_file() {
             return Ok(candidate);
         }
+        if let Some(path) = resolve_actor_asset_prefix(Path::new(&script_dir), raw_path) {
+            return Ok(path);
+        }
     }
     Err(format!("actor asset '{}' could not be resolved", raw))
+}
+
+fn resolve_actor_asset_prefix(script_dir: &Path, raw_path: &Path) -> Option<PathBuf> {
+    if raw_path.extension().is_some() {
+        return None;
+    }
+    let prefix = raw_path.file_name()?.to_str()?.trim();
+    if prefix.is_empty() {
+        return None;
+    }
+    let dir = raw_path
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .map(|parent| script_dir.join(parent))
+        .unwrap_or_else(|| script_dir.to_path_buf());
+    if !dir.is_dir() {
+        return None;
+    }
+    let key = (
+        dir.to_string_lossy().to_ascii_lowercase(),
+        prefix.to_ascii_lowercase(),
+    );
+    let cache = ACTOR_ASSET_PREFIX_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(cached) = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&key)
+        .cloned()
+    {
+        return cached;
+    }
+    let mut matches = fs::read_dir(&dir)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file() && is_song_lua_media_path(path))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.to_ascii_lowercase().starts_with(key.1.as_str()))
+        })
+        .collect::<Vec<_>>();
+    matches.sort_by(|left, right| {
+        let left = left
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let right = right
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        left.cmp(&right)
+    });
+    let found = matches.into_iter().next();
+    cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(key, found.clone());
+    found
 }
 
 fn read_bitmap_font(actor: &Table) -> Result<Option<(&'static str, PathBuf)>, String> {

@@ -10924,6 +10924,7 @@ fn compile_song_lua_supports_flip69_sample_if_present() {
             enabled: true,
             difficulty: SongLuaDifficulty::Challenge,
             speedmod: SongLuaSpeedMod::X(2.0),
+            noteskin_name: "ddr-note".to_string(),
             ..SongLuaPlayerContext::default()
         },
         SongLuaPlayerContext {
@@ -10956,6 +10957,18 @@ fn compile_song_lua_supports_flip69_sample_if_present() {
             .iter()
             .any(|ease| { ease.overlay_index == first_arrow && ease.to.rot_z_deg == Some(90.0) })
     );
+    assert!(compiled.overlays.iter().any(|overlay| {
+        overlay.parent_index == Some(first_arrow)
+            && overlay
+                .initial_state
+                .custom_texture_rect
+                .is_some_and(|[u0, v0, u1, v1]| (u1 - u0).abs() < 1.0 || (v1 - v0).abs() < 1.0)
+            && matches!(
+                &overlay.kind,
+                SongLuaOverlayKind::Sprite { texture_key, .. }
+                    if texture_key.as_ref().to_ascii_lowercase().contains("ddr-note")
+            )
+    }));
     let first_frame = compiled
         .overlays
         .iter()
