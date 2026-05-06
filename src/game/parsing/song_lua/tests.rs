@@ -7737,6 +7737,55 @@ return Def.ActorFrame{
 }
 
 #[test]
+fn compile_song_lua_supports_double_style_notefield_columns() {
+    let song_dir = test_dir("double-style-notefield-columns");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+return Def.ActorFrame{
+    InitCommand=function(self)
+        self:SetUpdateFunction(function(actor)
+            local style = GAMESTATE:GetCurrentStyle()
+            local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
+            local cols = nf:GetColumnActors()
+            local col8 = style:GetColumnInfo(PLAYER_1, 8)
+            mod_actions = {
+                {
+                    1,
+                    string.format(
+                        "%s:%s:%s:%d:%.0f:%d:%.0f:%d:%.0f",
+                        style:GetName(),
+                        style:GetStepsType(),
+                        style:GetStyleType(),
+                        style:ColumnsPerPlayer(),
+                        style:GetWidth(PLAYER_1),
+                        #cols,
+                        cols[8]:GetX(),
+                        col8.Track,
+                        col8.XOffset
+                    ),
+                    true
+                },
+            }
+        end)
+    end,
+}
+"#,
+    )
+    .unwrap();
+
+    let mut context = SongLuaCompileContext::new(&song_dir, "Double Style NoteField Columns");
+    context.style_name = "double".to_string();
+    let compiled = compile_song_lua(&entry, &context).unwrap();
+    assert_eq!(compiled.messages.len(), 1);
+    assert_eq!(
+        compiled.messages[0].message,
+        "double:StepsType_Dance_Double:StyleType_OnePlayerTwoSides:8:512:8:224:7:224"
+    );
+}
+
+#[test]
 fn compile_song_lua_player_options_getters_return_scalars() {
     let song_dir = test_dir("player-options-getters");
     let entry = song_dir.join("default.lua");
@@ -10805,6 +10854,36 @@ fn compile_song_lua_supports_step_your_game_up_sample_if_present() {
 
     let compiled = compile_song_lua(&entry, &context).unwrap();
     assert!(!compiled.beat_mods.is_empty());
+    assert!(!compiled.overlays.is_empty());
+}
+
+#[test]
+fn compile_song_lua_supports_flip69_sample_if_present() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("songs/ITL Online 2026 Unlocks/[10] flip69 (DX) [Telperion]");
+    let entry = root.join("multitap/Default.lua");
+    if !entry.is_file() {
+        return;
+    }
+
+    let mut context = SongLuaCompileContext::new(&root, "[5604] [10] flip69");
+    context.style_name = "double".to_string();
+    context.players = [
+        SongLuaPlayerContext {
+            enabled: true,
+            difficulty: SongLuaDifficulty::Challenge,
+            speedmod: SongLuaSpeedMod::X(2.0),
+            ..SongLuaPlayerContext::default()
+        },
+        SongLuaPlayerContext {
+            enabled: false,
+            difficulty: SongLuaDifficulty::Challenge,
+            speedmod: SongLuaSpeedMod::X(2.0),
+            ..SongLuaPlayerContext::default()
+        },
+    ];
+
+    let compiled = compile_song_lua(&entry, &context).unwrap();
     assert!(!compiled.overlays.is_empty());
 }
 

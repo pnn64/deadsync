@@ -93,12 +93,16 @@ use self::util::{
 
 const LUA_PLAYERS: usize = 2;
 const SONG_LUA_NOTE_COLUMNS: usize = 4;
+const SONG_LUA_DOUBLE_NOTE_COLUMNS: usize = 8;
 const SONG_LUA_PRODUCT_FAMILY: &str = "ITGmania";
 const SONG_LUA_PRODUCT_ID: &str = "ITGmania";
 const SONG_LUA_PRODUCT_VERSION: &str = "1.2.0";
 const THEME_RECEPTOR_Y_STD: f32 = -125.0;
 const THEME_RECEPTOR_Y_REV: f32 = 145.0;
 const SONG_LUA_COLUMN_X: [f32; SONG_LUA_NOTE_COLUMNS] = [-96.0, -32.0, 32.0, 96.0];
+const SONG_LUA_DOUBLE_COLUMN_X: [f32; SONG_LUA_DOUBLE_NOTE_COLUMNS] =
+    [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
+const SONG_LUA_COLUMN_NAMES: [&str; SONG_LUA_NOTE_COLUMNS] = ["Left", "Down", "Up", "Right"];
 const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
 const SONG_LUA_PROBE_METHODS_KEY: &str = "__songlua_probe_methods";
 const SONG_LUA_PROBE_ACTORS_KEY: &str = "__songlua_probe_actors";
@@ -164,6 +168,68 @@ const SONG_LUA_TIMING_WINDOW_NAMES: [&str; 5] = [
     "TimingWindow_W4",
     "TimingWindow_W5",
 ];
+
+#[derive(Clone, Copy)]
+struct SongLuaStyleInfo {
+    name: &'static str,
+    steps_type: &'static str,
+    style_type: &'static str,
+    columns: usize,
+    width: f32,
+    x_offsets: &'static [f32],
+}
+
+fn song_lua_style_info(style_name: &str) -> SongLuaStyleInfo {
+    let normalized = style_name
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['_', '-', ' '], "");
+    if matches!(
+        normalized.as_str(),
+        "double" | "dancedouble" | "stepstypedancedouble"
+    ) {
+        SongLuaStyleInfo {
+            name: "double",
+            steps_type: "StepsType_Dance_Double",
+            style_type: "StyleType_OnePlayerTwoSides",
+            columns: SONG_LUA_DOUBLE_NOTE_COLUMNS,
+            width: 512.0,
+            x_offsets: &SONG_LUA_DOUBLE_COLUMN_X,
+        }
+    } else if normalized == "versus" {
+        SongLuaStyleInfo {
+            name: "versus",
+            steps_type: "StepsType_Dance_Single",
+            style_type: "StyleType_TwoPlayersTwoSides",
+            columns: SONG_LUA_NOTE_COLUMNS,
+            width: 256.0,
+            x_offsets: &SONG_LUA_COLUMN_X,
+        }
+    } else {
+        SongLuaStyleInfo {
+            name: "single",
+            steps_type: "StepsType_Dance_Single",
+            style_type: "StyleType_OnePlayerOneSide",
+            columns: SONG_LUA_NOTE_COLUMNS,
+            width: 256.0,
+            x_offsets: &SONG_LUA_COLUMN_X,
+        }
+    }
+}
+
+#[inline(always)]
+fn song_lua_style_column_x(style_name: &str, column_index: usize) -> f32 {
+    song_lua_style_info(style_name)
+        .x_offsets
+        .get(column_index)
+        .copied()
+        .unwrap_or(0.0)
+}
+
+#[inline(always)]
+fn song_lua_style_column_name(column_index: usize) -> &'static str {
+    SONG_LUA_COLUMN_NAMES[column_index % SONG_LUA_COLUMN_NAMES.len()]
+}
 const SONG_LUA_PLAYER_OPTION_CAPABILITIES: &[&str] = &[
     "FromString",
     "IsEasierForSongAndSteps",

@@ -8,9 +8,18 @@ pub(super) struct TopScreenLuaTables {
 const SONG_LUA_LOADER_ENVS_KEY: &str = "__songlua_loader_envs";
 const SONG_LUA_CHILD_GROUP_KEY: &str = "__songlua_child_group";
 
-#[inline(always)]
-fn song_lua_column_x(column_index: usize) -> f32 {
-    SONG_LUA_COLUMN_X.get(column_index).copied().unwrap_or(0.0)
+fn current_song_lua_style_name(lua: &Lua) -> String {
+    let Ok(Value::Table(style)) = current_gamestate_value(lua, "GetCurrentStyle") else {
+        return "single".to_string();
+    };
+    let Ok(Some(method)) = style.get::<Option<Function>>("GetName") else {
+        return "single".to_string();
+    };
+    method
+        .call::<Value>(style)
+        .ok()
+        .and_then(read_string)
+        .unwrap_or_else(|| "single".to_string())
 }
 
 pub(super) fn create_arrow_effects_table(lua: &Lua) -> mlua::Result<Table> {
@@ -34,7 +43,7 @@ pub(super) fn create_arrow_effects_table(lua: &Lua) -> mlua::Result<Table> {
     )?;
     table.set(
         "GetXPos",
-        lua.create_function(|_, args: MultiValue| {
+        lua.create_function(|lua, args: MultiValue| {
             let column_index = args
                 .get(1)
                 .cloned()
@@ -43,7 +52,10 @@ pub(super) fn create_arrow_effects_table(lua: &Lua) -> mlua::Result<Table> {
                 .filter(|value| *value >= 0)
                 .map(|value| value as usize)
                 .unwrap_or(0);
-            Ok(song_lua_column_x(column_index))
+            Ok(song_lua_style_column_x(
+                &current_song_lua_style_name(lua),
+                column_index,
+            ))
         })?,
     )?;
     table.set(
@@ -212,6 +224,7 @@ fn copy_dummy_actor_tags(from: &Table, into: &Table) -> mlua::Result<()> {
         "__songlua_bpm_text",
         "__songlua_steps_text_1",
         "__songlua_steps_text_2",
+        "__songlua_style_name",
     ] {
         if let Some(value) = from.get::<Option<String>>(key)? {
             into.set(key, value)?;
@@ -229,7 +242,10 @@ fn create_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Resu
         && name.eq_ignore_ascii_case("NoteField")
         && let Some(player_index) = player_index
     {
-        create_note_field_actor(lua, player_index as usize)?
+        let style_name = parent
+            .get::<Option<String>>("__songlua_style_name")?
+            .unwrap_or_else(|| current_song_lua_style_name(lua));
+        create_note_field_actor(lua, player_index as usize, &style_name)?
     } else if parent_type
         .as_deref()
         .is_some_and(|kind| kind.eq_ignore_ascii_case("TopScreen"))
@@ -544,9 +560,14 @@ fn create_life_meter_table(lua: &Lua, name: &'static str) -> mlua::Result<Table>
     Ok(actor)
 }
 
-fn create_note_field_actor(lua: &Lua, player_index: usize) -> mlua::Result<Table> {
+fn create_note_field_actor(
+    lua: &Lua,
+    player_index: usize,
+    style_name: &str,
+) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, "NoteField")?;
     actor.set("__songlua_player_index", player_index as i64)?;
+    actor.set("__songlua_style_name", style_name)?;
     actor.set("__songlua_player_child_name", "NoteField")?;
     actor.set("__songlua_beat_bars", false)?;
     actor.set("__songlua_beat_bars_alpha", lua.create_table()?)?;
@@ -599,8 +620,12 @@ fn note_field_column_actors(lua: &Lua, note_field: &Table) -> mlua::Result<Table
     let player_index = note_field
         .get::<Option<i64>>("__songlua_player_index")?
         .unwrap_or(0) as usize;
-    for column_index in 0..SONG_LUA_NOTE_COLUMNS {
-        let column = create_note_column_actor(lua, note_field, player_index, column_index)?;
+    let style_name = note_field
+        .get::<Option<String>>("__songlua_style_name")?
+        .unwrap_or_else(|| current_song_lua_style_name(lua));
+    for column_index in 0..song_lua_style_info(&style_name).columns {
+        let column =
+            create_note_column_actor(lua, note_field, player_index, column_index, &style_name)?;
         columns.raw_set(column_index + 1, column)?;
     }
     note_field.set("__songlua_note_columns", columns.clone())?;
@@ -612,11 +637,15 @@ fn create_note_column_actor(
     note_field: &Table,
     player_index: usize,
     column_index: usize,
+    style_name: &str,
 ) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, "NoteColumnRenderer")?;
     actor.set("__songlua_parent", note_field.clone())?;
     actor.set("__songlua_player_index", player_index as i64)?;
-    actor.set("__songlua_state_x", song_lua_column_x(column_index))?;
+    actor.set(
+        "__songlua_state_x",
+        song_lua_style_column_x(style_name, column_index),
+    )?;
     actor.set("__songlua_state_y", 0.0_f32)?;
     actor.set("__songlua_state_z", 0.0_f32)?;
 
@@ -786,8 +815,8 @@ pub(super) fn create_top_screen_table(
         create_life_meter_table(lua, "LifeP2")?,
     ];
     let player_actors = [
-        create_top_screen_player_actor(lua, players[0].clone(), 0)?,
-        create_top_screen_player_actor(lua, players[1].clone(), 1)?,
+        create_top_screen_player_actor(lua, players[0].clone(), 0, &context.style_name)?,
+        create_top_screen_player_actor(lua, players[1].clone(), 1, &context.style_name)?,
     ];
     for player_actor in &player_actors {
         player_actor.set("__songlua_parent", top_screen.clone())?;
@@ -1305,10 +1334,12 @@ fn create_top_screen_player_actor(
     lua: &Lua,
     player: SongLuaPlayerContext,
     player_index: usize,
+    style_name: &str,
 ) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, "PlayerActor")?;
     actor.set("Name", top_screen_player_name(player_index))?;
     actor.set("__songlua_player_index", player_index as i64)?;
+    actor.set("__songlua_style_name", style_name)?;
     actor.set("__songlua_visible", true)?;
     actor.set("__songlua_state_x", player.screen_x)?;
     actor.set("__songlua_state_y", player.screen_y)?;
