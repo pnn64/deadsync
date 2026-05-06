@@ -272,7 +272,7 @@ impl Default for Config {
         Self {
             vsync: false,
             max_fps: 0,
-            present_mode_policy: PresentModePolicy::Immediate,
+            present_mode_policy: PresentModePolicy::Mailbox,
             windowed: true,
             fullscreen_type: FullscreenType::Exclusive,
             display_monitor: 0,

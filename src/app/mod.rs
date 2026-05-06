@@ -2699,9 +2699,14 @@ impl App {
 
     #[inline(always)]
     fn apply_present_back_pressure(&self) -> bool {
-        !self.state.shell.vsync_enabled
-            && self.state.shell.present_mode_policy == PresentModePolicy::Mailbox
-            && self.effective_frame_interval().is_none()
+        if self.state.shell.vsync_enabled {
+            return false;
+        }
+        #[cfg(target_os = "macos")]
+        if self.backend_type == BackendType::OpenGL {
+            return true;
+        }
+        self.state.shell.present_mode_policy == PresentModePolicy::Mailbox
     }
 
     #[inline(always)]
