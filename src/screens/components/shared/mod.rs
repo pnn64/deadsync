@@ -12,6 +12,7 @@ pub mod screen_bar;
 pub mod stats_overlay;
 mod technique_bg;
 pub mod test_input;
+pub mod update_overlay;
 pub mod timers;
 pub mod transitions;
 pub mod visual_style_bg;

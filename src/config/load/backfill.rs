@@ -71,6 +71,7 @@ const OPTION_KEYS: &[&str] = &[
     "SoftwareRendererThreads",
     "Theme",
     "TranslatedTitles",
+    "UpdaterInstallEnabled",
     "VideoRenderer",
     "VisualDelaySeconds",
     "Vsync",

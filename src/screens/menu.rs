@@ -102,7 +102,7 @@ pub struct State {
     pub started_by_p2: bool,
     bg: visual_style_bg::State,
     i18n_revision: Cell<u64>,
-    info_text_cache: RefCell<Option<Arc<str>>>,
+    info_text_cache: RefCell<Option<(Option<String>, Arc<str>)>>,
     groovestats_text_cache: RefCell<Option<StatusTextCache<GrooveStatusKey, 3>>>,
     arrowcloud_text_cache: RefCell<Option<StatusTextCache<ArrowCloudStatusKey, 1>>>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
@@ -173,16 +173,25 @@ fn sync_i18n_cache(state: &State) {
 
 #[inline(always)]
 fn menu_info_text(state: &State) -> Arc<str> {
-    if let Some(text) = state.info_text_cache.borrow().as_ref() {
+    let banner_tag = update_banner_tag();
+    if let Some((cached_tag, text)) = state.info_text_cache.borrow().as_ref()
+        && cached_tag == &banner_tag
+    {
         return text.clone();
     }
 
-    let version = env!("CARGO_PKG_VERSION");
+    let version = crate::engine::version::current().to_string();
     let song_cache = get_song_cache();
     let num_packs = song_cache.len();
     let num_songs: usize = song_cache.iter().map(|pack| pack.songs.len()).sum();
     let num_courses = get_course_cache().len();
-    let version_line = tr_fmt("Menu", "VersionLine", &[("version", version)]);
+    let mut version_line =
+        tr_fmt("Menu", "VersionLine", &[("version", &version)]).to_string();
+    if let Some(tag) = banner_tag.as_deref() {
+        let suffix = tr_fmt("Menu", "UpdateAvailableSuffix", &[("version", tag)]);
+        version_line.push(' ');
+        version_line.push_str(&suffix);
+    }
     let songs = num_songs.to_string();
     let packs = num_packs.to_string();
     let courses = num_courses.to_string();
@@ -191,9 +200,20 @@ fn menu_info_text(state: &State) -> Arc<str> {
         "SongSummary",
         &[("songs", &songs), ("packs", &packs), ("courses", &courses)],
     );
-    let text = Arc::<str>::from(format!("{version_line}\n{summary}"));
-    *state.info_text_cache.borrow_mut() = Some(text.clone());
+    let body = format!("{version_line}\n{summary}");
+    let text = Arc::<str>::from(body);
+    *state.info_text_cache.borrow_mut() = Some((banner_tag, text.clone()));
     text
+}
+
+/// The release tag (e.g. `v0.3.875`) that should be advertised on the menu,
+/// or `None` when no update is available.  Used as the cache key for
+/// `info_text_cache` so a fresh check fires a re-render automatically.
+fn update_banner_tag() -> Option<String> {
+    match crate::engine::updater::state::snapshot()? {
+        crate::engine::updater::UpdateState::Available(info) => Some(info.tag),
+        _ => None,
+    }
 }
 
 #[inline(always)]

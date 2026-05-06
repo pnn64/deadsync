@@ -11,16 +11,38 @@ pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 // Match Simply Love / ITGmania's GrooveStats request timeout (60s).
 pub const GROOVESTATS_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Timeouts applied to an individual `ureq::Agent`.  Every field is
+/// optional: a `None` value means "do not configure this dimension"
+/// and ureq's own default applies (which for global/connect/resolve
+/// is "no timeout at all").
+///
+/// `global` covers DNS through reading the entire response body and
+/// is appropriate for small, fast requests.  Long-lived requests
+/// (multi-megabyte downloads on slow networks) should leave `global`
+/// as `None` and rely on `connect` + `resolve` to fail fast on
+/// unreachable hosts without artificially capping transfer time.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AgentConfig {
-    pub timeout: Duration,
+    pub timeout: Option<Duration>,
+    pub connect_timeout: Option<Duration>,
+    pub resolve_timeout: Option<Duration>,
+}
+
+impl AgentConfig {
+    /// Convenience constructor for a single end-to-end timeout (the
+    /// historical behaviour before per-stage controls existed).
+    pub const fn with_global(timeout: Duration) -> Self {
+        Self {
+            timeout: Some(timeout),
+            connect_timeout: None,
+            resolve_timeout: None,
+        }
+    }
 }
 
 impl Default for AgentConfig {
     fn default() -> Self {
-        Self {
-            timeout: DEFAULT_REQUEST_TIMEOUT,
-        }
+        Self::with_global(DEFAULT_REQUEST_TIMEOUT)
     }
 }
 
@@ -70,10 +92,14 @@ fn ensure_success(status: u16) -> Result<(), NetworkError> {
 }
 
 pub fn build_agent(config: AgentConfig) -> ureq::Agent {
-    ureq::Agent::config_builder()
-        .timeout_global(Some(config.timeout))
-        .build()
-        .into()
+    let mut builder = ureq::Agent::config_builder().timeout_global(config.timeout);
+    if let Some(t) = config.connect_timeout {
+        builder = builder.timeout_connect(Some(t));
+    }
+    if let Some(t) = config.resolve_timeout {
+        builder = builder.timeout_resolve(Some(t));
+    }
+    builder.build().into()
 }
 
 // Reuse a single process-wide agent so score submits and leaderboard requests share
@@ -82,11 +108,8 @@ static DEFAULT_AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| build_agent(Agent
 
 // Dedicated agent for GrooveStats (and BoogieStats) requests, configured with the
 // longer 60s timeout used by Simply Love / ITGmania.
-static GROOVESTATS_AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
-    build_agent(AgentConfig {
-        timeout: GROOVESTATS_REQUEST_TIMEOUT,
-    })
-});
+static GROOVESTATS_AGENT: LazyLock<ureq::Agent> =
+    LazyLock::new(|| build_agent(AgentConfig::with_global(GROOVESTATS_REQUEST_TIMEOUT)));
 
 pub fn get_agent() -> ureq::Agent {
     DEFAULT_AGENT.clone()

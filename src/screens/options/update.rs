@@ -439,7 +439,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             } else {
                 match state.view {
                     OptionsView::Main => {
-                        let total = ITEMS.len();
+                        let total = visible_items().len();
                         if total > 0 {
                             let last = total - 1;
                             match direction {
@@ -517,7 +517,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         OptionsView::Main => {
             update_row_tweens(
                 &mut state.row_tweens,
-                ITEMS.len(),
+                visible_items().len(),
                 state.selected,
                 s,
                 list_y,
