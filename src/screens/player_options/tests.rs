@@ -2041,4 +2041,371 @@ pub(super) mod tests {
             "Row {id:?}: variant at cursor {idx} = {actual:?}, expected {expected:?}"
         );
     }
+
+    use crate::game::profile::{
+        AccelEffectsMask, AppearanceEffectsMask, HoldsMask, InsertMask, RemoveMask,
+        VisualEffectsMask,
+    };
+    use super::BitmaskWriteback;
+
+    fn install_bitmask_row(
+        state: &mut super::State,
+        id: RowId,
+        binding: BitmaskBinding,
+        choices: &[&str],
+        choice_index: usize,
+    ) -> usize {
+        let row = test_bitmask_row(id, lookup_key("PlayerOptions", "Insert"), choices, binding);
+        state.pane_mut().row_map.display_order.push(id);
+        state.pane_mut().row_map.insert(row);
+        let row_index = state.pane().row_map.display_order().len() - 1;
+        state.pane_mut().row_map.get_mut(id).unwrap().selected_choice_index = [choice_index, choice_index];
+        state.pane_mut().selected_row[P1] = row_index;
+        row_index
+    }
+
+    #[test]
+    fn generic_toggle_insert_row_sets_bit_and_profile() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+
+        let binding = BitmaskBinding {
+            toggle: |_, _| {},
+            init: Some(BitmaskInit {
+                from_profile: |p| p.insert_active_mask.bits() as u32,
+                get_active: |m| m.insert.bits() as u32,
+                set_active: |m, b| m.insert = InsertMask::from_bits_retain(b as u8),
+                cursor: CursorInit::FirstActiveBit,
+            }),
+            writeback: Some(BitmaskWriteback {
+                project_to_profile: |p, b| {
+                    p.insert_active_mask = InsertMask::from_bits_truncate(b as u8);
+                },
+                persist_for_side: |s, b| {
+                    profile::update_insert_mask_for_side(
+                        s,
+                        InsertMask::from_bits_truncate(b as u8),
+                    );
+                },
+                bit_for_choice: |i, _| if i < 7 { Some(1u32 << i) } else { None },
+            }),
+        };
+        install_bitmask_row(
+            &mut state,
+            RowId::Insert,
+            binding,
+            &["W", "B", "Q", "M", "S", "E", "T"],
+            2,
+        );
+        state.option_masks[P1].insert = InsertMask::empty();
+        state.player_profiles[P1].insert_active_mask = InsertMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(
+            state.option_masks[P1].insert.bits(),
+            1u8 << 2,
+            "Insert bit at choice index 2 should be set"
+        );
+        assert_eq!(
+            state.player_profiles[P1].insert_active_mask.bits(),
+            1u8 << 2,
+            "Insert profile should mirror the mask"
+        );
+
+        // Toggle again to clear.
+        handle_start_event(&mut state, &asset_manager, active, P1);
+        assert_eq!(state.option_masks[P1].insert, InsertMask::empty());
+        assert_eq!(
+            state.player_profiles[P1].insert_active_mask,
+            InsertMask::empty()
+        );
+    }
+
+    #[test]
+    fn generic_toggle_insert_row_ignores_out_of_width_choice() {
+        // Insert clamps to choice_index < 7. A row with 7 choices and a
+        // selected index of 7 (impossible in practice; defensive) must
+        // produce no toggle.
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+
+        let binding = BitmaskBinding {
+            toggle: |_, _| {},
+            init: Some(BitmaskInit {
+                from_profile: |p| p.insert_active_mask.bits() as u32,
+                get_active: |m| m.insert.bits() as u32,
+                set_active: |m, b| m.insert = InsertMask::from_bits_retain(b as u8),
+                cursor: CursorInit::FirstActiveBit,
+            }),
+            writeback: Some(BitmaskWriteback {
+                project_to_profile: |p, b| {
+                    p.insert_active_mask = InsertMask::from_bits_truncate(b as u8);
+                },
+                persist_for_side: |s, b| {
+                    profile::update_insert_mask_for_side(
+                        s,
+                        InsertMask::from_bits_truncate(b as u8),
+                    );
+                },
+                bit_for_choice: |i, _| if i < 7 { Some(1u32 << i) } else { None },
+            }),
+        };
+        // 8 choices, cursor at index 7 — out of width.
+        install_bitmask_row(
+            &mut state,
+            RowId::Insert,
+            binding,
+            &["a", "b", "c", "d", "e", "f", "g", "h"],
+            7,
+        );
+        state.option_masks[P1].insert = InsertMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(
+            state.option_masks[P1].insert,
+            InsertMask::empty(),
+            "out-of-width choice index must not toggle a bit"
+        );
+    }
+
+    #[test]
+    fn generic_toggle_remove_row_sets_bit_and_profile() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let binding = BitmaskBinding {
+            toggle: |_, _| {},
+            init: Some(BitmaskInit {
+                from_profile: |p| p.remove_active_mask.bits() as u32,
+                get_active: |m| m.remove.bits() as u32,
+                set_active: |m, b| m.remove = RemoveMask::from_bits_retain(b as u8),
+                cursor: CursorInit::FirstActiveBit,
+            }),
+            writeback: Some(BitmaskWriteback {
+                project_to_profile: |p, b| {
+                    p.remove_active_mask = RemoveMask::from_bits_truncate(b as u8);
+                },
+                persist_for_side: |s, b| {
+                    profile::update_remove_mask_for_side(
+                        s,
+                        RemoveMask::from_bits_truncate(b as u8),
+                    );
+                },
+                bit_for_choice: |i, _| if i < 8 { Some(1u32 << i) } else { None },
+            }),
+        };
+        install_bitmask_row(
+            &mut state,
+            RowId::Remove,
+            binding,
+            &["L", "M", "H", "J", "Hands", "Q", "Lifts", "Fakes"],
+            5,
+        );
+        state.option_masks[P1].remove = RemoveMask::empty();
+        state.player_profiles[P1].remove_active_mask = RemoveMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(state.option_masks[P1].remove.bits(), 1u8 << 5);
+        assert_eq!(state.player_profiles[P1].remove_active_mask.bits(), 1u8 << 5);
+    }
+
+    #[test]
+    fn generic_toggle_holds_row_sets_bit_and_profile() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let binding = BitmaskBinding {
+            toggle: |_, _| {},
+            init: Some(BitmaskInit {
+                from_profile: |p| p.holds_active_mask.bits() as u32,
+                get_active: |m| m.holds.bits() as u32,
+                set_active: |m, b| m.holds = HoldsMask::from_bits_retain(b as u8),
+                cursor: CursorInit::FirstActiveBit,
+            }),
+            writeback: Some(BitmaskWriteback {
+                project_to_profile: |p, b| {
+                    p.holds_active_mask = HoldsMask::from_bits_truncate(b as u8);
+                },
+                persist_for_side: |s, b| {
+                    profile::update_holds_mask_for_side(
+                        s,
+                        HoldsMask::from_bits_truncate(b as u8),
+                    );
+                },
+                bit_for_choice: |i, r| {
+                    let w = r.choices.len().min(8);
+                    if i < w { Some(1u32 << i) } else { None }
+                },
+            }),
+        };
+        // Holds in production has 5 choices; bit_for_choice clamps to choices.len().min(8).
+        install_bitmask_row(
+            &mut state,
+            RowId::Holds,
+            binding,
+            &["Planted", "Floored", "Twister", "NoRolls", "ToRolls"],
+            3,
+        );
+        state.option_masks[P1].holds = HoldsMask::empty();
+        state.player_profiles[P1].holds_active_mask = HoldsMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(state.option_masks[P1].holds.bits(), 1u8 << 3);
+        assert_eq!(state.player_profiles[P1].holds_active_mask.bits(), 1u8 << 3);
+    }
+
+    #[test]
+    fn generic_toggle_accel_row_sets_bit_and_profile() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let binding = BitmaskBinding {
+            toggle: |_, _| {},
+            init: Some(BitmaskInit {
+                from_profile: |p| p.accel_effects_active_mask.bits() as u32,
+                get_active: |m| m.accel_effects.bits() as u32,
+                set_active: |m, b| m.accel_effects = AccelEffectsMask::from_bits_retain(b as u8),
+                cursor: CursorInit::FirstActiveBit,
+            }),
+            writeback: Some(BitmaskWriteback {
+                project_to_profile: |p, b| {
+                    p.accel_effects_active_mask = AccelEffectsMask::from_bits_truncate(b as u8);
+                },
+                persist_for_side: |s, b| {
+                    profile::update_accel_effects_mask_for_side(
+                        s,
+                        AccelEffectsMask::from_bits_truncate(b as u8),
+                    );
+                },
+                bit_for_choice: |i, r| {
+                    let w = r.choices.len().min(8);
+                    if i < w { Some(1u32 << i) } else { None }
+                },
+            }),
+        };
+        install_bitmask_row(
+            &mut state,
+            RowId::Accel,
+            binding,
+            &["Boost", "Brake", "Wave", "Expand", "Boomerang"],
+            1,
+        );
+        state.option_masks[P1].accel_effects = AccelEffectsMask::empty();
+        state.player_profiles[P1].accel_effects_active_mask = AccelEffectsMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(state.option_masks[P1].accel_effects.bits(), 1u8 << 1);
+        assert_eq!(
+            state.player_profiles[P1].accel_effects_active_mask.bits(),
+            1u8 << 1
+        );
+    }
+
+    #[test]
+    fn generic_toggle_visual_effects_row_sets_bit_and_profile() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let binding = BitmaskBinding {
+            toggle: |_, _| {},
+            init: Some(BitmaskInit {
+                from_profile: |p| p.visual_effects_active_mask.bits() as u32,
+                get_active: |m| m.visual_effects.bits() as u32,
+                set_active: |m, b| {
+                    m.visual_effects = VisualEffectsMask::from_bits_retain(b as u16)
+                },
+                cursor: CursorInit::FirstActiveBit,
+            }),
+            writeback: Some(BitmaskWriteback {
+                project_to_profile: |p, b| {
+                    p.visual_effects_active_mask = VisualEffectsMask::from_bits_truncate(b as u16);
+                },
+                persist_for_side: |s, b| {
+                    profile::update_visual_effects_mask_for_side(
+                        s,
+                        VisualEffectsMask::from_bits_truncate(b as u16),
+                    );
+                },
+                bit_for_choice: |i, _| if i < 10 { Some(1u32 << i) } else { None },
+            }),
+        };
+        install_bitmask_row(
+            &mut state,
+            RowId::Effect,
+            binding,
+            &[
+                "Drunk", "Dizzy", "Confusion", "Big", "Flip", "Invert", "Tornado", "Tipsy",
+                "Bumpy", "Beat",
+            ],
+            9,
+        );
+        state.option_masks[P1].visual_effects = VisualEffectsMask::empty();
+        state.player_profiles[P1].visual_effects_active_mask = VisualEffectsMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(state.option_masks[P1].visual_effects.bits(), 1u16 << 9);
+        assert_eq!(
+            state.player_profiles[P1].visual_effects_active_mask.bits(),
+            1u16 << 9
+        );
+    }
+
+    #[test]
+    fn generic_toggle_appearance_row_sets_bit_and_profile() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let binding = BitmaskBinding {
+            toggle: |_, _| {},
+            init: Some(BitmaskInit {
+                from_profile: |p| p.appearance_effects_active_mask.bits() as u32,
+                get_active: |m| m.appearance_effects.bits() as u32,
+                set_active: |m, b| {
+                    m.appearance_effects = AppearanceEffectsMask::from_bits_retain(b as u8)
+                },
+                cursor: CursorInit::FirstActiveBit,
+            }),
+            writeback: Some(BitmaskWriteback {
+                project_to_profile: |p, b| {
+                    p.appearance_effects_active_mask =
+                        AppearanceEffectsMask::from_bits_truncate(b as u8);
+                },
+                persist_for_side: |s, b| {
+                    profile::update_appearance_effects_mask_for_side(
+                        s,
+                        AppearanceEffectsMask::from_bits_truncate(b as u8),
+                    );
+                },
+                bit_for_choice: |i, r| {
+                    let w = r.choices.len().min(8);
+                    if i < w { Some(1u32 << i) } else { None }
+                },
+            }),
+        };
+        install_bitmask_row(
+            &mut state,
+            RowId::Appearance,
+            binding,
+            &["Hidden", "Sudden", "Stealth", "Blink", "RVanish"],
+            4,
+        );
+        state.option_masks[P1].appearance_effects = AppearanceEffectsMask::empty();
+        state.player_profiles[P1].appearance_effects_active_mask = AppearanceEffectsMask::empty();
+
+        let active = session_active_players();
+        handle_start_event(&mut state, &asset_manager, active, P1);
+
+        assert_eq!(state.option_masks[P1].appearance_effects.bits(), 1u8 << 4);
+        assert_eq!(
+            state.player_profiles[P1].appearance_effects_active_mask.bits(),
+            1u8 << 4
+        );
+    }
 }
