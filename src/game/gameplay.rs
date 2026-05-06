@@ -131,7 +131,7 @@ pub use self::input::{
 use self::input::{
     input_queue_cap, lane_is_pressed, process_input_edges, replay_edge_cap,
     sync_active_hold_pressed_state, tap_explosion_noteskin_for_player, tick_visual_effects,
-    trigger_receptor_glow_pulse,
+    trigger_receptor_glow_pulse, trigger_receptor_step_pulse,
 };
 use self::judging::{
     PlayerJudgmentTiming, build_final_note_hit_judgment, build_player_judgment_timing,
@@ -956,6 +956,15 @@ fn song_lua_hides_note_visual(state: &State, player: usize, column: usize, beat:
 }
 
 #[inline(always)]
+fn trigger_note_receptor_feedback(state: &mut State, player: usize, column: usize, beat: f32) {
+    if song_lua_hides_note_visual(state, player, column, beat) {
+        trigger_receptor_step_pulse(state, column);
+    } else {
+        trigger_receptor_glow_pulse(state, column);
+    }
+}
+
+#[inline(always)]
 fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_index: usize) {
     let Some((flash_note_indices, flash_count, flash_grade)) = ({
         let Some(row_entry) =
@@ -972,6 +981,7 @@ fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_in
         let note = &state.notes[note_index];
         let column = note.column;
         if song_lua_hides_note_visual(state, player, column, note.beat) {
+            trigger_receptor_step_pulse(state, column);
             continue;
         }
         trigger_tap_explosion(state, column, flash_grade);
@@ -7247,7 +7257,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
             );
 
             trigger_completed_row_tap_explosions(state, player, note_row_index);
-            trigger_receptor_glow_pulse(state, note_col);
+            let note_beat = state.notes[note_index].beat;
+            trigger_note_receptor_feedback(state, player, note_col, note_beat);
             if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
                 && matches!(
                     state.notes[note_index].note_type,
@@ -7339,7 +7350,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
             );
 
             trigger_completed_row_tap_explosions(state, player, note_row_index);
-            trigger_receptor_glow_pulse(state, note_col);
+            let note_beat = state.notes[idx].beat;
+            trigger_note_receptor_feedback(state, player, note_col, note_beat);
             if let Some(end_time_ns) = state.hold_end_time_cache_ns[idx]
                 && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
             {
@@ -7535,7 +7547,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
     );
 
     trigger_completed_row_tap_explosions(state, player, note_row_index);
-    trigger_receptor_glow_pulse(state, note_col);
+    trigger_note_receptor_feedback(state, player, note_col, note_beat);
     true
 }
 
@@ -8368,14 +8380,16 @@ mod tests {
         single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
         stage_music_cut, step_calories, step_stats_notefield_width,
         suppress_final_bad_rescore_visual, tick_mode_status_line, tick_visual_effects,
-        try_hit_crossed_mines_while_held, turn_option_bits, update_active_holds,
-        update_lane_input_slot, visible_notefield_time_ns,
+        trigger_completed_row_tap_explosions, trigger_note_receptor_feedback,
+        trigger_receptor_step_pulse, try_hit_crossed_mines_while_held, turn_option_bits,
+        update_active_holds, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
     use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
     use crate::game::parsing::notes::ParsedNote;
+    use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use crate::game::profile;
     use crate::game::song::SongData;
     use crate::game::timing::{
@@ -9933,6 +9947,76 @@ return Def.ActorFrame{}
         assert_eq!(info.result, MineResult::Avoided);
         assert_eq!(info.column, 2);
         assert_eq!(info.started_at_screen_s, 9.25);
+    }
+
+    #[test]
+    fn hidden_song_lua_tap_steps_receptor_without_core_flash() {
+        let mut state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let row_index = 48usize;
+        let column = 1usize;
+        trigger_receptor_step_pulse(&mut state, 0);
+        let supports_press_tween = state.receptor_glow_press_timers[0] > f32::EPSILON;
+        state.receptor_glow_press_timers.fill(0.0);
+        state.receptor_glow_timers.fill(0.0);
+        state.receptor_bop_timers.fill(0.0);
+        state.notes = vec![note_with_judgment(
+            column,
+            row_index,
+            NoteType::Tap,
+            JudgeGrade::Great,
+            0.0,
+        )];
+        state.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0)];
+        state.row_entries = vec![test_row_entry_with_times(
+            &state.notes,
+            &state.note_time_cache_ns,
+            row_index,
+            vec![0],
+        )];
+        state.row_map_cache = std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
+        state.row_map_cache[0][row_index] = 0;
+        state.song_lua_note_hides[0].push(SongLuaNoteHideWindow {
+            player: 0,
+            column,
+            start_beat: 0.0,
+            end_beat: 2.0,
+        });
+
+        trigger_completed_row_tap_explosions(&mut state, 0, row_index);
+        let beat = state.notes[0].beat;
+        trigger_note_receptor_feedback(&mut state, 0, column, beat);
+
+        assert!(state.tap_explosions[column].is_none());
+        assert!(state.receptor_bop_timers[column] > 0.0);
+        if supports_press_tween {
+            assert!(state.receptor_glow_press_timers[column] > 0.0);
+            assert_eq!(state.receptor_glow_timers[column], 0.0);
+        }
+    }
+
+    #[test]
+    fn synthetic_receptor_step_survives_until_lift() {
+        let mut state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let column = 0usize;
+
+        trigger_receptor_step_pulse(&mut state, column);
+        let started_press = state.receptor_glow_press_timers[column];
+        if started_press <= f32::EPSILON {
+            assert!(state.receptor_bop_timers[column] > 0.0);
+            return;
+        }
+        tick_visual_effects(&mut state, 0.01);
+
+        if started_press > 0.01 {
+            assert!(state.receptor_glow_press_timers[column] > 0.0);
+            assert!(state.receptor_glow_press_timers[column] < started_press);
+        }
+        tick_visual_effects(&mut state, started_press.max(0.01));
+
+        assert_eq!(state.receptor_glow_press_timers[column], 0.0);
+        assert!(state.receptor_glow_timers[column] > 0.0);
     }
 
     #[test]

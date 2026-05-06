@@ -27,6 +27,7 @@ use crate::game::note::{HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelEffectMode, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
 };
+use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
 use crate::game::{
     gameplay::{ActiveHold, PlayerRuntime, SongTimeNs, State},
     profile, scores,
@@ -3561,13 +3562,22 @@ fn hold_overlaps_visible_window(
 }
 
 #[inline(always)]
-fn song_lua_hides_note(state: &State, player: usize, local_col: usize, beat: f32) -> bool {
+fn song_lua_hides_note_window(
+    windows: &[SongLuaNoteHideWindow],
+    local_col: usize,
+    beat: f32,
+) -> bool {
     const EPS: f32 = 1.0e-4;
-    state.song_lua_note_hides[player].iter().any(|window| {
+    windows.iter().any(|window| {
         window.column == local_col
             && beat + EPS >= window.start_beat
             && beat <= window.end_beat + EPS
     })
+}
+
+#[inline(always)]
+fn song_lua_hides_note(state: &State, player: usize, local_col: usize, beat: f32) -> bool {
+    song_lua_hides_note_window(&state.song_lua_note_hides[player], local_col, beat)
 }
 
 #[inline(always)]
@@ -4397,6 +4407,8 @@ pub fn build_bundles(
         // Receptors + glow
         for (i, &receptor_y_lane) in column_receptor_ys.iter().take(num_cols).enumerate() {
             let col = col_start + i;
+            let receptor_hidden_by_song_lua =
+                song_lua_hides_note(state, player_idx, i, current_beat);
             let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual, i);
             let receptor_center = receptor_row_center(
                 playfield_center_x,
@@ -4409,7 +4421,10 @@ pub fn build_bundles(
                 &invert_distances[..num_cols],
                 &tornado_bounds[..num_cols],
             );
-            if !profile.hide_targets && receptor_alpha > f32::EPSILON {
+            if !receptor_hidden_by_song_lua
+                && !profile.hide_targets
+                && receptor_alpha > f32::EPSILON
+            {
                 let bop_timer = state.receptor_bop_timers[col];
                 let bop_zoom = if bop_timer > 0.0 {
                     let t = (0.11 - bop_timer) / 0.11;
@@ -4484,7 +4499,9 @@ pub fn build_bundles(
                     ));
                 }
             }
-            let hold_slot = if let Some(active) = state.active_holds[col]
+            let hold_slot = if receptor_hidden_by_song_lua {
+                None
+            } else if let Some(active) = state.active_holds[col]
                 .as_ref()
                 .filter(|active| active_hold_is_engaged(active))
             {
@@ -4605,7 +4622,8 @@ pub fn build_bundles(
                     }
                 }
             }
-            if !profile.hide_targets
+            if !receptor_hidden_by_song_lua
+                && !profile.hide_targets
                 && receptor_alpha > f32::EPSILON
                 && let Some((alpha, zoom)) = receptor_glow_visual_for_col(state, col)
                 && let Some(glow_slot) = receptor_ns
@@ -4690,6 +4708,9 @@ pub fn build_bundles(
             .iter()
             .enumerate()
         {
+            if song_lua_hides_note(state, player_idx, i, current_beat) {
+                continue;
+            }
             if let Some(active) = active_opt.as_ref()
                 && let Some(tap_explosion_ns) = tap_explosion_ns
                 && let Some(explosion) = tap_explosion_ns.tap_explosion_for_col(i, active.window)
@@ -8267,8 +8288,8 @@ mod tests {
         move_x_extra, move_y_extra, note_alpha, note_glow, note_slot_base_size,
         note_world_z_for_bumpy, note_x_extra, offset_center, predictive_itg_percents,
         pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts, receptor_row_center,
-        scroll_receptor_y, tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col,
-        tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
+        scroll_receptor_y, song_lua_hides_note_window, tap_judgment_rows, tap_part_for_note_type,
+        tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
         zmod_subtractive_counter_state,
     };
     use crate::engine::gfx::BlendMode;
@@ -8284,6 +8305,7 @@ mod tests {
     use crate::game::parsing::noteskin::{
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
+    use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use crate::game::profile;
     use crate::game::timing::{TimeSignatureSegment, beat_to_note_row};
     use std::sync::Arc;
@@ -8532,6 +8554,21 @@ mod tests {
     fn receptor_glow_draws_under_hold_body() {
         assert!(Z_RECEPTOR < Z_HOLD_BODY);
         assert!(Z_HOLD_GLOW < Z_HOLD_BODY);
+    }
+
+    #[test]
+    fn song_lua_zoom_hide_window_covers_receptor_beat() {
+        let windows = [SongLuaNoteHideWindow {
+            player: 0,
+            column: 2,
+            start_beat: 40.0,
+            end_beat: 44.0,
+        }];
+
+        assert!(song_lua_hides_note_window(&windows, 2, 40.0));
+        assert!(song_lua_hides_note_window(&windows, 2, 44.0));
+        assert!(!song_lua_hides_note_window(&windows, 1, 42.0));
+        assert!(!song_lua_hides_note_window(&windows, 2, 44.01));
     }
 
     #[test]

@@ -275,6 +275,15 @@ pub(super) fn trigger_receptor_glow_pulse(state: &mut State, col: usize) {
 }
 
 #[inline(always)]
+pub(super) fn trigger_receptor_step_pulse(state: &mut State, col: usize) {
+    if col >= state.num_cols {
+        return;
+    }
+    start_receptor_glow_press(state, col);
+    state.receptor_bop_timers[col] = state.receptor_bop_timers[col].max(0.11);
+}
+
+#[inline(always)]
 fn start_receptor_glow_press(state: &mut State, col: usize) {
     let behavior = receptor_glow_behavior_for_col(state, col);
     state.receptor_glow_timers[col] = 0.0;
@@ -305,12 +314,12 @@ pub fn receptor_glow_visual_for_col(state: &State, col: usize) -> Option<(f32, f
         return None;
     }
     let behavior = receptor_glow_behavior_for_col(state, col);
+    if state.receptor_glow_press_timers[col] > f32::EPSILON
+        && behavior.press_duration > f32::EPSILON
+    {
+        return Some(behavior.sample_press(state.receptor_glow_press_timers[col]));
+    }
     if lane_is_pressed(state, col) {
-        if state.receptor_glow_press_timers[col] > f32::EPSILON
-            && behavior.press_duration > f32::EPSILON
-        {
-            return Some(behavior.sample_press(state.receptor_glow_press_timers[col]));
-        }
         return Some((behavior.press_alpha_end, behavior.press_zoom_end));
     }
     if state.receptor_glow_timers[col] > f32::EPSILON {
@@ -820,8 +829,13 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
             state.receptor_glow_timers[col] = 0.0;
             state.receptor_glow_press_timers[col] =
                 (state.receptor_glow_press_timers[col] - delta_time).max(0.0);
+        } else if state.receptor_glow_press_timers[col] > f32::EPSILON {
+            if state.receptor_glow_press_timers[col] <= delta_time {
+                release_receptor_glow(state, col);
+            } else {
+                state.receptor_glow_press_timers[col] -= delta_time;
+            }
         } else {
-            state.receptor_glow_press_timers[col] = 0.0;
             state.receptor_glow_timers[col] =
                 (state.receptor_glow_timers[col] - delta_time).max(0.0);
         }
