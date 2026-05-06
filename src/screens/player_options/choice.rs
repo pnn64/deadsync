@@ -1,9 +1,6 @@
 use super::*;
 use crate::engine::audio;
-use crate::game::profile::{
-    self as gp, AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
-    PlayerSide, RemoveMask, VisualEffectsMask,
-};
+use crate::game::profile::{self as gp, ErrorBarMask, PlayerSide};
 
 // ============================ Dispatchers ============================
 // Dispatch reads `row.behavior` to decide how to apply input.
@@ -149,11 +146,76 @@ pub(super) fn dispatch_behavior_delta(
 /// `toggle_*_row` helpers already play their own SFX and sync visibility.
 /// Returns true if the dispatcher handled the row (Bitmask behavior), false
 /// otherwise.
+///
+/// When the binding declares a `writeback` (and `init`), the row is routed
+/// through the generic `toggle_bitmask_row_generic` path; otherwise the
+/// hand-rolled `toggle` fn pointer is invoked.
 pub(super) fn dispatch_behavior_toggle(state: &mut State, player_idx: usize, id: RowId) -> bool {
     let Some(RowBehavior::Bitmask(b)) = state.pane().row_map.get(id).map(|r| r.behavior) else {
         return false;
     };
-    (b.toggle)(state, player_idx);
+    if b.writeback.is_some() && b.init.is_some() {
+        toggle_bitmask_row_generic(state, player_idx, id);
+    } else {
+        (b.toggle)(state, player_idx);
+    }
+    true
+}
+
+/// Generic bitmask toggle for `BitmaskBinding`s that declare both `init`
+/// and `writeback`. Verifies the focused row matches `id`, computes the
+/// target bit via `writeback.bit_for_choice`, flips it through
+/// `init.get_active`/`init.set_active`, projects the resulting bits onto
+/// the in-memory profile via `writeback.project_to_profile`, and
+/// (conditionally) persists them for the active side via
+/// `writeback.persist_for_side`. Plays the change-value SFX on success.
+///
+/// Returns `true` when a toggle was applied; `false` when the row was not
+/// focused, the binding lacked the required contracts, or the choice
+/// index produced no bit.
+pub(super) fn toggle_bitmask_row_generic(
+    state: &mut State,
+    player_idx: usize,
+    id: RowId,
+) -> bool {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.pane().selected_row[idx];
+    let focused_id = match state.pane().row_map.display_order().get(row_index) {
+        Some(&fid) => fid,
+        None => return false,
+    };
+    if focused_id != id {
+        return false;
+    }
+
+    let (init, writeback) = match state.pane().row_map.get(id).map(|r| r.behavior) {
+        Some(RowBehavior::Bitmask(b)) => match (b.init, b.writeback) {
+            (Some(i), Some(w)) => (i, w),
+            _ => return false,
+        },
+        _ => return false,
+    };
+
+    let row = state.pane().row_map.row(id);
+    let choice_index = row.selected_choice_index[idx];
+    let bit = match (writeback.bit_for_choice)(choice_index, row) {
+        Some(b) if b != 0 => b,
+        _ => return false,
+    };
+
+    let cur = (init.get_active)(&state.option_masks[idx]);
+    let new_bits = cur ^ bit;
+    (init.set_active)(&mut state.option_masks[idx], new_bits);
+    let stored = (init.get_active)(&state.option_masks[idx]);
+
+    (writeback.project_to_profile)(&mut state.player_profiles[idx], stored);
+
+    let (should_persist, side) = persist_ctx(idx);
+    if should_persist {
+        (writeback.persist_for_side)(side, stored);
+    }
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
     true
 }
 
@@ -389,365 +451,6 @@ pub(super) fn toggle_hide_row(state: &mut State, player_idx: usize) {
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
-pub(super) fn toggle_insert_row(state: &mut State, player_idx: usize) {
-    let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state
-        .pane()
-        .row_map
-        .display_order()
-        .get(row_index)
-        .and_then(|&id| state.pane().row_map.get(id))
-    {
-        if row.id != RowId::Insert {
-            return;
-        }
-    } else {
-        return;
-    }
-
-    let choice_index = state
-        .pane()
-        .row_map
-        .row(state.pane().row_map.id_at(row_index))
-        .selected_choice_index[idx];
-    let bit = if choice_index < 7 {
-        1u8 << (choice_index as u8)
-    } else {
-        0
-    };
-    if bit == 0 {
-        return;
-    }
-
-    let mut bits = state.option_masks[idx].insert.bits();
-    if (bits & bit) != 0 {
-        bits &= !bit;
-    } else {
-        bits |= bit;
-    }
-    let mask = InsertMask::from_bits_truncate(bits);
-    state.option_masks[idx].insert = mask;
-    state.player_profiles[idx].insert_active_mask = mask;
-
-    let play_style = crate::game::profile::get_session_play_style();
-    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
-        || idx == session_persisted_player_idx();
-    if should_persist {
-        let side = if idx == P1 {
-            crate::game::profile::PlayerSide::P1
-        } else {
-            crate::game::profile::PlayerSide::P2
-        };
-        crate::game::profile::update_insert_mask_for_side(side, mask);
-    }
-
-    audio::play_sfx("assets/sounds/change_value.ogg");
-}
-
-pub(super) fn toggle_remove_row(state: &mut State, player_idx: usize) {
-    let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state
-        .pane()
-        .row_map
-        .display_order()
-        .get(row_index)
-        .and_then(|&id| state.pane().row_map.get(id))
-    {
-        if row.id != RowId::Remove {
-            return;
-        }
-    } else {
-        return;
-    }
-
-    let choice_index = state
-        .pane()
-        .row_map
-        .row(state.pane().row_map.id_at(row_index))
-        .selected_choice_index[idx];
-    let bit = if choice_index < 8 {
-        1u8 << (choice_index as u8)
-    } else {
-        0
-    };
-    if bit == 0 {
-        return;
-    }
-
-    let mut bits = state.option_masks[idx].remove.bits();
-    if (bits & bit) != 0 {
-        bits &= !bit;
-    } else {
-        bits |= bit;
-    }
-    let mask = RemoveMask::from_bits_truncate(bits);
-    state.option_masks[idx].remove = mask;
-    state.player_profiles[idx].remove_active_mask = mask;
-
-    let play_style = crate::game::profile::get_session_play_style();
-    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
-        || idx == session_persisted_player_idx();
-    if should_persist {
-        let side = if idx == P1 {
-            crate::game::profile::PlayerSide::P1
-        } else {
-            crate::game::profile::PlayerSide::P2
-        };
-        crate::game::profile::update_remove_mask_for_side(side, mask);
-    }
-
-    audio::play_sfx("assets/sounds/change_value.ogg");
-}
-
-pub(super) fn toggle_holds_row(state: &mut State, player_idx: usize) {
-    let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state
-        .pane()
-        .row_map
-        .display_order()
-        .get(row_index)
-        .and_then(|&id| state.pane().row_map.get(id))
-    {
-        if row.id != RowId::Holds {
-            return;
-        }
-    } else {
-        return;
-    }
-
-    let choice_index = state
-        .pane()
-        .row_map
-        .row(state.pane().row_map.id_at(row_index))
-        .selected_choice_index[idx];
-    let bit = if choice_index
-        < state
-            .pane()
-            .row_map
-            .row(state.pane().row_map.id_at(row_index))
-            .choices
-            .len()
-            .min(u8::BITS as usize)
-    {
-        1u8 << (choice_index as u8)
-    } else {
-        0
-    };
-    if bit == 0 {
-        return;
-    }
-
-    let mut bits = state.option_masks[idx].holds.bits();
-    if (bits & bit) != 0 {
-        bits &= !bit;
-    } else {
-        bits |= bit;
-    }
-    let mask = HoldsMask::from_bits_truncate(bits);
-    state.option_masks[idx].holds = mask;
-    state.player_profiles[idx].holds_active_mask = mask;
-
-    let play_style = crate::game::profile::get_session_play_style();
-    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
-        || idx == session_persisted_player_idx();
-    if should_persist {
-        let side = if idx == P1 {
-            crate::game::profile::PlayerSide::P1
-        } else {
-            crate::game::profile::PlayerSide::P2
-        };
-        crate::game::profile::update_holds_mask_for_side(side, mask);
-    }
-
-    audio::play_sfx("assets/sounds/change_value.ogg");
-}
-
-pub(super) fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
-    let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state
-        .pane()
-        .row_map
-        .display_order()
-        .get(row_index)
-        .and_then(|&id| state.pane().row_map.get(id))
-    {
-        if row.id != RowId::Accel {
-            return;
-        }
-    } else {
-        return;
-    }
-
-    let choice_index = state
-        .pane()
-        .row_map
-        .row(state.pane().row_map.id_at(row_index))
-        .selected_choice_index[idx];
-    let bit = if choice_index
-        < state
-            .pane()
-            .row_map
-            .row(state.pane().row_map.id_at(row_index))
-            .choices
-            .len()
-            .min(u8::BITS as usize)
-    {
-        1u8 << (choice_index as u8)
-    } else {
-        0
-    };
-    if bit == 0 {
-        return;
-    }
-
-    let mut bits = state.option_masks[idx].accel_effects.bits();
-    if (bits & bit) != 0 {
-        bits &= !bit;
-    } else {
-        bits |= bit;
-    }
-    let mask = AccelEffectsMask::from_bits_truncate(bits);
-    state.option_masks[idx].accel_effects = mask;
-    state.player_profiles[idx].accel_effects_active_mask = mask;
-
-    let play_style = crate::game::profile::get_session_play_style();
-    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
-        || idx == session_persisted_player_idx();
-    if should_persist {
-        let side = if idx == P1 {
-            crate::game::profile::PlayerSide::P1
-        } else {
-            crate::game::profile::PlayerSide::P2
-        };
-        crate::game::profile::update_accel_effects_mask_for_side(side, mask);
-    }
-
-    audio::play_sfx("assets/sounds/change_value.ogg");
-}
-
-pub(super) fn toggle_visual_effects_row(state: &mut State, player_idx: usize) {
-    let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state
-        .pane()
-        .row_map
-        .display_order()
-        .get(row_index)
-        .and_then(|&id| state.pane().row_map.get(id))
-    {
-        if row.id != RowId::Effect {
-            return;
-        }
-    } else {
-        return;
-    }
-
-    let choice_index = state
-        .pane()
-        .row_map
-        .row(state.pane().row_map.id_at(row_index))
-        .selected_choice_index[idx];
-    let bit = if choice_index < 10 {
-        1u16 << (choice_index as u16)
-    } else {
-        0
-    };
-    if bit == 0 {
-        return;
-    }
-
-    let mut bits = state.option_masks[idx].visual_effects.bits();
-    if (bits & bit) != 0 {
-        bits &= !bit;
-    } else {
-        bits |= bit;
-    }
-    let mask = VisualEffectsMask::from_bits_truncate(bits);
-    state.option_masks[idx].visual_effects = mask;
-    state.player_profiles[idx].visual_effects_active_mask = mask;
-
-    let play_style = crate::game::profile::get_session_play_style();
-    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
-        || idx == session_persisted_player_idx();
-    if should_persist {
-        let side = if idx == P1 {
-            crate::game::profile::PlayerSide::P1
-        } else {
-            crate::game::profile::PlayerSide::P2
-        };
-        crate::game::profile::update_visual_effects_mask_for_side(side, mask);
-    }
-
-    audio::play_sfx("assets/sounds/change_value.ogg");
-}
-
-pub(super) fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
-    let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.pane().selected_row[idx];
-    if let Some(row) = state
-        .pane()
-        .row_map
-        .display_order()
-        .get(row_index)
-        .and_then(|&id| state.pane().row_map.get(id))
-    {
-        if row.id != RowId::Appearance {
-            return;
-        }
-    } else {
-        return;
-    }
-
-    let choice_index = state
-        .pane()
-        .row_map
-        .row(state.pane().row_map.id_at(row_index))
-        .selected_choice_index[idx];
-    let bit = if choice_index
-        < state
-            .pane()
-            .row_map
-            .row(state.pane().row_map.id_at(row_index))
-            .choices
-            .len()
-            .min(u8::BITS as usize)
-    {
-        1u8 << (choice_index as u8)
-    } else {
-        0
-    };
-    if bit == 0 {
-        return;
-    }
-
-    let mut bits = state.option_masks[idx].appearance_effects.bits();
-    if (bits & bit) != 0 {
-        bits &= !bit;
-    } else {
-        bits |= bit;
-    }
-    let mask = AppearanceEffectsMask::from_bits_truncate(bits);
-    state.option_masks[idx].appearance_effects = mask;
-    state.player_profiles[idx].appearance_effects_active_mask = mask;
-
-    let play_style = crate::game::profile::get_session_play_style();
-    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
-        || idx == session_persisted_player_idx();
-    if should_persist {
-        let side = if idx == P1 {
-            crate::game::profile::PlayerSide::P1
-        } else {
-            crate::game::profile::PlayerSide::P2
-        };
-        crate::game::profile::update_appearance_effects_mask_for_side(side, mask);
-    }
-
-    audio::play_sfx("assets/sounds/change_value.ogg");
-}
 
 pub(super) fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);

@@ -1,5 +1,5 @@
 use super::super::row::index_binding;
-use super::super::row::{BitmaskInit, CursorInit};
+use super::super::row::{BitmaskInit, BitmaskWriteback, CursorInit};
 use super::*;
 use crate::game::profile as gp;
 use crate::game::profile::{
@@ -21,8 +21,31 @@ const HIDE_LIGHT_TYPE: ChoiceBinding<usize> = index_binding!(
     false
 );
 
+/// Bit selector used by every uncommon-pane mask row except `Insert`: pick
+/// the bit at `choice_index` if it fits in the row's choice list, capped at
+/// `u8::BITS` to mirror the legacy `toggle_*_row` widths.
+#[inline]
+fn bit_choices_min_u8(choice_index: usize, row: &Row) -> Option<u32> {
+    let width = row.choices.len().min(u8::BITS as usize);
+    if choice_index < width {
+        Some(1u32 << choice_index)
+    } else {
+        None
+    }
+}
+
+/// Fixed-width bit selector. `Insert` clamps to 7, `Effect` to 10, etc.
+#[inline]
+fn bit_fixed<const N: usize>(choice_index: usize, _row: &Row) -> Option<u32> {
+    if choice_index < N {
+        Some(1u32 << choice_index)
+    } else {
+        None
+    }
+}
+
 const INSERT: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_insert_row,
+    toggle: |_, _| {},
     init: Some(BitmaskInit {
         from_profile: |p| p.insert_active_mask.bits() as u32,
         get_active: |m| m.insert.bits() as u32,
@@ -36,9 +59,18 @@ const INSERT: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
+    writeback: Some(BitmaskWriteback {
+        project_to_profile: |p, b| {
+            p.insert_active_mask = InsertMask::from_bits_truncate(b as u8);
+        },
+        persist_for_side: |s, b| {
+            gp::update_insert_mask_for_side(s, InsertMask::from_bits_truncate(b as u8));
+        },
+        bit_for_choice: bit_fixed::<7>,
+    }),
 };
 const REMOVE: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_remove_row,
+    toggle: |_, _| {},
     init: Some(BitmaskInit {
         from_profile: |p| p.remove_active_mask.bits() as u32,
         get_active: |m| m.remove.bits() as u32,
@@ -52,9 +84,18 @@ const REMOVE: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
+    writeback: Some(BitmaskWriteback {
+        project_to_profile: |p, b| {
+            p.remove_active_mask = RemoveMask::from_bits_truncate(b as u8);
+        },
+        persist_for_side: |s, b| {
+            gp::update_remove_mask_for_side(s, RemoveMask::from_bits_truncate(b as u8));
+        },
+        bit_for_choice: bit_fixed::<8>,
+    }),
 };
 const HOLDS: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_holds_row,
+    toggle: |_, _| {},
     init: Some(BitmaskInit {
         from_profile: |p| p.holds_active_mask.bits() as u32,
         get_active: |m| m.holds.bits() as u32,
@@ -68,9 +109,18 @@ const HOLDS: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
+    writeback: Some(BitmaskWriteback {
+        project_to_profile: |p, b| {
+            p.holds_active_mask = HoldsMask::from_bits_truncate(b as u8);
+        },
+        persist_for_side: |s, b| {
+            gp::update_holds_mask_for_side(s, HoldsMask::from_bits_truncate(b as u8));
+        },
+        bit_for_choice: bit_choices_min_u8,
+    }),
 };
 const ACCEL: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_accel_effects_row,
+    toggle: |_, _| {},
     init: Some(BitmaskInit {
         from_profile: |p| p.accel_effects_active_mask.bits() as u32,
         get_active: |m| m.accel_effects.bits() as u32,
@@ -84,9 +134,21 @@ const ACCEL: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
+    writeback: Some(BitmaskWriteback {
+        project_to_profile: |p, b| {
+            p.accel_effects_active_mask = AccelEffectsMask::from_bits_truncate(b as u8);
+        },
+        persist_for_side: |s, b| {
+            gp::update_accel_effects_mask_for_side(
+                s,
+                AccelEffectsMask::from_bits_truncate(b as u8),
+            );
+        },
+        bit_for_choice: bit_choices_min_u8,
+    }),
 };
 const EFFECT: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_visual_effects_row,
+    toggle: |_, _| {},
     init: Some(BitmaskInit {
         from_profile: |p| p.visual_effects_active_mask.bits() as u32,
         get_active: |m| m.visual_effects.bits() as u32,
@@ -100,9 +162,21 @@ const EFFECT: BitmaskBinding = BitmaskBinding {
         },
         cursor: CursorInit::FirstActiveBit,
     }),
+    writeback: Some(BitmaskWriteback {
+        project_to_profile: |p, b| {
+            p.visual_effects_active_mask = VisualEffectsMask::from_bits_truncate(b as u16);
+        },
+        persist_for_side: |s, b| {
+            gp::update_visual_effects_mask_for_side(
+                s,
+                VisualEffectsMask::from_bits_truncate(b as u16),
+            );
+        },
+        bit_for_choice: bit_fixed::<10>,
+    }),
 };
 const APPEARANCE: BitmaskBinding = BitmaskBinding {
-    toggle: super::super::choice::toggle_appearance_effects_row,
+    toggle: |_, _| {},
     init: Some(BitmaskInit {
         from_profile: |p| p.appearance_effects_active_mask.bits() as u32,
         get_active: |m| m.appearance_effects.bits() as u32,
@@ -115,6 +189,18 @@ const APPEARANCE: BitmaskBinding = BitmaskBinding {
             m.appearance_effects = AppearanceEffectsMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
+    }),
+    writeback: Some(BitmaskWriteback {
+        project_to_profile: |p, b| {
+            p.appearance_effects_active_mask = AppearanceEffectsMask::from_bits_truncate(b as u8);
+        },
+        persist_for_side: |s, b| {
+            gp::update_appearance_effects_mask_for_side(
+                s,
+                AppearanceEffectsMask::from_bits_truncate(b as u8),
+            );
+        },
+        bit_for_choice: bit_choices_min_u8,
     }),
 };
 
