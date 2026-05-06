@@ -1,5 +1,4 @@
-use super::super::row::index_binding;
-use super::super::row::{BitMapping, BitmaskInit, BitmaskWriteback, CursorInit};
+use super::super::row::{index_binding, simple_bitmask_binding};
 use super::*;
 use crate::game::profile as gp;
 use crate::game::profile::{
@@ -21,159 +20,54 @@ const HIDE_LIGHT_TYPE: ChoiceBinding<usize> = index_binding!(
     false
 );
 
-const INSERT: BitmaskBinding = BitmaskBinding::Generic {
-    init: BitmaskInit {
-        from_profile: |p| p.insert_active_mask.bits() as u32,
-        get_active: |m| m.insert.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u8::MAX as u32),
-                0,
-                "InsertMask init bits exceed u8 width"
-            );
-            m.insert = InsertMask::from_bits_retain(b as u8);
-        },
-        cursor: CursorInit::FirstActiveBit,
-    },
-    writeback: BitmaskWriteback {
-        project_to_profile: |p, b| {
-            p.insert_active_mask = InsertMask::from_bits_truncate(b as u8);
-        },
-        persist_for_side: |s, b| {
-            gp::update_insert_mask_for_side(s, InsertMask::from_bits_truncate(b as u8));
-        },
-        bit_mapping: BitMapping::Sequential { width: 7 },
-    },
-};
-const REMOVE: BitmaskBinding = BitmaskBinding::Generic {
-    init: BitmaskInit {
-        from_profile: |p| p.remove_active_mask.bits() as u32,
-        get_active: |m| m.remove.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u8::MAX as u32),
-                0,
-                "RemoveMask init bits exceed u8 width"
-            );
-            m.remove = RemoveMask::from_bits_retain(b as u8);
-        },
-        cursor: CursorInit::FirstActiveBit,
-    },
-    writeback: BitmaskWriteback {
-        project_to_profile: |p, b| {
-            p.remove_active_mask = RemoveMask::from_bits_truncate(b as u8);
-        },
-        persist_for_side: |s, b| {
-            gp::update_remove_mask_for_side(s, RemoveMask::from_bits_truncate(b as u8));
-        },
-        bit_mapping: BitMapping::Sequential { width: 8 },
-    },
-};
-const HOLDS: BitmaskBinding = BitmaskBinding::Generic {
-    init: BitmaskInit {
-        from_profile: |p| p.holds_active_mask.bits() as u32,
-        get_active: |m| m.holds.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u8::MAX as u32),
-                0,
-                "HoldsMask init bits exceed u8 width"
-            );
-            m.holds = HoldsMask::from_bits_retain(b as u8);
-        },
-        cursor: CursorInit::FirstActiveBit,
-    },
-    writeback: BitmaskWriteback {
-        project_to_profile: |p, b| {
-            p.holds_active_mask = HoldsMask::from_bits_truncate(b as u8);
-        },
-        persist_for_side: |s, b| {
-            gp::update_holds_mask_for_side(s, HoldsMask::from_bits_truncate(b as u8));
-        },
-        bit_mapping: BitMapping::Sequential { width: 5 },
-    },
-};
-const ACCEL: BitmaskBinding = BitmaskBinding::Generic {
-    init: BitmaskInit {
-        from_profile: |p| p.accel_effects_active_mask.bits() as u32,
-        get_active: |m| m.accel_effects.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u8::MAX as u32),
-                0,
-                "AccelEffectsMask init bits exceed u8 width",
-            );
-            m.accel_effects = AccelEffectsMask::from_bits_retain(b as u8);
-        },
-        cursor: CursorInit::FirstActiveBit,
-    },
-    writeback: BitmaskWriteback {
-        project_to_profile: |p, b| {
-            p.accel_effects_active_mask = AccelEffectsMask::from_bits_truncate(b as u8);
-        },
-        persist_for_side: |s, b| {
-            gp::update_accel_effects_mask_for_side(
-                s,
-                AccelEffectsMask::from_bits_truncate(b as u8),
-            );
-        },
-        bit_mapping: BitMapping::Sequential { width: 5 },
-    },
-};
-const EFFECT: BitmaskBinding = BitmaskBinding::Generic {
-    init: BitmaskInit {
-        from_profile: |p| p.visual_effects_active_mask.bits() as u32,
-        get_active: |m| m.visual_effects.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u16::MAX as u32),
-                0,
-                "VisualEffectsMask init bits exceed u16 width",
-            );
-            m.visual_effects = VisualEffectsMask::from_bits_retain(b as u16);
-        },
-        cursor: CursorInit::FirstActiveBit,
-    },
-    writeback: BitmaskWriteback {
-        project_to_profile: |p, b| {
-            p.visual_effects_active_mask = VisualEffectsMask::from_bits_truncate(b as u16);
-        },
-        persist_for_side: |s, b| {
-            gp::update_visual_effects_mask_for_side(
-                s,
-                VisualEffectsMask::from_bits_truncate(b as u16),
-            );
-        },
-        bit_mapping: BitMapping::Sequential { width: 10 },
-    },
-};
-const APPEARANCE: BitmaskBinding = BitmaskBinding::Generic {
-    init: BitmaskInit {
-        from_profile: |p| p.appearance_effects_active_mask.bits() as u32,
-        get_active: |m| m.appearance_effects.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u8::MAX as u32),
-                0,
-                "AppearanceEffectsMask init bits exceed u8 width",
-            );
-            m.appearance_effects = AppearanceEffectsMask::from_bits_retain(b as u8);
-        },
-        cursor: CursorInit::FirstActiveBit,
-    },
-    writeback: BitmaskWriteback {
-        project_to_profile: |p, b| {
-            p.appearance_effects_active_mask = AppearanceEffectsMask::from_bits_truncate(b as u8);
-        },
-        persist_for_side: |s, b| {
-            gp::update_appearance_effects_mask_for_side(
-                s,
-                AppearanceEffectsMask::from_bits_truncate(b as u8),
-            );
-        },
-        bit_mapping: BitMapping::Sequential { width: 5 },
-    },
-};
+const INSERT: BitmaskBinding = simple_bitmask_binding!(
+    mask = InsertMask,
+    bits = u8,
+    state_field = insert,
+    profile_field = insert_active_mask,
+    persist = gp::update_insert_mask_for_side,
+    width = 7,
+);
+const REMOVE: BitmaskBinding = simple_bitmask_binding!(
+    mask = RemoveMask,
+    bits = u8,
+    state_field = remove,
+    profile_field = remove_active_mask,
+    persist = gp::update_remove_mask_for_side,
+    width = 8,
+);
+const HOLDS: BitmaskBinding = simple_bitmask_binding!(
+    mask = HoldsMask,
+    bits = u8,
+    state_field = holds,
+    profile_field = holds_active_mask,
+    persist = gp::update_holds_mask_for_side,
+    width = 5,
+);
+const ACCEL: BitmaskBinding = simple_bitmask_binding!(
+    mask = AccelEffectsMask,
+    bits = u8,
+    state_field = accel_effects,
+    profile_field = accel_effects_active_mask,
+    persist = gp::update_accel_effects_mask_for_side,
+    width = 5,
+);
+const EFFECT: BitmaskBinding = simple_bitmask_binding!(
+    mask = VisualEffectsMask,
+    bits = u16,
+    state_field = visual_effects,
+    profile_field = visual_effects_active_mask,
+    persist = gp::update_visual_effects_mask_for_side,
+    width = 10,
+);
+const APPEARANCE: BitmaskBinding = simple_bitmask_binding!(
+    mask = AppearanceEffectsMask,
+    bits = u8,
+    state_field = appearance_effects,
+    profile_field = appearance_effects_active_mask,
+    persist = gp::update_appearance_effects_mask_for_side,
+    width = 5,
+);
 
 pub(super) fn build_uncommon_rows(return_screen: Screen) -> RowMap {
     let mut b = RowBuilder::new();

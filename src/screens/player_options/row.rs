@@ -510,6 +510,76 @@ macro_rules! index_binding {
 
 pub(crate) use index_binding;
 
+/// Build a `BitmaskBinding::Generic` for the common case of a mask row that:
+///
+/// - Reads/writes a single `bitflags!` mask field on `Profile` (`profile_field`).
+/// - Reads/writes the matching field on `PlayerOptionMasks` (`state_field`).
+/// - Persists via a `(PlayerSide, MaskType) -> ()` updater (`persist`).
+/// - Exposes choices `0..width` mapped 1:1 to bits `0..width`
+///   (`BitMapping::Sequential { width }`).
+/// - Initializes its cursor at the first active bit.
+///
+/// The macro expands to a `BitmaskBinding::Generic { init, writeback }` const
+/// expression, suitable for `const FOO: BitmaskBinding = ...`. The bit width
+/// appears literally at the call site, so "what is the bitmapping for this
+/// row?" is answered by reading one declaration.
+///
+/// For rows that need fan-out, derived state, visibility sync, or a non-FAB
+/// cursor (e.g. `FAPlusOptions` with `CursorInit::Fixed(0)`), construct the
+/// binding by hand instead of using this macro.
+///
+/// # Example
+///
+/// ```ignore
+/// const INSERT: BitmaskBinding = simple_bitmask_binding!(
+///     mask = InsertMask,
+///     bits = u8,
+///     state_field = insert,
+///     profile_field = insert_active_mask,
+///     persist = gp::update_insert_mask_for_side,
+///     width = 7,
+/// );
+/// ```
+macro_rules! simple_bitmask_binding {
+    (
+        mask = $mask_ty:ty,
+        bits = $bits_ty:ty,
+        state_field = $state_field:ident,
+        profile_field = $profile_field:ident,
+        persist = $persist:path,
+        width = $width:expr $(,)?
+    ) => {
+        $crate::screens::player_options::row::BitmaskBinding::Generic {
+            init: $crate::screens::player_options::row::BitmaskInit {
+                from_profile: |p| p.$profile_field.bits() as u32,
+                get_active: |m| m.$state_field.bits() as u32,
+                set_active: |m, b| {
+                    debug_assert_eq!(
+                        b & !(<$bits_ty>::MAX as u32),
+                        0,
+                        concat!(stringify!($mask_ty), " init bits exceed storage width"),
+                    );
+                    m.$state_field = <$mask_ty>::from_bits_retain(b as $bits_ty);
+                },
+                cursor: $crate::screens::player_options::row::CursorInit::FirstActiveBit,
+            },
+            writeback: $crate::screens::player_options::row::BitmaskWriteback {
+                project_to_profile: |p, b| {
+                    p.$profile_field = <$mask_ty>::from_bits_truncate(b as $bits_ty);
+                },
+                persist_for_side: |s, b| {
+                    $persist(s, <$mask_ty>::from_bits_truncate(b as $bits_ty));
+                },
+                bit_mapping: $crate::screens::player_options::row::BitMapping::Sequential {
+                    width: $width,
+                },
+            },
+        }
+    };
+}
+
+pub(crate) use simple_bitmask_binding;
+
 // ============================== RowMap =================================
 
 pub struct RowMap {
