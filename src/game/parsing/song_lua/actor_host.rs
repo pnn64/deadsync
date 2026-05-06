@@ -31,7 +31,7 @@ pub(super) fn create_arrow_effects_table(lua: &Lua) -> mlua::Result<Table> {
                 .get(2)
                 .cloned()
                 .and_then(read_f32)
-                .map(|beat| -64.0 * beat)
+                .map(|beat| 64.0 * beat)
                 .unwrap_or(0.0_f32))
         })?,
     )?;

@@ -10,9 +10,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use crate::engine::present::actors::{TextAlign, TextAttribute};
-use crate::engine::present::anim::EffectClock;
-#[cfg(test)]
-use crate::engine::present::anim::EffectMode;
+use crate::engine::present::anim::{EffectClock, EffectMode};
 
 mod actor_host;
 mod compat;
@@ -119,6 +117,13 @@ const SONG_LUA_DANGER_LIFE: f32 = 0.2;
 const GRAPH_DISPLAY_VALUE_RESOLUTION: usize = 100;
 const SONG_LUA_SPRITE_STATE_CLEAR: u32 = u32::MAX;
 const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 4096;
+const MULTITAP_PREVISIBLE_BEATS: f32 = 8.0;
+const MULTITAP_BASE_BOUNCE: f32 = 1.5;
+const MULTITAP_ELASTICITY: f32 = 1.05;
+const MULTITAP_SQUISHY: f32 = 0.2;
+const MULTITAP_SAMPLE_STEP: f32 = 0.125;
+const MULTITAP_LANE_ROTATION: [f32; SONG_LUA_DOUBLE_NOTE_COLUMNS] =
+    [90.0, 0.0, 180.0, 270.0, 90.0, 0.0, 180.0, 270.0];
 const EASING_NAMES: &[&str] = &[
     "instant",
     "linear",
@@ -835,12 +840,17 @@ pub fn compile_song_lua(
     out.overlay_eases.extend(perframe_overlay_eases);
     merge_compile_info(&mut out.info, perframe_info);
     push_song_lua_stage_time(&mut stage_times, "perframes", &mut stage_started);
-    let update_overlay_eases =
-        compile_update_function_overlays(&lua, &root, context, &mut overlays, &tracked_actors)?;
-    out.overlay_eases.extend(update_overlay_eases);
-    push_song_lua_stage_time(&mut stage_times, "update_overlays", &mut stage_started);
     out.note_hides = read_note_column_zoom_hides(&lua)?;
     push_song_lua_stage_time(&mut stage_times, "note_hides", &mut stage_started);
+    let update_overlay_eases = match compile_multitap_update_overlays(&lua, context, &mut overlays)?
+    {
+        Some(eases) => eases,
+        None => {
+            compile_update_function_overlays(&lua, &root, context, &mut overlays, &tracked_actors)?
+        }
+    };
+    out.overlay_eases.extend(update_overlay_eases);
+    push_song_lua_stage_time(&mut stage_times, "update_overlays", &mut stage_started);
     if overlays.iter().any(|overlay| {
         overlay
             .actor
@@ -3289,6 +3299,421 @@ fn call_update_functions_at(
     set_compile_song_runtime_delta_values(lua, previous_delta.0, previous_delta.1)
         .map_err(|err| err.to_string())?;
     result
+}
+
+#[derive(Clone)]
+struct MultitapDesc {
+    lane: usize,
+    taps: Vec<f32>,
+    peak: Option<f32>,
+}
+
+#[derive(Clone, Copy)]
+struct MultitapPhase {
+    pos: f32,
+    squish: f32,
+    lin: f32,
+    visible: bool,
+}
+
+fn compile_multitap_update_overlays(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+    overlays: &mut [OverlayCompileActor],
+) -> Result<Option<Vec<SongLuaOverlayEase>>, String> {
+    let Some(multitaps) = read_multitap_descs(lua, context)? else {
+        return Ok(None);
+    };
+    if multitaps.is_empty() {
+        return Ok(None);
+    }
+    let overlay_indices = named_overlay_indices(overlays);
+    let mut out = Vec::new();
+    for player in 0..LUA_PLAYERS {
+        if !context.players[player].enabled {
+            continue;
+        }
+        let pn = player + 1;
+        let Some(&field_index) = overlay_indices.get(format!("MultitapFrameP{pn}").as_str()) else {
+            return Ok(None);
+        };
+        apply_multitap_field_state(
+            &mut overlays[field_index].actor.initial_state,
+            context,
+            player,
+        );
+        for (mti, desc) in multitaps.iter().enumerate() {
+            let index = mti + 1;
+            let Some(&frame_index) = overlay_indices.get(format!("MultitapP{pn}_{index}").as_str())
+            else {
+                return Ok(None);
+            };
+            let Some(&arrow_index) =
+                overlay_indices.get(format!("MultitapArrowP{pn}_{index}").as_str())
+            else {
+                return Ok(None);
+            };
+            let Some(&deco_index) =
+                overlay_indices.get(format!("MultitapDeco{pn}_{index}").as_str())
+            else {
+                return Ok(None);
+            };
+            push_multitap_actor_eases(
+                &mut out,
+                overlays,
+                frame_index,
+                arrow_index,
+                deco_index,
+                context,
+                desc,
+            );
+        }
+        for lane in 1..=SONG_LUA_NOTE_COLUMNS {
+            let Some(&explosion_index) =
+                overlay_indices.get(format!("MultitapExplosionP{pn}_{lane}").as_str())
+            else {
+                continue;
+            };
+            push_multitap_explosion_eases(
+                &mut out,
+                overlays,
+                explosion_index,
+                context,
+                &multitaps,
+                lane,
+            );
+        }
+    }
+    Ok(Some(out))
+}
+
+fn apply_multitap_field_state(
+    state: &mut SongLuaOverlayState,
+    context: &SongLuaCompileContext,
+    player: usize,
+) {
+    state.visible = true;
+    state.x = context.players[player].screen_x;
+    state.y = context.players[player].screen_y;
+    state.z = 0.0;
+    state.zoom_x = 1.0;
+    state.zoom_y = 1.0;
+    state.zoom_z = 1.0;
+}
+
+fn named_overlay_indices(overlays: &[OverlayCompileActor]) -> HashMap<String, usize> {
+    let mut out = HashMap::new();
+    for (index, overlay) in overlays.iter().enumerate() {
+        if let Some(name) = overlay.actor.name.as_ref() {
+            out.insert(name.clone(), index);
+        }
+    }
+    out
+}
+
+fn read_multitap_descs(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+) -> Result<Option<Vec<MultitapDesc>>, String> {
+    let globals = lua.globals();
+    let Some(multitaps) = globals
+        .get::<Option<Table>>("multitaps")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let difficulty = context.players[0]
+        .difficulty
+        .sm_name()
+        .trim_start_matches("Difficulty_");
+    let table = multitaps
+        .get::<Option<Table>>(difficulty)
+        .map_err(|err| err.to_string())?
+        .or_else(|| multitaps.get::<Option<Table>>("Challenge").ok().flatten());
+    let Some(table) = table else {
+        return Ok(None);
+    };
+    let mut out = Vec::new();
+    for value in table.sequence_values::<Value>() {
+        let Value::Table(entry) = value.map_err(|err| err.to_string())? else {
+            continue;
+        };
+        let Some(lane) = entry
+            .get::<Option<i64>>("lane")
+            .map_err(|err| err.to_string())?
+            .and_then(|value| usize::try_from(value).ok())
+            .filter(|value| (1..=SONG_LUA_DOUBLE_NOTE_COLUMNS).contains(value))
+        else {
+            continue;
+        };
+        let Some(taps_table) = entry
+            .get::<Option<Table>>("taps")
+            .map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        let mut taps = Vec::new();
+        for tap in taps_table.sequence_values::<Value>() {
+            if let Some(tap) = read_f32(tap.map_err(|err| err.to_string())?)
+                && tap.is_finite()
+            {
+                taps.push(tap);
+            }
+        }
+        if taps.is_empty() {
+            continue;
+        }
+        taps.sort_by(|left, right| left.total_cmp(right));
+        let peak = entry
+            .get::<Value>("peak")
+            .map_err(|err| err.to_string())
+            .ok()
+            .and_then(read_f32)
+            .filter(|value| value.is_finite());
+        out.push(MultitapDesc { lane, taps, peak });
+    }
+    Ok(Some(out))
+}
+
+fn push_multitap_actor_eases(
+    out: &mut Vec<SongLuaOverlayEase>,
+    overlays: &[OverlayCompileActor],
+    frame_index: usize,
+    arrow_index: usize,
+    deco_index: usize,
+    context: &SongLuaCompileContext,
+    desc: &MultitapDesc,
+) {
+    let start = desc.taps[0] - MULTITAP_PREVISIBLE_BEATS;
+    let end = desc.taps[desc.taps.len() - 1] + MULTITAP_SAMPLE_STEP;
+    let mut frame_samples = Vec::new();
+    let mut arrow_samples = Vec::new();
+    let mut deco_samples = Vec::new();
+    let mut beat = start;
+    loop {
+        let phase = calc_multitap_phase(desc, beat);
+        frame_samples.push((
+            beat,
+            multitap_frame_state(
+                overlays[frame_index].actor.initial_state,
+                context,
+                desc.lane,
+                phase,
+            ),
+        ));
+        arrow_samples.push((
+            beat,
+            multitap_arrow_state(overlays[arrow_index].actor.initial_state, desc.lane, phase),
+        ));
+        deco_samples.push((
+            beat,
+            multitap_deco_state(overlays[deco_index].actor.initial_state, phase),
+        ));
+        if beat >= end - f32::EPSILON {
+            break;
+        }
+        beat = (beat + MULTITAP_SAMPLE_STEP).min(end);
+    }
+    push_overlay_sample_eases(
+        out,
+        frame_index,
+        overlays[frame_index].actor.initial_state,
+        &frame_samples,
+    );
+    push_overlay_sample_eases(
+        out,
+        arrow_index,
+        overlays[arrow_index].actor.initial_state,
+        &arrow_samples,
+    );
+    push_overlay_sample_eases(
+        out,
+        deco_index,
+        overlays[deco_index].actor.initial_state,
+        &deco_samples,
+    );
+}
+
+fn push_multitap_explosion_eases(
+    out: &mut Vec<SongLuaOverlayEase>,
+    overlays: &[OverlayCompileActor],
+    overlay_index: usize,
+    context: &SongLuaCompileContext,
+    descs: &[MultitapDesc],
+    lane: usize,
+) {
+    let mut ranges = descs
+        .iter()
+        .filter(|desc| desc.lane == lane)
+        .map(|desc| {
+            (
+                desc.taps[0] - MULTITAP_PREVISIBLE_BEATS,
+                desc.taps[desc.taps.len() - 1] + MULTITAP_SAMPLE_STEP,
+            )
+        })
+        .collect::<Vec<_>>();
+    if ranges.is_empty() {
+        return;
+    }
+    ranges.sort_by(|left, right| left.0.total_cmp(&right.0));
+    let baseline = overlays[overlay_index].actor.initial_state;
+    let mut samples = Vec::new();
+    for (start, end) in ranges {
+        let mut beat = start;
+        loop {
+            let visible = descs
+                .iter()
+                .any(|desc| desc.lane == lane && calc_multitap_phase(desc, beat).visible);
+            samples.push((
+                beat,
+                multitap_explosion_state(baseline, context, lane, visible),
+            ));
+            if beat >= end - f32::EPSILON {
+                break;
+            }
+            beat = (beat + MULTITAP_SAMPLE_STEP).min(end);
+        }
+    }
+    samples.sort_by(|left, right| left.0.total_cmp(&right.0));
+    samples.dedup_by(|left, right| (left.0 - right.0).abs() <= f32::EPSILON);
+    push_overlay_sample_eases(out, overlay_index, baseline, &samples);
+}
+
+fn push_overlay_sample_eases(
+    out: &mut Vec<SongLuaOverlayEase>,
+    overlay_index: usize,
+    baseline: SongLuaOverlayState,
+    samples: &[(f32, SongLuaOverlayState)],
+) {
+    for window in samples.windows(2) {
+        let [(start, from), (end, to)] = [window[0], window[1]];
+        if end <= start || from == to {
+            continue;
+        }
+        let Some((from, to)) = overlay_delta_pair_from_states(baseline, from, to) else {
+            continue;
+        };
+        out.push(SongLuaOverlayEase {
+            overlay_index,
+            unit: SongLuaTimeUnit::Beat,
+            start,
+            limit: end - start,
+            span_mode: SongLuaSpanMode::Len,
+            from,
+            to,
+            easing: Some("linear".to_string()),
+            sustain: None,
+            opt1: None,
+            opt2: None,
+        });
+    }
+}
+
+fn calc_multitap_phase(desc: &MultitapDesc, beat: f32) -> MultitapPhase {
+    let mut out = MultitapPhase {
+        pos: 0.0,
+        squish: 0.0,
+        lin: 0.0,
+        visible: false,
+    };
+    if beat > desc.taps[desc.taps.len() - 1] {
+        return out;
+    }
+    out.pos = desc.taps[0] - beat;
+    out.visible = out.pos < MULTITAP_PREVISIBLE_BEATS;
+    let mut elasticity = desc
+        .peak
+        .zip(desc.taps.get(1).copied())
+        .map(|(peak, second)| peak / (second - desc.taps[0]))
+        .unwrap_or(MULTITAP_BASE_BOUNCE);
+    for index in 0..desc.taps.len() {
+        if beat <= desc.taps[index] || index + 1 >= desc.taps.len() {
+            break;
+        }
+        let gap = desc.taps[index + 1] - desc.taps[index];
+        if gap <= f32::EPSILON {
+            continue;
+        }
+        elasticity = desc
+            .peak
+            .map(|peak| peak / gap)
+            .unwrap_or(elasticity * MULTITAP_ELASTICITY);
+        let t = beat - desc.taps[index];
+        out.pos = elasticity * t * (gap - t) / gap;
+        let velocity = elasticity * (gap - 2.0 * t) / gap;
+        out.squish = MULTITAP_SQUISHY * (velocity.abs() - 0.5);
+        out.lin = t / gap;
+        out.visible = true;
+    }
+    out
+}
+
+fn multitap_frame_state(
+    baseline: SongLuaOverlayState,
+    context: &SongLuaCompileContext,
+    lane: usize,
+    phase: MultitapPhase,
+) -> SongLuaOverlayState {
+    if !phase.visible {
+        return baseline;
+    }
+    let mut state = baseline;
+    state.visible = true;
+    state.x = song_lua_style_column_x(&context.style_name, lane - 1);
+    state.y = 64.0 * phase.pos;
+    state.z = 0.0;
+    state.zoom_x = 1.0;
+    state.zoom_y = 1.0 + phase.squish;
+    state.zoom_z = 1.0;
+    state.diffuse[3] = 1.0;
+    state
+}
+
+fn multitap_arrow_state(
+    baseline: SongLuaOverlayState,
+    lane: usize,
+    phase: MultitapPhase,
+) -> SongLuaOverlayState {
+    if !phase.visible {
+        return baseline;
+    }
+    let mut state = baseline;
+    state.visible = true;
+    state.rot_z_deg = MULTITAP_LANE_ROTATION[lane - 1];
+    state.diffuse = [0.4, 0.4, 0.4, 1.0];
+    state
+}
+
+fn multitap_deco_state(baseline: SongLuaOverlayState, phase: MultitapPhase) -> SongLuaOverlayState {
+    if !phase.visible {
+        return baseline;
+    }
+    let mut state = baseline;
+    state.visible = true;
+    state.zoom = 1.0;
+    state.z = 10.0;
+    state.rot_z_deg = phase.lin * 180.0;
+    state.effect_mode = EffectMode::DiffuseRamp;
+    state.effect_clock = EffectClock::Beat;
+    state.effect_color1 = [1.0, 1.0, 1.0, 1.0];
+    state.effect_color2 = [0.8, 0.8, 0.8, 1.0];
+    state.effect_period = 1.0;
+    state
+}
+
+fn multitap_explosion_state(
+    baseline: SongLuaOverlayState,
+    context: &SongLuaCompileContext,
+    lane: usize,
+    visible: bool,
+) -> SongLuaOverlayState {
+    let mut state = baseline;
+    state.visible = visible;
+    state.x = song_lua_style_column_x(&context.style_name, lane - 1);
+    state.y = 0.0;
+    state.z = 0.0;
+    state.rot_z_deg = MULTITAP_LANE_ROTATION[lane - 1];
+    state
 }
 
 fn compile_update_function_overlays(

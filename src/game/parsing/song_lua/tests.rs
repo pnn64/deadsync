@@ -10938,6 +10938,24 @@ fn compile_song_lua_supports_flip69_sample_if_present() {
     assert!(!compiled.overlays.is_empty());
     assert!(!compiled.overlay_eases.is_empty());
     assert!(!compiled.note_hides.is_empty());
+    let field = compiled
+        .overlays
+        .iter()
+        .find(|overlay| overlay.name.as_deref() == Some("MultitapFrameP1"))
+        .unwrap();
+    assert_eq!(field.initial_state.x, context.players[0].screen_x);
+    assert_eq!(field.initial_state.y, context.players[0].screen_y);
+    let first_arrow = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("MultitapArrowP1_1"))
+        .unwrap();
+    assert!(
+        compiled
+            .overlay_eases
+            .iter()
+            .any(|ease| { ease.overlay_index == first_arrow && ease.to.rot_z_deg == Some(90.0) })
+    );
 }
 
 #[test]
