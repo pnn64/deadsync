@@ -1,9 +1,10 @@
 use super::{
-    EffectClock, EffectMode, GRAPH_DISPLAY_VALUE_RESOLUTION, SONG_LUA_INITIAL_LIFE,
+    EffectClock, EffectMode, GRAPH_DISPLAY_VALUE_RESOLUTION, MultitapPhase, SONG_LUA_INITIAL_LIFE,
     SONG_LUA_STARTUP_MESSAGE, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
     SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaOverlayState, SongLuaPlayerContext,
     SongLuaProxyTarget, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit,
-    THEME_RECEPTOR_Y_STD, compile_song_lua, file_path_string, push_overlay_sample_eases,
+    THEME_RECEPTOR_Y_STD, compile_song_lua, file_path_string, multitap_deco_state,
+    push_multitap_arrow_sample, push_overlay_sample_eases,
 };
 use crate::engine::present::actors::TextAlign;
 use chrono::{Datelike, Local};
@@ -876,6 +877,82 @@ fn multitap_sample_eases_step_visibility_edges() {
             && ease.limit > 0.0
             && (ease.to.x.is_some() || ease.to.y.is_some())
     }));
+}
+
+#[test]
+fn multitap_deco_state_rotates_yinyang_during_bounce() {
+    let state = multitap_deco_state(
+        SongLuaOverlayState::default(),
+        "ddr-note",
+        MultitapPhase {
+            pos: 0.0,
+            squish: 0.0,
+            lin: 0.75,
+            qtc: 1,
+            visible: true,
+        },
+    );
+
+    assert!(state.visible);
+    assert_eq!(state.rot_z_deg, 135.0);
+}
+
+#[test]
+fn multitap_arrow_sampler_does_not_emit_inactive_baseline() {
+    let baseline = SongLuaOverlayState {
+        visible: true,
+        rot_z_deg: 0.0,
+        ..SongLuaOverlayState::default()
+    };
+    let mut samples = Vec::new();
+
+    push_multitap_arrow_sample(
+        &mut samples,
+        10.0,
+        baseline,
+        "ddr-note",
+        1,
+        MultitapPhase {
+            pos: 0.0,
+            squish: 0.0,
+            lin: 1.0,
+            qtc: 1,
+            visible: true,
+        },
+    );
+    push_multitap_arrow_sample(
+        &mut samples,
+        10.001,
+        baseline,
+        "ddr-note",
+        1,
+        MultitapPhase {
+            pos: 0.0,
+            squish: 0.0,
+            lin: 0.0,
+            qtc: 0,
+            visible: false,
+        },
+    );
+
+    assert_eq!(samples.len(), 1);
+    assert_eq!(samples[0].1.visible, true);
+    assert_eq!(samples[0].1.rot_z_deg, 90.0);
+
+    let mut eases = Vec::new();
+    push_overlay_sample_eases(&mut eases, 3, baseline, &samples);
+
+    assert!(!eases.iter().any(|ease| {
+        ease.overlay_index == 3
+            && ease.limit > 0.0
+            && ease.from.rot_z_deg == Some(90.0)
+            && ease.to.rot_z_deg == Some(0.0)
+    }));
+    assert!(
+        !eases
+            .iter()
+            .any(|ease| ease.overlay_index == 3 && ease.to.visible == Some(false))
+    );
 }
 
 #[test]

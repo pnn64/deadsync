@@ -122,6 +122,7 @@ const MULTITAP_BASE_BOUNCE: f32 = 1.5;
 const MULTITAP_ELASTICITY: f32 = 1.05;
 const MULTITAP_SQUISHY: f32 = 0.2;
 const MULTITAP_SAMPLE_STEP: f32 = 0.125;
+const MULTITAP_HIDE_EPSILON_BEATS: f32 = 0.0001;
 const MULTITAP_LANE_ROTATION: [f32; SONG_LUA_DOUBLE_NOTE_COLUMNS] =
     [90.0, 0.0, 180.0, 270.0, 90.0, 0.0, 180.0, 270.0];
 const EASING_NAMES: &[&str] = &[
@@ -3665,7 +3666,7 @@ fn push_multitap_actor_eases(
     desc: &MultitapDesc,
 ) {
     let start = desc.taps[0] - MULTITAP_PREVISIBLE_BEATS;
-    let end = desc.taps[desc.taps.len() - 1] + MULTITAP_SAMPLE_STEP;
+    let end = desc.taps[desc.taps.len() - 1] + MULTITAP_HIDE_EPSILON_BEATS;
     let mut frame_samples = Vec::new();
     let mut arrow_samples = Vec::new();
     let mut deco_samples = Vec::new();
@@ -3686,15 +3687,14 @@ fn push_multitap_actor_eases(
                 phase,
             ),
         ));
-        arrow_samples.push((
+        push_multitap_arrow_sample(
+            &mut arrow_samples,
             beat,
-            multitap_arrow_state(
-                overlays[arrow_index].actor.initial_state,
-                noteskin,
-                desc.lane,
-                phase,
-            ),
-        ));
+            overlays[arrow_index].actor.initial_state,
+            noteskin,
+            desc.lane,
+            phase,
+        );
         deco_samples.push((
             beat,
             multitap_deco_state(overlays[deco_index].actor.initial_state, noteskin, phase),
@@ -3756,7 +3756,7 @@ fn push_multitap_explosion_eases(
         .map(|desc| {
             (
                 desc.taps[0] - MULTITAP_PREVISIBLE_BEATS,
-                desc.taps[desc.taps.len() - 1] + MULTITAP_SAMPLE_STEP,
+                desc.taps[desc.taps.len() - 1] + MULTITAP_HIDE_EPSILON_BEATS,
             )
         })
         .collect::<Vec<_>>();
@@ -3785,6 +3785,19 @@ fn push_multitap_explosion_eases(
     samples.sort_by(|left, right| left.0.total_cmp(&right.0));
     samples.dedup_by(|left, right| (left.0 - right.0).abs() <= f32::EPSILON);
     push_overlay_sample_eases(out, overlay_index, baseline, &samples);
+}
+
+fn push_multitap_arrow_sample(
+    samples: &mut Vec<(f32, SongLuaOverlayState)>,
+    beat: f32,
+    baseline: SongLuaOverlayState,
+    noteskin: &str,
+    lane: usize,
+    phase: MultitapPhase,
+) {
+    if phase.visible {
+        samples.push((beat, multitap_arrow_state(baseline, noteskin, lane, phase)));
+    }
 }
 
 fn push_overlay_sample_eases(
@@ -4014,7 +4027,10 @@ fn multitap_arrow_state(
     phase: MultitapPhase,
 ) -> SongLuaOverlayState {
     if !phase.visible {
-        return baseline;
+        return SongLuaOverlayState {
+            visible: false,
+            ..baseline
+        };
     }
     let mut state = baseline;
     state.visible = true;
