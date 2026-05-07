@@ -114,6 +114,15 @@ pub(super) fn row_layout_params() -> (f32, f32) {
 }
 
 #[inline(always)]
+pub(super) fn player_option_column_x(player_idx: usize) -> f32 {
+    if player_idx == P2 {
+        screen_center_x() + widescale(140.0, 154.0)
+    } else {
+        screen_center_x() + widescale(-77.0, -100.0)
+    }
+}
+
+#[inline(always)]
 pub(super) fn init_row_tweens(
     row_map: &RowMap,
     selected_row: [usize; PLAYER_SLOTS],
@@ -250,9 +259,10 @@ pub(super) fn cursor_dest_for_player(
         return None;
     }
     let player_idx = player_idx.min(PLAYER_SLOTS - 1);
+    let active = session_active_players();
     let visibility = row_visibility(
         &state.pane().row_map,
-        session_active_players(),
+        active,
         state.option_masks,
         state.allow_per_player_global_offsets,
     );
@@ -286,8 +296,6 @@ pub(super) fn cursor_dest_for_player(
     let max_pad_x = widescale(22.0, 28.0);
     let width_ref = widescale(180.0, 220.0);
 
-    let speed_mod_x = screen_center_x() + widescale(-77.0, -100.0);
-
     // Shared geometry for Music Rate centering (must match get_actors()).
     let help_box_w = widescale(614.0, 792.0);
     let help_box_x = widescale(13.0, 30.666);
@@ -316,7 +324,12 @@ pub(super) fn cursor_dest_for_player(
         }
         let ring_w = draw_w + pad_x * 2.0;
         let ring_h = draw_h + pad_y * 2.0;
-        return Some((speed_mod_x, y, ring_w, ring_h));
+        let center_x = if active[P2] && !active[P1] {
+            player_option_column_x(P2)
+        } else {
+            player_option_column_x(P1)
+        };
+        return Some((center_x, y, ring_w, ring_h));
     }
 
     if row_shows_all_choices_inline(row.id) {
@@ -390,11 +403,9 @@ pub(super) fn cursor_dest_for_player(
     }
 
     // Single value rows (ShowOneInRow).
-    let mut center_x = speed_mod_x;
+    let mut center_x = player_option_column_x(player_idx);
     if row.id == RowId::MusicRate {
         center_x = music_rate_center_x;
-    } else if player_idx == P2 {
-        center_x = screen_center_x().mul_add(2.0, -center_x);
     }
 
     let display_text = if arcade_row_focuses_next_row(state, player_idx, row_idx) {
