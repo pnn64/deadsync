@@ -3458,7 +3458,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let line_count = step_artist_lines.len().max(1);
                     let zmod_diff_box_x = upper_origin_x + 129.5 * dir;
                     let x = zmod_diff_box_x - 21.5 * dir;
-                    let y_base = if line_count > 2 { cy - 62.0 } else { cy - 59.0 };
+                    // DeadSync's bottom-aligned text block does not include
+                    // StepMania's trailing BitmapText height, so Arrow Cloud's
+                    // raw cy-42/cy-43 anchor must be compensated here.
+                    let y_base = if line_count > 2 { cy - 58.0 } else { cy - 59.0 };
                     let align_x = if side == profile::PlayerSide::P1 {
                         0.0
                     } else {
