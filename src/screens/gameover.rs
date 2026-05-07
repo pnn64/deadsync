@@ -252,29 +252,33 @@ pub fn get_actors(
         ));
     }
 
-    // GAME OVER text (Simply Love: Wendy/_wendy white, crop reveal)
+    // GAME OVER text (Arrow Cloud: ThemeFont headline, crop reveal)
     {
         let cx = screen_center_x();
         let cy = screen_center_y();
+        let zoom = match crate::config::get().machine_font {
+            crate::config::MachineFont::Wendy => 1.2,
+            crate::config::MachineFont::Mega => 1.95,
+        };
 
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(current_machine_font_key(FontRole::Headline)):
             settext(tr("GameOver", "GameText")):
             align(0.5, 0.5):
             xy(cx, cy - 40.0):
             croptop(1.0): fadetop(1.0):
-            zoom(1.2):
+            zoom(zoom):
             shadowlength(1.0):
             z(20):
             decelerate(0.5): croptop(0.0): fadetop(0.0)
         ));
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Header)):
+            font(current_machine_font_key(FontRole::Headline)):
             settext(tr("GameOver", "OverText")):
             align(0.5, 0.5):
             xy(cx, cy + 40.0):
             croptop(1.0): fadetop(1.0):
-            zoom(1.2):
+            zoom(zoom):
             shadowlength(1.0):
             z(20):
             decelerate(0.5): croptop(0.0): fadetop(0.0)

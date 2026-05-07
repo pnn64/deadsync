@@ -4505,7 +4505,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let timestamp_text = now.format("%Y/%m/%d %H:%M").to_string();
 
     actors.push(act!(text:
-        font("wendy_monospace_numbers"):
+        font(current_machine_font_key(FontRole::Numbers)):
         settext(timestamp_text):
         align(0.5, 1.0): // align bottom-center of text block
         xy(screen_center_x(), screen_height() - 14.0):
