@@ -6771,10 +6771,8 @@ pub fn push_actors(
             requests
                 .note_field
                 .then(|| render_source_bundle(field_actors)),
-            requests
-                .judgment
-                .then(|| render_source_bundle(judgment_actors)),
-            requests.combo.then(|| render_source_bundle(combo_actors)),
+            judgment_actors.map(|actors| render_source_bundle(actors)),
+            combo_actors.map(|actors| render_source_bundle(actors)),
         ];
         (player, layout_center_x, player_source, proxy_sources)
     };
