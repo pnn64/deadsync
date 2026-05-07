@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{self, tr, tr_fmt};
+use crate::assets::{FontRole, current_machine_font_key};
 // Screen navigation is handled in app
 use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, TextAlign};
@@ -432,7 +433,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
         row_spacing: MENU_ROW_SPACING,
         selected_color: selected,
         normal_color: normal,
-        font: "wendy",
+        font: current_machine_font_key(FontRole::Bold),
     };
     actors.extend(menu_list::build_vertical_menu(params));
 
