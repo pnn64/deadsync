@@ -146,17 +146,120 @@ impl DensityGraphRenderState {
     }
 }
 
+const SONG_LUA_CHILD_ORDER_STATIC: u8 = 0;
+const SONG_LUA_CHILD_ORDER_DRAW: u8 = 1;
+const SONG_LUA_CHILD_ORDER_Z: u8 = 2;
+
+#[derive(Default)]
+struct SongLuaOverlayOrderCache {
+    child_lists: Vec<Vec<usize>>,
+    dynamic_draw_order: Vec<bool>,
+    sort_modes: Vec<u8>,
+}
+
+fn song_lua_overlay_child_list_index(parent_index: Option<usize>) -> usize {
+    parent_index.map_or(0, |idx| idx + 1)
+}
+
+fn song_lua_sort_static_children(overlays: &[SongLuaOverlayActor], children: &mut [usize]) {
+    children.sort_by_key(|&idx| (overlays[idx].initial_state.draw_order, idx));
+}
+
+fn song_lua_overlay_order_cache_from(
+    overlays: &[SongLuaOverlayActor],
+    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
+) -> SongLuaOverlayOrderCache {
+    let mut child_lists = vec![Vec::new(); overlays.len() + 1];
+    for (idx, overlay) in overlays.iter().enumerate() {
+        let list_idx = match overlay.parent_index {
+            Some(parent_index) if parent_index < overlays.len() => parent_index + 1,
+            Some(_) => continue,
+            None => 0,
+        };
+        child_lists[list_idx].push(idx);
+    }
+    for children in &mut child_lists {
+        song_lua_sort_static_children(overlays, children);
+    }
+
+    let mut dynamic_actor_draw_order = vec![false; overlays.len()];
+    for (idx, overlay) in overlays.iter().enumerate() {
+        dynamic_actor_draw_order[idx] = overlay.message_commands.iter().any(|command| {
+            command
+                .blocks
+                .iter()
+                .any(|block| block.delta.draw_order.is_some())
+        });
+    }
+    for ease in overlay_eases {
+        if ease.overlay_index < dynamic_actor_draw_order.len()
+            && (ease.from.draw_order.is_some() || ease.to.draw_order.is_some())
+        {
+            dynamic_actor_draw_order[ease.overlay_index] = true;
+        }
+    }
+
+    let dynamic_draw_order = child_lists
+        .iter()
+        .map(|children| {
+            children
+                .iter()
+                .any(|&idx| dynamic_actor_draw_order.get(idx).copied().unwrap_or(false))
+        })
+        .collect::<Vec<_>>();
+    let sort_modes = vec![SONG_LUA_CHILD_ORDER_STATIC; child_lists.len()];
+    SongLuaOverlayOrderCache {
+        child_lists,
+        dynamic_draw_order,
+        sort_modes,
+    }
+}
+
 pub struct State {
     pub(crate) gameplay: gameplay_core::State,
     pub density_graph: DensityGraphRenderState,
+    song_lua_overlay_order: SongLuaOverlayOrderCache,
+    song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
+    song_lua_foreground_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
+    song_lua_local_state_scratch: Vec<SongLuaOverlayState>,
+    song_lua_overlay_state_scratch: Vec<SongLuaOverlayState>,
+    song_lua_layer_local_state_scratch: Vec<SongLuaOverlayState>,
+    song_lua_layer_state_scratch: Vec<SongLuaOverlayState>,
+    song_lua_capture_state_scratch: Vec<SongLuaOverlayState>,
+    song_lua_order_scratch: Vec<usize>,
+    song_lua_capture_order_scratch: Vec<usize>,
 }
 
 impl State {
     pub fn from_gameplay(gameplay: gameplay_core::State) -> Self {
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
+        let song_lua_overlay_order = song_lua_overlay_order_cache_from(
+            &gameplay.song_lua_overlays,
+            &gameplay.song_lua_overlay_eases,
+        );
+        let song_lua_background_visual_layer_orders = gameplay
+            .song_lua_background_visual_layers
+            .iter()
+            .map(|layer| song_lua_overlay_order_cache_from(&layer.overlays, &layer.overlay_eases))
+            .collect();
+        let song_lua_foreground_visual_layer_orders = gameplay
+            .song_lua_foreground_visual_layers
+            .iter()
+            .map(|layer| song_lua_overlay_order_cache_from(&layer.overlays, &layer.overlay_eases))
+            .collect();
         Self {
             gameplay,
             density_graph,
+            song_lua_overlay_order,
+            song_lua_background_visual_layer_orders,
+            song_lua_foreground_visual_layer_orders,
+            song_lua_local_state_scratch: Vec::new(),
+            song_lua_overlay_state_scratch: Vec::new(),
+            song_lua_layer_local_state_scratch: Vec::new(),
+            song_lua_layer_state_scratch: Vec::new(),
+            song_lua_capture_state_scratch: Vec::new(),
+            song_lua_order_scratch: Vec::new(),
+            song_lua_capture_order_scratch: Vec::new(),
         }
     }
 }
@@ -1013,6 +1116,8 @@ fn song_lua_owns_fg_media(
     state: &State,
     overlay_states: &[SongLuaOverlayState],
     path: &Path,
+    layer_local_states: &mut Vec<SongLuaOverlayState>,
+    layer_states: &mut Vec<SongLuaOverlayState>,
 ) -> bool {
     if song_lua_has_visible_tex(&state.song_lua_overlays, overlay_states, path) {
         return true;
@@ -1021,7 +1126,7 @@ fn song_lua_owns_fg_media(
         if state.current_music_time_display < layer.start_second {
             continue;
         }
-        let layer_states = song_lua_overlay_states_from(
+        song_lua_overlay_state_sets_from_into(
             state.current_music_time_display,
             &layer.overlays,
             &layer.overlay_events,
@@ -1029,8 +1134,10 @@ fn song_lua_owns_fg_media(
             &layer.overlay_ease_ranges,
             layer.screen_width,
             layer.screen_height,
+            layer_local_states,
+            layer_states,
         );
-        if song_lua_has_visible_tex(&layer.overlays, &layer_states, path) {
+        if song_lua_has_visible_tex(&layer.overlays, layer_states, path) {
             return true;
         }
     }
@@ -1038,7 +1145,7 @@ fn song_lua_owns_fg_media(
         if state.current_music_time_display < layer.start_second {
             continue;
         }
-        let layer_states = song_lua_overlay_states_from(
+        song_lua_overlay_state_sets_from_into(
             state.current_music_time_display,
             &layer.overlays,
             &layer.overlay_events,
@@ -1046,17 +1153,30 @@ fn song_lua_owns_fg_media(
             &layer.overlay_ease_ranges,
             layer.screen_width,
             layer.screen_height,
+            layer_local_states,
+            layer_states,
         );
-        if song_lua_has_visible_tex(&layer.overlays, &layer_states, path) {
+        if song_lua_has_visible_tex(&layer.overlays, layer_states, path) {
             return true;
         }
     }
     false
 }
 
-fn build_foreground_media(state: &State, overlay_states: &[SongLuaOverlayState]) -> Option<Actor> {
+fn build_foreground_media(
+    state: &State,
+    overlay_states: &[SongLuaOverlayState],
+    layer_local_states: &mut Vec<SongLuaOverlayState>,
+    layer_states: &mut Vec<SongLuaOverlayState>,
+) -> Option<Actor> {
     let path = state.song.active_foreground_path(state.current_beat)?;
-    if song_lua_owns_fg_media(state, overlay_states, path) {
+    if song_lua_owns_fg_media(
+        state,
+        overlay_states,
+        path,
+        layer_local_states,
+        layer_states,
+    ) {
         return None;
     }
     Some(shared_banner::cover_sprite(
@@ -1839,29 +1959,29 @@ fn song_lua_overlay_compose_state(
     child
 }
 
-fn song_lua_overlay_local_states_from(
+fn song_lua_overlay_local_states_into(
     now: f32,
     overlays: &[SongLuaOverlayActor],
     overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
     overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
-) -> Vec<SongLuaOverlayState> {
-    overlays
-        .iter()
-        .enumerate()
-        .map(|(idx, overlay)| {
-            song_lua_overlay_render_state_from(
-                now,
-                idx,
-                overlay,
-                overlay_events,
-                overlay_eases,
-                overlay_ease_ranges,
-            )
-        })
-        .collect()
+    out: &mut Vec<SongLuaOverlayState>,
+) {
+    out.clear();
+    out.reserve(overlays.len());
+    for (idx, overlay) in overlays.iter().enumerate() {
+        out.push(song_lua_overlay_render_state_from(
+            now,
+            idx,
+            overlay,
+            overlay_events,
+            overlay_eases,
+            overlay_ease_ranges,
+        ));
+    }
 }
 
+#[cfg(test)]
 fn song_lua_overlay_states_from_local(
     overlays: &[SongLuaOverlayActor],
     local_states: &[SongLuaOverlayState],
@@ -1869,6 +1989,25 @@ fn song_lua_overlay_states_from_local(
     screen_height: f32,
 ) -> Vec<SongLuaOverlayState> {
     let mut out = Vec::with_capacity(overlays.len());
+    song_lua_overlay_states_from_local_into(
+        overlays,
+        local_states,
+        screen_width,
+        screen_height,
+        &mut out,
+    );
+    out
+}
+
+fn song_lua_overlay_states_from_local_into(
+    overlays: &[SongLuaOverlayActor],
+    local_states: &[SongLuaOverlayState],
+    screen_width: f32,
+    screen_height: f32,
+    out: &mut Vec<SongLuaOverlayState>,
+) {
+    out.clear();
+    out.reserve(overlays.len());
     for (idx, overlay) in overlays.iter().enumerate() {
         let local = local_states.get(idx).copied().unwrap_or_default();
         let composed = overlay
@@ -1890,10 +2029,9 @@ fn song_lua_overlay_states_from_local(
             .unwrap_or(local);
         out.push(composed);
     }
-    out
 }
 
-fn song_lua_overlay_state_sets_from(
+fn song_lua_overlay_state_sets_from_into(
     now: f32,
     overlays: &[SongLuaOverlayActor],
     overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
@@ -1901,44 +2039,32 @@ fn song_lua_overlay_state_sets_from(
     overlay_ease_ranges: &[std::ops::Range<usize>],
     screen_width: f32,
     screen_height: f32,
-) -> (Vec<SongLuaOverlayState>, Vec<SongLuaOverlayState>) {
-    let local_states = song_lua_overlay_local_states_from(
+    local_out: &mut Vec<SongLuaOverlayState>,
+    overlay_out: &mut Vec<SongLuaOverlayState>,
+) {
+    song_lua_overlay_local_states_into(
         now,
         overlays,
         overlay_events,
         overlay_eases,
         overlay_ease_ranges,
+        local_out,
     );
-    let overlay_states =
-        song_lua_overlay_states_from_local(overlays, &local_states, screen_width, screen_height);
-    (local_states, overlay_states)
-}
-
-fn song_lua_overlay_states_from(
-    now: f32,
-    overlays: &[SongLuaOverlayActor],
-    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
-    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
-    overlay_ease_ranges: &[std::ops::Range<usize>],
-    screen_width: f32,
-    screen_height: f32,
-) -> Vec<SongLuaOverlayState> {
-    let (_, overlay_states) = song_lua_overlay_state_sets_from(
-        now,
+    song_lua_overlay_states_from_local_into(
         overlays,
-        overlay_events,
-        overlay_eases,
-        overlay_ease_ranges,
+        local_out,
         screen_width,
         screen_height,
+        overlay_out,
     );
-    overlay_states
 }
 
-fn song_lua_overlay_state_sets(
+fn song_lua_overlay_state_sets_into(
     state: &State,
-) -> (Vec<SongLuaOverlayState>, Vec<SongLuaOverlayState>) {
-    song_lua_overlay_state_sets_from(
+    local_out: &mut Vec<SongLuaOverlayState>,
+    overlay_out: &mut Vec<SongLuaOverlayState>,
+) {
+    song_lua_overlay_state_sets_from_into(
         state.current_music_time_display,
         &state.song_lua_overlays,
         &state.song_lua_overlay_events,
@@ -1946,7 +2072,9 @@ fn song_lua_overlay_state_sets(
         &state.song_lua_overlay_ease_ranges,
         state.song_lua_screen_width,
         state.song_lua_screen_height,
-    )
+        local_out,
+        overlay_out,
+    );
 }
 
 fn song_lua_proxy_active_players(
@@ -2367,27 +2495,40 @@ fn song_lua_build_proxy_actor(
     })
 }
 
+#[cfg(test)]
 fn song_lua_overlay_order(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
     parent_index: Option<usize>,
 ) -> Vec<usize> {
+    let mut cache = song_lua_overlay_order_cache_from(overlays, &[]);
     let mut out = Vec::with_capacity(overlays.len());
-    song_lua_push_order(overlays, overlay_states, parent_index, &mut out);
+    song_lua_overlay_order_into(overlays, overlay_states, &mut cache, parent_index, &mut out);
     out
+}
+
+fn song_lua_overlay_order_into(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    order_cache: &mut SongLuaOverlayOrderCache,
+    parent_index: Option<usize>,
+    out: &mut Vec<usize>,
+) {
+    out.clear();
+    out.reserve(overlays.len());
+    song_lua_push_order(overlays, overlay_states, order_cache, parent_index, out);
 }
 
 fn song_lua_push_order(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
+    order_cache: &mut SongLuaOverlayOrderCache,
     parent_index: Option<usize>,
     out: &mut Vec<usize>,
 ) {
-    let mut children = Vec::new();
-    for (idx, overlay) in overlays.iter().enumerate() {
-        if overlay.parent_index == parent_index {
-            children.push(idx);
-        }
+    let list_idx = song_lua_overlay_child_list_index(parent_index);
+    if list_idx >= order_cache.child_lists.len() {
+        return;
     }
     let draw_by_z_position = parent_index.is_some_and(|idx| {
         overlay_states
@@ -2397,7 +2538,7 @@ fn song_lua_push_order(
             })
     });
     if draw_by_z_position {
-        children.sort_by(|&left, &right| {
+        order_cache.child_lists[list_idx].sort_by(|&left, &right| {
             let left_z = overlay_states
                 .get(left)
                 .map_or(overlays[left].initial_state.z, |state| state.z);
@@ -2406,8 +2547,14 @@ fn song_lua_push_order(
                 .map_or(overlays[right].initial_state.z, |state| state.z);
             left_z.total_cmp(&right_z).then_with(|| left.cmp(&right))
         });
-    } else {
-        children.sort_by_key(|&idx| {
+        order_cache.sort_modes[list_idx] = SONG_LUA_CHILD_ORDER_Z;
+    } else if order_cache
+        .dynamic_draw_order
+        .get(list_idx)
+        .copied()
+        .unwrap_or(false)
+    {
+        order_cache.child_lists[list_idx].sort_by_key(|&idx| {
             (
                 overlay_states
                     .get(idx)
@@ -2417,10 +2564,22 @@ fn song_lua_push_order(
                 idx,
             )
         });
+        order_cache.sort_modes[list_idx] = SONG_LUA_CHILD_ORDER_DRAW;
+    } else if order_cache
+        .sort_modes
+        .get(list_idx)
+        .copied()
+        .unwrap_or(SONG_LUA_CHILD_ORDER_STATIC)
+        != SONG_LUA_CHILD_ORDER_STATIC
+    {
+        song_lua_sort_static_children(overlays, &mut order_cache.child_lists[list_idx]);
+        order_cache.sort_modes[list_idx] = SONG_LUA_CHILD_ORDER_STATIC;
     }
-    for idx in children {
+    let child_count = order_cache.child_lists[list_idx].len();
+    for child_pos in 0..child_count {
+        let idx = order_cache.child_lists[list_idx][child_pos];
         out.push(idx);
-        song_lua_push_order(overlays, overlay_states, Some(idx), out);
+        song_lua_push_order(overlays, overlay_states, order_cache, Some(idx), out);
     }
 }
 
@@ -2441,72 +2600,109 @@ fn song_lua_capture_root_state(state: SongLuaOverlayState) -> SongLuaOverlayStat
     }
 }
 
-fn song_lua_capture_overlay_states(
+fn song_lua_capture_overlay_states_into_scratch(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
     local_overlay_states: &[SongLuaOverlayState],
+    order_cache: &SongLuaOverlayOrderCache,
     capture_index: usize,
     overlay_space_width: f32,
     overlay_space_height: f32,
-) -> Vec<SongLuaOverlayState> {
-    let mut out = vec![SongLuaOverlayState::default(); overlays.len()];
+    out: &mut Vec<SongLuaOverlayState>,
+) {
+    out.clear();
+    out.resize(overlays.len(), SongLuaOverlayState::default());
     let Some(capture_state) = overlay_states.get(capture_index).copied() else {
-        return out;
+        return;
     };
     // AFTs capture in texture space; placement transforms apply to the sprite
     // that consumes the texture, not to the captured children.
     out[capture_index] = song_lua_capture_root_state(capture_state);
-    for (idx, overlay) in overlays.iter().enumerate() {
-        if idx == capture_index
-            || song_lua_overlay_aft_ancestor(overlays, idx) != Some(capture_index)
-        {
+    song_lua_capture_overlay_child_states(
+        overlays,
+        local_overlay_states,
+        order_cache,
+        capture_index,
+        overlay_space_width,
+        overlay_space_height,
+        out,
+    );
+}
+
+fn song_lua_capture_overlay_child_states(
+    overlays: &[SongLuaOverlayActor],
+    local_overlay_states: &[SongLuaOverlayState],
+    order_cache: &SongLuaOverlayOrderCache,
+    parent_index: usize,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+    out: &mut [SongLuaOverlayState],
+) {
+    let list_idx = song_lua_overlay_child_list_index(Some(parent_index));
+    let Some(children) = order_cache.child_lists.get(list_idx) else {
+        return;
+    };
+    for &idx in children {
+        let Some(overlay) = overlays.get(idx) else {
             continue;
-        }
+        };
         let local = local_overlay_states.get(idx).copied().unwrap_or_default();
-        out[idx] = overlay
-            .parent_index
-            .and_then(|parent_index| {
-                out.get(parent_index)
-                    .copied()
-                    .zip(overlays.get(parent_index))
-            })
-            .map(|(parent, parent_overlay)| {
-                song_lua_overlay_compose_state(
-                    &parent_overlay.kind,
-                    parent,
-                    local,
-                    overlay_space_width,
-                    overlay_space_height,
-                )
-            })
-            .unwrap_or(local);
+        let parent = out.get(parent_index).copied().unwrap_or_default();
+        let parent_overlay = &overlays[parent_index];
+        out[idx] = song_lua_overlay_compose_state(
+            &parent_overlay.kind,
+            parent,
+            local,
+            overlay_space_width,
+            overlay_space_height,
+        );
+        if !matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture) {
+            song_lua_capture_overlay_child_states(
+                overlays,
+                local_overlay_states,
+                order_cache,
+                idx,
+                overlay_space_width,
+                overlay_space_height,
+                out,
+            );
+        }
     }
-    out
 }
 
 fn song_lua_capture_children(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
     local_overlay_states: &[SongLuaOverlayState],
+    order_cache: &mut SongLuaOverlayOrderCache,
     asset_manager: &AssetManager,
     capture_index: usize,
     proxy_sources: &SongLuaScreenProxySources<'_>,
     overlay_space_width: f32,
     overlay_space_height: f32,
+    capture_states: &mut Vec<SongLuaOverlayState>,
+    order_scratch: &mut Vec<usize>,
 ) -> Vec<Actor> {
-    let capture_states = song_lua_capture_overlay_states(
+    song_lua_capture_overlay_states_into_scratch(
         overlays,
         overlay_states,
         local_overlay_states,
+        order_cache,
         capture_index,
         overlay_space_width,
         overlay_space_height,
+        capture_states,
     );
     let mut out = Vec::new();
-    for (draw_idx, idx) in song_lua_overlay_order(overlays, &capture_states, Some(capture_index))
-        .into_iter()
-        .enumerate()
-    {
+    song_lua_overlay_order_into(
+        overlays,
+        capture_states,
+        order_cache,
+        Some(capture_index),
+        order_scratch,
+    );
+    out.reserve(order_scratch.len());
+    for (draw_idx, idx) in order_scratch.iter().copied().enumerate() {
         let Some(overlay) = overlays.get(idx) else {
             continue;
         };
@@ -2537,7 +2733,7 @@ fn song_lua_capture_children(
             _ => build_song_lua_overlay_actor(
                 overlay,
                 overlay_state,
-                song_lua_overlay_camera_state(overlays, &capture_states, overlay.parent_index),
+                song_lua_overlay_camera_state(overlays, capture_states, overlay.parent_index),
                 asset_manager,
                 draw_idx.min(i16::MAX as usize) as i16,
                 overlay_space_width,
@@ -6060,6 +6256,7 @@ fn song_lua_player_target_x(
 fn push_song_lua_layer_actors(
     out: &mut Vec<Actor>,
     overlays: &[SongLuaOverlayActor],
+    order_cache: &mut SongLuaOverlayOrderCache,
     local_overlay_states: &[SongLuaOverlayState],
     overlay_states: &[SongLuaOverlayState],
     song_foreground_state: SongLuaOverlayState,
@@ -6070,16 +6267,17 @@ fn push_song_lua_layer_actors(
     effect_time: f32,
     effect_beat: f32,
     total_elapsed: f32,
+    order_scratch: &mut Vec<usize>,
+    capture_states: &mut Vec<SongLuaOverlayState>,
+    capture_order_scratch: &mut Vec<usize>,
 ) {
     let song_lua_overlay_base_z = song_lua_add_z(
         SONG_LUA_OVERLAY_LAYER_Z_BASE,
         song_lua_rounded_z(song_foreground_state.z),
     );
     out.reserve(overlays.len());
-    for (draw_idx, idx) in song_lua_overlay_order(overlays, overlay_states, None)
-        .into_iter()
-        .enumerate()
-    {
+    song_lua_overlay_order_into(overlays, overlay_states, order_cache, None, order_scratch);
+    for (draw_idx, idx) in order_scratch.iter().copied().enumerate() {
         let Some(overlay) = overlays.get(idx) else {
             continue;
         };
@@ -6106,31 +6304,36 @@ fn push_song_lua_layer_actors(
                 })
             }
             SongLuaOverlayKind::AftSprite { capture_name } => {
-                song_lua_overlay_capture_index_by_name(overlays, capture_name).and_then(
-                    |capture_index| {
-                        let source = song_lua_capture_children(
-                            overlays,
-                            overlay_states,
-                            local_overlay_states,
-                            asset_manager,
-                            capture_index,
-                            proxy_sources,
-                            space_width,
-                            space_height,
-                        );
-                        song_lua_build_capture_actor(
-                            overlay,
-                            overlay_state,
-                            song_lua_add_z(
-                                song_lua_overlay_base_z,
-                                draw_idx.min(i16::MAX as usize) as i16,
-                            ),
-                            source,
-                            space_width,
-                            space_height,
-                        )
-                    },
-                )
+                if let Some(capture_index) =
+                    song_lua_overlay_capture_index_by_name(overlays, capture_name)
+                {
+                    let source = song_lua_capture_children(
+                        overlays,
+                        overlay_states,
+                        local_overlay_states,
+                        order_cache,
+                        asset_manager,
+                        capture_index,
+                        proxy_sources,
+                        space_width,
+                        space_height,
+                        capture_states,
+                        capture_order_scratch,
+                    );
+                    song_lua_build_capture_actor(
+                        overlay,
+                        overlay_state,
+                        song_lua_add_z(
+                            song_lua_overlay_base_z,
+                            draw_idx.min(i16::MAX as usize) as i16,
+                        ),
+                        source,
+                        space_width,
+                        space_height,
+                    )
+                } else {
+                    None
+                }
             }
             _ => build_song_lua_overlay_actor(
                 overlay,
@@ -6156,10 +6359,27 @@ fn push_song_lua_layer_actors(
 
 pub fn push_actors(
     mut actors: &mut Vec<Actor>,
-    state: &State,
+    state: &mut State,
     asset_manager: &AssetManager,
     view: ActorViewOverride,
 ) {
+    let mut song_lua_overlay_order = std::mem::take(&mut state.song_lua_overlay_order);
+    let mut song_lua_background_visual_layer_orders =
+        std::mem::take(&mut state.song_lua_background_visual_layer_orders);
+    let mut song_lua_foreground_visual_layer_orders =
+        std::mem::take(&mut state.song_lua_foreground_visual_layer_orders);
+    let mut song_lua_local_state_scratch = std::mem::take(&mut state.song_lua_local_state_scratch);
+    let mut song_lua_overlay_state_scratch =
+        std::mem::take(&mut state.song_lua_overlay_state_scratch);
+    let mut song_lua_layer_local_state_scratch =
+        std::mem::take(&mut state.song_lua_layer_local_state_scratch);
+    let mut song_lua_layer_state_scratch = std::mem::take(&mut state.song_lua_layer_state_scratch);
+    let mut song_lua_capture_state_scratch =
+        std::mem::take(&mut state.song_lua_capture_state_scratch);
+    let mut song_lua_order_scratch = std::mem::take(&mut state.song_lua_order_scratch);
+    let mut song_lua_capture_order_scratch =
+        std::mem::take(&mut state.song_lua_capture_order_scratch);
+
     let notefield_view = view.notefield;
     let hide_gameplay_hud = view.hide_gameplay_hud;
     let cfg = crate::config::get();
@@ -6177,18 +6397,26 @@ pub fn push_actors(
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
     let player_color = color::decorative_rgba(state.player_color_index);
-    let (local_overlay_states, overlay_states) = song_lua_overlay_state_sets(state);
-    let proxy_requests = song_lua_proxy_requests(&state.song_lua_overlays, &overlay_states);
+    song_lua_overlay_state_sets_into(
+        state,
+        &mut song_lua_local_state_scratch,
+        &mut song_lua_overlay_state_scratch,
+    );
+    let proxy_requests =
+        song_lua_proxy_requests(&state.song_lua_overlays, &song_lua_overlay_state_scratch);
     let mut underlay_proxy_source = proxy_requests.underlay.then_some(Vec::new());
     let mut overlay_proxy_source = proxy_requests.overlay.then_some(Vec::new());
     // --- Background and Filter ---
     let underlay_start = actors.len();
     actors.push(build_background(state, cfg.bg_brightness));
-    for layer in &state.song_lua_background_visual_layers {
+    for (layer_idx, layer) in state.song_lua_background_visual_layers.iter().enumerate() {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
-        let (local_overlay_states, overlay_states) = song_lua_overlay_state_sets_from(
+        let Some(order_cache) = song_lua_background_visual_layer_orders.get_mut(layer_idx) else {
+            continue;
+        };
+        song_lua_overlay_state_sets_from_into(
             state.current_music_time_display,
             &layer.overlays,
             &layer.overlay_events,
@@ -6196,6 +6424,8 @@ pub fn push_actors(
             &layer.overlay_ease_ranges,
             layer.screen_width,
             layer.screen_height,
+            &mut song_lua_layer_local_state_scratch,
+            &mut song_lua_layer_state_scratch,
         );
         let song_foreground_state = song_lua_song_foreground_state_from(
             state.current_music_time_display,
@@ -6205,8 +6435,9 @@ pub fn push_actors(
         push_song_lua_layer_actors(
             &mut actors,
             &layer.overlays,
-            &local_overlay_states,
-            &overlay_states,
+            order_cache,
+            &song_lua_layer_local_state_scratch,
+            &song_lua_layer_state_scratch,
             song_foreground_state,
             &SongLuaScreenProxySources::default(),
             asset_manager,
@@ -6215,6 +6446,9 @@ pub fn push_actors(
             state.current_music_time_display,
             state.current_beat,
             state.total_elapsed_in_screen,
+            &mut song_lua_order_scratch,
+            &mut song_lua_capture_state_scratch,
+            &mut song_lua_capture_order_scratch,
         );
     }
     song_lua_capture_new_actors(&mut underlay_proxy_source, &actors, underlay_start);
@@ -6628,7 +6862,7 @@ pub fn push_actors(
     ];
     let replacement_active_players = song_lua_replacement_active_players(
         &state.song_lua_overlays,
-        &overlay_states,
+        &song_lua_overlay_state_scratch,
         &replacement_proxy_sources,
     );
 
@@ -7563,8 +7797,9 @@ pub fn push_actors(
         push_song_lua_layer_actors(
             &mut out,
             &state.song_lua_overlays,
-            &local_overlay_states,
-            &overlay_states,
+            &mut song_lua_overlay_order,
+            &song_lua_local_state_scratch,
+            &song_lua_overlay_state_scratch,
             song_foreground_state,
             &proxy_sources,
             asset_manager,
@@ -7573,18 +7808,29 @@ pub fn push_actors(
             state.current_music_time_display,
             state.current_beat,
             state.total_elapsed_in_screen,
+            &mut song_lua_order_scratch,
+            &mut song_lua_capture_state_scratch,
+            &mut song_lua_capture_order_scratch,
         );
         out
     };
     actors.extend(main_layer_actors);
-    if let Some(actor) = build_foreground_media(state, &overlay_states) {
+    if let Some(actor) = build_foreground_media(
+        state,
+        &song_lua_overlay_state_scratch,
+        &mut song_lua_layer_local_state_scratch,
+        &mut song_lua_layer_state_scratch,
+    ) {
         actors.push(actor);
     }
-    for layer in &state.song_lua_foreground_visual_layers {
+    for (layer_idx, layer) in state.song_lua_foreground_visual_layers.iter().enumerate() {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
-        let (layer_local_states, layer_states) = song_lua_overlay_state_sets_from(
+        let Some(order_cache) = song_lua_foreground_visual_layer_orders.get_mut(layer_idx) else {
+            continue;
+        };
+        song_lua_overlay_state_sets_from_into(
             state.current_music_time_display,
             &layer.overlays,
             &layer.overlay_events,
@@ -7592,6 +7838,8 @@ pub fn push_actors(
             &layer.overlay_ease_ranges,
             layer.screen_width,
             layer.screen_height,
+            &mut song_lua_layer_local_state_scratch,
+            &mut song_lua_layer_state_scratch,
         );
         let song_foreground_state = song_lua_song_foreground_state_from(
             state.current_music_time_display,
@@ -7614,8 +7862,9 @@ pub fn push_actors(
             push_song_lua_layer_actors(
                 &mut out,
                 &layer.overlays,
-                &layer_local_states,
-                &layer_states,
+                order_cache,
+                &song_lua_layer_local_state_scratch,
+                &song_lua_layer_state_scratch,
                 song_foreground_state,
                 &proxy_sources,
                 asset_manager,
@@ -7624,11 +7873,24 @@ pub fn push_actors(
                 state.current_music_time_display,
                 state.current_beat,
                 state.total_elapsed_in_screen,
+                &mut song_lua_order_scratch,
+                &mut song_lua_capture_state_scratch,
+                &mut song_lua_capture_order_scratch,
             );
             out
         };
         actors.extend(layer_actors);
     }
+    state.song_lua_overlay_order = song_lua_overlay_order;
+    state.song_lua_background_visual_layer_orders = song_lua_background_visual_layer_orders;
+    state.song_lua_foreground_visual_layer_orders = song_lua_foreground_visual_layer_orders;
+    state.song_lua_local_state_scratch = song_lua_local_state_scratch;
+    state.song_lua_overlay_state_scratch = song_lua_overlay_state_scratch;
+    state.song_lua_layer_local_state_scratch = song_lua_layer_local_state_scratch;
+    state.song_lua_layer_state_scratch = song_lua_layer_state_scratch;
+    state.song_lua_capture_state_scratch = song_lua_capture_state_scratch;
+    state.song_lua_order_scratch = song_lua_order_scratch;
+    state.song_lua_capture_order_scratch = song_lua_capture_order_scratch;
 }
 
 #[cfg(test)]
@@ -8089,15 +8351,21 @@ mod tests {
             ],
             ..SongLuaScreenProxySources::default()
         };
+        let mut order_cache = song_lua_overlay_order_cache_from(&overlays, &[]);
+        let mut capture_states = Vec::new();
+        let mut order_scratch = Vec::new();
         let actors = song_lua_capture_children(
             &overlays,
             &overlay_states,
             &local_states,
+            &mut order_cache,
             &AssetManager::new(),
             1,
             &proxy_sources,
             854.0,
             480.0,
+            &mut capture_states,
+            &mut order_scratch,
         );
 
         match actors.as_slice() {

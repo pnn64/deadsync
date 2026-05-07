@@ -381,14 +381,10 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
     }
 }
 
-pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
+pub fn get_actors(state: &mut State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(128);
-    gameplay_screen::push_actors(
-        &mut actors,
-        &state.gameplay,
-        asset_manager,
-        practice_view(state),
-    );
+    let view = practice_view(state);
+    gameplay_screen::push_actors(&mut actors, &mut state.gameplay, asset_manager, view);
     if matches!(state.mode, Mode::Editing) {
         append_edit_markers(state, &mut actors);
         append_edit_overlay(state, &mut actors);

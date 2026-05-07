@@ -8847,7 +8847,7 @@ return Def.ActorFrame{}
                             let mut actors = Vec::new();
                             crate::screens::gameplay::push_actors(
                                 &mut actors,
-                                &state,
+                                &mut state,
                                 &assets,
                                 crate::screens::gameplay::ActorViewOverride::default(),
                             );

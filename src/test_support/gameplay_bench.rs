@@ -14,7 +14,7 @@ pub struct GameplayBenchFixture {
 }
 
 impl GameplayBenchFixture {
-    pub fn build(&self, retained: bool) -> Vec<Actor> {
+    pub fn build(&mut self, retained: bool) -> Vec<Actor> {
         if !retained {
             for cache in &self.state.notefield_model_cache {
                 cache.borrow_mut().clear();
@@ -23,7 +23,7 @@ impl GameplayBenchFixture {
         let mut actors = Vec::new();
         gameplay_screen::push_actors(
             &mut actors,
-            &self.state,
+            &mut self.state,
             &self.asset_manager,
             gameplay_screen::ActorViewOverride::default(),
         );

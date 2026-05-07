@@ -218,7 +218,7 @@ fn gameplay_stats_versus_scenario(
 }
 
 fn gameplay_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
-    let fixture = gameplay_bench::fixture();
+    let mut fixture = gameplay_bench::fixture();
     ComposeScenario {
         name: gameplay_bench::SCENARIO_NAME,
         actors: fixture.build(true),
