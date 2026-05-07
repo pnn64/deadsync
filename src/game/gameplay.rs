@@ -7819,6 +7819,25 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_ns: SongTimeNs)
     }
 }
 
+fn finalize_completed_mines(state: &mut State) {
+    for player in 0..state.num_players {
+        let (note_start, note_end) = player_note_range(state, player);
+        for note in &mut state.notes[note_start..note_end] {
+            if matches!(note.note_type, NoteType::Mine)
+                && note.can_be_judged
+                && !note.is_fake
+                && note.mine_result.is_none()
+            {
+                note.mine_result = Some(MineResult::Avoided);
+            }
+        }
+
+        let total = state.mines_total[player];
+        let hit = state.players[player].mines_hit.min(total);
+        state.players[player].mines_avoided = total.saturating_sub(hit);
+    }
+}
+
 #[inline(always)]
 fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
@@ -8006,6 +8025,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         if start_time.elapsed().as_secs_f32() >= hold_s {
             if key == HoldToExitKey::Start && music_time_ns >= state.notes_end_time_ns {
                 state.song_completed_naturally = true;
+                finalize_completed_mines(state);
             }
             match key {
                 HoldToExitKey::Start => {
@@ -8211,6 +8231,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     if state.current_music_time_ns >= state.music_end_time_ns {
         debug!("Music end time reached. Transitioning to evaluation.");
         state.song_completed_naturally = true;
+        finalize_completed_mines(state);
         finalize_update_trace(
             state,
             delta_time,
@@ -8362,7 +8383,7 @@ mod tests {
         completed_row_flash_note_indices_and_grade, count_rescore_tracks_on_row,
         crossed_mine_bounds_ns, crossed_mine_held_start_time,
         effective_appearance_effects_for_player, effective_player_global_offset_seconds,
-        enforce_max_simultaneous_notes, finalize_row_judgment,
+        enforce_max_simultaneous_notes, finalize_completed_mines, finalize_row_judgment,
         finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, handle_input,
         hit_mine, input_queue_cap, integrate_active_hold_to_time, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
@@ -11561,6 +11582,38 @@ return Def.ActorFrame{}
             .saturating_add(song_time_ns_from_seconds(2.1));
         apply_time_based_mine_avoidance(&mut mine_state, after_delay_music_time);
         assert_eq!(mine_state.notes[0].mine_result, Some(MineResult::Avoided));
+    }
+
+    #[test]
+    fn completed_song_counts_last_mine_as_avoided_at_end_cutoff() {
+        let timing = Arc::new(TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 60.0)],
+                ..TimingSegments::default()
+            },
+            &test_row_to_beat(ROWS_PER_BEAT as usize * 4),
+        ));
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        set_state_timing(&mut state, Arc::clone(&timing));
+
+        let mine_row = ROWS_PER_BEAT as usize;
+        let mine_time_ns = timing.get_time_for_beat_ns(1.0);
+        set_regression_mine(&mut state, 0, 0, mine_row, mine_time_ns);
+        let end_time_ns = mine_time_ns.saturating_add(max_step_distance_ns(
+            &state.timing_profile,
+            state.music_rate,
+        ));
+
+        apply_time_based_mine_avoidance(&mut state, end_time_ns);
+        assert_eq!(state.players[0].mines_avoided, 0);
+        assert_eq!(state.notes[0].mine_result, None);
+
+        finalize_completed_mines(&mut state);
+        assert_eq!(state.players[0].mines_avoided, 1);
+        assert_eq!(state.notes[0].mine_result, Some(MineResult::Avoided));
     }
 
     #[test]
