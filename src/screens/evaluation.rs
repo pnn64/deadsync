@@ -4418,12 +4418,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
-    // --- "ITG" text and Pads (top right) ---
+    // --- "DS" text and Pads (top right) ---
     {
-        let itg_text_x = screen_width() - widescale(55.0, 62.0);
-        let itg_text = tr("Evaluation", "ITGLabel");
-        let itg_font = current_machine_font_key_for_text(FontRole::Header, &itg_text);
-        actors.push(act!(text: font(itg_font): settext(itg_text): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
+        let ds_text_x = screen_width() - widescale(55.0, 62.0);
+        let ds_text = "DS";
+        let ds_font = current_machine_font_key_for_text(FontRole::Header, ds_text);
+        actors.push(act!(text: font(ds_font): settext(ds_text): align(1.0, 0.5): xy(ds_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
         actors.extend(mode_pads::build());
     }
 

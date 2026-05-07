@@ -8398,27 +8398,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
     let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
 
-    let mode_side = if is_p2_single {
-        profile::PlayerSide::P2
-    } else {
-        profile::PlayerSide::P1
-    };
     let scorebox_cycle_enabled = cfg.select_music_scorebox_cycle_itg
         || cfg.select_music_scorebox_cycle_ex
         || cfg.select_music_scorebox_cycle_hard_ex
         || cfg.select_music_scorebox_cycle_tournaments;
-    let mode_chart_hash =
-        if allow_gs_fetch && cfg.show_select_music_scorebox && scorebox_cycle_enabled {
-            let mode_chart = if mode_side == profile::PlayerSide::P2 && is_versus {
-                immediate_chart_p2
-            } else {
-                immediate_chart_p1
-            };
-            mode_chart.map(|c| c.short_hash.as_str())
-        } else {
-            None
-        };
-    let score_mode_text = gs_scorebox::select_music_mode_text(mode_side, mode_chart_hash);
 
     let preferred_idx_p1 = state
         .preferred_difficulty_index
@@ -8454,7 +8437,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
 
     // Pads
     {
-        actors.push(mode_pads::build_label(score_mode_text));
+        actors.push(mode_pads::build_label("DS".to_string()));
         actors.extend(mode_pads::build());
     }
 
