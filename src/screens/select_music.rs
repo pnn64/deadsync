@@ -989,6 +989,7 @@ pub struct State {
     currently_playing_preview_path: Option<PathBuf>,
     currently_playing_preview_start_sec: Option<f32>,
     currently_playing_preview_length_sec: Option<f32>,
+    preview_music_muted: bool,
     prev_selected_index: usize,
     time_since_selection_change: f32,
     lobby_last_joined_code: Option<String>,
@@ -3183,6 +3184,7 @@ pub fn init() -> State {
         currently_playing_preview_path: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
+        preview_music_muted: false,
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
         prev_selected_index: 0,
@@ -3392,6 +3394,7 @@ pub fn init_placeholder() -> State {
         currently_playing_preview_path: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
+        preview_music_muted: false,
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
         prev_selected_index: 0,
@@ -3537,6 +3540,24 @@ fn sync_preview_song(state: &mut State, selected_song: Option<&Arc<SongData>>, l
         state.currently_playing_preview_start_sec = None;
         state.currently_playing_preview_length_sec = None;
         audio::stop_music();
+    }
+}
+
+#[inline(always)]
+fn preview_mute_allowed(state: &State) -> bool {
+    state.out_prompt == OutPromptState::None
+        && state.exit_prompt == ExitPromptState::None
+        && !delayed_selection_updates_blocked(state)
+        && select_music_lobby_lock_text(state).is_none()
+}
+
+#[inline(always)]
+fn toggle_preview_mute(state: &mut State) {
+    state.preview_music_muted = !state.preview_music_muted;
+    if state.preview_music_muted {
+        clear_preview(state);
+    } else {
+        state.time_since_selection_change = PREVIEW_DELAY_SECONDS;
     }
 }
 
@@ -7268,7 +7289,7 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
             audio::play_sfx("assets/sounds/start.ogg");
             // ITGmania parity: force sample preview to start on selection finalize.
             let cfg = config::get();
-            if cfg.show_select_music_previews {
+            if cfg.show_select_music_previews && !state.preview_music_muted {
                 sync_preview_song(state, Some(&song), cfg.select_music_preview_loop);
             }
             state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
@@ -7416,6 +7437,12 @@ pub fn handle_raw_key_event(
 
     if !key.is_some_and(|key| key.pressed) {
         return ScreenAction::None;
+    }
+    if key.is_some_and(|key| key.code == KeyCode::KeyM && !key.repeat)
+        && preview_mute_allowed(state)
+    {
+        toggle_preview_mute(state);
+        return ScreenAction::ConsumeInput;
     }
     if key.is_some_and(|key| key.code == KeyCode::F7) {
         let target_chart_type = profile::get_session_play_style().chart_type();
@@ -7947,7 +7974,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     // --- Delayed Updates ---
-    if cfg.show_select_music_previews && allow_gs_fetch_for_selection(state) {
+    if cfg.show_select_music_previews
+        && !state.preview_music_muted
+        && allow_gs_fetch_for_selection(state)
+    {
         sync_preview_song(state, selected_song.as_ref(), cfg.select_music_preview_loop);
     } else if state.currently_playing_preview_path.is_some() {
         clear_preview(state);
@@ -9966,14 +9996,29 @@ mod tests {
     use super::{
         PREVIEW_DELAY_SECONDS, WheelSortMode, build_displayed_entries,
         build_playlist_entries_from_text, build_playlist_song_lookup,
-        delayed_selection_updates_blocked, init_placeholder, reset_preview_after_gameplay,
-        select_music_lobby_lock_text_for, steps_index_for_side, sync_low_confidence_warning,
+        delayed_selection_updates_blocked, handle_raw_key_event, init_placeholder,
+        reset_preview_after_gameplay, select_music_lobby_lock_text_for, steps_index_for_side,
+        sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
+    use crate::engine::input::RawKeyboardEvent;
     use crate::game::profile;
     use crate::game::song::SongData;
+    use crate::screens::ScreenAction;
     use std::path::PathBuf;
     use std::sync::Arc;
+    use std::time::Instant;
+    use winit::keyboard::KeyCode;
+
+    fn raw_key(code: KeyCode, pressed: bool, repeat: bool) -> RawKeyboardEvent {
+        RawKeyboardEvent {
+            code,
+            pressed,
+            repeat,
+            timestamp: Instant::now(),
+            host_nanos: 0,
+        }
+    }
 
     fn test_song(title: &str) -> Arc<SongData> {
         Arc::new(SongData {
@@ -10157,6 +10202,60 @@ mod tests {
         state.song_search = super::select_music_menu::SongSearchState::Hidden;
         state.downloads_overlay = super::select_music_menu::show_downloads_overlay();
         assert!(delayed_selection_updates_blocked(&state));
+    }
+
+    #[test]
+    fn preview_mute_hotkey_toggles_plain_wheel() {
+        let mut state = init_placeholder();
+        state.currently_playing_preview_path = Some(PathBuf::from("preview.ogg"));
+        state.currently_playing_preview_start_sec = Some(1.0);
+        state.currently_playing_preview_length_sec = Some(10.0);
+
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
+
+        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(state.preview_music_muted);
+        assert_eq!(state.currently_playing_preview_path, None);
+        assert_eq!(state.currently_playing_preview_start_sec, None);
+        assert_eq!(state.currently_playing_preview_length_sec, None);
+
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
+
+        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(!state.preview_music_muted);
+        assert_eq!(state.time_since_selection_change, PREVIEW_DELAY_SECONDS);
+    }
+
+    #[test]
+    fn preview_mute_hotkey_ignores_repeats_and_overlays() {
+        let mut state = init_placeholder();
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, true)), None);
+        assert!(matches!(action, ScreenAction::None));
+        assert!(!state.preview_music_muted);
+
+        state.song_search = super::select_music_menu::begin_song_search_prompt();
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
+        assert!(matches!(action, ScreenAction::None));
+        assert!(!state.preview_music_muted);
+
+        let mut state = init_placeholder();
+        state.lobby_overlay = super::lobby_overlay::show_overlay();
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
+        assert!(matches!(action, ScreenAction::None));
+        assert!(!state.preview_music_muted);
+
+        let mut state = init_placeholder();
+        state.select_music_menu =
+            super::select_music_menu::State::Visible(super::select_music_menu::open());
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
+        assert!(matches!(action, ScreenAction::None));
+        assert!(!state.preview_music_muted);
     }
 
     #[test]

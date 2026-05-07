@@ -3713,6 +3713,7 @@ impl App {
                 options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
                 Vec::new()
             }
+            ScreenAction::ConsumeInput => Vec::new(),
             ScreenAction::None => Vec::new(),
         };
         self.run_commands(commands, event_loop)

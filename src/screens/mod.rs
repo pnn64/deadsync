@@ -53,6 +53,8 @@ pub struct SongOffsetSyncChange {
 #[derive(Debug, Clone)]
 pub enum ScreenAction {
     None,
+    /// Consume the current input edge without scheduling app-level work.
+    ConsumeInput,
     Navigate(Screen),
     /// Navigate immediately without running the current screen's out-transition.
     /// This is used for cases where the current screen already rendered its own
