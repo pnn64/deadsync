@@ -3,9 +3,8 @@ use super::super::constants::MINI_INDICATOR_VARIANTS;
 use super::super::row::index_binding;
 use super::super::row::{BitmaskInit, CursorInit, CycleInit, NumericInit};
 use super::super::state::{
-    EarlyDwMask, ErrorBarOptionsMask, FaPlusMask, GameplayExtrasMask, HideMask,
-    LifeBarOptionsMask, MeasureCounterOptionsMask, PlayerOptionMasks, ResultsExtrasMask,
-    ScrollMask,
+    EarlyDwMask, ErrorBarOptionsMask, FaPlusMask, GameplayExtrasMask, HideMask, LifeBarOptionsMask,
+    MeasureCounterOptionsMask, PlayerOptionMasks, ResultsExtrasMask, ScrollMask,
 };
 use super::*;
 use crate::game::profile as gp;
@@ -463,8 +462,7 @@ const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
                 0,
                 "ErrorBarOptionsMask init bits exceed u8 width",
             );
-            m.error_bar_options =
-                ErrorBarOptionsMask::from_bits_retain(b as u8);
+            m.error_bar_options = ErrorBarOptionsMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     }),
@@ -498,8 +496,7 @@ const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
                 0,
                 "MeasureCounterOptionsMask init bits exceed u8 width",
             );
-            m.measure_counter_options =
-                MeasureCounterOptionsMask::from_bits_retain(b as u8);
+            m.measure_counter_options = MeasureCounterOptionsMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
     }),
@@ -609,9 +606,7 @@ const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding::HandRolled {
 
 const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        if choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
-            .is_none()
-        {
+        if choice::cycle_choice_index(state, player_idx, row_id, delta, wrap).is_none() {
             return Outcome::NONE;
         }
         Outcome::persisted_with_visibility()
@@ -620,8 +615,7 @@ const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {
 
 const MINI_INDICATOR: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -652,8 +646,7 @@ const MINI_INDICATOR: CustomBinding = CustomBinding {
 
 const JUDGMENT_TILT_INTENSITY: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -687,8 +680,7 @@ fn chosen_tilt_threshold_ms(
     delta: isize,
     wrap: NavWrap,
 ) -> Option<u32> {
-    let new_index =
-        choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)?;
+    let new_index = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)?;
     let choice = state
         .pane()
         .row_map
@@ -752,8 +744,7 @@ const JUDGMENT_TILT_MAX_THRESHOLD: CustomBinding = CustomBinding {
 
 const MEASURE_COUNTER_LOOKAHEAD: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -769,8 +760,7 @@ const MEASURE_COUNTER_LOOKAHEAD: CustomBinding = CustomBinding {
 
 const CUSTOM_BLUE_FANTASTIC_WINDOW_MS: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };

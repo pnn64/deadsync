@@ -172,9 +172,7 @@ fn apply_noteskin_delta(
     wrap: NavWrap,
     apply: fn(&mut State, usize, &str, bool, gp::PlayerSide),
 ) -> Outcome {
-    let Some(new_index) =
-        choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
-    else {
+    let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap) else {
         return Outcome::NONE;
     };
     let choice = state
@@ -350,8 +348,7 @@ const SPEED_MOD: CustomBinding = CustomBinding {
 
 const TYPE_OF_SPEED_MOD: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -398,8 +395,7 @@ const TYPE_OF_SPEED_MOD: CustomBinding = CustomBinding {
 
 const MINI: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -426,8 +422,7 @@ const MINI: CustomBinding = CustomBinding {
 
 const JUDGMENT_FONT: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -449,8 +444,7 @@ const JUDGMENT_FONT: CustomBinding = CustomBinding {
 
 const HOLD_JUDGMENT: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };
@@ -474,8 +468,7 @@ const HOLD_JUDGMENT: CustomBinding = CustomBinding {
 
 const STEPCHART: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) =
-            choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
         else {
             return Outcome::NONE;
         };

@@ -6856,34 +6856,26 @@ pub fn push_actors(
 
             // Difficulty Box
             let y = 56.0;
-            let mut diff_children =
-                Vec::with_capacity(if cfg.zmod_rating_box_text { 3 } else { 2 });
-            diff_children.push(act!(quad:
-                align(0.5, 0.5): xy(0.0, 0.0): zoomto(30.0, 30.0):
-                diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0)
+            actors.push(act!(quad:
+                align(0.5, 0.5): xy(diff_x, y): zoomto(30.0, 30.0):
+                diffuse(difficulty_color[0], difficulty_color[1], difficulty_color[2], 1.0):
+                z(90)
             ));
             let meter_y = if cfg.zmod_rating_box_text { -4.0 } else { 0.0 };
-            diff_children.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)): settext(meter_text): align(0.5, 0.5): xy(0.0, meter_y):
-                zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0)
+            actors.push(act!(text:
+                font(current_machine_font_key(FontRole::Header)): settext(meter_text): align(0.5, 0.5): xy(diff_x, y + meter_y):
+                zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0): z(90)
             ));
             if cfg.zmod_rating_box_text {
-                diff_children.push(act!(text:
+                actors.push(act!(text:
                     font("miso"):
                     settext(meter_detail_text):
-                    align(0.5, 0.5): xy(0.0, 9.5):
+                    align(0.5, 0.5): xy(diff_x, y + 9.5):
                     zoom(0.5):
-                    diffuse(0.0, 0.0, 0.0, 1.0)
+                    diffuse(0.0, 0.0, 0.0, 1.0):
+                    z(90)
                 ));
             }
-            actors.push(Actor::Frame {
-                align: [0.5, 0.5],
-                offset: [diff_x, y],
-                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-                children: diff_children,
-                background: None,
-                z: 90,
-            });
 
             // Score Display
             let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
@@ -7031,31 +7023,29 @@ pub fn push_actors(
             let h = 22.0;
             let box_cx = screen_center_x();
             let box_cy = 20.0;
-            let mut frame_children = Vec::with_capacity(4);
-            frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w, h): diffuse(1.0, 1.0, 1.0, 1.0): z(0) ));
-            frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w - 4.0, h - 4.0): diffuse(0.0, 0.0, 0.0, 1.0): z(1) ));
+            let box_left = box_cx - w * 0.5;
+            actors.push(act!(quad:
+                align(0.5, 0.5): xy(box_cx, box_cy): zoomto(w, h):
+                diffuse(1.0, 1.0, 1.0, 1.0): z(90)
+            ));
+            actors.push(act!(quad:
+                align(0.5, 0.5): xy(box_cx, box_cy): zoomto(w - 4.0, h - 4.0):
+                diffuse(0.0, 0.0, 0.0, 1.0): z(91)
+            ));
             if state.song.total_length_seconds > 0 && state.current_music_time_display >= 0.0 {
                 let progress = (state.current_music_time_display
                     / state.song.total_length_seconds as f32)
                     .clamp(0.0, 1.0);
-                frame_children.push(act!(quad:
-                    align(0.0, 0.5): xy(2.0, h / 2.0): zoomto((w - 4.0) * progress, h - 4.0):
-                    diffuse(player_color[0], player_color[1], player_color[2], 1.0): z(2)
+                actors.push(act!(quad:
+                    align(0.0, 0.5): xy(box_left + 2.0, box_cy): zoomto((w - 4.0) * progress, h - 4.0):
+                    diffuse(player_color[0], player_color[1], player_color[2], 1.0): z(92)
                 ));
             }
             let full_title = state.song_full_title.clone();
-            frame_children.push(act!(text:
-                font("miso"): settext(full_title): align(0.5, 0.5): xy(w / 2.0, h / 2.0):
-                zoom(0.8): maxwidth(screen_width() / 2.5 - 10.0): horizalign(center): z(3)
+            actors.push(act!(text:
+                font("miso"): settext(full_title): align(0.5, 0.5): xy(box_cx, box_cy):
+                zoom(0.8): maxwidth(screen_width() / 2.5 - 10.0): horizalign(center): z(93)
             ));
-            actors.push(Actor::Frame {
-                align: [0.5, 0.5],
-                offset: [box_cx, box_cy],
-                size: [SizeSpec::Px(w), SizeSpec::Px(h)],
-                background: None,
-                z: 90,
-                children: frame_children,
-            });
         }
         // --- Life Meter ---
         {

@@ -557,18 +557,8 @@ pub(super) mod tests {
         // Accumulated across all three panes (the fix): Reverse + Cross preserved.
         let mut combined = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut main_rows, &profile, P1, &mut combined);
-        panes::apply_profile_defaults(
-            &mut advanced_rows,
-            &profile,
-            P1,
-            &mut combined,
-        );
-        panes::apply_profile_defaults(
-            &mut uncommon_rows,
-            &profile,
-            P1,
-            &mut combined,
-        );
+        panes::apply_profile_defaults(&mut advanced_rows, &profile, P1, &mut combined);
+        panes::apply_profile_defaults(&mut uncommon_rows, &profile, P1, &mut combined);
         assert!(
             combined.scroll.contains(ScrollMask::REVERSE),
             "Reverse bit preserved after in-place accumulation"
@@ -2037,11 +2027,11 @@ pub(super) mod tests {
         );
     }
 
+    use super::{BitMapping, BitmaskWriteback};
     use crate::game::profile::{
         AccelEffectsMask, AppearanceEffectsMask, HoldsMask, InsertMask, RemoveMask,
         VisualEffectsMask,
     };
-    use super::{BitMapping, BitmaskWriteback};
 
     fn install_bitmask_row(
         state: &mut super::State,
@@ -2054,7 +2044,12 @@ pub(super) mod tests {
         state.pane_mut().row_map.display_order.push(id);
         state.pane_mut().row_map.insert(row);
         let row_index = state.pane().row_map.display_order().len() - 1;
-        state.pane_mut().row_map.get_mut(id).unwrap().selected_choice_index = [choice_index, choice_index];
+        state
+            .pane_mut()
+            .row_map
+            .get_mut(id)
+            .unwrap()
+            .selected_choice_index = [choice_index, choice_index];
         state.pane_mut().selected_row[P1] = row_index;
         row_index
     }
@@ -2203,7 +2198,10 @@ pub(super) mod tests {
         handle_start_event(&mut state, &asset_manager, active, P1);
 
         assert_eq!(state.option_masks[P1].remove.bits(), 1u8 << 5);
-        assert_eq!(state.player_profiles[P1].remove_active_mask.bits(), 1u8 << 5);
+        assert_eq!(
+            state.player_profiles[P1].remove_active_mask.bits(),
+            1u8 << 5
+        );
     }
 
     #[test]
@@ -2222,10 +2220,7 @@ pub(super) mod tests {
                     p.holds_active_mask = HoldsMask::from_bits_truncate(b as u8);
                 },
                 persist_for_side: |s, b| {
-                    profile::update_holds_mask_for_side(
-                        s,
-                        HoldsMask::from_bits_truncate(b as u8),
-                    );
+                    profile::update_holds_mask_for_side(s, HoldsMask::from_bits_truncate(b as u8));
                 },
                 bit_mapping: BitMapping::Sequential { width: 5 },
             },
@@ -2300,9 +2295,7 @@ pub(super) mod tests {
             init: BitmaskInit {
                 from_profile: |p| p.visual_effects_active_mask.bits() as u32,
                 get_active: |m| m.visual_effects.bits() as u32,
-                set_active: |m, b| {
-                    m.visual_effects = VisualEffectsMask::from_bits_retain(b as u16)
-                },
+                set_active: |m, b| m.visual_effects = VisualEffectsMask::from_bits_retain(b as u16),
                 cursor: CursorInit::FirstActiveBit,
             },
             writeback: BitmaskWriteback {
@@ -2323,8 +2316,16 @@ pub(super) mod tests {
             RowId::Effect,
             binding,
             &[
-                "Drunk", "Dizzy", "Confusion", "Big", "Flip", "Invert", "Tornado", "Tipsy",
-                "Bumpy", "Beat",
+                "Drunk",
+                "Dizzy",
+                "Confusion",
+                "Big",
+                "Flip",
+                "Invert",
+                "Tornado",
+                "Tipsy",
+                "Bumpy",
+                "Beat",
             ],
             9,
         );
@@ -2383,7 +2384,9 @@ pub(super) mod tests {
 
         assert_eq!(state.option_masks[P1].appearance_effects.bits(), 1u8 << 4);
         assert_eq!(
-            state.player_profiles[P1].appearance_effects_active_mask.bits(),
+            state.player_profiles[P1]
+                .appearance_effects_active_mask
+                .bits(),
             1u8 << 4
         );
     }

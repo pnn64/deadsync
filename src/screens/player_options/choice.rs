@@ -176,11 +176,7 @@ pub(super) fn dispatch_behavior_toggle(state: &mut State, player_idx: usize, id:
 /// Returns `true` when a toggle was applied; `false` when the row was not
 /// focused, the binding was not `Generic`, or the choice index produced
 /// no bit.
-pub(super) fn toggle_bitmask_row_generic(
-    state: &mut State,
-    player_idx: usize,
-    id: RowId,
-) -> bool {
+pub(super) fn toggle_bitmask_row_generic(state: &mut State, player_idx: usize, id: RowId) -> bool {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.pane().selected_row[idx];
     let focused_id = match state.pane().row_map.display_order().get(row_index) {
@@ -452,7 +448,6 @@ pub(super) fn toggle_hide_row(state: &mut State, player_idx: usize) {
     sync_selected_rows_with_visibility(state, session_active_players());
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
-
 
 pub(super) fn toggle_life_bar_options_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);

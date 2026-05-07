@@ -1167,13 +1167,14 @@ pub fn push_double_step_stats(
         let frame_cy = pane_cy + ((-10.0 + 0.8 * 28.0) * banner_data_zoom);
         let frame_zoom = 0.8 * banner_data_zoom;
 
-        actors.push(build_holds_mines_rolls_pane_at(
+        push_holds_mines_rolls_pane_at(
+            actors,
             state,
             asset_manager,
             frame_cx,
             frame_cy,
             frame_zoom,
-        ));
+        );
     }
 
     // Scorebox.lua (double): x(GetNotefieldWidth() - 140), y(-115)
@@ -1531,13 +1532,14 @@ fn build_steps_info(
     ));
 }
 
-fn build_holds_mines_rolls_pane_at(
+fn push_holds_mines_rolls_pane_at(
+    actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
     frame_cx: f32,
     frame_cy: f32,
     frame_zoom: f32,
-) -> Actor {
+) {
     let p = &state.players[0];
 
     let categories = [
@@ -1558,7 +1560,7 @@ fn build_holds_mines_rolls_pane_at(
     };
     let digits_to_fmt = digits_needed.clamp(3, 4);
     let row_height = 28.0 * frame_zoom;
-    let mut children = Vec::with_capacity(categories.len() * (digits_to_fmt * 2 + 2));
+    actors.reserve(categories.len() * (digits_to_fmt * 2 + 2));
 
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |metrics_font| {
@@ -1577,8 +1579,8 @@ fn build_holds_mines_rolls_pane_at(
             let fixed_char_width_scaled_for_label = LOGICAL_CHAR_WIDTH_FOR_LABEL * value_zoom;
 
             for (i, (label_index, achieved, total)) in categories.iter().enumerate() {
-                let item_y = (i as f32 - 1.0) * row_height;
-                let right_anchor_x = 0.0;
+                let item_y = frame_cy + (i as f32 - 1.0) * row_height;
+                let right_anchor_x = frame_cx;
                 let mut cursor_x = right_anchor_x;
 
                 let possible_str = cached_padded_num(*total, digits_to_fmt);
@@ -1593,18 +1595,18 @@ fn build_holds_mines_rolls_pane_at(
                     let original_index = possible_bytes.len() - 1 - char_idx;
                     let color = if original_index < possible_split { GRAY } else { white };
                     let x_pos = cursor_x - (char_idx as f32 * digit_width);
-                    children.push(act!(text:
+                    actors.push(act!(text:
                         font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
                         align(1.0, 0.5): xy(x_pos, item_y):
-                        zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
+                        zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3]): z(70)
                     ));
                 }
                 cursor_x -= possible_bytes.len() as f32 * digit_width;
 
-                children.push(act!(text:
+                actors.push(act!(text:
                     font(current_machine_font_key(FontRole::ScreenEval)): settext(SLASH_TEXT.clone()):
                     align(1.0, 0.5): xy(cursor_x, item_y):
-                    zoom(value_zoom): diffuse(GRAY[0], GRAY[1], GRAY[2], GRAY[3])
+                    zoom(value_zoom): diffuse(GRAY[0], GRAY[1], GRAY[2], GRAY[3]): z(70)
                 ));
                 cursor_x -= slash_width;
 
@@ -1612,10 +1614,10 @@ fn build_holds_mines_rolls_pane_at(
                     let original_index = achieved_bytes.len() - 1 - char_idx;
                     let color = if original_index < achieved_split { GRAY } else { white };
                     let x_pos = cursor_x - (char_idx as f32 * digit_width);
-                    children.push(act!(text:
+                    actors.push(act!(text:
                         font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
                         align(1.0, 0.5): xy(x_pos, item_y):
-                        zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
+                        zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3]): z(70)
                     ));
                 }
 
@@ -1624,25 +1626,17 @@ fn build_holds_mines_rolls_pane_at(
                     * fixed_char_width_scaled_for_label;
                 let label_x = right_anchor_x - total_value_width_for_label - (10.0 * frame_zoom);
 
-                children.push(act!(text:
+                actors.push(act!(text:
                     font("miso"): settext(holds_mines_rolls_label_text(*label_index)):
                     align(1.0, 0.5): xy(label_x, item_y):
                     zoom(label_zoom):
                     horizalign(right):
-                    diffuse(white[0], white[1], white[2], white[3])
+                    diffuse(white[0], white[1], white[2], white[3]):
+                    z(70)
                 ));
             }
         });
     });
-
-    Actor::Frame {
-        align: [0.5, 0.5],
-        offset: [frame_cx, frame_cy],
-        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-        children,
-        background: None,
-        z: 70,
-    }
 }
 
 fn notefield_width(state: &State) -> Option<f32> {
@@ -1695,7 +1689,7 @@ fn build_holds_mines_rolls_pane(
     };
     let digits_to_fmt = digits_needed.clamp(3, 4);
     let row_height = 28.0 * frame_zoom;
-    let mut children = Vec::with_capacity(categories.len() * (digits_to_fmt * 2 + 2));
+    actors.reserve(categories.len() * (digits_to_fmt * 2 + 2));
 
     asset_manager.with_fonts(|all_fonts| asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |metrics_font| {
         let value_zoom = 0.4 * frame_zoom;
@@ -1714,10 +1708,10 @@ fn build_holds_mines_rolls_pane(
         let fixed_char_width_scaled_for_label = LOGICAL_CHAR_WIDTH_FOR_LABEL * value_zoom;
 
         for (i, (label_index, achieved, total)) in categories.iter().enumerate() {
-            let item_y = (i as f32 - 1.0) * row_height;
+            let item_y = frame_cy + (i as f32 - 1.0) * row_height;
             let right_anchor_x = match player_side {
-                profile::PlayerSide::P1 => 0.0,
-                profile::PlayerSide::P2 => 100.0 * frame_zoom,
+                profile::PlayerSide::P1 => frame_cx,
+                profile::PlayerSide::P2 => frame_cx + 100.0 * frame_zoom,
             };
             let mut cursor_x = right_anchor_x;
 
@@ -1738,16 +1732,16 @@ fn build_holds_mines_rolls_pane(
                     white
                 };
                 let x_pos = cursor_x - (char_idx as f32 * digit_width);
-                children.push(act!(text:
+                actors.push(act!(text:
                     font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(possible_bytes[original_index])):
                     align(1.0, 0.5): xy(x_pos, item_y):
-                    zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
+                    zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3]): z(70)
                 ));
             }
             cursor_x -= possible_bytes.len() as f32 * digit_width;
 
             // 2. Draw slash
-            children.push(act!(text: font(current_machine_font_key(FontRole::ScreenEval)): settext(SLASH_TEXT.clone()): align(1.0, 0.5): xy(cursor_x, item_y): zoom(value_zoom): diffuse(gray[0], gray[1], gray[2], gray[3])));
+            actors.push(act!(text: font(current_machine_font_key(FontRole::ScreenEval)): settext(SLASH_TEXT.clone()): align(1.0, 0.5): xy(cursor_x, item_y): zoom(value_zoom): diffuse(gray[0], gray[1], gray[2], gray[3]): z(70)));
             cursor_x -= slash_width;
 
             // 3. Draw "achieved" number
@@ -1759,10 +1753,10 @@ fn build_holds_mines_rolls_pane(
                     white
                 };
                 let x_pos = cursor_x - (char_idx as f32 * digit_width);
-                children.push(act!(text:
+                actors.push(act!(text:
                     font(current_machine_font_key(FontRole::ScreenEval)): settext(digit_text(achieved_bytes[original_index])):
                     align(1.0, 0.5): xy(x_pos, item_y):
-                    zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3])
+                    zoom(value_zoom): diffuse(color[0], color[1], color[2], color[3]): z(70)
                 ));
             }
 
@@ -1770,21 +1764,12 @@ fn build_holds_mines_rolls_pane(
             let total_value_width_for_label = (achieved_str.len() + 1 + possible_str.len()) as f32 * fixed_char_width_scaled_for_label;
             let label_x = right_anchor_x - total_value_width_for_label - (10.0 * frame_zoom);
 
-            children.push(act!(text:
+            actors.push(act!(text:
                 font("miso"): settext(holds_mines_rolls_label_text(*label_index)): align(1.0, 0.5): xy(label_x, item_y):
-                zoom(label_zoom): horizalign(right): diffuse(white[0], white[1], white[2], white[3])
+                zoom(label_zoom): horizalign(right): diffuse(white[0], white[1], white[2], white[3]): z(70)
             ));
         }
     }));
-
-    actors.push(Actor::Frame {
-        align: [0.5, 0.5],
-        offset: [frame_cx, frame_cy],
-        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-        children,
-        background: None,
-        z: 70,
-    });
 }
 
 fn build_scorebox_pane(
