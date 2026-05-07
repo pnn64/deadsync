@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::act;
+use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -15,8 +16,6 @@ const DIM_ALPHA: f32 = 0.8;
 const HINT_Y_OFFSET: f32 = 120.0;
 const HINT_TEXT: &str = "PRESS &SELECT; TO CANCEL";
 const WHEEL_SLOTS: usize = 9;
-const FONT_TOP: &str = "miso";
-const FONT_BOTTOM: &str = "wendy";
 const CATEGORY_INDENT: f32 = 8.0;
 
 pub const FOCUS_TWEEN_SECONDS: f32 = 0.15;
@@ -376,7 +375,7 @@ pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
 
     // Hint text below the menu
     actors.push(act!(text:
-        font(FONT_BOTTOM):
+        font(current_machine_font_key(FontRole::Bold)):
         settext(HINT_TEXT):
         align(0.5, 0.5):
         xy(cx, cy + HINT_Y_OFFSET):
@@ -490,7 +489,7 @@ fn render_row(
             ));
             // Category label
             let mut label_actor = act!(text:
-                font(FONT_BOTTOM):
+                font(current_machine_font_key(FontRole::Bold)):
                 settext(*label):
                 align(0.0, 0.5):
                 xy(left_x + 27.0, y):
@@ -532,7 +531,7 @@ fn render_item_text(
     };
     if !item.top_label.as_str().is_empty() {
         let mut top = act!(text:
-            font(FONT_TOP):
+            font(current_machine_font_key(FontRole::Normal)):
             settext(item.top_label.clone()):
             align(0.0, 1.0):
             xy(x, y - 5.0):
@@ -546,7 +545,7 @@ fn render_item_text(
         actors.push(top);
     }
     let mut bottom = act!(text:
-        font(FONT_BOTTOM):
+        font(current_machine_font_key(FontRole::Bold)):
         settext(item.bottom_label.clone()):
         align(0.0, 0.5):
         xy(x, y + 4.0):
