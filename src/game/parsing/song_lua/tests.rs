@@ -8097,6 +8097,13 @@ return Def.ActorFrame{
             if getVar("ConstellationBg") ~= 1 then
                 error("custom mod variable masked by PlayerOptions")
             end
+            local decoy = Def.ActorFrame{ Name="Decoy" }
+            local constellationFrame = decoy:GetChild("ConstellationFrame")
+            local starfieldFrame = constellationFrame and constellationFrame:GetChild("StarfieldFrame")
+            local starFrame = starfieldFrame and starfieldFrame:GetChild("StarFrame")
+            if starFrame ~= nil then
+                error("missing actor children should not synthesize a StarFrame")
+            end
             self:x(12)
         end,
     },

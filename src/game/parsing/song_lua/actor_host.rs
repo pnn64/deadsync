@@ -353,6 +353,32 @@ fn create_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Resu
     Ok(child)
 }
 
+fn can_create_named_child_actor(parent: &Table, name: &str) -> mlua::Result<bool> {
+    let parent_type = parent.get::<Option<String>>("__songlua_actor_type")?;
+    if parent_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("PlayerActor"))
+        && name.eq_ignore_ascii_case("NoteField")
+        && parent
+            .get::<Option<i64>>("__songlua_player_index")?
+            .is_some()
+    {
+        return Ok(true);
+    }
+    if parent
+        .get::<Option<String>>("__songlua_top_screen_child_name")?
+        .as_deref()
+        .is_some_and(|child_name| child_name.eq_ignore_ascii_case("Underlay"))
+    {
+        return Ok(underlay_score_index(name).is_some()
+            || name.eq_ignore_ascii_case("SongMeter")
+            || top_screen_step_stats_pane_index(name).is_some()
+            || top_screen_danger_index(name).is_some()
+            || name.eq_ignore_ascii_case("Header"));
+    }
+    Ok(false)
+}
+
 fn create_named_actor(lua: &Lua, actor_type: &'static str, name: &str) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, actor_type)?;
     actor.set("Name", name)?;
@@ -9269,6 +9295,9 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 let children = actor_named_children(lua, &actor)?;
                 if let Some(child) = children.get::<Option<Table>>(name.as_str())? {
                     return Ok(Value::Table(child));
+                }
+                if !can_create_named_child_actor(&actor, &name)? {
+                    return Ok(Value::Nil);
                 }
                 let child = create_named_child_actor(lua, &actor, &name)?;
                 actor_children(lua, &actor)?.set(name.as_str(), child.clone())?;
