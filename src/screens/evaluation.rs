@@ -3556,8 +3556,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
 
             // Breakdown Text (under grade)
+            let breakdown_x = if cfg.zmod_rating_box_text {
+                upper_origin_x + 148.0 * dir
+            } else {
+                upper_origin_x + 150.0 * dir
+            };
             let breakdown_width = if cfg.zmod_rating_box_text {
-                screen_width() * 0.26
+                let banner_half_w = 418.0 * 0.7 * 0.5;
+                let banner_edge_x = screen_center_x() + banner_half_w * dir;
+                ((breakdown_x - banner_edge_x) * dir - 5.0).max(24.0)
             } else {
                 155.0
             };
@@ -3605,11 +3612,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
 
             {
-                let x = if cfg.zmod_rating_box_text {
-                    upper_origin_x + 148.0 * dir
-                } else {
-                    upper_origin_x + 150.0 * dir
-                };
+                let x = breakdown_x;
                 let y = if cfg.zmod_rating_box_text {
                     cy - 97.0
                 } else {
@@ -3631,12 +3634,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     all_fonts,
                                 ) as f32;
                                 let line_h = miso_font.height.max(1) as f32;
-                                let bg_w = (text_w + 10.0).min(breakdown_width).max(10.0) * 0.7;
+                                let bg_w = (text_w * 0.7 + 7.0).min(breakdown_width).max(7.0);
                                 let bg_h = (line_h + 4.0).max(4.0) * 0.7;
                                 (bg_w, bg_h)
                             })
                         })
-                        .unwrap_or((breakdown_width * 0.7, 14.0));
+                        .unwrap_or((breakdown_width, 14.0));
                     let bg_x = upper_origin_x + 150.0 * dir;
                     let bg_y = cy - 95.5;
                     let (fadeleft, faderight) = if side == profile::PlayerSide::P1 {
