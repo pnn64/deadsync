@@ -1666,12 +1666,11 @@ const fn hold_glow_color(alpha: f32) -> [f32; 4] {
 }
 
 #[inline(always)]
-fn push_hold_strip_quad(
-    out: &mut Vec<TexturedMeshVertex>,
+fn hold_strip_quad(
     top: [TexturedMeshVertex; 2],
     bottom: [TexturedMeshVertex; 2],
-) {
-    out.extend_from_slice(&[top[0], top[1], bottom[1], top[0], bottom[1], bottom[0]]);
+) -> [TexturedMeshVertex; 6] {
+    [top[0], top[1], bottom[1], top[0], bottom[1], bottom[0]]
 }
 
 #[inline(always)]
@@ -5354,10 +5353,8 @@ pub fn build_bundles(
                             let body_slice_step = if hold_depth_test { 4.0 } else { 16.0 };
                             let use_body_mesh =
                                 body_slot.model.is_none() && !hold_y_rotation_active;
-                            let mut body_mesh_vertices =
-                                use_body_mesh.then(|| Vec::with_capacity(96));
-                            let mut body_glow_vertices =
-                                use_body_mesh.then(|| Vec::with_capacity(96));
+                            let mut body_mesh_vertices: Option<Vec<TexturedMeshVertex>> = None;
+                            let mut body_glow_vertices: Option<Vec<TexturedMeshVertex>> = None;
                             let mut prev_body_row: Option<[[f32; 3]; 2]> = None;
 
                             while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
@@ -5486,7 +5483,7 @@ pub fn build_bundles(
                                         Some(v) => v.max(slice_bottom),
                                     });
 
-                                    if let Some(mesh_vertices) = body_mesh_vertices.as_mut() {
+                                    if use_body_mesh {
                                         let top_alpha = note_alpha(
                                             slice_top_travel + tipsy_y_for_col(local_col),
                                             elapsed_screen,
@@ -5576,11 +5573,12 @@ pub fn build_bundles(
                                                 hold_diffuse[3] * bottom_alpha,
                                             ],
                                         );
-                                        push_hold_strip_quad(mesh_vertices, top_row, bottom_row);
-                                        if let Some(glow_vertices) = body_glow_vertices.as_mut()
-                                            && (top_glow > f32::EPSILON
-                                                || bottom_glow > f32::EPSILON)
-                                        {
+                                        let mesh_vertices = body_mesh_vertices
+                                            .get_or_insert_with(|| Vec::with_capacity(96));
+                                        mesh_vertices.extend_from_slice(&hold_strip_quad(
+                                            top_row, bottom_row,
+                                        ));
+                                        if top_glow > f32::EPSILON || bottom_glow > f32::EPSILON {
                                             let top_glow_row = hold_strip_row_from_positions(
                                                 top_row[0].pos,
                                                 top_row[1].pos,
@@ -5597,11 +5595,12 @@ pub fn build_bundles(
                                                 slice_v1,
                                                 hold_glow_color(bottom_glow),
                                             );
-                                            push_hold_strip_quad(
-                                                glow_vertices,
+                                            let glow_vertices = body_glow_vertices
+                                                .get_or_insert_with(|| Vec::with_capacity(96));
+                                            glow_vertices.extend_from_slice(&hold_strip_quad(
                                                 top_glow_row,
                                                 bottom_glow_row,
-                                            );
+                                            ));
                                         }
                                         body_tail_row =
                                             Some([bottom_row[0].pos, bottom_row[1].pos]);
@@ -5842,11 +5841,9 @@ pub fn build_bundles(
                                     ],
                                 )
                             };
-                            let mut cap_vertices = Vec::with_capacity(6);
-                            push_hold_strip_quad(&mut cap_vertices, top_row, bottom_row);
                             actors.push(hold_strip_actor(
                                 cap_slot.texture_key_shared(),
-                                Arc::from(cap_vertices),
+                                Arc::new(hold_strip_quad(top_row, bottom_row)),
                                 BlendMode::Alpha,
                                 hold_depth_test,
                                 Z_HOLD_CAP as i16,
@@ -5868,15 +5865,9 @@ pub fn build_bundles(
                                     v1,
                                     hold_glow_color(bottom_glow),
                                 );
-                                let mut cap_glow_vertices = Vec::with_capacity(6);
-                                push_hold_strip_quad(
-                                    &mut cap_glow_vertices,
-                                    top_glow_row,
-                                    bottom_glow_row,
-                                );
                                 actors.push(hold_strip_actor(
                                     cap_slot.texture_key_shared(),
-                                    Arc::from(cap_glow_vertices),
+                                    Arc::new(hold_strip_quad(top_glow_row, bottom_glow_row)),
                                     BlendMode::Alpha,
                                     hold_depth_test,
                                     Z_HOLD_GLOW as i16,
@@ -6111,11 +6102,9 @@ pub fn build_bundles(
                                     hold_diffuse[3] * bottom_alpha,
                                 ],
                             );
-                            let mut cap_vertices = Vec::with_capacity(6);
-                            push_hold_strip_quad(&mut cap_vertices, top_row, bottom_row);
                             actors.push(hold_strip_actor(
                                 cap_slot.texture_key_shared(),
-                                Arc::from(cap_vertices),
+                                Arc::new(hold_strip_quad(top_row, bottom_row)),
                                 BlendMode::Alpha,
                                 hold_depth_test,
                                 Z_HOLD_CAP as i16,
@@ -6137,15 +6126,9 @@ pub fn build_bundles(
                                     v1,
                                     hold_glow_color(bottom_glow),
                                 );
-                                let mut cap_glow_vertices = Vec::with_capacity(6);
-                                push_hold_strip_quad(
-                                    &mut cap_glow_vertices,
-                                    top_glow_row,
-                                    bottom_glow_row,
-                                );
                                 actors.push(hold_strip_actor(
                                     cap_slot.texture_key_shared(),
-                                    Arc::from(cap_glow_vertices),
+                                    Arc::new(hold_strip_quad(top_glow_row, bottom_glow_row)),
                                     BlendMode::Alpha,
                                     hold_depth_test,
                                     Z_HOLD_GLOW as i16,
