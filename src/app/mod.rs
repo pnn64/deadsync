@@ -3081,7 +3081,14 @@ impl App {
         self.update_fps_stats(redraw_started);
         let screens = &self.state.screens;
         let current_screen = screens.current_screen;
-        let post_select_banner_paths = if config::get().show_select_music_video_banners
+        let (show_select_music_video_banners, show_select_music_banners) = {
+            let cfg = config::get();
+            (
+                cfg.show_select_music_video_banners,
+                cfg.show_select_music_banners,
+            )
+        };
+        let post_select_banner_paths = if show_select_music_video_banners
             && matches!(
                 current_screen,
                 CurrentScreen::EvaluationSummary | CurrentScreen::Initials
@@ -3109,8 +3116,8 @@ impl App {
             match current_screen {
                 CurrentScreen::SelectMusic => {
                     let state = &screens.select_music_state;
-                    let desired_path = if config::get().show_select_music_video_banners
-                        && config::get().show_select_music_banners
+                    let desired_path = if show_select_music_video_banners
+                        && show_select_music_banners
                         && state.banner_high_quality_requested
                     {
                         match state.entries.get(state.selected_index) {
@@ -3133,8 +3140,8 @@ impl App {
                 }
                 CurrentScreen::SelectCourse => {
                     let state = &screens.select_course_state;
-                    let desired_path = if config::get().show_select_music_video_banners
-                        && config::get().show_select_music_banners
+                    let desired_path = if show_select_music_video_banners
+                        && show_select_music_banners
                         && state.banner_high_quality_requested
                     {
                         match state.entries.get(state.selected_index) {
@@ -3156,7 +3163,7 @@ impl App {
                     );
                 }
                 CurrentScreen::Evaluation => {
-                    let desired_path = if config::get().show_select_music_video_banners {
+                    let desired_path = if show_select_music_video_banners {
                         screens
                             .evaluation_state
                             .score_info
