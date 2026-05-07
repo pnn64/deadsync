@@ -8062,6 +8062,64 @@ return Def.ActorFrame{
 }
 
 #[test]
+fn compile_song_lua_custom_mod_vars_do_not_probe_as_player_options() {
+    let song_dir = test_dir("custom-mod-vars-player-options");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
+local activeMods = { ConstellationBg = { value = 1 } }
+
+local function getVar(name)
+    local value = 0
+    if not po[name] then
+        local activeMod = activeMods[name]
+        if activeMod and activeMod.value then
+            value = activeMod.value
+        end
+    end
+    return value
+end
+
+return Def.ActorFrame{
+    InitCommand=function(self)
+        if type(po["MoveX16"]) ~= "function" then
+            error("expected real multicol PlayerOptions method")
+        end
+        if po["ConstellationBg"] ~= nil then
+            error("custom mod variable should not be a PlayerOptions method")
+        end
+    end,
+    Def.ActorFrame{
+        Name="ConstellationFrame",
+        ConstellationBgShowMessageCommand=function(self)
+            if getVar("ConstellationBg") ~= 1 then
+                error("custom mod variable masked by PlayerOptions")
+            end
+            self:x(12)
+        end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                MESSAGEMAN:Broadcast("ConstellationBgShow")
+            end)
+        end,
+    },
+}
+"#,
+    )
+    .unwrap();
+
+    compile_song_lua(
+        &entry,
+        &SongLuaCompileContext::new(&song_dir, "Custom Mod Vars"),
+    )
+    .unwrap();
+}
+
+#[test]
 fn compile_song_lua_player_options_speed_setters_chain() {
     let song_dir = test_dir("player-options-speed-setters");
     let entry = song_dir.join("default.lua");

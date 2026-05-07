@@ -514,6 +514,9 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
             let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {
                 return Ok(Value::Nil);
             };
+            if !is_player_option_method_name(&name) {
+                return Ok(Value::Nil);
+            }
             Ok(Value::Function(create_player_option_method(
                 lua,
                 &fallback_owner,
@@ -523,6 +526,17 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
     )?;
     let _ = table.set_metatable(Some(mt));
     Ok(table)
+}
+
+fn is_player_option_method_name(name: &str) -> bool {
+    SONG_LUA_PLAYER_OPTION_CAPABILITIES.contains(&name)
+        || SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES
+            .iter()
+            .any(|prefix| {
+                name.strip_prefix(prefix)
+                    .and_then(|suffix| suffix.parse::<usize>().ok())
+                    .is_some_and(|column| (1..=16).contains(&column))
+            })
 }
 
 fn disabled_timing_windows(lua: &Lua, owner: &Table) -> mlua::Result<Table> {

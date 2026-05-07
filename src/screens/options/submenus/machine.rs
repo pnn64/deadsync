@@ -8,6 +8,15 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::Font,
+        label: lookup_key("OptionsMachine", "MachineFont"),
+        choices: &[
+            localized_choice("OptionsMachine", "MachineFontWendy"),
+            localized_choice("OptionsMachine", "MachineFontMega"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SelectProfile,
         label: lookup_key("OptionsMachine", "SelectProfile"),
         choices: &[
@@ -65,15 +74,6 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         choices: &[
             localized_choice("OptionsMachine", "PreferredModeRegular"),
             localized_choice("OptionsMachine", "PreferredModeMarathon"),
-        ],
-        inline: true,
-    },
-    SubRow {
-        id: SubRowId::Font,
-        label: lookup_key("OptionsMachine", "MachineFont"),
-        choices: &[
-            localized_choice("OptionsMachine", "MachineFontWendy"),
-            localized_choice("OptionsMachine", "MachineFontMega"),
         ],
         inline: true,
     },
@@ -170,6 +170,14 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::MchFont,
+        name: lookup_key("OptionsMachine", "MachineFont"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "MachineFontHelp",
+        ))],
+    },
+    Item {
         id: ItemId::MchSelectProfile,
         name: lookup_key("OptionsMachine", "SelectProfile"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -223,14 +231,6 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "PreferredModeHelp",
-        ))],
-    },
-    Item {
-        id: ItemId::MchFont,
-        name: lookup_key("OptionsMachine", "MachineFont"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsMachineHelp",
-            "MachineFontHelp",
         ))],
     },
     Item {
