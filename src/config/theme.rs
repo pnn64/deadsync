@@ -509,7 +509,7 @@ impl FromStr for MachinePreferredPlayMode {
 pub enum MachineFont {
     /// Default; Bold/Header/Footer = Wendy, numbers = Wendy monospace.
     #[default]
-    Common,
+    Wendy,
     /// Bold/Header/Footer = Mega alphanumeric, numbers = Mega monospace.
     Mega,
 }
@@ -517,7 +517,7 @@ pub enum MachineFont {
 impl MachineFont {
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Common => "Common",
+            Self::Wendy => "Wendy",
             Self::Mega => "Mega",
         }
     }
@@ -528,14 +528,14 @@ impl FromStr for MachineFont {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_ascii_lowercase().as_str() {
-            "common" | "wendy" => Ok(Self::Common),
+            "common" | "wendy" => Ok(Self::Wendy),
             "mega" => Ok(Self::Mega),
             _ => Err(()),
         }
     }
 }
 
-pub const MACHINE_FONT_VARIANTS: [MachineFont; 2] = [MachineFont::Common, MachineFont::Mega];
+pub const MACHINE_FONT_VARIANTS: [MachineFont; 2] = [MachineFont::Wendy, MachineFont::Mega];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameFlag {
@@ -724,8 +724,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn machine_font_default_is_common() {
-        assert_eq!(MachineFont::default(), MachineFont::Common);
+    fn machine_font_default_is_wendy() {
+        assert_eq!(MachineFont::default(), MachineFont::Wendy);
     }
 
     #[test]
@@ -736,14 +736,15 @@ mod tests {
     }
 
     #[test]
-    fn machine_font_from_str_is_case_insensitive_and_accepts_wendy_alias() {
-        assert_eq!(MachineFont::from_str("common"), Ok(MachineFont::Common));
-        assert_eq!(MachineFont::from_str("COMMON"), Ok(MachineFont::Common));
+    fn machine_font_from_str_is_case_insensitive_and_accepts_common_alias() {
+        assert_eq!(MachineFont::from_str("Wendy"), Ok(MachineFont::Wendy));
+        assert_eq!(MachineFont::from_str("wendy"), Ok(MachineFont::Wendy));
         assert_eq!(MachineFont::from_str("Mega"), Ok(MachineFont::Mega));
         assert_eq!(MachineFont::from_str("mega"), Ok(MachineFont::Mega));
-        // SL labels Common as "Wendy" in its UI; accept that token too so a
-        // user editing the ini by hand isn't surprised.
-        assert_eq!(MachineFont::from_str("Wendy"), Ok(MachineFont::Common));
+        // SL/Arrow Cloud use Common as the font-redir family internally;
+        // accept old saved DeadSync configs and hand-edited ini values.
+        assert_eq!(MachineFont::from_str("common"), Ok(MachineFont::Wendy));
+        assert_eq!(MachineFont::from_str("COMMON"), Ok(MachineFont::Wendy));
     }
 
     #[test]
@@ -759,7 +760,7 @@ mod tests {
         // operator UI cycles through everything the type can represent.
         // Update this if a new variant is added.
         assert_eq!(MACHINE_FONT_VARIANTS.len(), 2);
-        assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Common));
+        assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Wendy));
         assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Mega));
     }
 }

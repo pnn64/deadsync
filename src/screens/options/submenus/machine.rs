@@ -72,7 +72,7 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         id: SubRowId::Font,
         label: lookup_key("OptionsMachine", "MachineFont"),
         choices: &[
-            localized_choice("OptionsMachine", "MachineFontCommon"),
+            localized_choice("OptionsMachine", "MachineFontWendy"),
             localized_choice("OptionsMachine", "MachineFontMega"),
         ],
         inline: true,
@@ -326,8 +326,8 @@ impl ChoiceEnum for MachinePreferredPlayMode {
 }
 
 impl ChoiceEnum for MachineFont {
-    const ALL: &'static [Self] = &[Self::Common, Self::Mega];
-    const DEFAULT: Self = Self::Common;
+    const ALL: &'static [Self] = &[Self::Wendy, Self::Mega];
+    const DEFAULT: Self = Self::Wendy;
 }
 
 impl ChoiceEnum for VisualStyle {

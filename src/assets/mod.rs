@@ -622,7 +622,7 @@ pub enum FontRole {
 ///
 /// Mirrors the Simply Love `<ThemeFont> <Role>.redir` table:
 ///
-/// | Role         | Common (default)            | Mega                          |
+/// | Role         | Wendy (default)             | Mega                          |
 /// | ------------ | --------------------------- | ----------------------------- |
 /// | `Normal`     | `miso`                      | `miso` (unchanged in SL)      |
 /// | `Bold`       | `wendy`                     | `mega_alpha`                  |
@@ -632,16 +632,16 @@ pub enum FontRole {
 /// | `ScreenEval` | `wendy_screenevaluation`    | `mega_screenevaluation`       |
 /// | `Headline`   | `wendy_white`               | `mega_alpha`                  |
 pub fn machine_font_key(machine_font: crate::config::MachineFont, role: FontRole) -> &'static str {
-    use crate::config::MachineFont::{Common, Mega};
+    use crate::config::MachineFont::{Mega, Wendy};
     match (machine_font, role) {
         (_, FontRole::Normal) => "miso",
-        (Common, FontRole::Bold | FontRole::Header | FontRole::Footer) => "wendy",
+        (Wendy, FontRole::Bold | FontRole::Header | FontRole::Footer) => "wendy",
         (Mega, FontRole::Bold | FontRole::Header | FontRole::Footer) => "mega_alpha",
-        (Common, FontRole::Numbers) => "wendy_monospace_numbers",
+        (Wendy, FontRole::Numbers) => "wendy_monospace_numbers",
         (Mega, FontRole::Numbers) => "mega_monospace_numbers",
-        (Common, FontRole::ScreenEval) => "wendy_screenevaluation",
+        (Wendy, FontRole::ScreenEval) => "wendy_screenevaluation",
         (Mega, FontRole::ScreenEval) => "mega_screenevaluation",
-        (Common, FontRole::Headline) => "wendy_white",
+        (Wendy, FontRole::Headline) => "wendy_white",
         (Mega, FontRole::Headline) => "mega_alpha",
     }
 }
@@ -725,7 +725,7 @@ mod tests {
         // Mirrors SL's `Mega Normal.redir -> Miso/_miso light`: body text
         // never swaps to Mega even when the machine font is Mega.
         assert_eq!(
-            machine_font_key(MachineFont::Common, FontRole::Normal),
+            machine_font_key(MachineFont::Wendy, FontRole::Normal),
             "miso"
         );
         assert_eq!(
@@ -735,29 +735,29 @@ mod tests {
     }
 
     #[test]
-    fn machine_font_key_common_routes_to_wendy_family() {
+    fn machine_font_key_wendy_routes_to_wendy_family() {
         assert_eq!(
-            machine_font_key(MachineFont::Common, FontRole::Bold),
+            machine_font_key(MachineFont::Wendy, FontRole::Bold),
             "wendy"
         );
         assert_eq!(
-            machine_font_key(MachineFont::Common, FontRole::Header),
+            machine_font_key(MachineFont::Wendy, FontRole::Header),
             "wendy"
         );
         assert_eq!(
-            machine_font_key(MachineFont::Common, FontRole::Footer),
+            machine_font_key(MachineFont::Wendy, FontRole::Footer),
             "wendy"
         );
         assert_eq!(
-            machine_font_key(MachineFont::Common, FontRole::Numbers),
+            machine_font_key(MachineFont::Wendy, FontRole::Numbers),
             "wendy_monospace_numbers"
         );
         assert_eq!(
-            machine_font_key(MachineFont::Common, FontRole::ScreenEval),
+            machine_font_key(MachineFont::Wendy, FontRole::ScreenEval),
             "wendy_screenevaluation"
         );
         assert_eq!(
-            machine_font_key(MachineFont::Common, FontRole::Headline),
+            machine_font_key(MachineFont::Wendy, FontRole::Headline),
             "wendy_white"
         );
     }
@@ -791,8 +791,8 @@ mod tests {
     }
 
     #[test]
-    fn machine_font_key_for_text_passes_through_when_common() {
-        // Common is the default; the for_text policy must never alter it.
+    fn machine_font_key_for_text_passes_through_when_wendy() {
+        // Wendy is the default; the for_text policy must never alter it.
         for role in [
             FontRole::Normal,
             FontRole::Bold,
@@ -802,8 +802,8 @@ mod tests {
             FontRole::ScreenEval,
         ] {
             assert_eq!(
-                machine_font_key_for_text(MachineFont::Common, role, "anything"),
-                machine_font_key(MachineFont::Common, role),
+                machine_font_key_for_text(MachineFont::Wendy, role, "anything"),
+                machine_font_key(MachineFont::Wendy, role),
                 "role={role:?}"
             );
         }

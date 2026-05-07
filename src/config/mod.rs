@@ -179,7 +179,7 @@ pub struct Config {
     /// Startup flow fallback mode used when Select Play Mode is disabled.
     pub machine_preferred_play_mode: MachinePreferredPlayMode,
     /// Machine font for Bold/Header/Footer/numbers/ScreenEval roles.
-    /// Default `Common` keeps Wendy; `Mega` swaps those roles to Mega.
+    /// Default `Wendy` keeps Wendy; `Mega` swaps those roles to Mega.
     /// Body text (Normal role) stays Miso regardless.
     pub machine_font: MachineFont,
     /// Machine-wide replay recording and replay menu visibility.
@@ -323,7 +323,7 @@ impl Default for Config {
             machine_show_select_play_mode: true,
             machine_preferred_style: MachinePreferredPlayStyle::Single,
             machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
-            machine_font: MachineFont::Common,
+            machine_font: MachineFont::Wendy,
             machine_enable_replays: true,
             machine_allow_per_player_global_offsets: false,
             machine_show_eval_summary: true,
