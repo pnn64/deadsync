@@ -1,5 +1,5 @@
 use super::super::choice;
-use super::super::row::index_binding;
+use super::super::row::{index_binding, numeric_binding};
 use super::*;
 use crate::game::profile as gp;
 
@@ -48,117 +48,69 @@ const BACKGROUND_FILTER: NumericBinding = NumericBinding {
     }),
 };
 
-const JUDGMENT_OFFSET_X: NumericBinding = NumericBinding {
-    parse: parse_i32,
-    apply: |p, v| {
-        p.judgment_offset_x = v;
-        Outcome::persisted()
-    },
-    persist_for_side: gp::update_judgment_offset_x_for_side,
-    init: Some(NumericInit {
-        from_profile: |p| p.judgment_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
-        format: |v| format!("{v}"),
-    }),
-};
-const JUDGMENT_OFFSET_Y: NumericBinding = NumericBinding {
-    parse: parse_i32,
-    apply: |p, v| {
-        p.judgment_offset_y = v;
-        Outcome::persisted()
-    },
-    persist_for_side: gp::update_judgment_offset_y_for_side,
-    init: Some(NumericInit {
-        from_profile: |p| p.judgment_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
-        format: |v| format!("{v}"),
-    }),
-};
-const COMBO_OFFSET_X: NumericBinding = NumericBinding {
-    parse: parse_i32,
-    apply: |p, v| {
-        p.combo_offset_x = v;
-        Outcome::persisted()
-    },
-    persist_for_side: gp::update_combo_offset_x_for_side,
-    init: Some(NumericInit {
-        from_profile: |p| p.combo_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
-        format: |v| format!("{v}"),
-    }),
-};
-const COMBO_OFFSET_Y: NumericBinding = NumericBinding {
-    parse: parse_i32,
-    apply: |p, v| {
-        p.combo_offset_y = v;
-        Outcome::persisted()
-    },
-    persist_for_side: gp::update_combo_offset_y_for_side,
-    init: Some(NumericInit {
-        from_profile: |p| p.combo_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
-        format: |v| format!("{v}"),
-    }),
-};
-const NOTEFIELD_OFFSET_X: NumericBinding = NumericBinding {
-    parse: parse_i32,
-    apply: |p, v| {
-        p.note_field_offset_x = v;
-        Outcome::persisted()
-    },
-    persist_for_side: gp::update_notefield_offset_x_for_side,
-    init: Some(NumericInit {
-        from_profile: |p| p.note_field_offset_x.clamp(0, 50),
-        format: |v| format!("{v}"),
-    }),
-};
-const NOTEFIELD_OFFSET_Y: NumericBinding = NumericBinding {
-    parse: parse_i32,
-    apply: |p, v| {
-        p.note_field_offset_y = v;
-        Outcome::persisted()
-    },
-    persist_for_side: gp::update_notefield_offset_y_for_side,
-    init: Some(NumericInit {
-        from_profile: |p| p.note_field_offset_y.clamp(-50, 50),
-        format: |v| format!("{v}"),
-    }),
-};
-const VISUAL_DELAY: NumericBinding = NumericBinding {
-    parse: parse_i32_ms,
-    apply: |p, v| {
-        p.visual_delay_ms = v;
-        Outcome::persisted()
-    },
-    persist_for_side: gp::update_visual_delay_ms_for_side,
-    init: Some(NumericInit {
-        from_profile: |p| p.visual_delay_ms.clamp(-100, 100),
-        format: |v| format!("{v}ms"),
-    }),
-};
-const GLOBAL_OFFSET_SHIFT: NumericBinding = NumericBinding {
-    parse: parse_i32_ms,
-    apply: |p, v| {
-        p.global_offset_shift_ms = v;
-        Outcome::persisted()
-    },
-    persist_for_side: gp::update_global_offset_shift_ms_for_side,
-    init: Some(NumericInit {
-        from_profile: |p| p.global_offset_shift_ms.clamp(-100, 100),
-        format: |v| format!("{v}ms"),
-    }),
-};
-const SPACING: NumericBinding = NumericBinding {
-    parse: parse_i32_percent,
-    apply: |p, v| {
-        p.spacing_percent = v;
-        Outcome::persisted()
-    },
-    persist_for_side: gp::update_spacing_percent_for_side,
-    init: Some(NumericInit {
-        from_profile: |p| {
-            p.spacing_percent
-                .clamp(SPACING_PERCENT_MIN, SPACING_PERCENT_MAX)
-        },
-        format: |v| format!("{v}%"),
-    }),
-};
+const JUDGMENT_OFFSET_X: NumericBinding = numeric_binding!(
+    parse = parse_i32,
+    field = judgment_offset_x,
+    persist = gp::update_judgment_offset_x_for_side,
+    clamp = (HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+    suffix = "",
+);
+const JUDGMENT_OFFSET_Y: NumericBinding = numeric_binding!(
+    parse = parse_i32,
+    field = judgment_offset_y,
+    persist = gp::update_judgment_offset_y_for_side,
+    clamp = (HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+    suffix = "",
+);
+const COMBO_OFFSET_X: NumericBinding = numeric_binding!(
+    parse = parse_i32,
+    field = combo_offset_x,
+    persist = gp::update_combo_offset_x_for_side,
+    clamp = (HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+    suffix = "",
+);
+const COMBO_OFFSET_Y: NumericBinding = numeric_binding!(
+    parse = parse_i32,
+    field = combo_offset_y,
+    persist = gp::update_combo_offset_y_for_side,
+    clamp = (HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+    suffix = "",
+);
+const NOTEFIELD_OFFSET_X: NumericBinding = numeric_binding!(
+    parse = parse_i32,
+    field = note_field_offset_x,
+    persist = gp::update_notefield_offset_x_for_side,
+    clamp = (0, 50),
+    suffix = "",
+);
+const NOTEFIELD_OFFSET_Y: NumericBinding = numeric_binding!(
+    parse = parse_i32,
+    field = note_field_offset_y,
+    persist = gp::update_notefield_offset_y_for_side,
+    clamp = (-50, 50),
+    suffix = "",
+);
+const VISUAL_DELAY: NumericBinding = numeric_binding!(
+    parse = parse_i32_ms,
+    field = visual_delay_ms,
+    persist = gp::update_visual_delay_ms_for_side,
+    clamp = (-100, 100),
+    suffix = "ms",
+);
+const GLOBAL_OFFSET_SHIFT: NumericBinding = numeric_binding!(
+    parse = parse_i32_ms,
+    field = global_offset_shift_ms,
+    persist = gp::update_global_offset_shift_ms_for_side,
+    clamp = (-100, 100),
+    suffix = "ms",
+);
+const SPACING: NumericBinding = numeric_binding!(
+    parse = parse_i32_percent,
+    field = spacing_percent,
+    persist = gp::update_spacing_percent_for_side,
+    clamp = (SPACING_PERCENT_MIN, SPACING_PERCENT_MAX),
+    suffix = "%",
+);
 
 /// Shared boilerplate for a noteskin-style cycle row implemented via
 /// `CustomBinding`: advance the choice index, look up the chosen string, then
