@@ -3864,13 +3864,6 @@ fn split_script_call_args(raw: &str) -> Vec<String> {
 #[inline(always)]
 fn split_script_token(token: &str) -> Option<(String, Vec<String>)> {
     let token = token.trim();
-    if let Some((name, raw_args)) = split_script_function_call(token) {
-        let command = name.trim().to_ascii_lowercase();
-        if command.is_empty() {
-            return None;
-        }
-        return Some((command, split_script_call_args(raw_args)));
-    }
     let parts = split_script_call_args(token);
     if parts.is_empty() {
         return None;
@@ -3885,21 +3878,6 @@ fn split_script_token(token: &str) -> Option<(String, Vec<String>)> {
         .map(|part| part.trim().to_string())
         .collect::<Vec<_>>();
     Some((command, args))
-}
-
-fn split_script_function_call(token: &str) -> Option<(&str, &str)> {
-    let open = token.find('(')?;
-    let name = token[..open].trim();
-    if name.is_empty()
-        || !name
-            .as_bytes()
-            .iter()
-            .all(|b| b.is_ascii_alphanumeric() || *b == b'_')
-    {
-        return None;
-    }
-    let close = itg_find_matching(token, open, '(', ')')?;
-    (close + 1 == token.len()).then_some((name, &token[open + 1..close]))
 }
 
 #[inline(always)]
@@ -3965,9 +3943,6 @@ fn parse_script_judgment_line_color(raw: &str) -> Option<[f32; 4]> {
 #[inline(always)]
 fn parse_script_color(raw: &str) -> Option<[f32; 4]> {
     let trimmed = raw.trim();
-    if let Some(color) = parse_script_named_color(trimmed) {
-        return Some(color);
-    }
     if let Some(color) = parse_script_judgment_line_color(trimmed) {
         return Some(color);
     }
@@ -3978,9 +3953,6 @@ fn parse_script_color(raw: &str) -> Option<[f32; 4]> {
     } else {
         trimmed.trim_matches('"').trim_matches('\'')
     };
-    if let Some(color) = parse_script_named_color(value) {
-        return Some(color);
-    }
     if let Some(color) = parse_script_hex_color(value) {
         return Some(color);
     }
@@ -3989,24 +3961,6 @@ fn parse_script_color(raw: &str) -> Option<[f32; 4]> {
         return None;
     }
     Some([values[0], values[1], values[2], values[3]])
-}
-
-fn parse_script_named_color(raw: &str) -> Option<[f32; 4]> {
-    match raw
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_ascii_lowercase()
-        .as_str()
-    {
-        "w1colour" | "hdcolour" | "lastcolour" => parse_script_hex_color("#00C8FF"),
-        "w11colour" => parse_script_hex_color("#DBDBDB"),
-        "w2colour" => parse_script_hex_color("#FFC917"),
-        "w3colour" => parse_script_hex_color("#30ED24"),
-        "w4colour" => parse_script_hex_color("#E55BFC"),
-        "w5colour" => parse_script_hex_color("#E75B01"),
-        _ => None,
-    }
 }
 
 fn parse_script_hex_color(raw: &str) -> Option<[f32; 4]> {
@@ -4237,26 +4191,6 @@ fn normalized_lua_function_command(script: &str) -> Option<String> {
     let body_start = params_close + 1;
     let body_end = itg_find_function_end(script, body_start)?;
     itg_parse_self_chain_commands(&script[body_start..body_end])
-}
-
-fn is_empty_lua_function_command(token: &str) -> bool {
-    let trimmed = token.trim();
-    if !trimmed.starts_with("function") {
-        return false;
-    }
-    let mut cursor = "function".len();
-    cursor = itg_skip_ws(trimmed, cursor);
-    if trimmed.as_bytes().get(cursor).is_none_or(|b| *b != b'(') {
-        return false;
-    }
-    let Some(params_close) = itg_find_matching(trimmed, cursor, '(', ')') else {
-        return false;
-    };
-    let body_start = params_close + 1;
-    let Some(body_end) = itg_find_function_end(trimmed, body_start) else {
-        return false;
-    };
-    trimmed[body_start..body_end].trim().is_empty()
 }
 
 #[inline(always)]
@@ -6687,78 +6621,6 @@ struct PendingSegment {
     target_visible: Option<bool>,
 }
 
-fn expand_cf_explosion_helpers(script: &str) -> Cow<'_, str> {
-    let mut expanded = Vec::new();
-    let mut changed = false;
-    for raw_token in script.split(';') {
-        let token = raw_token.trim();
-        if token.is_empty() {
-            continue;
-        }
-        if is_empty_lua_function_command(token) {
-            changed = true;
-            continue;
-        }
-        if let Some(replacement) = cf_explosion_helper_command(token) {
-            expanded.push(replacement);
-            changed = true;
-        } else {
-            expanded.push(token.to_string());
-        }
-    }
-    if changed {
-        Cow::Owned(expanded.join(";"))
-    } else {
-        Cow::Borrowed(script)
-    }
-}
-
-fn cf_explosion_helper_command(token: &str) -> Option<String> {
-    let (command, args) = split_script_token(token)?;
-    match command.as_str() {
-        "flashspark" => {
-            let color = cf_helper_color_arg(&args, 0)?;
-            Some(format!(
-                "finishtweening;diffuse,{color};diffusealpha,0.9;zoom,0.7;\
-                 linear,6/60;zoom,0.925;sleep,0;diffuse,0,0,0,1"
-            ))
-        }
-        "flashadd" => {
-            let color = cf_helper_color_arg(&args, 0)?;
-            Some(format!(
-                "finishtweening;diffuse,{color};blend,Blend.Add;diffusealpha,1.0;\
-                 linear,1/60;diffusealpha,0.5;linear,3/60;diffusealpha,0.0"
-            ))
-        }
-        "flashnormal" => {
-            let use_last = args.get(1).is_some_and(|arg| parse_script_bool(arg));
-            if use_last {
-                Some("finishtweening;diffusealpha,1.0;linear,10/60;diffusealpha,0.0".to_string())
-            } else {
-                let color = cf_helper_color_arg(&args, 0)?;
-                Some(format!(
-                    "finishtweening;diffuse,{color};diffusealpha,1.0;\
-                     linear,10/60;diffusealpha,0.0"
-                ))
-            }
-        }
-        "glowover" => Some(
-            "finishtweening;diffusealpha,1.0;blend,Blend.Add;\
-             linear,12/60;diffusealpha,0.0"
-                .to_string(),
-        ),
-        _ => None,
-    }
-}
-
-fn cf_helper_color_arg(args: &[String], idx: usize) -> Option<String> {
-    let color = parse_script_color(args.get(idx)?.as_str())?;
-    Some(format!(
-        "{},{},{},{}",
-        color[0], color[1], color[2], color[3]
-    ))
-}
-
 fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
     let mut animation = ExplosionAnimation {
         initial: ExplosionState::default(),
@@ -6804,7 +6666,6 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
     };
 
     let script = normalized_script_command(script);
-    let script = expand_cf_explosion_helpers(&script);
     for raw_token in script.split(';') {
         let token = raw_token.trim();
         if token.is_empty() {
@@ -7583,28 +7444,6 @@ Materials: 1
         assert_eq!(anim.segments.len(), 1);
         assert!((anim.segments[0].duration - 0.2).abs() <= 1e-6);
         assert_eq!(anim.segments[0].end_color.map(|c| c[3]), Some(0.0));
-    }
-
-    #[test]
-    fn cf_chrome_explosion_helper_commands_expand_to_actor_commands() {
-        let add =
-            parse_explosion_animation("diffusealpha,0;flashadd(W2colour,true);function(self) end");
-        assert!(add.blend_add);
-        assert_eq!(add.segments.len(), 2);
-        assert!((add.duration() - (4.0 / 60.0)).abs() <= 1e-6);
-        assert!((add.initial.color[0] - 1.0).abs() <= 1e-6);
-        assert!((add.initial.color[1] - (0xC9 as f32 / 255.0)).abs() <= 1e-6);
-        assert!((add.initial.color[2] - (0x17 as f32 / 255.0)).abs() <= 1e-6);
-        assert!((add.initial.color[3] - 1.0).abs() <= 1e-6);
-
-        let spark = parse_explosion_animation("flashspark(W1colour,true)");
-        assert!((spark.duration() - 0.1).abs() <= 1e-6);
-        assert!((spark.initial.zoom - 0.7).abs() <= 1e-6);
-        assert!((spark.initial.color[3] - 0.9).abs() <= 1e-6);
-
-        let glow = parse_explosion_animation("glowover()");
-        assert!(glow.blend_add);
-        assert!((glow.duration() - 0.2).abs() <= 1e-6);
     }
 
     #[test]

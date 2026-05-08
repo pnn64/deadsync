@@ -6,6 +6,18 @@ mod actor {
 
     const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
 
+    #[derive(Debug, Default)]
+    struct CommandContext {
+        colors: HashMap<String, String>,
+        functions: HashMap<String, LocalFunction>,
+    }
+
+    #[derive(Debug)]
+    struct LocalFunction {
+        params: Vec<String>,
+        body: String,
+    }
+
     #[derive(Debug, Default, Clone, Serialize, Deserialize, Encode, Decode)]
     pub struct ItgLuaSpriteDecl {
         pub texture_expr: String,
@@ -52,6 +64,7 @@ mod actor {
     pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLuaActorDecl {
         let mut decl = ItgLuaActorDecl::default();
         let arg0_aliases = parse_arg0_aliases(content);
+        let command_context = command_context(content);
 
         let mut cursor = 0usize;
         while let Some(rel) = content[cursor..].find("Def.Sprite") {
@@ -63,7 +76,9 @@ mod actor {
             let Some(close) = find_matching(content, open, '{', '}') else {
                 break;
             };
-            if let Some(sprite) = parse_sprite_block(&content[open + 1..close], metrics) {
+            if let Some(sprite) =
+                parse_sprite_block(&content[open + 1..close], metrics, &command_context)
+            {
                 decl.sprites.push(sprite);
             }
             cursor = close + 1;
@@ -79,7 +94,9 @@ mod actor {
             let Some(close) = find_matching(content, open, '{', '}') else {
                 break;
             };
-            if let Some(model) = parse_model_block(&content[open + 1..close], metrics) {
+            if let Some(model) =
+                parse_model_block(&content[open + 1..close], metrics, &command_context)
+            {
                 decl.models.push(model);
             }
             cursor = close + 1;
@@ -101,7 +118,8 @@ mod actor {
                 break;
             };
             let args = split_call_args(&content[open + 1..close]);
-            let (commands, next_cursor) = find_post_call_commands(content, close, metrics);
+            let (commands, next_cursor) =
+                find_post_call_commands(content, close, metrics, &command_context);
             let frame_override = find_post_call_frame_override(content, close);
             if !args.is_empty() {
                 decl.path_refs.push(ItgLuaPathRefDecl {
@@ -127,7 +145,8 @@ mod actor {
                 continue;
             };
             let mut wrapper_expr = None;
-            let (mut commands, mut next_cursor) = find_post_call_commands(content, close, metrics);
+            let (mut commands, mut next_cursor) =
+                find_post_call_commands(content, close, metrics, &command_context);
             let mut frame_override = find_post_call_frame_override(content, close);
             if commands.is_empty()
                 && let Some((outer_args, outer_close)) =
@@ -136,7 +155,7 @@ mod actor {
             {
                 wrapper_expr = Some(outer_args[0].clone());
                 let (outer_commands, outer_next_cursor) =
-                    find_post_call_commands(content, outer_close, metrics);
+                    find_post_call_commands(content, outer_close, metrics, &command_context);
                 let outer_frame_override = find_post_call_frame_override(content, outer_close);
                 if outer_commands.is_empty() {
                     next_cursor = outer_close + 1;
@@ -193,6 +212,143 @@ mod actor {
         }
     }
 
+    fn command_context(content: &str) -> CommandContext {
+        let mut context = CommandContext::default();
+        for raw in content.lines() {
+            let mut line = raw.trim();
+            if line.is_empty() || line.starts_with("--") {
+                continue;
+            }
+            if let Some((prefix, _)) = line.split_once("--") {
+                line = prefix.trim();
+            }
+            if let Some((name, value)) = parse_local_assignment(line)
+                && let Some(color) = parse_lua_color_expr(value)
+            {
+                context.colors.insert(name.to_ascii_lowercase(), color);
+            }
+        }
+        context.functions = parse_local_functions(content);
+        context
+    }
+
+    fn parse_local_assignment(line: &str) -> Option<(&str, &str)> {
+        let rest = line.strip_prefix("local ")?;
+        let (lhs, rhs) = rest.split_once('=')?;
+        let name = lhs.trim();
+        if name.is_empty() || !name.as_bytes().iter().all(|b| is_lua_ident(*b)) {
+            return None;
+        }
+        Some((
+            name,
+            rhs.trim()
+                .trim_end_matches(',')
+                .trim_end_matches(';')
+                .trim(),
+        ))
+    }
+
+    fn parse_lua_color_expr(raw: &str) -> Option<String> {
+        let value = raw.trim();
+        let lower = value.to_ascii_lowercase();
+        let inner = if lower.starts_with("color(") && value.ends_with(')') {
+            value[6..value.len().saturating_sub(1)]
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+        } else {
+            value.trim_matches('"').trim_matches('\'')
+        };
+        parse_hex_color(inner)
+            .or_else(|| parse_color_list(inner))
+            .map(format_color)
+    }
+
+    fn parse_hex_color(raw: &str) -> Option<[f32; 4]> {
+        let hex = raw.trim().strip_prefix('#')?;
+        if hex.len() != 6 && hex.len() != 8 {
+            return None;
+        }
+        let byte = |idx: usize| u8::from_str_radix(&hex[idx..idx + 2], 16).ok();
+        Some([
+            byte(0)? as f32 / 255.0,
+            byte(2)? as f32 / 255.0,
+            byte(4)? as f32 / 255.0,
+            if hex.len() == 8 {
+                byte(6)? as f32 / 255.0
+            } else {
+                1.0
+            },
+        ])
+    }
+
+    fn parse_color_list(raw: &str) -> Option<[f32; 4]> {
+        let values = raw
+            .split(',')
+            .filter_map(parse_lua_float_expr)
+            .collect::<Vec<_>>();
+        if values.len() < 4 {
+            return None;
+        }
+        Some([values[0], values[1], values[2], values[3]])
+    }
+
+    fn format_color(color: [f32; 4]) -> String {
+        format!("{},{},{},{}", color[0], color[1], color[2], color[3])
+    }
+
+    fn parse_local_functions(content: &str) -> HashMap<String, LocalFunction> {
+        let mut functions = HashMap::new();
+        let mut cursor = 0usize;
+        while let Some(rel) = content[cursor..].find("local function ") {
+            let start = cursor + rel;
+            if start > 0 && is_lua_ident(content.as_bytes()[start - 1]) {
+                cursor = start + 1;
+                continue;
+            }
+            let name_start = start + "local function ".len();
+            let mut name_end = name_start;
+            while content
+                .as_bytes()
+                .get(name_end)
+                .is_some_and(|b| is_lua_ident(*b))
+            {
+                name_end += 1;
+            }
+            let name = content[name_start..name_end].trim();
+            if name.is_empty() {
+                cursor = name_end;
+                continue;
+            }
+            let open = skip_ws(content, name_end);
+            if content.as_bytes().get(open).is_none_or(|b| *b != b'(') {
+                cursor = name_end;
+                continue;
+            }
+            let Some(close) = find_matching(content, open, '(', ')') else {
+                cursor = name_end;
+                continue;
+            };
+            let Some(end_idx) = find_function_end(content, close + 1) else {
+                cursor = close + 1;
+                continue;
+            };
+            let params = split_call_args(&content[open + 1..close])
+                .into_iter()
+                .filter(|param| param.as_bytes().iter().all(|b| is_lua_ident(*b)))
+                .collect();
+            functions.insert(
+                name.to_ascii_lowercase(),
+                LocalFunction {
+                    params,
+                    body: content[close + 1..end_idx].to_string(),
+                },
+            );
+            cursor = end_idx + "end".len();
+        }
+        functions
+    }
+
     fn split_call_args(raw: &str) -> Vec<String> {
         let mut out = Vec::new();
         let mut start = 0usize;
@@ -235,6 +391,7 @@ mod actor {
         content: &str,
         call_close: usize,
         metrics: &noteskin_itg::IniData,
+        command_context: &CommandContext,
     ) -> (HashMap<String, String>, usize) {
         let mut after = skip_ws(content, call_close + 1);
         if !content
@@ -252,7 +409,7 @@ mod actor {
             return (HashMap::new(), call_close + 1);
         };
         (
-            parse_commands_block(&content[after + 1..end], metrics),
+            parse_commands_block(&content[after + 1..end], metrics, command_context),
             end + 1,
         )
     }
@@ -338,6 +495,7 @@ mod actor {
     fn parse_sprite_block(
         block: &str,
         metrics: &noteskin_itg::IniData,
+        command_context: &CommandContext,
     ) -> Option<ItgLuaSpriteDecl> {
         let mut texture_expr = None;
         let mut frame0 = 0usize;
@@ -398,12 +556,12 @@ mod actor {
                 continue;
             }
             if key_lower.ends_with("command")
-                && let Some(cmd) = resolve_command_expr(value, metrics)
+                && let Some(cmd) = resolve_command_expr(value, metrics, command_context)
             {
                 commands.insert(key_lower, cmd);
             }
         }
-        for (k, v) in parse_function_commands(block) {
+        for (k, v) in parse_function_commands(block, command_context) {
             commands.insert(k, v);
         }
         if frame_seen {
@@ -497,7 +655,11 @@ mod actor {
         Some((frame_count, vec![delay; frame_count]))
     }
 
-    fn parse_model_block(block: &str, metrics: &noteskin_itg::IniData) -> Option<ItgLuaModelDecl> {
+    fn parse_model_block(
+        block: &str,
+        metrics: &noteskin_itg::IniData,
+        command_context: &CommandContext,
+    ) -> Option<ItgLuaModelDecl> {
         let mut meshes_expr = None;
         let mut materials_expr = None;
         let mut texture_expr = None;
@@ -542,12 +704,12 @@ mod actor {
                 continue;
             }
             if key_lower.ends_with("command")
-                && let Some(cmd) = resolve_command_expr(value, metrics)
+                && let Some(cmd) = resolve_command_expr(value, metrics, command_context)
             {
                 commands.insert(key_lower, cmd);
             }
         }
-        for (k, v) in parse_function_commands(block) {
+        for (k, v) in parse_function_commands(block, command_context) {
             commands.insert(k, v);
         }
         if meshes_expr.is_none() && materials_expr.is_none() && texture_expr.is_none() {
@@ -578,6 +740,7 @@ mod actor {
     fn parse_commands_block(
         block: &str,
         metrics: &noteskin_itg::IniData,
+        command_context: &CommandContext,
     ) -> HashMap<String, String> {
         let mut commands = HashMap::new();
         for raw in block.lines() {
@@ -599,18 +762,22 @@ mod actor {
             if !key.ends_with("command") {
                 continue;
             }
-            if let Some(cmd) = resolve_command_expr(v.trim(), metrics) {
+            if let Some(cmd) = resolve_command_expr(v.trim(), metrics, command_context) {
                 commands.insert(key, cmd);
             }
         }
-        for (k, v) in parse_function_commands(block) {
+        for (k, v) in parse_function_commands(block, command_context) {
             commands.insert(k, v);
         }
         commands
     }
 
-    fn parse_function_commands(block: &str) -> HashMap<String, String> {
+    fn parse_function_commands(
+        block: &str,
+        command_context: &CommandContext,
+    ) -> HashMap<String, String> {
         let mut commands = HashMap::new();
+        let scope = HashMap::new();
         let bytes = block.as_bytes();
         let mut cursor = 0usize;
         while let Some(eq_rel) = block[cursor..].find('=') {
@@ -643,7 +810,11 @@ mod actor {
                 cursor = eq + 1;
                 continue;
             };
-            if let Some(cmd) = parse_self_chain_commands(&block[body_start..end_idx]) {
+            if let Some(cmd) = parse_self_chain_commands_scoped(
+                &block[body_start..end_idx],
+                command_context,
+                &scope,
+            ) {
                 commands.insert(key_lower, cmd);
             }
             cursor = end_idx + 3;
@@ -703,7 +874,114 @@ mod actor {
         b.is_ascii_alphanumeric() || b == b'_'
     }
 
-    fn parse_self_chain_commands(body: &str) -> Option<String> {
+    fn resolve_command_expr(
+        raw: &str,
+        metrics: &noteskin_itg::IniData,
+        command_context: &CommandContext,
+    ) -> Option<String> {
+        let value = raw
+            .trim()
+            .trim_end_matches(',')
+            .trim_end_matches(';')
+            .trim();
+        if value.starts_with("function") {
+            return Some(resolve_lua_function_command(value, command_context).unwrap_or_default());
+        }
+        if value.starts_with("NOTESKIN:GetMetricA(") {
+            let args = extract_quoted_strings(value);
+            if args.len() >= 2 {
+                return metrics.get(&args[0], &args[1]).map(str::to_string);
+            }
+        }
+        if value.starts_with("cmd(") && value.ends_with(')') {
+            return Some(value[4..value.len() - 1].trim().to_string());
+        }
+        if let Some(command) = resolve_helper_command(value, command_context) {
+            return Some(command);
+        }
+        if let Some(q) = parse_lua_quoted(value) {
+            return Some(q);
+        }
+        Some(value.to_string())
+    }
+
+    fn resolve_lua_function_command(value: &str, context: &CommandContext) -> Option<String> {
+        let mut rhs = value.find("function")? + "function".len();
+        rhs = skip_ws(value, rhs);
+        let param_open = *value.as_bytes().get(rhs)?;
+        if param_open != b'(' {
+            return None;
+        }
+        let param_close = find_matching(value, rhs, '(', ')')?;
+        let body_start = param_close + 1;
+        let end_idx = find_function_end(value, body_start)?;
+        parse_self_chain_commands_scoped(&value[body_start..end_idx], context, &HashMap::new())
+            .or_else(|| Some(String::new()))
+    }
+
+    fn resolve_helper_command(value: &str, context: &CommandContext) -> Option<String> {
+        let (name, args) = split_lua_call(value)?;
+        let function = context.functions.get(&name.to_ascii_lowercase())?;
+        let scope = function
+            .params
+            .iter()
+            .zip(args.iter())
+            .map(|(param, arg)| {
+                (
+                    param.to_ascii_lowercase(),
+                    context.resolve_command_arg(arg, &HashMap::new()),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        let Some(body) = return_function_body(&function.body) else {
+            return Some(String::new());
+        };
+        let body = resolve_lua_conditionals(body, &scope);
+        Some(parse_self_chain_commands_scoped(&body, context, &scope).unwrap_or_default())
+    }
+
+    impl CommandContext {
+        fn resolve_command_arg(&self, raw: &str, scope: &HashMap<String, String>) -> String {
+            let key = raw
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_ascii_lowercase();
+            scope
+                .get(&key)
+                .cloned()
+                .or_else(|| self.colors.get(&key).cloned())
+                .or_else(|| parse_lua_color_expr(raw))
+                .unwrap_or_else(|| raw.trim().to_string())
+        }
+    }
+
+    fn return_function_body(body: &str) -> Option<&str> {
+        let return_idx = body.find("return")?;
+        let mut cursor = return_idx + "return".len();
+        cursor = skip_ws(body, cursor);
+        if !body.get(cursor..).is_some_and(|tail| {
+            tail.starts_with("function")
+                && token_boundary(body.as_bytes(), cursor, "function".len())
+        }) {
+            return None;
+        }
+        cursor += "function".len();
+        cursor = skip_ws(body, cursor);
+        if body.as_bytes().get(cursor).is_none_or(|b| *b != b'(') {
+            return None;
+        }
+        let params_close = find_matching(body, cursor, '(', ')')?;
+        let body_start = params_close + 1;
+        let body_end = find_function_end(body, body_start)?;
+        Some(&body[body_start..body_end])
+    }
+
+    fn parse_self_chain_commands_scoped(
+        body: &str,
+        context: &CommandContext,
+        scope: &HashMap<String, String>,
+    ) -> Option<String> {
         let mut out = Vec::new();
         let bytes = body.as_bytes();
         let mut cursor = 0usize;
@@ -727,11 +1005,14 @@ mod actor {
                 cursor = name_end;
                 continue;
             };
-            let args = body[open + 1..close].trim();
+            let args = split_call_args(&body[open + 1..close])
+                .into_iter()
+                .map(|arg| context.resolve_command_arg(&arg, scope))
+                .collect::<Vec<_>>();
             out.push(if args.is_empty() {
                 name.to_string()
             } else {
-                format!("{name},{args}")
+                format!("{name},{}", args.join(","))
             });
             open = close + 1;
             cursor = open;
@@ -739,25 +1020,139 @@ mod actor {
         (!out.is_empty()).then(|| out.join(";"))
     }
 
-    fn resolve_command_expr(raw: &str, metrics: &noteskin_itg::IniData) -> Option<String> {
-        let value = raw
-            .trim()
-            .trim_end_matches(',')
-            .trim_end_matches(';')
-            .trim();
-        if value.starts_with("NOTESKIN:GetMetricA(") {
-            let args = extract_quoted_strings(value);
-            if args.len() >= 2 {
-                return metrics.get(&args[0], &args[1]).map(str::to_string);
+    fn resolve_lua_conditionals(body: &str, scope: &HashMap<String, String>) -> String {
+        let mut out = String::new();
+        let mut cursor = 0usize;
+        while let Some(if_idx) = find_lua_keyword(body, cursor, "if") {
+            out.push_str(&body[cursor..if_idx]);
+            let condition_start = skip_ws(body, if_idx + "if".len());
+            let Some(then_idx) = find_lua_keyword(body, condition_start, "then") else {
+                out.push_str(&body[if_idx..]);
+                return out;
+            };
+            let Some((else_idx, end_idx)) = find_lua_if_close(body, then_idx + "then".len()) else {
+                out.push_str(&body[if_idx..]);
+                return out;
+            };
+            let condition = body[condition_start..then_idx].trim();
+            let then_body = &body[then_idx + "then".len()..else_idx.unwrap_or(end_idx)];
+            let else_body = else_idx
+                .map(|idx| &body[idx + "else".len()..end_idx])
+                .unwrap_or("");
+            let selected = if eval_lua_condition(condition, scope) {
+                then_body
+            } else {
+                else_body
+            };
+            out.push_str(&resolve_lua_conditionals(selected, scope));
+            cursor = end_idx + "end".len();
+        }
+        out.push_str(&body[cursor..]);
+        out
+    }
+
+    fn find_lua_keyword(content: &str, mut cursor: usize, keyword: &str) -> Option<usize> {
+        let bytes = content.as_bytes();
+        let mut quote = 0u8;
+        while cursor < bytes.len() {
+            let b = bytes[cursor];
+            if quote != 0 {
+                if b == quote {
+                    quote = 0;
+                }
+                cursor += 1;
+                continue;
             }
+            if b == b'"' || b == b'\'' {
+                quote = b;
+                cursor += 1;
+                continue;
+            }
+            if content[cursor..].starts_with(keyword)
+                && token_boundary(bytes, cursor, keyword.len())
+            {
+                return Some(cursor);
+            }
+            cursor += 1;
         }
-        if value.starts_with("cmd(") && value.ends_with(')') {
-            return Some(value[4..value.len() - 1].trim().to_string());
+        None
+    }
+
+    fn find_lua_if_close(content: &str, mut cursor: usize) -> Option<(Option<usize>, usize)> {
+        let bytes = content.as_bytes();
+        let mut quote = 0u8;
+        let mut depth = 1usize;
+        let mut else_idx = None;
+        while cursor < bytes.len() {
+            let b = bytes[cursor];
+            if quote != 0 {
+                if b == quote {
+                    quote = 0;
+                }
+                cursor += 1;
+                continue;
+            }
+            if b == b'"' || b == b'\'' {
+                quote = b;
+                cursor += 1;
+                continue;
+            }
+            if content[cursor..].starts_with("if") && token_boundary(bytes, cursor, "if".len()) {
+                depth += 1;
+                cursor += "if".len();
+                continue;
+            }
+            if content[cursor..].starts_with("else")
+                && depth == 1
+                && token_boundary(bytes, cursor, "else".len())
+            {
+                else_idx = Some(cursor);
+                cursor += "else".len();
+                continue;
+            }
+            if content[cursor..].starts_with("end") && token_boundary(bytes, cursor, "end".len()) {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some((else_idx, cursor));
+                }
+                cursor += "end".len();
+                continue;
+            }
+            cursor += 1;
         }
-        if let Some(q) = parse_lua_quoted(value) {
-            return Some(q);
+        None
+    }
+
+    fn eval_lua_condition(condition: &str, scope: &HashMap<String, String>) -> bool {
+        let condition = condition.trim();
+        if let Some(rest) = condition.strip_prefix("not ") {
+            return !eval_lua_condition(rest, scope);
         }
-        Some(value.to_string())
+        let key = condition
+            .trim_matches('"')
+            .trim_matches('\'')
+            .to_ascii_lowercase();
+        scope
+            .get(&key)
+            .map_or_else(|| parse_lua_bool(condition), |value| parse_lua_bool(value))
+    }
+
+    fn split_lua_call(value: &str) -> Option<(&str, Vec<String>)> {
+        let open = value.find('(')?;
+        let name = value[..open].trim();
+        if name.is_empty() || !name.as_bytes().iter().all(|b| is_lua_ident(*b)) {
+            return None;
+        }
+        let close = find_matching(value, open, '(', ')')?;
+        if close + 1 != value.len() {
+            return None;
+        }
+        Some((name, split_call_args(&value[open + 1..close])))
+    }
+
+    fn parse_lua_bool(raw: &str) -> bool {
+        let value = raw.trim().trim_matches('"').trim_matches('\'');
+        value.eq_ignore_ascii_case("true") || value == "1"
     }
 
     fn extract_quoted_strings(input: &str) -> Vec<String> {
@@ -1011,7 +1406,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 4;
+const COMPILER_VERSION: u32 = 6;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const DANCE_BUTTONS: [&str; 6] = ["UpLeft", "UpRight", "Left", "Down", "Up", "Right"];
@@ -1678,7 +2073,7 @@ fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoad
 
 #[cfg(test)]
 mod tests {
-    use super::compiled;
+    use super::{compiled, noteskin_actor, noteskin_itg};
     use std::ffi::OsStr;
     use std::path::Path;
 
@@ -1694,6 +2089,105 @@ mod tests {
         assert!(
             path.components()
                 .all(|component| component.as_os_str() != OsStr::new(&version_dir))
+        );
+    }
+
+    #[test]
+    fn actor_decl_ignores_non_color_local_assignments() {
+        let decl = noteskin_actor::parse_actor_decl(
+            r#"
+local button = Var "Button"
+local path = NOTESKIN:GetPath(button, "Tap Note")
+return Def.Sprite {
+    Texture=path;
+    InitCommand=cmd(diffusealpha,1);
+}
+"#,
+            &noteskin_itg::IniData::default(),
+        );
+
+        let sprite = decl.sprites.first().expect("sprite should parse");
+        assert_eq!(
+            sprite.commands.get("initcommand").map(String::as_str),
+            Some("diffusealpha,1")
+        );
+    }
+
+    #[test]
+    fn actor_decl_expands_local_lua_command_helpers() {
+        let decl = noteskin_actor::parse_actor_decl(
+            r##"
+local W2colour = color("#FFC917")
+local Lastcolour = color("#00C8FF")
+
+local function flashadd(thecolour, updatelast)
+    return function(self)
+        if updatelast then
+            Lastcolour = thecolour
+        end
+        self:finishtweening()
+        :diffuse(thecolour)
+        :blend(Blend.Add)
+        :diffusealpha(1.0)
+        :linear(1/60)
+        :diffusealpha(0.5)
+        :linear(3/60)
+        :diffusealpha(0.0)
+    end
+end
+
+local function flashnormal(thecolour, uselast)
+    return function(self)
+        if uselast then
+            self:finishtweening()
+            :diffusealpha(1.0)
+            :linear(10/60)
+            :diffusealpha(0.0)
+        else
+            self:finishtweening()
+            :diffuse(thecolour)
+            :diffusealpha(1.0)
+            :linear(10/60)
+            :diffusealpha(0.0)
+        end
+    end
+end
+
+return Def.ActorFrame {
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath(Var "Button", "Flash");
+        InitCommand=cmd(diffusealpha,0);
+        W2Command=flashadd(W2colour,true);
+        HeldCommand=flashnormal(Lastcolour,true);
+        JudgmentCommand=function(self) end;
+    };
+}
+"##,
+            &noteskin_itg::IniData::default(),
+        );
+        let sprite = decl.sprites.first().expect("sprite should parse");
+
+        let w2 = sprite
+            .commands
+            .get("w2command")
+            .expect("W2 command should compile");
+        assert!(w2.contains("diffuse,1,0.7882353,0.09019608,1"));
+        assert!(w2.contains("blend,Blend.Add"));
+        assert!(w2.contains("linear,1/60"));
+        assert!(!w2.contains("flashadd"));
+
+        let held = sprite
+            .commands
+            .get("heldcommand")
+            .expect("Held command should compile");
+        assert!(held.contains("diffusealpha,1"));
+        assert!(held.contains("linear,10/60"));
+        assert!(!held.contains("diffuse,0,0.78431374,1,1"));
+        assert!(!held.contains("flashnormal"));
+
+        assert_eq!(
+            sprite.commands.get("judgmentcommand").map(String::as_str),
+            Some("")
         );
     }
 }
