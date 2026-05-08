@@ -1,6 +1,6 @@
 use super::super::choice;
 use super::super::constants::MINI_INDICATOR_VARIANTS;
-use super::super::row::index_binding;
+use super::super::row::{fanout_bitmask_binding, index_binding};
 use super::super::row::{BitMapping, BitmaskInit, BitmaskWriteback, CursorInit, CycleInit, NumericInit};
 use super::super::state::{
     EarlyDwMask, ErrorBarOptionsMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
@@ -347,113 +347,47 @@ const SCROLL: BitmaskBinding = BitmaskBinding::Generic {
         sync_visibility: false,
     },
 };
-const HIDE: BitmaskBinding = BitmaskBinding::Generic {
-    init: BitmaskInit {
-        from_profile: |p| {
-            let mut bits = HideMask::empty();
-            if p.hide_targets {
-                bits.insert(HideMask::TARGETS);
-            }
-            if p.hide_song_bg {
-                bits.insert(HideMask::BACKGROUND);
-            }
-            if p.hide_combo {
-                bits.insert(HideMask::COMBO);
-            }
-            if p.hide_lifebar {
-                bits.insert(HideMask::LIFE);
-            }
-            if p.hide_score {
-                bits.insert(HideMask::SCORE);
-            }
-            if p.hide_danger {
-                bits.insert(HideMask::DANGER);
-            }
-            if p.hide_combo_explosions {
-                bits.insert(HideMask::COMBO_EXPLOSIONS);
-            }
-            bits.bits() as u32
-        },
-        get_active: |m| m.hide.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u8::MAX as u32),
-                0,
-                "HideMask init bits exceed u8 width"
-            );
-            m.hide = HideMask::from_bits_retain(b as u8);
-        },
-        cursor: CursorInit::FirstActiveBit,
+const HIDE: BitmaskBinding = fanout_bitmask_binding!(
+    mask = HideMask,
+    bits = u8,
+    state_field = hide,
+    fields = [
+        (TARGETS, hide_targets),
+        (BACKGROUND, hide_song_bg),
+        (COMBO, hide_combo),
+        (LIFE, hide_lifebar),
+        (SCORE, hide_score),
+        (DANGER, hide_danger),
+        (COMBO_EXPLOSIONS, hide_combo_explosions),
+    ],
+    persist_for_side = |s, p| gp::update_hide_options_for_side(
+        s,
+        p.hide_targets,
+        p.hide_song_bg,
+        p.hide_combo,
+        p.hide_lifebar,
+        p.hide_score,
+        p.hide_danger,
+        p.hide_combo_explosions,
+    ),
+    sync_visibility = true,
+);
+const LIFE_BAR_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
+    mask = LifeBarOptionsMask,
+    bits = u8,
+    state_field = life_bar_options,
+    fields = [
+        (RAINBOW_MAX, rainbow_max),
+        (RESPONSIVE_COLORS, responsive_colors),
+        (SHOW_LIFE_PERCENT, show_life_percent),
+    ],
+    persist_for_side = |s, p| {
+        gp::update_rainbow_max_for_side(s, p.rainbow_max);
+        gp::update_responsive_colors_for_side(s, p.responsive_colors);
+        gp::update_show_life_percent_for_side(s, p.show_life_percent);
     },
-    writeback: BitmaskWriteback {
-        project: |_m, p, b| {
-            let mask = HideMask::from_bits_truncate(b as u8);
-            p.hide_targets = mask.contains(HideMask::TARGETS);
-            p.hide_song_bg = mask.contains(HideMask::BACKGROUND);
-            p.hide_combo = mask.contains(HideMask::COMBO);
-            p.hide_lifebar = mask.contains(HideMask::LIFE);
-            p.hide_score = mask.contains(HideMask::SCORE);
-            p.hide_danger = mask.contains(HideMask::DANGER);
-            p.hide_combo_explosions = mask.contains(HideMask::COMBO_EXPLOSIONS);
-        },
-        persist_for_side: |s, p| {
-            gp::update_hide_options_for_side(
-                s,
-                p.hide_targets,
-                p.hide_song_bg,
-                p.hide_combo,
-                p.hide_lifebar,
-                p.hide_score,
-                p.hide_danger,
-                p.hide_combo_explosions,
-            );
-        },
-        bit_mapping: BitMapping::Sequential { width: 7 },
-        sync_visibility: true,
-    },
-};
-const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
-    init: BitmaskInit {
-        from_profile: |p| {
-            let mut bits = LifeBarOptionsMask::empty();
-            if p.rainbow_max {
-                bits.insert(LifeBarOptionsMask::RAINBOW_MAX);
-            }
-            if p.responsive_colors {
-                bits.insert(LifeBarOptionsMask::RESPONSIVE_COLORS);
-            }
-            if p.show_life_percent {
-                bits.insert(LifeBarOptionsMask::SHOW_LIFE_PERCENT);
-            }
-            bits.bits() as u32
-        },
-        get_active: |m| m.life_bar_options.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u8::MAX as u32),
-                0,
-                "LifeBarOptionsMask init bits exceed u8 width",
-            );
-            m.life_bar_options = LifeBarOptionsMask::from_bits_retain(b as u8);
-        },
-        cursor: CursorInit::FirstActiveBit,
-    },
-    writeback: BitmaskWriteback {
-        project: |_m, p, b| {
-            let mask = LifeBarOptionsMask::from_bits_truncate(b as u8);
-            p.rainbow_max = mask.contains(LifeBarOptionsMask::RAINBOW_MAX);
-            p.responsive_colors = mask.contains(LifeBarOptionsMask::RESPONSIVE_COLORS);
-            p.show_life_percent = mask.contains(LifeBarOptionsMask::SHOW_LIFE_PERCENT);
-        },
-        persist_for_side: |s, p| {
-            gp::update_rainbow_max_for_side(s, p.rainbow_max);
-            gp::update_responsive_colors_for_side(s, p.responsive_colors);
-            gp::update_show_life_percent_for_side(s, p.show_life_percent);
-        },
-        bit_mapping: BitMapping::Sequential { width: 3 },
-        sync_visibility: false,
-    },
-};
+    sync_visibility = false,
+);
 const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
     init: BitmaskInit {
         from_profile: |p| {
@@ -552,97 +486,42 @@ const ERROR_BAR: BitmaskBinding = BitmaskBinding::Generic {
         sync_visibility: true,
     },
 };
-const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
-    init: BitmaskInit {
-        from_profile: |p| {
-            let mut bits = ErrorBarOptionsMask::empty();
-            if p.error_bar_up {
-                bits.insert(ErrorBarOptionsMask::MOVE_UP);
-            }
-            if p.error_bar_multi_tick {
-                bits.insert(ErrorBarOptionsMask::MULTI_TICK);
-            }
-            bits.bits() as u32
-        },
-        get_active: |m| m.error_bar_options.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u8::MAX as u32),
-                0,
-                "ErrorBarOptionsMask init bits exceed u8 width",
-            );
-            m.error_bar_options = ErrorBarOptionsMask::from_bits_retain(b as u8);
-        },
-        cursor: CursorInit::FirstActiveBit,
+const ERROR_BAR_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
+    mask = ErrorBarOptionsMask,
+    bits = u8,
+    state_field = error_bar_options,
+    fields = [
+        (MOVE_UP, error_bar_up),
+        (MULTI_TICK, error_bar_multi_tick),
+    ],
+    persist_for_side = |s, p| {
+        gp::update_error_bar_options_for_side(s, p.error_bar_up, p.error_bar_multi_tick);
     },
-    writeback: BitmaskWriteback {
-        project: |_m, p, b| {
-            let mask = ErrorBarOptionsMask::from_bits_truncate(b as u8);
-            p.error_bar_up = mask.contains(ErrorBarOptionsMask::MOVE_UP);
-            p.error_bar_multi_tick = mask.contains(ErrorBarOptionsMask::MULTI_TICK);
-        },
-        persist_for_side: |s, p| {
-            gp::update_error_bar_options_for_side(s, p.error_bar_up, p.error_bar_multi_tick);
-        },
-        bit_mapping: BitMapping::Sequential { width: 2 },
-        sync_visibility: false,
+    sync_visibility = false,
+);
+const MEASURE_COUNTER_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
+    mask = MeasureCounterOptionsMask,
+    bits = u8,
+    state_field = measure_counter_options,
+    fields = [
+        (MOVE_LEFT, measure_counter_left),
+        (MOVE_UP, measure_counter_up),
+        (VERTICAL_LOOKAHEAD, measure_counter_vert),
+        (BROKEN_RUN_TOTAL, broken_run),
+        (RUN_TIMER, run_timer),
+    ],
+    persist_for_side = |s, p| {
+        gp::update_measure_counter_options_for_side(
+            s,
+            p.measure_counter_left,
+            p.measure_counter_up,
+            p.measure_counter_vert,
+            p.broken_run,
+            p.run_timer,
+        );
     },
-};
-const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
-    init: BitmaskInit {
-        from_profile: |p| {
-            let mut bits = MeasureCounterOptionsMask::empty();
-            if p.measure_counter_left {
-                bits.insert(MeasureCounterOptionsMask::MOVE_LEFT);
-            }
-            if p.measure_counter_up {
-                bits.insert(MeasureCounterOptionsMask::MOVE_UP);
-            }
-            if p.measure_counter_vert {
-                bits.insert(MeasureCounterOptionsMask::VERTICAL_LOOKAHEAD);
-            }
-            if p.broken_run {
-                bits.insert(MeasureCounterOptionsMask::BROKEN_RUN_TOTAL);
-            }
-            if p.run_timer {
-                bits.insert(MeasureCounterOptionsMask::RUN_TIMER);
-            }
-            bits.bits() as u32
-        },
-        get_active: |m| m.measure_counter_options.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u8::MAX as u32),
-                0,
-                "MeasureCounterOptionsMask init bits exceed u8 width",
-            );
-            m.measure_counter_options = MeasureCounterOptionsMask::from_bits_retain(b as u8);
-        },
-        cursor: CursorInit::FirstActiveBit,
-    },
-    writeback: BitmaskWriteback {
-        project: |_m, p, b| {
-            let mask = MeasureCounterOptionsMask::from_bits_truncate(b as u8);
-            p.measure_counter_left = mask.contains(MeasureCounterOptionsMask::MOVE_LEFT);
-            p.measure_counter_up = mask.contains(MeasureCounterOptionsMask::MOVE_UP);
-            p.measure_counter_vert = mask.contains(MeasureCounterOptionsMask::VERTICAL_LOOKAHEAD);
-            p.broken_run = mask.contains(MeasureCounterOptionsMask::BROKEN_RUN_TOTAL);
-            p.run_timer = mask.contains(MeasureCounterOptionsMask::RUN_TIMER);
-        },
-        persist_for_side: |s, p| {
-            gp::update_measure_counter_options_for_side(
-                s,
-                p.measure_counter_left,
-                p.measure_counter_up,
-                p.measure_counter_vert,
-                p.broken_run,
-                p.run_timer,
-            );
-        },
-        bit_mapping: BitMapping::Sequential { width: 5 },
-        sync_visibility: false,
-    },
-};
+    sync_visibility = false,
+);
 fn fa_plus_bits_from_profile(p: &gp::Profile) -> u32 {
     let mut bits = FaPlusMask::empty();
     if p.show_fa_plus_window {
@@ -738,83 +617,33 @@ const FA_PLUS_WINDOW_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
         sync_visibility: false,
     },
 };
-const EARLY_DW_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
-    init: BitmaskInit {
-        from_profile: |p| {
-            let mut bits = EarlyDwMask::empty();
-            if p.hide_early_dw_judgments {
-                bits.insert(EarlyDwMask::HIDE_JUDGMENTS);
-            }
-            if p.hide_early_dw_flash {
-                bits.insert(EarlyDwMask::HIDE_FLASH);
-            }
-            bits.bits() as u32
-        },
-        get_active: |m| m.early_dw.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u8::MAX as u32),
-                0,
-                "EarlyDwMask init bits exceed u8 width"
-            );
-            m.early_dw = EarlyDwMask::from_bits_retain(b as u8);
-        },
-        cursor: CursorInit::FirstActiveBit,
+const EARLY_DW_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
+    mask = EarlyDwMask,
+    bits = u8,
+    state_field = early_dw,
+    fields = [
+        (HIDE_JUDGMENTS, hide_early_dw_judgments),
+        (HIDE_FLASH, hide_early_dw_flash),
+    ],
+    persist_for_side = |s, p| {
+        gp::update_early_dw_options_for_side(s, p.hide_early_dw_judgments, p.hide_early_dw_flash);
     },
-    writeback: BitmaskWriteback {
-        project: |_m, p, b| {
-            let mask = EarlyDwMask::from_bits_truncate(b as u8);
-            p.hide_early_dw_judgments = mask.contains(EarlyDwMask::HIDE_JUDGMENTS);
-            p.hide_early_dw_flash = mask.contains(EarlyDwMask::HIDE_FLASH);
-        },
-        persist_for_side: |s, p| {
-            gp::update_early_dw_options_for_side(
-                s,
-                p.hide_early_dw_judgments,
-                p.hide_early_dw_flash,
-            );
-        },
-        bit_mapping: BitMapping::Sequential { width: 2 },
-        sync_visibility: false,
+    sync_visibility = false,
+);
+const RESULTS_EXTRAS: BitmaskBinding = fanout_bitmask_binding!(
+    mask = ResultsExtrasMask,
+    bits = u8,
+    state_field = results_extras,
+    fields = [
+        (TRACK_EARLY_JUDGMENTS, track_early_judgments),
+        (SCALE_SCATTERPLOT, scale_scatterplot),
+    ],
+    persist_for_side = |s, p| {
+        gp::update_track_early_judgments_for_side(s, p.track_early_judgments);
+        gp::update_scale_scatterplot_for_side(s, p.scale_scatterplot);
     },
-};
-const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
-    init: BitmaskInit {
-        from_profile: |p| {
-            let mut bits = ResultsExtrasMask::empty();
-            if p.track_early_judgments {
-                bits.insert(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
-            }
-            if p.scale_scatterplot {
-                bits.insert(ResultsExtrasMask::SCALE_SCATTERPLOT);
-            }
-            bits.bits() as u32
-        },
-        get_active: |m| m.results_extras.bits() as u32,
-        set_active: |m, b| {
-            debug_assert_eq!(
-                b & !(u8::MAX as u32),
-                0,
-                "ResultsExtrasMask init bits exceed u8 width",
-            );
-            m.results_extras = ResultsExtrasMask::from_bits_retain(b as u8);
-        },
-        cursor: CursorInit::FirstActiveBit,
-    },
-    writeback: BitmaskWriteback {
-        project: |_m, p, b| {
-            let mask = ResultsExtrasMask::from_bits_truncate(b as u8);
-            p.track_early_judgments = mask.contains(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
-            p.scale_scatterplot = mask.contains(ResultsExtrasMask::SCALE_SCATTERPLOT);
-        },
-        persist_for_side: |s, p| {
-            gp::update_track_early_judgments_for_side(s, p.track_early_judgments);
-            gp::update_scale_scatterplot_for_side(s, p.scale_scatterplot);
-        },
-        bit_mapping: BitMapping::Sequential { width: 2 },
-        sync_visibility: false,
-    },
-};
+    sync_visibility = false,
+);
 
 const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {

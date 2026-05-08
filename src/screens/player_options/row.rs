@@ -585,6 +585,119 @@ macro_rules! simple_bitmask_binding {
 
 pub(crate) use simple_bitmask_binding;
 
+/// Build a `BitmaskBinding::Generic` for a row that fans a single mask
+/// out to `N` boolean profile fields (one boolean per bit).
+///
+/// Each entry in `fields = [...]` pairs a `bitflags!` constant on the
+/// mask type with the boolean profile field that mirrors it. The macro
+/// generates:
+///
+/// - `from_profile`: scans the `N` booleans, OR's the matching mask
+///   flags, returns `bits as u32`.
+/// - `project`: extracts each flag from the new bits and writes it to
+///   its boolean profile field.
+/// - `bit_mapping`: `BitMapping::Sequential { width: N }` derived from
+///   the field count at compile time.
+///
+/// Persistence is *user-supplied* via the `persist_for_side` argument
+/// (a closure of type `fn(PlayerSide, &Profile)`) so callers can either
+/// invoke a single bulk setter (e.g.
+/// `gp::update_hide_options_for_side(s, p.hide_targets, p.hide_song_bg, ...)`)
+/// or fan out to per-field setters (e.g.
+/// `gp::update_rainbow_max_for_side(s, p.rainbow_max);
+///  gp::update_responsive_colors_for_side(s, p.responsive_colors); ...`).
+///
+/// Set `sync_visibility = true` for rows whose toggled state changes
+/// the visibility of *other* rows (e.g. `Hide`).
+///
+/// # Example
+///
+/// ```ignore
+/// const HIDE: BitmaskBinding = fanout_bitmask_binding!(
+///     mask = HideMask,
+///     bits = u8,
+///     state_field = hide,
+///     fields = [
+///         (TARGETS, hide_targets),
+///         (BACKGROUND, hide_song_bg),
+///         (COMBO, hide_combo),
+///         (LIFE, hide_lifebar),
+///         (SCORE, hide_score),
+///         (DANGER, hide_danger),
+///         (COMBO_EXPLOSIONS, hide_combo_explosions),
+///     ],
+///     persist_for_side = |s, p| gp::update_hide_options_for_side(
+///         s,
+///         p.hide_targets, p.hide_song_bg, p.hide_combo, p.hide_lifebar,
+///         p.hide_score, p.hide_danger, p.hide_combo_explosions,
+///     ),
+///     sync_visibility = true,
+/// );
+/// ```
+macro_rules! fanout_bitmask_binding {
+    (
+        mask = $mask_ty:ty,
+        bits = $bits_ty:ty,
+        state_field = $state_field:ident,
+        fields = [ $( ( $flag:ident, $profile_field:ident ) ),+ $(,)? ],
+        persist_for_side = $persist:expr,
+        sync_visibility = $sync:expr $(,)?
+    ) => {
+        $crate::screens::player_options::row::BitmaskBinding::Generic {
+            init: $crate::screens::player_options::row::BitmaskInit {
+                from_profile: |p| {
+                    let mut bits = <$mask_ty>::empty();
+                    $(
+                        if p.$profile_field {
+                            bits.insert(<$mask_ty>::$flag);
+                        }
+                    )+
+                    bits.bits() as u32
+                },
+                get_active: |m| m.$state_field.bits() as u32,
+                set_active: |m, b| {
+                    debug_assert_eq!(
+                        b & !(<$bits_ty>::MAX as u32),
+                        0,
+                        concat!(stringify!($mask_ty), " init bits exceed storage width"),
+                    );
+                    m.$state_field = <$mask_ty>::from_bits_retain(b as $bits_ty);
+                },
+                cursor: $crate::screens::player_options::row::CursorInit::FirstActiveBit,
+            },
+            writeback: $crate::screens::player_options::row::BitmaskWriteback {
+                project: |_m, p, b| {
+                    let mask = <$mask_ty>::from_bits_truncate(b as $bits_ty);
+                    $(
+                        p.$profile_field = mask.contains(<$mask_ty>::$flag);
+                    )+
+                },
+                persist_for_side: $persist,
+                bit_mapping: $crate::screens::player_options::row::BitMapping::Sequential {
+                    // `[(); N]::len()` is const-evaluable; one `()` is
+                    // emitted per field so the count matches `fields`.
+                    width: ([$( $crate::screens::player_options::row::__count_unit!($flag) ),+].len()) as u8,
+                },
+                sync_visibility: $sync,
+            },
+        }
+    };
+}
+
+/// Helper for `fanout_bitmask_binding!`: replace any token with `()` so
+/// the macro can build a fixed-size array literal whose `.len()` yields
+/// the field count at compile time.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __count_unit {
+    ($_ignored:tt) => {
+        ()
+    };
+}
+
+pub(crate) use __count_unit;
+pub(crate) use fanout_bitmask_binding;
+
 // ============================== RowMap =================================
 
 pub struct RowMap {
