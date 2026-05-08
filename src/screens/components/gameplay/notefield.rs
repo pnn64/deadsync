@@ -4425,8 +4425,9 @@ pub fn build_bundles(
             {
                 let bop_timer = state.receptor_bop_timers[col];
                 let bop_zoom = if bop_timer > 0.0 {
-                    let t = (0.11 - bop_timer) / 0.11;
-                    0.75 + (1.0 - 0.75) * t
+                    receptor_ns
+                        .receptor_step_behavior_for_col(i)
+                        .sample_zoom(bop_timer)
                 } else {
                     1.0
                 };

@@ -129,6 +129,23 @@ fn receptor_glow_behavior_for_col(state: &State, col: usize) -> noteskin::Recept
 }
 
 #[inline(always)]
+fn receptor_step_behavior_for_col(state: &State, col: usize) -> noteskin::ReceptorStepBehavior {
+    let player = if state.num_players <= 1 || state.cols_per_player == 0 {
+        0
+    } else {
+        (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
+    };
+    let local_col = if state.cols_per_player == 0 {
+        col
+    } else {
+        col % state.cols_per_player
+    };
+    receptor_glow_behavior_noteskin(state, player)
+        .map(|ns| ns.receptor_step_behavior_for_col(local_col))
+        .unwrap_or_default()
+}
+
+#[inline(always)]
 pub(super) fn lane_is_pressed(state: &State, col: usize) -> bool {
     state.input_lane_counts[col] != 0
 }
@@ -280,7 +297,8 @@ pub(super) fn trigger_receptor_step_pulse(state: &mut State, col: usize) {
         return;
     }
     start_receptor_glow_press(state, col);
-    state.receptor_bop_timers[col] = state.receptor_bop_timers[col].max(0.11);
+    let duration = receptor_step_behavior_for_col(state, col).duration;
+    state.receptor_bop_timers[col] = state.receptor_bop_timers[col].max(duration);
 }
 
 #[inline(always)]
@@ -794,7 +812,8 @@ pub(super) fn process_input_edges(
                     audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
                 }
             } else {
-                state.receptor_bop_timers[lane_idx] = 0.11;
+                state.receptor_bop_timers[lane_idx] =
+                    receptor_step_behavior_for_col(state, lane_idx).duration;
             }
         } else if edge_judges_lift {
             let hit_lift = judge_a_lift(state, lane_idx, edge.event_music_time_ns);
