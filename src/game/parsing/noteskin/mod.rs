@@ -3119,9 +3119,6 @@ fn itg_tap_explosion_map_compiled(
         .iter()
         .filter(|sprite| itg_sprite_has_tap_explosion_command(sprite))
         .collect::<Vec<_>>();
-    let actor_rotation_hint = actor_tap_sprites
-        .first()
-        .map(|sprite| sprite.slot.def.rotation_deg);
 
     let mut dim_sprites = Vec::<ItgTapExplosionSource>::new();
     let mut bright_sprites = Vec::<ItgTapExplosionSource>::new();
@@ -3156,7 +3153,7 @@ fn itg_tap_explosion_map_compiled(
         .chain(direct_dim_sprites.iter())
         .chain(direct_bright_sprites.iter())
     {
-        let source = ItgTapExplosionSource::from_sprite(sprite, actor_rotation_hint);
+        let source = ItgTapExplosionSource::from_sprite(sprite);
         match source.mode {
             ItgTapExplosionMode::Dim => dim_sprites.push(source),
             ItgTapExplosionMode::Bright => bright_sprites.push(source),
@@ -3225,14 +3222,10 @@ struct ItgTapExplosionSource {
 }
 
 impl ItgTapExplosionSource {
-    fn from_sprite(sprite: &ItgLuaResolvedSprite, rotation_hint: Option<i32>) -> Self {
-        let mut slot = sprite.slot.clone();
-        if let Some(rotation) = rotation_hint {
-            slot.set_rotation_deg(rotation);
-        }
+    fn from_sprite(sprite: &ItgLuaResolvedSprite) -> Self {
         Self {
             element: sprite.element.clone(),
-            slot,
+            slot: sprite.slot.clone(),
             commands: sprite.commands.clone(),
             mode: itg_tap_explosion_mode(&sprite.element)
                 .or_else(|| itg_tap_explosion_mode_from_commands(&sprite.commands))
@@ -8945,31 +8938,36 @@ return skin
         let ns = load_itg_skin(&style, "CF_VIBRANTALLOY")
             .expect("CF_VIBRANTALLOY should load from assets/noteskins");
 
-        for (col, expected_rotation) in [90, 0, 180, -90].into_iter().enumerate() {
-            let explosion = ns
-                .tap_explosion_for_col(col, "W1")
-                .expect("W1 tap explosion should resolve for each column");
-            assert!(
-                explosion.layers.iter().any(|layer| {
-                    layer.slot.def.rotation_deg == expected_rotation
-                        && layer
-                            .slot
-                            .texture_key()
-                            .to_ascii_lowercase()
-                            .contains("flash")
-                }),
-                "column {col} should keep the rotated Flash child from Fallback Explosion"
-            );
-            assert!(
-                !explosion.layers.iter().any(|layer| {
-                    layer
-                        .slot
-                        .texture_key()
-                        .to_ascii_lowercase()
-                        .contains("tap explosion dim")
-                }),
-                "column {col} should not replace the actor stack with direct Tap Explosion art"
-            );
+        for window in ["W1", "W2", "W3", "W4", "W5"] {
+            for (col, expected_rotation) in [90, 0, 180, -90].into_iter().enumerate() {
+                let explosion = ns.tap_explosion_for_col(col, window).unwrap_or_else(|| {
+                    panic!("{window} tap explosion should resolve for column {col}")
+                });
+                let mut rotated_child_count = 0usize;
+                for layer in explosion.layers.iter() {
+                    let key = layer.slot.texture_key().to_ascii_lowercase();
+                    if key.contains("flash") || key.contains("glow") {
+                        rotated_child_count += 1;
+                        assert_eq!(
+                            layer.slot.def.rotation_deg, expected_rotation,
+                            "{window} column {col} should keep per-button rotation for {key}"
+                        );
+                    } else if key.contains("spark") {
+                        assert_eq!(
+                            layer.slot.def.rotation_deg, 0,
+                            "{window} column {col} Spark should remain unrotated per PartsToRotate"
+                        );
+                    }
+                    assert!(
+                        !key.contains("tap explosion dim"),
+                        "{window} column {col} should not replace the actor stack with direct Tap Explosion art"
+                    );
+                }
+                assert!(
+                    rotated_child_count > 0,
+                    "{window} column {col} should keep at least one rotated Flash/Glow child"
+                );
+            }
         }
 
         clear_itg_runtime_caches();
