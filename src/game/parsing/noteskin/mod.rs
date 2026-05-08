@@ -2987,39 +2987,29 @@ fn load_itg_sprite_noteskin_compiled(
                     itg_slot_from_actor_path_first_sprite_compiled(data, compiled_actors, &p)
                 })
         });
-    let mine_command = mine_source
-        .and_then(|sprite| sprite.commands.get("hitminecommand"))
-        .cloned()
+    let mine_hit_explosion = mine_source
+        .and_then(itg_mine_explosion_from_actor_source)
         .or_else(|| {
-            data.metrics
-                .get("GhostArrowBright", "HitMineCommand")
-                .map(str::to_string)
+            mine_slot.map(|slot| {
+                let mine_command = mine_source
+                    .and_then(|sprite| sprite.commands.get("hitminecommand"))
+                    .cloned()
+                    .or_else(|| {
+                        data.metrics
+                            .get("GhostArrowBright", "HitMineCommand")
+                            .map(str::to_string)
+                    });
+                TapExplosion::from_single(
+                    slot,
+                    mine_command
+                        .as_deref()
+                        .and_then(|cmd| itg_command_with_init(mine_source, cmd))
+                        .as_deref()
+                        .map(parse_explosion_animation)
+                        .unwrap_or_default(),
+                )
+            })
         });
-    let mine_command_with_init = mine_command
-        .as_deref()
-        .map(str::trim)
-        .filter(|cmd| !cmd.is_empty())
-        .map(|cmd| {
-            let mut sequence = Vec::with_capacity(2);
-            if let Some(init) = mine_source
-                .and_then(|sprite| sprite.commands.get("initcommand"))
-                .map(|value| value.trim())
-                .filter(|value| !value.is_empty())
-            {
-                sequence.push(init.to_string());
-            }
-            sequence.push(cmd.to_string());
-            sequence.join(";")
-        });
-    let mine_hit_explosion = mine_slot.map(|slot| {
-        TapExplosion::from_single(
-            slot,
-            mine_command_with_init
-                .as_deref()
-                .map(parse_explosion_animation)
-                .unwrap_or_default(),
-        )
-    });
 
     let tap_explosions = tap_explosions_by_col
         .get(down_col)
@@ -3082,6 +3072,40 @@ fn load_itg_sprite_noteskin_compiled(
         animation_is_beat_based,
         hold_let_go_gray_percent,
     })
+}
+
+fn itg_mine_explosion_from_actor_source(source: &ItgLuaResolvedSprite) -> Option<TapExplosion> {
+    let mut layers = Vec::new();
+    for key in ["ecommand", "e2command"] {
+        let Some(command) = source.commands.get(key) else {
+            continue;
+        };
+        let Some(command_with_init) = itg_command_with_init(Some(source), command) else {
+            continue;
+        };
+        layers.push(TapExplosionLayer {
+            slot: source.slot.clone(),
+            animation: parse_explosion_animation(&command_with_init),
+        });
+    }
+    TapExplosion::from_layers(layers)
+}
+
+fn itg_command_with_init(source: Option<&ItgLuaResolvedSprite>, command: &str) -> Option<String> {
+    let command = command.trim();
+    if command.is_empty() {
+        return None;
+    }
+    let mut sequence = Vec::with_capacity(2);
+    if let Some(init) = source
+        .and_then(|sprite| sprite.commands.get("initcommand"))
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        sequence.push(init.to_string());
+    }
+    sequence.push(command.to_string());
+    Some(sequence.join(";"))
 }
 
 fn itg_tap_explosion_map_compiled(
@@ -5286,42 +5310,55 @@ fn is_lua_ident(b: u8) -> bool {
 
 fn itg_parse_self_chain_commands(body: &str) -> Option<String> {
     let mut out = Vec::new();
-    let bytes = body.as_bytes();
     let mut cursor = 0usize;
     while let Some(rel) = body[cursor..].find("self:") {
-        let name_start = cursor + rel + 5;
-        let mut name_end = name_start;
-        while name_end < bytes.len() && is_lua_ident(bytes[name_end]) {
-            name_end += 1;
+        let mut name_start = cursor + rel + 5;
+        loop {
+            let Some((name, args, next)) = itg_parse_lua_method_call(body, name_start) else {
+                cursor = name_start;
+                break;
+            };
+            if args.is_empty() {
+                out.push(name);
+            } else {
+                out.push(format!("{name},{args}"));
+            }
+            cursor = next;
+
+            let chain = itg_skip_ws(body, next);
+            if body.as_bytes().get(chain).is_some_and(|b| *b == b':') {
+                name_start = chain + 1;
+                continue;
+            }
+            break;
         }
-        if name_end == name_start {
-            cursor = name_start;
-            continue;
-        }
-        let name = body[name_start..name_end].trim();
-        let mut open = itg_skip_ws(body, name_end);
-        if bytes.get(open).is_none_or(|b| *b != b'(') {
-            cursor = name_end;
-            continue;
-        }
-        let Some(close) = itg_find_matching(body, open, '(', ')') else {
-            cursor = name_end;
-            continue;
-        };
-        let args = body[open + 1..close].trim();
-        if args.is_empty() {
-            out.push(name.to_string());
-        } else {
-            out.push(format!("{name},{args}"));
-        }
-        open = close + 1;
-        cursor = open;
     }
     if out.is_empty() {
         None
     } else {
         Some(out.join(";"))
     }
+}
+
+fn itg_parse_lua_method_call(body: &str, name_start: usize) -> Option<(String, String, usize)> {
+    let bytes = body.as_bytes();
+    let mut name_end = name_start;
+    while name_end < bytes.len() && is_lua_ident(bytes[name_end]) {
+        name_end += 1;
+    }
+    if name_end == name_start {
+        return None;
+    }
+    let open = itg_skip_ws(body, name_end);
+    if bytes.get(open).is_none_or(|b| *b != b'(') {
+        return None;
+    }
+    let close = itg_find_matching(body, open, '(', ')')?;
+    Some((
+        body[name_start..name_end].trim().to_string(),
+        body[open + 1..close].trim().to_string(),
+        close + 1,
+    ))
 }
 
 fn itg_resolve_command_expr(raw: &str, metrics: &noteskin_itg::IniData) -> Option<String> {
@@ -8932,6 +8969,55 @@ return skin
                         .contains("tap explosion dim")
                 }),
                 "column {col} should not replace the actor stack with direct Tap Explosion art"
+            );
+        }
+
+        clear_itg_runtime_caches();
+    }
+
+    #[test]
+    fn cf_chrome_family_mine_explosion_uses_emitter_commands_without_spin() {
+        clear_itg_runtime_caches();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "CF_VIBRANTALLOY")
+            .expect("CF_VIBRANTALLOY should load from assets/noteskins");
+        let mine = ns
+            .mine_hit_explosion
+            .as_ref()
+            .expect("CF_VIBRANTALLOY should define a hit-mine explosion");
+
+        assert!(
+            mine.layers.iter().any(|layer| !layer.animation.blend_add),
+            "CF mine explosion should keep the normal ECommand layer"
+        );
+        assert!(
+            mine.layers.iter().any(|layer| layer.animation.blend_add),
+            "CF mine explosion should keep the additive E2Command layer"
+        );
+        assert!(
+            (mine.duration() - 64.0 / 60.0).abs() <= 1e-6,
+            "CF mine explosion should use the emitter E/E2 duration, got {}",
+            mine.duration()
+        );
+        for (idx, layer) in mine.layers.iter().enumerate() {
+            assert!(
+                layer.animation.initial.color[3] > 0.99,
+                "mine layer {idx} should become visible when E/E2Command fires"
+            );
+            assert_eq!(
+                layer.animation.initial.rotation_z, 0.0,
+                "mine layer {idx} should not inherit the common rotating HitMineCommand"
+            );
+            assert!(
+                layer
+                    .animation
+                    .segments
+                    .iter()
+                    .all(|segment| segment.end_rotation_z.is_none()),
+                "mine layer {idx} should not animate rotation"
             );
         }
 

@@ -983,41 +983,58 @@ mod actor {
         scope: &HashMap<String, String>,
     ) -> Option<String> {
         let mut out = Vec::new();
-        let bytes = body.as_bytes();
         let mut cursor = 0usize;
         while let Some(rel) = body[cursor..].find("self:") {
-            let name_start = cursor + rel + 5;
-            let mut name_end = name_start;
-            while name_end < bytes.len() && is_lua_ident(bytes[name_end]) {
-                name_end += 1;
+            let mut name_start = cursor + rel + 5;
+            loop {
+                let Some((name, args, next)) = parse_lua_method_call(body, name_start) else {
+                    cursor = name_start;
+                    break;
+                };
+                let args = args
+                    .into_iter()
+                    .map(|arg| context.resolve_command_arg(&arg, scope))
+                    .collect::<Vec<_>>();
+                out.push(if args.is_empty() {
+                    name
+                } else {
+                    format!("{name},{}", args.join(","))
+                });
+                cursor = next;
+
+                let chain = skip_ws(body, next);
+                if body.as_bytes().get(chain).is_some_and(|b| *b == b':') {
+                    name_start = chain + 1;
+                    continue;
+                }
+                break;
             }
-            if name_end == name_start {
-                cursor = name_start;
-                continue;
-            }
-            let name = body[name_start..name_end].trim();
-            let mut open = skip_ws(body, name_end);
-            if bytes.get(open).is_none_or(|b| *b != b'(') {
-                cursor = name_end;
-                continue;
-            }
-            let Some(close) = find_matching(body, open, '(', ')') else {
-                cursor = name_end;
-                continue;
-            };
-            let args = split_call_args(&body[open + 1..close])
-                .into_iter()
-                .map(|arg| context.resolve_command_arg(&arg, scope))
-                .collect::<Vec<_>>();
-            out.push(if args.is_empty() {
-                name.to_string()
-            } else {
-                format!("{name},{}", args.join(","))
-            });
-            open = close + 1;
-            cursor = open;
         }
         (!out.is_empty()).then(|| out.join(";"))
+    }
+
+    fn parse_lua_method_call(
+        body: &str,
+        name_start: usize,
+    ) -> Option<(String, Vec<String>, usize)> {
+        let bytes = body.as_bytes();
+        let mut name_end = name_start;
+        while name_end < bytes.len() && is_lua_ident(bytes[name_end]) {
+            name_end += 1;
+        }
+        if name_end == name_start {
+            return None;
+        }
+        let open = skip_ws(body, name_end);
+        if bytes.get(open).is_none_or(|b| *b != b'(') {
+            return None;
+        }
+        let close = find_matching(body, open, '(', ')')?;
+        Some((
+            body[name_start..name_end].trim().to_string(),
+            split_call_args(&body[open + 1..close]),
+            close + 1,
+        ))
     }
 
     fn resolve_lua_conditionals(body: &str, scope: &HashMap<String, String>) -> String {
@@ -1406,7 +1423,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 6;
+const COMPILER_VERSION: u32 = 7;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const DANCE_BUTTONS: [&str; 6] = ["UpLeft", "UpRight", "Left", "Down", "Up", "Right"];
@@ -2159,6 +2176,7 @@ return Def.ActorFrame {
         InitCommand=cmd(diffusealpha,0);
         W2Command=flashadd(W2colour,true);
         HeldCommand=flashnormal(Lastcolour,true);
+        ECommand=function(self) self:blend("BlendMode_Normal"):diffusealpha(1.0):zoom(0.75):accelerate(64/60):diffusealpha(0.0):zoom(1.0):setstate(0):animate(true) end;
         JudgmentCommand=function(self) end;
     };
 }
@@ -2184,6 +2202,17 @@ return Def.ActorFrame {
         assert!(held.contains("linear,10/60"));
         assert!(!held.contains("diffuse,0,0.78431374,1,1"));
         assert!(!held.contains("flashnormal"));
+
+        let e = sprite
+            .commands
+            .get("ecommand")
+            .expect("E command should compile");
+        assert!(e.contains("blend,\"BlendMode_Normal\""));
+        assert!(e.contains("diffusealpha,1.0"));
+        assert!(e.contains("zoom,0.75"));
+        assert!(e.contains("accelerate,64/60"));
+        assert!(e.contains("setstate,0"));
+        assert!(e.contains("animate,true"));
 
         assert_eq!(
             sprite.commands.get("judgmentcommand").map(String::as_str),
