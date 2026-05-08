@@ -1,10 +1,11 @@
 use super::super::choice;
 use super::super::constants::MINI_INDICATOR_VARIANTS;
 use super::super::row::index_binding;
-use super::super::row::{BitmaskInit, CursorInit, CycleInit, NumericInit};
+use super::super::row::{BitMapping, BitmaskInit, BitmaskWriteback, CursorInit, CycleInit, NumericInit};
 use super::super::state::{
-    EarlyDwMask, ErrorBarOptionsMask, FaPlusMask, GameplayExtrasMask, HideMask, LifeBarOptionsMask,
-    MeasureCounterOptionsMask, PlayerOptionMasks, ResultsExtrasMask, ScrollMask,
+    EarlyDwMask, ErrorBarOptionsMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
+    HideMask, LifeBarOptionsMask, MeasureCounterOptionsMask, PlayerOptionMasks, ResultsExtrasMask,
+    ScrollMask,
 };
 use super::*;
 use crate::game::profile as gp;
@@ -277,8 +278,8 @@ const ERROR_BAR_OFFSET_Y: NumericBinding = NumericBinding {
     }),
 };
 
-const SCROLL: BitmaskBinding = BitmaskBinding::HandRolled {
-    init: Some(BitmaskInit {
+const SCROLL: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
         from_profile: |p| {
             // The Scroll row's choice indices are fixed by build order
             // (0=Reverse, 1=Split, 2=Alternate, 3=Cross, 4=Centered) and the
@@ -315,11 +316,39 @@ const SCROLL: BitmaskBinding = BitmaskBinding::HandRolled {
             m.scroll = ScrollMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
-    }),
-    toggle: choice::toggle_scroll_row,
+    },
+    writeback: BitmaskWriteback {
+        project: |_m, p, b| {
+            use crate::game::profile::ScrollOption;
+            let mask = ScrollMask::from_bits_truncate(b as u8);
+            let mut setting = ScrollOption::Normal;
+            if mask.contains(ScrollMask::REVERSE) {
+                setting = setting.union(ScrollOption::Reverse);
+            }
+            if mask.contains(ScrollMask::SPLIT) {
+                setting = setting.union(ScrollOption::Split);
+            }
+            if mask.contains(ScrollMask::ALTERNATE) {
+                setting = setting.union(ScrollOption::Alternate);
+            }
+            if mask.contains(ScrollMask::CROSS) {
+                setting = setting.union(ScrollOption::Cross);
+            }
+            if mask.contains(ScrollMask::CENTERED) {
+                setting = setting.union(ScrollOption::Centered);
+            }
+            p.scroll_option = setting;
+            p.reverse_scroll = setting.contains(ScrollOption::Reverse);
+        },
+        persist_for_side: |s, p| {
+            gp::update_scroll_option_for_side(s, p.scroll_option);
+        },
+        bit_mapping: BitMapping::Sequential { width: 5 },
+        sync_visibility: false,
+    },
 };
-const HIDE: BitmaskBinding = BitmaskBinding::HandRolled {
-    init: Some(BitmaskInit {
+const HIDE: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
         from_profile: |p| {
             let mut bits = HideMask::empty();
             if p.hide_targets {
@@ -355,11 +384,36 @@ const HIDE: BitmaskBinding = BitmaskBinding::HandRolled {
             m.hide = HideMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
-    }),
-    toggle: choice::toggle_hide_row,
+    },
+    writeback: BitmaskWriteback {
+        project: |_m, p, b| {
+            let mask = HideMask::from_bits_truncate(b as u8);
+            p.hide_targets = mask.contains(HideMask::TARGETS);
+            p.hide_song_bg = mask.contains(HideMask::BACKGROUND);
+            p.hide_combo = mask.contains(HideMask::COMBO);
+            p.hide_lifebar = mask.contains(HideMask::LIFE);
+            p.hide_score = mask.contains(HideMask::SCORE);
+            p.hide_danger = mask.contains(HideMask::DANGER);
+            p.hide_combo_explosions = mask.contains(HideMask::COMBO_EXPLOSIONS);
+        },
+        persist_for_side: |s, p| {
+            gp::update_hide_options_for_side(
+                s,
+                p.hide_targets,
+                p.hide_song_bg,
+                p.hide_combo,
+                p.hide_lifebar,
+                p.hide_score,
+                p.hide_danger,
+                p.hide_combo_explosions,
+            );
+        },
+        bit_mapping: BitMapping::Sequential { width: 7 },
+        sync_visibility: true,
+    },
 };
-const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
-    init: Some(BitmaskInit {
+const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
         from_profile: |p| {
             let mut bits = LifeBarOptionsMask::empty();
             if p.rainbow_max {
@@ -383,11 +437,25 @@ const LIFE_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
             m.life_bar_options = LifeBarOptionsMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
-    }),
-    toggle: choice::toggle_life_bar_options_row,
+    },
+    writeback: BitmaskWriteback {
+        project: |_m, p, b| {
+            let mask = LifeBarOptionsMask::from_bits_truncate(b as u8);
+            p.rainbow_max = mask.contains(LifeBarOptionsMask::RAINBOW_MAX);
+            p.responsive_colors = mask.contains(LifeBarOptionsMask::RESPONSIVE_COLORS);
+            p.show_life_percent = mask.contains(LifeBarOptionsMask::SHOW_LIFE_PERCENT);
+        },
+        persist_for_side: |s, p| {
+            gp::update_rainbow_max_for_side(s, p.rainbow_max);
+            gp::update_responsive_colors_for_side(s, p.responsive_colors);
+            gp::update_show_life_percent_for_side(s, p.show_life_percent);
+        },
+        bit_mapping: BitMapping::Sequential { width: 3 },
+        sync_visibility: false,
+    },
 };
-const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::HandRolled {
-    init: Some(BitmaskInit {
+const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
         from_profile: |p| {
             let mut bits = GameplayExtrasMask::empty();
             if p.column_flash_on_miss {
@@ -414,11 +482,40 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::HandRolled {
             m.gameplay_extras = GameplayExtrasMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
-    }),
-    toggle: choice::toggle_gameplay_extras_row,
+    },
+    writeback: BitmaskWriteback {
+        project: |m, p, b| {
+            let mask = GameplayExtrasMask::from_bits_truncate(b as u8);
+            p.column_flash_on_miss = mask.contains(GameplayExtrasMask::FLASH_COLUMN_FOR_MISS);
+            p.nps_graph_at_top = mask.contains(GameplayExtrasMask::DENSITY_GRAPH_AT_TOP);
+            p.column_cues = mask.contains(GameplayExtrasMask::COLUMN_CUES);
+            p.display_scorebox = mask.contains(GameplayExtrasMask::DISPLAY_SCOREBOX);
+            let mut more = GameplayExtrasMoreMask::empty();
+            if p.column_cues {
+                more.insert(GameplayExtrasMoreMask::COLUMN_CUES);
+            }
+            if p.display_scorebox {
+                more.insert(GameplayExtrasMoreMask::DISPLAY_SCOREBOX);
+            }
+            m.gameplay_extras_more = more;
+        },
+        persist_for_side: |s, p| {
+            gp::update_gameplay_extras_for_side(
+                s,
+                p.column_flash_on_miss,
+                p.subtractive_scoring,
+                p.pacemaker,
+                p.nps_graph_at_top,
+            );
+            gp::update_column_cues_for_side(s, p.column_cues);
+            gp::update_display_scorebox_for_side(s, p.display_scorebox);
+        },
+        bit_mapping: BitMapping::Sequential { width: 4 },
+        sync_visibility: false,
+    },
 };
-const ERROR_BAR: BitmaskBinding = BitmaskBinding::HandRolled {
-    init: Some(BitmaskInit {
+const ERROR_BAR: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
         from_profile: |p| {
             // Profile already stores the desired mask; if it's empty (e.g.
             // legacy profile or unset) fall back to the canonical mapping
@@ -440,11 +537,23 @@ const ERROR_BAR: BitmaskBinding = BitmaskBinding::HandRolled {
             m.error_bar = crate::game::profile::ErrorBarMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
-    }),
-    toggle: choice::toggle_error_bar_row,
+    },
+    writeback: BitmaskWriteback {
+        project: |_m, p, b| {
+            let mask = crate::game::profile::ErrorBarMask::from_bits_truncate(b as u8);
+            p.error_bar_active_mask = mask;
+            p.error_bar = crate::game::profile::error_bar_style_from_mask(mask);
+            p.error_bar_text = crate::game::profile::error_bar_text_from_mask(mask);
+        },
+        persist_for_side: |s, p| {
+            gp::update_error_bar_mask_for_side(s, p.error_bar_active_mask);
+        },
+        bit_mapping: BitMapping::Sequential { width: 5 },
+        sync_visibility: true,
+    },
 };
-const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
-    init: Some(BitmaskInit {
+const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
         from_profile: |p| {
             let mut bits = ErrorBarOptionsMask::empty();
             if p.error_bar_up {
@@ -465,11 +574,22 @@ const ERROR_BAR_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
             m.error_bar_options = ErrorBarOptionsMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
-    }),
-    toggle: choice::toggle_error_bar_options_row,
+    },
+    writeback: BitmaskWriteback {
+        project: |_m, p, b| {
+            let mask = ErrorBarOptionsMask::from_bits_truncate(b as u8);
+            p.error_bar_up = mask.contains(ErrorBarOptionsMask::MOVE_UP);
+            p.error_bar_multi_tick = mask.contains(ErrorBarOptionsMask::MULTI_TICK);
+        },
+        persist_for_side: |s, p| {
+            gp::update_error_bar_options_for_side(s, p.error_bar_up, p.error_bar_multi_tick);
+        },
+        bit_mapping: BitMapping::Sequential { width: 2 },
+        sync_visibility: false,
+    },
 };
-const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
-    init: Some(BitmaskInit {
+const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
         from_profile: |p| {
             let mut bits = MeasureCounterOptionsMask::empty();
             if p.measure_counter_left {
@@ -499,8 +619,29 @@ const MEASURE_COUNTER_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
             m.measure_counter_options = MeasureCounterOptionsMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
-    }),
-    toggle: choice::toggle_measure_counter_options_row,
+    },
+    writeback: BitmaskWriteback {
+        project: |_m, p, b| {
+            let mask = MeasureCounterOptionsMask::from_bits_truncate(b as u8);
+            p.measure_counter_left = mask.contains(MeasureCounterOptionsMask::MOVE_LEFT);
+            p.measure_counter_up = mask.contains(MeasureCounterOptionsMask::MOVE_UP);
+            p.measure_counter_vert = mask.contains(MeasureCounterOptionsMask::VERTICAL_LOOKAHEAD);
+            p.broken_run = mask.contains(MeasureCounterOptionsMask::BROKEN_RUN_TOTAL);
+            p.run_timer = mask.contains(MeasureCounterOptionsMask::RUN_TIMER);
+        },
+        persist_for_side: |s, p| {
+            gp::update_measure_counter_options_for_side(
+                s,
+                p.measure_counter_left,
+                p.measure_counter_up,
+                p.measure_counter_vert,
+                p.broken_run,
+                p.run_timer,
+            );
+        },
+        bit_mapping: BitMapping::Sequential { width: 5 },
+        sync_visibility: false,
+    },
 };
 fn fa_plus_bits_from_profile(p: &gp::Profile) -> u32 {
     let mut bits = FaPlusMask::empty();
@@ -525,36 +666,80 @@ fn fa_plus_bits_from_profile(p: &gp::Profile) -> u32 {
     bits.bits() as u32
 }
 
-fn set_fa_plus_bits(m: &mut PlayerOptionMasks, b: u32) {
-    debug_assert_eq!(
-        b & !(u8::MAX as u32),
-        0,
-        "FaPlusMask init bits exceed u8 width"
-    );
-    m.fa_plus = FaPlusMask::from_bits_retain(b as u8);
+/// Project the full FA+ mask onto every fan-out profile field. Both FA+
+/// rows share the same projection — they only differ in which slice of
+/// `FaPlusMask` they own at toggle time.
+fn project_fa_plus(_m: &mut PlayerOptionMasks, p: &mut gp::Profile, _b: u32, mask: FaPlusMask) {
+    p.show_fa_plus_window = mask.contains(FaPlusMask::WINDOW);
+    p.show_ex_score = mask.contains(FaPlusMask::EX_SCORE);
+    p.show_hard_ex_score = mask.contains(FaPlusMask::HARD_EX_SCORE);
+    p.show_fa_plus_pane = mask.contains(FaPlusMask::PANE);
+    p.fa_plus_10ms_blue_window = mask.contains(FaPlusMask::BLUE_WINDOW_10MS);
+    p.split_15_10ms = mask.contains(FaPlusMask::SPLIT_15_10MS);
 }
 
-const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
-    init: Some(BitmaskInit {
-        from_profile: fa_plus_bits_from_profile,
+fn persist_fa_plus(s: gp::PlayerSide, p: &gp::Profile) {
+    gp::update_show_fa_plus_window_for_side(s, p.show_fa_plus_window);
+    gp::update_show_ex_score_for_side(s, p.show_ex_score);
+    gp::update_show_hard_ex_score_for_side(s, p.show_hard_ex_score);
+    gp::update_show_fa_plus_pane_for_side(s, p.show_fa_plus_pane);
+    gp::update_fa_plus_10ms_blue_window_for_side(s, p.fa_plus_10ms_blue_window);
+    gp::update_split_15_10ms_for_side(s, p.split_15_10ms);
+}
+
+const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
+        // FA+ Options owns bits 0..=3 of FaPlusMask (WINDOW/EX/HARD_EX/PANE).
+        // The row stores its slice in row-local coordinates: choice i ⇔ bit i.
+        from_profile: |p| (fa_plus_bits_from_profile(p)) & 0b0000_1111,
         get_active: |m| (m.fa_plus.bits() & 0b0000_1111) as u32,
-        set_active: set_fa_plus_bits,
+        set_active: |m, b| {
+            debug_assert_eq!(b & !0b0000_1111u32, 0, "FA+ Options bits exceed slice width");
+            let preserved = m.fa_plus.bits() & 0b1111_0000;
+            m.fa_plus = FaPlusMask::from_bits_retain(preserved | (b as u8 & 0b0000_1111));
+        },
         cursor: CursorInit::Fixed(0),
-    }),
-    toggle: choice::toggle_fa_plus_row,
+    },
+    writeback: BitmaskWriteback {
+        project: |m, p, _b| {
+            let mask = m.fa_plus;
+            project_fa_plus(m, p, _b, mask);
+        },
+        persist_for_side: persist_fa_plus,
+        bit_mapping: BitMapping::Sequential { width: 4 },
+        // Toggling the WINDOW bit hides/shows FA+ Window Options. We always
+        // sync after FA+ Options toggles; sync is cheap and a no-op when
+        // nothing changed.
+        sync_visibility: true,
+    },
 };
 
-const FA_PLUS_WINDOW_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
-    init: Some(BitmaskInit {
-        from_profile: fa_plus_bits_from_profile,
+const FA_PLUS_WINDOW_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
+        // FA+ Window Options owns bits 4..=5 of FaPlusMask (BLUE_WINDOW_10MS,
+        // SPLIT_15_10MS), shifted into row-local 0..=1.
+        from_profile: |p| (fa_plus_bits_from_profile(p) >> 4) & 0b0000_0011,
         get_active: |m| ((m.fa_plus.bits() >> 4) & 0b0000_0011) as u32,
-        set_active: set_fa_plus_bits,
+        set_active: |m, b| {
+            debug_assert_eq!(b & !0b0000_0011u32, 0, "FA+ Window bits exceed slice width");
+            let preserved = m.fa_plus.bits() & 0b1100_1111;
+            m.fa_plus =
+                FaPlusMask::from_bits_retain(preserved | (((b as u8) & 0b11) << 4));
+        },
         cursor: CursorInit::FirstActiveBit,
-    }),
-    toggle: choice::toggle_fa_plus_row,
+    },
+    writeback: BitmaskWriteback {
+        project: |m, p, _b| {
+            let mask = m.fa_plus;
+            project_fa_plus(m, p, _b, mask);
+        },
+        persist_for_side: persist_fa_plus,
+        bit_mapping: BitMapping::Sequential { width: 2 },
+        sync_visibility: false,
+    },
 };
-const EARLY_DW_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
-    init: Some(BitmaskInit {
+const EARLY_DW_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
         from_profile: |p| {
             let mut bits = EarlyDwMask::empty();
             if p.hide_early_dw_judgments {
@@ -575,11 +760,26 @@ const EARLY_DW_OPTIONS: BitmaskBinding = BitmaskBinding::HandRolled {
             m.early_dw = EarlyDwMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
-    }),
-    toggle: choice::toggle_early_dw_row,
+    },
+    writeback: BitmaskWriteback {
+        project: |_m, p, b| {
+            let mask = EarlyDwMask::from_bits_truncate(b as u8);
+            p.hide_early_dw_judgments = mask.contains(EarlyDwMask::HIDE_JUDGMENTS);
+            p.hide_early_dw_flash = mask.contains(EarlyDwMask::HIDE_FLASH);
+        },
+        persist_for_side: |s, p| {
+            gp::update_early_dw_options_for_side(
+                s,
+                p.hide_early_dw_judgments,
+                p.hide_early_dw_flash,
+            );
+        },
+        bit_mapping: BitMapping::Sequential { width: 2 },
+        sync_visibility: false,
+    },
 };
-const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding::HandRolled {
-    init: Some(BitmaskInit {
+const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
         from_profile: |p| {
             let mut bits = ResultsExtrasMask::empty();
             if p.track_early_judgments {
@@ -600,8 +800,20 @@ const RESULTS_EXTRAS: BitmaskBinding = BitmaskBinding::HandRolled {
             m.results_extras = ResultsExtrasMask::from_bits_retain(b as u8);
         },
         cursor: CursorInit::FirstActiveBit,
-    }),
-    toggle: choice::toggle_results_extras_row,
+    },
+    writeback: BitmaskWriteback {
+        project: |_m, p, b| {
+            let mask = ResultsExtrasMask::from_bits_truncate(b as u8);
+            p.track_early_judgments = mask.contains(ResultsExtrasMask::TRACK_EARLY_JUDGMENTS);
+            p.scale_scatterplot = mask.contains(ResultsExtrasMask::SCALE_SCATTERPLOT);
+        },
+        persist_for_side: |s, p| {
+            gp::update_track_early_judgments_for_side(s, p.track_early_judgments);
+            gp::update_scale_scatterplot_for_side(s, p.scale_scatterplot);
+        },
+        bit_mapping: BitMapping::Sequential { width: 2 },
+        sync_visibility: false,
+    },
 };
 
 const ACTION_ON_MISSED_TARGET: CustomBinding = CustomBinding {
@@ -1262,12 +1474,26 @@ mod bitmask_binding_init_tests {
     }
 
     fn make_bitmask_row(id: RowId, name: LookupKey, choices: &[&str]) -> Row {
+        // Placeholder Generic binding — these tests call
+        // `init_bitmask_row_from_binding` with a *different* (production)
+        // binding, so the row's own behavior is never exercised.
+        let stub = BitmaskBinding::Generic {
+            init: BitmaskInit {
+                from_profile: |_| 0,
+                get_active: |_| 0,
+                set_active: |_, _| {},
+                cursor: CursorInit::FirstActiveBit,
+            },
+            writeback: BitmaskWriteback {
+                project: |_, _, _| {},
+                persist_for_side: |_, _| {},
+                bit_mapping: BitMapping::Sequential { width: 0 },
+                sync_visibility: false,
+            },
+        };
         Row {
             id,
-            behavior: RowBehavior::Bitmask(BitmaskBinding::HandRolled {
-                init: None,
-                toggle: |_, _| {},
-            }),
+            behavior: RowBehavior::Bitmask(stub),
             name,
             choices: choices.iter().map(ToString::to_string).collect(),
             selected_choice_index: [0, 0],
@@ -1368,31 +1594,6 @@ mod bitmask_binding_init_tests {
             row.selected_choice_index[0], 1,
             "child row cursor reads shifted bits so Split lands on choice index 1",
         );
-    }
-
-    /// Bindings without an init contract must report `false` and leave
-    /// row/masks untouched. Now that all production bindings opt in, this
-    /// guard uses a synthetic init-less binding to assert the contract
-    /// shape directly.
-    #[test]
-    fn binding_without_init_is_noop() {
-        ensure_i18n();
-        let mut row = make_bitmask_row(
-            RowId::GameplayExtras,
-            lookup_key("PlayerOptions", "GameplayExtras"),
-            &["FlashMiss", "DensityTop", "ColumnCues", "Scorebox"],
-        );
-        row.selected_choice_index = [3, 4];
-        let mut masks = PlayerOptionMasks::default();
-        let profile = Profile::default();
-        let init_less = BitmaskBinding::HandRolled {
-            init: None,
-            toggle: |_, _| {},
-        };
-        let applied = init_bitmask_row_from_binding(&mut row, &init_less, &profile, &mut masks, 0);
-        assert!(!applied, "init-less binding must short-circuit");
-        assert_eq!(row.selected_choice_index, [3, 4], "row untouched");
-        assert_eq!(masks, PlayerOptionMasks::default(), "masks untouched");
     }
 
     /// Order assertion: Scroll choice index N maps to ScrollMask bit (1 << N)

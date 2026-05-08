@@ -2,16 +2,16 @@ use super::*;
 
 #[cfg(test)]
 pub(super) mod tests {
-    use super::super::{choice, panes};
+    use super::super::panes;
     use super::{
-        BitmaskBinding, BitmaskInit, ChoiceBinding, CursorInit, CycleInit, ErrorBarMask,
-        FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
-        HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL,
-        NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row, RowBehavior, RowId, RowMap,
-        ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event, handle_start_event,
-        hud_offset_choices, init_cycle_row_from_binding, init_numeric_row_from_binding,
-        is_row_visible, judgment_tilt_options_visible, player_option_column_x,
-        repeat_held_arcade_start, row_visibility, session_active_players,
+        BitMapping, BitmaskBinding, BitmaskInit, BitmaskWriteback, ChoiceBinding, CursorInit,
+        CycleInit, ErrorBarMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
+        HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
+        NAV_REPEAT_SCROLL_INTERVAL, NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row,
+        RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event,
+        handle_start_event, hud_offset_choices, init_cycle_row_from_binding,
+        init_numeric_row_from_binding, is_row_visible, judgment_tilt_options_visible,
+        player_option_column_x, repeat_held_arcade_start, row_visibility, session_active_players,
         sync_profile_scroll_speed, sync_speed_mod_type_row,
     };
     use crate::assets::AssetManager;
@@ -74,6 +74,18 @@ pub(super) mod tests {
         }
         map
     }
+
+    /// Stub writeback for synthetic test bindings whose tests only exercise
+    /// the init contract (`apply_profile_defaults`). The toggle path is
+    /// never invoked so `project`/`persist`/`bit_mapping` semantics are
+    /// irrelevant; we just need a value-typed `BitmaskWriteback` to fit
+    /// into `BitmaskBinding::Generic`.
+    const TEST_WRITEBACK: BitmaskWriteback = BitmaskWriteback {
+        project: |_, _, _| {},
+        persist_for_side: |_, _| {},
+        bit_mapping: BitMapping::Sequential { width: 0 },
+        sync_visibility: false,
+    };
 
     #[test]
     fn sync_profile_scroll_speed_matches_speed_mod() {
@@ -507,8 +519,8 @@ pub(super) mod tests {
             &["Exit"],
             [0, 0],
         )]);
-        let scroll_binding = BitmaskBinding::HandRolled {
-            init: Some(BitmaskInit {
+        let scroll_binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
                 from_profile: |p| {
                     use crate::game::profile::ScrollOption;
                     let mut bits = ScrollMask::empty();
@@ -534,8 +546,8 @@ pub(super) mod tests {
                     m.scroll = ScrollMask::from_bits_retain(b as u8);
                 },
                 cursor: CursorInit::FirstActiveBit,
-            }),
-            toggle: choice::toggle_scroll_row,
+            },
+            writeback: TEST_WRITEBACK,
         };
         let mut advanced_rows = test_row_map(vec![test_bitmask_row(
             RowId::Scroll,
@@ -583,8 +595,8 @@ pub(super) mod tests {
         profile.hide_targets = false;
         profile.hide_song_bg = true;
 
-        let hide_binding = BitmaskBinding::HandRolled {
-            init: Some(BitmaskInit {
+        let hide_binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
                 from_profile: |p| {
                     let mut bits = HideMask::empty();
                     if p.hide_targets {
@@ -615,8 +627,8 @@ pub(super) mod tests {
                     m.hide = HideMask::from_bits_retain(b as u8);
                 },
                 cursor: CursorInit::FirstActiveBit,
-            }),
-            toggle: choice::toggle_hide_row,
+            },
+            writeback: TEST_WRITEBACK,
         };
         let mut hide_rows = test_row_map(vec![test_bitmask_row(
             RowId::Hide,
@@ -655,8 +667,8 @@ pub(super) mod tests {
         profile.show_fa_plus_window = false;
         profile.show_ex_score = true;
 
-        let fa_plus_binding = BitmaskBinding::HandRolled {
-            init: Some(BitmaskInit {
+        let fa_plus_binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
                 from_profile: |p| {
                     let mut bits = FaPlusMask::empty();
                     if p.show_fa_plus_window {
@@ -684,8 +696,8 @@ pub(super) mod tests {
                     m.fa_plus = FaPlusMask::from_bits_retain(b as u8);
                 },
                 cursor: CursorInit::Fixed(0),
-            }),
-            toggle: choice::toggle_fa_plus_row,
+            },
+            writeback: TEST_WRITEBACK,
         };
         let mut fa_plus_rows = test_row_map(vec![test_bitmask_row(
             RowId::FAPlusOptions,
@@ -726,8 +738,8 @@ pub(super) mod tests {
         // No GameplayExtrasMore row exists (orphan; see the
         // `every_row_id_is_constructed_by_some_pane` test) — we still expect
         // the derived mask bits to be populated.
-        let gameplay_extras_binding = BitmaskBinding::HandRolled {
-            init: Some(BitmaskInit {
+        let gameplay_extras_binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
                 from_profile: |p| {
                     let mut bits = GameplayExtrasMask::empty();
                     if p.column_flash_on_miss {
@@ -749,8 +761,8 @@ pub(super) mod tests {
                     m.gameplay_extras = GameplayExtrasMask::from_bits_retain(b as u8);
                 },
                 cursor: CursorInit::FirstActiveBit,
-            }),
-            toggle: choice::toggle_gameplay_extras_row,
+            },
+            writeback: TEST_WRITEBACK,
         };
         let mut rows = test_row_map(vec![test_bitmask_row(
             RowId::GameplayExtras,
@@ -1056,13 +1068,28 @@ pub(super) mod tests {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
 
-        // Insert a Scroll row directly since it lives in the Advanced pane.
+        // Inline Scroll binding (toggle-capable) for this dispatch test.
+        // Mirrors the shape of the production SCROLL binding without
+        // taking a dependency on the panes module's private constants.
+        let scroll_binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
+                from_profile: |_| 0,
+                get_active: |m| m.scroll.bits() as u32,
+                set_active: |m, b| {
+                    m.scroll = ScrollMask::from_bits_retain(b as u8);
+                },
+                cursor: CursorInit::FirstActiveBit,
+            },
+            writeback: BitmaskWriteback {
+                project: |_, _, _| {},
+                persist_for_side: |_, _| {},
+                bit_mapping: BitMapping::Sequential { width: 5 },
+                sync_visibility: false,
+            },
+        };
         let scroll_row = Row {
             id: RowId::Scroll,
-            behavior: super::RowBehavior::Bitmask(super::BitmaskBinding::HandRolled {
-                init: None,
-                toggle: super::choice::toggle_scroll_row,
-            }),
+            behavior: super::RowBehavior::Bitmask(scroll_binding),
             name: lookup_key("PlayerOptions", "Scroll"),
             choices: ["Reverse", "Split", "Alternate", "Cross", "Centered"]
                 .iter()
@@ -1405,12 +1432,25 @@ pub(super) mod tests {
 
         // Insert a Bitmask row (Scroll lives in the Advanced pane, so attach it
         // to the Main row_map directly for this isolated test).
+        let scroll_binding = BitmaskBinding::Generic {
+            init: BitmaskInit {
+                from_profile: |_| 0,
+                get_active: |m| m.scroll.bits() as u32,
+                set_active: |m, b| {
+                    m.scroll = ScrollMask::from_bits_retain(b as u8);
+                },
+                cursor: CursorInit::FirstActiveBit,
+            },
+            writeback: BitmaskWriteback {
+                project: |_, _, _| {},
+                persist_for_side: |_, _| {},
+                bit_mapping: BitMapping::Sequential { width: 5 },
+                sync_visibility: false,
+            },
+        };
         let scroll_row = Row {
             id: RowId::Scroll,
-            behavior: super::RowBehavior::Bitmask(super::BitmaskBinding::HandRolled {
-                init: None,
-                toggle: super::choice::toggle_scroll_row,
-            }),
+            behavior: super::RowBehavior::Bitmask(scroll_binding),
             name: lookup_key("PlayerOptions", "Scroll"),
             choices: ["Reverse", "Split", "Alternate", "Cross", "Centered"]
                 .iter()
@@ -2078,7 +2118,6 @@ pub(super) mod tests {
         );
     }
 
-    use super::{BitMapping, BitmaskWriteback};
     use crate::game::profile::{
         AccelEffectsMask, AppearanceEffectsMask, HoldsMask, InsertMask, RemoveMask,
         VisualEffectsMask,
@@ -2118,16 +2157,14 @@ pub(super) mod tests {
                 cursor: CursorInit::FirstActiveBit,
             },
             writeback: BitmaskWriteback {
-                project_to_profile: |p, b| {
+                project: |_, p, b| {
                     p.insert_active_mask = InsertMask::from_bits_truncate(b as u8);
                 },
-                persist_for_side: |s, b| {
-                    profile::update_insert_mask_for_side(
-                        s,
-                        InsertMask::from_bits_truncate(b as u8),
-                    );
+                persist_for_side: |s, p| {
+                    profile::update_insert_mask_for_side(s, p.insert_active_mask);
                 },
                 bit_mapping: BitMapping::Sequential { width: 7 },
+                sync_visibility: false,
             },
         };
         install_bitmask_row(
@@ -2179,16 +2216,14 @@ pub(super) mod tests {
                 cursor: CursorInit::FirstActiveBit,
             },
             writeback: BitmaskWriteback {
-                project_to_profile: |p, b| {
+                project: |_, p, b| {
                     p.insert_active_mask = InsertMask::from_bits_truncate(b as u8);
                 },
-                persist_for_side: |s, b| {
-                    profile::update_insert_mask_for_side(
-                        s,
-                        InsertMask::from_bits_truncate(b as u8),
-                    );
+                persist_for_side: |s, p| {
+                    profile::update_insert_mask_for_side(s, p.insert_active_mask);
                 },
                 bit_mapping: BitMapping::Sequential { width: 7 },
+                sync_visibility: false,
             },
         };
         // 8 choices, cursor at index 7 — out of width.
@@ -2223,16 +2258,14 @@ pub(super) mod tests {
                 cursor: CursorInit::FirstActiveBit,
             },
             writeback: BitmaskWriteback {
-                project_to_profile: |p, b| {
+                project: |_, p, b| {
                     p.remove_active_mask = RemoveMask::from_bits_truncate(b as u8);
                 },
-                persist_for_side: |s, b| {
-                    profile::update_remove_mask_for_side(
-                        s,
-                        RemoveMask::from_bits_truncate(b as u8),
-                    );
+                persist_for_side: |s, p| {
+                    profile::update_remove_mask_for_side(s, p.remove_active_mask);
                 },
                 bit_mapping: BitMapping::Sequential { width: 8 },
+                sync_visibility: false,
             },
         };
         install_bitmask_row(
@@ -2267,13 +2300,14 @@ pub(super) mod tests {
                 cursor: CursorInit::FirstActiveBit,
             },
             writeback: BitmaskWriteback {
-                project_to_profile: |p, b| {
+                project: |_, p, b| {
                     p.holds_active_mask = HoldsMask::from_bits_truncate(b as u8);
                 },
-                persist_for_side: |s, b| {
-                    profile::update_holds_mask_for_side(s, HoldsMask::from_bits_truncate(b as u8));
+                persist_for_side: |s, p| {
+                    profile::update_holds_mask_for_side(s, p.holds_active_mask);
                 },
                 bit_mapping: BitMapping::Sequential { width: 5 },
+                sync_visibility: false,
             },
         };
         // Holds in production has 5 choices; bit_mapping is Sequential { width: 5 }.
@@ -2306,16 +2340,14 @@ pub(super) mod tests {
                 cursor: CursorInit::FirstActiveBit,
             },
             writeback: BitmaskWriteback {
-                project_to_profile: |p, b| {
+                project: |_, p, b| {
                     p.accel_effects_active_mask = AccelEffectsMask::from_bits_truncate(b as u8);
                 },
-                persist_for_side: |s, b| {
-                    profile::update_accel_effects_mask_for_side(
-                        s,
-                        AccelEffectsMask::from_bits_truncate(b as u8),
-                    );
+                persist_for_side: |s, p| {
+                    profile::update_accel_effects_mask_for_side(s, p.accel_effects_active_mask);
                 },
                 bit_mapping: BitMapping::Sequential { width: 5 },
+                sync_visibility: false,
             },
         };
         install_bitmask_row(
@@ -2350,16 +2382,14 @@ pub(super) mod tests {
                 cursor: CursorInit::FirstActiveBit,
             },
             writeback: BitmaskWriteback {
-                project_to_profile: |p, b| {
+                project: |_, p, b| {
                     p.visual_effects_active_mask = VisualEffectsMask::from_bits_truncate(b as u16);
                 },
-                persist_for_side: |s, b| {
-                    profile::update_visual_effects_mask_for_side(
-                        s,
-                        VisualEffectsMask::from_bits_truncate(b as u16),
-                    );
+                persist_for_side: |s, p| {
+                    profile::update_visual_effects_mask_for_side(s, p.visual_effects_active_mask);
                 },
                 bit_mapping: BitMapping::Sequential { width: 10 },
+                sync_visibility: false,
             },
         };
         install_bitmask_row(
@@ -2407,17 +2437,18 @@ pub(super) mod tests {
                 cursor: CursorInit::FirstActiveBit,
             },
             writeback: BitmaskWriteback {
-                project_to_profile: |p, b| {
+                project: |_, p, b| {
                     p.appearance_effects_active_mask =
                         AppearanceEffectsMask::from_bits_truncate(b as u8);
                 },
-                persist_for_side: |s, b| {
+                persist_for_side: |s, p| {
                     profile::update_appearance_effects_mask_for_side(
                         s,
-                        AppearanceEffectsMask::from_bits_truncate(b as u8),
+                        p.appearance_effects_active_mask,
                     );
                 },
                 bit_mapping: BitMapping::Sequential { width: 5 },
+                sync_visibility: false,
             },
         };
         install_bitmask_row(
