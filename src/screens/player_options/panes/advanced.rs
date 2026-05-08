@@ -1,7 +1,7 @@
 use super::super::choice;
 use super::super::constants::MINI_INDICATOR_VARIANTS;
-use super::super::row::index_binding;
-use super::super::row::{BitmaskInit, CursorInit, CycleInit, NumericInit};
+use super::super::row::{index_binding, numeric_binding};
+use super::super::row::{BitmaskInit, CursorInit, CycleInit};
 use super::super::state::{
     EarlyDwMask, ErrorBarOptionsMask, FaPlusMask, GameplayExtrasMask, HideMask, LifeBarOptionsMask,
     MeasureCounterOptionsMask, PlayerOptionMasks, ResultsExtrasMask, ScrollMask,
@@ -252,30 +252,20 @@ const CUSTOM_BLUE_FANTASTIC_WINDOW: ChoiceBinding<bool> = ChoiceBinding::<bool> 
     }),
 };
 
-const ERROR_BAR_OFFSET_X: NumericBinding = NumericBinding {
-    parse: parse_i32,
-    apply: |p, v| {
-        p.error_bar_offset_x = v;
-        Outcome::persisted()
-    },
-    persist_for_side: gp::update_error_bar_offset_x_for_side,
-    init: Some(NumericInit {
-        from_profile: |p| p.error_bar_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
-        format: |v| format!("{v}"),
-    }),
-};
-const ERROR_BAR_OFFSET_Y: NumericBinding = NumericBinding {
-    parse: parse_i32,
-    apply: |p, v| {
-        p.error_bar_offset_y = v;
-        Outcome::persisted()
-    },
-    persist_for_side: gp::update_error_bar_offset_y_for_side,
-    init: Some(NumericInit {
-        from_profile: |p| p.error_bar_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX),
-        format: |v| format!("{v}"),
-    }),
-};
+const ERROR_BAR_OFFSET_X: NumericBinding = numeric_binding!(
+    parse = parse_i32,
+    field = error_bar_offset_x,
+    persist = gp::update_error_bar_offset_x_for_side,
+    clamp = (HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+    suffix = "",
+);
+const ERROR_BAR_OFFSET_Y: NumericBinding = numeric_binding!(
+    parse = parse_i32,
+    field = error_bar_offset_y,
+    persist = gp::update_error_bar_offset_y_for_side,
+    clamp = (HUD_OFFSET_MIN, HUD_OFFSET_MAX),
+    suffix = "",
+);
 
 const SCROLL: BitmaskBinding = BitmaskBinding::HandRolled {
     init: Some(BitmaskInit {

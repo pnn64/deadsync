@@ -510,6 +510,58 @@ macro_rules! index_binding {
 
 pub(crate) use index_binding;
 
+/// Build a `NumericBinding` for the common shape: a row whose value is
+/// an `i32` that lives directly on a single `Profile` field, with an
+/// `init` contract that clamps the profile value into a `(min, max)`
+/// range and formats it for choice-list lookup with an optional unit
+/// suffix (e.g. `"ms"`, `"%"`, or `""`).
+///
+/// The macro does *not* cover bindings whose `apply` translates the
+/// `i32` into something other than the field type (e.g.
+/// `BackgroundFilter` which converts `i32 → enum` and back). Construct
+/// those by hand.
+///
+/// # Example
+///
+/// ```ignore
+/// const VISUAL_DELAY: NumericBinding = numeric_binding!(
+///     parse = parse_i32_ms,
+///     field = visual_delay_ms,
+///     persist = gp::update_visual_delay_ms_for_side,
+///     clamp = (-100, 100),
+///     suffix = "ms",
+/// );
+/// ```
+macro_rules! numeric_binding {
+    (
+        parse = $parse:expr,
+        field = $field:ident,
+        persist = $persist:path,
+        clamp = ($min:expr, $max:expr),
+        suffix = $suffix:literal $(,)?
+    ) => {
+        $crate::screens::player_options::row::NumericBinding {
+            parse: $parse,
+            apply: |p, v| {
+                p.$field = v;
+                $crate::screens::player_options::row::Outcome::persisted()
+            },
+            persist_for_side: $persist,
+            init: Some($crate::screens::player_options::row::NumericInit {
+                from_profile: |p| p.$field.clamp($min, $max),
+                // Format string `"{}{}"` is a literal; `$suffix` is a
+                // const-evaluable expression substituted as the second
+                // argument. (Using `concat!("{v}", $suffix)` would not
+                // compile because `format_args!` cannot capture `v`
+                // from a macro-expanded format string.)
+                format: |v| format!("{}{}", v, $suffix),
+            }),
+        }
+    };
+}
+
+pub(crate) use numeric_binding;
+
 /// Build a `BitmaskBinding::Generic` for the common case of a mask row that:
 ///
 /// - Reads/writes a single `bitflags!` mask field on `Profile` (`profile_field`).
