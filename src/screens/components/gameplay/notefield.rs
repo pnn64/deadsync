@@ -4419,18 +4419,18 @@ pub fn build_bundles(
                 &invert_distances[..num_cols],
                 &tornado_bounds[..num_cols],
             );
+            let bop_timer = state.receptor_bop_timers[col];
+            let bop_zoom = if bop_timer > 0.0 {
+                receptor_ns
+                    .receptor_step_behavior_for_col(i)
+                    .sample_zoom(bop_timer)
+            } else {
+                1.0
+            };
             if !receptor_hidden_by_song_lua
                 && !profile.hide_targets
                 && receptor_alpha > f32::EPSILON
             {
-                let bop_timer = state.receptor_bop_timers[col];
-                let bop_zoom = if bop_timer > 0.0 {
-                    receptor_ns
-                        .receptor_step_behavior_for_col(i)
-                        .sample_zoom(bop_timer)
-                } else {
-                    1.0
-                };
                 let receptor_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
                 let receptor_slot = &receptor_ns.receptor_off[i];
                 let receptor_reverse = receptor_ns
@@ -4673,8 +4673,8 @@ pub fn build_bundles(
                                 align(0.5, glow_reverse.vert_align()):
                                 xy(center[0], center[1]):
                                 setsize(width, height):
-                                zoomx(slot_zoom_x(glow_slot, 1.0)):
-                                zoomy(slot_zoom_y(glow_slot, 1.0)):
+                                zoomx(slot_zoom_x(glow_slot, bop_zoom)):
+                                zoomy(slot_zoom_y(glow_slot, bop_zoom)):
                                 rotationy(note_rotation_y):
                                 rotationz(glow_draw.rot[2] - glow_rotation + confusion_receptor_rot):
                                 customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
@@ -4687,8 +4687,8 @@ pub fn build_bundles(
                                 align(0.5, glow_reverse.vert_align()):
                                 xy(center[0], center[1]):
                                 setsize(width, height):
-                                zoomx(slot_zoom_x(glow_slot, 1.0)):
-                                zoomy(slot_zoom_y(glow_slot, 1.0)):
+                                zoomx(slot_zoom_x(glow_slot, bop_zoom)):
+                                zoomy(slot_zoom_y(glow_slot, bop_zoom)):
                                 rotationy(note_rotation_y):
                                 rotationz(glow_draw.rot[2] - glow_rotation + confusion_receptor_rot):
                                 customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
