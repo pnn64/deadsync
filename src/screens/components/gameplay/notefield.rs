@@ -25,7 +25,7 @@ use crate::game::gameplay::{
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{
-    ModelDrawState, ModelEffectMode, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
+    ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
 };
 use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
 use crate::game::{
@@ -6728,17 +6728,8 @@ pub fn build_bundles(
                                     let width = size[0];
                                     let height = size[1];
                                     let base_rotation = -slot.def.rotation_deg as f32;
-                                    let has_scripted_rot =
-                                        matches!(slot.model_effect.mode, ModelEffectMode::Spin)
-                                            || slot.model_auto_rot_total_frames > f32::EPSILON
-                                            || draw.rot[2].abs() > f32::EPSILON;
-                                    let legacy_rot = if has_scripted_rot {
-                                        0.0
-                                    } else {
-                                        -note_display_time * 45.0
-                                    };
-                                    let sprite_rotation =
-                                        base_rotation + legacy_rot + draw.rot[2] + note_rot;
+                                    // ITG only rotates mines when the actor/model declares it.
+                                    let sprite_rotation = base_rotation + draw.rot[2] + note_rot;
                                     let center = [column_center_x, y_pos];
                                     if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                                         slot,
@@ -6746,7 +6737,7 @@ pub fn build_bundles(
                                         center,
                                         [width, height],
                                         uv,
-                                        base_rotation + legacy_rot + note_rot,
+                                        base_rotation + note_rot,
                                         [1.0, 1.0, 1.0, 0.9 * note_alpha],
                                         BlendMode::Alpha,
                                         (Z_TAP_NOTE - 1) as i16,
@@ -6791,17 +6782,8 @@ pub fn build_bundles(
                             );
                             let size = scale_mine_slot_for_note(slot);
                             let base_rotation = -slot.def.rotation_deg as f32;
-                            let has_scripted_rot =
-                                matches!(slot.model_effect.mode, ModelEffectMode::Spin)
-                                    || slot.model_auto_rot_total_frames > f32::EPSILON
-                                    || draw.rot[2].abs() > f32::EPSILON;
-                            let legacy_rot = if has_scripted_rot {
-                                0.0
-                            } else {
-                                note_display_time * 120.0
-                            };
-                            let sprite_rotation =
-                                base_rotation + legacy_rot + draw.rot[2] + note_rot;
+                            // ITG only rotates mines when the actor/model declares it.
+                            let sprite_rotation = base_rotation + draw.rot[2] + note_rot;
                             let center = [column_center_x, y_pos];
                             if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                                 slot,
@@ -6809,7 +6791,7 @@ pub fn build_bundles(
                                 center,
                                 size,
                                 uv,
-                                base_rotation + legacy_rot + note_rot,
+                                base_rotation + note_rot,
                                 [1.0, 1.0, 1.0, note_alpha],
                                 BlendMode::Alpha,
                                 Z_TAP_NOTE as i16,
