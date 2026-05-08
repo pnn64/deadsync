@@ -2066,11 +2066,24 @@ where
     };
     for (idx, skin) in skins.iter().enumerate() {
         let label = format!("{game}/{skin}");
-        let loaded = roots
-            .iter()
-            .find_map(|root| noteskin_itg::load_noteskin_data(root, game, skin).ok());
+        let mut last_load_err = None;
+        let mut loaded = None;
+        for root in &roots {
+            match noteskin_itg::load_noteskin_data(root, game, skin) {
+                Ok(data) => {
+                    loaded = Some(data);
+                    break;
+                }
+                Err(err) => {
+                    last_load_err = Some(err);
+                }
+            }
+        }
         let result = loaded
-            .ok_or_else(|| format!("noteskin '{game}/{skin}' not found in any root"))
+            .ok_or_else(|| {
+                last_load_err
+                    .unwrap_or_else(|| format!("noteskin '{game}/{skin}' not found in any root"))
+            })
             .and_then(|data| {
                 noteskin_compile::ensure_compiled(game, &data).map(|outcome| (data, outcome))
             });
