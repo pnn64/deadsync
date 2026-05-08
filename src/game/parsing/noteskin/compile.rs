@@ -1289,6 +1289,7 @@ fn install_host(lua: &Lua) -> mlua::Result<()> {
         "valign",
         "blend",
         "visible",
+        "SetTextureFiltering",
     ] {
         let command = name.to_string();
         actor_methods.set(

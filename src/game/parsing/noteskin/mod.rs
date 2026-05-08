@@ -3391,6 +3391,7 @@ enum ScriptControl {
     Animate,
     SetState,
     SetStateProperties,
+    SetTextureFiltering,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -3648,6 +3649,7 @@ fn parse_script_control(cmd: &str) -> Option<ScriptControl> {
         "animate" => Some(ScriptControl::Animate),
         "setstate" => Some(ScriptControl::SetState),
         "setstateproperties" => Some(ScriptControl::SetStateProperties),
+        "settexturefiltering" => Some(ScriptControl::SetTextureFiltering),
         _ => None,
     }
 }
@@ -6474,7 +6476,7 @@ mod tests {
         itg_apply_state_properties_from_script, itg_model_draw_program,
         itg_receptor_pulse_from_script, itg_register_texture_dims_for_path, itg_texture_key,
         load_itg, load_itg_data_cached, load_itg_model_slots_from_path, load_itg_skin,
-        parse_explosion_animation,
+        parse_explosion_animation, parse_script_control,
     };
     use std::collections::{HashMap, HashSet};
     use std::fs;
@@ -6590,9 +6592,10 @@ mod tests {
         let mut commands = HashMap::new();
         commands.insert(
             "initcommand".to_string(),
-            "vertalign,bottom;glow,0.1,0.2,0.3,0.4".to_string(),
+            "SetTextureFiltering,false;vertalign,bottom;glow,0.1,0.2,0.3,0.4".to_string(),
         );
         let (draw, timeline, effect) = itg_model_draw_program(&commands);
+        assert!(parse_script_control("settexturefiltering").is_some());
         assert!(timeline.is_empty(), "expected no tween timeline");
         assert!(
             (draw.vert_align - 1.0).abs() <= f32::EPSILON,
@@ -7093,7 +7096,7 @@ function skin.Load()
     local element = Var "Element"
     if element == "Receptor" and button == "Right" then
         local t = LoadActor(NOTESKIN:GetPath("Left", "Receptor"))
-        t.InitCommand=function(self) self:y(1); self:zoomx(-1); end
+        t.InitCommand=function(self) self:SetTextureFiltering(false); self:y(1); self:zoomx(-1); end
         return t
     end
     if element == "Receptor" and button == "Left" then
