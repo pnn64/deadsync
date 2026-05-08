@@ -6197,16 +6197,29 @@ pub fn build_bundles(
                 let head_center = [head_center_x, head_draw_y];
                 let head_world_z = world_z_for_raw_travel(local_col, head_anchor_travel);
                 let elapsed = state.total_elapsed_in_screen;
-                let head_slot = if use_active {
+                let head_layers = if use_active {
+                    visuals
+                        .head_active_layers
+                        .as_deref()
+                        .or(visuals.head_inactive_layers.as_deref())
+                } else {
+                    visuals
+                        .head_inactive_layers
+                        .as_deref()
+                        .or(visuals.head_active_layers.as_deref())
+                };
+                let head_slot = if head_layers.is_none() && use_active {
                     visuals
                         .head_active
                         .as_ref()
                         .or(visuals.head_inactive.as_ref())
-                } else {
+                } else if head_layers.is_none() {
                     visuals
                         .head_inactive
                         .as_ref()
                         .or(visuals.head_active.as_ref())
+                } else {
+                    None
                 };
                 let hold_head_translation =
                     ns.part_uv_translation(hold_head_part, note.beat, false);
@@ -6340,7 +6353,9 @@ pub fn build_bundles(
                         },
                         &mut model_cache,
                     );
-                } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
+                } else if let Some(note_slots) = head_layers
+                    .or_else(|| ns.note_layers.get(note_idx).map(|layers| layers.as_ref()))
+                {
                     let note_scale = hold_note_scale;
                     for note_slot in note_slots.iter() {
                         let draw = song_lua_note_model_draw(
@@ -6841,6 +6856,154 @@ pub fn build_bundles(
                         };
                     if let Some(use_roll_head) = tap_replacement_roll {
                         let visuals = ns.hold_visuals_for_col(col_idx, use_roll_head);
+                        let part = if use_roll_head {
+                            NoteAnimPart::RollHead
+                        } else {
+                            NoteAnimPart::HoldHead
+                        };
+                        if let Some(head_slots) = visuals
+                            .head_inactive_layers
+                            .as_deref()
+                            .or(visuals.head_active_layers.as_deref())
+                        {
+                            let head_phase =
+                                ns.part_uv_phase(part, elapsed, current_beat, note.beat);
+                            let head_translation = ns.part_uv_translation(part, note.beat, false);
+                            let note_scale = col_note_scale;
+                            let center = [column_center_x, y_pos];
+                            for head_slot in head_slots.iter() {
+                                let draw = song_lua_note_model_draw(
+                                    head_slot.model_draw_at(elapsed, current_beat),
+                                    note_rotation_y,
+                                );
+                                if !draw.visible {
+                                    continue;
+                                }
+                                let note_frame = head_slot.frame_index_from_phase(head_phase);
+                                let uv_elapsed = if head_slot.model.is_some() {
+                                    head_phase
+                                } else {
+                                    elapsed
+                                };
+                                let note_uv = translated_uv_rect(
+                                    head_slot.uv_for_frame_at(note_frame, uv_elapsed),
+                                    head_translation,
+                                );
+                                let base_size = note_slot_base_size(head_slot, note_scale);
+                                let local_offset =
+                                    [draw.pos[0] * note_scale, draw.pos[1] * note_scale];
+                                let local_offset_rot_sin_cos = head_slot.base_rot_sin_cos();
+                                let model_center = if head_slot.model.is_some() {
+                                    let [sin_r, cos_r] = local_offset_rot_sin_cos;
+                                    let offset = [
+                                        local_offset[0] * cos_r - local_offset[1] * sin_r,
+                                        local_offset[0] * sin_r + local_offset[1] * cos_r,
+                                    ];
+                                    [center[0] + offset[0], center[1] + offset[1]]
+                                } else {
+                                    center
+                                };
+                                let note_size = [
+                                    base_size[0] * draw.zoom[0].max(0.0),
+                                    base_size[1] * draw.zoom[1].max(0.0),
+                                ];
+                                if note_size[0] <= f32::EPSILON || note_size[1] <= f32::EPSILON {
+                                    continue;
+                                }
+                                let blend = if draw.blend_add {
+                                    BlendMode::Add
+                                } else {
+                                    BlendMode::Alpha
+                                };
+                                let color = [
+                                    draw.tint[0],
+                                    draw.tint[1],
+                                    draw.tint[2],
+                                    draw.tint[3] * note_alpha,
+                                ];
+                                if !prefer_sprite_note_path
+                                    && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
+                                        head_slot,
+                                        draw,
+                                        model_center,
+                                        note_size,
+                                        note_uv,
+                                        -head_slot.def.rotation_deg as f32 + note_rot,
+                                        color,
+                                        blend,
+                                        Z_TAP_NOTE as i16,
+                                        &mut model_cache,
+                                    )
+                                {
+                                    actors.push(actor_with_world_z(model_actor, note_world_z));
+                                } else {
+                                    let sprite_center = offset_center(
+                                        center,
+                                        local_offset,
+                                        local_offset_rot_sin_cos,
+                                    );
+                                    if draw.blend_add {
+                                        actors.push(actor_with_world_z(
+                                            act!(sprite(head_slot.texture_key_handle()):
+                                                align(0.5, 0.5):
+                                                xy(sprite_center[0], sprite_center[1]):
+                                                setsize(note_size[0], note_size[1]):
+                                                rotationy(flat_tap_face_rotation_y):
+                                                rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + note_rot):
+                                                customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
+                                                diffuse(color[0], color[1], color[2], color[3]):
+                                                blend(add):
+                                                z(Z_TAP_NOTE)
+                                            ),
+                                            note_world_z,
+                                        ));
+                                    } else {
+                                        actors.push(actor_with_world_z(
+                                            act!(sprite(head_slot.texture_key_handle()):
+                                                align(0.5, 0.5):
+                                                xy(sprite_center[0], sprite_center[1]):
+                                                setsize(note_size[0], note_size[1]):
+                                                rotationy(flat_tap_face_rotation_y):
+                                                rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + note_rot):
+                                                customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
+                                                diffuse(color[0], color[1], color[2], color[3]):
+                                                blend(normal):
+                                                z(Z_TAP_NOTE)
+                                            ),
+                                            note_world_z,
+                                        ));
+                                    }
+                                }
+                                push_note_glow_actor(
+                                    &mut actors,
+                                    NoteGlowDraw {
+                                        slot: head_slot,
+                                        draw,
+                                        model_center,
+                                        sprite_center: offset_center(
+                                            center,
+                                            local_offset,
+                                            local_offset_rot_sin_cos,
+                                        ),
+                                        size: note_size,
+                                        uv: note_uv,
+                                        rotation_y: flat_tap_face_rotation_y,
+                                        model_rotation_z: -head_slot.def.rotation_deg as f32
+                                            + note_rot,
+                                        sprite_rotation_z: draw.rot[2]
+                                            - head_slot.def.rotation_deg as f32
+                                            + note_rot,
+                                        alpha: note_glow,
+                                        blend,
+                                        z: Z_TAP_NOTE as i16,
+                                        world_z: note_world_z,
+                                        prefer_sprite: prefer_sprite_note_path,
+                                    },
+                                    &mut model_cache,
+                                );
+                            }
+                            return;
+                        }
                         if let Some(head_slot) = visuals
                             .head_inactive
                             .as_ref()

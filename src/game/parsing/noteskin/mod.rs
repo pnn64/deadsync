@@ -1040,6 +1040,8 @@ impl ReceptorReverseBehavior {
 pub struct HoldVisuals {
     pub head_inactive: Option<SpriteSlot>,
     pub head_active: Option<SpriteSlot>,
+    pub head_inactive_layers: Option<Arc<[SpriteSlot]>>,
+    pub head_active_layers: Option<Arc<[SpriteSlot]>>,
     pub body_inactive: Option<SpriteSlot>,
     pub body_active: Option<SpriteSlot>,
     pub topcap_inactive: Option<SpriteSlot>,
@@ -1310,6 +1312,17 @@ impl Noteskin {
             .flatten()
             {
                 visit(slot);
+            }
+            for layers in [
+                h.head_inactive_layers.as_deref(),
+                h.head_active_layers.as_deref(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                for slot in layers {
+                    visit(slot);
+                }
             }
             if let Some(slot) = h.explosion.as_ref() {
                 visit(slot);
@@ -2235,6 +2248,26 @@ fn load_itg_sprite_noteskin_compiled(
     let mut hold_columns = Vec::with_capacity(style.num_cols);
     let mut roll_columns = Vec::with_capacity(style.num_cols);
     let mut receptor_pulse_command: Option<String> = None;
+    let resolve_slots = |button: &str, element: &str| {
+        itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, element)
+            .into_iter()
+            .map(|mut s| {
+                let (draw, timeline, effect) = itg_model_draw_program(&s.commands);
+                s.slot.model_draw = draw;
+                s.slot.model_timeline = timeline;
+                s.slot.model_effect = effect;
+                s.slot
+            })
+            .collect::<Vec<_>>()
+    };
+    let resolve_head_slots = |button: &str, element: &str| {
+        let slots = resolve_slots(button, element);
+        match slots.len() {
+            0 => (None, None),
+            1 => (slots.into_iter().next(), None),
+            _ => (slots.first().cloned(), Some(Arc::from(slots))),
+        }
+    };
     let resolve_single_slot = |button: &str, element: &str| {
         let request = itg_load_request(compiled, button, element);
         itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, element)
@@ -2403,23 +2436,19 @@ fn load_itg_sprite_noteskin_compiled(
         mines.push(mine_fill);
         mine_frames.push(mine_frame);
 
-        let hold_head_inactive = if itg_request_maps_head_to_tap(&itg_load_request(
-            compiled,
-            button,
-            "Hold Head Inactive",
-        )) {
-            None
+        let (hold_head_inactive, hold_head_inactive_layers) = if itg_request_maps_head_to_tap(
+            &itg_load_request(compiled, button, "Hold Head Inactive"),
+        ) {
+            (None, None)
         } else {
-            resolve_single_slot(button, "Hold Head Inactive")
+            resolve_head_slots(button, "Hold Head Inactive")
         };
-        let hold_head_active = if itg_request_maps_head_to_tap(&itg_load_request(
-            compiled,
-            button,
-            "Hold Head Active",
-        )) {
-            None
+        let (hold_head_active, hold_head_active_layers) = if itg_request_maps_head_to_tap(
+            &itg_load_request(compiled, button, "Hold Head Active"),
+        ) {
+            (None, None)
         } else {
-            resolve_single_slot(button, "Hold Head Active")
+            resolve_head_slots(button, "Hold Head Active")
         };
         let hold_body_inactive = resolve_single_slot(button, "Hold Body Inactive");
         let hold_body_active = resolve_single_slot(button, "Hold Body Active");
@@ -2428,9 +2457,18 @@ fn load_itg_sprite_noteskin_compiled(
         let hold_bottomcap_inactive = resolve_single_slot(button, "Hold BottomCap Inactive");
         let hold_bottomcap_active = resolve_single_slot(button, "Hold BottomCap Active");
 
+        let hold_head_active_layers = if hold_head_active.is_some() {
+            hold_head_active_layers.clone()
+        } else {
+            hold_head_active_layers
+                .clone()
+                .or_else(|| hold_head_inactive_layers.clone())
+        };
         let hold_visual = HoldVisuals {
             head_inactive: hold_head_inactive.clone(),
             head_active: hold_head_active.or(hold_head_inactive.clone()),
+            head_inactive_layers: hold_head_inactive_layers.clone(),
+            head_active_layers: hold_head_active_layers,
             body_inactive: hold_body_inactive.clone(),
             body_active: hold_body_active.or(hold_body_inactive.clone()),
             topcap_inactive: hold_topcap_inactive.clone(),
@@ -2440,23 +2478,19 @@ fn load_itg_sprite_noteskin_compiled(
             explosion: None,
         };
 
-        let roll_head_inactive = if itg_request_maps_head_to_tap(&itg_load_request(
-            compiled,
-            button,
-            "Roll Head Inactive",
-        )) {
-            None
+        let (roll_head_inactive, roll_head_inactive_layers) = if itg_request_maps_head_to_tap(
+            &itg_load_request(compiled, button, "Roll Head Inactive"),
+        ) {
+            (None, None)
         } else {
-            resolve_single_slot(button, "Roll Head Inactive")
+            resolve_head_slots(button, "Roll Head Inactive")
         };
-        let roll_head_active = if itg_request_maps_head_to_tap(&itg_load_request(
-            compiled,
-            button,
-            "Roll Head Active",
-        )) {
-            None
+        let (roll_head_active, roll_head_active_layers) = if itg_request_maps_head_to_tap(
+            &itg_load_request(compiled, button, "Roll Head Active"),
+        ) {
+            (None, None)
         } else {
-            resolve_single_slot(button, "Roll Head Active")
+            resolve_head_slots(button, "Roll Head Active")
         };
         let roll_body_inactive = resolve_single_slot(button, "Roll Body Inactive");
         let roll_body_active = resolve_single_slot(button, "Roll Body Active");
@@ -2465,6 +2499,25 @@ fn load_itg_sprite_noteskin_compiled(
         let roll_bottomcap_inactive = resolve_single_slot(button, "Roll BottomCap Inactive");
         let roll_bottomcap_active = resolve_single_slot(button, "Roll BottomCap Active");
 
+        let roll_head_inactive_has_slot = roll_head_inactive.is_some();
+        let roll_head_active_has_slot = roll_head_active.is_some();
+        let roll_head_inactive_layers_resolved = if roll_head_inactive_has_slot {
+            roll_head_inactive_layers.clone()
+        } else {
+            roll_head_inactive_layers
+                .clone()
+                .or_else(|| hold_visual.head_inactive_layers.clone())
+        };
+        let roll_head_active_layers_resolved = if roll_head_active_has_slot {
+            roll_head_active_layers.clone()
+        } else if roll_head_inactive_has_slot {
+            roll_head_inactive_layers.clone()
+        } else {
+            roll_head_active_layers
+                .or(roll_head_inactive_layers)
+                .or_else(|| hold_visual.head_active_layers.clone())
+                .or_else(|| hold_visual.head_inactive_layers.clone())
+        };
         let roll_visual = HoldVisuals {
             head_inactive: roll_head_inactive
                 .clone()
@@ -2473,6 +2526,8 @@ fn load_itg_sprite_noteskin_compiled(
                 .or(roll_head_inactive)
                 .or(hold_visual.head_active.clone())
                 .or(hold_visual.head_inactive.clone()),
+            head_inactive_layers: roll_head_inactive_layers_resolved,
+            head_active_layers: roll_head_active_layers_resolved,
             body_inactive: roll_body_inactive
                 .clone()
                 .or(hold_visual.body_inactive.clone()),
@@ -2515,6 +2570,8 @@ fn load_itg_sprite_noteskin_compiled(
         .unwrap_or_else(|| HoldVisuals {
             head_inactive: hold.head_inactive.clone(),
             head_active: hold.head_active.clone(),
+            head_inactive_layers: hold.head_inactive_layers.clone(),
+            head_active_layers: hold.head_active_layers.clone(),
             body_inactive: hold.body_inactive.clone(),
             body_active: hold.body_active.clone(),
             topcap_inactive: hold.topcap_inactive.clone(),
@@ -7743,6 +7800,139 @@ return t
             );
         }
     }
+
+    #[test]
+    fn multi_layer_hold_heads_keep_model_layers() {
+        clear_itg_runtime_caches();
+        let root = temp_noteskin_root("multi-layer-hold-head");
+        let skin_dir = root.join("dance/multilayer");
+        fs::create_dir_all(skin_dir.join("textures")).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=multilayer\n",
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local ret = ... or {}
+ret.Redir = function(sButton, sElement)
+    return "Down", sElement
+end
+ret.Load = function()
+    local button, element = ret.Redir(Var "Button", Var "Element")
+    return LoadActor(NOTESKIN:GetPath(button, element))
+end
+return ret
+"#,
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("Down Tap Note.lua"),
+            r#"return Def.Model {
+    Meshes=NOTESKIN:GetPath('_down','tap note model');
+    Materials=NOTESKIN:GetPath('_down','tap note model');
+    Bones=NOTESKIN:GetPath('_down','tap note model');
+};
+"#,
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("Down Hold Head Inactive.lua"),
+            r#"return Def.Model {
+    Meshes=NOTESKIN:GetPath('_down','tap note model');
+    Materials=NOTESKIN:GetPath('_down','tap note model');
+    Bones=NOTESKIN:GetPath('_down','tap note model');
+};
+"#,
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("_down tap note model.txt"),
+            r#"MilkShape 3D ASCII
+Meshes: 2
+"fill" 0 0
+3
+0 -1.0 -1.0 0.0 0.0 0.0 -1
+0 1.0 -1.0 0.0 1.0 0.0 -1
+0 0.0 1.0 0.0 0.0 1.0 -1
+0
+1
+0 0 1 2 0 0 0 1
+"frame" 0 1
+3
+0 -1.0 -1.0 0.0 0.0 0.0 -1
+0 1.0 -1.0 0.0 1.0 0.0 -1
+0 0.0 1.0 0.0 0.0 1.0 -1
+0
+1
+0 0 1 2 0 0 0 1
+Materials: 2
+"fill_mat"
+0.0 0.0 0.0 1.0
+1.0 1.0 1.0 1.0
+0.0 0.0 0.0 1.0
+0.0 0.0 0.0 1.0
+0.0
+1.0
+"textures/fill.png"
+""
+"frame_mat"
+0.0 0.0 0.0 1.0
+1.0 1.0 1.0 1.0
+0.0 0.0 0.0 1.0
+0.0 0.0 0.0 1.0
+0.0
+1.0
+"textures/frame.png"
+""
+"#,
+        )
+        .unwrap();
+        write_noteskin_png(&skin_dir.join("textures/fill.png"));
+        write_noteskin_png(&skin_dir.join("textures/frame.png"));
+        write_noteskin_png(&skin_dir.join("Down Receptor.png"));
+
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg(&root, "dance", "multilayer", &style)
+            .expect("temp multilayer noteskin should load");
+
+        for col in 0..style.num_cols {
+            let note_idx = col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+            let tap_keys = ns.note_layers[note_idx]
+                .iter()
+                .map(|slot| slot.texture_key().to_ascii_lowercase())
+                .collect::<Vec<_>>();
+            let visuals = ns.hold_visuals_for_col(col, false);
+            let head_layers = visuals
+                .head_inactive_layers
+                .as_deref()
+                .expect("hold heads should keep all model layers");
+            let head_keys = head_layers
+                .iter()
+                .map(|slot| slot.texture_key().to_ascii_lowercase())
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                head_keys, tap_keys,
+                "column {col} hold head should use the full tap-note model layer stack"
+            );
+            assert!(
+                head_keys.iter().any(|key| key.contains("fill.png")),
+                "column {col} hold head is missing the fill layer: {head_keys:?}"
+            );
+            assert!(
+                head_keys.iter().any(|key| key.contains("frame.png")),
+                "column {col} hold head is missing the frame layer: {head_keys:?}"
+            );
+        }
+
+        let _ = fs::remove_dir_all(&root);
+        clear_itg_runtime_caches();
+    }
+
     #[test]
     fn default_skin_blanks_hold_and_roll_explosion() {
         let style = Style {
