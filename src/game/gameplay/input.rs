@@ -812,8 +812,7 @@ pub(super) fn process_input_edges(
                     audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
                 }
             } else {
-                state.receptor_bop_timers[lane_idx] =
-                    receptor_step_behavior_for_col(state, lane_idx).duration;
+                trigger_receptor_step_pulse(state, lane_idx);
             }
         } else if edge_judges_lift {
             let hit_lift = judge_a_lift(state, lane_idx, edge.event_music_time_ns);

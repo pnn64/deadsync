@@ -9550,6 +9550,29 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn empty_live_press_steps_receptor() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        let event_time_ns = song_time_ns_from_seconds(12.345);
+        state
+            .pending_edges
+            .push_back(test_input_edge_at(Lane::Left, true, event_time_ns));
+
+        let now = Instant::now();
+        let clock = super::SongClockSnapshot {
+            song_time_ns: event_time_ns,
+            seconds_per_second: 1.0,
+            mapped_audio: true,
+            valid_at: now,
+            valid_at_host_nanos: 0,
+        };
+        let mut phase_timings = super::GameplayUpdatePhaseTimings::default();
+        process_input_edges(&mut state, false, &mut phase_timings, clock);
+
+        assert!(state.receptor_bop_timers[0] > 0.0);
+    }
+
+    #[test]
     fn autoplay_random_offset_w1_uses_full_window_without_fa_plus() {
         let mut rng = TurnRng::new(1);
         let mut profile = TimingProfile::default_itg_with_fa_plus();
