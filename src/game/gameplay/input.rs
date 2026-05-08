@@ -898,7 +898,7 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
         };
         let lifetime = tap_explosion_noteskin_for_player(state, player)
             .and_then(|ns| ns.tap_explosion_for_col(local_col, window))
-            .map_or(0.0, |explosion| explosion.animation.duration());
+            .map_or(0.0, |explosion| explosion.duration());
         if lifetime <= 0.0 || elapsed >= lifetime {
             state.tap_explosions[col] = None;
         }
@@ -914,9 +914,7 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
             let lifetime = state.mine_noteskin[player]
                 .as_ref()
                 .and_then(|ns| ns.mine_hit_explosion.as_ref())
-                .map_or(MINE_EXPLOSION_DURATION, |explosion| {
-                    explosion.animation.duration()
-                });
+                .map_or(MINE_EXPLOSION_DURATION, |explosion| explosion.duration());
             if lifetime <= 0.0 || active.elapsed >= lifetime {
                 *explosion = None;
             }

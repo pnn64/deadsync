@@ -1011,7 +1011,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 3;
+const COMPILER_VERSION: u32 = 4;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const DANCE_BUTTONS: [&str; 6] = ["UpLeft", "UpRight", "Left", "Down", "Up", "Right"];

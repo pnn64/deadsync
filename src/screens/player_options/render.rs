@@ -1526,7 +1526,7 @@ fn draw_tap_explosion_preview(
     else {
         return;
     };
-    let duration = explosion.animation.duration();
+    let duration = explosion.duration();
     let anim_time = if duration > f32::EPSILON {
         preview_time.rem_euclid(duration)
     } else {

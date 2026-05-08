@@ -4726,86 +4726,89 @@ pub fn build_bundles(
                     &invert_distances[..num_cols],
                     &tornado_bounds[..num_cols],
                 );
-                let anim_time = active.elapsed;
-                let slot = &explosion.slot;
-                let beat_for_anim = if slot.source.is_beat_based() {
-                    (state.current_beat_display - active.start_beat).max(0.0)
-                } else {
-                    state.current_beat_display
-                };
-                let frame = slot.frame_index(anim_time, beat_for_anim);
-                let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
-                let size = scale_explosion(logical_slot_size(slot));
-                let explosion_visual = explosion.animation.state_at(active.elapsed);
-                if !explosion_visual.visible {
-                    continue;
-                }
                 let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual, i);
-                let glow = explosion_visual.glow;
-                let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
-                if explosion.animation.blend_add {
-                    actors.push(act!(sprite(slot.texture_key_handle()):
-                        align(0.5, 0.5):
-                        xy(receptor_center[0], receptor_center[1]):
-                        setsize(size[0], size[1]):
-                        zoom(explosion_visual.zoom):
-                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                        diffuse(
-                            explosion_visual.diffuse[0],
-                            explosion_visual.diffuse[1],
-                            explosion_visual.diffuse[2],
-                            explosion_visual.diffuse[3]
-                        ):
-                        rotationy(flat_tap_face_rotation_y):
-                        rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
-                        blend(add):
-                        z(Z_TAP_EXPLOSION)
-                    ));
-                    if glow_strength > f32::EPSILON {
+                for layer in explosion.layers.iter() {
+                    let anim_time = active.elapsed;
+                    let slot = &layer.slot;
+                    let beat_for_anim = if slot.source.is_beat_based() {
+                        (state.current_beat_display - active.start_beat).max(0.0)
+                    } else {
+                        state.current_beat_display
+                    };
+                    let frame = slot.frame_index(anim_time, beat_for_anim);
+                    let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
+                    let size = scale_explosion(logical_slot_size(slot));
+                    let explosion_visual = layer.animation.state_at(active.elapsed);
+                    if !explosion_visual.visible {
+                        continue;
+                    }
+                    let glow = explosion_visual.glow;
+                    let glow_strength =
+                        glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
+                    if layer.animation.blend_add {
                         actors.push(act!(sprite(slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(size[0], size[1]):
                             zoom(explosion_visual.zoom):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                            diffuse(glow[0], glow[1], glow[2], glow[3]):
+                            diffuse(
+                                explosion_visual.diffuse[0],
+                                explosion_visual.diffuse[1],
+                                explosion_visual.diffuse[2],
+                                explosion_visual.diffuse[3]
+                            ):
                             rotationy(flat_tap_face_rotation_y):
                             rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
                             blend(add):
                             z(Z_TAP_EXPLOSION)
                         ));
-                    }
-                } else {
-                    actors.push(act!(sprite(slot.texture_key_handle()):
-                        align(0.5, 0.5):
-                        xy(receptor_center[0], receptor_center[1]):
-                        setsize(size[0], size[1]):
-                        zoom(explosion_visual.zoom):
-                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                        diffuse(
-                            explosion_visual.diffuse[0],
-                            explosion_visual.diffuse[1],
-                            explosion_visual.diffuse[2],
-                            explosion_visual.diffuse[3]
-                        ):
-                        rotationy(flat_tap_face_rotation_y):
-                        rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
-                        blend(normal):
-                        z(Z_TAP_EXPLOSION)
-                    ));
-                    if glow_strength > f32::EPSILON {
+                        if glow_strength > f32::EPSILON {
+                            actors.push(act!(sprite(slot.texture_key_handle()):
+                                align(0.5, 0.5):
+                                xy(receptor_center[0], receptor_center[1]):
+                                setsize(size[0], size[1]):
+                                zoom(explosion_visual.zoom):
+                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                diffuse(glow[0], glow[1], glow[2], glow[3]):
+                                rotationy(flat_tap_face_rotation_y):
+                                rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
+                                blend(add):
+                                z(Z_TAP_EXPLOSION)
+                            ));
+                        }
+                    } else {
                         actors.push(act!(sprite(slot.texture_key_handle()):
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(size[0], size[1]):
                             zoom(explosion_visual.zoom):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                            diffuse(glow[0], glow[1], glow[2], glow[3]):
+                            diffuse(
+                                explosion_visual.diffuse[0],
+                                explosion_visual.diffuse[1],
+                                explosion_visual.diffuse[2],
+                                explosion_visual.diffuse[3]
+                            ):
                             rotationy(flat_tap_face_rotation_y):
                             rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
                             blend(normal):
                             z(Z_TAP_EXPLOSION)
                         ));
+                        if glow_strength > f32::EPSILON {
+                            actors.push(act!(sprite(slot.texture_key_handle()):
+                                align(0.5, 0.5):
+                                xy(receptor_center[0], receptor_center[1]):
+                                setsize(size[0], size[1]):
+                                zoom(explosion_visual.zoom):
+                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                diffuse(glow[0], glow[1], glow[2], glow[3]):
+                                rotationy(flat_tap_face_rotation_y):
+                                rotationz(explosion_visual.rotation_z - slot.def.rotation_deg as f32 + confusion_receptor_rot):
+                                blend(normal):
+                                z(Z_TAP_EXPLOSION)
+                            ));
+                        }
                     }
                 }
             }
