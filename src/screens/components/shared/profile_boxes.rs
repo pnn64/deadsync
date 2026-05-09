@@ -968,6 +968,25 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                 apply_zoom_to_actor(child, pivot, zoom);
             }
         }
+        Actor::SharedFrame {
+            offset,
+            size,
+            children,
+            ..
+        } => {
+            offset[0] = scale_about(offset[0], pivot[0], zoom);
+            offset[1] = scale_about(offset[1], pivot[1], zoom);
+            for s in size.iter_mut() {
+                if let actors::SizeSpec::Px(v) = s {
+                    *v *= zoom;
+                }
+            }
+            if let Some(children) = std::sync::Arc::get_mut(children) {
+                for child in children {
+                    apply_zoom_to_actor(child, pivot, zoom);
+                }
+            }
+        }
         Actor::Camera { children, .. } => {
             for child in children {
                 apply_zoom_to_actor(child, pivot, zoom);
@@ -1009,6 +1028,10 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
             offset[0] += dx;
             offset[1] += dy;
         }
+        Actor::SharedFrame { offset, .. } => {
+            offset[0] += dx;
+            offset[1] += dy;
+        }
         Actor::Camera { children, .. } => {
             for child in children {
                 apply_offset_to_actor(child, dx, dy);
@@ -1024,13 +1047,21 @@ fn apply_z_offset(actor: &mut Actor, dz: i16) {
         | Actor::Text { z, .. }
         | Actor::Mesh { z, .. }
         | Actor::TexturedMesh { z, .. }
-        | Actor::Frame { z, .. } => *z = z.saturating_add(dz),
+        | Actor::Frame { z, .. }
+        | Actor::SharedFrame { z, .. } => *z = z.saturating_add(dz),
         Actor::Camera { .. } | Actor::Shadow { .. } => {}
     }
     match actor {
         Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
             for child in children {
                 apply_z_offset(child, dz);
+            }
+        }
+        Actor::SharedFrame { children, .. } => {
+            if let Some(children) = std::sync::Arc::get_mut(children) {
+                for child in children {
+                    apply_z_offset(child, dz);
+                }
             }
         }
         Actor::Shadow { child, .. } => apply_z_offset(child, dz),
@@ -1044,6 +1075,13 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
         Actor::Frame { children, .. } => {
             for child in children {
                 apply_clip_rect_to_actor(child, rect);
+            }
+        }
+        Actor::SharedFrame { children, .. } => {
+            if let Some(children) = std::sync::Arc::get_mut(children) {
+                for child in children {
+                    apply_clip_rect_to_actor(child, rect);
+                }
             }
         }
         Actor::Camera { children, .. } => {

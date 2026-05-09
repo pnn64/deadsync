@@ -187,6 +187,18 @@ pub enum Actor {
         z: i16,
     },
 
+    /// Frame whose children are shared by capture/proxy render paths.
+    SharedFrame {
+        align: [f32; 2],
+        offset: [f32; 2],
+        size: [SizeSpec; 2],
+        children: Arc<[Self]>,
+        background: Option<Background>,
+        z: i16,
+        tint: [f32; 4],
+        blend: Option<BlendMode>,
+    },
+
     /// Camera wrapper: renders all child actors using the provided view-projection matrix.
     /// The matrix is expected to map world coordinates to clip space.
     Camera {
@@ -251,6 +263,14 @@ impl Actor {
                 for child in children {
                     child.mul_alpha(alpha);
                 }
+            }
+            Self::SharedFrame {
+                background, tint, ..
+            } => {
+                if let Some(Background::Color(color)) = background {
+                    color[3] *= alpha;
+                }
+                tint[3] *= alpha;
             }
             Self::Camera { children, .. } => {
                 for child in children {

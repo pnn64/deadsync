@@ -110,6 +110,7 @@ pub fn build_screen_cached_with_scratch(
             scratch,
             parent_z,
             camera,
+            ComposeStyle::IDENTITY,
             &mut cameras,
             &mut masks,
             &mut order_counter,
@@ -2163,6 +2164,32 @@ fn push_shadow_objects_for_range(
     }
 }
 
+#[derive(Clone, Copy)]
+struct ComposeStyle {
+    tint: [f32; 4],
+    blend: Option<BlendMode>,
+}
+
+impl ComposeStyle {
+    const IDENTITY: Self = Self {
+        tint: [1.0; 4],
+        blend: None,
+    };
+
+    #[inline(always)]
+    fn child(self, tint: [f32; 4], blend: Option<BlendMode>) -> Self {
+        Self {
+            tint: mul_rgba(self.tint, tint),
+            blend: self.blend.or(blend),
+        }
+    }
+}
+
+#[inline(always)]
+fn mul_rgba(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
+    [a[0] * b[0], a[1] * b[1], a[2] * b[2], a[3] * b[3]]
+}
+
 #[inline(always)]
 fn build_actor_recursive<'a>(
     actor: &'a actors::Actor,
@@ -2172,6 +2199,7 @@ fn build_actor_recursive<'a>(
     scratch: &mut ComposeScratch,
     base_z: i16,
     camera: u8,
+    style: ComposeStyle,
     cameras: &mut Vec<Matrix4>,
     masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
@@ -2286,6 +2314,8 @@ fn build_actor_recursive<'a>(
                 &mut effect_scale,
                 &mut effect_rot,
             );
+            effect_tint = mul_rgba(effect_tint, style.tint);
+            let actor_blend = style.blend.unwrap_or(*blend);
 
             let resolved_size = resolve_sprite_size_like_sm(
                 *size,
@@ -2336,7 +2366,7 @@ fn build_actor_recursive<'a>(
                 *faderight,
                 *fadetop,
                 *fadebottom,
-                *blend,
+                actor_blend,
                 effect_rot[0],
                 effect_rot[1],
                 effect_rot[2],
@@ -2369,7 +2399,13 @@ fn build_actor_recursive<'a>(
                 };
             }
             if has_shadow(*shadow_len) {
-                push_shadow_objects_for_range(out, before, end, *shadow_len, *shadow_color);
+                push_shadow_objects_for_range(
+                    out,
+                    before,
+                    end,
+                    *shadow_len,
+                    mul_rgba(*shadow_color, style.tint),
+                );
             }
             if glow[3] > 0.0001 {
                 let before = out.len();
@@ -2396,7 +2432,7 @@ fn build_actor_recursive<'a>(
                     *faderight,
                     *fadetop,
                     *fadebottom,
-                    *blend,
+                    actor_blend,
                     effect_rot[0],
                     effect_rot[1],
                     effect_rot[2],
@@ -2458,7 +2494,7 @@ fn build_actor_recursive<'a>(
                 },
                 texture_handle: renderer::INVALID_TEXTURE_HANDLE,
                 transform,
-                blend: *blend,
+                blend: style.blend.unwrap_or(*blend),
                 z: 0,
                 order: 0,
                 camera,
@@ -2521,7 +2557,7 @@ fn build_actor_recursive<'a>(
                 },
                 texture_handle: texture_cache.texture_handle(texture.as_ref()),
                 transform,
-                blend: *blend,
+                blend: style.blend.unwrap_or(*blend),
                 z: 0,
                 order: 0,
                 camera,
@@ -2552,7 +2588,7 @@ fn build_actor_recursive<'a>(
                     },
                     texture_handle: texture_cache.texture_handle(texture.as_ref()),
                     transform,
-                    blend: *blend,
+                    blend: style.blend.unwrap_or(*blend),
                     z: 0,
                     order: 0,
                     camera,
@@ -2579,6 +2615,7 @@ fn build_actor_recursive<'a>(
                 scratch,
                 base_z,
                 camera,
+                style,
                 cameras,
                 masks,
                 order_counter,
@@ -2589,7 +2626,7 @@ fn build_actor_recursive<'a>(
             );
             let end = out.len();
             if has_shadow(*len) {
-                push_shadow_objects_for_range(out, start, end, *len, *color);
+                push_shadow_objects_for_range(out, start, end, *len, mul_rgba(*color, style.tint));
             }
         }
 
@@ -2608,6 +2645,7 @@ fn build_actor_recursive<'a>(
                     scratch,
                     base_z,
                     id,
+                    style,
                     cameras,
                     masks,
                     order_counter,
@@ -2661,8 +2699,12 @@ fn build_actor_recursive<'a>(
                 let mut effect_color = *color;
                 let mut effect_scale = *scale;
                 apply_effect_to_text(*effect, total_elapsed, &mut effect_color, &mut effect_scale);
-                let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
+                effect_color = mul_rgba(effect_color, style.tint);
+                let mut stroke_rgba = stroke_color
+                    .map(|color| mul_rgba(color, style.tint))
+                    .unwrap_or(fm.default_stroke_color);
                 stroke_rgba[3] *= effect_color[3];
+                let actor_blend = style.blend.unwrap_or(*blend);
                 let needs_stroke = stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty();
                 let clip_world = (*clip).map(|[x, y, w, h]| {
                     sm_rect_to_world_edges(
@@ -2735,7 +2777,7 @@ fn build_actor_recursive<'a>(
                                     *order_counter += 1;
                                     o
                                 };
-                                obj.blend = *blend;
+                                obj.blend = actor_blend;
                                 obj.camera = camera;
                             }
                         }
@@ -2816,7 +2858,7 @@ fn build_actor_recursive<'a>(
                                     *order_counter += 1;
                                     o
                                 };
-                                obj.blend = *blend;
+                                obj.blend = actor_blend;
                                 obj.camera = camera;
                             }
                         }
@@ -2840,7 +2882,7 @@ fn build_actor_recursive<'a>(
                         *order_counter += 1;
                         o
                     };
-                    obj.blend = *blend;
+                    obj.blend = actor_blend;
                     obj.camera = camera;
                     if let renderer::ObjectType::TexturedMesh { tint, .. } = &mut obj.object_type {
                         tint[0] *= effect_color[0];
@@ -2850,7 +2892,13 @@ fn build_actor_recursive<'a>(
                     }
                 }
                 if has_shadow(*shadow_len) {
-                    push_shadow_objects_for_range(out, before, end, *shadow_len, *shadow_color);
+                    push_shadow_objects_for_range(
+                        out,
+                        before,
+                        end,
+                        *shadow_len,
+                        mul_rgba(*shadow_color, style.tint),
+                    );
                 }
             }
         }
@@ -2974,6 +3022,141 @@ fn build_actor_recursive<'a>(
                     scratch,
                     layer,
                     camera,
+                    style,
+                    cameras,
+                    masks,
+                    order_counter,
+                    out,
+                    text_cache,
+                    texture_cache,
+                    total_elapsed,
+                );
+            }
+        }
+
+        actors::Actor::SharedFrame {
+            align,
+            offset,
+            size,
+            children,
+            background,
+            z,
+            tint,
+            blend,
+        } => {
+            let rect = place_rect(parent, *align, *offset, *size);
+            let layer = base_z.saturating_add(*z);
+
+            if let Some(bg) = background {
+                match bg {
+                    actors::Background::Color(c) => {
+                        let before = out.len();
+                        push_sprite(
+                            out,
+                            camera,
+                            rect,
+                            m,
+                            true,
+                            "__white",
+                            Some(str_ptr("__white")),
+                            true,
+                            *c,
+                            None,
+                            None,
+                            None,
+                            false,
+                            false,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            BlendMode::Alpha,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            [0.0, 0.0],
+                            [0.0, 1.0],
+                            None,
+                            None,
+                            texture_cache,
+                            total_elapsed,
+                            false,
+                        );
+                        for obj in out.iter_mut().skip(before) {
+                            obj.z = layer;
+                            obj.order = {
+                                let o = *order_counter;
+                                *order_counter += 1;
+                                o
+                            };
+                        }
+                    }
+                    actors::Background::Texture(tex) => {
+                        let before = out.len();
+                        push_sprite(
+                            out,
+                            camera,
+                            rect,
+                            m,
+                            false,
+                            tex,
+                            Some(str_ptr(tex)),
+                            true,
+                            [1.0; 4],
+                            None,
+                            None,
+                            None,
+                            false,
+                            false,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            BlendMode::Alpha,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            [0.0, 0.0],
+                            [0.0, 1.0],
+                            None,
+                            None,
+                            texture_cache,
+                            total_elapsed,
+                            false,
+                        );
+                        for obj in out.iter_mut().skip(before) {
+                            obj.z = layer;
+                            obj.order = {
+                                let o = *order_counter;
+                                *order_counter += 1;
+                                o
+                            };
+                        }
+                    }
+                }
+            }
+
+            let child_style = style.child(*tint, *blend);
+            for child in children.iter() {
+                build_actor_recursive(
+                    child,
+                    rect,
+                    m,
+                    fonts,
+                    scratch,
+                    layer,
+                    camera,
+                    child_style,
                     cameras,
                     masks,
                     order_counter,

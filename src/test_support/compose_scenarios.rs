@@ -1315,6 +1315,18 @@ fn remap_actor_texture_case(actors: &mut [Actor]) {
                 }
                 remap_actor_texture_case(children);
             }
+            Actor::SharedFrame {
+                background,
+                children,
+                ..
+            } => {
+                if let Some(Background::Texture(texture)) = background {
+                    *texture = Box::leak(mixed_case_texture_key(texture).into_boxed_str());
+                }
+                let mut remapped = children.to_vec();
+                remap_actor_texture_case(&mut remapped);
+                *children = Arc::from(remapped);
+            }
             Actor::Camera { children, .. } => remap_actor_texture_case(children),
             Actor::Shadow { child, .. } => {
                 remap_actor_texture_case(std::slice::from_mut(child.as_mut()))

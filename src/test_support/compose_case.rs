@@ -188,6 +188,16 @@ pub enum ActorSnapshot {
         background: Option<BackgroundSnapshot>,
         z: i16,
     },
+    SharedFrame {
+        align: [f32; 2],
+        offset: [f32; 2],
+        size: [SizeSpecSnapshot; 2],
+        children: Vec<Self>,
+        background: Option<BackgroundSnapshot>,
+        z: i16,
+        tint: [f32; 4],
+        blend: Option<BlendModeSnapshot>,
+    },
     Camera {
         view_proj: [[f32; 4]; 4],
         children: Vec<Self>,
@@ -641,6 +651,11 @@ fn collect_font_names_actor(
                 collect_font_names_actor(child, fonts, out);
             }
         }
+        Actor::SharedFrame { children, .. } => {
+            for child in children.iter() {
+                collect_font_names_actor(child, fonts, out);
+            }
+        }
         Actor::Shadow { child, .. } => collect_font_names_actor(child, fonts, out),
         Actor::Sprite { .. } | Actor::Mesh { .. } | Actor::TexturedMesh { .. } => {}
     }
@@ -715,6 +730,18 @@ fn collect_actor_texture_keys(actor: &Actor, out: &mut BTreeSet<String>) {
                 out.insert((*tex).to_string());
             }
             for child in children {
+                collect_actor_texture_keys(child, out);
+            }
+        }
+        Actor::SharedFrame {
+            children,
+            background,
+            ..
+        } => {
+            if let Some(Background::Texture(tex)) = background {
+                out.insert((*tex).to_string());
+            }
+            for child in children.iter() {
                 collect_actor_texture_keys(child, out);
             }
         }
@@ -1036,6 +1063,25 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             background: background.as_ref().map(BackgroundSnapshot::from),
             z: *z,
         },
+        Actor::SharedFrame {
+            align,
+            offset,
+            size,
+            children,
+            background,
+            z,
+            tint,
+            blend,
+        } => ActorSnapshot::SharedFrame {
+            align: *align,
+            offset: *offset,
+            size: size.map(SizeSpecSnapshot::from),
+            children: children.iter().map(actor_snapshot).collect(),
+            background: background.as_ref().map(BackgroundSnapshot::from),
+            z: *z,
+            tint: *tint,
+            blend: blend.map(BlendModeSnapshot::from),
+        },
         Actor::Camera {
             view_proj,
             children,
@@ -1251,6 +1297,30 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
                 .collect(),
             background: background.as_ref().map(Background::from),
             z: *z,
+        },
+        ActorSnapshot::SharedFrame {
+            align,
+            offset,
+            size,
+            children,
+            background,
+            z,
+            tint,
+            blend,
+        } => Actor::SharedFrame {
+            align: *align,
+            offset: *offset,
+            size: size.map(SizeSpec::from),
+            children: Arc::from(
+                children
+                    .iter()
+                    .map(|child| actor_runtime(child, name_map))
+                    .collect::<Vec<_>>(),
+            ),
+            background: background.as_ref().map(Background::from),
+            z: *z,
+            tint: *tint,
+            blend: blend.map(BlendMode::from),
         },
         ActorSnapshot::Camera {
             view_proj,

@@ -976,7 +976,7 @@ pub struct ViewOverride {
 pub struct BuiltNotefield {
     pub actors: Vec<Actor>,
     pub layout_center_x: f32,
-    pub field_actors: Vec<Actor>,
+    pub field_actors: Vec<Arc<[Actor]>>,
     pub judgment_actors: Option<Vec<Actor>>,
     pub combo_actors: Option<Vec<Actor>>,
 }
@@ -8383,8 +8383,19 @@ pub fn build_bundles(
         }
     }
 
-    let field_actors = if capture_requests.note_field {
-        actors.clone()
+    let field_actors = if capture_requests.note_field && !actors.is_empty() {
+        let children = Arc::<[Actor]>::from(actors);
+        actors = vec![Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: Arc::clone(&children),
+            background: None,
+            z: 0,
+            tint: [1.0; 4],
+            blend: None,
+        }];
+        vec![children]
     } else {
         Vec::new()
     };

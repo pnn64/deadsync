@@ -543,6 +543,12 @@ fn actor_tree_stats(actors: &[crate::engine::present::actors::Actor]) -> ActorTr
                     visit(stats, child);
                 }
             }
+            crate::engine::present::actors::Actor::SharedFrame { children, .. } => {
+                stats.frames = stats.frames.saturating_add(1);
+                for child in children.iter() {
+                    visit(stats, child);
+                }
+            }
             crate::engine::present::actors::Actor::Camera { children, .. } => {
                 stats.cameras = stats.cameras.saturating_add(1);
                 for child in children {
