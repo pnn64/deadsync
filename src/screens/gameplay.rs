@@ -701,7 +701,7 @@ fn play_song_lua_sound_events_for(
                 let play_second = event.event_second + block.start;
                 if song_lua_sound_time_crossed(previous, now, play_second) {
                     let key = sound_path.to_string_lossy();
-                    crate::engine::audio::play_sfx(key.as_ref());
+                    crate::engine::audio::play_preloaded_sfx(key.as_ref());
                 }
             }
         }

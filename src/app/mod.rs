@@ -1949,12 +1949,6 @@ fn prewarm_gameplay_assets(
                             media_cache::ensure_banner_texture(assets, backend, texture_path);
                         }
                     }
-                    crate::game::parsing::song_lua::SongLuaOverlayKind::Sound { sound_path } => {
-                        let key = sound_path.to_string_lossy().into_owned();
-                        if seen.insert(key.clone()) {
-                            crate::engine::audio::preload_sfx(&key);
-                        }
-                    }
                     crate::game::parsing::song_lua::SongLuaOverlayKind::ActorMultiVertex {
                         texture_path: Some(texture_path),
                         texture_key: Some(texture_key),
@@ -2021,14 +2015,41 @@ fn prewarm_gameplay_assets(
     for layer in &state.song_lua_foreground_visual_layers {
         prewarm_song_lua_overlays(&layer.overlays);
     }
+}
+
+fn prewarm_gameplay_sfx(state: &gameplay::State) {
+    crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");
+    crate::engine::audio::preload_sfx("assets/sounds/assist_tick.ogg");
+
+    let mut seen = HashSet::<String>::with_capacity(state.song_lua_sound_paths.len());
+    let mut prewarm_sound_overlays =
+        |overlays: &[crate::game::parsing::song_lua::SongLuaOverlayActor]| {
+            for overlay in overlays {
+                let crate::game::parsing::song_lua::SongLuaOverlayKind::Sound { sound_path } =
+                    &overlay.kind
+                else {
+                    continue;
+                };
+                let key = sound_path.to_string_lossy().into_owned();
+                if seen.insert(key.clone()) {
+                    crate::engine::audio::preload_sfx(&key);
+                }
+            }
+        };
+
+    prewarm_sound_overlays(&state.song_lua_overlays);
+    for layer in &state.song_lua_background_visual_layers {
+        prewarm_sound_overlays(&layer.overlays);
+    }
+    for layer in &state.song_lua_foreground_visual_layers {
+        prewarm_sound_overlays(&layer.overlays);
+    }
     for sound_path in &state.song_lua_sound_paths {
         let key = sound_path.to_string_lossy().into_owned();
         if seen.insert(key.clone()) {
             crate::engine::audio::preload_sfx(&key);
         }
     }
-    crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");
-    crate::engine::audio::preload_sfx("assets/sounds/assist_tick.ogg");
 }
 
 fn prewarm_gameplay_text_layout_cache(
@@ -6647,6 +6668,9 @@ impl App {
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
                 let overlay_video_paths = gameplay_overlay_video_paths(&gs);
 
+                let sfx_prewarm_started = Instant::now();
+                prewarm_gameplay_sfx(&gs);
+                let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
                     prewarm_gameplay_assets(&mut self.asset_manager, backend, &gs);
@@ -6674,7 +6698,7 @@ impl App {
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 debug!(
-                    "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3}",
+                    "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3}",
                     gs.song.title
                 );
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
@@ -6994,6 +7018,9 @@ impl App {
                 let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
                 let overlay_video_paths = gameplay_overlay_video_paths(&gs);
 
+                let sfx_prewarm_started = Instant::now();
+                prewarm_gameplay_sfx(&gs);
+                let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
                     prewarm_gameplay_assets(&mut self.asset_manager, backend, &gs);
@@ -7023,7 +7050,7 @@ impl App {
                 let total_ms = gameplay_entry_started.elapsed().as_secs_f64() * 1000.0;
                 if total_ms >= 50.0 {
                     info!(
-                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
+                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
                         gs.song.title,
                         prev == CurrentScreen::Gameplay,
                         if reusing_gameplay_payload {
@@ -7034,7 +7061,7 @@ impl App {
                     );
                 } else {
                     debug!(
-                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
+                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
                         gs.song.title,
                         prev == CurrentScreen::Gameplay,
                         if reusing_gameplay_payload {

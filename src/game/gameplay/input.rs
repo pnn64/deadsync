@@ -809,7 +809,7 @@ pub(super) fn process_input_edges(
             }
             if hit_note {
                 if state.tick_mode == TickMode::Hit {
-                    audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
+                    audio::play_preloaded_assist_tick(ASSIST_TICK_SFX_PATH);
                 }
             } else {
                 trigger_receptor_step_pulse(state, lane_idx);
@@ -817,7 +817,7 @@ pub(super) fn process_input_edges(
         } else if edge_judges_lift {
             let hit_lift = judge_a_lift(state, lane_idx, edge.event_music_time_ns);
             if hit_lift && state.tick_mode == TickMode::Hit {
-                audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
+                audio::play_preloaded_assist_tick(ASSIST_TICK_SFX_PATH);
             }
         }
     }
