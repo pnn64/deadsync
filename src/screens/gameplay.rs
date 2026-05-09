@@ -6227,7 +6227,8 @@ fn song_lua_player_transform_matrix(
 }
 
 fn apply_song_lua_player_transform(
-    actors: Vec<Actor>,
+    field_actors: Vec<Actor>,
+    hud_actors: Vec<Actor>,
     z_shift: i16,
     tint: [f32; 4],
     blend: Option<BlendMode>,
@@ -6243,13 +6244,21 @@ fn apply_song_lua_player_transform(
     zoom_y: f32,
     zoom_z: f32,
 ) -> Vec<Actor> {
-    let actors = if rotation_y_deg.is_finite() && rotation_y_deg.abs() > f32::EPSILON {
-        actors
+    let field_actors = if rotation_y_deg.is_finite() && rotation_y_deg.abs() > f32::EPSILON {
+        field_actors
             .into_iter()
             .map(|actor| song_lua_player_y_fold_actor(actor, playfield_center_x, rotation_y_deg))
             .collect()
     } else {
-        actors
+        field_actors
+    };
+    let mut hud_actors = if rotation_y_deg.is_finite() && rotation_y_deg.abs() > f32::EPSILON {
+        hud_actors
+            .into_iter()
+            .map(|actor| song_lua_player_y_fold_actor(actor, playfield_center_x, rotation_y_deg))
+            .collect()
+    } else {
+        hud_actors
     };
     let Some(player_transform) = song_lua_player_transform_matrix(
         playfield_center_x,
@@ -6263,10 +6272,13 @@ fn apply_song_lua_player_transform(
         zoom_y,
         zoom_z,
     ) else {
+        if !field_actors.is_empty() {
+            hud_actors.extend(field_actors);
+        }
         return if z_shift == 0 {
-            actors
+            hud_actors
         } else {
-            actors
+            hud_actors
                 .into_iter()
                 .map(|actor| song_lua_style_capture_actor(actor, [1.0; 4], None, z_shift))
                 .collect()
@@ -6283,9 +6295,38 @@ fn apply_song_lua_player_transform(
         -4096.0,
         4096.0,
     ) * player_transform;
-    let mut out = Vec::with_capacity(actors.len().saturating_add(1));
-    let mut plain_children = Vec::new();
-    for actor in actors {
+    if !field_actors
+        .iter()
+        .any(|actor| matches!(actor, Actor::Camera { .. }))
+    {
+        if !field_actors.is_empty() {
+            hud_actors.extend(field_actors);
+        }
+        let mut out = Vec::with_capacity((!hud_actors.is_empty()) as usize);
+        if !hud_actors.is_empty() {
+            out.push(Actor::Camera {
+                view_proj: root_camera,
+                children: hud_actors,
+            });
+        }
+        return if z_shift == 0 {
+            if tint == [1.0; 4] && blend.is_none() {
+                out
+            } else {
+                out.into_iter()
+                    .map(|actor| song_lua_style_capture_actor(actor, tint, blend, 0))
+                    .collect()
+            }
+        } else {
+            out.into_iter()
+                .map(|actor| song_lua_style_capture_actor(actor, tint, blend, z_shift))
+                .collect()
+        };
+    }
+
+    let mut out = Vec::with_capacity(field_actors.len() + (!hud_actors.is_empty()) as usize);
+    let mut plain_children = hud_actors;
+    for actor in field_actors {
         match actor {
             Actor::Camera {
                 view_proj,
@@ -6794,6 +6835,7 @@ pub fn push_actors(
                                requests: SongLuaPlayerProxyRequests| {
         let notefield::BuiltNotefield {
             actors,
+            hud_actors,
             layout_center_x,
             field_actors,
             judgment_actors,
@@ -6843,9 +6885,10 @@ pub fn push_actors(
             SongLuaOverlayBlendMode::Multiply => Some(BlendMode::Multiply),
             SongLuaOverlayBlendMode::Subtract => Some(BlendMode::Subtract),
         };
-        let render_source_bundle = |bundle| {
+        let render_source_bundle = |field_bundle, hud_bundle| {
             apply_song_lua_player_transform(
-                bundle,
+                field_bundle,
+                hud_bundle,
                 z_shift,
                 player_state.diffuse,
                 player_blend,
@@ -6864,9 +6907,9 @@ pub fn push_actors(
         };
         let note_field_source = requests
             .note_field
-            .then(|| render_source_bundle(song_lua_shared_segment_actors(field_actors)))
+            .then(|| render_source_bundle(song_lua_shared_segment_actors(field_actors), Vec::new()))
             .and_then(song_lua_shared_actor_source);
-        let player = render_source_bundle(actors);
+        let player = render_source_bundle(actors, hud_actors);
         let (player, player_source) = if requests.player {
             if let Some(source) = song_lua_shared_actor_source(player) {
                 let player = if player_state.visible {
@@ -6887,11 +6930,11 @@ pub fn push_actors(
             note_field_source,
             judgment_actors
                 .map(song_lua_shared_segment_actors)
-                .map(|actors| render_source_bundle(actors))
+                .map(|actors| render_source_bundle(Vec::new(), actors))
                 .and_then(song_lua_shared_actor_source),
             combo_actors
                 .map(song_lua_shared_segment_actors)
-                .map(|actors| render_source_bundle(actors))
+                .map(|actors| render_source_bundle(Vec::new(), actors))
                 .and_then(song_lua_shared_actor_source),
         ];
         (player, layout_center_x, player_source, proxy_sources)

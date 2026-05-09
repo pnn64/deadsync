@@ -975,6 +975,7 @@ pub struct ViewOverride {
 
 pub struct BuiltNotefield {
     pub actors: Vec<Actor>,
+    pub hud_actors: Vec<Actor>,
     pub layout_center_x: f32,
     pub field_actors: Vec<Arc<[Actor]>>,
     pub judgment_actors: Option<Vec<Arc<[Actor]>>>,
@@ -992,6 +993,7 @@ impl BuiltNotefield {
     fn empty(layout_center_x: f32) -> Self {
         Self {
             actors: Vec::new(),
+            hud_actors: Vec::new(),
             layout_center_x,
             field_actors: Vec::new(),
             judgment_actors: None,
@@ -8378,13 +8380,9 @@ pub fn build_bundles(
     } else {
         Vec::new()
     };
-    if !hud_actors.is_empty() {
-        hud_actors.reserve(actors.len());
-        hud_actors.extend(actors);
-        actors = hud_actors;
-    }
     BuiltNotefield {
         actors,
+        hud_actors,
         layout_center_x,
         field_actors,
         judgment_actors,
