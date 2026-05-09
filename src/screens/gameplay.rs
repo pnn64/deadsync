@@ -2427,7 +2427,7 @@ fn song_lua_proxy_requests(
     overlay_states: &[SongLuaOverlayState],
 ) -> SongLuaScreenProxyRequests {
     let mut requests = SongLuaScreenProxyRequests::default();
-    let mut capture_stack = Vec::with_capacity(4);
+    let mut capture_stack = Vec::new();
     for (idx, overlay) in overlays.iter().enumerate() {
         if song_lua_overlay_aft_ancestor(overlays, idx).is_some() {
             continue;
@@ -6756,21 +6756,21 @@ pub fn push_actors(
                 zoom_z,
             )
         };
-        let player_source = requests
-            .player
-            .then(|| render_source_bundle(actors.clone()));
-        let render_bundle = |bundle| {
-            if !player_state.visible {
-                Vec::new()
-            } else {
-                render_source_bundle(bundle)
-            }
+        let note_field_source = requests
+            .note_field
+            .then(|| render_source_bundle(field_actors));
+        let note_field_replaces_player = note_field_source
+            .as_ref()
+            .is_some_and(|actors| !actors.is_empty());
+        let (player, player_source) = if requests.player {
+            (Vec::new(), Some(render_source_bundle(actors)))
+        } else if note_field_replaces_player || !player_state.visible {
+            (Vec::new(), None)
+        } else {
+            (render_source_bundle(actors), None)
         };
-        let player = render_bundle(actors);
         let proxy_sources = [
-            requests
-                .note_field
-                .then(|| render_source_bundle(field_actors)),
+            note_field_source,
             judgment_actors.map(|actors| render_source_bundle(actors)),
             combo_actors.map(|actors| render_source_bundle(actors)),
         ];
