@@ -8426,7 +8426,7 @@ mod tests {
         row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
         single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
-        stage_music_cut, step_calories, step_stats_notefield_width,
+        stage_music_cut, start_active_hold, step_calories, step_stats_notefield_width,
         suppress_final_bad_rescore_visual, tick_mode_status_line, tick_visual_effects,
         trigger_completed_row_tap_explosions, trigger_note_receptor_feedback,
         trigger_receptor_step_pulse, try_hit_crossed_mines_while_held, turn_option_bits,
@@ -9486,6 +9486,50 @@ return Def.ActorFrame{}
         assert!(state.active_holds[0].is_none());
         assert!((hold.last_held_beat - 0.2).abs() <= 1e-6);
         assert!(hold.last_held_beat > TIMING_WINDOW_SECONDS_HOLD * 0.25 + f32::EPSILON);
+    }
+
+    #[test]
+    fn early_next_hold_start_settles_previous_same_column_hold() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        let previous_end_ns = song_time_ns_from_seconds(1.0);
+        let next_start_ns = song_time_ns_from_seconds(1.09375);
+        let next_end_ns = song_time_ns_from_seconds(1.375);
+
+        state.notes[0] = test_hold(0, 0, ROWS_PER_BEAT as usize);
+        state.notes[1] = test_hold(0, ROWS_PER_BEAT as usize + 12, ROWS_PER_BEAT as usize * 2);
+        state.hold_end_time_cache_ns[0] = Some(previous_end_ns);
+        state.hold_end_time_cache_ns[1] = Some(next_end_ns);
+        state.active_holds[0] = Some(super::ActiveHold {
+            note_index: 0,
+            start_time_ns: 0,
+            end_time_ns: previous_end_ns,
+            note_type: NoteType::Hold,
+            let_go: false,
+            is_pressed: true,
+            life: super::MAX_HOLD_LIFE,
+            last_update_time_ns: song_time_ns_from_seconds(0.95),
+        });
+
+        start_active_hold(
+            &mut state,
+            0,
+            1,
+            next_start_ns,
+            next_end_ns,
+            song_time_ns_from_seconds(0.95),
+        );
+
+        assert_eq!(
+            state.notes[0].hold.as_ref().and_then(|hold| hold.result),
+            Some(HoldResult::Held)
+        );
+        assert_eq!(
+            state.active_holds[0]
+                .as_ref()
+                .map(|active| active.note_index),
+            Some(1)
+        );
     }
 
     #[test]
