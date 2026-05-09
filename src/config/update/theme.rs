@@ -187,6 +187,17 @@ pub fn update_show_select_music_gameplay_timer(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_show_select_music_stage_display(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_select_music_stage_display == enabled {
+            return;
+        }
+        cfg.show_select_music_stage_display = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_select_music_scorebox(enabled: bool) {
     {
         let mut cfg = lock_config();

@@ -98,6 +98,7 @@ pub enum SubRowId {
     PreviewMarker,
     LoopMusic,
     ShowGameplayTimer,
+    ShowStageDisplay,
     ShowGsBox,
     GsBoxPlacement,
     GsBoxLeaderboards,

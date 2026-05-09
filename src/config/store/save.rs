@@ -192,6 +192,11 @@ fn push_saved_options(
     );
     push_bool(
         content,
+        "SelectMusicShowStageDisplay",
+        cfg.show_select_music_stage_display,
+    );
+    push_bool(
+        content,
         "SelectMusicShowCDTitles",
         cfg.show_select_music_cdtitles,
     );

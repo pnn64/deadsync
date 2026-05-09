@@ -909,6 +909,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::ShowStageDisplay,
+        yes_no_choice_index(cfg.show_select_music_stage_display),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowGsBox,
         yes_no_choice_index(cfg.show_select_music_scorebox),
     );

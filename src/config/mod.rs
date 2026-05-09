@@ -144,6 +144,7 @@ pub struct Config {
     pub song_parsing_threads: u8,
     pub simply_love_color: i32,
     pub show_select_music_gameplay_timer: bool,
+    pub show_select_music_stage_display: bool,
     pub show_select_music_banners: bool,
     pub show_select_music_video_banners: bool,
     pub show_select_music_breakdown: bool,
@@ -301,6 +302,7 @@ impl Default for Config {
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             show_select_music_gameplay_timer: true,
+            show_select_music_stage_display: true,
             show_select_music_banners: true,
             show_select_music_video_banners: true,
             show_select_music_breakdown: true,

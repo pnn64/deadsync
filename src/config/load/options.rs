@@ -319,6 +319,10 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicShowBreakdown")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.show_select_music_breakdown, |v| v != 0);
+    cfg.show_select_music_stage_display = conf
+        .get("Options", "SelectMusicShowStageDisplay")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.show_select_music_stage_display, |v| v != 0);
     cfg.show_select_music_cdtitles = conf
         .get("Options", "SelectMusicShowCDTitles")
         .and_then(|v| v.parse::<u8>().ok())

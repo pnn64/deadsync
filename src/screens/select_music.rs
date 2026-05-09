@@ -8486,7 +8486,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(screen_bars::build("SELECT MUSIC", Some(stage_number)));
+    actors.extend(screen_bars::build("SELECT MUSIC"));
 
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
     let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
@@ -8522,6 +8522,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
+    if cfg.show_select_music_stage_display {
+        actors.push(screen_bars::build_stage_display(stage_number));
+    }
     if cfg.show_select_music_gameplay_timer {
         actors.push(timers::build_gameplay(format_session_time(
             state.gameplay_elapsed,

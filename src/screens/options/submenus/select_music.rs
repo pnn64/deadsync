@@ -186,6 +186,15 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::ShowStageDisplay,
+        label: lookup_key("OptionsSelectMusic", "ShowStageDisplay"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::ShowGsBox,
         label: lookup_key("OptionsSelectMusic", "ShowGSBox"),
         choices: &[
@@ -375,6 +384,14 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "ShowGameplayTimerHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SmStageDisplay,
+        name: lookup_key("OptionsSelectMusic", "ShowStageDisplay"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "ShowStageDisplayHelp",
         ))],
     },
     Item {

@@ -48,6 +48,7 @@ const OPTION_KEYS: &[&str] = &[
     "SelectMusicShowBanners",
     "SelectMusicShowVideoBanners",
     "SelectMusicShowBreakdown",
+    "SelectMusicShowStageDisplay",
     "SelectMusicShowCDTitles",
     "SelectMusicWheelGrades",
     "SelectMusicWheelLamps",

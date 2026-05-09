@@ -121,6 +121,11 @@ fn push_default_options(content: &mut String, default: &Config) {
     );
     push_bool(
         content,
+        "SelectMusicShowStageDisplay",
+        default.show_select_music_stage_display,
+    );
+    push_bool(
+        content,
         "SelectMusicShowCDTitles",
         default.show_select_music_cdtitles,
     );
