@@ -87,6 +87,20 @@ const TEXT_CACHE_LIMIT: usize = 4096;
 
 thread_local! {
     static SCORE_PERCENT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(1024));
+    static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(1024));
+}
+
+#[inline(always)]
+fn cached_u32_text(value: u32) -> Arc<str> {
+    cached_text(&UINT_TEXT_CACHE, value, TEXT_CACHE_LIMIT, || {
+        value.to_string()
+    })
+}
+
+#[inline(always)]
+fn unknown_text() -> Arc<str> {
+    static UNKNOWN: OnceLock<Arc<str>> = OnceLock::new();
+    UNKNOWN.get_or_init(|| Arc::<str>::from("?")).clone()
 }
 
 #[inline(always)]
@@ -2047,45 +2061,44 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         match selected_rating {
             Some(rating) => {
                 let meter = if let Some(course_meter) = rating.course_meter {
-                    course_meter.to_string()
+                    cached_u32_text(course_meter)
                 } else if rating.meter_count > 0 {
-                    format!(
-                        "{}",
-                        (rating.meter_sum as f32 / rating.meter_count as f32).round() as i32
+                    cached_u32_text(
+                        (rating.meter_sum as f32 / rating.meter_count as f32).round() as u32,
                     )
                 } else {
-                    "?".to_string()
+                    unknown_text()
                 };
                 if rating.rated_entry_count > 0 {
                     (
-                        rating.totals.steps.to_string(),
-                        rating.totals.jumps.to_string(),
-                        rating.totals.holds.to_string(),
-                        rating.totals.mines.to_string(),
-                        rating.totals.hands.to_string(),
-                        rating.totals.rolls.to_string(),
+                        cached_u32_text(rating.totals.steps),
+                        cached_u32_text(rating.totals.jumps),
+                        cached_u32_text(rating.totals.holds),
+                        cached_u32_text(rating.totals.mines),
+                        cached_u32_text(rating.totals.hands),
+                        cached_u32_text(rating.totals.rolls),
                         meter,
                     )
                 } else {
                     (
-                        "?".to_string(),
-                        "?".to_string(),
-                        "?".to_string(),
-                        "?".to_string(),
-                        "?".to_string(),
-                        "?".to_string(),
+                        unknown_text(),
+                        unknown_text(),
+                        unknown_text(),
+                        unknown_text(),
+                        unknown_text(),
+                        unknown_text(),
                         meter,
                     )
                 }
             }
             None => (
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
+                unknown_text(),
+                unknown_text(),
+                unknown_text(),
+                unknown_text(),
+                unknown_text(),
+                unknown_text(),
+                unknown_text(),
             ),
         };
 

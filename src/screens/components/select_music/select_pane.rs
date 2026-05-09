@@ -3,6 +3,7 @@ use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
+use std::sync::Arc;
 
 #[derive(Clone, Copy)]
 pub struct PaneLayout {
@@ -15,19 +16,19 @@ pub struct PaneLayout {
 }
 
 pub struct StatsValues {
-    pub steps: String,
-    pub mines: String,
-    pub jumps: String,
-    pub hands: String,
-    pub holds: String,
-    pub rolls: String,
+    pub steps: Arc<str>,
+    pub mines: Arc<str>,
+    pub jumps: Arc<str>,
+    pub hands: Arc<str>,
+    pub holds: Arc<str>,
+    pub rolls: Arc<str>,
 }
 
 pub struct StatsPaneParams {
     pub pane_cx: f32,
     pub accent_color: [f32; 4],
     pub values: StatsValues,
-    pub meter: Option<String>,
+    pub meter: Option<Arc<str>>,
 }
 
 #[inline(always)]

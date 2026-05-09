@@ -53,6 +53,7 @@ const WHEEL_BADGE_ZOOM: f32 = 0.1875;
 const ITL_RANK_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
+const PACK_COUNT_TEXT_CACHE_LIMIT: usize = 1024;
 const STR_REF_CACHE_LIMIT: usize = 4096;
 // Simply Love and Arrow Cloud both use zoom(0.2) for the single-line ITL wheel value.
 // Our stacked Points+Score mode is deadsync-only, so it needs a smaller zoom to
@@ -66,6 +67,8 @@ thread_local! {
     static ITL_EX_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
         RefCell::new(HashMap::with_capacity(256));
     static ITL_POINTS_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
+        RefCell::new(HashMap::with_capacity(256));
+    static PACK_COUNT_TEXT_CACHE: RefCell<HashMap<usize, Arc<str>>> =
         RefCell::new(HashMap::with_capacity(256));
     static STR_REF_CACHE: RefCell<SharedStrCache> =
         RefCell::new(HashMap::with_capacity(1024));
@@ -147,6 +150,21 @@ fn cached_itl_points_text(points: u32) -> Arc<str> {
         let text: Arc<str> = Arc::<str>::from(points.to_string());
         if cache.len() < ITL_POINTS_TEXT_CACHE_LIMIT {
             cache.insert(points, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
+fn cached_pack_count_text(count: usize) -> Arc<str> {
+    PACK_COUNT_TEXT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&count) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(count.to_string());
+        if cache.len() < PACK_COUNT_TEXT_CACHE_LIMIT {
+            cache.insert(count, text.clone());
         }
         text
     })
@@ -497,7 +515,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     {
                         actors.push(act!(text:
                             font("miso"):
-                            settext(count.to_string()):
+                            settext(cached_pack_count_text(*count)):
                             align(1.0, 0.5):
                             xy(highlight_left_world + pack_count_x_local, y_center_item):
                             zoom(0.75):

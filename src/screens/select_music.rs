@@ -160,6 +160,7 @@ const TEXT_CACHE_LIMIT: usize = 8192;
 thread_local! {
     static SESSION_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(2048));
     static CHART_LENGTH_CACHE: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity(2048));
+    static BPM_TEXT_CACHE: RefCell<TextCache<(u64, u64, u32)>> = RefCell::new(HashMap::with_capacity(2048));
     static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(4096));
     static MUSIC_RATE_FMT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(256));
     static MUSIC_RATE_BANNER_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(128));
@@ -1732,43 +1733,97 @@ fn song_display_bpm_range(song: &SongData) -> Option<(f64, f64)> {
 
 const RANDOM_BPM_CYCLE_SPEED: f32 = 0.2;
 
-fn random_bpm_cycle_text(elapsed: f32) -> String {
+fn random_bpm_cycle_text(elapsed: f32) -> Arc<str> {
     let cycle = (elapsed / RANDOM_BPM_CYCLE_SPEED) as u32;
     // Deterministic per-cycle "random" via integer hash (Knuth multiplicative)
     let hash = cycle.wrapping_mul(2654435761);
     if hash.is_multiple_of(10) {
-        "???".to_string()
+        cached_str_ref("???")
     } else {
-        (hash % 1000).to_string()
+        cached_u32_text(hash % 1000)
     }
 }
 
 /// Formats a BPM range with music rate applied, matching Simply Love's
 /// `StringifyDisplayBPMs` semantics: integers at 1.0x, one decimal otherwise.
-fn format_bpm_with_rate(range: Option<(f64, f64)>, music_rate: f32) -> String {
+fn format_bpm_with_rate(range: Option<(f64, f64)>, music_rate: f32) -> Arc<str> {
     let Some((lo, hi)) = range else {
-        return String::new();
+        return cached_str_ref("");
     };
-    let rate = if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate as f64
+    let rate_f32 = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
     } else {
         1.0
     };
-    let lo = lo * rate;
-    let hi = hi * rate;
-    let use_decimals = (music_rate - 1.0).abs() > 0.001;
-    let fmt_one = |v: f64| {
-        if use_decimals {
-            let s = format!("{v:.1}");
-            s.trim_end_matches('0').trim_end_matches('.').to_string()
-        } else {
-            format!("{v:.0}")
-        }
-    };
-    if (lo - hi).abs() < 1.0e-6 {
-        fmt_one(lo)
+    cached_text(
+        &BPM_TEXT_CACHE,
+        (lo.to_bits(), hi.to_bits(), rate_f32.to_bits()),
+        TEXT_CACHE_LIMIT,
+        || {
+            let rate = rate_f32 as f64;
+            let lo = lo * rate;
+            let hi = hi * rate;
+            let use_decimals = (rate_f32 - 1.0).abs() > 0.001;
+            let fmt_one = |v: f64| {
+                if use_decimals {
+                    let s = format!("{v:.1}");
+                    s.trim_end_matches('0').trim_end_matches('.').to_string()
+                } else {
+                    format!("{v:.0}")
+                }
+            };
+            if (lo - hi).abs() < 1.0e-6 {
+                fmt_one(lo)
+            } else {
+                format!("{} - {}", fmt_one(lo.min(hi)), fmt_one(lo.max(hi)))
+            }
+        },
+    )
+}
+
+#[inline(always)]
+fn stats_unknown_text(entry_opt: Option<&MusicWheelEntry>) -> Arc<str> {
+    if matches!(entry_opt, Some(MusicWheelEntry::Song(_))) {
+        cached_str_ref("?")
     } else {
-        format!("{} - {}", fmt_one(lo.min(hi)), fmt_one(lo.max(hi)))
+        cached_str_ref("")
+    }
+}
+
+#[inline(always)]
+fn chart_panel_stats(
+    chart: Option<&ChartData>,
+    entry_opt: Option<&MusicWheelEntry>,
+) -> (
+    Arc<str>,
+    Arc<str>,
+    Arc<str>,
+    Arc<str>,
+    Arc<str>,
+    Arc<str>,
+    Arc<str>,
+) {
+    if let Some(c) = chart {
+        (
+            cached_u32_text(c.stats.total_steps),
+            cached_u32_text(c.stats.jumps),
+            cached_u32_text(c.stats.holds),
+            cached_u32_text(c.mines_nonfake),
+            cached_u32_text(c.stats.hands),
+            cached_u32_text(c.stats.rolls),
+            cached_u32_text(c.meter),
+        )
+    } else {
+        let unknown = cached_str_ref("?");
+        (
+            unknown.clone(),
+            unknown.clone(),
+            unknown.clone(),
+            unknown.clone(),
+            unknown.clone(),
+            unknown,
+            stats_unknown_text(entry_opt),
+        )
     }
 }
 
@@ -8544,7 +8599,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         (310.0, screen_center_x() - 165.0, screen_center_y() - 55.0)
     };
     let entry_opt = selected_entry;
-    let (artist, bpm, len_text): (String, String, Arc<str>) = match entry_opt {
+    let (artist, bpm, len_text): (Arc<str>, Arc<str>, Arc<str>) = match entry_opt {
         Some(MusicWheelEntry::Song(s)) => {
             let bpm = match immediate_chart_p1.and_then(|c| c.display_bpm.as_ref()) {
                 Some(ChartDisplayBpm::Random) => random_bpm_cycle_text(state.session_elapsed),
@@ -8553,7 +8608,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 }
             };
             (
-                s.artist.clone(),
+                cached_str_ref(s.artist.as_str()),
                 bpm,
                 format_chart_length(((s.total_length_seconds.max(0) as f32) / music_rate) as i32),
             )
@@ -8565,12 +8620,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 .copied()
                 .unwrap_or(0.0);
             (
-                "".to_string(),
-                "".to_string(),
+                cached_str_ref(""),
+                cached_str_ref(""),
                 format_session_time((total_sec / music_rate as f64) as f32),
             )
         }
-        None => ("".to_string(), "".to_string(), Arc::<str>::from("")),
+        None => (cached_str_ref(""), cached_str_ref(""), cached_str_ref("")),
     };
 
     actors.push(Actor::Frame {
@@ -8604,34 +8659,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
 
     let cycle_elapsed = state.session_elapsed - state.step_artist_cycle_base;
 
-    let (step_artist, steps, jumps, holds, mines, hands, rolls, meter) =
-        if let Some(c) = immediate_chart_p1 {
-            (
-                step_artist_cycle_text(c, cycle_elapsed),
-                c.stats.total_steps.to_string(),
-                c.stats.jumps.to_string(),
-                c.stats.holds.to_string(),
-                c.mines_nonfake.to_string(),
-                c.stats.hands.to_string(),
-                c.stats.rolls.to_string(),
-                c.meter.to_string(),
-            )
-        } else {
-            (
-                "",
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                if matches!(entry_opt, Some(MusicWheelEntry::Song(_))) {
-                    "?".to_string()
-                } else {
-                    "".to_string()
-                },
-            )
-        };
+    let step_artist = immediate_chart_p1.map_or("", |c| step_artist_cycle_text(c, cycle_elapsed));
+    let (steps, jumps, holds, mines, hands, rolls, meter) =
+        chart_panel_stats(immediate_chart_p1, entry_opt);
 
     let step_artist_p2 = if let Some(c) = immediate_chart_p2 {
         step_artist_cycle_text(c, cycle_elapsed)
@@ -8640,31 +8670,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     };
 
     let (steps_p2, jumps_p2, holds_p2, mines_p2, hands_p2, rolls_p2, meter_p2) =
-        if let Some(c) = immediate_chart_p2 {
-            (
-                c.stats.total_steps.to_string(),
-                c.stats.jumps.to_string(),
-                c.stats.holds.to_string(),
-                c.mines_nonfake.to_string(),
-                c.stats.hands.to_string(),
-                c.stats.rolls.to_string(),
-                c.meter.to_string(),
-            )
-        } else {
-            (
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                "?".to_string(),
-                if matches!(entry_opt, Some(MusicWheelEntry::Song(_))) {
-                    "?".to_string()
-                } else {
-                    "".to_string()
-                },
-            )
-        };
+        chart_panel_stats(immediate_chart_p2, entry_opt);
 
     // Step Artist & Steps
     let base_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
@@ -8894,13 +8900,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                       sel_col: [f32; 4],
                       side: profile::PlayerSide,
                       player_initials: &str,
-                      steps: String,
-                      mines: String,
-                      jumps: String,
-                      hands: String,
-                      holds: String,
-                      rolls: String,
-                      meter: String,
+                      steps: Arc<str>,
+                      mines: Arc<str>,
+                      jumps: Arc<str>,
+                      hands: Arc<str>,
+                      holds: Arc<str>,
+                      rolls: Arc<str>,
+                      meter: Arc<str>,
                       chart: Option<&ChartData>| {
         let gs_active = scores::is_gs_active_for_side(side);
         let show_rivals = gs_active && cfg.show_select_music_scorebox && scorebox_cycle_enabled;
@@ -8959,26 +8965,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 }
             }
         } else {
-            let mut player_name = "----".to_owned();
+            let mut player_name = cached_str_ref("----");
             let mut player_score = placeholder_score_percent();
             if let Some(c) = chart
                 && let Some(sc) = scores::get_cached_local_score_for_side(&c.short_hash, side)
                 && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
             {
-                player_name = player_initials.to_owned();
+                player_name = cached_str_ref(player_initials);
                 player_score = cached_score_percent_text(sc.score_percent);
             }
 
-            let mut machine_name_storage: Option<String> = None;
+            let mut machine_name = cached_str_ref("----");
             let mut machine_score = placeholder_score_percent();
             if let Some(c) = chart
                 && let Some((initials, sc)) = scores::get_machine_record_local(&c.short_hash)
                 && (sc.grade != scores::Grade::Failed || sc.score_percent > 0.0)
             {
-                machine_name_storage = Some(initials);
+                machine_name = cached_str_ref(initials.as_str());
                 machine_score = cached_score_percent_text(sc.score_percent);
             }
-            let machine_name = machine_name_storage.unwrap_or_else(|| "----".to_owned());
             let lines = [(machine_name, machine_score), (player_name, player_score)];
             for (i, (name, score)) in lines.into_iter().enumerate() {
                 out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
@@ -9133,14 +9138,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                                      col_w: f32,
                                      num_right_x: f32,
                                      row: usize,
-                                     num: &str,
-                                     label: &str| {
+                                     num: &Arc<str>,
+                                     label: Arc<str>| {
                 let y = stamina_base_y + row as f32 * stamina_row_step;
                 let label_x = num_right_x + 3.0;
                 let num_w = (num_right_x - col_left).max(8.0);
                 let label_w = (col_left + col_w - label_x - 2.0).max(8.0);
-                actors.push(act!(text: font("miso"): settext(num.to_owned()): align(1.0, 0.5): horizalign(right): xy(num_right_x, y): maxwidth(num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
-                actors.push(act!(text: font("miso"): settext(label.to_owned()): align(0.0, 0.5): horizalign(left): xy(label_x, y): maxwidth(label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+                actors.push(act!(text: font("miso"): settext(num): align(1.0, 0.5): horizalign(right): xy(num_right_x, y): maxwidth(num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+                actors.push(act!(text: font("miso"): settext(label): align(0.0, 0.5): horizalign(left): xy(label_x, y): maxwidth(label_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
             };
 
             let num_anchor_frac = 0.31;
@@ -9154,8 +9159,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 col_w1,
                 col1_num_x,
                 0,
-                boxes.as_ref(),
-                &tr("PatternInfo", "Boxes"),
+                &boxes,
+                tr("PatternInfo", "Boxes"),
             );
             push_pattern_line(
                 &mut actors,
@@ -9163,8 +9168,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 col_w1,
                 col1_num_x,
                 1,
-                anchors.as_ref(),
-                &tr("PatternInfo", "Anchors"),
+                &anchors,
+                tr("PatternInfo", "Anchors"),
             );
             push_pattern_line(
                 &mut actors,
@@ -9172,8 +9177,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 col_w1,
                 col1_num_x,
                 2,
-                staircases.as_ref(),
-                &tr("PatternInfo", "Staircases"),
+                &staircases,
+                tr("PatternInfo", "Staircases"),
             );
             push_pattern_line(
                 &mut actors,
@@ -9181,8 +9186,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 col_w1,
                 col1_num_x,
                 3,
-                sweeps.as_ref(),
-                &tr("PatternInfo", "Sweeps"),
+                &sweeps,
+                tr("PatternInfo", "Sweeps"),
             );
 
             push_pattern_line(
@@ -9191,8 +9196,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 col_w2,
                 col2_num_x,
                 0,
-                triangles.as_ref(),
-                &tr("PatternInfo", "Triangles"),
+                &triangles,
+                tr("PatternInfo", "Triangles"),
             );
             push_pattern_line(
                 &mut actors,
@@ -9200,8 +9205,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 col_w2,
                 col2_num_x,
                 1,
-                hip_breakers.as_ref(),
-                &tr("PatternInfo", "HipBreakers"),
+                &hip_breakers,
+                tr("PatternInfo", "HipBreakers"),
             );
             push_pattern_line(
                 &mut actors,
@@ -9209,8 +9214,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 col_w2,
                 col2_num_x,
                 2,
-                doritos.as_ref(),
-                &tr("PatternInfo", "Doritos"),
+                &doritos,
+                tr("PatternInfo", "Doritos"),
             );
             push_pattern_line(
                 &mut actors,
@@ -9218,8 +9223,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 col_w2,
                 col2_num_x,
                 3,
-                towers.as_ref(),
-                &tr("PatternInfo", "Towers"),
+                &towers,
+                tr("PatternInfo", "Towers"),
             );
 
             push_pattern_line(
@@ -9228,8 +9233,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 col_w3,
                 col3_num_x,
                 0,
-                spirals.as_ref(),
-                &tr("PatternInfo", "Spirals"),
+                &spirals,
+                tr("PatternInfo", "Spirals"),
             );
             push_pattern_line(
                 &mut actors,
@@ -9237,8 +9242,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 col_w3,
                 col3_num_x,
                 1,
-                copters.as_ref(),
-                &tr("PatternInfo", "Copters"),
+                &copters,
+                tr("PatternInfo", "Copters"),
             );
 
             let col3_label_x = col3_num_x + 3.0;
@@ -9285,7 +9290,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                     cached_u32_text(0),
                     cached_u32_text(0),
                     cached_u32_text(0),
-                    Arc::<str>::from("None (0.0%)"),
+                    cached_str_ref("None (0.0%)"),
                 )
             };
 
@@ -9312,10 +9317,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 let vx = p_v_x + c as f32 * 148.0;
                 let lx = p_l_x + c as f32 * 148.0;
                 match mw {
-                    Some(w) => actors.push(act!(text: font("miso"): settext(val.to_owned()): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
-                    None => actors.push(act!(text: font("miso"): settext(val.to_owned()): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+                    Some(w) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(w): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+                    None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
                 }
-                actors.push(act!(text: font("miso"): settext(lbl.to_owned()): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+                actors.push(act!(text: font("miso"): settext(lbl): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(0.78): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
             }
         }
     }
@@ -9403,7 +9408,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         }
         if let Some(chart) = steps_charts[idx] {
             let c = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
-            actors.push(act!(text: font(current_machine_font_key(FontRole::Header)): settext(chart.meter.to_string()): align(0.5, 0.5): xy(lst_cx, lst_cy + y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
+            actors.push(act!(text: font(current_machine_font_key(FontRole::Header)): settext(cached_u32_text(chart.meter)): align(0.5, 0.5): xy(lst_cx, lst_cy + y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
         }
     }
 
