@@ -46,9 +46,7 @@ pub(super) fn refresh_timing_after_offset_change(state: &mut State) {
             .map(|h| state.timing_players[player].get_time_for_beat_ns(h.end_beat));
     }
     for row_entry in &mut state.row_entries {
-        if let Some(&note_index) = row_entry.nonmine_note_indices.first() {
-            row_entry.time_ns = state.note_time_cache_ns[note_index];
-        }
+        row_entry.time_ns = state.note_time_cache_ns[row_entry.note_indices()[0]];
     }
     for player in 0..state.num_players {
         let mine_note_time_ns = &mut state.mine_note_time_ns[player];

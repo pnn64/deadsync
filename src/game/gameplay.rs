@@ -887,7 +887,7 @@ fn completed_row_final_judgment<'a>(
     let mut row_judgments: [Option<&Judgment>; MAX_COLS] = [None; MAX_COLS];
     let mut row_judgment_count = 0usize;
 
-    for &note_index in &row_entry.nonmine_note_indices {
+    for &note_index in row_entry.note_indices() {
         let judgment = notes[note_index].result.as_ref()?;
         debug_assert!(row_judgment_count < row_judgments.len());
         row_judgments[row_judgment_count] = Some(judgment);
@@ -922,7 +922,7 @@ fn completed_row_flash_note_indices_and_judgment(
 
     let mut out = [usize::MAX; MAX_COLS];
     let mut len = 0usize;
-    for &note_index in &row_entry.nonmine_note_indices {
+    for &note_index in row_entry.note_indices() {
         debug_assert!(len < out.len());
         out[len] = note_index;
         len += 1;
@@ -995,17 +995,18 @@ fn count_rescore_tracks_on_row(row_entry: &RowEntry) -> usize {
 
 fn build_row_entry(
     row_index: usize,
-    nonmine_note_indices: Vec<usize>,
+    nonmine_note_indices: [usize; MAX_COLS],
+    nonmine_note_count: u8,
     notes: &[Note],
     note_time_cache_ns: &[SongTimeNs],
 ) -> RowEntry {
-    debug_assert!(!nonmine_note_indices.is_empty());
+    debug_assert!(nonmine_note_count != 0);
     let time_ns = note_time_cache_ns[nonmine_note_indices[0]];
     let mut rescore_track_count = 0u8;
     let mut unresolved_count = 0u8;
     let mut unresolved_nonlift_count = 0u8;
     let mut had_provisional_early_hit = false;
-    for &note_index in &nonmine_note_indices {
+    for &note_index in &nonmine_note_indices[..usize::from(nonmine_note_count)] {
         let note = &notes[note_index];
         if counts_for_early_rescore(note.note_type) {
             rescore_track_count = rescore_track_count.saturating_add(1);
@@ -1022,6 +1023,7 @@ fn build_row_entry(
         row_index,
         time_ns,
         nonmine_note_indices,
+        nonmine_note_count,
         rescore_track_count,
         unresolved_count,
         unresolved_nonlift_count,
@@ -2794,12 +2796,20 @@ pub struct RowEntry {
     row_index: usize,
     time_ns: SongTimeNs,
     // Non-mine, non-fake, judgable notes on this row
-    nonmine_note_indices: Vec<usize>,
+    nonmine_note_indices: [usize; MAX_COLS],
+    nonmine_note_count: u8,
     rescore_track_count: u8,
     unresolved_count: u8,
     unresolved_nonlift_count: u8,
     had_provisional_early_hit: bool,
     final_outcome: Option<FinalizedRowOutcome>,
+}
+
+impl RowEntry {
+    #[inline(always)]
+    pub(super) fn note_indices(&self) -> &[usize] {
+        &self.nonmine_note_indices[..usize::from(self.nonmine_note_count)]
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -4228,7 +4238,7 @@ fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_s
         }
     }
     for (row_entry_index, row_entry) in state.row_entries.iter().enumerate() {
-        let first_note_index = row_entry.nonmine_note_indices[0];
+        let first_note_index = row_entry.note_indices()[0];
         let player = player_for_col(state, state.notes[first_note_index].column);
         debug_assert!(
             row_entry_index >= state.row_entry_ranges[player].0
@@ -4240,7 +4250,7 @@ fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_s
                 .copied(),
             Some(row_entry_index as u32)
         );
-        for &note_index in &row_entry.nonmine_note_indices {
+        for &note_index in row_entry.note_indices() {
             debug_assert!(note_index < state.notes.len());
             debug_assert_eq!(
                 state.note_row_entry_indices[note_index],
@@ -4915,10 +4925,12 @@ fn reset_practice_note_results(state: &mut State) {
 
     for row_ix in 0..state.row_entries.len() {
         let row_index = state.row_entries[row_ix].row_index;
-        let nonmine_note_indices = state.row_entries[row_ix].nonmine_note_indices.clone();
+        let nonmine_note_indices = state.row_entries[row_ix].nonmine_note_indices;
+        let nonmine_note_count = state.row_entries[row_ix].nonmine_note_count;
         state.row_entries[row_ix] = build_row_entry(
             row_index,
             nonmine_note_indices,
+            nonmine_note_count,
             &state.notes,
             &state.note_time_cache_ns,
         );
@@ -5527,7 +5539,8 @@ pub fn init(
             let row_index = notes[cursor].row_index;
             let row_start = cursor;
             let mut row_flags = 0u8;
-            let mut nonmine_note_indices = Vec::with_capacity(4);
+            let mut nonmine_note_indices = [usize::MAX; MAX_COLS];
+            let mut nonmine_note_count = 0u8;
             while cursor < note_end && notes[cursor].row_index == row_index {
                 let note = &notes[cursor];
                 match note.note_type {
@@ -5536,19 +5549,23 @@ pub fn init(
                     _ => {}
                 }
                 if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
-                    nonmine_note_indices.push(cursor);
+                    let count = usize::from(nonmine_note_count);
+                    debug_assert!(count < MAX_COLS);
+                    nonmine_note_indices[count] = cursor;
+                    nonmine_note_count += 1;
                 }
                 cursor += 1;
             }
-            if !nonmine_note_indices.is_empty() {
+            if nonmine_note_count != 0 {
                 let row_entry_index = row_entries.len() as u32;
                 row_map_cache[player][row_index] = row_entry_index;
-                for &note_index in &nonmine_note_indices {
+                for &note_index in &nonmine_note_indices[..usize::from(nonmine_note_count)] {
                     note_row_entry_indices[note_index] = row_entry_index;
                 }
                 row_entries.push(build_row_entry(
                     row_index,
                     nonmine_note_indices,
+                    nonmine_note_count,
                     &notes,
                     &note_time_cache_ns,
                 ));
@@ -8943,7 +8960,18 @@ return Def.ActorFrame{}
         nonmine_note_indices: Vec<usize>,
     ) -> RowEntry {
         let note_time_cache_ns = vec![0; notes.len()];
-        build_row_entry(row_index, nonmine_note_indices, notes, &note_time_cache_ns)
+        let mut row_note_indices = [usize::MAX; MAX_COLS];
+        let nonmine_note_count = nonmine_note_indices.len() as u8;
+        for (i, note_index) in nonmine_note_indices.into_iter().enumerate() {
+            row_note_indices[i] = note_index;
+        }
+        build_row_entry(
+            row_index,
+            row_note_indices,
+            nonmine_note_count,
+            notes,
+            &note_time_cache_ns,
+        )
     }
 
     fn test_row_entry_with_times(
@@ -8952,7 +8980,18 @@ return Def.ActorFrame{}
         row_index: usize,
         nonmine_note_indices: Vec<usize>,
     ) -> RowEntry {
-        build_row_entry(row_index, nonmine_note_indices, notes, note_time_cache_ns)
+        let mut row_note_indices = [usize::MAX; MAX_COLS];
+        let nonmine_note_count = nonmine_note_indices.len() as u8;
+        for (i, note_index) in nonmine_note_indices.into_iter().enumerate() {
+            row_note_indices[i] = note_index;
+        }
+        build_row_entry(
+            row_index,
+            row_note_indices,
+            nonmine_note_count,
+            notes,
+            note_time_cache_ns,
+        )
     }
 
     fn test_input_event(action: VirtualAction) -> InputEvent {
@@ -9713,7 +9752,7 @@ return Def.ActorFrame{}
             .expect("expected cached row entry");
 
         assert_eq!(row_entry.row_index, row_index);
-        assert_eq!(row_entry.nonmine_note_indices, vec![0, 1]);
+        assert_eq!(row_entry.note_indices(), &[0, 1]);
     }
 
     #[test]
@@ -9739,8 +9778,8 @@ return Def.ActorFrame{}
         let p2 = row_entry_for_cached_row(&row_entries, &row_map_cache[1], row_index)
             .expect("expected cached p2 row entry");
 
-        assert_eq!(p1.nonmine_note_indices, vec![0, 1]);
-        assert_eq!(p2.nonmine_note_indices, vec![2, 3]);
+        assert_eq!(p1.note_indices(), &[0, 1]);
+        assert_eq!(p2.note_indices(), &[2, 3]);
     }
 
     #[test]

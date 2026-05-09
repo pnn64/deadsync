@@ -27,7 +27,7 @@ pub(super) fn finalize_row_judgment(
     let mut row_has_miss = false;
     let mut row_has_wayoff = false;
     let mut player_row_note_count = 0u32;
-    let row_notes = &state.row_entries[row_entry_index].nonmine_note_indices;
+    let row_notes = state.row_entries[row_entry_index].note_indices();
     let Some(final_judgment) =
         judgment::aggregate_row_final_judgment(row_notes.iter().filter_map(|&note_index| {
             let judgment = state.notes[note_index].result.as_ref()?;

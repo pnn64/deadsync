@@ -1,7 +1,9 @@
 use super::super::choice;
 use super::super::constants::MINI_INDICATOR_VARIANTS;
+use super::super::row::{
+    BitMapping, BitmaskInit, BitmaskWriteback, CursorInit, CycleInit, NumericInit,
+};
 use super::super::row::{fanout_bitmask_binding, index_binding};
-use super::super::row::{BitMapping, BitmaskInit, BitmaskWriteback, CursorInit, CycleInit, NumericInit};
 use super::super::state::{
     EarlyDwMask, ErrorBarOptionsMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
     HideMask, LifeBarOptionsMask, MeasureCounterOptionsMask, PlayerOptionMasks, ResultsExtrasMask,
@@ -490,10 +492,7 @@ const ERROR_BAR_OPTIONS: BitmaskBinding = fanout_bitmask_binding!(
     mask = ErrorBarOptionsMask,
     bits = u8,
     state_field = error_bar_options,
-    fields = [
-        (MOVE_UP, error_bar_up),
-        (MULTI_TICK, error_bar_multi_tick),
-    ],
+    fields = [(MOVE_UP, error_bar_up), (MULTI_TICK, error_bar_multi_tick),],
     persist_for_side = |s, p| {
         gp::update_error_bar_options_for_side(s, p.error_bar_up, p.error_bar_multi_tick);
     },
@@ -573,7 +572,11 @@ const FA_PLUS_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
         from_profile: |p| (fa_plus_bits_from_profile(p)) & 0b0000_1111,
         get_active: |m| (m.fa_plus.bits() & 0b0000_1111) as u32,
         set_active: |m, b| {
-            debug_assert_eq!(b & !0b0000_1111u32, 0, "FA+ Options bits exceed slice width");
+            debug_assert_eq!(
+                b & !0b0000_1111u32,
+                0,
+                "FA+ Options bits exceed slice width"
+            );
             let preserved = m.fa_plus.bits() & 0b1111_0000;
             m.fa_plus = FaPlusMask::from_bits_retain(preserved | (b as u8 & 0b0000_1111));
         },
@@ -602,8 +605,7 @@ const FA_PLUS_WINDOW_OPTIONS: BitmaskBinding = BitmaskBinding::Generic {
         set_active: |m, b| {
             debug_assert_eq!(b & !0b0000_0011u32, 0, "FA+ Window bits exceed slice width");
             let preserved = m.fa_plus.bits() & 0b1100_1111;
-            m.fa_plus =
-                FaPlusMask::from_bits_retain(preserved | (((b as u8) & 0b11) << 4));
+            m.fa_plus = FaPlusMask::from_bits_retain(preserved | (((b as u8) & 0b11) << 4));
         },
         cursor: CursorInit::FirstActiveBit,
     },
