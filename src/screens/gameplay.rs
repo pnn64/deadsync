@@ -6886,9 +6886,11 @@ pub fn push_actors(
         let proxy_sources = [
             note_field_source,
             judgment_actors
+                .map(song_lua_shared_segment_actors)
                 .map(|actors| render_source_bundle(actors))
                 .and_then(song_lua_shared_actor_source),
             combo_actors
+                .map(song_lua_shared_segment_actors)
                 .map(|actors| render_source_bundle(actors))
                 .and_then(song_lua_shared_actor_source),
         ];

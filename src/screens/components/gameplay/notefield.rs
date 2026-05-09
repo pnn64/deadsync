@@ -977,8 +977,8 @@ pub struct BuiltNotefield {
     pub actors: Vec<Actor>,
     pub layout_center_x: f32,
     pub field_actors: Vec<Arc<[Actor]>>,
-    pub judgment_actors: Option<Vec<Actor>>,
-    pub combo_actors: Option<Vec<Actor>>,
+    pub judgment_actors: Option<Vec<Arc<[Actor]>>>,
+    pub combo_actors: Option<Vec<Arc<[Actor]>>>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -1000,15 +1000,22 @@ impl BuiltNotefield {
     }
 }
 
-fn push_hud_capture(
-    hud_actors: &mut Vec<Actor>,
-    capture_actors: &mut Option<Vec<Actor>>,
-    actor: Actor,
-) {
-    if let Some(capture_actors) = capture_actors {
-        capture_actors.push(actor.clone());
+fn share_hud_range(hud_actors: &mut Vec<Actor>, start: usize) -> Option<Vec<Arc<[Actor]>>> {
+    if start >= hud_actors.len() {
+        return None;
     }
-    hud_actors.push(actor);
+    let children = Arc::<[Actor]>::from(hud_actors.drain(start..).collect::<Vec<_>>());
+    hud_actors.push(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children: Arc::clone(&children),
+        background: None,
+        z: 0,
+        tint: [1.0; 4],
+        blend: None,
+    });
+    Some(vec![children])
 }
 #[inline(always)]
 fn translated_uv_rect(mut uv: [f32; 4], translate: [f32; 2]) -> [f32; 4] {
@@ -3658,8 +3665,6 @@ pub fn build_bundles(
         };
     let mut actors = Vec::with_capacity(actor_cap);
     let mut hud_actors: Vec<Actor> = Vec::with_capacity(hud_cap);
-    let mut judgment_actors = capture_requests.judgment.then(|| Vec::with_capacity(4));
-    let mut combo_actors = capture_requests.combo.then(|| Vec::with_capacity(8));
     let p = &state.players[player_idx];
     let mut model_cache = state.notefield_model_cache[player_idx].borrow_mut();
 
@@ -7364,6 +7369,7 @@ pub fn build_bundles(
         }
     }
 
+    let combo_capture_start = hud_actors.len();
     // Combo Milestone Explosions (100 / 1000 combo)
     if !blind_active
         && !profile.hide_combo
@@ -7388,19 +7394,15 @@ pub fn build_bundles(
                         let alpha = (0.5 * (1.0 - progress)).max(0.0);
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let rotation = 90.0 * direction * progress;
-                            push_hud_capture(
-                                &mut hud_actors,
-                                &mut combo_actors,
-                                act!(sprite("combo_explosion.png"):
-                                    align(0.5, 0.5):
-                                    xy(combo_center_x, combo_center_y):
-                                    zoom(zoom):
-                                    rotationz(rotation):
-                                    diffuse(1.0, 1.0, 1.0, alpha):
-                                    blend(add):
-                                    z(89)
-                                ),
-                            );
+                            hud_actors.push(act!(sprite("combo_explosion.png"):
+                                align(0.5, 0.5):
+                                xy(combo_center_x, combo_center_y):
+                                zoom(zoom):
+                                rotationz(rotation):
+                                diffuse(1.0, 1.0, 1.0, alpha):
+                                blend(add):
+                                z(89)
+                            ));
                         }
                     }
                     if elapsed <= COMBO_HUNDRED_MILESTONE_DURATION {
@@ -7409,38 +7411,30 @@ pub fn build_bundles(
                         let zoom = (0.25 + (2.0 - 0.25) * eased) * combo_zoom_mod;
                         let alpha = (0.6 * (1.0 - eased)).max(0.0);
                         let rotation = 10.0 + (0.0 - 10.0) * eased;
-                        push_hud_capture(
-                            &mut hud_actors,
-                            &mut combo_actors,
-                            act!(sprite("combo_100milestone_splode.png"):
-                                align(0.5, 0.5):
-                                xy(combo_center_x, combo_center_y):
-                                zoom(zoom):
-                                rotationz(rotation):
-                                diffuse(player_color[0], player_color[1], player_color[2], alpha):
-                                blend(add):
-                                z(89)
-                            ),
-                        );
+                        hud_actors.push(act!(sprite("combo_100milestone_splode.png"):
+                            align(0.5, 0.5):
+                            xy(combo_center_x, combo_center_y):
+                            zoom(zoom):
+                            rotationz(rotation):
+                            diffuse(player_color[0], player_color[1], player_color[2], alpha):
+                            blend(add):
+                            z(89)
+                        ));
                         let mini_duration = 0.4_f32;
                         if elapsed <= mini_duration {
                             let mini_progress = (elapsed / mini_duration).clamp(0.0, 1.0);
                             let mini_zoom = (0.25 + (1.8 - 0.25) * mini_progress) * combo_zoom_mod;
                             let mini_alpha = (1.0 - mini_progress).max(0.0);
                             let mini_rotation = 10.0 + (0.0 - 10.0) * mini_progress;
-                            push_hud_capture(
-                                &mut hud_actors,
-                                &mut combo_actors,
-                                act!(sprite("combo_100milestone_minisplode.png"):
-                                    align(0.5, 0.5):
-                                    xy(combo_center_x, combo_center_y):
-                                    zoom(mini_zoom):
-                                    rotationz(mini_rotation):
-                                    diffuse(player_color[0], player_color[1], player_color[2], mini_alpha):
-                                    blend(add):
-                                    z(89)
-                                ),
-                            );
+                            hud_actors.push(act!(sprite("combo_100milestone_minisplode.png"):
+                                align(0.5, 0.5):
+                                xy(combo_center_x, combo_center_y):
+                                zoom(mini_zoom):
+                                rotationz(mini_rotation):
+                                diffuse(player_color[0], player_color[1], player_color[2], mini_alpha):
+                                blend(add):
+                                z(89)
+                            ));
                         }
                     }
                 }
@@ -7454,19 +7448,15 @@ pub fn build_bundles(
                         let x_offset = 100.0 * progress * combo_zoom_mod;
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let final_x = combo_center_x + x_offset * direction;
-                            push_hud_capture(
-                                &mut hud_actors,
-                                &mut combo_actors,
-                                act!(sprite("combo_1000milestone_swoosh.png"):
-                                    align(0.5, 0.5):
-                                    xy(final_x, combo_center_y):
-                                    zoom(zoom):
-                                    zoomx(zoom * direction):
-                                    diffuse(player_color[0], player_color[1], player_color[2], alpha):
-                                    blend(add):
-                                    z(89)
-                                ),
-                            );
+                            hud_actors.push(act!(sprite("combo_1000milestone_swoosh.png"):
+                                align(0.5, 0.5):
+                                xy(final_x, combo_center_y):
+                                zoom(zoom):
+                                zoomx(zoom * direction):
+                                diffuse(player_color[0], player_color[1], player_color[2], alpha):
+                                blend(add):
+                                z(89)
+                            ));
                         }
                     }
                 }
@@ -7479,17 +7469,13 @@ pub fn build_bundles(
         let combo_font_name = zmod_combo_font_name(profile.combo_font);
         if p.miss_combo >= SHOW_COMBO_AT {
             if let Some(font_name) = combo_font_name {
-                push_hud_capture(
-                    &mut hud_actors,
-                    &mut combo_actors,
-                    act!(text:
-                        font(font_name): settext(cached_int_u32(p.miss_combo)):
-                        align(0.5, 0.5): xy(combo_x, combo_y):
-                        zoom(0.75 * combo_zoom_mod): horizalign(center): shadowlength(1.0):
-                        diffuse(1.0, 0.0, 0.0, 1.0):
-                        z(90)
-                    ),
-                );
+                hud_actors.push(act!(text:
+                    font(font_name): settext(cached_int_u32(p.miss_combo)):
+                    align(0.5, 0.5): xy(combo_x, combo_y):
+                    zoom(0.75 * combo_zoom_mod): horizalign(center): shadowlength(1.0):
+                    diffuse(1.0, 0.0, 0.0, 1.0):
+                    z(90)
+                ));
             }
         } else if p.combo >= SHOW_COMBO_AT {
             let quint_active = zmod_combo_quint_active(state, player_idx, profile);
@@ -7556,20 +7542,20 @@ pub fn build_bundles(
                 }
             };
             if let Some(font_name) = combo_font_name {
-                push_hud_capture(
-                    &mut hud_actors,
-                    &mut combo_actors,
-                    act!(text:
-                        font(font_name): settext(cached_int_u32(p.combo)):
-                        align(0.5, 0.5): xy(combo_x, combo_y):
-                        zoom(0.75 * combo_zoom_mod): horizalign(center): shadowlength(1.0):
-                        diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
-                        z(90)
-                    ),
-                );
+                hud_actors.push(act!(text:
+                    font(font_name): settext(cached_int_u32(p.combo)):
+                    align(0.5, 0.5): xy(combo_x, combo_y):
+                    zoom(0.75 * combo_zoom_mod): horizalign(center): shadowlength(1.0):
+                    diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
+                    z(90)
+                ));
             }
         }
     }
+    let combo_actors = capture_requests
+        .combo
+        .then(|| share_hud_range(&mut hud_actors, combo_capture_start))
+        .flatten();
 
     let show_error_bar_colorful = error_bar_mask.contains(profile::ErrorBarMask::COLORFUL);
     let show_error_bar_monochrome = error_bar_mask.contains(profile::ErrorBarMask::MONOCHROME);
@@ -8260,6 +8246,7 @@ pub fn build_bundles(
         ));
     }
 
+    let judgment_capture_start = hud_actors.len();
     // Judgment Sprite (tap judgments)
     if !blind_active && let Some(render_info) = &p.last_judgment {
         if let Some(judgment_texture) = resolved_judgment_texture(profile) {
@@ -8286,25 +8273,17 @@ pub fn build_bundles(
                 let col_index = if columns > 1 { frame_offset } else { 0 };
                 let linear_index = (frame_row * columns + col_index) as u32;
                 let rot_deg = judgment_tilt_rotation_deg(profile, judgment);
-                push_hud_capture(
-                    &mut hud_actors,
-                    &mut judgment_actors,
-                    act!(sprite(judgment_texture):
-                        align(0.5, 0.5): xy(judgment_x, judgment_y):
-                        z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
-                    ),
-                );
+                hud_actors.push(act!(sprite(judgment_texture):
+                    align(0.5, 0.5): xy(judgment_x, judgment_y):
+                    z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
+                ));
                 if let Some(overlay_row) = overlay_row {
                     let overlay_index = (overlay_row * columns + col_index) as u32;
-                    push_hud_capture(
-                        &mut hud_actors,
-                        &mut judgment_actors,
-                        act!(sprite(judgment_texture):
-                            align(0.5, 0.5): xy(judgment_x, judgment_y):
-                            z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(overlay_index): zoom(zoom):
-                            diffuse(1.0, 1.0, 1.0, SPLIT_15_10MS_OVERLAY_ALPHA)
-                        ),
-                    );
+                    hud_actors.push(act!(sprite(judgment_texture):
+                        align(0.5, 0.5): xy(judgment_x, judgment_y):
+                        z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(overlay_index): zoom(zoom):
+                        diffuse(1.0, 1.0, 1.0, SPLIT_15_10MS_OVERLAY_ALPHA)
+                    ));
                 }
             }
         }
@@ -8349,20 +8328,20 @@ pub fn build_bundles(
                 .and_then(|ns| ns.column_xs.get(i))
                 .map(|&x| x as f32 * spacing_mult)
                 .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
-            push_hud_capture(
-                &mut hud_actors,
-                &mut judgment_actors,
-                act!(sprite(texture):
-                    align(0.5, 0.5):
-                    xy(judgment_x + column_offset, hold_judgment_y):
-                    z(195):
-                    setstate(frame_index):
-                    zoom(zoom):
-                    diffusealpha(1.0)
-                ),
-            );
+            hud_actors.push(act!(sprite(texture):
+                align(0.5, 0.5):
+                xy(judgment_x + column_offset, hold_judgment_y):
+                z(195):
+                setstate(frame_index):
+                zoom(zoom):
+                diffusealpha(1.0)
+            ));
         }
     }
+    let judgment_actors = capture_requests
+        .judgment
+        .then(|| share_hud_range(&mut hud_actors, judgment_capture_start))
+        .flatten();
 
     let (tilt, skew) = (perspective.tilt, perspective.skew);
     if !actors.is_empty() {
