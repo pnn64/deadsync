@@ -4503,6 +4503,97 @@ mod tests {
         assert!(render.cameras.capacity() >= 4);
     }
 
+    #[test]
+    fn flat_camera_scope_matches_nested_camera() {
+        let vertices: Arc<[MeshVertex]> = Arc::from([
+            MeshVertex {
+                pos: [0.0, 0.0],
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            MeshVertex {
+                pos: [12.0, 0.0],
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
+            MeshVertex {
+                pos: [0.0, 9.0],
+                color: [0.0, 0.0, 1.0, 1.0],
+            },
+        ]);
+        let mesh = Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [3.0, 4.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            vertices,
+            mode: MeshMode::Triangles,
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: 7,
+        };
+        let view_proj = Matrix4::from_cols_array(&[
+            1.0, 0.0, 0.0, 0.0, //
+            0.0, 2.0, 0.0, 0.0, //
+            0.0, 0.0, 3.0, 0.0, //
+            4.0, 5.0, 6.0, 1.0,
+        ]);
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let fonts = HashMap::new();
+        let nested = [Actor::Camera {
+            view_proj,
+            children: vec![mesh.clone()],
+        }];
+        let flat = [Actor::CameraPush { view_proj }, mesh, Actor::CameraPop];
+
+        let nested_render = build_screen(&nested, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+        let flat_render = build_screen(&flat, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
+
+        assert_eq!(nested_render.clear_color, flat_render.clear_color);
+        assert_eq!(nested_render.cameras.len(), flat_render.cameras.len());
+        for (nested_camera, flat_camera) in nested_render.cameras.iter().zip(&flat_render.cameras) {
+            assert_eq!(nested_camera.to_cols_array(), flat_camera.to_cols_array());
+        }
+        assert_eq!(nested_render.objects.len(), flat_render.objects.len());
+        let nested_obj = &nested_render.objects[0];
+        let flat_obj = &flat_render.objects[0];
+        assert_eq!(nested_obj.texture_handle, flat_obj.texture_handle);
+        assert_eq!(
+            nested_obj.transform.to_cols_array(),
+            flat_obj.transform.to_cols_array()
+        );
+        assert_eq!(nested_obj.blend, flat_obj.blend);
+        assert_eq!(nested_obj.z, flat_obj.z);
+        assert_eq!(nested_obj.order, flat_obj.order);
+        assert_eq!(nested_obj.camera, flat_obj.camera);
+
+        let ObjectType::Mesh {
+            tint: nested_tint,
+            vertices: nested_vertices,
+            mode: nested_mode,
+        } = &nested_obj.object_type
+        else {
+            panic!("expected nested mesh render object");
+        };
+        let ObjectType::Mesh {
+            tint: flat_tint,
+            vertices: flat_vertices,
+            mode: flat_mode,
+        } = &flat_obj.object_type
+        else {
+            panic!("expected flat mesh render object");
+        };
+        assert_eq!(nested_tint, flat_tint);
+        assert_eq!(nested_mode, flat_mode);
+        assert_eq!(nested_vertices.len(), flat_vertices.len());
+        for (nested_vertex, flat_vertex) in nested_vertices.iter().zip(flat_vertices.iter()) {
+            assert_eq!(nested_vertex.pos, flat_vertex.pos);
+            assert_eq!(nested_vertex.color, flat_vertex.color);
+        }
+    }
+
     fn test_font() -> Font {
         let texture_key = Arc::<str>::from("test_font_page");
         let glyph_a = test_glyph(&texture_key);

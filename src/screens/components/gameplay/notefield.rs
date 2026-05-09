@@ -974,8 +974,6 @@ pub struct ViewOverride {
 }
 
 pub struct BuiltNotefield {
-    pub actors: Vec<Actor>,
-    pub hud_actors: Vec<Actor>,
     pub layout_center_x: f32,
     pub field_actors: Vec<Arc<[Actor]>>,
     pub judgment_actors: Option<Vec<Arc<[Actor]>>>,
@@ -992,8 +990,6 @@ pub struct ProxyCaptureRequests {
 impl BuiltNotefield {
     fn empty(layout_center_x: f32) -> Self {
         Self {
-            actors: Vec::new(),
-            hud_actors: Vec::new(),
             layout_center_x,
             field_actors: Vec::new(),
             judgment_actors: None,
@@ -3602,7 +3598,11 @@ pub fn build_bundles(
     center_1player_notefield: bool,
     capture_requests: ProxyCaptureRequests,
     view: ViewOverride,
+    mut actors: &mut Vec<Actor>,
+    mut hud_actors: &mut Vec<Actor>,
 ) -> BuiltNotefield {
+    actors.clear();
+    hud_actors.clear();
     let hold_judgment_texture = resolved_hold_judgment_texture(profile);
 
     // --- Playfield Positioning (1:1 with Simply Love) ---
@@ -3665,8 +3665,8 @@ pub fn build_bundles(
         } else {
             0
         };
-    let mut actors = Vec::with_capacity(actor_cap);
-    let mut hud_actors: Vec<Actor> = Vec::with_capacity(hud_cap);
+    actors.reserve(actor_cap);
+    hud_actors.reserve(hud_cap);
     let p = &state.players[player_idx];
     let mut model_cache = state.notefield_model_cache[player_idx].borrow_mut();
 
@@ -8364,8 +8364,8 @@ pub fn build_bundles(
     }
 
     let field_actors = if capture_requests.note_field && !actors.is_empty() {
-        let children = Arc::<[Actor]>::from(actors);
-        actors = vec![Actor::SharedFrame {
+        let children = Arc::<[Actor]>::from(actors.drain(..).collect::<Vec<_>>());
+        actors.push(Actor::SharedFrame {
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Fill, SizeSpec::Fill],
@@ -8374,14 +8374,12 @@ pub fn build_bundles(
             z: 0,
             tint: [1.0; 4],
             blend: None,
-        }];
+        });
         vec![children]
     } else {
         Vec::new()
     };
     BuiltNotefield {
-        actors,
-        hud_actors,
         layout_center_x,
         field_actors,
         judgment_actors,

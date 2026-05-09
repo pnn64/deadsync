@@ -121,6 +121,8 @@ pub fn fixture() -> GameplayStatsBenchFixture {
         asset_manager.register_font(name, font);
     }
 
+    let mut notefield_actors = Vec::new();
+    let mut notefield_hud_actors = Vec::new();
     let playfield_center_x = notefield::build_bundles(
         &state,
         &bench_profile,
@@ -129,6 +131,8 @@ pub fn fixture() -> GameplayStatsBenchFixture {
         false,
         notefield::ProxyCaptureRequests::default(),
         notefield::ViewOverride::default(),
+        &mut notefield_actors,
+        &mut notefield_hud_actors,
     )
     .layout_center_x;
 

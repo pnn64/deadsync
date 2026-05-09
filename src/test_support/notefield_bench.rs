@@ -50,6 +50,8 @@ impl NotefieldBenchFixture {
                 cache.borrow_mut().clear();
             }
         }
+        let mut actors = Vec::new();
+        let mut hud_actors = Vec::new();
         notefield::build_bundles(
             &self.state,
             &self.profile,
@@ -58,8 +60,10 @@ impl NotefieldBenchFixture {
             false,
             notefield::ProxyCaptureRequests::default(),
             notefield::ViewOverride::default(),
-        )
-        .actors
+            &mut actors,
+            &mut hud_actors,
+        );
+        actors
     }
 }
 
