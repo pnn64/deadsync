@@ -58,8 +58,7 @@ fn show_for_group(state: &mut State, pack_group: Option<&str>) -> bool {
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
     clear_overlay_nav_hold(state);
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
+    clear_nav_hold(state);
     state.last_steps_nav_dir_p1 = None;
     state.last_steps_nav_time_p1 = None;
     state.last_steps_nav_dir_p2 = None;

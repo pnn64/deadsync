@@ -1021,7 +1021,7 @@ pub struct State {
     last_steps_nav_dir_p2: Option<PadDir>,
     last_steps_nav_time_p2: Option<Instant>,
     nav_key_held_direction: Option<NavDirection>,
-    nav_key_held_since: Option<Instant>,
+    nav_key_held_elapsed: Duration,
     overlay_nav_held_direction: Option<NavDirection>,
     overlay_nav_held_since: Option<Instant>,
     overlay_nav_last_scrolled_at: Option<Instant>,
@@ -3270,7 +3270,7 @@ pub fn init() -> State {
         last_steps_nav_dir_p2: None,
         last_steps_nav_time_p2: None,
         nav_key_held_direction: None,
-        nav_key_held_since: None,
+        nav_key_held_elapsed: Duration::ZERO,
         overlay_nav_held_direction: None,
         overlay_nav_held_since: None,
         overlay_nav_last_scrolled_at: None,
@@ -3480,7 +3480,7 @@ pub fn init_placeholder() -> State {
         last_steps_nav_dir_p2: None,
         last_steps_nav_time_p2: None,
         nav_key_held_direction: None,
-        nav_key_held_since: None,
+        nav_key_held_elapsed: Duration::ZERO,
         overlay_nav_held_direction: None,
         overlay_nav_held_since: None,
         overlay_nav_last_scrolled_at: None,
@@ -3661,6 +3661,42 @@ fn clear_menu_chord(state: &mut State) {
     state.menu_chord_right_pressed_at = None;
 }
 
+#[inline(always)]
+fn logic_dt_duration(dt: f32) -> Duration {
+    if dt.is_finite() && dt > 0.0 {
+        Duration::from_secs_f32(dt)
+    } else {
+        Duration::ZERO
+    }
+}
+
+#[inline(always)]
+fn clear_nav_hold(state: &mut State) {
+    state.nav_key_held_direction = None;
+    state.nav_key_held_elapsed = Duration::ZERO;
+}
+
+#[inline(always)]
+fn start_nav_hold(state: &mut State, dir: NavDirection) {
+    state.nav_key_held_direction = Some(dir);
+    state.nav_key_held_elapsed = Duration::ZERO;
+}
+
+#[inline(always)]
+fn nav_hold_started(state: &State) -> bool {
+    state.nav_key_held_elapsed >= NAV_INITIAL_HOLD_DELAY
+}
+
+#[inline(always)]
+fn advance_nav_hold(state: &mut State, dt: f32) -> bool {
+    if state.nav_key_held_direction.is_none() {
+        state.nav_key_held_elapsed = Duration::ZERO;
+        return false;
+    }
+    state.nav_key_held_elapsed += logic_dt_duration(dt);
+    nav_hold_started(state)
+}
+
 fn toggle_favorite_for_selected_song(state: &mut State, side: profile::PlayerSide) {
     if let Some(song) = selected_song_arc(state) {
         let target_chart_type = profile::get_session_play_style().chart_type();
@@ -3753,8 +3789,7 @@ fn show_select_music_menu(state: &mut State) {
     rebuild_select_music_menu(state);
     clear_menu_chord(state);
     clear_overlay_nav_hold(state);
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
+    clear_nav_hold(state);
     clear_preview(state);
     audio::play_sfx("assets/sounds/start.ogg");
 }
@@ -3764,8 +3799,7 @@ fn hide_select_music_menu(state: &mut State) {
     state.select_music_menu = select_music_menu::State::Hidden;
     clear_menu_chord(state);
     clear_overlay_nav_hold(state);
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
+    clear_nav_hold(state);
 }
 
 #[inline(always)]
@@ -3955,8 +3989,7 @@ fn show_test_input_overlay(state: &mut State) {
     state.profile_switch_overlay = None;
     clear_menu_chord(state);
     clear_overlay_nav_hold(state);
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
+    clear_nav_hold(state);
     state.test_input_overlay_visible = true;
     test_input::clear(&mut state.test_input_overlay);
 }
@@ -3976,8 +4009,7 @@ fn show_lobby_overlay(state: &mut State) {
     hide_test_input_overlay(state);
     clear_menu_chord(state);
     clear_overlay_nav_hold(state);
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
+    clear_nav_hold(state);
     state.lobby_overlay = lobby_overlay::show_overlay();
     crate::game::online::lobbies::search_lobbies();
     clear_preview(state);
@@ -3996,8 +4028,7 @@ fn start_song_search_prompt(state: &mut State) {
     hide_test_input_overlay(state);
     clear_menu_chord(state);
     clear_overlay_nav_hold(state);
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
+    clear_nav_hold(state);
     state.song_search = select_music_menu::begin_song_search_prompt();
 }
 
@@ -4017,8 +4048,7 @@ fn show_profile_switch_overlay(state: &mut State) {
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
     clear_overlay_nav_hold(state);
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
+    clear_nav_hold(state);
     state.last_steps_nav_dir_p1 = None;
     state.last_steps_nav_time_p1 = None;
     state.last_steps_nav_dir_p2 = None;
@@ -4132,8 +4162,7 @@ fn begin_reload_ui(state: &mut State) -> Option<mpsc::Sender<ReloadMsg>> {
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
     clear_overlay_nav_hold(state);
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
+    clear_nav_hold(state);
     state.last_steps_nav_dir_p1 = None;
     state.last_steps_nav_time_p1 = None;
     state.last_steps_nav_dir_p2 = None;
@@ -6067,8 +6096,7 @@ fn apply_remote_lobby_song_selection(
     state.prev_selected_index = state.selected_index;
     state.time_since_selection_change = 0.0;
     state.wheel_offset_from_selection = 0.0;
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
+    clear_nav_hold(state);
     state.last_steps_nav_dir_p1 = None;
     state.last_steps_nav_time_p1 = None;
     state.last_steps_nav_dir_p2 = None;
@@ -6412,8 +6440,7 @@ fn show_sync_overlay(state: &mut State) {
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
     clear_overlay_nav_hold(state);
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
+    clear_nav_hold(state);
     state.last_steps_nav_dir_p1 = None;
     state.last_steps_nav_time_p1 = None;
     state.last_steps_nav_dir_p2 = None;
@@ -7087,17 +7114,17 @@ pub fn handle_pad_dir(
                 if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
                     == (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
                 {
-                    // ITGmania parity: if both directions are held, neutralize wheel movement.
-                    state.nav_key_held_direction = None;
-                    state.nav_key_held_since = None;
+                    // ITGmania: the newly pressed opposite direction steps once,
+                    // then automatic hold scrolling stops while both are down.
+                    music_wheel_change(state, 1);
+                    clear_nav_hold(state);
                     return ScreenAction::None;
                 }
                 if state.nav_key_held_direction == Some(NavDirection::Right) {
                     return ScreenAction::None;
                 }
                 music_wheel_change(state, 1);
-                state.nav_key_held_direction = Some(NavDirection::Right);
-                state.nav_key_held_since = Some(timestamp);
+                start_nav_hold(state, NavDirection::Right);
             }
             PadDir::Left => {
                 state.menu_chord_mask |= MENU_CHORD_LEFT;
@@ -7108,17 +7135,17 @@ pub fn handle_pad_dir(
                 if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
                     == (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
                 {
-                    // ITGmania parity: if both directions are held, neutralize wheel movement.
-                    state.nav_key_held_direction = None;
-                    state.nav_key_held_since = None;
+                    // ITGmania: the newly pressed opposite direction steps once,
+                    // then automatic hold scrolling stops while both are down.
+                    music_wheel_change(state, -1);
+                    clear_nav_hold(state);
                     return ScreenAction::None;
                 }
                 if state.nav_key_held_direction == Some(NavDirection::Left) {
                     return ScreenAction::None;
                 }
                 music_wheel_change(state, -1);
-                state.nav_key_held_direction = Some(NavDirection::Left);
-                state.nav_key_held_since = Some(timestamp);
+                start_nav_hold(state, NavDirection::Left);
             }
             PadDir::Up | PadDir::Down => {
                 if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
@@ -7214,44 +7241,32 @@ pub fn handle_pad_dir(
                 state.menu_chord_mask &= !MENU_CHORD_LEFT;
                 state.menu_chord_left_pressed_at = None;
                 if state.nav_key_held_direction == Some(NavDirection::Left) {
-                    let now = timestamp;
-                    let moving_started = state
-                        .nav_key_held_since
-                        .is_some_and(|t| now.duration_since(t) >= NAV_INITIAL_HOLD_DELAY);
-                    if moving_started
+                    if nav_hold_started(state)
                         && state.wheel_offset_from_selection.abs()
                             < MUSIC_WHEEL_STOP_SPINDOWN_THRESHOLD
                     {
                         music_wheel_change(state, -1);
                     }
-                    state.nav_key_held_direction = None;
-                    state.nav_key_held_since = None;
+                    clear_nav_hold(state);
                 } else if state.menu_chord_mask & MENU_CHORD_RIGHT != 0 {
                     // After releasing one side of a held-opposite pair, resume remaining hold.
-                    state.nav_key_held_direction = Some(NavDirection::Right);
-                    state.nav_key_held_since = Some(timestamp);
+                    start_nav_hold(state, NavDirection::Right);
                 }
             }
             PadDir::Right => {
                 state.menu_chord_mask &= !MENU_CHORD_RIGHT;
                 state.menu_chord_right_pressed_at = None;
                 if state.nav_key_held_direction == Some(NavDirection::Right) {
-                    let now = timestamp;
-                    let moving_started = state
-                        .nav_key_held_since
-                        .is_some_and(|t| now.duration_since(t) >= NAV_INITIAL_HOLD_DELAY);
-                    if moving_started
+                    if nav_hold_started(state)
                         && state.wheel_offset_from_selection.abs()
                             < MUSIC_WHEEL_STOP_SPINDOWN_THRESHOLD
                     {
                         music_wheel_change(state, 1);
                     }
-                    state.nav_key_held_direction = None;
-                    state.nav_key_held_since = None;
+                    clear_nav_hold(state);
                 } else if state.menu_chord_mask & MENU_CHORD_LEFT != 0 {
                     // After releasing one side of a held-opposite pair, resume remaining hold.
-                    state.nav_key_held_direction = Some(NavDirection::Left);
-                    state.nav_key_held_since = Some(timestamp);
+                    start_nav_hold(state, NavDirection::Left);
                 }
             }
         }
@@ -7367,8 +7382,7 @@ fn handle_pad_dir_p2(
 }
 
 pub fn handle_confirm(state: &mut State) -> ScreenAction {
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
+    clear_nav_hold(state);
     if state.out_prompt != OutPromptState::None {
         return ScreenAction::None;
     }
@@ -7827,8 +7841,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         clear_p1_ud_chord(state);
         clear_p2_ud_chord(state);
         clear_overlay_nav_hold(state);
-        state.nav_key_held_direction = None;
-        state.nav_key_held_since = None;
+        clear_nav_hold(state);
         state.last_steps_nav_dir_p1 = None;
         state.last_steps_nav_time_p1 = None;
         state.last_steps_nav_dir_p2 = None;
@@ -7944,10 +7957,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         update_overlay_nav_hold(state);
     }
 
-    let now = Instant::now();
-    let wheel_moving = state
-        .nav_key_held_since
-        .is_some_and(|t| now.duration_since(t) >= NAV_INITIAL_HOLD_DELAY);
+    let wheel_moving = advance_nav_hold(state, dt);
     if wheel_moving {
         match state.nav_key_held_direction {
             Some(dir) => music_wheel_update_hold_scroll(state, dt, dir),
@@ -9894,8 +9904,7 @@ fn begin_exit_prompt(state: &mut State) {
         switch_elapsed: 0.0,
     };
     // Match SL's `MusicWheel:Move(0)` intent: stop any ongoing hold-scroll.
-    state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
+    clear_nav_hold(state);
 }
 
 #[inline(always)]
@@ -10031,13 +10040,13 @@ mod tests {
         sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
-    use crate::engine::input::RawKeyboardEvent;
+    use crate::engine::input::{PadDir, RawKeyboardEvent};
     use crate::game::profile;
     use crate::game::song::SongData;
     use crate::screens::ScreenAction;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
     use winit::keyboard::KeyCode;
 
     fn raw_key(code: KeyCode, pressed: bool, repeat: bool) -> RawKeyboardEvent {
@@ -10232,6 +10241,51 @@ mod tests {
         state.song_search = super::select_music_menu::SongSearchState::Hidden;
         state.downloads_overlay = super::select_music_menu::show_downloads_overlay();
         assert!(delayed_selection_updates_blocked(&state));
+    }
+
+    #[test]
+    fn nav_hold_delay_advances_with_logic_dt() {
+        let mut state = init_placeholder();
+        super::start_nav_hold(&mut state, super::NavDirection::Right);
+
+        assert!(!super::advance_nav_hold(&mut state, 0.249));
+        assert!(super::advance_nav_hold(&mut state, 0.002));
+    }
+
+    #[test]
+    fn opposite_direction_press_steps_once_then_stops_hold() {
+        let mut state = init_placeholder();
+        state.entries = test_entries();
+        state.selected_index = 2;
+        state.prev_selected_index = 2;
+
+        let now = Instant::now();
+        super::handle_pad_dir(&mut state, PadDir::Right, true, now);
+        assert_eq!(state.selected_index, 3);
+        assert_eq!(
+            state.nav_key_held_direction,
+            Some(super::NavDirection::Right)
+        );
+
+        super::handle_pad_dir(
+            &mut state,
+            PadDir::Left,
+            true,
+            now + Duration::from_millis(60),
+        );
+        assert_eq!(state.selected_index, 2);
+        assert_eq!(state.nav_key_held_direction, None);
+
+        super::handle_pad_dir(
+            &mut state,
+            PadDir::Right,
+            false,
+            now + Duration::from_millis(70),
+        );
+        assert_eq!(
+            state.nav_key_held_direction,
+            Some(super::NavDirection::Left)
+        );
     }
 
     #[test]
