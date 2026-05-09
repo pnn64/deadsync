@@ -2996,7 +2996,7 @@ fn resolve_sprite_size_like_sm(
     texture_name: &str,
     texture_key_ptr: Option<*const str>,
     texture_key_stable: bool,
-    uv_rect: Option<[f32; 4]>,
+    _uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
     grid: Option<(u32, u32)>,
     scale: [f32; 2],
@@ -3010,7 +3010,6 @@ fn resolve_sprite_size_like_sm(
         texture_name: &str,
         texture_key_ptr: Option<*const str>,
         texture_key_stable: bool,
-        _uv: Option<[f32; 4]>,
         cell: Option<(u32, u32)>,
         grid: Option<(u32, u32)>,
         texture_cache: &mut TextureLookupCache,
@@ -3040,26 +3039,31 @@ fn resolve_sprite_size_like_sm(
         (tw, th)
     }
 
+    let (w, h) = match (size[0], size[1]) {
+        (Px(w), Px(h)) if w == 0.0 && h == 0.0 => (w, h),
+        (Px(w), Px(h)) if w > 0.0 && h == 0.0 => (w, h),
+        (Px(w), Px(h)) if w == 0.0 && h > 0.0 => (w, h),
+        _ => return size,
+    };
+
     let (nw, nh) = native_dims(
         is_solid,
         texture_name,
         texture_key_ptr,
         texture_key_stable,
-        uv_rect,
         cell,
         grid,
         texture_cache,
     );
     let aspect = if nw > 0.0 && nh > 0.0 { nh / nw } else { 1.0 };
 
-    match (size[0], size[1]) {
-        (Px(w), Px(h)) if w == 0.0 && h == 0.0 => [Px(nw * scale[0]), Px(nh * scale[1])],
-        (Px(w), Px(h)) if w > 0.0 && h == 0.0 => [Px(w), Px(w * aspect)],
-        (Px(w), Px(h)) if w == 0.0 && h > 0.0 => {
-            let inv_aspect = if aspect > 0.0 { 1.0 / aspect } else { 1.0 };
-            [Px(h * inv_aspect), Px(h)]
-        }
-        _ => size,
+    if w == 0.0 && h == 0.0 {
+        [Px(nw * scale[0]), Px(nh * scale[1])]
+    } else if h == 0.0 {
+        [Px(w), Px(w * aspect)]
+    } else {
+        let inv_aspect = if aspect > 0.0 { 1.0 / aspect } else { 1.0 };
+        [Px(h * inv_aspect), Px(h)]
     }
 }
 
