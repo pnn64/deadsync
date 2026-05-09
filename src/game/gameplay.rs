@@ -912,10 +912,10 @@ const fn row_final_grade_hides_note(grade: JudgeGrade) -> bool {
 }
 
 #[inline(always)]
-fn completed_row_flash_note_indices_and_grade(
+fn completed_row_flash_note_indices_and_judgment(
     notes: &[Note],
     row_entry: &RowEntry,
-) -> Option<([usize; MAX_COLS], usize, JudgeGrade)> {
+) -> Option<([usize; MAX_COLS], usize, Judgment)> {
     let Some(final_judgment) = completed_row_final_judgment(notes, row_entry) else {
         return None;
     };
@@ -927,7 +927,7 @@ fn completed_row_flash_note_indices_and_grade(
         out[len] = note_index;
         len += 1;
     }
-    Some((out, len, final_judgment.grade))
+    Some((out, len, *final_judgment))
 }
 
 #[inline(always)]
@@ -966,13 +966,13 @@ fn trigger_note_receptor_feedback(state: &mut State, player: usize, column: usiz
 
 #[inline(always)]
 fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_index: usize) {
-    let Some((flash_note_indices, flash_count, flash_grade)) = ({
+    let Some((flash_note_indices, flash_count, flash_judgment)) = ({
         let Some(row_entry) =
             row_entry_for_cached_row(&state.row_entries, &state.row_map_cache[player], row_index)
         else {
             return;
         };
-        completed_row_flash_note_indices_and_grade(&state.notes, row_entry)
+        completed_row_flash_note_indices_and_judgment(&state.notes, row_entry)
     }) else {
         return;
     };
@@ -984,7 +984,7 @@ fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_in
             trigger_receptor_step_pulse(state, column);
             continue;
         }
-        trigger_tap_explosion(state, column, flash_grade);
+        trigger_tap_judgment_explosion(state, player, column, &flash_judgment);
     }
 }
 
@@ -2837,6 +2837,7 @@ pub struct HoldJudgmentRenderInfo {
 #[derive(Copy, Clone, Debug)]
 pub struct ActiveTapExplosion {
     pub window: &'static str,
+    pub bright: bool,
     pub elapsed: f32,
     pub start_beat: f32,
 }
@@ -6395,20 +6396,42 @@ fn log_timing_hit_detail(
     );
 }
 
+fn tap_judgment_uses_bright_explosion(state: &State, player: usize, judgment: &Judgment) -> bool {
+    state
+        .player_profiles
+        .get(player)
+        .is_some_and(|profile| profile.show_fa_plus_window)
+        && judgment.grade == JudgeGrade::Fantastic
+        && judgment.window == Some(TimingWindow::W1)
+}
+
+fn trigger_tap_judgment_explosion(
+    state: &mut State,
+    player: usize,
+    column: usize,
+    judgment: &Judgment,
+) {
+    let Some(window_key) = grade_to_window(judgment.grade) else {
+        return;
+    };
+    let bright = tap_judgment_uses_bright_explosion(state, player, judgment);
+    spawn_tap_explosion(state, column, window_key, bright);
+}
+
 fn trigger_tap_explosion(state: &mut State, column: usize, grade: JudgeGrade) {
     let Some(window_key) = grade_to_window(grade) else {
         return;
     };
-    spawn_tap_explosion(state, column, window_key);
+    spawn_tap_explosion(state, column, window_key, false);
 }
 
 pub(super) fn trigger_hold_explosion(state: &mut State, column: usize) {
     // Hold success uses the noteskin's `HeldCommand` (matching ITGMania), which
     // is plumbed through the parser as the "Held" pseudo-window.
-    spawn_tap_explosion(state, column, "Held");
+    spawn_tap_explosion(state, column, "Held", false);
 }
 
-fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static str) {
+fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static str, bright: bool) {
     let player = player_for_col(state, column);
     let local_col = if state.cols_per_player == 0 {
         column
@@ -6416,7 +6439,10 @@ fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static st
         column % state.cols_per_player
     };
     let spawn_window = tap_explosion_noteskin_for_player(state, player).and_then(|ns| {
-        if ns.tap_explosion_for_col(local_col, window_key).is_some() {
+        if ns
+            .tap_explosion_for_col_with_bright(local_col, window_key, bright)
+            .is_some()
+        {
             Some(window_key)
         } else {
             None
@@ -6425,6 +6451,7 @@ fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static st
     if let Some(window) = spawn_window {
         state.tap_explosions[column] = Some(ActiveTapExplosion {
             window,
+            bright,
             elapsed: 0.0,
             start_beat: state.current_beat,
         });
@@ -8380,7 +8407,7 @@ mod tests {
         build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
         build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
         collect_edge_judge_indices, completed_row_final_judgment,
-        completed_row_flash_note_indices_and_grade, count_rescore_tracks_on_row,
+        completed_row_flash_note_indices_and_judgment, count_rescore_tracks_on_row,
         crossed_mine_bounds_ns, crossed_mine_held_start_time,
         effective_appearance_effects_for_player, effective_player_global_offset_seconds,
         enforce_max_simultaneous_notes, finalize_completed_mines, finalize_row_judgment,
@@ -10040,6 +10067,69 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn white_fantastic_row_uses_bright_tap_explosion() {
+        let mut profile = profile::Profile::default();
+        profile.noteskin = profile::NoteSkin::new(profile::NoteSkin::CEL_NAME);
+        profile.show_fa_plus_window = true;
+        let mut state = regression_state([profile, profile::Profile::default()]);
+        let row_index = 48usize;
+        let column = 1usize;
+        let mut note = note_with_judgment(
+            column,
+            row_index,
+            NoteType::Tap,
+            JudgeGrade::Fantastic,
+            18.0,
+        );
+        note.result.as_mut().unwrap().window = Some(TimingWindow::W1);
+        state.notes = vec![note];
+        state.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0)];
+        state.row_entries = vec![test_row_entry_with_times(
+            &state.notes,
+            &state.note_time_cache_ns,
+            row_index,
+            vec![0],
+        )];
+        state.row_map_cache = std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
+        state.row_map_cache[0][row_index] = 0;
+
+        trigger_completed_row_tap_explosions(&mut state, 0, row_index);
+
+        let active = state.tap_explosions[column].expect("white Fantastic should flash");
+        assert_eq!(active.window, "W1");
+        assert!(active.bright);
+    }
+
+    #[test]
+    fn blue_fantastic_row_uses_dim_tap_explosion() {
+        let mut profile = profile::Profile::default();
+        profile.noteskin = profile::NoteSkin::new(profile::NoteSkin::CEL_NAME);
+        profile.show_fa_plus_window = true;
+        let mut state = regression_state([profile, profile::Profile::default()]);
+        let row_index = 48usize;
+        let column = 1usize;
+        let mut note =
+            note_with_judgment(column, row_index, NoteType::Tap, JudgeGrade::Fantastic, 4.0);
+        note.result.as_mut().unwrap().window = Some(TimingWindow::W0);
+        state.notes = vec![note];
+        state.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0)];
+        state.row_entries = vec![test_row_entry_with_times(
+            &state.notes,
+            &state.note_time_cache_ns,
+            row_index,
+            vec![0],
+        )];
+        state.row_map_cache = std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
+        state.row_map_cache[0][row_index] = 0;
+
+        trigger_completed_row_tap_explosions(&mut state, 0, row_index);
+
+        let active = state.tap_explosions[column].expect("blue Fantastic should flash");
+        assert_eq!(active.window, "W1");
+        assert!(!active.bright);
+    }
+
+    #[test]
     fn synthetic_receptor_step_survives_until_lift() {
         let mut state =
             regression_state([profile::Profile::default(), profile::Profile::default()]);
@@ -10072,7 +10162,7 @@ return Def.ActorFrame{}
         ];
         let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        assert!(completed_row_flash_note_indices_and_grade(&notes, &row_entry).is_none());
+        assert!(completed_row_flash_note_indices_and_judgment(&notes, &row_entry).is_none());
     }
 
     #[test]
@@ -10084,11 +10174,11 @@ return Def.ActorFrame{}
         ];
         let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        let (hide_indices, hide_count, final_grade) =
-            completed_row_flash_note_indices_and_grade(&notes, &row_entry)
+        let (hide_indices, hide_count, final_judgment) =
+            completed_row_flash_note_indices_and_judgment(&notes, &row_entry)
                 .expect("completed jump should produce a row-final grade");
 
-        assert!(row_final_grade_hides_note(final_grade));
+        assert!(row_final_grade_hides_note(final_judgment.grade));
         assert_eq!(hide_count, 2);
         assert_eq!(hide_indices[0], 0);
         assert_eq!(hide_indices[1], 1);
@@ -10103,9 +10193,10 @@ return Def.ActorFrame{}
         ];
         let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        let (_, _, final_grade) = completed_row_flash_note_indices_and_grade(&notes, &row_entry)
-            .expect("completed jump should produce a row-final grade");
-        assert!(!row_final_grade_hides_note(final_grade));
+        let (_, _, final_judgment) =
+            completed_row_flash_note_indices_and_judgment(&notes, &row_entry)
+                .expect("completed jump should produce a row-final grade");
+        assert!(!row_final_grade_hides_note(final_judgment.grade));
     }
 
     #[test]
@@ -10117,16 +10208,16 @@ return Def.ActorFrame{}
         ];
         let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        let (flash_indices, flash_count, flash_grade) =
-            completed_row_flash_note_indices_and_grade(&notes, &row_entry)
+        let (flash_indices, flash_count, flash_judgment) =
+            completed_row_flash_note_indices_and_judgment(&notes, &row_entry)
                 .expect("completed jump should flash every lane with the final row grade");
 
-        assert_eq!(flash_grade, JudgeGrade::Great);
+        assert_eq!(flash_judgment.grade, JudgeGrade::Great);
         assert_eq!(flash_count, 2);
         assert_eq!(flash_indices[0], 0);
         assert_eq!(flash_indices[1], 1);
 
-        assert!(row_final_grade_hides_note(flash_grade));
+        assert!(row_final_grade_hides_note(flash_judgment.grade));
     }
 
     #[test]

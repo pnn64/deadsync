@@ -4712,7 +4712,11 @@ pub fn build_bundles(
             }
             if let Some(active) = active_opt.as_ref()
                 && let Some(tap_explosion_ns) = tap_explosion_ns
-                && let Some(explosion) = tap_explosion_ns.tap_explosion_for_col(i, active.window)
+                && let Some(explosion) = tap_explosion_ns.tap_explosion_for_col_with_bright(
+                    i,
+                    active.window,
+                    active.bright,
+                )
             {
                 let receptor_y_lane = column_receptor_ys[i];
                 let receptor_center = receptor_row_center(

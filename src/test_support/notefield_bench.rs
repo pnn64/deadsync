@@ -181,6 +181,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
 
     state.tap_explosions[0] = Some(ActiveTapExplosion {
         window: "W1",
+        bright: false,
         elapsed: 0.08,
         start_beat: beat,
     });

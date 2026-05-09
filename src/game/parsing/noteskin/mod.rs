@@ -1317,10 +1317,31 @@ pub struct Noteskin {
 impl Noteskin {
     #[inline(always)]
     pub fn tap_explosion_for_col(&self, col: usize, window: &str) -> Option<&TapExplosion> {
+        self.tap_explosion_for_col_with_bright(col, window, false)
+    }
+
+    #[inline(always)]
+    pub fn tap_explosion_for_col_with_bright(
+        &self,
+        col: usize,
+        window: &str,
+        bright: bool,
+    ) -> Option<&TapExplosion> {
+        if bright
+            && let Some(key) = itg_bright_tap_explosion_key(window)
+            && let Some(explosion) = self.tap_explosion_for_col_key(col, key)
+        {
+            return Some(explosion);
+        }
+        self.tap_explosion_for_col_key(col, window)
+    }
+
+    #[inline(always)]
+    fn tap_explosion_for_col_key(&self, col: usize, key: &str) -> Option<&TapExplosion> {
         self.tap_explosions_by_col
             .get(col)
-            .and_then(|by_window| by_window.get(window))
-            .or_else(|| self.tap_explosions.get(window))
+            .and_then(|by_window| by_window.get(key))
+            .or_else(|| self.tap_explosions.get(key))
     }
 
     #[inline(always)]
@@ -3167,47 +3188,52 @@ fn itg_tap_explosion_map_compiled(
     let mut tap_explosions = HashMap::new();
     for window in ["W1", "W2", "W3", "W4", "W5", "Held"] {
         let key = format!("{}command", window.to_ascii_lowercase());
-        let sources =
-            itg_tap_explosion_sources_for_window(&dim_sprites, &bright_sprites, window, &key);
-        if sources.is_empty() {
-            continue;
-        }
-        let metric_key = format!("{window}Command");
-        let metric_command = data
-            .metrics
-            .get("GhostArrowDim", &metric_key)
-            .or_else(|| data.metrics.get("GhostArrowBright", &metric_key))
-            .map(str::to_string);
-        let mut layers = Vec::with_capacity(sources.len());
-        for source in sources {
-            let command = source
-                .commands
-                .get(&key)
-                .cloned()
-                .or_else(|| metric_command.clone());
-            if window == "Held" && command.as_deref().map_or(true, |c| c.trim().is_empty()) {
+        for mode in [ItgTapExplosionMode::Dim, ItgTapExplosionMode::Bright] {
+            if mode == ItgTapExplosionMode::Bright && bright_sprites.is_empty() {
                 continue;
             }
-            let Some(command) = command.filter(|cmd| !cmd.trim().is_empty()) else {
+            let sources = itg_tap_explosion_sources_for_window(
+                &dim_sprites,
+                &bright_sprites,
+                window,
+                &key,
+                mode,
+            );
+            if sources.is_empty() {
                 continue;
-            };
-            let Some(command_with_init) = itg_tap_explosion_command_with_init(source, &command)
-            else {
-                continue;
-            };
-            layers.push(TapExplosionLayer {
-                slot: source.slot.clone(),
-                animation: parse_explosion_animation(&command_with_init),
-            });
-        }
-        if let Some(explosion) = TapExplosion::from_layers(layers) {
-            tap_explosions.insert(window.to_string(), explosion);
+            }
+            let metric_key = format!("{window}Command");
+            let mut layers = Vec::with_capacity(sources.len());
+            for source in sources {
+                let command =
+                    source.commands.get(&key).cloned().or_else(|| {
+                        itg_tap_explosion_metric_command(data, source.mode, &metric_key)
+                    });
+                if window == "Held" && command.as_deref().map_or(true, |c| c.trim().is_empty()) {
+                    continue;
+                }
+                let Some(command) = command.filter(|cmd| !cmd.trim().is_empty()) else {
+                    continue;
+                };
+                let Some(command_with_init) =
+                    itg_tap_explosion_command_with_init(source, mode, &command)
+                else {
+                    continue;
+                };
+                layers.push(TapExplosionLayer {
+                    slot: source.slot.clone(),
+                    animation: parse_explosion_animation(&command_with_init),
+                });
+            }
+            if let Some(explosion) = TapExplosion::from_layers(layers) {
+                tap_explosions.insert(itg_tap_explosion_key(window, mode).to_string(), explosion);
+            }
         }
     }
     tap_explosions
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum ItgTapExplosionMode {
     Dim,
     Bright,
@@ -3237,6 +3263,18 @@ impl ItgTapExplosionSource {
         itg_tap_explosion_element_window(&self.element)
             .is_some_and(|value| value.eq_ignore_ascii_case(window))
     }
+
+    fn applies_to_window(&self, window: &str, command_key: &str) -> bool {
+        self.commands.contains_key(command_key)
+            || self.matches_window(window)
+            || self.is_generic_tap_explosion()
+    }
+
+    fn is_generic_tap_explosion(&self) -> bool {
+        let element = self.element.trim().to_ascii_lowercase();
+        (element == "tap explosion dim" || element == "tap explosion bright")
+            && itg_tap_explosion_element_window(&self.element).is_none()
+    }
 }
 
 fn itg_tap_explosion_sources_for_window<'a>(
@@ -3244,28 +3282,48 @@ fn itg_tap_explosion_sources_for_window<'a>(
     bright_sprites: &'a [ItgTapExplosionSource],
     window: &str,
     command_key: &str,
+    mode: ItgTapExplosionMode,
 ) -> Vec<&'a ItgTapExplosionSource> {
-    let mut out = dim_sprites
-        .iter()
-        .filter(|sprite| sprite.commands.contains_key(command_key) || sprite.matches_window(window))
-        .collect::<Vec<_>>();
-    if out.is_empty() {
-        out.extend(bright_sprites.iter().filter(|sprite| {
-            sprite.commands.contains_key(command_key) || sprite.matches_window(window)
-        }));
+    let mut out = Vec::new();
+    let (preferred, fallback) = match mode {
+        ItgTapExplosionMode::Dim => (dim_sprites, bright_sprites),
+        ItgTapExplosionMode::Bright => (bright_sprites, dim_sprites),
+    };
+    out.extend(
+        preferred
+            .iter()
+            .filter(|sprite| sprite.applies_to_window(window, command_key)),
+    );
+    let has_preferred = !out.is_empty();
+    if mode == ItgTapExplosionMode::Bright && !has_preferred {
+        return out;
+    }
+    if !has_preferred {
+        out.extend(
+            fallback
+                .iter()
+                .filter(|sprite| sprite.applies_to_window(window, command_key)),
+        );
     }
     if out.is_empty() {
-        if let Some(first) = dim_sprites.first() {
+        if let Some(first) = preferred.first() {
             out.push(first);
-        } else if let Some(first) = bright_sprites.first() {
+        } else if let Some(first) = fallback.first() {
             out.push(first);
         }
+    } else if has_preferred {
+        out.extend(
+            fallback
+                .iter()
+                .filter(|sprite| sprite.applies_to_window(window, command_key)),
+        );
     }
     out
 }
 
 fn itg_tap_explosion_command_with_init(
     source: &ItgTapExplosionSource,
+    mode: ItgTapExplosionMode,
     command: &str,
 ) -> Option<String> {
     let mut sequence = Vec::with_capacity(4);
@@ -3282,7 +3340,7 @@ fn itg_tap_explosion_command_with_init(
     push_command(
         source
             .commands
-            .get(itg_tap_explosion_mode_command_key(source.mode)),
+            .get(itg_tap_explosion_mode_command_key(mode)),
     );
     sequence.push(command.trim().to_string());
     (!sequence.is_empty()).then(|| sequence.join(";"))
@@ -3303,6 +3361,40 @@ fn itg_tap_explosion_mode_command_key(mode: ItgTapExplosionMode) -> &'static str
     match mode {
         ItgTapExplosionMode::Dim => "dimcommand",
         ItgTapExplosionMode::Bright => "brightcommand",
+    }
+}
+
+fn itg_tap_explosion_metric_command(
+    data: &noteskin_itg::NoteskinData,
+    mode: ItgTapExplosionMode,
+    metric_key: &str,
+) -> Option<String> {
+    let section = match mode {
+        ItgTapExplosionMode::Dim => "GhostArrowDim",
+        ItgTapExplosionMode::Bright => "GhostArrowBright",
+    };
+    data.metrics.get(section, metric_key).map(str::to_string)
+}
+
+fn itg_tap_explosion_key(window: &str, mode: ItgTapExplosionMode) -> &str {
+    if mode == ItgTapExplosionMode::Bright
+        && let Some(key) = itg_bright_tap_explosion_key(window)
+    {
+        key
+    } else {
+        window
+    }
+}
+
+fn itg_bright_tap_explosion_key(window: &str) -> Option<&'static str> {
+    match window {
+        "W1" => Some("W1Bright"),
+        "W2" => Some("W2Bright"),
+        "W3" => Some("W3Bright"),
+        "W4" => Some("W4Bright"),
+        "W5" => Some("W5Bright"),
+        "Held" => Some("HeldBright"),
+        _ => None,
     }
 }
 
@@ -8945,7 +9037,7 @@ return skin
     }
 
     #[test]
-    fn cel_w1_tap_explosion_uses_visible_dim_path() {
+    fn cel_w1_tap_explosion_resolves_dim_and_bright_paths() {
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -8966,6 +9058,29 @@ return skin
         assert!(
             !w1.animation.blend_add,
             "cel W1 tap explosion should render with normal blend like ITG GhostArrow sprites"
+        );
+        assert!(
+            w1.slot
+                .texture_key()
+                .to_ascii_lowercase()
+                .contains("tap explosion dim w1"),
+            "cel dim W1 tap explosion should use the dim W1 actor first"
+        );
+
+        let w1_bright = ns
+            .tap_explosion_for_col_with_bright(0, "W1", true)
+            .expect("cel should define bright W1 tap explosion");
+        assert!(
+            w1_bright
+                .slot
+                .texture_key()
+                .to_ascii_lowercase()
+                .contains("tap explosion bright w1"),
+            "cel bright W1 tap explosion should use the bright W1 actor first"
+        );
+        assert!(
+            w1_bright.animation.initial.color[3] > 0.9,
+            "cel bright W1 tap explosion should start from the bright W1 alpha path"
         );
 
         let mine = ns
