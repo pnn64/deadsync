@@ -5,7 +5,6 @@ use crate::engine::input::{
 use crate::game::parsing::noteskin::{self, Noteskin};
 use crate::game::profile;
 use log::{debug, warn};
-use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Instant;
 
@@ -596,17 +595,8 @@ pub(super) fn process_input_edges(
         return;
     }
 
-    let mut pending = VecDeque::new();
-    if trace_enabled {
-        let started = Instant::now();
-        std::mem::swap(&mut pending, &mut state.pending_edges);
-        add_elapsed_us(&mut phase_timings.input_queue_us, started);
-    } else {
-        std::mem::swap(&mut pending, &mut state.pending_edges);
-    }
-
     let input_log = gameplay_input_log_enabled();
-    while let Some(mut edge) = pending.pop_front() {
+    while let Some(mut edge) = state.pending_edges.pop_front() {
         let lane_idx = edge.lane.index();
         if lane_idx >= state.num_cols {
             if input_log {
@@ -637,7 +627,7 @@ pub(super) fn process_input_edges(
                     edge.input_slot,
                     edge.pressed,
                     edge.captured_host_nanos,
-                    pending.len() + state.pending_edges.len(),
+                    state.pending_edges.len(),
                 );
             }
             continue;
@@ -702,7 +692,7 @@ pub(super) fn process_input_edges(
                 capture_to_queue_us,
                 queue_to_process_us,
                 capture_to_process_us,
-                pending.len() + state.pending_edges.len(),
+                state.pending_edges.len(),
             );
         }
         if edge_judges_tap {
@@ -744,7 +734,7 @@ pub(super) fn process_input_edges(
                     queue_to_process_us,
                     capture_to_queue_us,
                     capture_to_process_us,
-                    pending.len() + state.pending_edges.len() + 1,
+                    state.pending_edges.len() + 1,
                     current_music_time_s(state),
                     song_time_ns_to_seconds(edge.event_music_time_ns),
                 );
@@ -820,23 +810,6 @@ pub(super) fn process_input_edges(
                 audio::play_preloaded_assist_tick(ASSIST_TICK_SFX_PATH);
             }
         }
-    }
-
-    if !state.pending_edges.is_empty() {
-        if trace_enabled {
-            let started = Instant::now();
-            pending.append(&mut state.pending_edges);
-            add_elapsed_us(&mut phase_timings.input_queue_us, started);
-        } else {
-            pending.append(&mut state.pending_edges);
-        }
-    }
-    if trace_enabled {
-        let started = Instant::now();
-        state.pending_edges = pending;
-        add_elapsed_us(&mut phase_timings.input_queue_us, started);
-    } else {
-        state.pending_edges = pending;
     }
 }
 
