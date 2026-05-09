@@ -402,6 +402,10 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicChartInfoPeakNps")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.select_music_chart_info_peak_nps, |v| v != 0);
+    cfg.select_music_chart_info_effective_bpm = conf
+        .get("Options", "SelectMusicChartInfoEffectiveBpm")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.select_music_chart_info_effective_bpm, |v| v != 0);
     cfg.select_music_chart_info_matrix_rating = conf
         .get("Options", "SelectMusicChartInfoMatrixRating")
         .and_then(|v| v.parse::<u8>().ok())

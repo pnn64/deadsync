@@ -278,6 +278,11 @@ fn push_saved_options(
     );
     push_bool(
         content,
+        "SelectMusicChartInfoEffectiveBpm",
+        cfg.select_music_chart_info_effective_bpm,
+    );
+    push_bool(
+        content,
         "SelectMusicChartInfoMatrixRating",
         cfg.select_music_chart_info_matrix_rating,
     );

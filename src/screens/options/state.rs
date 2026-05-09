@@ -878,6 +878,7 @@ pub fn init() -> State {
         SubRowId::ChartInfo,
         select_music_chart_info_cursor_index(
             cfg.select_music_chart_info_peak_nps,
+            cfg.select_music_chart_info_effective_bpm,
             cfg.select_music_chart_info_matrix_rating,
         ),
     );

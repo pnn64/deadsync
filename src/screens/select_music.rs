@@ -228,6 +228,7 @@ fn cached_score_percent_text(score_percent: f64) -> Arc<str> {
 #[inline(always)]
 fn cached_chart_info_text(
     show_peak_nps: bool,
+    show_effective_bpm: bool,
     show_matrix_rating: bool,
     meter: u32,
     peak_nps: f64,
@@ -243,10 +244,13 @@ fn cached_chart_info_text(
     } else {
         0.0
     };
-    let mut mask = (show_peak_nps as u8) | ((show_matrix_rating as u8) << 1);
+    let mut mask = (show_peak_nps as u8)
+        | ((show_effective_bpm as u8) << 1)
+        | ((show_matrix_rating as u8) << 2);
     if mask == 0 {
         mask = 1;
     }
+    let effective_bpm = peak_nps * 15.0;
     let matrix_rating_rounded = (matrix_rating * 100.0).round() / 100.0;
     let matrix_rating_text = if meter >= 11 && matrix_rating_rounded > 0.0 {
         tr_fmt(
@@ -263,8 +267,29 @@ fn cached_chart_info_text(
         (mask, meter, peak_nps.to_bits(), matrix_rating.to_bits()),
         TEXT_CACHE_LIMIT,
         || match mask {
-            0b10 => matrix_rating_text,
-            0b11 => tr_fmt(
+            0b001 => tr_fmt(
+                "SelectMusic",
+                "PeakNpsOnly",
+                &[("peak_nps", &format!("{peak_nps:.1}"))],
+            )
+            .to_string(),
+            0b010 => tr_fmt(
+                "SelectMusic",
+                "PeakEbpmOnly",
+                &[("effective_bpm", &format!("{effective_bpm:.0}"))],
+            )
+            .to_string(),
+            0b011 => tr_fmt(
+                "SelectMusic",
+                "PnpsAndEbpm",
+                &[
+                    ("peak_nps", &format!("{peak_nps:.1}")),
+                    ("effective_bpm", &format!("{effective_bpm:.0}")),
+                ],
+            )
+            .to_string(),
+            0b100 => matrix_rating_text,
+            0b101 => tr_fmt(
                 "SelectMusic",
                 "PnpsAndMr",
                 &[
@@ -273,10 +298,23 @@ fn cached_chart_info_text(
                 ],
             )
             .to_string(),
+            0b110 => tr_fmt(
+                "SelectMusic",
+                "EbpmAndMr",
+                &[
+                    ("effective_bpm", &format!("{effective_bpm:.0}")),
+                    ("mr", &matrix_rating_text),
+                ],
+            )
+            .to_string(),
             _ => tr_fmt(
                 "SelectMusic",
-                "PeakNpsOnly",
-                &[("peak_nps", &format!("{peak_nps:.1}"))],
+                "PnpsEbpmAndMr",
+                &[
+                    ("peak_nps", &format!("{peak_nps:.1}")),
+                    ("effective_bpm", &format!("{effective_bpm:.0}")),
+                    ("mr", &matrix_rating_text),
+                ],
             )
             .to_string(),
         },
@@ -8722,6 +8760,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             };
             let peak = cached_chart_info_text(
                 cfg.select_music_chart_info_peak_nps,
+                cfg.select_music_chart_info_effective_bpm,
                 cfg.select_music_chart_info_matrix_rating,
                 c.meter,
                 scaled_peak_nps,

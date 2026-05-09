@@ -264,6 +264,17 @@ pub fn update_select_music_chart_info_peak_nps(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_select_music_chart_info_effective_bpm(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_chart_info_effective_bpm == enabled {
+            return;
+        }
+        cfg.select_music_chart_info_effective_bpm = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_select_music_chart_info_matrix_rating(enabled: bool) {
     {
         let mut cfg = lock_config();

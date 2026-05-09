@@ -143,8 +143,9 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         id: SubRowId::ChartInfo,
         label: lookup_key("OptionsSelectMusic", "ChartInfo"),
         choices: &[
-            localized_choice("OptionsSelectMusic", "ChartInfoPeakNPS"),
-            localized_choice("OptionsSelectMusic", "ChartInfoMatrixRating"),
+            localized_choice("OptionsSelectMusic", "ChartInfoTogglePNPS"),
+            localized_choice("OptionsSelectMusic", "ChartInfoToggleEBPM"),
+            localized_choice("OptionsSelectMusic", "ChartInfoToggleMR"),
         ],
         inline: true,
     },
@@ -411,7 +412,7 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
 ];
 
 pub(in crate::screens::options) const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 4;
-pub(in crate::screens::options) const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 2;
+pub(in crate::screens::options) const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 3;
 
 pub(in crate::screens::options) const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] =
     [5, 10, 15, 25, 30, 45, 100];
@@ -609,20 +610,24 @@ impl ChoiceEnum for SelectMusicPatternInfoMode {
 #[inline(always)]
 pub(in crate::screens::options) const fn select_music_chart_info_mask(
     peak_nps: bool,
+    effective_bpm: bool,
     matrix_rating: bool,
 ) -> u8 {
-    (peak_nps as u8) | ((matrix_rating as u8) << 1)
+    (peak_nps as u8) | ((effective_bpm as u8) << 1) | ((matrix_rating as u8) << 2)
 }
 
 #[inline(always)]
 pub(in crate::screens::options) const fn select_music_chart_info_cursor_index(
     peak_nps: bool,
+    effective_bpm: bool,
     matrix_rating: bool,
 ) -> usize {
     if peak_nps {
         0
-    } else if matrix_rating {
+    } else if effective_bpm {
         1
+    } else if matrix_rating {
+        2
     } else {
         0
     }
@@ -643,6 +648,7 @@ pub(in crate::screens::options) const fn select_music_chart_info_mask_from_confi
 ) -> u8 {
     select_music_chart_info_mask(
         cfg.select_music_chart_info_peak_nps,
+        cfg.select_music_chart_info_effective_bpm,
         cfg.select_music_chart_info_matrix_rating,
     )
 }
@@ -650,7 +656,8 @@ pub(in crate::screens::options) const fn select_music_chart_info_mask_from_confi
 #[inline(always)]
 pub(in crate::screens::options) fn apply_select_music_chart_info_mask(mask: u8) {
     config::update_select_music_chart_info_peak_nps((mask & (1u8 << 0)) != 0);
-    config::update_select_music_chart_info_matrix_rating((mask & (1u8 << 1)) != 0);
+    config::update_select_music_chart_info_effective_bpm((mask & (1u8 << 1)) != 0);
+    config::update_select_music_chart_info_matrix_rating((mask & (1u8 << 2)) != 0);
 }
 
 pub(in crate::screens::options) fn toggle_select_music_chart_info_option(
