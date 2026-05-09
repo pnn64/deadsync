@@ -1331,7 +1331,10 @@ fn remap_actor_texture_case(actors: &mut [Actor]) {
             Actor::Shadow { child, .. } => {
                 remap_actor_texture_case(std::slice::from_mut(child.as_mut()))
             }
-            Actor::Text { .. } | Actor::Mesh { .. } => {}
+            Actor::Text { .. }
+            | Actor::Mesh { .. }
+            | Actor::CameraPush { .. }
+            | Actor::CameraPop => {}
         }
     }
 }

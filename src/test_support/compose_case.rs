@@ -202,6 +202,10 @@ pub enum ActorSnapshot {
         view_proj: [[f32; 4]; 4],
         children: Vec<Self>,
     },
+    CameraPush {
+        view_proj: [[f32; 4]; 4],
+    },
+    CameraPop,
     Shadow {
         len: [f32; 2],
         color: [f32; 4],
@@ -657,7 +661,11 @@ fn collect_font_names_actor(
             }
         }
         Actor::Shadow { child, .. } => collect_font_names_actor(child, fonts, out),
-        Actor::Sprite { .. } | Actor::Mesh { .. } | Actor::TexturedMesh { .. } => {}
+        Actor::Sprite { .. }
+        | Actor::Mesh { .. }
+        | Actor::TexturedMesh { .. }
+        | Actor::CameraPush { .. }
+        | Actor::CameraPop => {}
     }
 }
 
@@ -751,7 +759,7 @@ fn collect_actor_texture_keys(actor: &Actor, out: &mut BTreeSet<String>) {
             }
         }
         Actor::Shadow { child, .. } => collect_actor_texture_keys(child, out),
-        Actor::Text { .. } | Actor::Mesh { .. } => {}
+        Actor::Text { .. } | Actor::Mesh { .. } | Actor::CameraPush { .. } | Actor::CameraPop => {}
     }
 }
 
@@ -1089,6 +1097,10 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             view_proj: matrix_snapshot(view_proj),
             children: children.iter().map(actor_snapshot).collect(),
         },
+        Actor::CameraPush { view_proj } => ActorSnapshot::CameraPush {
+            view_proj: matrix_snapshot(view_proj),
+        },
+        Actor::CameraPop => ActorSnapshot::CameraPop,
         Actor::Shadow { len, color, child } => ActorSnapshot::Shadow {
             len: *len,
             color: *color,
@@ -1332,6 +1344,10 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
                 .map(|child| actor_runtime(child, name_map))
                 .collect(),
         },
+        ActorSnapshot::CameraPush { view_proj } => Actor::CameraPush {
+            view_proj: matrix_runtime(*view_proj),
+        },
+        ActorSnapshot::CameraPop => Actor::CameraPop,
         ActorSnapshot::Shadow { len, color, child } => Actor::Shadow {
             len: *len,
             color: *color,

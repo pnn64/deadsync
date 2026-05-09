@@ -3248,6 +3248,8 @@ fn song_lua_style_capture_actor(
                 .map(|child| song_lua_style_capture_actor(child, tint, blend, z_shift))
                 .collect(),
         },
+        Actor::CameraPush { view_proj } => Actor::CameraPush { view_proj },
+        Actor::CameraPop => Actor::CameraPop,
         Actor::Shadow { len, color, child } => Actor::Shadow {
             len,
             color: song_lua_capture_tint(color, tint),
@@ -6119,6 +6121,8 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 .map(|child| song_lua_player_y_fold_actor(child, pivot_x, rotation_y_deg))
                 .collect(),
         },
+        Actor::CameraPush { view_proj } => Actor::CameraPush { view_proj },
+        Actor::CameraPop => Actor::CameraPop,
         Actor::Shadow { len, color, child } => Actor::Shadow {
             len,
             color,
@@ -6244,6 +6248,16 @@ fn apply_song_lua_player_transform(
     zoom_y: f32,
     zoom_z: f32,
 ) -> Vec<Actor> {
+    #[inline(always)]
+    fn push_camera_scope(out: &mut Vec<Actor>, view_proj: Matrix4, children: &mut Vec<Actor>) {
+        if children.is_empty() {
+            return;
+        }
+        out.push(Actor::CameraPush { view_proj });
+        out.append(children);
+        out.push(Actor::CameraPop);
+    }
+
     let field_actors = if rotation_y_deg.is_finite() && rotation_y_deg.abs() > f32::EPSILON {
         field_actors
             .into_iter()
@@ -6295,20 +6309,17 @@ fn apply_song_lua_player_transform(
         -4096.0,
         4096.0,
     ) * player_transform;
-    if !field_actors
-        .iter()
-        .any(|actor| matches!(actor, Actor::Camera { .. }))
-    {
+    if !field_actors.iter().any(|actor| {
+        matches!(
+            actor,
+            Actor::Camera { .. } | Actor::CameraPush { .. } | Actor::CameraPop
+        )
+    }) {
         if !field_actors.is_empty() {
             hud_actors.extend(field_actors);
         }
-        let mut out = Vec::with_capacity((!hud_actors.is_empty()) as usize);
-        if !hud_actors.is_empty() {
-            out.push(Actor::Camera {
-                view_proj: root_camera,
-                children: hud_actors,
-            });
-        }
+        let mut out = Vec::with_capacity(hud_actors.len().saturating_add(2));
+        push_camera_scope(&mut out, root_camera, &mut hud_actors);
         return if z_shift == 0 {
             if tint == [1.0; 4] && blend.is_none() {
                 out
@@ -6324,34 +6335,47 @@ fn apply_song_lua_player_transform(
         };
     }
 
-    let mut out = Vec::with_capacity(field_actors.len() + (!hud_actors.is_empty()) as usize);
+    let mut out = Vec::with_capacity(
+        field_actors
+            .len()
+            .saturating_add(hud_actors.len())
+            .saturating_add(4),
+    );
     let mut plain_children = hud_actors;
+    let mut field_camera_depth = 0usize;
     for actor in field_actors {
         match actor {
             Actor::Camera {
                 view_proj,
                 children,
             } => {
-                if !plain_children.is_empty() {
-                    out.push(Actor::Camera {
-                        view_proj: root_camera,
-                        children: std::mem::take(&mut plain_children),
-                    });
+                if field_camera_depth == 0 {
+                    push_camera_scope(&mut out, root_camera, &mut plain_children);
                 }
-                out.push(Actor::Camera {
+                out.push(Actor::CameraPush {
                     view_proj: view_proj * player_transform,
-                    children,
                 });
+                out.extend(children);
+                out.push(Actor::CameraPop);
             }
+            Actor::CameraPush { view_proj } => {
+                if field_camera_depth == 0 {
+                    push_camera_scope(&mut out, root_camera, &mut plain_children);
+                }
+                out.push(Actor::CameraPush {
+                    view_proj: view_proj * player_transform,
+                });
+                field_camera_depth = field_camera_depth.saturating_add(1);
+            }
+            Actor::CameraPop => {
+                out.push(Actor::CameraPop);
+                field_camera_depth = field_camera_depth.saturating_sub(1);
+            }
+            other if field_camera_depth > 0 => out.push(other),
             other => plain_children.push(other),
         }
     }
-    if !plain_children.is_empty() {
-        out.push(Actor::Camera {
-            view_proj: root_camera,
-            children: plain_children,
-        });
-    }
+    push_camera_scope(&mut out, root_camera, &mut plain_children);
     if z_shift == 0 {
         if tint == [1.0; 4] && blend.is_none() {
             out

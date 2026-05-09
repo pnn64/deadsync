@@ -555,6 +555,10 @@ fn actor_tree_stats(actors: &[crate::engine::present::actors::Actor]) -> ActorTr
                     visit(stats, child);
                 }
             }
+            crate::engine::present::actors::Actor::CameraPush { .. } => {
+                stats.cameras = stats.cameras.saturating_add(1);
+            }
+            crate::engine::present::actors::Actor::CameraPop => {}
             crate::engine::present::actors::Actor::Shadow { child, .. } => {
                 stats.shadows = stats.shadows.saturating_add(1);
                 visit(stats, child);

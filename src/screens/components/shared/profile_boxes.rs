@@ -992,6 +992,7 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                 apply_zoom_to_actor(child, pivot, zoom);
             }
         }
+        Actor::CameraPush { .. } | Actor::CameraPop => {}
         Actor::Shadow { len, child, .. } => {
             len[0] *= zoom;
             len[1] *= zoom;
@@ -1037,6 +1038,7 @@ fn apply_offset_to_actor(actor: &mut Actor, dx: f32, dy: f32) {
                 apply_offset_to_actor(child, dx, dy);
             }
         }
+        Actor::CameraPush { .. } | Actor::CameraPop => {}
         Actor::Shadow { child, .. } => apply_offset_to_actor(child, dx, dy),
     }
 }
@@ -1049,7 +1051,10 @@ fn apply_z_offset(actor: &mut Actor, dz: i16) {
         | Actor::TexturedMesh { z, .. }
         | Actor::Frame { z, .. }
         | Actor::SharedFrame { z, .. } => *z = z.saturating_add(dz),
-        Actor::Camera { .. } | Actor::Shadow { .. } => {}
+        Actor::Camera { .. }
+        | Actor::CameraPush { .. }
+        | Actor::CameraPop
+        | Actor::Shadow { .. } => {}
     }
     match actor {
         Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
@@ -1065,6 +1070,7 @@ fn apply_z_offset(actor: &mut Actor, dz: i16) {
             }
         }
         Actor::Shadow { child, .. } => apply_z_offset(child, dz),
+        Actor::CameraPush { .. } | Actor::CameraPop => {}
         _ => {}
     }
 }
@@ -1090,7 +1096,11 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
             }
         }
         Actor::Shadow { child, .. } => apply_clip_rect_to_actor(child, rect),
-        Actor::Sprite { .. } | Actor::Mesh { .. } | Actor::TexturedMesh { .. } => {}
+        Actor::Sprite { .. }
+        | Actor::Mesh { .. }
+        | Actor::TexturedMesh { .. }
+        | Actor::CameraPush { .. }
+        | Actor::CameraPop => {}
     }
 }
 

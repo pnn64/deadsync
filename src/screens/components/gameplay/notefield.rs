@@ -8357,10 +8357,9 @@ pub fn build_bundles(
             skew,
             reverse_scroll,
         ) {
-            actors = vec![Actor::Camera {
-                view_proj,
-                children: actors,
-            }];
+            actors.reserve(2);
+            actors.insert(0, Actor::CameraPush { view_proj });
+            actors.push(Actor::CameraPop);
         }
     }
 

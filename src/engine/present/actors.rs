@@ -206,6 +206,12 @@ pub enum Actor {
         children: Vec<Self>,
     },
 
+    /// Begin a flat camera scope for subsequent sibling actors.
+    CameraPush { view_proj: Matrix4 },
+
+    /// End the most recent flat camera scope.
+    CameraPop,
+
     /// Shadow wrapper: draws child's objects once more with an offset and tint,
     /// matching `StepMania`'s `shadowlength*` and `shadowcolor` behavior.
     Shadow {
@@ -277,6 +283,7 @@ impl Actor {
                     child.mul_alpha(alpha);
                 }
             }
+            Self::CameraPush { .. } | Self::CameraPop => {}
             Self::Shadow { color, child, .. } => {
                 color[3] *= alpha;
                 child.mul_alpha(alpha);

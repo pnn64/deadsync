@@ -101,25 +101,23 @@ pub fn build_screen_cached_with_scratch(
     let parent_z: i16 = 0;
     let camera: u8 = 0;
 
-    for actor in actors {
-        build_actor_recursive(
-            actor,
-            root_rect,
-            m,
-            fonts,
-            scratch,
-            parent_z,
-            camera,
-            ComposeStyle::IDENTITY,
-            &mut cameras,
-            &mut masks,
-            &mut order_counter,
-            &mut objects,
-            text_cache,
-            &mut texture_cache,
-            total_elapsed,
-        );
-    }
+    build_actor_list(
+        actors,
+        root_rect,
+        m,
+        fonts,
+        scratch,
+        parent_z,
+        camera,
+        ComposeStyle::IDENTITY,
+        &mut cameras,
+        &mut masks,
+        &mut order_counter,
+        &mut objects,
+        text_cache,
+        &mut texture_cache,
+        total_elapsed,
+    );
 
     // Prefer the dense stable z-bucket pass for common dense ranges, but fall
     // back to `(z, order)` sorting when insertion order and draw order differ.
@@ -2191,6 +2189,57 @@ fn mul_rgba(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
 }
 
 #[inline(always)]
+fn build_actor_list<'a>(
+    actors: &'a [actors::Actor],
+    parent: SmRect,
+    m: &Metrics,
+    fonts: &'a HashMap<&'static str, font::Font>,
+    scratch: &mut ComposeScratch,
+    base_z: i16,
+    camera: u8,
+    style: ComposeStyle,
+    cameras: &mut Vec<Matrix4>,
+    masks: &mut Vec<WorldRect>,
+    order_counter: &mut u32,
+    out: &mut Vec<RenderObject>,
+    text_cache: &mut TextLayoutCache,
+    texture_cache: &mut TextureLookupCache,
+    total_elapsed: f32,
+) {
+    let mut active_camera = camera;
+    let mut camera_stack: SmallVec<[u8; 4]> = SmallVec::new();
+    for actor in actors {
+        match actor {
+            actors::Actor::CameraPush { view_proj } => {
+                cameras.push(*view_proj);
+                camera_stack.push(active_camera);
+                active_camera = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+            }
+            actors::Actor::CameraPop => {
+                active_camera = camera_stack.pop().unwrap_or(camera);
+            }
+            _ => build_actor_recursive(
+                actor,
+                parent,
+                m,
+                fonts,
+                scratch,
+                base_z,
+                active_camera,
+                style,
+                cameras,
+                masks,
+                order_counter,
+                out,
+                text_cache,
+                texture_cache,
+                total_elapsed,
+            ),
+        }
+    }
+}
+
+#[inline(always)]
 fn build_actor_recursive<'a>(
     actor: &'a actors::Actor,
     parent: SmRect,
@@ -2636,26 +2685,26 @@ fn build_actor_recursive<'a>(
         } => {
             cameras.push(*view_proj);
             let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
-            for child in children {
-                build_actor_recursive(
-                    child,
-                    parent,
-                    m,
-                    fonts,
-                    scratch,
-                    base_z,
-                    id,
-                    style,
-                    cameras,
-                    masks,
-                    order_counter,
-                    out,
-                    text_cache,
-                    texture_cache,
-                    total_elapsed,
-                );
-            }
+            build_actor_list(
+                children,
+                parent,
+                m,
+                fonts,
+                scratch,
+                base_z,
+                id,
+                style,
+                cameras,
+                masks,
+                order_counter,
+                out,
+                text_cache,
+                texture_cache,
+                total_elapsed,
+            );
         }
+
+        actors::Actor::CameraPush { .. } | actors::Actor::CameraPop => {}
 
         actors::Actor::Text {
             align,
@@ -3013,25 +3062,23 @@ fn build_actor_recursive<'a>(
                 }
             }
 
-            for child in children {
-                build_actor_recursive(
-                    child,
-                    rect,
-                    m,
-                    fonts,
-                    scratch,
-                    layer,
-                    camera,
-                    style,
-                    cameras,
-                    masks,
-                    order_counter,
-                    out,
-                    text_cache,
-                    texture_cache,
-                    total_elapsed,
-                );
-            }
+            build_actor_list(
+                children,
+                rect,
+                m,
+                fonts,
+                scratch,
+                layer,
+                camera,
+                style,
+                cameras,
+                masks,
+                order_counter,
+                out,
+                text_cache,
+                texture_cache,
+                total_elapsed,
+            );
         }
 
         actors::Actor::SharedFrame {
@@ -3147,25 +3194,23 @@ fn build_actor_recursive<'a>(
             }
 
             let child_style = style.child(*tint, *blend);
-            for child in children.iter() {
-                build_actor_recursive(
-                    child,
-                    rect,
-                    m,
-                    fonts,
-                    scratch,
-                    layer,
-                    camera,
-                    child_style,
-                    cameras,
-                    masks,
-                    order_counter,
-                    out,
-                    text_cache,
-                    texture_cache,
-                    total_elapsed,
-                );
-            }
+            build_actor_list(
+                children,
+                rect,
+                m,
+                fonts,
+                scratch,
+                layer,
+                camera,
+                child_style,
+                cameras,
+                masks,
+                order_counter,
+                out,
+                text_cache,
+                texture_cache,
+                total_elapsed,
+            );
         }
     }
 }
