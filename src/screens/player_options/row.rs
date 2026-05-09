@@ -170,21 +170,16 @@ pub struct ChoiceBinding<T: Copy + 'static> {
 /// 2. Build the row in the appropriate pane's `build_*_rows` (or its row
 ///    catalogue) with `behavior: RowBehavior::Bitmask(MY_BINDING)`.
 /// 3. Declare `const MY_BINDING: BitmaskBinding` in that pane's module.
-///    Pick one of two variants:
-///
-///    a. `BitmaskBinding::Generic { init, writeback }` — preferred for
-///    "clean" rows that project a single mask field onto the profile
-///    and persist for one side with no fan-out, no derived recomputes,
-///    and no visibility sync. The generic `toggle_bitmask_row_generic`
-///    in `choice.rs` drives input; `writeback.bit_mapping` declares
-///    how choice indices map to bits.
-///
-///    b. `BitmaskBinding::HandRolled { init, toggle }` — for rows whose
-///    toggle fans out to multiple profile fields, recomputes derived
-///    state, or calls `sync_selected_rows_with_visibility`. `toggle`
-///    is a hand-rolled `toggle_*_row` fn in `choice.rs`. `init` is
-///    optional; production bindings always supply it, and `None` is
-///    reserved for synthetic bindings in tests.
+///    For "clean" rows (single mask projects to a single profile field
+///    and persists for one side with no fan-out, no derived recomputes,
+///    no visibility sync), use the `simple_bitmask_binding!` macro. For
+///    rows that fan out, derive secondary mask state, or need a
+///    visibility re-sync after toggle, construct `BitmaskBinding::Generic
+///    { init, writeback }` directly and set the relevant fields on
+///    `BitmaskWriteback` (`project`, `persist_for_side`, `sync_visibility`).
+///    The generic `toggle_bitmask_row_generic` in `choice.rs` drives
+///    input for every bitmask row; `writeback.bit_mapping` declares how
+///    choice indices map to bits.
 ///
 /// 4. `BitmaskInit` shape:
 ///    - `from_profile` reads the relevant profile fields and emits
@@ -196,52 +191,61 @@ pub struct ChoiceBinding<T: Copy + 'static> {
 ///      `CursorInit::Fixed(0)` for pinned-cursor rows like FA+ Options.
 #[derive(Clone, Copy, Debug)]
 pub enum BitmaskBinding {
-    /// Generic, fully-declarative bitmask binding. The generic toggle
-    /// dispatcher uses `init` + `writeback` to flip a bit and persist it
-    /// without any per-row code. `Row::bitmask` debug-asserts that
-    /// `choices.len() == writeback.bit_mapping.required_choices()`.
+    /// Fully-declarative bitmask binding. `init` + `writeback` are
+    /// enough to flip a bit, project the new state onto the profile
+    /// (and any secondary mask fields), persist for the active side,
+    /// and optionally sync visibility — all without per-row code.
+    /// `Row::bitmask` debug-asserts that `choices.len() <=
+    /// writeback.bit_mapping.required_choices()`.
     Generic {
         init: BitmaskInit,
         writeback: BitmaskWriteback,
     },
-    /// Hand-rolled bitmask binding. The dispatcher invokes `toggle`
-    /// directly. `init` is optional but expected for production rows so
-    /// that `init_bitmask_row_from_binding` can derive the initial cursor
-    /// and mask bits from the player's profile.
-    HandRolled {
-        init: Option<BitmaskInit>,
-        toggle: fn(&mut State, usize),
-    },
 }
 
 impl BitmaskBinding {
-    /// Borrow the optional `BitmaskInit`, regardless of variant.
-    /// `Generic` always has init; `HandRolled` may or may not.
+    /// Borrow the binding's `BitmaskInit`. Returned as `Option` for API
+    /// stability — every binding currently has init, but callers
+    /// uniformly pattern-match on `Some` so future additions remain
+    /// backward-compatible.
     #[inline]
     pub fn init(&self) -> Option<&BitmaskInit> {
         match self {
             BitmaskBinding::Generic { init, .. } => Some(init),
-            BitmaskBinding::HandRolled { init, .. } => init.as_ref(),
         }
     }
 }
 
 /// Declarative writeback contract for a `BitmaskBinding::Generic`.
-/// Together with `BitmaskInit`, this lets the generic toggle fully replace
-/// a hand-rolled `toggle_*_row` for "clean" bitmask rows that have no
-/// fan-out and no visibility-sync side effects.
+/// Together with `BitmaskInit`, this is enough to fully replace the
+/// `toggle_*_row` hand-rolled functions even for rows that fan out to
+/// multiple profile fields, derive secondary masks, or need a
+/// post-toggle visibility sync.
 #[derive(Clone, Copy, Debug)]
 pub struct BitmaskWriteback {
-    /// Project the row's bits onto the in-memory profile. Implementations
-    /// typically reconstruct the typed mask via `from_bits_truncate`.
-    pub project_to_profile: fn(&mut Profile, u32),
-    /// Persist the row's bits for the given side. Called only when
+    /// Project the row's just-toggled bits onto the in-memory profile and
+    /// (if needed) onto secondary fields of `PlayerOptionMasks`. Receives
+    /// the row-local bits stored by `BitmaskInit::set_active`. Most
+    /// bindings only touch the profile; `gameplay_extras` is the
+    /// canonical example of a binding that also patches `masks` (it
+    /// rebuilds `masks.gameplay_extras_more`).
+    pub project: fn(&mut PlayerOptionMasks, &mut Profile, u32),
+    /// Persist the row's just-projected state for the given side. Called
+    /// after `project`, with the freshly-updated profile, only when
     /// `persist_ctx` says the active player_idx should write through.
-    pub persist_for_side: fn(PlayerSide, u32),
+    /// Bindings read whatever profile fields they need (which may span
+    /// several fields for fan-out rows) and call the appropriate
+    /// `update_*_for_side` setters.
+    pub persist_for_side: fn(PlayerSide, &Profile),
     /// Declarative choice-index-to-bit mapping. The generic toggle
     /// resolves the focused row's selected choice index through this
     /// mapping; out-of-range indices yield `None` and produce a no-op.
     pub bit_mapping: BitMapping,
+    /// When `true`, the generic dispatcher calls
+    /// `sync_selected_rows_with_visibility` after `project`/persist.
+    /// Used by rows whose toggled state changes which other rows are
+    /// visible (`hide`, `fa_plus_options`, `error_bar`).
+    pub sync_visibility: bool,
 }
 
 /// Declarative mapping from a row's choice index to the bit to toggle.
@@ -564,21 +568,135 @@ macro_rules! simple_bitmask_binding {
                 cursor: $crate::screens::player_options::row::CursorInit::FirstActiveBit,
             },
             writeback: $crate::screens::player_options::row::BitmaskWriteback {
-                project_to_profile: |p, b| {
+                project: |_m, p, b| {
                     p.$profile_field = <$mask_ty>::from_bits_truncate(b as $bits_ty);
                 },
-                persist_for_side: |s, b| {
-                    $persist(s, <$mask_ty>::from_bits_truncate(b as $bits_ty));
+                persist_for_side: |s, p| {
+                    $persist(s, p.$profile_field);
                 },
                 bit_mapping: $crate::screens::player_options::row::BitMapping::Sequential {
                     width: $width,
                 },
+                sync_visibility: false,
             },
         }
     };
 }
 
 pub(crate) use simple_bitmask_binding;
+
+/// Build a `BitmaskBinding::Generic` for a row that fans a single mask
+/// out to `N` boolean profile fields (one boolean per bit).
+///
+/// Each entry in `fields = [...]` pairs a `bitflags!` constant on the
+/// mask type with the boolean profile field that mirrors it. The macro
+/// generates:
+///
+/// - `from_profile`: scans the `N` booleans, OR's the matching mask
+///   flags, returns `bits as u32`.
+/// - `project`: extracts each flag from the new bits and writes it to
+///   its boolean profile field.
+/// - `bit_mapping`: `BitMapping::Sequential { width: N }` derived from
+///   the field count at compile time.
+///
+/// Persistence is *user-supplied* via the `persist_for_side` argument
+/// (a closure of type `fn(PlayerSide, &Profile)`) so callers can either
+/// invoke a single bulk setter (e.g.
+/// `gp::update_hide_options_for_side(s, p.hide_targets, p.hide_song_bg, ...)`)
+/// or fan out to per-field setters (e.g.
+/// `gp::update_rainbow_max_for_side(s, p.rainbow_max);
+///  gp::update_responsive_colors_for_side(s, p.responsive_colors); ...`).
+///
+/// Set `sync_visibility = true` for rows whose toggled state changes
+/// the visibility of *other* rows (e.g. `Hide`).
+///
+/// # Example
+///
+/// ```ignore
+/// const HIDE: BitmaskBinding = fanout_bitmask_binding!(
+///     mask = HideMask,
+///     bits = u8,
+///     state_field = hide,
+///     fields = [
+///         (TARGETS, hide_targets),
+///         (BACKGROUND, hide_song_bg),
+///         (COMBO, hide_combo),
+///         (LIFE, hide_lifebar),
+///         (SCORE, hide_score),
+///         (DANGER, hide_danger),
+///         (COMBO_EXPLOSIONS, hide_combo_explosions),
+///     ],
+///     persist_for_side = |s, p| gp::update_hide_options_for_side(
+///         s,
+///         p.hide_targets, p.hide_song_bg, p.hide_combo, p.hide_lifebar,
+///         p.hide_score, p.hide_danger, p.hide_combo_explosions,
+///     ),
+///     sync_visibility = true,
+/// );
+/// ```
+macro_rules! fanout_bitmask_binding {
+    (
+        mask = $mask_ty:ty,
+        bits = $bits_ty:ty,
+        state_field = $state_field:ident,
+        fields = [ $( ( $flag:ident, $profile_field:ident ) ),+ $(,)? ],
+        persist_for_side = $persist:expr,
+        sync_visibility = $sync:expr $(,)?
+    ) => {
+        $crate::screens::player_options::row::BitmaskBinding::Generic {
+            init: $crate::screens::player_options::row::BitmaskInit {
+                from_profile: |p| {
+                    let mut bits = <$mask_ty>::empty();
+                    $(
+                        if p.$profile_field {
+                            bits.insert(<$mask_ty>::$flag);
+                        }
+                    )+
+                    bits.bits() as u32
+                },
+                get_active: |m| m.$state_field.bits() as u32,
+                set_active: |m, b| {
+                    debug_assert_eq!(
+                        b & !(<$bits_ty>::MAX as u32),
+                        0,
+                        concat!(stringify!($mask_ty), " init bits exceed storage width"),
+                    );
+                    m.$state_field = <$mask_ty>::from_bits_retain(b as $bits_ty);
+                },
+                cursor: $crate::screens::player_options::row::CursorInit::FirstActiveBit,
+            },
+            writeback: $crate::screens::player_options::row::BitmaskWriteback {
+                project: |_m, p, b| {
+                    let mask = <$mask_ty>::from_bits_truncate(b as $bits_ty);
+                    $(
+                        p.$profile_field = mask.contains(<$mask_ty>::$flag);
+                    )+
+                },
+                persist_for_side: $persist,
+                bit_mapping: $crate::screens::player_options::row::BitMapping::Sequential {
+                    // `[(); N]::len()` is const-evaluable; one `()` is
+                    // emitted per field so the count matches `fields`.
+                    width: ([$( $crate::screens::player_options::row::__count_unit!($flag) ),+].len()) as u8,
+                },
+                sync_visibility: $sync,
+            },
+        }
+    };
+}
+
+/// Helper for `fanout_bitmask_binding!`: replace any token with `()` so
+/// the macro can build a fixed-size array literal whose `.len()` yields
+/// the field count at compile time.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __count_unit {
+    ($_ignored:tt) => {
+        ()
+    };
+}
+
+pub(crate) use __count_unit;
+pub(crate) use fanout_bitmask_binding;
 
 // ============================== RowMap =================================
 
@@ -735,17 +853,21 @@ impl Row {
         binding: BitmaskBinding,
         choices: Vec<String>,
     ) -> Self {
-        if let BitmaskBinding::Generic { writeback, .. } = &binding {
-            let required = writeback.bit_mapping.required_choices();
-            debug_assert_eq!(
-                choices.len(),
-                required,
-                "bitmask row {:?}: choices.len()={} but bit_mapping requires {}",
-                id,
-                choices.len(),
-                required,
-            );
-        }
+        let BitmaskBinding::Generic { writeback, .. } = &binding;
+        let required = writeback.bit_mapping.required_choices();
+        // Allow `choices.len() <= required` so rows with conditional
+        // choices (e.g. `GameplayExtras` whose `DisplayScorebox` choice is
+        // gated behind a feature flag) can ship fewer choices than bits.
+        // The `bit_for_choice` lookup already returns `None` for indices
+        // past the row's choice list, so the extra bits are simply
+        // unreachable from the UI — never silently toggled.
+        debug_assert!(
+            choices.len() <= required,
+            "bitmask row {:?}: choices.len()={} exceeds bit_mapping required {}",
+            id,
+            choices.len(),
+            required,
+        );
         Self::base(id, RowBehavior::Bitmask(binding), name, help, choices)
     }
 
