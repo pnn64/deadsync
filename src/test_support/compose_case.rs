@@ -1372,7 +1372,9 @@ fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
             rot_sin_cos,
             ..
         } => sprite_transform(*center, *size, *rot_sin_cos),
-        _ => render.transform,
+        ObjectType::Mesh { transform, .. } | ObjectType::TexturedMesh { transform, .. } => {
+            *transform
+        }
     };
     RenderObjectSnapshot {
         object_type: match &render.object_type {
@@ -1397,6 +1399,7 @@ fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
                 tint,
                 vertices,
                 mode,
+                ..
             } => RenderObjectTypeSnapshot::Mesh {
                 tint: *tint,
                 vertices: vertices.to_vec(),
@@ -1482,6 +1485,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                 vertices,
                 mode,
             } => ObjectType::Mesh {
+                transform: snapshot_transform,
                 tint: *tint,
                 vertices: Arc::from(vertices.clone()),
                 mode: MeshMode::from(*mode),
@@ -1496,6 +1500,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                 depth_test,
                 ..
             } => ObjectType::TexturedMesh {
+                transform: snapshot_transform,
                 tint: *tint,
                 vertices: crate::engine::gfx::TexturedMeshVertices::Shared(Arc::from(
                     vertices.clone(),
@@ -1510,10 +1515,6 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
             },
         },
         texture_handle,
-        transform: match &render.object_type {
-            RenderObjectTypeSnapshot::Sprite { .. } => Matrix4::IDENTITY,
-            _ => snapshot_transform,
-        },
         blend: BlendMode::from(render.blend),
         z: render.z,
         order: render.order,

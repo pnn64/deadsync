@@ -360,6 +360,7 @@ where
                 });
             }
             ObjectType::Mesh {
+                transform,
                 tint,
                 vertices,
                 mode,
@@ -372,7 +373,7 @@ where
                 let vertex_start = scratch.mesh_vertices.len() as u32;
                 scratch.mesh_vertices.reserve(vertices.len());
                 for v in vertices.iter() {
-                    let p = obj.transform * Vector4::new(v.pos[0], v.pos[1], 0.0, 1.0);
+                    let p = *transform * Vector4::new(v.pos[0], v.pos[1], 0.0, 1.0);
                     scratch.mesh_vertices.push(MeshVertex {
                         pos: [p.x, p.y],
                         color: [
@@ -403,6 +404,7 @@ where
                 }));
             }
             ObjectType::TexturedMesh {
+                transform,
                 tint,
                 vertices,
                 geom_cache_key,
@@ -473,7 +475,7 @@ where
 
                 let instance_start = scratch.tmesh_instances.len() as u32;
                 scratch.tmesh_instances.push(textured_instance_raw(
-                    &obj.transform,
+                    transform,
                     *tint,
                     *uv_scale,
                     *uv_offset,
@@ -535,7 +537,6 @@ mod tests {
                 texture_mask: false,
             },
             texture_handle: INVALID_TEXTURE_HANDLE,
-            transform: Matrix4::IDENTITY,
             blend: BlendMode::Alpha,
             z: 0,
             order,

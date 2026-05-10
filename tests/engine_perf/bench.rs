@@ -2757,6 +2757,7 @@ fn make_draw_prep_tmesh_render_list(
         };
         objects.push(gfx::RenderObject {
             object_type: gfx::ObjectType::TexturedMesh {
+                transform: glam::Mat4::IDENTITY,
                 tint: [1.0, 1.0, 1.0, 1.0],
                 vertices,
                 geom_cache_key: INVALID_TMESH_CACHE_KEY,
@@ -2768,7 +2769,6 @@ fn make_draw_prep_tmesh_render_list(
                 depth_test: false,
             },
             texture_handle: 1,
-            transform: glam::Mat4::IDENTITY,
             blend: GfxBlendMode::Alpha,
             z: 0,
             order: mesh as u32,

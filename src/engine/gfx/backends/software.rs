@@ -260,13 +260,14 @@ fn draw_rows(
                 )
             }
             ObjectType::Mesh {
+                transform,
                 tint,
                 vertices,
                 mode,
             } => match mode {
                 MeshMode::Triangles => rasterize_mesh_triangles(
                     &proj,
-                    &obj.transform,
+                    transform,
                     *tint,
                     vertices.as_ref(),
                     obj.blend,
@@ -278,6 +279,7 @@ fn draw_rows(
                 ),
             },
             ObjectType::TexturedMesh {
+                transform,
                 tint,
                 vertices,
                 mode,
@@ -294,7 +296,7 @@ fn draw_rows(
                     };
                     rasterize_textured_mesh_triangles(
                         &proj,
-                        &obj.transform,
+                        transform,
                         vertices.as_ref(),
                         *tint,
                         *uv_scale,

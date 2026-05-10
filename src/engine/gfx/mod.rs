@@ -93,7 +93,6 @@ pub struct RenderList {
 pub struct RenderObject {
     pub object_type: ObjectType,
     pub texture_handle: TextureHandle,
-    pub transform: Matrix4,
     pub blend: BlendMode,
     pub z: i16,
     pub order: u32,
@@ -184,12 +183,14 @@ pub enum ObjectType {
         texture_mask: bool,
     },
     Mesh {
+        transform: Matrix4,
         tint: [f32; 4],
         vertices: Arc<[MeshVertex]>,
         mode: MeshMode,
     },
     #[allow(dead_code)]
     TexturedMesh {
+        transform: Matrix4,
         tint: [f32; 4],
         vertices: TexturedMeshVertices,
         geom_cache_key: TMeshCacheKey,
