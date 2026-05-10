@@ -582,6 +582,12 @@ pub fn read_render_snapshot(path: &Path) -> Result<RenderListSnapshot, Box<dyn E
 }
 
 pub fn render_list_runtime(snapshot: &RenderListSnapshot) -> RenderList {
+    let mut sprite_instances = Vec::new();
+    let objects = snapshot
+        .objects
+        .iter()
+        .map(|object| render_object_runtime(object, &mut sprite_instances))
+        .collect();
     RenderList {
         clear_color: snapshot.clear_color,
         cameras: snapshot
@@ -590,7 +596,8 @@ pub fn render_list_runtime(snapshot: &RenderListSnapshot) -> RenderList {
             .copied()
             .map(matrix_runtime)
             .collect(),
-        objects: snapshot.objects.iter().map(render_object_runtime).collect(),
+        sprite_instances,
+        objects,
     }
 }
 
@@ -1344,13 +1351,21 @@ pub fn render_list_snapshot(render: &RenderList) -> RenderListSnapshot {
     RenderListSnapshot {
         clear_color: render.clear_color,
         cameras: render.cameras.iter().map(matrix_snapshot).collect(),
-        objects: render.objects.iter().map(render_object_snapshot).collect(),
+        objects: render
+            .objects
+            .iter()
+            .map(|object| render_object_snapshot(object, &render.sprite_instances))
+            .collect(),
     }
 }
 
-fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
+fn render_object_snapshot(
+    render: &RenderObject,
+    sprite_instances: &[SpriteInstanceRaw],
+) -> RenderObjectSnapshot {
     let transform = match &render.object_type {
-        ObjectType::Sprite(sprite) => {
+        ObjectType::Sprite(index) => {
+            let sprite = sprite_instances[*index as usize];
             sprite_transform(sprite.center, sprite.size, sprite.rot_sin_cos)
         }
         ObjectType::Mesh { transform, .. } => *transform,
@@ -1358,15 +1373,18 @@ fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
     };
     RenderObjectSnapshot {
         object_type: match &render.object_type {
-            ObjectType::Sprite(sprite) => RenderObjectTypeSnapshot::Sprite {
-                texture_id: None,
-                tint: sprite.tint,
-                uv_scale: sprite.uv_scale,
-                uv_offset: sprite.uv_offset,
-                local_offset: sprite.local_offset,
-                local_offset_rot_sin_cos: sprite.local_offset_rot_sin_cos,
-                edge_fade: sprite.edge_fade,
-            },
+            ObjectType::Sprite(index) => {
+                let sprite = sprite_instances[*index as usize];
+                RenderObjectTypeSnapshot::Sprite {
+                    texture_id: None,
+                    tint: sprite.tint,
+                    uv_scale: sprite.uv_scale,
+                    uv_offset: sprite.uv_offset,
+                    local_offset: sprite.local_offset,
+                    local_offset_rot_sin_cos: sprite.local_offset_rot_sin_cos,
+                    edge_fade: sprite.edge_fade,
+                }
+            }
             ObjectType::Mesh { tint, vertices, .. } => RenderObjectTypeSnapshot::Mesh {
                 tint: *tint,
                 vertices: vertices.to_vec(),
@@ -1402,7 +1420,10 @@ fn texture_resolve_object_snapshot(render: &RenderObject) -> TextureResolveObjec
     }
 }
 
-fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
+fn render_object_runtime(
+    render: &RenderObjectSnapshot,
+    sprite_instances: &mut Vec<SpriteInstanceRaw>,
+) -> RenderObject {
     let snapshot_transform = matrix_runtime(render.transform);
     let texture_handle = if render.texture_handle != crate::engine::gfx::INVALID_TEXTURE_HANDLE {
         render.texture_handle
@@ -1428,7 +1449,8 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                 ..
             } => {
                 let (center, size, rot_sin_cos) = sprite_parts_from_transform(&snapshot_transform);
-                ObjectType::Sprite(SpriteInstanceRaw {
+                let sprite_index = sprite_instances.len() as u32;
+                sprite_instances.push(SpriteInstanceRaw {
                     center,
                     size,
                     rot_sin_cos,
@@ -1439,7 +1461,8 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                     local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
                     edge_fade: *edge_fade,
                     texture_mask: 0.0,
-                })
+                });
+                ObjectType::Sprite(sprite_index)
             }
             RenderObjectTypeSnapshot::Mesh { tint, vertices } => ObjectType::Mesh {
                 transform: snapshot_transform,

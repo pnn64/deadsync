@@ -1,6 +1,6 @@
 use crate::engine::gfx::{
     BlendMode, DrawStats, ObjectType, RenderList, RenderObject, SamplerDesc, SamplerFilter,
-    SamplerWrap, Texture as RendererTexture, TextureHandleMap,
+    SamplerWrap, SpriteInstanceRaw, Texture as RendererTexture, TextureHandleMap,
 };
 use crate::engine::space::ortho_for_window;
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
@@ -112,6 +112,7 @@ pub fn draw(
     let default_proj = state.projection;
     let cameras = render_list.cameras.as_slice();
     let objects = render_list.objects.as_slice();
+    let sprite_instances = render_list.sprite_instances.as_slice();
     let vertex_counter = AtomicU32::new(0);
 
     let threads_auto = thread::available_parallelism()
@@ -161,6 +162,7 @@ pub fn draw(
                         };
                         local_vertices = local_vertices.saturating_add(draw_rows(
                             objects,
+                            sprite_instances,
                             cameras,
                             default_proj,
                             textures,
@@ -180,6 +182,7 @@ pub fn draw(
         vertex_counter.store(
             draw_rows(
                 objects,
+                sprite_instances,
                 cameras,
                 default_proj,
                 textures,
@@ -205,6 +208,7 @@ pub fn draw(
 
 fn draw_rows(
     objects: &[RenderObject],
+    sprite_instances: &[SpriteInstanceRaw],
     cameras: &[Matrix4],
     default_proj: Matrix4,
     textures: &TextureHandleMap<RendererTexture>,
@@ -222,7 +226,10 @@ fn draw_rows(
             .copied()
             .unwrap_or(default_proj);
         let drawn = match &obj.object_type {
-            ObjectType::Sprite(sprite) => {
+            ObjectType::Sprite(sprite_index) => {
+                let Some(sprite) = sprite_instances.get(*sprite_index as usize) else {
+                    continue;
+                };
                 let Some(RendererTexture::Software(tex)) = textures.get(&obj.texture_handle) else {
                     continue;
                 };

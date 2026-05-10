@@ -119,6 +119,7 @@ enum BlendMode {
 #[derive(Clone)]
 enum ObjectType {
     Sprite(SpriteInstanceRaw),
+    SpriteIndex(u32),
     TexturedMesh {
         instance: TMeshInstanceRaw,
         vertices: Arc<[TexturedMeshVertex]>,
@@ -130,6 +131,22 @@ enum ObjectType {
 #[allow(dead_code)] // Keep production staging fields in the model even when a scenario ignores them.
 struct RenderObject {
     object_type: ObjectType,
+    texture_handle: TextureHandle,
+    blend: BlendMode,
+    z: i16,
+    order: u32,
+    camera: u8,
+}
+
+#[derive(Clone, Copy)]
+enum ObjectTypeIndexed {
+    Sprite(u32),
+}
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)] // Keep production staging fields in the model even when a scenario ignores them.
+struct RenderObjectIndexed {
+    object_type: ObjectTypeIndexed,
     texture_handle: TextureHandle,
     blend: BlendMode,
     z: i16,
@@ -239,12 +256,23 @@ fn main() {
 fn run_sprite_pair(name: &str, count: usize, textures: usize) {
     let input = make_sprites(count, textures);
     let mut objects = Vec::new();
+    let mut extracted_objects = Vec::new();
+    let mut extracted_sprites = Vec::new();
+    let mut indexed_objects = Vec::new();
+    let mut indexed_sprites = Vec::new();
     let mut staged = Scratch::default();
     let mut grouped = Scratch::default();
+    let mut extracted = Scratch::default();
+    let mut indexed = Scratch::default();
     let mut direct = Scratch::default();
     stage_sprites(&input, &mut objects);
+    stage_sprites(&input, &mut extracted_objects);
+    extract_sprites(&mut extracted_objects, &mut extracted_sprites);
+    stage_sprites_indexed(&input, &mut indexed_objects, &mut indexed_sprites);
     prepare(&objects, &mut staged);
     prepare_grouped(&objects, &mut grouped);
+    prepare_extracted_sprites(&extracted_objects, &mut extracted);
+    prepare_indexed_sprites(&indexed_objects, &mut indexed);
     direct_sprites(&input, &mut direct);
 
     let staged = bench(
@@ -265,6 +293,29 @@ fn run_sprite_pair(name: &str, count: usize, textures: usize) {
             checksum_scratch(&grouped)
         },
     );
+    let extracted = bench(
+        format!("{name}: staged + extract sprites + prepare"),
+        SPRITE_ITERS,
+        || {
+            stage_sprites(black_box(&input), &mut extracted_objects);
+            extract_sprites(&mut extracted_objects, &mut extracted_sprites);
+            prepare_extracted_sprites(&extracted_objects, &mut extracted);
+            checksum_indexed(&extracted_sprites, &extracted)
+        },
+    );
+    let indexed = bench(
+        format!("{name}: indexed sprites + prepare"),
+        SPRITE_ITERS,
+        || {
+            stage_sprites_indexed(
+                black_box(&input),
+                &mut indexed_objects,
+                &mut indexed_sprites,
+            );
+            prepare_indexed_sprites(&indexed_objects, &mut indexed);
+            checksum_indexed(&indexed_sprites, &indexed)
+        },
+    );
     let direct = bench(
         format!("{name}: direct prepared buffers"),
         SPRITE_ITERS,
@@ -276,8 +327,12 @@ fn run_sprite_pair(name: &str, count: usize, textures: usize) {
 
     print_result(&staged);
     print_result(&grouped);
+    print_result(&extracted);
+    print_result(&indexed);
     print_result(&direct);
     print_ratio("grouped vs staged", &staged, &grouped);
+    print_ratio("extracted vs staged", &staged, &extracted);
+    print_ratio("indexed vs staged", &staged, &indexed);
     print_ratio("direct vs staged", &staged, &direct);
     println!();
 }
@@ -427,6 +482,53 @@ fn stage_sprites(input: &[SpriteInput], objects: &mut Vec<RenderObject>) {
     }
 }
 
+fn stage_sprites_indexed(
+    input: &[SpriteInput],
+    objects: &mut Vec<RenderObjectIndexed>,
+    sprites: &mut Vec<SpriteInstanceRaw>,
+) {
+    objects.clear();
+    sprites.clear();
+    objects.reserve(input.len());
+    sprites.reserve(input.len());
+    for sprite in input {
+        let index = sprites.len() as u32;
+        sprites.push(SpriteInstanceRaw {
+            center: sprite.center,
+            size: sprite.size,
+            rot_sin_cos: [0.0, 1.0],
+            tint: sprite.tint,
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            edge_fade: [0.0; 4],
+            texture_mask: 0.0,
+        });
+        objects.push(RenderObjectIndexed {
+            object_type: ObjectTypeIndexed::Sprite(index),
+            texture_handle: sprite.texture_handle,
+            blend: BlendMode::Alpha,
+            z: 0,
+            order: sprite.order,
+            camera: 0,
+        });
+    }
+}
+
+fn extract_sprites(objects: &mut [RenderObject], sprites: &mut Vec<SpriteInstanceRaw>) {
+    sprites.clear();
+    sprites.reserve(objects.len());
+    for obj in objects {
+        let ObjectType::Sprite(instance) = obj.object_type else {
+            continue;
+        };
+        let index = sprites.len() as u32;
+        sprites.push(instance);
+        obj.object_type = ObjectType::SpriteIndex(index);
+    }
+}
+
 fn stage_tmeshes(input: &[TMeshInput], objects: &mut Vec<RenderObject>) {
     objects.clear();
     objects.reserve(input.len());
@@ -484,6 +586,7 @@ fn prepare(objects: &[RenderObject], scratch: &mut Scratch) {
                     *depth_test,
                 );
             }
+            ObjectType::SpriteIndex(_) => unreachable!("extracted sprites use prepare_extracted"),
         }
     }
     flush_sprite_run(&mut sprite_run, &mut scratch.ops);
@@ -546,8 +649,67 @@ fn prepare_grouped(objects: &[RenderObject], scratch: &mut Scratch) {
                 );
                 i += 1;
             }
+            ObjectType::SpriteIndex(_) => unreachable!("extracted sprites use prepare_extracted"),
         }
     }
+}
+
+fn prepare_extracted_sprites(objects: &[RenderObject], scratch: &mut Scratch) {
+    scratch.sprites.clear();
+    scratch.tmesh_vertices.clear();
+    scratch.tmesh_instances.clear();
+    scratch.ops.clear();
+    scratch.shared_geom.clear();
+
+    let mut run: Option<SpriteRun> = None;
+    for obj in objects {
+        let ObjectType::SpriteIndex(instance_start) = obj.object_type else {
+            continue;
+        };
+        if let Some(last) = run.as_mut()
+            && last.texture_handle == obj.texture_handle
+            && last.instance_start + last.instance_count == instance_start
+        {
+            last.instance_count += 1;
+            continue;
+        }
+
+        flush_sprite_run(&mut run, &mut scratch.ops);
+        run = Some(SpriteRun {
+            instance_start,
+            instance_count: 1,
+            texture_handle: obj.texture_handle,
+        });
+    }
+    flush_sprite_run(&mut run, &mut scratch.ops);
+}
+
+fn prepare_indexed_sprites(objects: &[RenderObjectIndexed], scratch: &mut Scratch) {
+    scratch.sprites.clear();
+    scratch.tmesh_vertices.clear();
+    scratch.tmesh_instances.clear();
+    scratch.ops.clear();
+    scratch.shared_geom.clear();
+
+    let mut run: Option<SpriteRun> = None;
+    for obj in objects {
+        let ObjectTypeIndexed::Sprite(instance_start) = obj.object_type;
+        if let Some(last) = run.as_mut()
+            && last.texture_handle == obj.texture_handle
+            && last.instance_start + last.instance_count == instance_start
+        {
+            last.instance_count += 1;
+            continue;
+        }
+
+        flush_sprite_run(&mut run, &mut scratch.ops);
+        run = Some(SpriteRun {
+            instance_start,
+            instance_count: 1,
+            texture_handle: obj.texture_handle,
+        });
+    }
+    flush_sprite_run(&mut run, &mut scratch.ops);
 }
 
 fn direct_sprites(input: &[SpriteInput], scratch: &mut Scratch) {
@@ -718,6 +880,45 @@ fn checksum_scratch(scratch: &Scratch) -> u64 {
             .wrapping_add(instance.uv_offset[0].to_bits() as u64)
             .wrapping_add(instance.uv_tex_shift[0].to_bits() as u64)
             .wrapping_add(instance.texture_mask.to_bits() as u64);
+    }
+    for op in &scratch.ops {
+        match op {
+            DrawOp::Sprite(run) => {
+                out = out
+                    .wrapping_mul(131)
+                    .wrapping_add(run.instance_start as u64)
+                    .wrapping_add(run.instance_count as u64)
+                    .wrapping_add(run.texture_handle);
+            }
+            DrawOp::TMesh(run) => {
+                out = out
+                    .wrapping_mul(131)
+                    .wrapping_add(run.vertex_start as u64)
+                    .wrapping_add(run.vertex_count as u64)
+                    .wrapping_add(run.instance_start as u64)
+                    .wrapping_add(run.instance_count as u64)
+                    .wrapping_add(run.texture_handle);
+            }
+        }
+    }
+    out
+}
+
+fn checksum_indexed(sprites: &[SpriteInstanceRaw], scratch: &Scratch) -> u64 {
+    let mut out = sprites.len().wrapping_add(scratch.ops.len() << 24) as u64;
+    for sprite in sprites.iter().take(8) {
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(sprite.center[0].to_bits() as u64)
+            .wrapping_add(sprite.size[0].to_bits() as u64)
+            .wrapping_add(sprite.rot_sin_cos[1].to_bits() as u64)
+            .wrapping_add(sprite.tint[3].to_bits() as u64)
+            .wrapping_add(sprite.uv_scale[0].to_bits() as u64)
+            .wrapping_add(sprite.uv_offset[0].to_bits() as u64)
+            .wrapping_add(sprite.local_offset[0].to_bits() as u64)
+            .wrapping_add(sprite.local_offset_rot_sin_cos[1].to_bits() as u64)
+            .wrapping_add(sprite.edge_fade[0].to_bits() as u64)
+            .wrapping_add(sprite.texture_mask.to_bits() as u64);
     }
     for op in &scratch.ops {
         match op {

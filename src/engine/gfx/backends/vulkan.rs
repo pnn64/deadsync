@@ -362,7 +362,7 @@ pub fn init(
         tmesh_instance_ring_ptr: std::ptr::null_mut(),
         tmesh_capacity_instances: 0,
         per_frame_stride_tmesh_instances: 0,
-        prep: DrawScratch::with_capacity(256, 1024, 1024, 256, 64),
+        prep: DrawScratch::with_capacity(1024, 1024, 256, 64),
         cached_tmesh: FastU64Map::default(),
         cached_tmesh_bytes: 0,
         pending_tex_upload_cmd: None,
@@ -1482,7 +1482,7 @@ pub fn draw(
             );
     }
 
-    let needed_instances = state.prep.sprite_instances.len();
+    let needed_instances = render_list.sprite_instances.len();
     let needed_mesh_vertices = state.prep.mesh_vertices.len();
     let needed_tmesh_vertices = state.prep.tmesh_vertices.len();
     let needed_tmesh_instances = state.prep.tmesh_instances.len();
@@ -1588,7 +1588,7 @@ pub fn draw(
         if needed_instances > 0 {
             debug_assert!(!inst_base_ptr.is_null(), "instance ring missing");
             std::ptr::copy_nonoverlapping(
-                state.prep.sprite_instances.as_ptr(),
+                render_list.sprite_instances.as_ptr(),
                 inst_base_ptr,
                 needed_instances,
             );

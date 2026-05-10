@@ -87,6 +87,7 @@ impl<V> TextureHandleMap<V> {
 pub struct RenderList {
     pub clear_color: [f32; 4],
     pub cameras: Vec<Matrix4>,
+    pub sprite_instances: Vec<SpriteInstanceRaw>,
     pub objects: Vec<RenderObject>,
 }
 #[derive(Clone)]
@@ -306,7 +307,7 @@ impl TexturedMeshInstanceRaw {
 
 #[derive(Clone)]
 pub enum ObjectType {
-    Sprite(SpriteInstanceRaw),
+    Sprite(u32),
     Mesh {
         transform: Matrix4,
         tint: [f32; 4],

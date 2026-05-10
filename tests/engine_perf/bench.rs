@@ -1152,7 +1152,6 @@ fn run_draw_prep_tmesh_prepare_pair(
     let render_list = make_draw_prep_tmesh_render_list(mesh_count, verts_per_mesh, shared_invalid);
     let mut scratch = gfx::draw_prep::DrawScratch::with_capacity(
         0,
-        0,
         mesh_count * verts_per_mesh,
         mesh_count,
         mesh_count,
@@ -2356,7 +2355,8 @@ fn checksum_gfx_render(render: &deadsync::engine::gfx::RenderList) -> u64 {
             .wrapping_add((obj.order as u64) << 16)
             .wrapping_add((obj.camera as u64) << 48);
         match &obj.object_type {
-            deadsync::engine::gfx::ObjectType::Sprite(sprite) => {
+            deadsync::engine::gfx::ObjectType::Sprite(index) => {
+                let sprite = render.sprite_instances[*index as usize];
                 out = out
                     .wrapping_add(sprite.center[0].to_bits() as u64)
                     .wrapping_add(sprite.center[1].to_bits() as u64)
@@ -2780,6 +2780,7 @@ fn make_draw_prep_tmesh_render_list(
     gfx::RenderList {
         clear_color: [0.0, 0.0, 0.0, 1.0],
         cameras: vec![glam::Mat4::IDENTITY],
+        sprite_instances: Vec::new(),
         objects,
     }
 }

@@ -1,7 +1,7 @@
 use crate::engine::gfx::{
     BlendMode, FastU64Map, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType,
-    RenderList, SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshInstanceRaw,
-    TexturedMeshVertex, TexturedMeshVertices,
+    RenderList, TMeshCacheKey, TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
+    TexturedMeshVertices,
 };
 use glam::Vec4 as Vector4;
 use std::{collections::HashMap, hash::BuildHasherDefault};
@@ -79,7 +79,6 @@ pub enum DrawOp {
 
 #[derive(Debug, Default)]
 pub struct DrawScratch {
-    pub sprite_instances: Vec<SpriteInstanceRaw>,
     pub mesh_vertices: Vec<MeshVertex>,
     pub tmesh_vertices: Vec<TexturedMeshVertex>,
     pub tmesh_instances: Vec<TexturedMeshInstanceRaw>,
@@ -110,14 +109,12 @@ struct FrameTMeshGeom {
 impl DrawScratch {
     #[inline(always)]
     pub fn with_capacity(
-        sprite_instances: usize,
         mesh_vertices: usize,
         tmesh_vertices: usize,
         tmesh_instances: usize,
         ops: usize,
     ) -> Self {
         Self {
-            sprite_instances: Vec::with_capacity(sprite_instances),
             mesh_vertices: Vec::with_capacity(mesh_vertices),
             tmesh_vertices: Vec::with_capacity(tmesh_vertices),
             tmesh_instances: Vec::with_capacity(tmesh_instances),
@@ -206,14 +203,6 @@ where
 {
     let objects_len = render_list.objects.len();
 
-    scratch.sprite_instances.clear();
-    if scratch.sprite_instances.capacity() < objects_len {
-        scratch
-            .sprite_instances
-            .reserve(objects_len - scratch.sprite_instances.len());
-    }
-    debug_assert!(scratch.sprite_instances.capacity() >= objects_len);
-
     scratch.mesh_vertices.clear();
     scratch.tmesh_vertices.clear();
     scratch.tmesh_instances.clear();
@@ -232,16 +221,13 @@ where
     while i < objects_len {
         let obj = &render_list.objects[i];
         match &obj.object_type {
-            ObjectType::Sprite(instance) => {
+            ObjectType::Sprite(instance_start) => {
                 let mut sprite_run: Option<SpriteRun> = None;
                 let mut obj = obj;
-                let mut instance = instance;
+                let mut instance_start = *instance_start;
                 loop {
                     let texture_handle = obj.texture_handle;
                     if texture_handle != INVALID_TEXTURE_HANDLE {
-                        let instance_start = scratch.sprite_instances.len() as u32;
-                        scratch.sprite_instances.push(*instance);
-
                         if let Some(last) = sprite_run.as_mut()
                             && last.texture_handle == texture_handle
                             && last.blend == obj.blend
@@ -268,10 +254,10 @@ where
                         break;
                     }
                     obj = &render_list.objects[i];
-                    let ObjectType::Sprite(next_instance) = &obj.object_type else {
+                    let ObjectType::Sprite(next_instance_start) = &obj.object_type else {
                         break;
                     };
-                    instance = next_instance;
+                    instance_start = *next_instance_start;
                 }
 
                 if let Some(run) = sprite_run {
@@ -429,18 +415,7 @@ mod tests {
 
     fn sprite_object(order: u32) -> RenderObject {
         RenderObject {
-            object_type: ObjectType::Sprite(SpriteInstanceRaw {
-                center: [0.0, 0.0, 0.0, 1.0],
-                size: [1.0, 1.0],
-                rot_sin_cos: [0.0, 1.0],
-                tint: [1.0, 1.0, 1.0, 1.0],
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                local_offset: [0.0, 0.0],
-                local_offset_rot_sin_cos: [0.0, 1.0],
-                edge_fade: [0.0, 0.0, 0.0, 0.0],
-                texture_mask: 0.0,
-            }),
+            object_type: ObjectType::Sprite(order),
             texture_handle: INVALID_TEXTURE_HANDLE,
             blend: BlendMode::Alpha,
             z: 0,
@@ -454,13 +429,26 @@ mod tests {
         let render_list = RenderList {
             clear_color: [0.0, 0.0, 0.0, 1.0],
             cameras: vec![Matrix4::IDENTITY],
+            sprite_instances: (0..101)
+                .map(|_| SpriteInstanceRaw {
+                    center: [0.0, 0.0, 0.0, 1.0],
+                    size: [1.0, 1.0],
+                    rot_sin_cos: [0.0, 1.0],
+                    tint: [1.0, 1.0, 1.0, 1.0],
+                    uv_scale: [1.0, 1.0],
+                    uv_offset: [0.0, 0.0],
+                    local_offset: [0.0, 0.0],
+                    local_offset_rot_sin_cos: [0.0, 1.0],
+                    edge_fade: [0.0, 0.0, 0.0, 0.0],
+                    texture_mask: 0.0,
+                })
+                .collect(),
             objects: (0..101).map(sprite_object).collect(),
         };
-        let mut scratch = DrawScratch::with_capacity(100, 0, 0, 0, 100);
+        let mut scratch = DrawScratch::with_capacity(0, 0, 0, 100);
 
         prepare(&render_list, &mut scratch, |_, _| false);
 
-        assert!(scratch.sprite_instances.capacity() >= render_list.objects.len());
         assert!(scratch.ops.capacity() >= render_list.objects.len());
     }
 }

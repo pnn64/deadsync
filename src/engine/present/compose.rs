@@ -73,6 +73,12 @@ pub fn build_screen_cached_with_scratch(
         objects.reserve(object_capacity - objects.len());
     }
     debug_assert!(objects.capacity() >= object_capacity);
+    let mut sprite_instances = std::mem::take(&mut scratch.sprite_instances);
+    sprite_instances.clear();
+    if sprite_instances.capacity() < object_capacity {
+        sprite_instances.reserve(object_capacity - sprite_instances.len());
+    }
+    debug_assert!(sprite_instances.capacity() >= object_capacity);
     let mut cameras = std::mem::take(&mut scratch.cameras);
     cameras.clear();
     if cameras.capacity() < 4 {
@@ -114,6 +120,7 @@ pub fn build_screen_cached_with_scratch(
         &mut masks,
         &mut order_counter,
         &mut objects,
+        &mut sprite_instances,
         text_cache,
         &mut texture_cache,
         total_elapsed,
@@ -130,6 +137,7 @@ pub fn build_screen_cached_with_scratch(
     RenderList {
         clear_color,
         cameras,
+        sprite_instances,
         objects,
     }
 }
@@ -137,6 +145,7 @@ pub fn build_screen_cached_with_scratch(
 #[derive(Default)]
 pub struct ComposeScratch {
     objects: Vec<RenderObject>,
+    sprite_instances: Vec<renderer::SpriteInstanceRaw>,
     cameras: Vec<Matrix4>,
     masks: Vec<WorldRect>,
     z_counts: Vec<usize>,
@@ -164,6 +173,9 @@ impl ComposeScratch {
             self.recycled_text_mesh_vertices.push(vertices);
         }
         self.objects = objects;
+        let mut sprite_instances = std::mem::take(&mut render.sprite_instances);
+        sprite_instances.clear();
+        self.sprite_instances = sprite_instances;
         let mut cameras = std::mem::take(&mut render.cameras);
         cameras.clear();
         self.cameras = cameras;
@@ -1898,6 +1910,7 @@ fn sprite_source_handle(
 
 fn push_shadow_objects_for_range(
     out: &mut Vec<RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     start: usize,
     end: usize,
     len: [f32; 2],
@@ -1908,12 +1921,15 @@ fn push_shadow_objects_for_range(
         let obj = &out[i];
         let mut obj_type = obj.object_type.clone();
         match &mut obj_type {
-            renderer::ObjectType::Sprite(sprite) => {
+            renderer::ObjectType::Sprite(sprite_index) => {
+                let mut sprite = sprite_instances[*sprite_index as usize];
                 let mut shadow_tint = color;
                 shadow_tint[3] *= sprite.tint[3];
                 sprite.tint = shadow_tint;
                 sprite.center[0] += len[0];
                 sprite.center[1] += len[1];
+                *sprite_index = sprite_instances.len() as u32;
+                sprite_instances.push(sprite);
             }
             renderer::ObjectType::Mesh {
                 transform, tint, ..
@@ -1986,6 +2002,7 @@ fn build_actor_list<'a>(
     masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
     out: &mut Vec<RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     text_cache: &mut TextLayoutCache,
     texture_cache: &mut TextureLookupCache,
     total_elapsed: f32,
@@ -2015,6 +2032,7 @@ fn build_actor_list<'a>(
                 masks,
                 order_counter,
                 out,
+                sprite_instances,
                 text_cache,
                 texture_cache,
                 total_elapsed,
@@ -2037,6 +2055,7 @@ fn build_actor_recursive<'a>(
     masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
     out: &mut Vec<RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     text_cache: &mut TextLayoutCache,
     texture_cache: &mut TextureLookupCache,
     total_elapsed: f32,
@@ -2169,8 +2188,10 @@ fn build_actor_recursive<'a>(
             }
 
             let before = out.len();
+            let before_sprite = sprite_instances.len();
             push_sprite(
                 out,
+                sprite_instances,
                 camera,
                 rect,
                 m,
@@ -2207,7 +2228,9 @@ fn build_actor_recursive<'a>(
             if *mask_dest {
                 clip_objects_range_to_world_masks(
                     out,
+                    sprite_instances,
                     before,
+                    before_sprite,
                     masks,
                     &mut scratch.recycled_text_mesh_vertices,
                 );
@@ -2226,6 +2249,7 @@ fn build_actor_recursive<'a>(
             if has_shadow(*shadow_len) {
                 push_shadow_objects_for_range(
                     out,
+                    sprite_instances,
                     before,
                     end,
                     *shadow_len,
@@ -2234,8 +2258,10 @@ fn build_actor_recursive<'a>(
             }
             if glow[3] > 0.0001 {
                 let before = out.len();
+                let before_sprite = sprite_instances.len();
                 push_sprite(
                     out,
+                    sprite_instances,
                     camera,
                     rect,
                     m,
@@ -2272,7 +2298,9 @@ fn build_actor_recursive<'a>(
                 if *mask_dest {
                     clip_objects_range_to_world_masks(
                         out,
+                        sprite_instances,
                         before,
+                        before_sprite,
                         masks,
                         &mut scratch.recycled_text_mesh_vertices,
                     );
@@ -2447,13 +2475,21 @@ fn build_actor_recursive<'a>(
                 masks,
                 order_counter,
                 out,
+                sprite_instances,
                 text_cache,
                 texture_cache,
                 total_elapsed,
             );
             let end = out.len();
             if has_shadow(*len) {
-                push_shadow_objects_for_range(out, start, end, *len, mul_rgba(*color, style.tint));
+                push_shadow_objects_for_range(
+                    out,
+                    sprite_instances,
+                    start,
+                    end,
+                    *len,
+                    mul_rgba(*color, style.tint),
+                );
             }
         }
 
@@ -2476,6 +2512,7 @@ fn build_actor_recursive<'a>(
                 masks,
                 order_counter,
                 out,
+                sprite_instances,
                 text_cache,
                 texture_cache,
                 total_elapsed,
@@ -2545,6 +2582,7 @@ fn build_actor_recursive<'a>(
                     )
                 });
                 let before = out.len();
+                let before_sprite = sprite_instances.len();
                 let layer = base_z.saturating_add(*z);
                 let end = if let Some(placement) = resolve_text_layout_placement(
                     layout,
@@ -2573,13 +2611,16 @@ fn build_actor_recursive<'a>(
                         if let Some(clip_world) = clip_world {
                             clip_objects_range_to_world_rect(
                                 out,
+                                sprite_instances,
                                 before,
+                                before_sprite,
                                 clip_world,
                                 &mut scratch.recycled_text_mesh_vertices,
                             );
                         }
                         if needs_stroke {
                             let stroke_start = out.len();
+                            let stroke_start_sprite = sprite_instances.len();
                             push_text_mesh_batches(
                                 out,
                                 layout.stroke_batches(*align_text),
@@ -2592,7 +2633,9 @@ fn build_actor_recursive<'a>(
                             if let Some(clip_world) = clip_world {
                                 clip_objects_range_to_world_rect(
                                     out,
+                                    sprite_instances,
                                     stroke_start,
+                                    stroke_start_sprite,
                                     clip_world,
                                     &mut scratch.recycled_text_mesh_vertices,
                                 );
@@ -2632,13 +2675,16 @@ fn build_actor_recursive<'a>(
                         if let Some(clip_world) = clip_world {
                             clip_objects_range_to_world_rect(
                                 out,
+                                sprite_instances,
                                 before,
+                                before_sprite,
                                 clip_world,
                                 recycled_vertices,
                             );
                         }
                         if needs_stroke {
                             let stroke_start = out.len();
+                            let stroke_start_sprite = sprite_instances.len();
                             if text_distortion > 1e-6 {
                                 build_transient_text_mesh_builders(
                                     layout,
@@ -2673,7 +2719,9 @@ fn build_actor_recursive<'a>(
                             if let Some(clip_world) = clip_world {
                                 clip_objects_range_to_world_rect(
                                     out,
+                                    sprite_instances,
                                     stroke_start,
+                                    stroke_start_sprite,
                                     clip_world,
                                     recycled_vertices,
                                 );
@@ -2697,7 +2745,9 @@ fn build_actor_recursive<'a>(
                 if *mask_dest {
                     clip_objects_range_to_world_masks(
                         out,
+                        sprite_instances,
                         before,
+                        before_sprite,
                         masks,
                         &mut scratch.recycled_text_mesh_vertices,
                     );
@@ -2723,6 +2773,7 @@ fn build_actor_recursive<'a>(
                 if has_shadow(*shadow_len) {
                     push_shadow_objects_for_range(
                         out,
+                        sprite_instances,
                         before,
                         end,
                         *shadow_len,
@@ -2749,6 +2800,7 @@ fn build_actor_recursive<'a>(
                         let before = out.len();
                         push_sprite(
                             out,
+                            sprite_instances,
                             camera,
                             rect,
                             m,
@@ -2795,6 +2847,7 @@ fn build_actor_recursive<'a>(
                         let before = out.len();
                         push_sprite(
                             out,
+                            sprite_instances,
                             camera,
                             rect,
                             m,
@@ -2853,6 +2906,7 @@ fn build_actor_recursive<'a>(
                 masks,
                 order_counter,
                 out,
+                sprite_instances,
                 text_cache,
                 texture_cache,
                 total_elapsed,
@@ -2878,6 +2932,7 @@ fn build_actor_recursive<'a>(
                         let before = out.len();
                         push_sprite(
                             out,
+                            sprite_instances,
                             camera,
                             rect,
                             m,
@@ -2924,6 +2979,7 @@ fn build_actor_recursive<'a>(
                         let before = out.len();
                         push_sprite(
                             out,
+                            sprite_instances,
                             camera,
                             rect,
                             m,
@@ -2983,6 +3039,7 @@ fn build_actor_recursive<'a>(
                 masks,
                 order_counter,
                 out,
+                sprite_instances,
                 text_cache,
                 texture_cache,
                 total_elapsed,
@@ -3181,6 +3238,7 @@ fn fold_sprite_xy_rot(
 #[inline(always)]
 fn push_sprite<'a>(
     out: &mut Vec<renderer::RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     camera: u8,
     rect: SmRect,
     m: &Metrics,
@@ -3314,19 +3372,22 @@ fn push_sprite<'a>(
         }
     };
 
+    let sprite_index = sprite_instances.len() as u32;
+    sprite_instances.push(renderer::SpriteInstanceRaw {
+        center: [center_x, center_y, world_z, 0.0],
+        size: [size_x, size_y],
+        rot_sin_cos: [sin_z, cos_z],
+        tint,
+        uv_scale,
+        uv_offset,
+        local_offset,
+        local_offset_rot_sin_cos,
+        edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
+        texture_mask: texture_mask as u8 as f32,
+    });
+
     out.push(renderer::RenderObject {
-        object_type: renderer::ObjectType::Sprite(renderer::SpriteInstanceRaw {
-            center: [center_x, center_y, world_z, 0.0],
-            size: [size_x, size_y],
-            rot_sin_cos: [sin_z, cos_z],
-            tint,
-            uv_scale,
-            uv_offset,
-            local_offset,
-            local_offset_rot_sin_cos,
-            edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
-            texture_mask: texture_mask as u8 as f32,
-        }),
+        object_type: renderer::ObjectType::Sprite(sprite_index),
         texture_handle,
         blend,
         z: 0,
@@ -3520,7 +3581,9 @@ fn sm_rect_to_world_edges(rect: SmRect, m: &Metrics) -> WorldRect {
 
 fn clip_objects_range_to_world_masks(
     objects: &mut Vec<RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     start: usize,
+    sprite_start: usize,
     masks: &[WorldRect],
     recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
 ) {
@@ -3529,10 +3592,18 @@ fn clip_objects_range_to_world_masks(
     }
     if masks.is_empty() {
         objects.truncate(start);
+        sprite_instances.truncate(sprite_start);
         return;
     }
     if let [mask] = masks {
-        clip_objects_range_to_world_rect(objects, start, *mask, recycled_vertices);
+        clip_objects_range_to_world_rect(
+            objects,
+            sprite_instances,
+            start,
+            sprite_start,
+            *mask,
+            recycled_vertices,
+        );
         return;
     }
     let len = objects.len();
@@ -3540,7 +3611,7 @@ fn clip_objects_range_to_world_masks(
     for read in start..len {
         let keep = {
             let obj = &mut objects[read];
-            clip_object_to_world_masks(obj, masks)
+            clip_object_to_world_masks(obj, sprite_instances, masks)
         };
         if keep {
             if write != read {
@@ -3550,16 +3621,27 @@ fn clip_objects_range_to_world_masks(
         }
     }
     objects.truncate(write);
+    compact_sprite_instances_for_range(&mut objects[start..], sprite_instances, sprite_start);
 }
 
 struct ClippedSpriteObject {
     object_type: renderer::ObjectType,
+    sprite: Option<renderer::SpriteInstanceRaw>,
 }
 
 #[inline(always)]
-fn object_world_area(object_type: &renderer::ObjectType) -> f32 {
-    match object_type {
-        renderer::ObjectType::Sprite(sprite) => (sprite.size[0] * sprite.size[1]).abs(),
+fn object_world_area(
+    clipped: &ClippedSpriteObject,
+    sprite_instances: &[renderer::SpriteInstanceRaw],
+) -> f32 {
+    if let Some(sprite) = clipped.sprite {
+        return (sprite.size[0] * sprite.size[1]).abs();
+    }
+    match &clipped.object_type {
+        renderer::ObjectType::Sprite(index) => {
+            let sprite = sprite_instances[*index as usize];
+            (sprite.size[0] * sprite.size[1]).abs()
+        }
         renderer::ObjectType::TexturedMesh {
             instance, vertices, ..
         } => {
@@ -3583,20 +3665,31 @@ fn object_world_area(object_type: &renderer::ObjectType) -> f32 {
     }
 }
 
-fn clip_object_to_world_masks(obj: &mut RenderObject, masks: &[WorldRect]) -> bool {
+fn clip_object_to_world_masks(
+    obj: &mut RenderObject,
+    sprite_instances: &mut [renderer::SpriteInstanceRaw],
+    masks: &[WorldRect],
+) -> bool {
     let mut best_obj: Option<ClippedSpriteObject> = None;
     let mut best_area = -1.0_f32;
     for &mask in masks {
-        let Some(candidate) = clipped_sprite_object_to_world_rect(obj, mask, None) else {
+        let Some(candidate) =
+            clipped_sprite_object_to_world_rect(obj, sprite_instances, mask, None)
+        else {
             continue;
         };
-        let area = object_world_area(&candidate.object_type);
+        let area = object_world_area(&candidate, sprite_instances);
         if area > best_area {
             best_area = area;
             best_obj = Some(candidate);
         }
     }
     if let Some(chosen) = best_obj {
+        if let Some(sprite) = chosen.sprite
+            && let renderer::ObjectType::Sprite(index) = &chosen.object_type
+        {
+            sprite_instances[*index as usize] = sprite;
+        }
         obj.object_type = chosen.object_type;
         true
     } else {
@@ -3606,7 +3699,9 @@ fn clip_object_to_world_masks(obj: &mut RenderObject, masks: &[WorldRect]) -> bo
 
 fn clip_objects_range_to_world_rect(
     objects: &mut Vec<RenderObject>,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     start: usize,
+    sprite_start: usize,
     clip: WorldRect,
     recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
 ) {
@@ -3615,6 +3710,7 @@ fn clip_objects_range_to_world_rect(
     }
     if clip.left >= clip.right || clip.bottom >= clip.top {
         objects.truncate(start);
+        sprite_instances.truncate(sprite_start);
         return;
     }
 
@@ -3623,7 +3719,12 @@ fn clip_objects_range_to_world_rect(
     for read in start..len {
         let keep = {
             let obj = &mut objects[read];
-            clip_sprite_object_to_world_rect_with_recycled(obj, clip, Some(&mut *recycled_vertices))
+            clip_sprite_object_to_world_rect_with_recycled(
+                obj,
+                sprite_instances,
+                clip,
+                Some(&mut *recycled_vertices),
+            )
         };
         if keep {
             if write != read {
@@ -3633,15 +3734,43 @@ fn clip_objects_range_to_world_rect(
         }
     }
     objects.truncate(write);
+    compact_sprite_instances_for_range(&mut objects[start..], sprite_instances, sprite_start);
+}
+
+fn compact_sprite_instances_for_range(
+    objects: &mut [RenderObject],
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+    sprite_start: usize,
+) {
+    let mut write = sprite_start;
+    for obj in objects {
+        let renderer::ObjectType::Sprite(index) = &mut obj.object_type else {
+            continue;
+        };
+        let sprite = sprite_instances[*index as usize];
+        *index = write as u32;
+        if write < sprite_instances.len() {
+            sprite_instances[write] = sprite;
+        } else {
+            sprite_instances.push(sprite);
+        }
+        write += 1;
+    }
+    sprite_instances.truncate(write);
 }
 
 #[cfg(test)]
-fn clip_sprite_object_to_world_rect(obj: &mut RenderObject, clip: WorldRect) -> bool {
-    clip_sprite_object_to_world_rect_with_recycled(obj, clip, None)
+fn clip_sprite_object_to_world_rect(
+    obj: &mut RenderObject,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
+    clip: WorldRect,
+) -> bool {
+    clip_sprite_object_to_world_rect_with_recycled(obj, sprite_instances, clip, None)
 }
 
 fn clip_sprite_object_to_world_rect_with_recycled(
     obj: &mut RenderObject,
+    sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     clip: WorldRect,
     recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> bool {
@@ -3675,15 +3804,23 @@ fn clip_sprite_object_to_world_rect_with_recycled(
         renderer::ObjectType::Sprite(_) => {}
     }
 
-    let Some(clipped) = clipped_sprite_object_to_world_rect(obj, clip, recycled_vertices) else {
+    let Some(clipped) =
+        clipped_sprite_object_to_world_rect(obj, sprite_instances, clip, recycled_vertices)
+    else {
         return false;
     };
+    if let Some(sprite) = clipped.sprite
+        && let renderer::ObjectType::Sprite(index) = &clipped.object_type
+    {
+        sprite_instances[*index as usize] = sprite;
+    }
     obj.object_type = clipped.object_type;
     true
 }
 
 fn clipped_sprite_object_to_world_rect(
     obj: &RenderObject,
+    sprite_instances: &[renderer::SpriteInstanceRaw],
     clip: WorldRect,
     recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> Option<ClippedSpriteObject> {
@@ -3691,7 +3828,8 @@ fn clipped_sprite_object_to_world_rect(
         return None;
     }
     match &obj.object_type {
-        renderer::ObjectType::Sprite(sprite) => {
+        renderer::ObjectType::Sprite(index) => {
+            let sprite = sprite_instances[*index as usize];
             let eps = 1e-6;
             let offset_world = [
                 sprite.local_offset_rot_sin_cos[1].mul_add(
@@ -3769,7 +3907,8 @@ fn clipped_sprite_object_to_world_rect(
             let new_h = h * sy_crop;
 
             Some(ClippedSpriteObject {
-                object_type: renderer::ObjectType::Sprite(renderer::SpriteInstanceRaw {
+                object_type: renderer::ObjectType::Sprite(*index),
+                sprite: Some(renderer::SpriteInstanceRaw {
                     center: [center_x, center_y, sprite.center[2], sprite.center[3]],
                     size: [new_w, new_h],
                     rot_sin_cos: sprite.rot_sin_cos,
@@ -3805,6 +3944,7 @@ fn clipped_sprite_object_to_world_rect(
             {
                 return Some(ClippedSpriteObject {
                     object_type: obj.object_type.clone(),
+                    sprite: None,
                 });
             }
             clip_textured_mesh_to_world_rect(
@@ -3821,6 +3961,7 @@ fn clipped_sprite_object_to_world_rect(
         }
         renderer::ObjectType::Mesh { .. } => Some(ClippedSpriteObject {
             object_type: obj.object_type.clone(),
+            sprite: None,
         }),
     }
 }
@@ -4102,6 +4243,7 @@ fn clip_textured_mesh_to_world_rect(
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             depth_test: false,
         },
+        sprite: None,
     })
 }
 
@@ -4178,6 +4320,7 @@ fn clip_rotated_sprite_to_world_rect(
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             depth_test: false,
         },
+        sprite: None,
     })
 }
 
@@ -4487,18 +4630,7 @@ mod tests {
 
     fn test_render_object(z: i16, order: u32) -> RenderObject {
         RenderObject {
-            object_type: ObjectType::Sprite(SpriteInstanceRaw {
-                center: [0.0, 0.0, 0.0, 0.0],
-                size: [1.0, 1.0],
-                rot_sin_cos: [0.0, 1.0],
-                tint: [1.0; 4],
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                local_offset: [0.0, 0.0],
-                local_offset_rot_sin_cos: [0.0, 1.0],
-                edge_fade: [0.0; 4],
-                texture_mask: 0.0,
-            }),
+            object_type: ObjectType::Sprite(0),
             texture_handle: 0,
             blend: BlendMode::Alpha,
             z,
@@ -4616,19 +4748,20 @@ mod tests {
 
     #[test]
     fn mask_clip_chooses_largest_intersection() {
+        let mut sprite_instances = vec![SpriteInstanceRaw {
+            center: [0.0, 0.0, 0.0, 0.0],
+            size: [10.0, 10.0],
+            rot_sin_cos: [0.0, 1.0],
+            tint: [1.0; 4],
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            edge_fade: [0.0; 4],
+            texture_mask: 0.0,
+        }];
         let mut obj = RenderObject {
-            object_type: ObjectType::Sprite(SpriteInstanceRaw {
-                center: [0.0, 0.0, 0.0, 0.0],
-                size: [10.0, 10.0],
-                rot_sin_cos: [0.0, 1.0],
-                tint: [1.0; 4],
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                local_offset: [0.0, 0.0],
-                local_offset_rot_sin_cos: [0.0, 1.0],
-                edge_fade: [0.0; 4],
-                texture_mask: 0.0,
-            }),
+            object_type: ObjectType::Sprite(0),
             texture_handle: 0,
             blend: BlendMode::Alpha,
             z: 0,
@@ -4638,6 +4771,7 @@ mod tests {
 
         assert!(clip_object_to_world_masks(
             &mut obj,
+            &mut sprite_instances,
             &[
                 WorldRect {
                     left: -2.0,
@@ -4654,7 +4788,8 @@ mod tests {
             ],
         ));
 
-        if let ObjectType::Sprite(sprite) = &obj.object_type {
+        if let ObjectType::Sprite(index) = &obj.object_type {
+            let sprite = sprite_instances[*index as usize];
             assert_eq!(sprite.size, [10.0, 10.0]);
             assert_eq!(sprite.uv_scale, [1.0, 1.0]);
             assert_eq!(sprite.uv_offset, [0.0, 0.0]);
@@ -4665,19 +4800,20 @@ mod tests {
 
     #[test]
     fn rotated_clip_preserves_texture_handle() {
+        let mut sprite_instances = vec![SpriteInstanceRaw {
+            center: [0.0, 0.0, 0.0, 0.0],
+            size: [10.0, 10.0],
+            rot_sin_cos: [45.0_f32.to_radians().sin(), 45.0_f32.to_radians().cos()],
+            tint: [0.25, 0.5, 0.75, 1.0],
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            edge_fade: [0.0; 4],
+            texture_mask: 0.0,
+        }];
         let mut obj = RenderObject {
-            object_type: ObjectType::Sprite(SpriteInstanceRaw {
-                center: [0.0, 0.0, 0.0, 0.0],
-                size: [10.0, 10.0],
-                rot_sin_cos: [45.0_f32.to_radians().sin(), 45.0_f32.to_radians().cos()],
-                tint: [0.25, 0.5, 0.75, 1.0],
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                local_offset: [0.0, 0.0],
-                local_offset_rot_sin_cos: [0.0, 1.0],
-                edge_fade: [0.0; 4],
-                texture_mask: 0.0,
-            }),
+            object_type: ObjectType::Sprite(0),
             texture_handle: 17,
             blend: BlendMode::Alpha,
             z: 0,
@@ -4687,6 +4823,7 @@ mod tests {
 
         assert!(clip_sprite_object_to_world_rect(
             &mut obj,
+            &mut sprite_instances,
             WorldRect {
                 left: -3.0,
                 right: 3.0,
@@ -4860,6 +4997,7 @@ mod tests {
         let mut render = crate::engine::gfx::RenderList {
             clear_color: [0.0, 0.0, 0.0, 1.0],
             cameras: Vec::new(),
+            sprite_instances: Vec::new(),
             objects: vec![RenderObject {
                 object_type: ObjectType::TexturedMesh {
                     instance: TexturedMeshInstanceRaw::new(
