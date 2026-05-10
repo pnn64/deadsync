@@ -3883,6 +3883,33 @@ fn clip_sprite_object_to_world_rect_with_recycled(
     clip: WorldRect,
     recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> bool {
+    if clip.left >= clip.right || clip.bottom >= clip.top {
+        return false;
+    }
+    match &obj.object_type {
+        renderer::ObjectType::Mesh { .. } => return true,
+        renderer::ObjectType::TexturedMesh { vertices, .. } => {
+            let Some(bounds) = textured_mesh_world_bounds(vertices.as_ref(), obj.transform) else {
+                return false;
+            };
+            if bounds.right < clip.left
+                || bounds.left > clip.right
+                || bounds.top < clip.bottom
+                || bounds.bottom > clip.top
+            {
+                return false;
+            }
+            if bounds.left >= clip.left
+                && bounds.right <= clip.right
+                && bounds.bottom >= clip.bottom
+                && bounds.top <= clip.top
+            {
+                return true;
+            }
+        }
+        renderer::ObjectType::Sprite { .. } => {}
+    }
+
     let Some(clipped) = clipped_sprite_object_to_world_rect(obj, clip, recycled_vertices) else {
         return false;
     };

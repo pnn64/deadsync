@@ -43,6 +43,8 @@ const VIDEO_FRAME_ITERS: usize = 800;
 const VIDEO_QUEUE_ITERS: usize = 1_200;
 const AUDIO_CLOCK_ITERS: usize = 600_000;
 const CLIP_RECYCLE_ITERS: usize = 18_000;
+const CLIP_FAST_ACCEPT_ITERS: usize = 20_000;
+const SHADOW_TMESH_ITERS: usize = 4_000;
 
 struct CountingAlloc {
     alloc_calls: AtomicU64,
@@ -140,6 +142,18 @@ struct TexturedMeshVertex {
     uv: [f32; 2],
     tex_matrix_scale: [f32; 2],
     color: [f32; 4],
+}
+
+#[derive(Clone)]
+enum ClipTMeshVertices {
+    Shared(Arc<[TexturedMeshVertex]>),
+    Transient(Vec<TexturedMeshVertex>),
+}
+
+#[derive(Clone)]
+struct ClipTMeshObj {
+    tint: [f32; 4],
+    vertices: ClipTMeshVertices,
 }
 
 #[derive(Clone, Copy)]
@@ -640,6 +654,8 @@ fn bench_shadow_build() {
     run_real_shadow_build_pair("real Actor 256 shadowed sprites", 256);
     run_shadow_build_pair("64 shadowed sprites", 64);
     run_shadow_build_pair("256 shadowed sprites", 256);
+    run_shadow_transient_mesh_pair("128 transient meshes x 96 verts", 128, 96);
+    run_shadow_transient_mesh_pair("512 transient meshes x 24 verts", 512, 24);
     println!();
 }
 
@@ -973,6 +989,8 @@ fn bench_clip_vertex_recycle() {
     print_result(&local);
     print_result(&reused);
     print_ratio("scratch recycle vs local pool", &local, &reused);
+    run_clip_fast_accept_pair("inside transient meshes 128 x 96", 128, 96);
+    run_clip_fast_accept_pair("inside transient meshes 512 x 24", 512, 24);
     println!();
 }
 
@@ -1330,6 +1348,30 @@ fn run_real_shadow_build_pair(name: &str, count: usize) {
     print_result(&boxed);
     print_result(&inline);
     print_ratio("inline actor shadow vs boxed", &boxed, &inline);
+}
+
+fn run_shadow_transient_mesh_pair(name: &str, mesh_count: usize, verts_per_mesh: usize) {
+    let base = make_clip_tmesh_objects(mesh_count, verts_per_mesh);
+    let mut out = Vec::with_capacity(mesh_count);
+    let current = bench(
+        format!("{name}: clone transient Vec"),
+        SHADOW_TMESH_ITERS,
+        || {
+            let mut meshes = base.clone();
+            shadow_tmesh_current(black_box(&mut meshes), &mut out)
+        },
+    );
+    let shared = bench(
+        format!("{name}: convert to shared"),
+        SHADOW_TMESH_ITERS,
+        || {
+            let mut meshes = base.clone();
+            shadow_tmesh_shared(black_box(&mut meshes), &mut out)
+        },
+    );
+    print_result(&current);
+    print_result(&shared);
+    print_ratio("shared shadow vs clone", &current, &shared);
 }
 
 #[derive(Clone, Copy)]
@@ -2234,6 +2276,105 @@ fn clip_meshes_into(
             .wrapping_add(out.len() as u64)
             .wrapping_add(out.capacity() as u64);
         outputs.push(out);
+    }
+    checksum
+}
+
+fn run_clip_fast_accept_pair(name: &str, mesh_count: usize, verts_per_mesh: usize) {
+    let mut current = make_clip_tmesh_objects(mesh_count, verts_per_mesh);
+    let mut keep = make_clip_tmesh_objects(mesh_count, verts_per_mesh);
+    let current = bench(
+        format!("{name}: current clone"),
+        CLIP_FAST_ACCEPT_ITERS,
+        || clip_inside_current(black_box(&mut current)),
+    );
+    let keep = bench(
+        format!("{name}: keep in place"),
+        CLIP_FAST_ACCEPT_ITERS,
+        || clip_inside_keep(black_box(&mut keep)),
+    );
+    print_result(&current);
+    print_result(&keep);
+    print_ratio("keep vs clone", &current, &keep);
+}
+
+fn make_clip_tmesh_objects(mesh_count: usize, verts_per_mesh: usize) -> Vec<ClipTMeshObj> {
+    make_clip_meshes(mesh_count, verts_per_mesh)
+        .into_iter()
+        .map(|vertices| ClipTMeshObj {
+            tint: [1.0; 4],
+            vertices: ClipTMeshVertices::Transient(vertices),
+        })
+        .collect()
+}
+
+fn clip_inside_current(meshes: &mut [ClipTMeshObj]) -> u64 {
+    let mut checksum = 0u64;
+    for mesh in meshes {
+        let clipped = mesh.clone();
+        *mesh = clipped;
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(clip_tmesh_len(mesh) as u64);
+    }
+    checksum
+}
+
+fn clip_inside_keep(meshes: &mut [ClipTMeshObj]) -> u64 {
+    let mut checksum = 0u64;
+    for mesh in meshes {
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(clip_tmesh_len(mesh) as u64);
+    }
+    checksum
+}
+
+fn shadow_tmesh_current(meshes: &mut [ClipTMeshObj], out: &mut Vec<ClipTMeshObj>) -> u64 {
+    out.clear();
+    for mesh in meshes {
+        let mut shadow = mesh.clone();
+        shadow.tint = [0.0, 0.0, 0.0, mesh.tint[3] * 0.5];
+        out.push(shadow);
+    }
+    checksum_clip_tmeshes(out)
+}
+
+fn shadow_tmesh_shared(meshes: &mut [ClipTMeshObj], out: &mut Vec<ClipTMeshObj>) -> u64 {
+    out.clear();
+    for mesh in meshes {
+        let shadow_vertices = match &mut mesh.vertices {
+            ClipTMeshVertices::Shared(vertices) => ClipTMeshVertices::Shared(Arc::clone(vertices)),
+            ClipTMeshVertices::Transient(vertices) => {
+                let shared =
+                    Arc::<[TexturedMeshVertex]>::from(std::mem::take(vertices).into_boxed_slice());
+                let shadow_vertices = ClipTMeshVertices::Shared(Arc::clone(&shared));
+                mesh.vertices = ClipTMeshVertices::Shared(shared);
+                shadow_vertices
+            }
+        };
+        out.push(ClipTMeshObj {
+            tint: [0.0, 0.0, 0.0, mesh.tint[3] * 0.5],
+            vertices: shadow_vertices,
+        });
+    }
+    checksum_clip_tmeshes(out)
+}
+
+fn clip_tmesh_len(mesh: &ClipTMeshObj) -> usize {
+    match &mesh.vertices {
+        ClipTMeshVertices::Shared(vertices) => vertices.len(),
+        ClipTMeshVertices::Transient(vertices) => vertices.len(),
+    }
+}
+
+fn checksum_clip_tmeshes(meshes: &[ClipTMeshObj]) -> u64 {
+    let mut checksum = 0u64;
+    for mesh in meshes {
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(clip_tmesh_len(mesh) as u64)
+            .wrapping_add(mesh.tint[3].to_bits() as u64);
     }
     checksum
 }
