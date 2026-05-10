@@ -65,7 +65,7 @@ const HOLD_JUDGMENT_FINAL_ZOOM: f32 =
     HOLD_JUDGMENT_FINAL_HEIGHT / LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT;
 const HOLD_JUDGMENT_INITIAL_ZOOM: f32 =
     HOLD_JUDGMENT_INITIAL_HEIGHT / LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT;
-const HELD_MISS_Y_OFFSET: f32 = 50.0;
+const HELD_MISS_OFFSET_FROM_RECEPTOR: f32 = 60.0;
 const ERROR_BAR_JUDGMENT_HEIGHT: f32 = 40.0; // SL: judgmentHeight in SL-Layout.lua
 const ERROR_BAR_OFFSET_FROM_JUDGMENT: f32 = ERROR_BAR_JUDGMENT_HEIGHT * 0.5 + 5.0; // SL: top/bottom +/-25px
 
@@ -8327,6 +8327,11 @@ pub fn build_bundles(
         }
     }
     if !blind_active && let Some(texture) = held_miss_texture {
+        let texture_scale = if assets::parse_texture_hints(texture.key.as_ref()).doubleres {
+            0.5
+        } else {
+            1.0
+        };
         for (i, held_miss) in state.held_miss_judgments[col_start..col_start + num_cols]
             .iter()
             .enumerate()
@@ -8339,6 +8344,8 @@ pub fn build_bundles(
                 continue;
             }
             let (zoom_x, zoom_y) = held_miss_zoom(elapsed, mini);
+            let zoom_x = zoom_x * texture_scale;
+            let zoom_y = zoom_y * texture_scale;
             if zoom_x <= f32::EPSILON || zoom_y <= f32::EPSILON {
                 continue;
             }
@@ -8346,8 +8353,8 @@ pub fn build_bundles(
                 column_reverse_percent[i],
                 0.0,
                 1.0,
-                -HELD_MISS_Y_OFFSET,
-                HELD_MISS_Y_OFFSET * 2.0 + 10.0,
+                receptor_y_normal + HELD_MISS_OFFSET_FROM_RECEPTOR,
+                receptor_y_reverse - HELD_MISS_OFFSET_FROM_RECEPTOR,
             );
             let column_offset = state.noteskin[player_idx]
                 .as_ref()
