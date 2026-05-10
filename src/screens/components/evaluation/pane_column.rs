@@ -270,8 +270,10 @@ pub fn build_column_judgments_pane(
         asset_manager.with_font("miso", |miso_font| {
             let label_zoom: f32 = 0.8;
             let number_zoom: f32 = 0.9;
-            let small_zoom: f32 = 0.65;
+            let small_zoom: f32 = 0.6;
             let held_label_zoom: f32 = 0.6;
+            let early_y_offset: f32 = -5.0;
+            let all_y_offset: f32 = -10.0;
 
             // Row labels
             for (row_idx, row) in rows.iter().enumerate() {
@@ -290,11 +292,15 @@ pub fn build_column_judgments_pane(
                     let label_width =
                         font::measure_line_width_logical(miso_font, row.label, all_fonts) as f32
                             * label_zoom;
-                    let info_x = labels_right_x - label_width / 1.15;
-                    actors.push(act!(text: font("miso"): settext("EARLY".to_string()):
+                    let early_x = if matches!(row.kind, RowKind::FanW1 | RowKind::Ex) {
+                        labels_right_x - label_width / 1.15
+                    } else {
+                        (labels_right_x - label_width - 4.0).max(labels_frame_x - 190.0)
+                    };
+                    actors.push(act!(text: font("miso"): settext("Early".to_string()):
                         align(1.0, 0.5):
-                        xy(info_x, y - (row_height * 0.35)):
-                        zoom(0.6):
+                        xy(early_x, y + early_y_offset):
+                        zoom(small_zoom):
                         horizalign(right):
                         diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
                         z(101)
@@ -303,8 +309,8 @@ pub fn build_column_judgments_pane(
                     if matches!(row.kind, RowKind::Dec | RowKind::Wo) {
                         actors.push(act!(text: font("miso"): settext("(All)".to_string()):
                             align(1.0, 0.5):
-                            xy(info_x, y - (row_height * 0.60)):
-                            zoom(0.55):
+                            xy(labels_right_x, y + all_y_offset):
+                            zoom(small_zoom):
                             horizalign(right):
                             diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
                             z(101)
@@ -316,8 +322,8 @@ pub fn build_column_judgments_pane(
             // "HELD" label at the bottom, aligned relative to the MISS label width.
             let miss_label_width =
                 font::measure_line_width_logical(miso_font, "MISS", all_fonts) as f32 * label_zoom;
-            let held_label_x = labels_right_x - miss_label_width / 1.15;
-            let held_y = labels_frame_y + 140.0;
+            let held_label_x = labels_right_x - miss_label_width - 4.0;
+            let held_y = base_y + 144.0;
             let miss_color = color::JUDGMENT_RGBA[5];
             actors.push(act!(text: font("miso"): settext("HELD".to_string()):
                 align(1.0, 0.5):
@@ -584,7 +590,7 @@ pub fn build_column_judgments_pane(
                     {
                         actors.push(act!(text: font("miso"): settext(early.to_string()):
                             align(1.0, 0.5):
-                            xy(right_edge_x, y - (row_height * 0.35)):
+                            xy(right_edge_x, y + early_y_offset):
                             zoom(small_zoom):
                             horizalign(right):
                             z(101)
@@ -594,8 +600,8 @@ pub fn build_column_judgments_pane(
                     if let Some(early_all) = counts.early_all {
                         if score_info.track_early_judgments {
                             actors.push(act!(text: font("miso"): settext(early_all.to_string()):
-                                align(0.0, 0.5):
-                                xy(col_center_x - 1.0, y - (row_height * 0.60)):
+                                align(-1.0, 0.5):
+                                xy(col_center_x - 1.0, y + all_y_offset):
                                 zoom(small_zoom):
                                 horizalign(left):
                                 z(101)
@@ -603,7 +609,7 @@ pub fn build_column_judgments_pane(
                         } else {
                             actors.push(act!(text: font("miso"): settext(early_all.to_string()):
                                 align(1.0, 0.5):
-                                xy(right_edge_x, y - (row_height * 0.35)):
+                                xy(right_edge_x, y + all_y_offset):
                                 zoom(small_zoom):
                                 horizalign(right):
                                 z(101)
@@ -612,11 +618,11 @@ pub fn build_column_judgments_pane(
                     }
                 }
 
-                // Held-miss count per column (MissBecauseHeld) at y=144, aligned like early counts.
+                // Held-miss count per column (MissBecauseHeld), aligned with the HELD label.
                 let held_str = cj.held_miss.to_string();
                 actors.push(act!(text: font("miso"): settext(held_str):
                     align(1.0, 0.5):
-                    xy(right_edge_x, base_y + 144.0):
+                    xy(right_edge_x, held_y):
                     zoom(small_zoom):
                     horizalign(right):
                     z(101)
