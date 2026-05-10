@@ -62,6 +62,79 @@ fn pane3_retexture_model_actor(mut actor: Actor, texture: &str) -> Actor {
     actor
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RowKind {
+    FanCombined,
+    FanW0,
+    FanW1,
+    Ex,
+    Gr,
+    Dec,
+    Wo,
+    Miss,
+}
+
+#[derive(Clone, Copy)]
+struct RowInfo {
+    kind: RowKind,
+    label: &'static str,
+    color: [f32; 4],
+    show_early: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct RowCounts {
+    count: u32,
+    early: Option<u32>,
+    early_all: Option<u32>,
+}
+
+#[inline(always)]
+fn column_row_counts(cj: ColumnJudgments, kind: RowKind) -> RowCounts {
+    match kind {
+        RowKind::FanCombined => RowCounts {
+            count: cj.w0.saturating_add(cj.w1),
+            early: None,
+            early_all: None,
+        },
+        RowKind::FanW0 => RowCounts {
+            count: cj.w0,
+            early: None,
+            early_all: None,
+        },
+        RowKind::FanW1 => RowCounts {
+            count: cj.w1,
+            early: Some(cj.early_w1),
+            early_all: None,
+        },
+        RowKind::Ex => RowCounts {
+            count: cj.w2,
+            early: Some(cj.early_w2),
+            early_all: None,
+        },
+        RowKind::Gr => RowCounts {
+            count: cj.w3,
+            early: Some(cj.early_w3),
+            early_all: None,
+        },
+        RowKind::Dec => RowCounts {
+            count: cj.w4,
+            early: Some(cj.early_w4),
+            early_all: Some(cj.early_total_w4),
+        },
+        RowKind::Wo => RowCounts {
+            count: cj.w5,
+            early: Some(cj.early_w5),
+            early_all: Some(cj.early_total_w5),
+        },
+        RowKind::Miss => RowCounts {
+            count: cj.miss,
+            early: None,
+            early_all: None,
+        },
+    }
+}
+
 pub fn build_column_judgments_pane(
     score_info: &ScoreInfo,
     controller: profile::PlayerSide,
@@ -73,26 +146,6 @@ pub fn build_column_judgments_pane(
     let num_cols = score_info.column_judgments.len();
     if num_cols == 0 {
         return vec![];
-    }
-
-    #[derive(Clone, Copy)]
-    enum RowKind {
-        FanCombined,
-        FanW0,
-        FanW1,
-        Ex,
-        Gr,
-        Dec,
-        Wo,
-        Miss,
-    }
-
-    #[derive(Clone, Copy)]
-    struct RowInfo {
-        kind: RowKind,
-        label: &'static str,
-        color: [f32; 4],
-        show_early: bool,
     }
 
     let show_fa_plus_rows = score_info.show_fa_plus_window && score_info.show_fa_plus_pane;
@@ -213,48 +266,6 @@ pub fn build_column_judgments_pane(
     let preview_time = preview_elapsed.max(0.0);
     let preview_beat = preview_time * (PREVIEW_BPM / 60.0);
 
-    struct RowCounts {
-        count: u32,
-        early: Option<u32>,
-    }
-
-    let count_for = |cj: ColumnJudgments, kind: RowKind| -> RowCounts {
-        match kind {
-            RowKind::FanCombined => RowCounts {
-                count: cj.w0.saturating_add(cj.w1),
-                early: None,
-            },
-            RowKind::FanW0 => RowCounts {
-                count: cj.w0,
-                early: None,
-            },
-            RowKind::FanW1 => RowCounts {
-                count: cj.w1,
-                early: Some(cj.early_w1),
-            },
-            RowKind::Ex => RowCounts {
-                count: cj.w2,
-                early: Some(cj.early_w2),
-            },
-            RowKind::Gr => RowCounts {
-                count: cj.w3,
-                early: Some(cj.early_w3),
-            },
-            RowKind::Dec => RowCounts {
-                count: cj.w4,
-                early: Some(cj.early_w4),
-            },
-            RowKind::Wo => RowCounts {
-                count: cj.w5,
-                early: Some(cj.early_w5),
-            },
-            RowKind::Miss => RowCounts {
-                count: cj.miss,
-                early: None,
-            },
-        }
-    };
-
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font("miso", |miso_font| {
             let label_zoom: f32 = 0.8;
@@ -288,6 +299,17 @@ pub fn build_column_judgments_pane(
                         diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
                         z(101)
                     ));
+
+                    if matches!(row.kind, RowKind::Dec | RowKind::Wo) {
+                        actors.push(act!(text: font("miso"): settext("(All)".to_string()):
+                            align(1.0, 0.5):
+                            xy(info_x, y - (row_height * 0.60)):
+                            zoom(0.55):
+                            horizalign(right):
+                            diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
+                            z(101)
+                        ));
+                    }
                 }
             }
 
@@ -314,7 +336,7 @@ pub fn build_column_judgments_pane(
                 // Measure the widest main count so side annotations clear every row.
                 let mut max_count_width: f32 = 0.0;
                 for row in &rows {
-                    let counts = count_for(cj, row.kind);
+                    let counts = column_row_counts(cj, row.kind);
                     let w = font::measure_line_width_logical(
                         miso_font,
                         &counts.count.to_string(),
@@ -547,7 +569,7 @@ pub fn build_column_judgments_pane(
                 }
 
                 for (row_idx, row) in rows.iter().enumerate() {
-                    let counts = count_for(cj, row.kind);
+                    let counts = column_row_counts(cj, row.kind);
                     let y = labels_frame_y + (row_idx as f32 + 1.0).mul_add(row_height, 0.0);
                     actors.push(act!(text: font("miso"): settext(counts.count.to_string()):
                         align(0.5, 0.5):
@@ -568,6 +590,26 @@ pub fn build_column_judgments_pane(
                             z(101)
                         ));
                     }
+
+                    if let Some(early_all) = counts.early_all {
+                        if score_info.track_early_judgments {
+                            actors.push(act!(text: font("miso"): settext(early_all.to_string()):
+                                align(0.0, 0.5):
+                                xy(col_center_x - 1.0, y - (row_height * 0.60)):
+                                zoom(small_zoom):
+                                horizalign(left):
+                                z(101)
+                            ));
+                        } else {
+                            actors.push(act!(text: font("miso"): settext(early_all.to_string()):
+                                align(1.0, 0.5):
+                                xy(right_edge_x, y - (row_height * 0.35)):
+                                zoom(small_zoom):
+                                horizalign(right):
+                                z(101)
+                            ));
+                        }
+                    }
                 }
 
                 // Held-miss count per column (MissBecauseHeld) at y=144, aligned like early counts.
@@ -584,4 +626,90 @@ pub fn build_column_judgments_pane(
     });
 
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RowCounts, RowKind, column_row_counts};
+    use crate::screens::evaluation::ColumnJudgments;
+
+    #[test]
+    fn column_counts_expose_arrowcloud_all_bad_rescores() {
+        let cj = ColumnJudgments {
+            w4: 3,
+            w5: 4,
+            early_w4: 1,
+            early_w5: 2,
+            early_total_w4: 5,
+            early_total_w5: 6,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            column_row_counts(cj, RowKind::Dec),
+            RowCounts {
+                count: 3,
+                early: Some(1),
+                early_all: Some(5),
+            }
+        );
+        assert_eq!(
+            column_row_counts(cj, RowKind::Wo),
+            RowCounts {
+                count: 4,
+                early: Some(2),
+                early_all: Some(6),
+            }
+        );
+    }
+
+    #[test]
+    fn column_counts_keep_rescore_all_counts_off_other_rows() {
+        let cj = ColumnJudgments {
+            w0: 1,
+            w1: 2,
+            w2: 3,
+            w3: 4,
+            miss: 5,
+            early_w1: 6,
+            early_w2: 7,
+            early_w3: 8,
+            early_total_w2: 9,
+            early_total_w3: 10,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            column_row_counts(cj, RowKind::FanCombined),
+            RowCounts {
+                count: 3,
+                early: None,
+                early_all: None,
+            }
+        );
+        assert_eq!(
+            column_row_counts(cj, RowKind::Ex),
+            RowCounts {
+                count: 3,
+                early: Some(7),
+                early_all: None,
+            }
+        );
+        assert_eq!(
+            column_row_counts(cj, RowKind::Gr),
+            RowCounts {
+                count: 4,
+                early: Some(8),
+                early_all: None,
+            }
+        );
+        assert_eq!(
+            column_row_counts(cj, RowKind::Miss),
+            RowCounts {
+                count: 5,
+                early: None,
+                early_all: None,
+            }
+        );
+    }
 }
