@@ -1184,10 +1184,10 @@ pub fn push_double_step_stats(
         let frame_zoom = banner_data_zoom;
         let side = profile::get_session_player_side();
         let snapshot = gameplay::scorebox_snapshot_for_side(state, side);
+        let profile_snapshot = gameplay::scorebox_profile_for_side(state, side);
         actors.extend(gs_scorebox::gameplay_scorebox_actors_from_snapshot(
-            side,
             snapshot,
-            profile::get_for_side(side).display_scorebox,
+            profile_snapshot,
             frame_cx,
             frame_cy,
             frame_zoom,
@@ -1798,9 +1798,8 @@ fn build_scorebox_pane(
     let frame_cy = layout.sidepane_center_y + (-115.0 * layout.banner_data_zoom);
 
     actors.extend(gs_scorebox::gameplay_scorebox_actors_from_snapshot(
-        player_side,
         gameplay::scorebox_snapshot_for_side(state, player_side),
-        profile::get_for_side(player_side).display_scorebox,
+        gameplay::scorebox_profile_for_side(state, player_side),
         frame_cx,
         frame_cy,
         layout.banner_data_zoom,

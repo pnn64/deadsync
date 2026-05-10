@@ -3,7 +3,7 @@ use super::{
     GrooveStatsSubmitApiProgress, GrooveStatsSubmitPlayerJob, LeaderboardApiEntry,
     LeaderboardEntry, gameplay_run_passed, gameplay_side_for_player,
     get_cached_player_leaderboard_itl_self_rank_for_side,
-    get_or_fetch_player_leaderboards_for_side_inner, groovestats_eval_state_from_gameplay,
+    get_or_fetch_player_leaderboards_for_side, groovestats_eval_state_from_gameplay,
     groovestats_judgment_counts, leaderboard_entries_from_api,
 };
 use crate::config::dirs;
@@ -1789,12 +1789,7 @@ pub fn get_or_fetch_itl_self_score_for_side(
     // Keep the wheel's ITL prefetch aligned with the Select Music scorebox cache width.
     // Smaller requests seed the shared leaderboard cache with partial panes, so the
     // scorebox briefly renders a truncated list before refetching the remaining rows.
-    let _ = get_or_fetch_player_leaderboards_for_side_inner(
-        chart_hash,
-        side,
-        ITL_WHEEL_FETCH_ENTRIES,
-        false,
-    )?;
+    let _ = get_or_fetch_player_leaderboards_for_side(chart_hash, side, ITL_WHEEL_FETCH_ENTRIES)?;
     get_cached_itl_self_score_for_side(chart_hash, side)
 }
 
@@ -1805,12 +1800,7 @@ pub fn get_or_fetch_itl_tournament_rank_for_side(
     if let Some(rank) = get_cached_itl_tournament_rank_for_side(chart_hash, side) {
         return Some(rank);
     }
-    let _ = get_or_fetch_player_leaderboards_for_side_inner(
-        chart_hash,
-        side,
-        ITL_WHEEL_FETCH_ENTRIES,
-        false,
-    )?;
+    let _ = get_or_fetch_player_leaderboards_for_side(chart_hash, side, ITL_WHEEL_FETCH_ENTRIES)?;
     get_cached_itl_tournament_rank_for_side(chart_hash, side)
 }
 

@@ -2530,6 +2530,53 @@ struct PlayerLeaderboardCacheKey {
     show_ex_score: bool,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct GameplayScoreboxProfileSnapshot {
+    pub display_scorebox: bool,
+    pub gs_active: bool,
+    pub show_ex_score: bool,
+    api_key: String,
+    arrowcloud_api_key: String,
+    include_arrowcloud: bool,
+    gs_username: String,
+    persistent_profile_id: Option<String>,
+    auto_profile_id: Option<String>,
+    should_auto_populate: bool,
+}
+
+impl GameplayScoreboxProfileSnapshot {
+    pub fn from_profile(
+        player_profile: &profile::Profile,
+        side_joined: bool,
+        persistent_profile_id: Option<String>,
+    ) -> Self {
+        let cfg = crate::config::get();
+        let api_key = player_profile.groovestats_api_key.trim().to_string();
+        let arrowcloud_api_key = player_profile.arrowcloud_api_key.trim().to_string();
+        let include_arrowcloud = cfg.enable_arrowcloud && !arrowcloud_api_key.is_empty();
+        let gs_username = player_profile.groovestats_username.trim().to_string();
+        let auto_profile_id = if cfg.auto_populate_gs_scores {
+            persistent_profile_id.clone()
+        } else {
+            None
+        };
+        let should_auto_populate =
+            cfg.auto_populate_gs_scores && auto_profile_id.is_some() && !gs_username.is_empty();
+        Self {
+            display_scorebox: player_profile.display_scorebox,
+            gs_active: cfg.enable_groovestats && side_joined && !api_key.is_empty(),
+            show_ex_score: player_profile.show_ex_score,
+            api_key,
+            arrowcloud_api_key,
+            include_arrowcloud,
+            gs_username,
+            persistent_profile_id,
+            auto_profile_id,
+            should_auto_populate,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 enum PlayerLeaderboardCacheValue {
     Ready(PlayerLeaderboardData),
@@ -3819,33 +3866,33 @@ fn spawn_player_leaderboard_fetch(
 }
 
 #[inline(always)]
-fn player_leaderboard_cache_key_for_side(
-    chart_hash: &str,
+fn player_leaderboard_profile_snapshot_for_side(
     side: profile::PlayerSide,
-) -> Option<PlayerLeaderboardCacheKey> {
-    let cfg = crate::config::get();
-    if !cfg.enable_groovestats {
-        return None;
-    }
-    let chart_hash = chart_hash.trim();
-    if chart_hash.is_empty() || !profile::is_session_side_joined(side) {
-        return None;
-    }
-
+) -> GameplayScoreboxProfileSnapshot {
     let side_profile = profile::get_for_side(side);
-    let gs_api_key = side_profile.groovestats_api_key.trim();
-    if gs_api_key.is_empty() {
+    GameplayScoreboxProfileSnapshot::from_profile(
+        &side_profile,
+        profile::is_session_side_joined(side),
+        profile::active_local_profile_id_for_side(side),
+    )
+}
+
+#[inline(always)]
+fn player_leaderboard_cache_key_for_profile(
+    chart_hash: &str,
+    profile_snapshot: &GameplayScoreboxProfileSnapshot,
+) -> Option<PlayerLeaderboardCacheKey> {
+    let chart_hash = chart_hash.trim();
+    if chart_hash.is_empty() || !profile_snapshot.gs_active {
         return None;
     }
 
-    let arrowcloud_api_key = side_profile.arrowcloud_api_key.trim().to_string();
-    let include_arrowcloud = cfg.enable_arrowcloud && !arrowcloud_api_key.is_empty();
     Some(PlayerLeaderboardCacheKey {
         chart_hash: chart_hash.to_string(),
-        api_key: gs_api_key.to_string(),
-        arrowcloud_api_key,
-        include_arrowcloud,
-        show_ex_score: side_profile.show_ex_score,
+        api_key: profile_snapshot.api_key.clone(),
+        arrowcloud_api_key: profile_snapshot.arrowcloud_api_key.clone(),
+        include_arrowcloud: profile_snapshot.include_arrowcloud,
+        show_ex_score: profile_snapshot.show_ex_score,
     })
 }
 
@@ -3853,7 +3900,8 @@ fn get_cached_player_leaderboard_itl_self_rank_for_side(
     chart_hash: &str,
     side: profile::PlayerSide,
 ) -> Option<u32> {
-    let key = player_leaderboard_cache_key_for_side(chart_hash, side)?;
+    let profile_snapshot = player_leaderboard_profile_snapshot_for_side(side);
+    let key = player_leaderboard_cache_key_for_profile(chart_hash, &profile_snapshot)?;
     let cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
     let entry = cache.by_key.get(&key)?;
     let PlayerLeaderboardCacheValue::Ready(data) = &entry.value else {
@@ -3862,9 +3910,9 @@ fn get_cached_player_leaderboard_itl_self_rank_for_side(
     data.itl_self_rank
 }
 
-fn get_or_fetch_player_leaderboards_for_side_inner(
+fn get_or_fetch_player_leaderboards_for_profile_inner(
     chart_hash: &str,
-    side: profile::PlayerSide,
+    profile_snapshot: &GameplayScoreboxProfileSnapshot,
     max_entries: usize,
     refresh_cached: bool,
 ) -> Option<CachedPlayerLeaderboardData> {
@@ -3872,19 +3920,11 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
     if chart_hash.is_empty() || max_entries == 0 {
         return None;
     }
-    let cfg = crate::config::get();
-    let key = player_leaderboard_cache_key_for_side(chart_hash, side)?;
-    let side_profile = profile::get_for_side(side);
-    let persistent_profile_id = profile::active_local_profile_id_for_side(side);
-    let auto_populate = cfg.auto_populate_gs_scores;
-    let auto_profile_id = if auto_populate {
-        persistent_profile_id.clone()
-    } else {
-        None
-    };
-    let gs_username = side_profile.groovestats_username.trim().to_string();
-    let should_auto_populate =
-        auto_populate && auto_profile_id.is_some() && !gs_username.is_empty();
+    let key = player_leaderboard_cache_key_for_profile(chart_hash, profile_snapshot)?;
+    let gs_username = profile_snapshot.gs_username.clone();
+    let persistent_profile_id = profile_snapshot.persistent_profile_id.clone();
+    let auto_profile_id = profile_snapshot.auto_profile_id.clone();
+    let should_auto_populate = profile_snapshot.should_auto_populate;
 
     let mut should_spawn = false;
     let mut requested_max_entries = max_entries;
@@ -3940,7 +3980,26 @@ pub fn get_or_fetch_player_leaderboards_for_side(
     side: profile::PlayerSide,
     max_entries: usize,
 ) -> Option<CachedPlayerLeaderboardData> {
-    get_or_fetch_player_leaderboards_for_side_inner(chart_hash, side, max_entries, false)
+    let profile_snapshot = player_leaderboard_profile_snapshot_for_side(side);
+    get_or_fetch_player_leaderboards_for_profile_inner(
+        chart_hash,
+        &profile_snapshot,
+        max_entries,
+        false,
+    )
+}
+
+pub fn get_or_fetch_player_leaderboards_for_profile(
+    chart_hash: &str,
+    profile_snapshot: &GameplayScoreboxProfileSnapshot,
+    max_entries: usize,
+) -> Option<CachedPlayerLeaderboardData> {
+    get_or_fetch_player_leaderboards_for_profile_inner(
+        chart_hash,
+        profile_snapshot,
+        max_entries,
+        false,
+    )
 }
 
 pub fn refresh_player_leaderboards_for_side(
@@ -3948,7 +4007,13 @@ pub fn refresh_player_leaderboards_for_side(
     side: profile::PlayerSide,
     max_entries: usize,
 ) -> Option<CachedPlayerLeaderboardData> {
-    get_or_fetch_player_leaderboards_for_side_inner(chart_hash, side, max_entries, true)
+    let profile_snapshot = player_leaderboard_profile_snapshot_for_side(side);
+    get_or_fetch_player_leaderboards_for_profile_inner(
+        chart_hash,
+        &profile_snapshot,
+        max_entries,
+        true,
+    )
 }
 
 pub fn invalidate_player_leaderboards_for_side(chart_hash: &str, side: profile::PlayerSide) {

@@ -419,12 +419,13 @@ fn preferred_primary_pane<'a>(
 }
 
 #[inline(always)]
+fn default_mode_text(show_ex_score: bool) -> &'static str {
+    if show_ex_score { "EX" } else { "ITG" }
+}
+
+#[inline(always)]
 fn default_mode_text_for_side(side: profile::PlayerSide) -> &'static str {
-    if profile::get_for_side(side).show_ex_score {
-        "EX"
-    } else {
-        "ITG"
-    }
+    default_mode_text(profile::get_for_side(side).show_ex_score)
 }
 
 pub fn select_music_scorebox_view(
@@ -560,10 +561,10 @@ fn empty_rows() -> [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES] {
     std::array::from_fn(|_| gameplay_empty_row())
 }
 
-fn gameplay_status_pane(side: profile::PlayerSide, text: &str) -> GameplayScoreboxPane {
+fn gameplay_status_pane(show_ex_score: bool, text: &str) -> GameplayScoreboxPane {
     let mut rows = empty_rows();
     rows[0] = gameplay_status_row(text);
-    let kind = if profile::get_for_side(side).show_ex_score {
+    let kind = if show_ex_score {
         PaneKind::Ex
     } else {
         PaneKind::Gs
@@ -571,10 +572,14 @@ fn gameplay_status_pane(side: profile::PlayerSide, text: &str) -> GameplayScoreb
     GameplayScoreboxPane {
         kind,
         is_arrowcloud: false,
-        mode_text: owned_text(default_mode_text_for_side(side)),
+        mode_text: owned_text(default_mode_text(show_ex_score)),
         border_color: SCOREBOX_GS_BLUE,
         rows,
     }
+}
+
+fn gameplay_status_pane_for_side(side: profile::PlayerSide, text: &str) -> GameplayScoreboxPane {
+    gameplay_status_pane(profile::get_for_side(side).show_ex_score, text)
 }
 
 fn gameplay_row_from_entry(
@@ -721,20 +726,29 @@ fn gameplay_pane_from_leaderboard(
 
 fn gameplay_panes_from_snapshot(
     snapshot: &scores::CachedPlayerLeaderboardData,
-    side: profile::PlayerSide,
+    profile_snapshot: &scores::GameplayScoreboxProfileSnapshot,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
-        return vec![gameplay_status_pane(side, "Loading ...")];
+        return vec![gameplay_status_pane(
+            profile_snapshot.show_ex_score,
+            "Loading ...",
+        )];
     }
     if let Some(error) = snapshot.error.as_deref() {
         let text = error_text(error);
-        return vec![gameplay_status_pane(side, text)];
+        return vec![gameplay_status_pane(profile_snapshot.show_ex_score, text)];
     }
     let Some(data) = snapshot.data.as_ref() else {
-        return vec![gameplay_status_pane(side, "No Scores")];
+        return vec![gameplay_status_pane(
+            profile_snapshot.show_ex_score,
+            "No Scores",
+        )];
     };
     if data.panes.is_empty() {
-        return vec![gameplay_status_pane(side, "No Scores")];
+        return vec![gameplay_status_pane(
+            profile_snapshot.show_ex_score,
+            "No Scores",
+        )];
     }
 
     let filter = select_music_pane_filter();
@@ -744,7 +758,10 @@ fn gameplay_panes_from_snapshot(
 
     let filtered = select_music_filtered_panes(data.panes.as_slice(), filter);
     if filtered.is_empty() {
-        return vec![gameplay_status_pane(side, "No Scores")];
+        return vec![gameplay_status_pane(
+            profile_snapshot.show_ex_score,
+            "No Scores",
+        )];
     }
 
     let mut panes = Vec::with_capacity(filtered.len());
@@ -763,14 +780,14 @@ fn select_music_panes_from_snapshot(
     chart_hash: Option<&str>,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
-        return vec![gameplay_status_pane(side, "Loading ...")];
+        return vec![gameplay_status_pane_for_side(side, "Loading ...")];
     }
     if let Some(error) = snapshot.error.as_deref() {
         let text = error_text(error);
-        return vec![gameplay_status_pane(side, text)];
+        return vec![gameplay_status_pane_for_side(side, text)];
     }
     let Some(data) = snapshot.data.as_ref() else {
-        return vec![gameplay_status_pane(side, "No Scores")];
+        return vec![gameplay_status_pane_for_side(side, "No Scores")];
     };
     let filter = select_music_pane_filter();
     if !select_music_filter_has_any(filter) {
@@ -779,7 +796,7 @@ fn select_music_panes_from_snapshot(
 
     let filtered = select_music_filtered_panes(data.panes.as_slice(), filter);
     if filtered.is_empty() {
-        return vec![gameplay_status_pane(side, "No Scores")];
+        return vec![gameplay_status_pane_for_side(side, "No Scores")];
     }
     let mut panes = Vec::with_capacity(filtered.len());
     for pane in filtered {
@@ -1344,23 +1361,22 @@ pub fn select_music_scorebox_actors(
 }
 
 pub fn gameplay_scorebox_actors_from_snapshot(
-    side: profile::PlayerSide,
     snapshot: Option<&scores::CachedPlayerLeaderboardData>,
-    show_scorebox: bool,
+    profile_snapshot: &scores::GameplayScoreboxProfileSnapshot,
     center_x: f32,
     center_y: f32,
     zoom: f32,
     elapsed_seconds: f32,
 ) -> Vec<Actor> {
-    if !show_scorebox || !scores::is_gs_active_for_side(side) {
+    if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
         return Vec::new();
     }
     let Some(snapshot) = snapshot else {
         return Vec::new();
     };
     gameplay_scorebox_actors_from_cached_snapshot(
-        side,
         snapshot,
+        profile_snapshot,
         center_x,
         center_y,
         zoom,
@@ -1369,14 +1385,14 @@ pub fn gameplay_scorebox_actors_from_snapshot(
 }
 
 pub(crate) fn gameplay_scorebox_actors_from_cached_snapshot(
-    side: profile::PlayerSide,
     snapshot: &scores::CachedPlayerLeaderboardData,
+    profile_snapshot: &scores::GameplayScoreboxProfileSnapshot,
     center_x: f32,
     center_y: f32,
     zoom: f32,
     elapsed_seconds: f32,
 ) -> Vec<Actor> {
-    let panes = gameplay_panes_from_snapshot(snapshot, side);
+    let panes = gameplay_panes_from_snapshot(snapshot, profile_snapshot);
     gameplay_scorebox_actors_from_panes(&panes, center_x, center_y, zoom, elapsed_seconds)
 }
 
@@ -1483,6 +1499,13 @@ mod tests {
         }
     }
 
+    fn scorebox_profile(show_ex_score: bool) -> scores::GameplayScoreboxProfileSnapshot {
+        let mut player_profile = profile::Profile::default();
+        player_profile.show_ex_score = show_ex_score;
+        player_profile.display_scorebox = true;
+        scores::GameplayScoreboxProfileSnapshot::from_profile(&player_profile, true, None)
+    }
+
     #[test]
     fn non_hard_ex_scorebox_keeps_self_row() {
         let entries = vec![
@@ -1574,7 +1597,8 @@ mod tests {
             }),
         };
 
-        let panes = gameplay_panes_from_snapshot(&snapshot, profile::PlayerSide::P1);
+        let profile_snapshot = scorebox_profile(false);
+        let panes = gameplay_panes_from_snapshot(&snapshot, &profile_snapshot);
 
         crate::config::update_select_music_scorebox_cycle_itg(prev.select_music_scorebox_cycle_itg);
         crate::config::update_select_music_scorebox_cycle_ex(prev.select_music_scorebox_cycle_ex);

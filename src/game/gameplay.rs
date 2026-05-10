@@ -3059,6 +3059,14 @@ pub fn scorebox_snapshot_for_side(
     state.scorebox_side_snapshot[side_index(side)].as_ref()
 }
 
+#[inline(always)]
+pub fn scorebox_profile_for_side(
+    state: &State,
+    side: profile::PlayerSide,
+) -> &scores::GameplayScoreboxProfileSnapshot {
+    &state.scorebox_profile_snapshot[side_index(side)]
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ErrorBarTick {
     pub started_at: f32,
@@ -3667,6 +3675,7 @@ pub struct State {
     pub live_window_counts_display_blue: [crate::game::timing::WindowCounts; MAX_PLAYERS],
 
     pub player_profiles: [profile::Profile; MAX_PLAYERS],
+    pub scorebox_profile_snapshot: [scores::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
     pub scorebox_side_snapshot: [Option<scores::CachedPlayerLeaderboardData>; MAX_PLAYERS],
     attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
     song_lua_ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
@@ -5888,14 +5897,24 @@ pub fn init(
             .max(personal_best.unwrap_or(0.0));
     }
 
+    let mut scorebox_profile_snapshot: [scores::GameplayScoreboxProfileSnapshot; MAX_PLAYERS] =
+        std::array::from_fn(|_| scores::GameplayScoreboxProfileSnapshot::default());
+    for p in 0..num_players {
+        let side = player_side_for_index(play_style, player_side, p);
+        scorebox_profile_snapshot[side_index(side)] =
+            scores::GameplayScoreboxProfileSnapshot::from_profile(
+                &player_profiles[p],
+                profile::is_session_side_joined(side),
+                profile::active_local_profile_id_for_side(side),
+            );
+    }
+
     let mut scorebox_side_snapshot: [Option<scores::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     for p in 0..num_players {
-        if !player_profiles[p].display_scorebox {
-            continue;
-        }
         let side = player_side_for_index(play_style, player_side, p);
-        if !scores::is_gs_active_for_side(side) {
+        let profile_snapshot = &scorebox_profile_snapshot[side_index(side)];
+        if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
             continue;
         }
         let chart_hash = charts[p].short_hash.trim();
@@ -5903,9 +5922,9 @@ pub fn init(
             continue;
         }
         scorebox_side_snapshot[side_index(side)] =
-            scores::get_or_fetch_player_leaderboards_for_side(
+            scores::get_or_fetch_player_leaderboards_for_profile(
                 chart_hash,
-                side,
+                profile_snapshot,
                 SCOREBOX_NUM_ENTRIES,
             );
     }
@@ -6135,6 +6154,7 @@ pub fn init(
         live_window_counts_display_blue: [crate::game::timing::WindowCounts::default();
             MAX_PLAYERS],
         player_profiles,
+        scorebox_profile_snapshot,
         scorebox_side_snapshot,
         attack_mask_windows,
         song_lua_ease_windows,
@@ -8329,27 +8349,25 @@ fn refresh_scorebox_snapshots(state: &mut State) {
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
     for p in 0..state.num_players {
-        if !state.player_profiles[p].display_scorebox {
-            continue;
-        }
         let side = player_side_for_index(play_style, player_side, p);
         let idx = side_index(side);
+        let profile_snapshot = &state.scorebox_profile_snapshot[idx];
+        if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
+            continue;
+        }
         let needs_refresh = state.scorebox_side_snapshot[idx]
             .as_ref()
             .is_some_and(|s| s.loading);
         if !needs_refresh {
             continue;
         }
-        if !scores::is_gs_active_for_side(side) {
-            continue;
-        }
         let chart_hash = state.charts[p].short_hash.trim();
         if chart_hash.is_empty() {
             continue;
         }
-        if let Some(fresh) = scores::get_or_fetch_player_leaderboards_for_side(
+        if let Some(fresh) = scores::get_or_fetch_player_leaderboards_for_profile(
             chart_hash,
-            side,
+            profile_snapshot,
             SCOREBOX_NUM_ENTRIES,
         ) {
             if !fresh.loading {
