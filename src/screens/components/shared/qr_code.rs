@@ -1,5 +1,5 @@
 use crate::act;
-use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
+use crate::engine::gfx::{BlendMode, MeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use qrcodegen::{QrCode, QrCodeEcc};
 use std::collections::HashMap;
@@ -135,7 +135,6 @@ pub fn build(params: QrCodeParams<'_>) -> Vec<Actor> {
                 offset: [0.0, 0.0],
                 size: [SizeSpec::Px(params.size), SizeSpec::Px(params.size)],
                 vertices: data.vertices,
-                mode: MeshMode::Triangles,
                 visible: true,
                 blend: BlendMode::Alpha,
                 z: 1,

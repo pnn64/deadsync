@@ -3,9 +3,7 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::gfx::{
-    BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, TexturedMeshVertex,
-};
+use crate::engine::gfx::{BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TexturedMeshVertex};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextAttribute, TextContent};
 use crate::engine::present::anim::EffectState;
@@ -3157,7 +3155,6 @@ fn song_lua_style_capture_actor(
             offset,
             size,
             vertices,
-            mode,
             visible,
             blend: actor_blend,
             z,
@@ -3166,7 +3163,6 @@ fn song_lua_style_capture_actor(
             offset,
             size,
             vertices,
-            mode,
             visible,
             blend: blend.unwrap_or(actor_blend),
             z: song_lua_add_z(z, z_shift),
@@ -3182,7 +3178,6 @@ fn song_lua_style_capture_actor(
             glow,
             vertices,
             geom_cache_key,
-            mode,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -3201,7 +3196,6 @@ fn song_lua_style_capture_actor(
             glow,
             vertices,
             geom_cache_key,
-            mode,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -3848,7 +3842,6 @@ fn song_lua_model_actor(
             glow: [1.0, 1.0, 1.0, 0.0],
             vertices: Arc::clone(&layer.vertices),
             geom_cache_key: INVALID_TMESH_CACHE_KEY,
-            mode: MeshMode::Triangles,
             uv_scale: layer.uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -4266,7 +4259,6 @@ fn song_lua_graph_display_body_actor(
         offset: [0.0, 0.0],
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         vertices: Arc::from(vertices.into_boxed_slice()),
-        mode: MeshMode::Triangles,
         visible: state.visible && body_state.visible,
         blend: if body_state.blend == SongLuaOverlayBlendMode::Alpha {
             song_lua_overlay_blend(state.blend)
@@ -4328,7 +4320,6 @@ fn song_lua_graph_display_line_actor(
         offset: [0.0, 0.0],
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         vertices: Arc::from(vertices.into_boxed_slice()),
-        mode: MeshMode::Triangles,
         visible: state.visible && line_state.visible,
         blend: if line_state.blend == SongLuaOverlayBlendMode::Alpha {
             song_lua_overlay_blend(state.blend)
@@ -4728,7 +4719,6 @@ fn song_lua_flat_skewed_overlay_actor(
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices: Arc::from(vertices.into_boxed_slice()),
         geom_cache_key: INVALID_TMESH_CACHE_KEY,
-        mode: MeshMode::Triangles,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -4814,7 +4804,6 @@ fn song_lua_projected_overlay_actor(
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices: Arc::from(vertices.into_boxed_slice()),
         geom_cache_key: INVALID_TMESH_CACHE_KEY,
-        mode: MeshMode::Triangles,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -5223,7 +5212,6 @@ fn build_song_lua_overlay_actor(
                         glow: [1.0, 1.0, 1.0, 0.0],
                         vertices: mesh,
                         geom_cache_key: INVALID_TMESH_CACHE_KEY,
-                        mode: MeshMode::Triangles,
                         uv_scale: [1.0, 1.0],
                         uv_offset: [0.0, 0.0],
                         uv_tex_shift: [0.0, 0.0],
@@ -5254,7 +5242,6 @@ fn build_song_lua_overlay_actor(
                     ],
                     size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                     vertices: mesh,
-                    mode: MeshMode::Triangles,
                     visible: state.visible,
                     blend: overlay_blend,
                     z,
@@ -5788,7 +5775,6 @@ fn song_lua_overlay_glow_actor(
             local_transform,
             texture,
             vertices,
-            mode,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -5815,7 +5801,6 @@ fn song_lua_overlay_glow_actor(
                 glow,
                 vertices: Arc::from(glow_vertices.into_boxed_slice()),
                 geom_cache_key: INVALID_TMESH_CACHE_KEY,
-                mode: *mode,
                 uv_scale: *uv_scale,
                 uv_offset: *uv_offset,
                 uv_tex_shift: *uv_tex_shift,
@@ -6023,7 +6008,6 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             mut offset,
             size,
             vertices,
-            mode,
             visible,
             blend,
             z,
@@ -6034,7 +6018,6 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 offset,
                 size,
                 vertices,
-                mode,
                 visible,
                 blend,
                 z,
@@ -6051,7 +6034,6 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             glow,
             vertices,
             geom_cache_key,
-            mode,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -6072,7 +6054,6 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
                 glow,
                 vertices,
                 geom_cache_key,
-                mode,
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
@@ -7297,7 +7278,6 @@ pub fn push_actors(
                     offset: [x, y_mesh_top],
                     size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_mesh_h)],
                     vertices: mesh.clone(),
-                    mode: MeshMode::Triangles,
                     visible: true,
                     blend: BlendMode::Alpha,
                     z: 85,

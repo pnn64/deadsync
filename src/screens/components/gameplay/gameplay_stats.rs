@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key, tr};
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::engine::gfx::{BlendMode, MeshMode};
+use crate::engine::gfx::BlendMode;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use crate::engine::present::color;
@@ -2253,7 +2253,6 @@ fn build_side_pane(
                     offset: [x0, y0],
                     size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
                     vertices: mesh.clone(),
-                    mode: MeshMode::Triangles,
                     visible: true,
                     blend: BlendMode::Alpha,
                     z: 60,
@@ -2268,7 +2267,6 @@ fn build_side_pane(
                     offset: [x0, y0],
                     size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
                     vertices: mesh.clone(),
-                    mode: MeshMode::Triangles,
                     visible: true,
                     blend: BlendMode::Alpha,
                     z: 61,

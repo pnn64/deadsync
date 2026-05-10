@@ -2294,7 +2294,6 @@ fn build_actor_recursive<'a>(
             offset,
             size,
             vertices,
-            mode: _,
             visible,
             blend,
             z,
@@ -2345,7 +2344,6 @@ fn build_actor_recursive<'a>(
             glow,
             vertices,
             geom_cache_key,
-            mode: _,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -4192,7 +4190,7 @@ mod tests {
     };
     use crate::assets;
     use crate::engine::gfx::{
-        BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, ObjectType, RenderObject,
+        BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType, RenderObject,
         SpriteInstanceRaw, TMeshCacheKey, TexturedMeshInstanceRaw, TexturedMeshVertex,
     };
     use crate::engine::present::actors::{Actor, SizeSpec, TextAlign, TextAttribute, TextContent};
@@ -4247,7 +4245,6 @@ mod tests {
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             vertices: Arc::from(vec![MeshVertex::default(); 3]),
-            mode: MeshMode::Triangles,
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,
@@ -4301,7 +4298,6 @@ mod tests {
             offset: [3.0, 4.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             vertices,
-            mode: MeshMode::Triangles,
             visible: true,
             blend: BlendMode::Alpha,
             z: 7,
@@ -4948,7 +4944,6 @@ mod tests {
             glow: [1.0, 1.0, 1.0, 0.0],
             vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),
             geom_cache_key: CACHE_KEY,
-            mode: MeshMode::Triangles,
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],

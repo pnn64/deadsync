@@ -1,5 +1,5 @@
 use crate::act;
-use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
+use crate::engine::gfx::{BlendMode, MeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use crate::engine::present::color;
@@ -3917,7 +3917,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 offset: [0.0, graph_height],
                                 size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
                                 vertices: mesh.clone(),
-                                mode: MeshMode::Triangles,
                                 visible: true,
                                 blend: BlendMode::Alpha,
                                 z: 1,
@@ -3948,7 +3947,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 offset: [0.0, 0.0],
                                 size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
                                 vertices: mesh.clone(),
-                                mode: MeshMode::Triangles,
                                 visible: true,
                                 blend: BlendMode::Alpha,
                                 z: 3,

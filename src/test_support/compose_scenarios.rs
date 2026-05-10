@@ -1,5 +1,5 @@
 use crate::assets;
-use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
+use crate::engine::gfx::{BlendMode, MeshVertex, TexturedMeshVertex};
 use crate::engine::present::actors::{
     Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent,
 };
@@ -1078,7 +1078,6 @@ fn colored_mesh() -> Actor {
         offset: screen_pos(0.0, 178.0),
         size: [SizeSpec::Px(140.0), SizeSpec::Px(80.0)],
         vertices: verts,
-        mode: MeshMode::Triangles,
         visible: true,
         blend: BlendMode::Add,
         z: 2,
@@ -1105,7 +1104,6 @@ fn textured_mesh() -> Actor {
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices: verts,
         geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
-        mode: MeshMode::Triangles,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],

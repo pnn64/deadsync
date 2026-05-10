@@ -1,6 +1,4 @@
-use crate::engine::gfx::{
-    BlendMode, MeshMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
-};
+use crate::engine::gfx::{BlendMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex};
 use crate::engine::present::anim;
 use glam::Mat4 as Matrix4;
 use std::sync::Arc;
@@ -149,7 +147,6 @@ pub enum Actor {
         offset: [f32; 2],
         size: [SizeSpec; 2],
         vertices: Arc<[MeshVertex]>,
-        mode: MeshMode,
         visible: bool,
         blend: BlendMode,
         z: i16,
@@ -167,7 +164,6 @@ pub enum Actor {
         glow: [f32; 4],
         vertices: Arc<[TexturedMeshVertex]>,
         geom_cache_key: TMeshCacheKey,
-        mode: MeshMode,
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
@@ -369,7 +365,7 @@ impl From<&Arc<str>> for TextContent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::gfx::{BlendMode, MeshMode};
+    use crate::engine::gfx::BlendMode;
 
     fn approx_eq(lhs: f32, rhs: f32) {
         assert!((lhs - rhs).abs() < 1e-6, "expected {rhs}, got {lhs}");
@@ -457,7 +453,6 @@ mod tests {
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             vertices: Arc::clone(&original),
-            mode: MeshMode::Triangles,
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,

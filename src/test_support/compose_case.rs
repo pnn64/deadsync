@@ -1,6 +1,6 @@
 use crate::assets;
 use crate::engine::gfx::{
-    BlendMode, MeshMode, MeshVertex, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
+    BlendMode, MeshVertex, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
     TexturedMeshInstanceRaw, TexturedMeshVertex,
 };
 use crate::engine::present::actors::{
@@ -158,7 +158,6 @@ pub enum ActorSnapshot {
         offset: [f32; 2],
         size: [SizeSpecSnapshot; 2],
         vertices: Vec<MeshVertex>,
-        mode: MeshModeSnapshot,
         visible: bool,
         blend: BlendModeSnapshot,
         z: i16,
@@ -171,7 +170,6 @@ pub enum ActorSnapshot {
         #[serde(default = "default_textured_mesh_tint")]
         tint: [f32; 4],
         vertices: Vec<TexturedMeshVertex>,
-        mode: MeshModeSnapshot,
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
@@ -245,11 +243,6 @@ pub enum BlendModeSnapshot {
     Add,
     Multiply,
     Subtract,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum MeshModeSnapshot {
-    Triangles,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -1009,7 +1002,6 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             offset,
             size,
             vertices,
-            mode,
             visible,
             blend,
             z,
@@ -1018,7 +1010,6 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             offset: *offset,
             size: size.map(SizeSpecSnapshot::from),
             vertices: vertices.to_vec(),
-            mode: MeshModeSnapshot::from(*mode),
             visible: *visible,
             blend: BlendModeSnapshot::from(*blend),
             z: *z,
@@ -1030,7 +1021,6 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             texture,
             tint,
             vertices,
-            mode,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -1046,7 +1036,6 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             texture: texture.to_string(),
             tint: *tint,
             vertices: vertices.to_vec(),
-            mode: MeshModeSnapshot::from(*mode),
             uv_scale: *uv_scale,
             uv_offset: *uv_offset,
             uv_tex_shift: *uv_tex_shift,
@@ -1242,7 +1231,6 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             offset,
             size,
             vertices,
-            mode,
             visible,
             blend,
             z,
@@ -1251,7 +1239,6 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             offset: *offset,
             size: size.map(SizeSpec::from),
             vertices: Arc::from(vertices.clone()),
-            mode: MeshMode::from(*mode),
             visible: *visible,
             blend: BlendMode::from(*blend),
             z: *z,
@@ -1263,7 +1250,6 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             texture,
             tint,
             vertices,
-            mode,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -1282,7 +1268,6 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             glow: [1.0, 1.0, 1.0, 0.0],
             vertices: Arc::from(vertices.clone()),
             geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
-            mode: MeshMode::from(*mode),
             uv_scale: *uv_scale,
             uv_offset: *uv_offset,
             uv_tex_shift: *uv_tex_shift,
@@ -1653,22 +1638,6 @@ impl From<BlendModeSnapshot> for BlendMode {
             BlendModeSnapshot::Add => Self::Add,
             BlendModeSnapshot::Multiply => Self::Multiply,
             BlendModeSnapshot::Subtract => Self::Subtract,
-        }
-    }
-}
-
-impl From<MeshMode> for MeshModeSnapshot {
-    fn from(value: MeshMode) -> Self {
-        match value {
-            MeshMode::Triangles => Self::Triangles,
-        }
-    }
-}
-
-impl From<MeshModeSnapshot> for MeshMode {
-    fn from(value: MeshModeSnapshot) -> Self {
-        match value {
-            MeshModeSnapshot::Triangles => Self::Triangles,
         }
     }
 }

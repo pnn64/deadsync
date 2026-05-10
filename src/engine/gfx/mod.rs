@@ -163,11 +163,6 @@ impl Deref for TexturedMeshVertices {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MeshMode {
-    Triangles,
-}
-
 #[repr(C)]
 #[derive(
     Clone,

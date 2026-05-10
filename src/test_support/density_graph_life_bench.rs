@@ -1,4 +1,4 @@
-use crate::engine::gfx::{BlendMode, MeshMode};
+use crate::engine::gfx::BlendMode;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::density;
 use crate::engine::space::screen_center_x;
@@ -36,7 +36,6 @@ impl DensityGraphLifeBenchFixture {
             offset: self.offset_xy,
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             vertices: Arc::clone(vertices),
-            mode: MeshMode::Triangles,
             visible: true,
             blend: BlendMode::Alpha,
             z: 41,

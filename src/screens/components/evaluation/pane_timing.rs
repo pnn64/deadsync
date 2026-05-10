@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
-use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
+use crate::engine::gfx::{BlendMode, MeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
 use crate::game::profile;
@@ -233,7 +233,6 @@ pub fn build_timing_pane(
             offset: [0.0, topbar_height],
             size: [SizeSpec::Px(pane_width), SizeSpec::Px(graph_area_height)],
             vertices: mesh.clone(),
-            mode: MeshMode::Triangles,
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,

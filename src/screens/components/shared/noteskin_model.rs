@@ -1,4 +1,4 @@
-use crate::engine::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
+use crate::engine::gfx::{BlendMode, TexturedMeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelMesh, ModelMeshCache, SpriteSlot, build_model_geometry,
@@ -152,7 +152,6 @@ fn actor_from_vertices(
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
         geom_cache_key,
-        mode: MeshMode::Triangles,
         uv_scale,
         uv_offset,
         uv_tex_shift,

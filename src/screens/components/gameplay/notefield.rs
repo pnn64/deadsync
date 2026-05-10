@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets;
-use crate::engine::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
+use crate::engine::gfx::{BlendMode, TexturedMeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
@@ -1697,7 +1697,6 @@ fn hold_strip_actor(
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
         geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
-        mode: MeshMode::Triangles,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],

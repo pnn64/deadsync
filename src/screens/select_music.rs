@@ -7,7 +7,7 @@ use crate::config::{
     SyncGraphMode, dirs,
 };
 use crate::engine::audio;
-use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
+use crate::engine::gfx::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
 use crate::engine::input::{InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
 use crate::engine::present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
@@ -5089,7 +5089,6 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             offset: [graph_x, graph_y],
             size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
             vertices: mesh,
-            mode: MeshMode::Triangles,
             visible: true,
             blend: BlendMode::Alpha,
             z: SYNC_OVERLAY_Z + 6,
@@ -8835,7 +8834,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                     offset: [0.0, 0.0],
                     size: [SizeSpec::Px(panel_w), SizeSpec::Px(graph_h)],
                     vertices: mesh,
-                    mode: MeshMode::Triangles,
                     visible: true,
                     blend: BlendMode::Alpha,
                     z: 0,
