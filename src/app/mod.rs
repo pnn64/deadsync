@@ -1,6 +1,5 @@
 mod commands;
 mod dynamic_media;
-mod fsr;
 mod graphics;
 mod input_routing;
 pub(crate) mod media_cache;
@@ -2697,7 +2696,7 @@ pub struct App {
     window: Option<Arc<Window>>,
     backend: Option<renderer::Backend>,
     backend_type: BackendType,
-    fsr_monitor: fsr::Monitor,
+    fsr_monitor: input::fsr::Monitor,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
     ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
@@ -3401,7 +3400,7 @@ impl App {
             window: None,
             backend: None,
             backend_type,
-            fsr_monitor: fsr::Monitor::new(),
+            fsr_monitor: input::fsr::Monitor::new(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
             // Screen transitions clear the UI cache, so misses stop inserting

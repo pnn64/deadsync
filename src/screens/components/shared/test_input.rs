@@ -1,5 +1,8 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
+pub use crate::engine::input::fsr::{
+    BarView as FsrBarView, VIEW_SENSOR_COUNT as FSR_BAR_COUNT, View as FsrView,
+};
 use crate::engine::input::{
     InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
 };
@@ -15,7 +18,6 @@ const SORT_MENU_DIM_ALPHA: f32 = 0.875;
 const SORT_MENU_CLOSE_HINT: &str = "Press &START; to dismiss.";
 const EVENT_RATE_HISTORY: usize = 64;
 const MAX_DISPLAY_HZ: u32 = 1000;
-const FSR_BAR_COUNT: usize = 4;
 const FSR_BAR_WIDTH: f32 = 42.0;
 const FSR_BAR_GAP: f32 = 18.0;
 const FSR_BAR_HEIGHT: f32 = 160.0;
@@ -32,22 +34,6 @@ struct FsrTheme {
     track_idle_bottom: [f32; 4],
     fill_top: [f32; 4],
     fill_bottom: [f32; 4],
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct FsrBarView {
-    pub label: &'static str,
-    pub raw_value: u16,
-    pub value_norm: f32,
-    pub raw_threshold: u16,
-    pub threshold_norm: f32,
-    pub active: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct FsrView {
-    pub device_name: Option<String>,
-    pub bars: [FsrBarView; FSR_BAR_COUNT],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
