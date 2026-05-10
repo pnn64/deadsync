@@ -240,9 +240,11 @@ fn run_sprite_pair(name: &str, count: usize, textures: usize) {
     let input = make_sprites(count, textures);
     let mut objects = Vec::new();
     let mut staged = Scratch::default();
+    let mut grouped = Scratch::default();
     let mut direct = Scratch::default();
     stage_sprites(&input, &mut objects);
     prepare(&objects, &mut staged);
+    prepare_grouped(&objects, &mut grouped);
     direct_sprites(&input, &mut direct);
 
     let staged = bench(
@@ -252,6 +254,15 @@ fn run_sprite_pair(name: &str, count: usize, textures: usize) {
             stage_sprites(black_box(&input), &mut objects);
             prepare(&objects, &mut staged);
             checksum_scratch(&staged)
+        },
+    );
+    let grouped = bench(
+        format!("{name}: staged RenderObject + grouped sprite prepare"),
+        SPRITE_ITERS,
+        || {
+            stage_sprites(black_box(&input), &mut objects);
+            prepare_grouped(&objects, &mut grouped);
+            checksum_scratch(&grouped)
         },
     );
     let direct = bench(
@@ -264,7 +275,9 @@ fn run_sprite_pair(name: &str, count: usize, textures: usize) {
     );
 
     print_result(&staged);
+    print_result(&grouped);
     print_result(&direct);
+    print_ratio("grouped vs staged", &staged, &grouped);
     print_ratio("direct vs staged", &staged, &direct);
     println!();
 }
@@ -474,6 +487,67 @@ fn prepare(objects: &[RenderObject], scratch: &mut Scratch) {
         }
     }
     flush_sprite_run(&mut sprite_run, &mut scratch.ops);
+}
+
+fn prepare_grouped(objects: &[RenderObject], scratch: &mut Scratch) {
+    scratch.sprites.clear();
+    scratch.tmesh_vertices.clear();
+    scratch.tmesh_instances.clear();
+    scratch.ops.clear();
+    scratch.shared_geom.clear();
+
+    let mut i = 0usize;
+    while i < objects.len() {
+        match &objects[i].object_type {
+            ObjectType::Sprite(instance) => {
+                let instance_start = scratch.sprites.len() as u32;
+                scratch.sprites.push(*instance);
+                let mut run = SpriteRun {
+                    instance_start,
+                    instance_count: 1,
+                    texture_handle: objects[i].texture_handle,
+                };
+                i += 1;
+
+                while i < objects.len() {
+                    let ObjectType::Sprite(instance) = &objects[i].object_type else {
+                        break;
+                    };
+                    let instance_start = scratch.sprites.len() as u32;
+                    scratch.sprites.push(*instance);
+                    if run.texture_handle == objects[i].texture_handle
+                        && run.instance_start + run.instance_count == instance_start
+                    {
+                        run.instance_count += 1;
+                    } else {
+                        scratch.ops.push(DrawOp::Sprite(run));
+                        run = SpriteRun {
+                            instance_start,
+                            instance_count: 1,
+                            texture_handle: objects[i].texture_handle,
+                        };
+                    }
+                    i += 1;
+                }
+
+                scratch.ops.push(DrawOp::Sprite(run));
+            }
+            ObjectType::TexturedMesh {
+                instance,
+                vertices,
+                depth_test,
+            } => {
+                push_tmesh_instance(
+                    scratch,
+                    objects[i].texture_handle,
+                    *instance,
+                    vertices,
+                    *depth_test,
+                );
+                i += 1;
+            }
+        }
+    }
 }
 
 fn direct_sprites(input: &[SpriteInput], scratch: &mut Scratch) {

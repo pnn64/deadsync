@@ -132,13 +132,6 @@ impl DrawScratch {
 }
 
 #[inline(always)]
-fn flush_sprite_run(sprite_run: &mut Option<SpriteRun>, ops: &mut Vec<DrawOp>) {
-    if let Some(run) = sprite_run.take() {
-        ops.push(DrawOp::Sprite(run));
-    }
-}
-
-#[inline(always)]
 fn transient_tmesh_source(
     scratch: &mut DrawScratch,
     vertices: &[TexturedMeshVertex],
@@ -212,7 +205,6 @@ where
     EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> bool,
 {
     let objects_len = render_list.objects.len();
-    let mut sprite_run: Option<SpriteRun> = None;
 
     scratch.sprite_instances.clear();
     if scratch.sprite_instances.capacity() < objects_len {
@@ -235,44 +227,64 @@ where
     let mut stats = PrepareStats::default();
     let mut shared_tmesh_geom_cleared = false;
     let mut cached_tmesh_cleared = false;
+    let mut i = 0usize;
 
-    for obj in render_list.objects.iter() {
+    while i < objects_len {
+        let obj = &render_list.objects[i];
         match &obj.object_type {
             ObjectType::Sprite(instance) => {
-                let texture_handle = obj.texture_handle;
-                if texture_handle == INVALID_TEXTURE_HANDLE {
-                    continue;
+                let mut sprite_run: Option<SpriteRun> = None;
+                let mut obj = obj;
+                let mut instance = instance;
+                loop {
+                    let texture_handle = obj.texture_handle;
+                    if texture_handle != INVALID_TEXTURE_HANDLE {
+                        let instance_start = scratch.sprite_instances.len() as u32;
+                        scratch.sprite_instances.push(*instance);
+
+                        if let Some(last) = sprite_run.as_mut()
+                            && last.texture_handle == texture_handle
+                            && last.blend == obj.blend
+                            && last.camera == obj.camera
+                            && last.instance_start + last.instance_count == instance_start
+                        {
+                            last.instance_count += 1;
+                        } else {
+                            if let Some(run) = sprite_run.take() {
+                                scratch.ops.push(DrawOp::Sprite(run));
+                            }
+                            sprite_run = Some(SpriteRun {
+                                instance_start,
+                                instance_count: 1,
+                                blend: obj.blend,
+                                texture_handle,
+                                camera: obj.camera,
+                            });
+                        }
+                    }
+
+                    i += 1;
+                    if i >= objects_len {
+                        break;
+                    }
+                    obj = &render_list.objects[i];
+                    let ObjectType::Sprite(next_instance) = &obj.object_type else {
+                        break;
+                    };
+                    instance = next_instance;
                 }
 
-                let instance_start = scratch.sprite_instances.len() as u32;
-                scratch.sprite_instances.push(*instance);
-
-                if let Some(last) = sprite_run.as_mut()
-                    && last.texture_handle == texture_handle
-                    && last.blend == obj.blend
-                    && last.camera == obj.camera
-                    && last.instance_start + last.instance_count == instance_start
-                {
-                    last.instance_count += 1;
-                    continue;
+                if let Some(run) = sprite_run {
+                    scratch.ops.push(DrawOp::Sprite(run));
                 }
-
-                flush_sprite_run(&mut sprite_run, &mut scratch.ops);
-                sprite_run = Some(SpriteRun {
-                    instance_start,
-                    instance_count: 1,
-                    blend: obj.blend,
-                    texture_handle,
-                    camera: obj.camera,
-                });
             }
             ObjectType::Mesh {
                 transform,
                 tint,
                 vertices,
             } => {
-                flush_sprite_run(&mut sprite_run, &mut scratch.ops);
                 if vertices.is_empty() {
+                    i += 1;
                     continue;
                 }
 
@@ -297,6 +309,7 @@ where
                     && last.vertex_start + last.vertex_count == vertex_start
                 {
                     last.vertex_count += vertices.len() as u32;
+                    i += 1;
                     continue;
                 }
 
@@ -306,6 +319,7 @@ where
                     blend: obj.blend,
                     camera: obj.camera,
                 }));
+                i += 1;
             }
             ObjectType::TexturedMesh {
                 instance,
@@ -314,12 +328,13 @@ where
                 depth_test,
                 ..
             } => {
-                flush_sprite_run(&mut sprite_run, &mut scratch.ops);
                 if vertices.is_empty() {
+                    i += 1;
                     continue;
                 }
                 let texture_handle = obj.texture_handle;
                 if texture_handle == INVALID_TEXTURE_HANDLE {
+                    i += 1;
                     continue;
                 }
                 let source = if *geom_cache_key != INVALID_TMESH_CACHE_KEY {
@@ -383,6 +398,7 @@ where
                     && last.instance_start + last.instance_count == instance_start
                 {
                     last.instance_count += 1;
+                    i += 1;
                     continue;
                 }
 
@@ -395,11 +411,11 @@ where
                     camera: obj.camera,
                     depth_test: *depth_test,
                 }));
+                i += 1;
             }
         }
     }
 
-    flush_sprite_run(&mut sprite_run, &mut scratch.ops);
     stats
 }
 
