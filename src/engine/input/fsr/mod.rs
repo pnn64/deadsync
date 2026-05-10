@@ -7,6 +7,13 @@ use std::path::Path;
     target_os = "macos"
 ))]
 mod fsrio;
+#[cfg(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+))]
+mod smx;
 
 pub const VIEW_SENSOR_COUNT: usize = 4;
 
@@ -17,6 +24,8 @@ pub struct BarView {
     pub value_norm: f32,
     pub raw_threshold: u16,
     pub threshold_norm: f32,
+    pub min_raw_threshold: u16,
+    pub max_raw_threshold: u16,
     pub active: bool,
 }
 
@@ -32,7 +41,72 @@ pub struct View {
     target_os = "freebsd",
     target_os = "macos"
 ))]
-pub use fsrio::Monitor;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ActiveMonitor {
+    None,
+    Fsrio,
+    Smx,
+}
+
+#[cfg(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+))]
+pub struct Monitor {
+    fsrio: fsrio::Monitor,
+    smx: smx::Monitor,
+    active: ActiveMonitor,
+}
+
+#[cfg(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+))]
+impl Monitor {
+    pub fn new() -> Self {
+        Self {
+            fsrio: fsrio::Monitor::new(),
+            smx: smx::Monitor::new(),
+            active: ActiveMonitor::None,
+        }
+    }
+
+    pub fn poll_view(&mut self) -> Option<View> {
+        if let Some(view) = self.fsrio.poll_view() {
+            self.active = ActiveMonitor::Fsrio;
+            return Some(view);
+        }
+        if let Some(view) = self.smx.poll_view() {
+            self.active = ActiveMonitor::Smx;
+            return Some(view);
+        }
+        self.active = ActiveMonitor::None;
+        None
+    }
+
+    pub fn update_threshold(&mut self, sensor_index: usize, threshold: u16) -> bool {
+        match self.active {
+            ActiveMonitor::Fsrio => self.fsrio.update_threshold(sensor_index, threshold),
+            ActiveMonitor::Smx => self.smx.update_threshold(sensor_index, threshold),
+            ActiveMonitor::None => {
+                self.fsrio.update_threshold(sensor_index, threshold)
+                    || self.smx.update_threshold(sensor_index, threshold)
+            }
+        }
+    }
+
+    pub fn write_debug_dump(&mut self, path: &Path) -> Result<(), String> {
+        let mut out = String::new();
+        out.push_str(&self.fsrio.debug_dump());
+        out.push_str("\n\n");
+        out.push_str(&self.smx.debug_dump());
+        write_dump_file(path, out)
+    }
+}
 
 #[cfg(not(any(
     windows,

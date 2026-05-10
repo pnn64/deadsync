@@ -9,7 +9,6 @@ mod imp {
     use hidapi::{DeviceInfo, HidApi, HidDevice};
     use std::cmp::min;
     use std::fmt::Write as _;
-    use std::path::Path;
     use std::time::{Duration, Instant, SystemTime};
 
     const ADP_VENDOR_ID: u16 = 0x1209;
@@ -73,6 +72,8 @@ mod imp {
                     value_norm: normalize_sensor_value(self.input.sensor_values[i]),
                     raw_threshold: self.config.sensor_thresholds[i],
                     threshold_norm: normalize_sensor_value(self.config.sensor_thresholds[i]),
+                    min_raw_threshold: 0,
+                    max_raw_threshold: MAX_SENSOR_VALUE,
                     active: self.input.sensor_values[i] >= self.config.sensor_thresholds[i],
                 }),
             })
@@ -94,10 +95,10 @@ mod imp {
             false
         }
 
-        pub fn write_debug_dump(&mut self, path: &Path) -> Result<(), String> {
+        pub fn debug_dump(&mut self) -> String {
             self.ensure_device();
             self.read_pending_reports();
-            super::super::write_dump_file(path, build_debug_dump(self))
+            build_debug_dump(self)
         }
 
         fn ensure_device(&mut self) {

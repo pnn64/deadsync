@@ -23,7 +23,6 @@ const FSR_BAR_GAP: f32 = 18.0;
 const FSR_BAR_HEIGHT: f32 = 160.0;
 const FSR_PANEL_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.68];
 const FSR_PANEL_BORDER_H: f32 = 3.0;
-const FSR_MAX_THRESHOLD: u16 = 850;
 const FSR_THRESHOLD_STEP: u16 = 5;
 
 #[derive(Clone, Copy, Debug)]
@@ -403,14 +402,18 @@ fn current_fsr_threshold(state: &State, sensor_index: usize) -> Option<u16> {
 }
 
 fn adjust_fsr_threshold(state: &mut State, delta: i32) -> FsrEditResult {
-    if state.fsr_view.is_none() {
+    let Some(view) = state.fsr_view.as_ref() else {
         return FsrEditResult::None;
-    }
+    };
     let sensor_index = selected_fsr_bar(state);
     let Some(current) = current_fsr_threshold(state, sensor_index) else {
         return FsrEditResult::None;
     };
-    let next = (i32::from(current) + delta).clamp(0, i32::from(FSR_MAX_THRESHOLD)) as u16;
+    let bar = &view.bars[sensor_index];
+    let next = (i32::from(current) + delta).clamp(
+        i32::from(bar.min_raw_threshold),
+        i32::from(bar.max_raw_threshold),
+    ) as u16;
     if next == current {
         return FsrEditResult::None;
     }
@@ -1182,6 +1185,8 @@ mod tests {
                 value_norm: 0.0,
                 raw_threshold: 100 + i as u16 * 10,
                 threshold_norm: 0.0,
+                min_raw_threshold: 0,
+                max_raw_threshold: 850,
                 active: false,
             }),
         }
