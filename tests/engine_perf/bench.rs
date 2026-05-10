@@ -1,5 +1,8 @@
 use deadsync::assets;
-use deadsync::engine::gfx::BlendMode as GfxBlendMode;
+use deadsync::engine::gfx::{
+    self, BlendMode as GfxBlendMode, INVALID_TMESH_CACHE_KEY, MeshMode as GfxMeshMode,
+    TexturedMeshVertex as GfxTexturedMeshVertex, TexturedMeshVertices as GfxTexturedMeshVertices,
+};
 use deadsync::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextContent};
 use deadsync::engine::present::{anim, compose, font};
 use deadsync::test_support::compose_scenarios;
@@ -25,6 +28,7 @@ const TMESH_ITERS: usize = 20_000;
 const INPUT_TEMP_ITERS: usize = 500_000;
 const ACTIVE_SFX_ITERS: usize = 100_000;
 const DRAW_PREP_RESERVE_ITERS: usize = 12_000;
+const DRAW_PREP_TMESH_ITERS: usize = 25_000;
 const TMESH_REPACK_ITERS: usize = 30_000;
 const TEXTURE_LOOKUP_ITERS: usize = 12_000;
 const COMPOSE_TEXTURE_LOOKUP_ITERS: usize = 20_000;
@@ -978,6 +982,18 @@ fn bench_transient_tmesh() {
     run_tmesh_pair("duplicate 64 meshes x 24 verts", 64, 24, true);
     run_tmesh_pair("unique 256 meshes x 6 verts", 256, 6, false);
     run_tmesh_pair("duplicate 256 meshes x 6 verts", 256, 6, true);
+    run_draw_prep_tmesh_prepare_pair(
+        "prepare unique transient 256 meshes x 6 verts",
+        256,
+        6,
+        false,
+    );
+    run_draw_prep_tmesh_prepare_pair(
+        "prepare repeated shared invalid 256 meshes x 6 verts",
+        256,
+        6,
+        true,
+    );
     println!();
 }
 
@@ -1140,6 +1156,31 @@ fn run_tmesh_pair(name: &str, mesh_count: usize, verts_per_mesh: usize, duplicat
     print_result(&dedupe);
     print_result(&direct);
     print_ratio("direct vs dedupe", &dedupe, &direct);
+}
+
+fn run_draw_prep_tmesh_prepare_pair(
+    name: &str,
+    mesh_count: usize,
+    verts_per_mesh: usize,
+    shared_invalid: bool,
+) {
+    let render_list = make_draw_prep_tmesh_render_list(mesh_count, verts_per_mesh, shared_invalid);
+    let mut scratch = gfx::draw_prep::DrawScratch::with_capacity(
+        0,
+        0,
+        mesh_count * verts_per_mesh,
+        mesh_count,
+        mesh_count,
+    );
+
+    let result = bench(name, DRAW_PREP_TMESH_ITERS, || {
+        let stats = gfx::draw_prep::prepare(black_box(&render_list), &mut scratch, |_, _| false);
+        checksum_draw_prep_scratch(&scratch)
+            .wrapping_add(stats.dynamic_upload_vertices)
+            .wrapping_add(stats.cached_upload_vertices << 32)
+    });
+
+    print_result(&result);
 }
 
 fn run_prep_reserve_pair(name: &str, objects: &[PrepObj], cold: bool) {
@@ -2608,6 +2649,93 @@ fn make_tmesh_storage(
         storage.push(vertices);
     }
     storage
+}
+
+fn make_draw_prep_tmesh_render_list(
+    mesh_count: usize,
+    verts_per_mesh: usize,
+    shared_invalid: bool,
+) -> gfx::RenderList {
+    let shared = shared_invalid.then(|| {
+        Arc::<[GfxTexturedMeshVertex]>::from(
+            make_gfx_tmesh_vertices(0, verts_per_mesh).into_boxed_slice(),
+        )
+    });
+    let mut objects = Vec::with_capacity(mesh_count);
+    for mesh in 0..mesh_count {
+        let vertices = match &shared {
+            Some(vertices) => GfxTexturedMeshVertices::Shared(Arc::clone(vertices)),
+            None => {
+                GfxTexturedMeshVertices::Transient(make_gfx_tmesh_vertices(mesh, verts_per_mesh))
+            }
+        };
+        objects.push(gfx::RenderObject {
+            object_type: gfx::ObjectType::TexturedMesh {
+                tint: [1.0, 1.0, 1.0, 1.0],
+                vertices,
+                geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                mode: GfxMeshMode::Triangles,
+                uv_scale: [1.0, 1.0],
+                uv_offset: [0.0, 0.0],
+                uv_tex_shift: [0.0, 0.0],
+                texture_mask: false,
+                depth_test: false,
+            },
+            texture_handle: 1,
+            transform: glam::Mat4::IDENTITY,
+            blend: GfxBlendMode::Alpha,
+            z: 0,
+            order: mesh as u32,
+            camera: 0,
+        });
+    }
+    gfx::RenderList {
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        cameras: vec![glam::Mat4::IDENTITY],
+        objects,
+    }
+}
+
+fn make_gfx_tmesh_vertices(mesh: usize, verts_per_mesh: usize) -> Vec<GfxTexturedMeshVertex> {
+    let mut vertices = Vec::with_capacity(verts_per_mesh);
+    for i in 0..verts_per_mesh {
+        vertices.push(GfxTexturedMeshVertex {
+            pos: [i as f32, mesh as f32, 0.0],
+            uv: [i as f32 * 0.01, mesh as f32 * 0.01],
+            color: [1.0, 0.5, 0.25, 1.0],
+            tex_matrix_scale: [1.0, 1.0],
+        });
+    }
+    vertices
+}
+
+fn checksum_draw_prep_scratch(scratch: &gfx::draw_prep::DrawScratch) -> u64 {
+    let mut out = scratch
+        .tmesh_vertices
+        .len()
+        .wrapping_add(scratch.tmesh_instances.len() << 8)
+        .wrapping_add(scratch.ops.len() << 16) as u64;
+    for op in scratch.ops.iter() {
+        if let gfx::draw_prep::DrawOp::TexturedMesh(run) = op {
+            out = out
+                .wrapping_mul(131)
+                .wrapping_add(run.source.vertex_start() as u64)
+                .wrapping_add(run.source.vertex_count() as u64)
+                .wrapping_add(run.instance_count as u64)
+                .wrapping_add(run.texture_handle);
+        }
+    }
+    out.wrapping_add(checksum_gfx_tmesh_tail(&scratch.tmesh_vertices))
+}
+
+fn checksum_gfx_tmesh_tail(vertices: &[GfxTexturedMeshVertex]) -> u64 {
+    let Some(v) = vertices.last() else {
+        return 0;
+    };
+    v.pos[0].to_bits() as u64
+        ^ v.pos[1].to_bits() as u64
+        ^ v.uv[0].to_bits() as u64
+        ^ v.tex_matrix_scale[0].to_bits() as u64
 }
 
 fn copy_tmesh_dedupe(
