@@ -303,9 +303,20 @@ impl App {
                 backend,
                 path_opt.clone(),
             );
+            let show_video_backgrounds = crate::config::get().show_video_backgrounds;
             if let Some(gs) = &mut self.state.screens.gameplay_state {
-                gs.current_background_path = path_opt;
-                gs.background_texture_key = key;
+                let was_dirty = gs.background_path_dirty;
+                gs.current_background_path = path_opt.clone();
+                gs.background_allow_video = show_video_backgrounds;
+                gs.background_path_dirty = was_dirty;
+                gs.background_texture_key = key.clone();
+            }
+            if let Some(ps) = &mut self.state.screens.practice_state {
+                let was_dirty = ps.gameplay.background_path_dirty;
+                ps.gameplay.current_background_path = path_opt;
+                ps.gameplay.background_allow_video = show_video_backgrounds;
+                ps.gameplay.background_path_dirty = was_dirty;
+                ps.gameplay.background_texture_key = key;
             }
         }
     }

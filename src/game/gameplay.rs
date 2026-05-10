@@ -3571,6 +3571,8 @@ pub struct State {
     pub pack_group: Arc<str>,
     pub pack_banner_path: Option<PathBuf>,
     pub current_background_path: Option<PathBuf>,
+    pub background_path_dirty: bool,
+    pub background_allow_video: bool,
     pub next_background_change_ix: usize,
     pub background_texture_key: String,
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
@@ -4840,12 +4842,16 @@ fn set_current_music_time_ns(state: &mut State, music_time_ns: SongTimeNs) {
             state.timing_players[player].get_beat_for_time_ns(visible_time_ns);
     }
 
-    state.next_background_change_ix = state
+    let next_background_change_ix = state
         .song
         .background_changes
         .iter()
         .take_while(|change| change.start_beat <= state.current_beat)
         .count();
+    if state.next_background_change_ix != next_background_change_ix {
+        state.next_background_change_ix = next_background_change_ix;
+        state.background_path_dirty = true;
+    }
     refresh_active_attack_masks(state, 0.0);
     let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
     refresh_live_notefield_options(state, current_bpm);
@@ -6040,6 +6046,8 @@ pub fn init(
         pack_group,
         pack_banner_path,
         current_background_path: None,
+        background_path_dirty: true,
+        background_allow_video: false,
         next_background_change_ix,
         charts,
         gameplay_charts,

@@ -299,10 +299,16 @@ impl SongData {
         path.is_file().then_some(path)
     }
 
-    pub fn gameplay_background_path(&self, beat: f32, allow_video: bool) -> Option<&PathBuf> {
-        let fallback = self.fallback_background_path(allow_video);
-        match self
-            .active_background_change(beat)
+    pub fn gameplay_background_path_for_change_ix(
+        &self,
+        next_background_change_ix: usize,
+        allow_video: bool,
+    ) -> Option<&PathBuf> {
+        let active_ix = next_background_change_ix
+            .min(self.background_changes.len())
+            .checked_sub(1);
+        match active_ix
+            .and_then(|ix| self.background_changes.get(ix))
             .map(|change| &change.target)
         {
             Some(SongBackgroundChangeTarget::File(path)) => {
@@ -310,12 +316,13 @@ impl SongData {
                 if exists && (allow_video || !Self::is_video_path(path)) {
                     Some(path)
                 } else {
-                    fallback.or(exists.then_some(path))
+                    self.fallback_background_path(allow_video)
+                        .or(exists.then_some(path))
                 }
             }
-            Some(SongBackgroundChangeTarget::Random) => fallback,
+            Some(SongBackgroundChangeTarget::Random) => self.fallback_background_path(allow_video),
             Some(SongBackgroundChangeTarget::NoSongBg) => None,
-            None => fallback,
+            None => self.fallback_background_path(allow_video),
         }
     }
 }

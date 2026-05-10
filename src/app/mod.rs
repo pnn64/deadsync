@@ -4615,6 +4615,23 @@ impl App {
         self.handle_action(action, event_loop)
     }
 
+    fn refresh_gameplay_background_path(
+        state: &mut crate::game::gameplay::State,
+        show_video_backgrounds: bool,
+    ) -> Option<PathBuf> {
+        let path = state
+            .song
+            .gameplay_background_path_for_change_ix(
+                state.next_background_change_ix,
+                show_video_backgrounds,
+            )
+            .cloned();
+        state.current_background_path = path.clone();
+        state.background_allow_video = show_video_backgrounds;
+        state.background_path_dirty = false;
+        path
+    }
+
     fn sync_gameplay_background(&mut self) {
         if !matches!(
             self.state.screens.current_screen,
@@ -4637,27 +4654,21 @@ impl App {
             let Some(gs) = gs else {
                 return;
             };
-            if let Some(next_change) = gs.song.background_changes.get(gs.next_background_change_ix)
-            {
-                if gs.current_beat >= next_change.start_beat {
-                    while let Some(change) =
-                        gs.song.background_changes.get(gs.next_background_change_ix)
-                    {
-                        if gs.current_beat < change.start_beat {
-                            break;
-                        }
-                        gs.next_background_change_ix += 1;
-                    }
+            let mut background_changed = false;
+            while let Some(change) = gs.song.background_changes.get(gs.next_background_change_ix) {
+                if gs.current_beat < change.start_beat {
+                    break;
                 }
+                gs.next_background_change_ix += 1;
+                background_changed = true;
             }
-            let desired = gs
-                .song
-                .gameplay_background_path(gs.current_beat, show_video_backgrounds)
-                .cloned();
-            if desired != gs.current_background_path {
-                gs.current_background_path = desired.clone();
+            if background_changed {
+                gs.background_path_dirty = true;
             }
-            desired
+            if gs.background_path_dirty || gs.background_allow_video != show_video_backgrounds {
+                Self::refresh_gameplay_background_path(gs, show_video_backgrounds);
+            }
+            gs.current_background_path.clone()
         };
 
         let next_key = self.backend.as_mut().and_then(|backend| {
@@ -6702,11 +6713,9 @@ impl App {
                 );
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
                 let show_video_backgrounds = config::get().show_video_backgrounds;
-                commands.push(Command::SetDynamicBackground(
-                    gs.song
-                        .gameplay_background_path(gs.current_beat, show_video_backgrounds)
-                        .cloned(),
-                ));
+                let background_path =
+                    Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
+                commands.push(Command::SetDynamicBackground(background_path));
                 self.state.screens.practice_state = Some(practice::init(gs));
                 if let Some(ps) = self.state.screens.practice_state.as_mut() {
                     crate::screens::practice::on_enter(ps);
@@ -7072,11 +7081,9 @@ impl App {
                 }
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
                 let show_video_backgrounds = config::get().show_video_backgrounds;
-                commands.push(Command::SetDynamicBackground(
-                    gs.song
-                        .gameplay_background_path(gs.current_beat, show_video_backgrounds)
-                        .cloned(),
-                ));
+                let background_path =
+                    Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
+                commands.push(Command::SetDynamicBackground(background_path));
                 self.state.screens.gameplay_state = Some(gs);
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                     crate::screens::gameplay::on_enter(gs);
