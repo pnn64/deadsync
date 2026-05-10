@@ -644,6 +644,7 @@ pub const DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER: f32 = 1.5;
 pub const DRAW_DISTANCE_AFTER_TARGETS: f32 = 130.0;
 pub const MINE_EXPLOSION_DURATION: f32 = 0.6;
 pub const HOLD_JUDGMENT_TOTAL_DURATION: f32 = 0.8;
+pub const HELD_MISS_TOTAL_DURATION: f32 = 0.5;
 pub const RECEPTOR_GLOW_DURATION: f32 = 0.2;
 pub const COMBO_HUNDRED_MILESTONE_DURATION: f32 = 0.6;
 pub const COMBO_THOUSAND_MILESTONE_DURATION: f32 = 0.7;
@@ -2845,6 +2846,11 @@ pub struct HoldJudgmentRenderInfo {
 }
 
 #[derive(Copy, Clone, Debug)]
+pub struct HeldMissRenderInfo {
+    pub started_at_screen_s: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct ActiveTapExplosion {
     pub window: &'static str,
     pub bright: bool,
@@ -3657,6 +3663,7 @@ pub struct State {
 
     pub players: [PlayerRuntime; MAX_PLAYERS],
     pub hold_judgments: [Option<HoldJudgmentRenderInfo>; MAX_COLS],
+    pub held_miss_judgments: [Option<HeldMissRenderInfo>; MAX_COLS],
     pub is_in_freeze: bool,
     pub is_in_delay: bool,
 
@@ -4960,6 +4967,7 @@ pub fn reset_practice_playback(state: &mut State, judge_start_music_time: f32) {
     state.song_completed_naturally = false;
     state.autoplay_used = false;
     state.hold_judgments = [None; MAX_COLS];
+    state.held_miss_judgments = [None; MAX_COLS];
     state.tap_explosions = std::array::from_fn(|_| None);
     state.mine_explosions = std::array::from_fn(|_| None);
     state.active_holds = std::array::from_fn(|_| None);
@@ -6137,6 +6145,7 @@ pub fn init(
         pending_missed_hold_indices: Vec::new(),
         players,
         hold_judgments: Default::default(),
+        held_miss_judgments: Default::default(),
         is_in_freeze: false,
         is_in_delay: false,
         possible_grade_points,
@@ -8439,15 +8448,16 @@ fn update_danger_fx(state: &mut State) {
 mod tests {
     use super::{
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, FinalizedRowOutcome,
-        FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, HoldJudgmentRenderInfo,
-        HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, REPLAY_EDGE_RATE_PER_SEC,
-        RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TIMING_WINDOW_SECONDS_HOLD,
-        TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
-        advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
-        apply_autosync_for_row_hits, apply_global_offset_delta, apply_mines_insert,
-        apply_pending_mine_hits, apply_song_offset_delta, apply_time_based_mine_avoidance,
-        apply_time_based_tap_misses, autoplay_random_offset_music_ns_for_window,
-        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
+        FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, HELD_MISS_TOTAL_DURATION,
+        HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS,
+        MAX_PLAYERS, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting,
+        SongClockSnapshot, TIMING_WINDOW_SECONDS_HOLD, TickMode, TurnRng,
+        active_hold_counts_as_pressed, add_provisional_early_score, advance_hold_last_held,
+        advance_hold_life_ns, advance_judged_row_cursor, apply_autosync_for_row_hits,
+        apply_global_offset_delta, apply_mines_insert, apply_pending_mine_hits,
+        apply_song_offset_delta, apply_time_based_mine_avoidance, apply_time_based_tap_misses,
+        autoplay_random_offset_music_ns_for_window, build_assist_clap_rows,
+        build_attack_mask_windows_for_player, build_column_cues_for_player,
         build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
         collect_edge_judge_indices, completed_row_final_judgment,
         completed_row_flash_note_indices_and_judgment, count_rescore_tracks_on_row,
@@ -10111,6 +10121,50 @@ return Def.ActorFrame{}
         });
         tick_visual_effects(&mut state, 0.0);
         assert!(state.hold_judgments[0].is_none());
+    }
+
+    #[test]
+    fn held_miss_feedback_records_column_and_cleans_up() {
+        let mut state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        state.total_elapsed_in_screen = 5.0;
+        state.notes = vec![test_note(2, 48, NoteType::Tap)];
+        state.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0)];
+        state.row_entries = vec![test_row_entry_with_times(
+            &state.notes,
+            &state.note_time_cache_ns,
+            48,
+            vec![0],
+        )];
+        state.note_row_entry_indices = vec![0];
+
+        set_final_note_result(
+            &mut state,
+            0,
+            0,
+            Judgment {
+                time_error_ms: 180.0,
+                time_error_music_ns: song_time_ns_from_seconds(0.18),
+                grade: JudgeGrade::Miss,
+                window: None,
+                miss_because_held: true,
+            },
+        );
+
+        assert!(state.held_miss_judgments[0].is_none());
+        assert!(state.held_miss_judgments[1].is_none());
+        assert_eq!(
+            state.held_miss_judgments[2]
+                .as_ref()
+                .map(|info| info.started_at_screen_s),
+            Some(5.0)
+        );
+
+        state.held_miss_judgments[2] = Some(HeldMissRenderInfo {
+            started_at_screen_s: 5.0 - HELD_MISS_TOTAL_DURATION,
+        });
+        tick_visual_effects(&mut state, 0.0);
+        assert!(state.held_miss_judgments[2].is_none());
     }
 
     #[test]

@@ -776,6 +776,7 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         "HoldJudgmentGraphic={}\n",
         options.hold_judgment_graphic
     ));
+    content.push_str(&format!("HeldGraphic={}\n", options.held_miss_graphic));
     content.push_str(&format!("JudgmentGraphic={}\n", options.judgment_graphic));
     content.push_str(&format!("ComboFont={}\n", options.combo_font));
     content.push_str(&format!("ComboColors={}\n", options.combo_colors));
@@ -850,6 +851,11 @@ fn load_player_options(
         .get(section, "HoldJudgmentGraphic")
         .and_then(|s| HoldJudgmentGraphic::from_str(&s).ok())
         .unwrap_or_else(|| options.hold_judgment_graphic.clone());
+    options.held_miss_graphic = profile_conf
+        .get(section, "HeldGraphic")
+        .or_else(|| profile_conf.get(section, "HeldMissGraphic"))
+        .and_then(|s| HeldMissGraphic::from_str(&s).ok())
+        .unwrap_or_else(|| options.held_miss_graphic.clone());
     options.judgment_graphic = profile_conf
         .get(section, "JudgmentGraphic")
         .and_then(|s| JudgmentGraphic::from_str(&s).ok())
@@ -1563,6 +1569,64 @@ impl FromStr for HoldJudgmentGraphic {
 }
 
 impl core::fmt::Display for HoldJudgmentGraphic {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeldMissGraphic(String);
+
+impl HeldMissGraphic {
+    pub const DEFAULT_KEY: &'static str = "None";
+
+    const STOCK_ALIASES: &'static [(&'static str, &'static str)] = &[
+        ("love", "held_miss/Love (doubleres).png"),
+        ("love (doubleres).png", "held_miss/Love (doubleres).png"),
+        (
+            "held_miss/love (doubleres).png",
+            "held_miss/Love (doubleres).png",
+        ),
+    ];
+
+    #[inline(always)]
+    pub fn new(raw: &str) -> Self {
+        Self(
+            normalize_graphic_key(raw, "held_miss", Self::STOCK_ALIASES)
+                .unwrap_or_else(|_| Self::DEFAULT_KEY.to_string()),
+        )
+    }
+
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[inline(always)]
+    pub fn is_none(&self) -> bool {
+        self.0.eq_ignore_ascii_case("None")
+    }
+
+    #[inline(always)]
+    pub fn texture_key(&self) -> Option<&str> {
+        (!self.is_none()).then_some(self.as_str())
+    }
+}
+
+impl Default for HeldMissGraphic {
+    fn default() -> Self {
+        Self(Self::DEFAULT_KEY.to_string())
+    }
+}
+
+impl FromStr for HeldMissGraphic {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        normalize_graphic_key(s, "held_miss", Self::STOCK_ALIASES).map(Self)
+    }
+}
+
+impl core::fmt::Display for HeldMissGraphic {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(&self.0)
     }
@@ -2544,6 +2608,7 @@ impl core::fmt::Display for TargetScoreSetting {
 pub struct PlayerOptionsData {
     pub background_filter: BackgroundFilter,
     pub hold_judgment_graphic: HoldJudgmentGraphic,
+    pub held_miss_graphic: HeldMissGraphic,
     pub judgment_graphic: JudgmentGraphic,
     pub combo_font: ComboFont,
     pub combo_colors: ComboColors,
@@ -2640,6 +2705,7 @@ fn default_player_options() -> PlayerOptionsData {
     PlayerOptionsData {
         background_filter: BackgroundFilter::default(),
         hold_judgment_graphic: HoldJudgmentGraphic::default(),
+        held_miss_graphic: HeldMissGraphic::default(),
         judgment_graphic: JudgmentGraphic::default(),
         combo_font: ComboFont::default(),
         combo_colors: ComboColors::default(),
@@ -2758,6 +2824,7 @@ pub struct Profile {
     // active session play style so existing read paths can stay simple.
     pub background_filter: BackgroundFilter,
     pub hold_judgment_graphic: HoldJudgmentGraphic,
+    pub held_miss_graphic: HeldMissGraphic,
     pub judgment_graphic: JudgmentGraphic,
     pub combo_font: ComboFont,
     pub combo_colors: ComboColors,
@@ -2936,6 +3003,7 @@ impl Default for Profile {
             arrowcloud_api_key: String::new(),
             background_filter: player_options.background_filter,
             hold_judgment_graphic: player_options.hold_judgment_graphic.clone(),
+            held_miss_graphic: player_options.held_miss_graphic.clone(),
             judgment_graphic: player_options.judgment_graphic.clone(),
             combo_font: player_options.combo_font,
             combo_colors: player_options.combo_colors,
@@ -3098,6 +3166,7 @@ impl Profile {
         PlayerOptionsData {
             background_filter: self.background_filter,
             hold_judgment_graphic: self.hold_judgment_graphic.clone(),
+            held_miss_graphic: self.held_miss_graphic.clone(),
             judgment_graphic: self.judgment_graphic.clone(),
             combo_font: self.combo_font,
             combo_colors: self.combo_colors,
@@ -3194,6 +3263,7 @@ impl Profile {
     fn apply_player_options(&mut self, options: &PlayerOptionsData) {
         self.background_filter = options.background_filter;
         self.hold_judgment_graphic = options.hold_judgment_graphic.clone();
+        self.held_miss_graphic = options.held_miss_graphic.clone();
         self.judgment_graphic = options.judgment_graphic.clone();
         self.combo_font = options.combo_font;
         self.combo_colors = options.combo_colors;

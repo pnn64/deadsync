@@ -1,8 +1,8 @@
 use super::{
     AccelEffectsMask, AppearanceEffectsMask, AttackMode, BackgroundFilter, ComboColors, ComboFont,
     ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
-    HideLightType, HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic, LifeMeterType,
-    MINI_PERCENT_MAX, MINI_PERCENT_MIN, MeasureCounter, MeasureLines, MiniIndicator,
+    HeldMissGraphic, HideLightType, HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic,
+    LifeMeterType, MINI_PERCENT_MAX, MINI_PERCENT_MIN, MeasureCounter, MeasureLines, MiniIndicator,
     MiniIndicatorScoreType, NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN,
     NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoteSkin, Perspective, PlayStyle, PlayerSide,
     RemoveMask, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN, ScrollOption, ScrollSpeedSetting,
@@ -129,6 +129,18 @@ pub fn update_hold_judgment_graphic_for_side(side: PlayerSide, setting: HoldJudg
             return;
         }
         profile.hold_judgment_graphic = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_held_miss_graphic_for_side(side: PlayerSide, setting: HeldMissGraphic) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.held_miss_graphic == setting {
+            return;
+        }
+        profile.held_miss_graphic = setting;
     }
     save_profile_ini_for_side(side);
 }

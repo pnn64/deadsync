@@ -1298,6 +1298,7 @@ const SONG_LUA_TOP_SCREEN_OPTION_ROWS: &[&str] = &[
     "JudgmentGraphic",
     "ComboFont",
     "HoldJudgment",
+    "HeldGraphic",
     "BackgroundFilter",
     "NoteFieldOffsetX",
     "NoteFieldOffsetY",

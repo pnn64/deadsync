@@ -896,6 +896,7 @@ pub(super) fn draw_single_value_with_preview(actors: &mut Vec<Actor>, rc: &RowCt
     match rc.row.id {
         RowId::JudgmentFont => draw_judgment_preview(actors, rc, primary_player_idx),
         RowId::HoldJudgment => draw_hold_preview(actors, rc, primary_player_idx),
+        RowId::HeldGraphic => draw_held_graphic_preview(actors, rc, primary_player_idx),
         RowId::NoteSkin | RowId::MineSkin | RowId::ReceptorSkin | RowId::TapExplosionSkin => {
             draw_noteskin_family_preview(actors, rc, primary_player_idx)
         }
@@ -1093,6 +1094,37 @@ fn draw_hold_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: u
             && let Some(texture) = texture_for(P2)
         {
             draw_hold_preview(texture, rc.fc.preview_x[P2], &mut *actors);
+        }
+    }
+}
+
+fn draw_held_graphic_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
+    if rc.row.id == RowId::HeldGraphic {
+        let texture_for = |player_idx: usize| -> Option<&str> {
+            select_preview_texture(rc.row, player_idx, assets::held_miss_texture_choices())
+        };
+        if let Some(texture) = texture_for(primary_player_idx) {
+            actors.push(act!(sprite(texture):
+                align(0.5, 0.5):
+                xy(rc.fc.preview_x[primary_player_idx], rc.current_row_y):
+                setstate(0):
+                zoom(JUDGMENT_PREVIEW_ZOOM):
+                diffuse(1.0, 1.0, 1.0, rc.a):
+                z(Z_ROW_PREVIEW)
+            ));
+        }
+        if rc.fc.show_p2
+            && primary_player_idx != P2
+            && let Some(texture) = texture_for(P2)
+        {
+            actors.push(act!(sprite(texture):
+                align(0.5, 0.5):
+                xy(rc.fc.preview_x[P2], rc.current_row_y):
+                setstate(0):
+                zoom(JUDGMENT_PREVIEW_ZOOM):
+                diffuse(1.0, 1.0, 1.0, rc.a):
+                z(Z_ROW_PREVIEW)
+            ));
         }
     }
 }

@@ -9,9 +9,9 @@ use crate::engine::present::font;
 use crate::engine::space::*;
 use crate::game::gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
-    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS,
-    NoteCountStat, RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
-    TRANSITION_IN_DURATION, VisualEffects,
+    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HELD_MISS_TOTAL_DURATION,
+    HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, NoteCountStat, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, TRANSITION_IN_DURATION, VisualEffects,
 };
 use crate::game::gameplay::{
     active_chart_attack_effects_for_player, active_hold_is_engaged,
@@ -65,6 +65,7 @@ const HOLD_JUDGMENT_FINAL_ZOOM: f32 =
     HOLD_JUDGMENT_FINAL_HEIGHT / LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT;
 const HOLD_JUDGMENT_INITIAL_ZOOM: f32 =
     HOLD_JUDGMENT_INITIAL_HEIGHT / LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT;
+const HELD_MISS_Y_OFFSET: f32 = 50.0;
 const ERROR_BAR_JUDGMENT_HEIGHT: f32 = 40.0; // SL: judgmentHeight in SL-Layout.lua
 const ERROR_BAR_OFFSET_FROM_JUDGMENT: f32 = ERROR_BAR_JUDGMENT_HEIGHT * 0.5 + 5.0; // SL: top/bottom +/-25px
 
@@ -2016,6 +2017,23 @@ fn hallway_judgment_zoom(perspective_tilt: f32, perspective_skew: f32) -> f32 {
 }
 
 #[inline(always)]
+fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
+    let mini_scale = (1.0 - mini * 0.5).max(0.0);
+    if elapsed < 0.1 {
+        let t = (elapsed / 0.1).clamp(0.0, 1.0);
+        let ease_t = 1.0 - (1.0 - t).powi(2);
+        let zoom_x = 0.8 + (0.75 - 0.8) * ease_t;
+        return (zoom_x * mini_scale, 0.75 * mini_scale);
+    }
+    if elapsed < 0.3 {
+        return (0.75 * mini_scale, 0.75 * mini_scale);
+    }
+    let t = ((elapsed - 0.3) / 0.2).clamp(0.0, 1.0);
+    let zoom = 0.75 * mini_scale * (1.0 - t.powi(2));
+    (zoom, zoom)
+}
+
+#[inline(always)]
 fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
     let fmt_float = |v: f32| -> String {
         let s = cached_fmt2_f32(v);
@@ -2232,6 +2250,16 @@ fn resolved_hold_judgment_texture(
     assets::resolve_texture_choice_entry(
         profile.hold_judgment_graphic.texture_key(),
         assets::hold_judgment_texture_choices(),
+    )
+}
+
+#[inline(always)]
+fn resolved_held_miss_texture(
+    profile: &profile::Profile,
+) -> Option<&'static assets::TextureChoice> {
+    assets::resolve_texture_choice_entry(
+        profile.held_miss_graphic.texture_key(),
+        assets::held_miss_texture_choices(),
     )
 }
 
@@ -3605,6 +3633,7 @@ pub fn build_bundles(
     actors.clear();
     hud_actors.clear();
     let hold_judgment_texture = resolved_hold_judgment_texture(profile);
+    let held_miss_texture = resolved_held_miss_texture(profile);
 
     // --- Playfield Positioning (1:1 with Simply Love) ---
     // In P2-only single-player, we still have a single player runtime (index 0),
@@ -3660,6 +3689,11 @@ pub fn build_bundles(
         + if !error_bar_mask.is_empty() { 18 } else { 0 };
     let hud_cap = 8
         + if profile.column_cues { 1 } else { 0 }
+        + if held_miss_texture.is_some() {
+            num_cols
+        } else {
+            0
+        }
         + if profile.hide_combo { 0 } else { 2 }
         + if error_bar_mask.contains(profile::ErrorBarMask::TEXT) {
             1
@@ -8287,6 +8321,45 @@ pub fn build_bundles(
                     ));
                 }
             }
+        }
+    }
+    if !blind_active && let Some(texture) = held_miss_texture {
+        for (i, held_miss) in state.held_miss_judgments[col_start..col_start + num_cols]
+            .iter()
+            .enumerate()
+        {
+            let Some(render_info) = held_miss.as_ref() else {
+                continue;
+            };
+            let elapsed = (elapsed_screen - render_info.started_at_screen_s).max(0.0);
+            if elapsed >= HELD_MISS_TOTAL_DURATION {
+                continue;
+            }
+            let (zoom_x, zoom_y) = held_miss_zoom(elapsed, mini);
+            if zoom_x <= f32::EPSILON || zoom_y <= f32::EPSILON {
+                continue;
+            }
+            let y = sm_scale(
+                column_reverse_percent[i],
+                0.0,
+                1.0,
+                -HELD_MISS_Y_OFFSET,
+                HELD_MISS_Y_OFFSET * 2.0 + 10.0,
+            );
+            let column_offset = state.noteskin[player_idx]
+                .as_ref()
+                .and_then(|ns| ns.column_xs.get(i))
+                .map(|&x| x as f32 * spacing_mult)
+                .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
+            hud_actors.push(act!(sprite(texture.texture_key_handle()):
+                align(0.5, 0.5):
+                xy(playfield_center_x + column_offset, y):
+                z(196):
+                setstate(0):
+                zoomx(zoom_x):
+                zoomy(zoom_y):
+                diffusealpha(1.0)
+            ));
         }
     }
     for (i, hold_judgment) in state.hold_judgments[col_start..col_start + num_cols]

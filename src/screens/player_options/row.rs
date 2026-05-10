@@ -21,6 +21,7 @@ pub enum RowId {
     ComboOffsetX,
     ComboOffsetY,
     HoldJudgment,
+    HeldGraphic,
     BackgroundFilter,
     NoteFieldOffsetX,
     NoteFieldOffsetY,
@@ -391,7 +392,7 @@ pub fn init_bitmask_row_from_binding(
 /// **Scope:** only `CycleBinding::Bool` and `CycleBinding::Index` rows.
 /// `CustomBinding` rows whose init logic depends on translated strings or
 /// runtime asset lookups (e.g. `NoteSkin`, `JudgmentFont`, `MineSkin`,
-/// `ReceptorSkin`, `TapExplosionSkin`, `HoldJudgment`) are intentionally not
+/// `ReceptorSkin`, `TapExplosionSkin`, `HoldJudgment`, `HeldGraphic`) are intentionally not
 /// covered by this contract; they continue to be initialized in
 /// `apply_profile_defaults`.
 #[derive(Clone, Copy, Debug)]

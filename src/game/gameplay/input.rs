@@ -12,12 +12,12 @@ use super::{
     ASSIST_TICK_SFX_PATH, ActiveInputSlot, COMBO_HUNDRED_MILESTONE_DURATION,
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, GAMEPLAY_INPUT_BACKLOG_WARN,
     GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction, GameplayUpdatePhaseTimings,
-    HOLD_JUDGMENT_TOTAL_DURATION, HoldToExitKey, INVALID_SONG_TIME_NS, MAX_ACTIVE_INPUT_SLOTS,
-    MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION, REPLAY_EDGE_FLOOR_PER_LANE,
-    REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, SongClockSnapshot, SongTimeNs, State, TickMode,
-    abort_hold_to_exit, add_elapsed_us, current_music_time_s, elapsed_us_between,
-    gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift, judge_a_tap,
-    live_autoplay_enabled, music_time_ns_from_song_clock, record_step_calories,
+    HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, HoldToExitKey, INVALID_SONG_TIME_NS,
+    MAX_ACTIVE_INPUT_SLOTS, MINE_EXPLOSION_DURATION, RECEPTOR_GLOW_DURATION,
+    REPLAY_EDGE_FLOOR_PER_LANE, REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, SongClockSnapshot,
+    SongTimeNs, State, TickMode, abort_hold_to_exit, add_elapsed_us, current_music_time_s,
+    elapsed_us_between, gameplay_input_log_enabled, integrate_active_hold_to_time, judge_a_lift,
+    judge_a_tap, live_autoplay_enabled, music_time_ns_from_song_clock, record_step_calories,
     refresh_roll_life_on_step, single_runtime_player_is_p2, song_time_ns_invalid,
     song_time_ns_to_seconds,
 };
@@ -896,6 +896,14 @@ pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
         if let Some(render_info) = slot
             && state.total_elapsed_in_screen - render_info.started_at_screen_s
                 >= HOLD_JUDGMENT_TOTAL_DURATION
+        {
+            *slot = None;
+        }
+    }
+    for slot in &mut state.held_miss_judgments {
+        if let Some(render_info) = slot
+            && state.total_elapsed_in_screen - render_info.started_at_screen_s
+                >= HELD_MISS_TOTAL_DURATION
         {
             *slot = None;
         }
