@@ -2218,16 +2218,18 @@ fn split_15_10ms_active(profile: &profile::Profile, judgment: &Judgment) -> bool
 }
 
 #[inline(always)]
-fn resolved_judgment_texture(profile: &profile::Profile) -> Option<&str> {
-    assets::resolve_texture_choice(
+fn resolved_judgment_texture(profile: &profile::Profile) -> Option<&'static assets::TextureChoice> {
+    assets::resolve_texture_choice_entry(
         profile.judgment_graphic.texture_key(),
         assets::judgment_texture_choices(),
     )
 }
 
 #[inline(always)]
-fn resolved_hold_judgment_texture(profile: &profile::Profile) -> Option<&str> {
-    assets::resolve_texture_choice(
+fn resolved_hold_judgment_texture(
+    profile: &profile::Profile,
+) -> Option<&'static assets::TextureChoice> {
+    assets::resolve_texture_choice_entry(
         profile.hold_judgment_graphic.texture_key(),
         assets::hold_judgment_texture_choices(),
     )
@@ -8251,7 +8253,8 @@ pub fn build_bundles(
     // Judgment Sprite (tap judgments)
     if !blind_active && let Some(render_info) = &p.last_judgment {
         if let Some(judgment_texture) = resolved_judgment_texture(profile) {
-            let (frame_cols, frame_rows) = assets::parse_sprite_sheet_dims(judgment_texture);
+            let (frame_cols, frame_rows) =
+                assets::parse_sprite_sheet_dims(judgment_texture.key.as_ref());
             let judgment = &render_info.judgment;
             let elapsed = (elapsed_screen - render_info.started_at_screen_s).max(0.0);
             if elapsed < 0.9 {
@@ -8274,13 +8277,13 @@ pub fn build_bundles(
                 let col_index = if columns > 1 { frame_offset } else { 0 };
                 let linear_index = (frame_row * columns + col_index) as u32;
                 let rot_deg = judgment_tilt_rotation_deg(profile, judgment);
-                hud_actors.push(act!(sprite(judgment_texture):
+                hud_actors.push(act!(sprite(judgment_texture.texture_key_handle()):
                     align(0.5, 0.5): xy(judgment_x, judgment_y):
                     z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
                 ));
                 if let Some(overlay_row) = overlay_row {
                     let overlay_index = (overlay_row * columns + col_index) as u32;
-                    hud_actors.push(act!(sprite(judgment_texture):
+                    hud_actors.push(act!(sprite(judgment_texture.texture_key_handle()):
                         align(0.5, 0.5): xy(judgment_x, judgment_y):
                         z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(overlay_index): zoom(zoom):
                         diffuse(1.0, 1.0, 1.0, SPLIT_15_10MS_OVERLAY_ALPHA)
@@ -8329,7 +8332,7 @@ pub fn build_bundles(
                 .and_then(|ns| ns.column_xs.get(i))
                 .map(|&x| x as f32 * spacing_mult)
                 .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
-            hud_actors.push(act!(sprite(texture):
+            hud_actors.push(act!(sprite(texture.texture_key_handle()):
                 align(0.5, 0.5):
                 xy(judgment_x + column_offset, hold_judgment_y):
                 z(195):

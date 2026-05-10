@@ -428,7 +428,7 @@ const JUDGMENT_FONT: CustomBinding = CustomBinding {
         };
         let setting = assets::judgment_texture_choices()
             .get(new_index)
-            .map(|choice| gp::JudgmentGraphic::new(&choice.key))
+            .map(|choice| gp::JudgmentGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
         state.player_profiles[player_idx].judgment_graphic = setting;
         let (should_persist, side) = choice::persist_ctx(player_idx);
@@ -450,7 +450,7 @@ const HOLD_JUDGMENT: CustomBinding = CustomBinding {
         };
         let setting = assets::hold_judgment_texture_choices()
             .get(new_index)
-            .map(|choice| gp::HoldJudgmentGraphic::new(&choice.key))
+            .map(|choice| gp::HoldJudgmentGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
         state.player_profiles[player_idx].hold_judgment_graphic = setting;
         let (should_persist, side) = choice::persist_ctx(player_idx);

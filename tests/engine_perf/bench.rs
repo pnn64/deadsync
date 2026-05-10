@@ -5,6 +5,7 @@ use deadsync::engine::gfx::{
     TexturedMeshVertex as GfxTexturedMeshVertex, TexturedMeshVertices as GfxTexturedMeshVertices,
 };
 use deadsync::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextContent};
+use deadsync::engine::present::dsl::TextureKeyHandle;
 use deadsync::engine::present::{anim, compose, font};
 use deadsync::test_support::compose_scenarios;
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -35,6 +36,8 @@ const TEXTURE_LOOKUP_ITERS: usize = 12_000;
 const COMPOSE_TEXTURE_LOOKUP_ITERS: usize = 20_000;
 const COMPOSE_REGISTRY_CHURN_ITERS: usize = 1_500;
 const COMPOSE_TEXT_CACHE_ITERS: usize = 800;
+const SPRITE_KEY_ITERS: usize = 12_000;
+const SPRITE_KEY_ACTORS: usize = 128;
 const TEXT_CACHE_CHURN_POOL: usize = 512;
 const MARKER_SCAN_ITERS: usize = 80_000;
 const SHADOW_BUILD_ITERS: usize = 12_000;
@@ -356,6 +359,12 @@ fn main() {
     println!("engine perf microbench");
     println!("synthetic targeted checks for review recommendations\n");
 
+    if std::env::args().any(|arg| arg == "--sprite-texture-key") {
+        bench_sprite_texture_keys();
+        return;
+    }
+
+    bench_sprite_texture_keys();
     bench_sorting();
     bench_draw_prep_reserves();
     bench_tmesh_repack();
@@ -509,6 +518,22 @@ fn bench_compose_registry_churn() {
     print_result(&stable);
     print_result(&churn);
     print_ratio("stable registry vs repeated register_dims", &churn, &stable);
+    println!();
+}
+
+fn bench_sprite_texture_keys() {
+    println!("sprite texture key actor build");
+    let tex = "bench/judgment.png";
+    let tex_string = tex.to_string();
+    let tex_arc = Arc::<str>::from(tex);
+    run_sprite_texture_key_pair(
+        format!("{SPRITE_KEY_ACTORS} sprites"),
+        tex,
+        &tex_string,
+        &tex_arc,
+        17,
+        1,
+    );
     println!();
 }
 
@@ -1277,6 +1302,51 @@ fn run_compose_texture_lookup_pair(name: &str, texture_count: usize, op_count: u
     print_ratio("direct handles vs frame ptr", &frame_ptr, &direct);
 }
 
+fn run_sprite_texture_key_pair(
+    name: String,
+    tex: &'static str,
+    tex_string: &String,
+    tex_arc: &Arc<str>,
+    handle: TextureHandle,
+    generation: u64,
+) {
+    let str_expr = bench(
+        format!("{name}: act sprite(&str)"),
+        SPRITE_KEY_ITERS,
+        || build_sprite_key_str(black_box(tex), SPRITE_KEY_ACTORS),
+    );
+    let string_ref = bench(
+        format!("{name}: act sprite(&String)"),
+        SPRITE_KEY_ITERS,
+        || build_sprite_key_string_ref(black_box(tex_string), SPRITE_KEY_ACTORS),
+    );
+    let owned_string = bench(
+        format!("{name}: act sprite(String)"),
+        SPRITE_KEY_ITERS,
+        || build_sprite_key_owned_string(black_box(tex), SPRITE_KEY_ACTORS),
+    );
+    let arc_ref = bench(
+        format!("{name}: act sprite(&Arc<str>)"),
+        SPRITE_KEY_ITERS,
+        || build_sprite_key_arc_ref(black_box(tex_arc), SPRITE_KEY_ACTORS),
+    );
+    let key_handle = bench(
+        format!("{name}: act sprite(TextureKeyHandle)"),
+        SPRITE_KEY_ITERS,
+        || build_sprite_key_handle(black_box(tex_arc), handle, generation, SPRITE_KEY_ACTORS),
+    );
+
+    print_result(&str_expr);
+    print_result(&string_ref);
+    print_result(&owned_string);
+    print_result(&arc_ref);
+    print_result(&key_handle);
+    print_ratio("TextureKeyHandle vs &str", &str_expr, &key_handle);
+    print_ratio("TextureKeyHandle vs &String", &string_ref, &key_handle);
+    print_ratio("TextureKeyHandle vs String", &owned_string, &key_handle);
+    print_ratio("&Arc<str> vs &str", &str_expr, &arc_ref);
+}
+
 fn run_shadow_build_pair(name: &str, count: usize) {
     let boxed = bench(
         format!("{name}: Box<child> actor"),
@@ -1687,6 +1757,124 @@ fn lookup_compose_textures_direct(handles: &[TextureHandle]) -> u64 {
         out = out.wrapping_mul(131).wrapping_add(handle);
     }
     out
+}
+
+fn build_sprite_key_str(tex: &str, count: usize) -> u64 {
+    let mut out = 0u64;
+    for i in 0..count {
+        let actor = deadsync::act!(sprite(tex):
+            xy(i as f32, i as f32 * 0.5): setsize(76.0, 76.0): z((i & 31) as i16)
+        );
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(checksum_sprite_key_actor(black_box(&actor)));
+    }
+    out
+}
+
+fn build_sprite_key_string_ref(tex: &String, count: usize) -> u64 {
+    let mut out = 0u64;
+    for i in 0..count {
+        let actor = deadsync::act!(sprite(tex):
+            xy(i as f32, i as f32 * 0.5): setsize(76.0, 76.0): z((i & 31) as i16)
+        );
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(checksum_sprite_key_actor(black_box(&actor)));
+    }
+    out
+}
+
+fn build_sprite_key_owned_string(tex: &str, count: usize) -> u64 {
+    let mut out = 0u64;
+    for i in 0..count {
+        let actor = deadsync::act!(sprite(tex.to_string()):
+            xy(i as f32, i as f32 * 0.5): setsize(76.0, 76.0): z((i & 31) as i16)
+        );
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(checksum_sprite_key_actor(black_box(&actor)));
+    }
+    out
+}
+
+fn build_sprite_key_arc_ref(tex: &Arc<str>, count: usize) -> u64 {
+    let mut out = 0u64;
+    for i in 0..count {
+        let actor = deadsync::act!(sprite(tex):
+            xy(i as f32, i as f32 * 0.5): setsize(76.0, 76.0): z((i & 31) as i16)
+        );
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(checksum_sprite_key_actor(black_box(&actor)));
+    }
+    out
+}
+
+fn build_sprite_key_handle(
+    tex: &Arc<str>,
+    handle: TextureHandle,
+    generation: u64,
+    count: usize,
+) -> u64 {
+    let mut out = 0u64;
+    for i in 0..count {
+        let actor = deadsync::act!(sprite(TextureKeyHandle {
+            key: Arc::clone(tex),
+            handle,
+            generation,
+        }):
+            xy(i as f32, i as f32 * 0.5): setsize(76.0, 76.0): z((i & 31) as i16)
+        );
+        out = out
+            .wrapping_mul(131)
+            .wrapping_add(checksum_sprite_key_actor(black_box(&actor)));
+    }
+    out
+}
+
+fn checksum_sprite_key_actor(actor: &Actor) -> u64 {
+    match actor {
+        Actor::Sprite {
+            source,
+            offset,
+            size,
+            z,
+            ..
+        } => {
+            let size_bits = match size[0] {
+                SizeSpec::Px(value) => value.to_bits() as u64,
+                SizeSpec::Fill => 1,
+            };
+            (offset[0].to_bits() as u64)
+                .wrapping_add(size_bits)
+                .wrapping_add(*z as u16 as u64)
+                .wrapping_add(checksum_sprite_source(source))
+        }
+        _ => 0,
+    }
+}
+
+fn checksum_sprite_source(source: &SpriteSource) -> u64 {
+    match source {
+        SpriteSource::TextureStatic(key) => key.len() as u64,
+        SpriteSource::TextureStaticHandle {
+            key,
+            handle,
+            generation,
+        } => (key.len() as u64)
+            .wrapping_add(*handle)
+            .wrapping_add(generation.wrapping_mul(17)),
+        SpriteSource::TextureHandle {
+            key,
+            handle,
+            generation,
+        } => (key.len() as u64)
+            .wrapping_add(*handle)
+            .wrapping_add(generation.wrapping_mul(17)),
+        SpriteSource::Texture(key) => key.len() as u64,
+        SpriteSource::Solid => 1,
+    }
 }
 
 fn make_marker_texts(count: usize, marked: bool) -> Vec<String> {

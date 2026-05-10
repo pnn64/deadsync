@@ -39,11 +39,75 @@ pub struct TextureHints {
     pub sampler_wrap: Option<SamplerWrap>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TextureChoice {
-    pub key: String,
+    pub key: Arc<str>,
     pub label: String,
+    cached_handle: AtomicU64,
+    cached_generation: AtomicU64,
 }
+
+impl TextureChoice {
+    fn new(key: String, label: String) -> Self {
+        Self {
+            key: Arc::from(key),
+            label,
+            cached_handle: AtomicU64::new(INVALID_TEXTURE_HANDLE),
+            cached_generation: AtomicU64::new(u64::MAX),
+        }
+    }
+
+    #[inline(always)]
+    pub fn texture_key_handle(&self) -> crate::engine::present::dsl::TextureKeyHandle {
+        let generation = texture_registry_generation();
+        let handle = self.cached_handle.load(Ordering::Relaxed);
+        if handle != INVALID_TEXTURE_HANDLE
+            && self.cached_generation.load(Ordering::Relaxed) == generation
+        {
+            return crate::engine::present::dsl::TextureKeyHandle {
+                key: Arc::clone(&self.key),
+                handle,
+                generation,
+            };
+        }
+
+        let handle = texture_handle(self.key.as_ref());
+        self.cached_handle.store(handle, Ordering::Relaxed);
+        self.cached_generation.store(generation, Ordering::Relaxed);
+        crate::engine::present::dsl::TextureKeyHandle {
+            key: Arc::clone(&self.key),
+            handle,
+            generation,
+        }
+    }
+}
+
+impl Clone for TextureChoice {
+    fn clone(&self) -> Self {
+        Self {
+            key: Arc::clone(&self.key),
+            label: self.label.clone(),
+            cached_handle: AtomicU64::new(self.cached_handle.load(Ordering::Relaxed)),
+            cached_generation: AtomicU64::new(self.cached_generation.load(Ordering::Relaxed)),
+        }
+    }
+}
+
+impl core::fmt::Debug for TextureChoice {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("TextureChoice")
+            .field("key", &self.key)
+            .field("label", &self.label)
+            .finish()
+    }
+}
+
+impl PartialEq for TextureChoice {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key && self.label == other.label
+    }
+}
+
+impl Eq for TextureChoice {}
 
 #[derive(Clone, Debug)]
 struct DiscoveredTexture {
@@ -232,16 +296,13 @@ fn texture_choices_from_discovered(
 ) -> Vec<TextureChoice> {
     let mut choices: Vec<TextureChoice> = discover_graphic_textures(folder, love_first)
         .into_iter()
-        .map(|texture| TextureChoice {
-            key: texture.key,
-            label: texture.label,
-        })
+        .map(|texture| TextureChoice::new(texture.key, texture.label))
         .collect();
     if include_none {
-        choices.push(TextureChoice {
-            key: NONE_TEXTURE_CHOICE_KEY.to_string(),
-            label: NONE_TEXTURE_CHOICE_KEY.to_string(),
-        });
+        choices.push(TextureChoice::new(
+            NONE_TEXTURE_CHOICE_KEY.to_string(),
+            NONE_TEXTURE_CHOICE_KEY.to_string(),
+        ));
     }
     choices
 }
@@ -262,6 +323,13 @@ pub fn resolve_texture_choice<'a>(
     requested: Option<&str>,
     choices: &'a [TextureChoice],
 ) -> Option<&'a str> {
+    resolve_texture_choice_entry(requested, choices).map(|choice| choice.key.as_ref())
+}
+
+pub fn resolve_texture_choice_entry<'a>(
+    requested: Option<&str>,
+    choices: &'a [TextureChoice],
+) -> Option<&'a TextureChoice> {
     // When the caller explicitly opts out of a texture (e.g. user selected "None"),
     // honor that and render nothing. Only fall back to the first available choice
     // when a texture was requested but could not be located in the discovered set
@@ -269,13 +337,14 @@ pub fn resolve_texture_choice<'a>(
     let key = requested?;
     choices
         .iter()
-        .find(|choice| choice.key.eq_ignore_ascii_case(key))
-        .map(|choice| choice.key.as_str())
+        .find(|choice| choice.key.as_ref().eq_ignore_ascii_case(key))
         .or_else(|| {
-            choices
-                .iter()
-                .find(|choice| !choice.key.eq_ignore_ascii_case(NONE_TEXTURE_CHOICE_KEY))
-                .map(|choice| choice.key.as_str())
+            choices.iter().find(|choice| {
+                !choice
+                    .key
+                    .as_ref()
+                    .eq_ignore_ascii_case(NONE_TEXTURE_CHOICE_KEY)
+            })
         })
 }
 

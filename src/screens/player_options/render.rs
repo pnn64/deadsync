@@ -530,7 +530,7 @@ pub(super) fn select_preview_texture<'a>(
             if choice.key.eq_ignore_ascii_case("None") {
                 None
             } else {
-                crate::assets::resolve_texture_choice(Some(choice.key.as_str()), choices)
+                crate::assets::resolve_texture_choice(Some(choice.key.as_ref()), choices)
             }
         })
 }

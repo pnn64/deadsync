@@ -23,9 +23,10 @@ pub(crate) use self::textures::parse_texture_resolution_hint;
 pub use self::textures::{
     TexMeta, TextureChoice, TextureHints, canonical_texture_key, hold_judgment_texture_choices,
     judgment_texture_choices, open_image_fallback, parse_sprite_sheet_dims, parse_texture_hints,
-    register_generated_texture, register_texture_dims, resolve_texture_choice, sprite_sheet_dims,
-    strip_sprite_hints, texture_dims, texture_handle, texture_registry_generation,
-    texture_source_dims_from_real, texture_source_frame_dims_from_real,
+    register_generated_texture, register_texture_dims, resolve_texture_choice,
+    resolve_texture_choice_entry, sprite_sheet_dims, strip_sprite_hints, texture_dims,
+    texture_handle, texture_registry_generation, texture_source_dims_from_real,
+    texture_source_frame_dims_from_real,
 };
 use self::textures::{
     apply_texture_hints, clear_texture_handles, fix_hidden_alpha, generated_texture,
