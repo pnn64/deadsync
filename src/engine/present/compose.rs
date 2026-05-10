@@ -2366,6 +2366,8 @@ fn build_actor_recursive<'a>(
             let before = out.len();
             let texture_key = texture.as_ref();
             let texture_key_ptr = str_ptr(texture_key);
+            let texture_handle = texture_cache.texture_handle(texture_key_ptr, texture_key);
+            let actor_blend = style.blend.unwrap_or(*blend);
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::TexturedMesh {
                     instance: renderer::TexturedMeshInstanceRaw::new(
@@ -2380,8 +2382,8 @@ fn build_actor_recursive<'a>(
                     geom_cache_key: *geom_cache_key,
                     depth_test: *depth_test,
                 },
-                texture_handle: texture_cache.texture_handle(texture_key_ptr, texture_key),
-                blend: style.blend.unwrap_or(*blend),
+                texture_handle,
+                blend: actor_blend,
                 z: 0,
                 order: 0,
                 camera,
@@ -2412,8 +2414,8 @@ fn build_actor_recursive<'a>(
                         geom_cache_key: *geom_cache_key,
                         depth_test: *depth_test,
                     },
-                    texture_handle: texture_cache.texture_handle(texture_key_ptr, texture_key),
-                    blend: style.blend.unwrap_or(*blend),
+                    texture_handle,
+                    blend: actor_blend,
                     z: 0,
                     order: 0,
                     camera,
