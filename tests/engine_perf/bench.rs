@@ -1,6 +1,7 @@
 use deadsync::assets;
 use deadsync::engine::gfx::{
-    self, BlendMode as GfxBlendMode, INVALID_TMESH_CACHE_KEY, MeshMode as GfxMeshMode,
+    self, BlendMode as GfxBlendMode, INVALID_TMESH_CACHE_KEY,
+    TexturedMeshInstanceRaw as GfxTexturedMeshInstanceRaw,
     TexturedMeshVertex as GfxTexturedMeshVertex, TexturedMeshVertices as GfxTexturedMeshVertices,
 };
 use deadsync::engine::present::actors::{Actor, SizeSpec, SpriteSource, TextContent};
@@ -2367,10 +2368,12 @@ fn checksum_gfx_render(render: &deadsync::engine::gfx::RenderList) -> u64 {
                     .wrapping_add(vertices.len() as u64)
                     .wrapping_add(tint[3].to_bits() as u64);
             }
-            deadsync::engine::gfx::ObjectType::TexturedMesh { tint, vertices, .. } => {
+            deadsync::engine::gfx::ObjectType::TexturedMesh {
+                instance, vertices, ..
+            } => {
                 out = out
                     .wrapping_add(vertices.len() as u64)
-                    .wrapping_add(tint[3].to_bits() as u64);
+                    .wrapping_add(instance.tint[3].to_bits() as u64);
             }
         }
     }
@@ -2755,15 +2758,16 @@ fn make_draw_prep_tmesh_render_list(
         };
         objects.push(gfx::RenderObject {
             object_type: gfx::ObjectType::TexturedMesh {
-                transform: glam::Mat4::IDENTITY,
-                tint: [1.0, 1.0, 1.0, 1.0],
+                instance: GfxTexturedMeshInstanceRaw::new(
+                    glam::Mat4::IDENTITY,
+                    [1.0, 1.0, 1.0, 1.0],
+                    [1.0, 1.0],
+                    [0.0, 0.0],
+                    [0.0, 0.0],
+                    false,
+                ),
                 vertices,
                 geom_cache_key: INVALID_TMESH_CACHE_KEY,
-                mode: GfxMeshMode::Triangles,
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                uv_tex_shift: [0.0, 0.0],
-                texture_mask: false,
                 depth_test: false,
             },
             texture_handle: 1,

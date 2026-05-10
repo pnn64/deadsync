@@ -120,13 +120,8 @@ enum BlendMode {
 enum ObjectType {
     Sprite(SpriteInstanceRaw),
     TexturedMesh {
-        transform: [f32; 16],
-        tint: [f32; 4],
+        instance: TMeshInstanceRaw,
         vertices: Arc<[TexturedMeshVertex]>,
-        uv_scale: [f32; 2],
-        uv_offset: [f32; 2],
-        uv_tex_shift: [f32; 2],
-        texture_mask: bool,
         depth_test: bool,
     },
 }
@@ -425,13 +420,15 @@ fn stage_tmeshes(input: &[TMeshInput], objects: &mut Vec<RenderObject>) {
     for mesh in input {
         objects.push(RenderObject {
             object_type: ObjectType::TexturedMesh {
-                transform: mesh.transform,
-                tint: [1.0; 4],
+                instance: TMeshInstanceRaw {
+                    transform: mesh.transform,
+                    tint: [1.0; 4],
+                    uv_scale: [1.0, 1.0],
+                    uv_offset: [0.0, 0.0],
+                    uv_tex_shift: [0.0, 0.0],
+                    texture_mask: 0.0,
+                },
                 vertices: Arc::clone(&mesh.vertices),
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                uv_tex_shift: [0.0, 0.0],
-                texture_mask: false,
                 depth_test: false,
             },
             texture_handle: mesh.texture_handle,
@@ -461,26 +458,16 @@ fn prepare(objects: &[RenderObject], scratch: &mut Scratch) {
                 *instance,
             ),
             ObjectType::TexturedMesh {
-                transform,
-                tint,
+                instance,
                 vertices,
-                uv_scale,
-                uv_offset,
-                uv_tex_shift,
-                texture_mask,
                 depth_test,
             } => {
                 flush_sprite_run(&mut sprite_run, &mut scratch.ops);
                 push_tmesh_instance(
                     scratch,
                     obj.texture_handle,
-                    *transform,
-                    *tint,
+                    *instance,
                     vertices,
-                    *uv_scale,
-                    *uv_offset,
-                    *uv_tex_shift,
-                    *texture_mask,
                     *depth_test,
                 );
             }
@@ -531,13 +518,15 @@ fn direct_tmeshes(input: &[TMeshInput], scratch: &mut Scratch) {
         push_tmesh_instance(
             scratch,
             mesh.texture_handle,
-            mesh.transform,
-            [1.0; 4],
+            TMeshInstanceRaw {
+                transform: mesh.transform,
+                tint: [1.0; 4],
+                uv_scale: [1.0, 1.0],
+                uv_offset: [0.0, 0.0],
+                uv_tex_shift: [0.0, 0.0],
+                texture_mask: 0.0,
+            },
             &mesh.vertices,
-            [1.0, 1.0],
-            [0.0, 0.0],
-            [0.0, 0.0],
-            false,
             false,
         );
     }
@@ -572,13 +561,8 @@ fn push_sprite_instance(
 fn push_tmesh_instance(
     scratch: &mut Scratch,
     texture_handle: TextureHandle,
-    transform: [f32; 16],
-    tint: [f32; 4],
+    instance: TMeshInstanceRaw,
     vertices: &Arc<[TexturedMeshVertex]>,
-    uv_scale: [f32; 2],
-    uv_offset: [f32; 2],
-    uv_tex_shift: [f32; 2],
-    texture_mask: bool,
     depth_test: bool,
 ) {
     let geom_key = ((vertices.as_ptr() as usize as u64) << 16) ^ vertices.len() as u64;
@@ -593,14 +577,7 @@ fn push_tmesh_instance(
     };
 
     let instance_start = scratch.tmesh_instances.len() as u32;
-    scratch.tmesh_instances.push(TMeshInstanceRaw {
-        transform,
-        tint,
-        uv_scale,
-        uv_offset,
-        uv_tex_shift,
-        texture_mask: texture_mask as u8 as f32,
-    });
+    scratch.tmesh_instances.push(instance);
 
     if let Some(DrawOp::TMesh(last)) = scratch.ops.last_mut()
         && last.texture_handle == texture_handle

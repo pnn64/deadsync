@@ -1,7 +1,7 @@
 use crate::assets;
 use crate::engine::gfx::{
     BlendMode, MeshMode, MeshVertex, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
-    TexturedMeshVertex,
+    TexturedMeshInstanceRaw, TexturedMeshVertex,
 };
 use crate::engine::present::actors::{
     Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent,
@@ -335,7 +335,6 @@ pub enum RenderObjectTypeSnapshot {
         #[serde(default = "default_mesh_tint")]
         tint: [f32; 4],
         vertices: Vec<MeshVertex>,
-        mode: MeshModeSnapshot,
     },
     TexturedMesh {
         #[serde(default)]
@@ -343,7 +342,6 @@ pub enum RenderObjectTypeSnapshot {
         #[serde(default = "default_textured_mesh_tint")]
         tint: [f32; 4],
         vertices: Vec<TexturedMeshVertex>,
-        mode: MeshModeSnapshot,
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
@@ -1370,9 +1368,8 @@ fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
         ObjectType::Sprite(sprite) => {
             sprite_transform(sprite.center, sprite.size, sprite.rot_sin_cos)
         }
-        ObjectType::Mesh { transform, .. } | ObjectType::TexturedMesh { transform, .. } => {
-            *transform
-        }
+        ObjectType::Mesh { transform, .. } => *transform,
+        ObjectType::TexturedMesh { instance, .. } => instance.transform(),
     };
     RenderObjectSnapshot {
         object_type: match &render.object_type {
@@ -1385,33 +1382,22 @@ fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
                 local_offset_rot_sin_cos: sprite.local_offset_rot_sin_cos,
                 edge_fade: sprite.edge_fade,
             },
-            ObjectType::Mesh {
-                tint,
-                vertices,
-                mode,
-                ..
-            } => RenderObjectTypeSnapshot::Mesh {
+            ObjectType::Mesh { tint, vertices, .. } => RenderObjectTypeSnapshot::Mesh {
                 tint: *tint,
                 vertices: vertices.to_vec(),
-                mode: MeshModeSnapshot::from(*mode),
             },
             ObjectType::TexturedMesh {
-                tint,
+                instance,
                 vertices,
-                mode,
-                uv_scale,
-                uv_offset,
-                uv_tex_shift,
                 depth_test,
                 ..
             } => RenderObjectTypeSnapshot::TexturedMesh {
                 texture_id: None,
-                tint: *tint,
+                tint: instance.tint,
                 vertices: vertices.to_vec(),
-                mode: MeshModeSnapshot::from(*mode),
-                uv_scale: *uv_scale,
-                uv_offset: *uv_offset,
-                uv_tex_shift: *uv_tex_shift,
+                uv_scale: instance.uv_scale,
+                uv_offset: instance.uv_offset,
+                uv_tex_shift: instance.uv_tex_shift,
                 depth_test: *depth_test,
             },
         },
@@ -1470,37 +1456,32 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                     texture_mask: 0.0,
                 })
             }
-            RenderObjectTypeSnapshot::Mesh {
-                tint,
-                vertices,
-                mode,
-            } => ObjectType::Mesh {
+            RenderObjectTypeSnapshot::Mesh { tint, vertices } => ObjectType::Mesh {
                 transform: snapshot_transform,
                 tint: *tint,
                 vertices: Arc::from(vertices.clone()),
-                mode: MeshMode::from(*mode),
             },
             RenderObjectTypeSnapshot::TexturedMesh {
                 tint,
                 vertices,
-                mode,
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
                 depth_test,
                 ..
             } => ObjectType::TexturedMesh {
-                transform: snapshot_transform,
-                tint: *tint,
+                instance: TexturedMeshInstanceRaw::new(
+                    snapshot_transform,
+                    *tint,
+                    *uv_scale,
+                    *uv_offset,
+                    *uv_tex_shift,
+                    false,
+                ),
                 vertices: crate::engine::gfx::TexturedMeshVertices::Shared(Arc::from(
                     vertices.clone(),
                 )),
                 geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
-                mode: MeshMode::from(*mode),
-                uv_scale: *uv_scale,
-                uv_offset: *uv_offset,
-                uv_tex_shift: *uv_tex_shift,
-                texture_mask: false,
                 depth_test: *depth_test,
             },
         },

@@ -1172,12 +1172,10 @@ pub fn draw(
                         );
                         last_camera = Some(run.camera);
                     }
-                    match run.mode {
-                        crate::engine::gfx::MeshMode::Triangles => pass.draw(
-                            run.vertex_start..(run.vertex_start + run.vertex_count),
-                            0..1,
-                        ),
-                    }
+                    pass.draw(
+                        run.vertex_start..(run.vertex_start + run.vertex_count),
+                        0..1,
+                    );
                 }
                 DrawOp::TexturedMesh(run) => {
                     if run.source.vertex_count() == 0 || run.instance_count == 0 {
@@ -1246,12 +1244,10 @@ pub fn draw(
                     }
                     let draw_start = run.source.vertex_start();
                     let draw_end = draw_start + run.source.vertex_count();
-                    match run.mode {
-                        crate::engine::gfx::MeshMode::Triangles => pass.draw(
-                            draw_start..draw_end,
-                            run.instance_start..(run.instance_start + run.instance_count),
-                        ),
-                    }
+                    pass.draw(
+                        draw_start..draw_end,
+                        run.instance_start..(run.instance_start + run.instance_count),
+                    );
                 }
             }
         }

@@ -1,37 +1,14 @@
 use crate::engine::gfx::{
-    BlendMode, FastU64Map, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex,
-    ObjectType, RenderList, SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
-    TexturedMeshVertices,
+    BlendMode, FastU64Map, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType,
+    RenderList, SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshInstanceRaw,
+    TexturedMeshVertex, TexturedMeshVertices,
 };
-use glam::{Mat4 as Matrix4, Vec4 as Vector4};
+use glam::Vec4 as Vector4;
 use std::{collections::HashMap, hash::BuildHasherDefault};
 use twox_hash::XxHash64;
 
 type TMeshHasher = BuildHasherDefault<XxHash64>;
 type TMeshGeomMap = HashMap<TMeshGeomKey, FrameTMeshGeom, TMeshHasher>;
-
-#[repr(C)]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    serde::Serialize,
-    serde::Deserialize,
-    bytemuck::Pod,
-    bytemuck::Zeroable,
-)]
-pub struct TexturedMeshInstanceRaw {
-    pub model_col0: [f32; 4],
-    pub model_col1: [f32; 4],
-    pub model_col2: [f32; 4],
-    pub model_col3: [f32; 4],
-    pub tint: [f32; 4],
-    pub uv_scale: [f32; 2],
-    pub uv_offset: [f32; 2],
-    pub uv_tex_shift: [f32; 2],
-    pub texture_mask: f32,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SpriteRun {
@@ -46,7 +23,6 @@ pub struct SpriteRun {
 pub struct MeshRun {
     pub vertex_start: u32,
     pub vertex_count: u32,
-    pub mode: MeshMode,
     pub blend: BlendMode,
     pub camera: u8,
 }
@@ -88,7 +64,6 @@ pub struct TexturedMeshRun {
     pub source: TexturedMeshSource,
     pub instance_start: u32,
     pub instance_count: u32,
-    pub mode: MeshMode,
     pub blend: BlendMode,
     pub texture_handle: TextureHandle,
     pub camera: u8,
@@ -153,28 +128,6 @@ impl DrawScratch {
             ),
             cached_tmesh: FastU64Map::with_capacity_and_hasher(ops, BuildHasherDefault::default()),
         }
-    }
-}
-
-#[inline(always)]
-fn textured_instance_raw(
-    m: &Matrix4,
-    tint: [f32; 4],
-    uv_scale: [f32; 2],
-    uv_offset: [f32; 2],
-    uv_tex_shift: [f32; 2],
-    texture_mask: bool,
-) -> TexturedMeshInstanceRaw {
-    TexturedMeshInstanceRaw {
-        model_col0: [m.x_axis.x, m.x_axis.y, m.x_axis.z, m.x_axis.w],
-        model_col1: [m.y_axis.x, m.y_axis.y, m.y_axis.z, m.y_axis.w],
-        model_col2: [m.z_axis.x, m.z_axis.y, m.z_axis.z, m.z_axis.w],
-        model_col3: [m.w_axis.x, m.w_axis.y, m.w_axis.z, m.w_axis.w],
-        tint,
-        uv_scale,
-        uv_offset,
-        uv_tex_shift,
-        texture_mask: texture_mask as u8 as f32,
     }
 }
 
@@ -317,10 +270,9 @@ where
                 transform,
                 tint,
                 vertices,
-                mode,
             } => {
                 flush_sprite_run(&mut sprite_run, &mut scratch.ops);
-                if *mode != MeshMode::Triangles || vertices.is_empty() {
+                if vertices.is_empty() {
                     continue;
                 }
 
@@ -342,7 +294,6 @@ where
                 if let Some(DrawOp::Mesh(last)) = scratch.ops.last_mut()
                     && last.blend == obj.blend
                     && last.camera == obj.camera
-                    && last.mode == *mode
                     && last.vertex_start + last.vertex_count == vertex_start
                 {
                     last.vertex_count += vertices.len() as u32;
@@ -352,26 +303,19 @@ where
                 scratch.ops.push(DrawOp::Mesh(MeshRun {
                     vertex_start,
                     vertex_count: vertices.len() as u32,
-                    mode: *mode,
                     blend: obj.blend,
                     camera: obj.camera,
                 }));
             }
             ObjectType::TexturedMesh {
-                transform,
-                tint,
+                instance,
                 vertices,
                 geom_cache_key,
-                mode,
-                uv_scale,
-                uv_offset,
-                uv_tex_shift,
-                texture_mask,
                 depth_test,
                 ..
             } => {
                 flush_sprite_run(&mut sprite_run, &mut scratch.ops);
-                if *mode != MeshMode::Triangles || vertices.is_empty() {
+                if vertices.is_empty() {
                     continue;
                 }
                 let texture_handle = obj.texture_handle;
@@ -428,21 +372,13 @@ where
                 };
 
                 let instance_start = scratch.tmesh_instances.len() as u32;
-                scratch.tmesh_instances.push(textured_instance_raw(
-                    transform,
-                    *tint,
-                    *uv_scale,
-                    *uv_offset,
-                    *uv_tex_shift,
-                    *texture_mask,
-                ));
+                scratch.tmesh_instances.push(*instance);
 
                 if let Some(DrawOp::TexturedMesh(last)) = scratch.ops.last_mut()
                     && last.texture_handle == texture_handle
                     && last.blend == obj.blend
                     && last.camera == obj.camera
                     && last.depth_test == *depth_test
-                    && last.mode == *mode
                     && last.source == source
                     && last.instance_start + last.instance_count == instance_start
                 {
@@ -454,7 +390,6 @@ where
                     source,
                     instance_start,
                     instance_count: 1,
-                    mode: *mode,
                     blend: obj.blend,
                     texture_handle,
                     camera: obj.camera,

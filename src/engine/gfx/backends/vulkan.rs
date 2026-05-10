@@ -2,11 +2,8 @@ use crate::engine::gfx::{
     BlendMode, ClockDomainTrace, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
     SpriteInstanceRaw as InstanceData, TMeshCacheKey, Texture as RendererTexture, TextureHandleMap,
-    TexturedMeshVertex,
-    draw_prep::{
-        self, DrawOp, DrawScratch, TexturedMeshInstanceRaw as TexturedMeshInstanceGpu,
-        TexturedMeshSource,
-    },
+    TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshVertex,
+    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use crate::engine::space::ortho_for_window;
 use ash::{

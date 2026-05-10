@@ -1,6 +1,6 @@
 use crate::engine::gfx::{
-    BlendMode, DrawStats, MeshMode, ObjectType, RenderList, RenderObject, SamplerDesc,
-    SamplerFilter, SamplerWrap, Texture as RendererTexture, TextureHandleMap,
+    BlendMode, DrawStats, ObjectType, RenderList, RenderObject, SamplerDesc, SamplerFilter,
+    SamplerWrap, Texture as RendererTexture, TextureHandleMap,
 };
 use crate::engine::space::ortho_for_window;
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
@@ -251,57 +251,44 @@ fn draw_rows(
                 transform,
                 tint,
                 vertices,
-                mode,
-            } => match mode {
-                MeshMode::Triangles => rasterize_mesh_triangles(
+            } => rasterize_mesh_triangles(
+                &proj,
+                transform,
+                *tint,
+                vertices.as_ref(),
+                obj.blend,
+                width,
+                height,
+                stripe_y_start,
+                stripe_y_end,
+                buffer,
+            ),
+            ObjectType::TexturedMesh {
+                instance, vertices, ..
+            } => {
+                let Some(RendererTexture::Software(tex)) = textures.get(&obj.texture_handle) else {
+                    continue;
+                };
+                let transform = instance.transform();
+                rasterize_textured_mesh_triangles(
                     &proj,
-                    transform,
-                    *tint,
+                    &transform,
                     vertices.as_ref(),
+                    instance.tint,
+                    instance.uv_scale,
+                    instance.uv_offset,
+                    instance.uv_tex_shift,
+                    instance.texture_mask != 0.0,
                     obj.blend,
+                    &tex.image,
+                    tex.sampler,
                     width,
                     height,
                     stripe_y_start,
                     stripe_y_end,
                     buffer,
-                ),
-            },
-            ObjectType::TexturedMesh {
-                transform,
-                tint,
-                vertices,
-                mode,
-                uv_scale,
-                uv_offset,
-                uv_tex_shift,
-                texture_mask,
-                ..
-            } => match mode {
-                MeshMode::Triangles => {
-                    let Some(RendererTexture::Software(tex)) = textures.get(&obj.texture_handle)
-                    else {
-                        continue;
-                    };
-                    rasterize_textured_mesh_triangles(
-                        &proj,
-                        transform,
-                        vertices.as_ref(),
-                        *tint,
-                        *uv_scale,
-                        *uv_offset,
-                        *uv_tex_shift,
-                        *texture_mask,
-                        obj.blend,
-                        &tex.image,
-                        tex.sampler,
-                        width,
-                        height,
-                        stripe_y_start,
-                        stripe_y_end,
-                        buffer,
-                    )
-                }
-            },
+                )
+            }
         };
         vertices_drawn = vertices_drawn.saturating_add(drawn);
     }

@@ -1,8 +1,9 @@
 use deadsync::engine::gfx::draw_prep::{
-    self, DrawOp, DrawScratch, PrepareStats, TexturedMeshInstanceRaw, TexturedMeshSource,
+    self, DrawOp, DrawScratch, PrepareStats, TexturedMeshSource,
 };
 use deadsync::engine::gfx::{
-    BlendMode, MeshMode, MeshVertex, RenderList, SpriteInstanceRaw, TexturedMeshVertex,
+    BlendMode, MeshVertex, RenderList, SpriteInstanceRaw, TexturedMeshInstanceRaw,
+    TexturedMeshVertex,
 };
 use deadsync::engine::present::compose;
 use deadsync::test_support::{compose_case, compose_scenarios};
@@ -105,7 +106,6 @@ enum PlanOpSnapshot {
     Mesh {
         vertex_start: u32,
         vertex_count: u32,
-        mode: &'static str,
         blend: &'static str,
         camera: u8,
     },
@@ -113,7 +113,6 @@ enum PlanOpSnapshot {
         source: PlanTMeshSourceSnapshot,
         instance_start: u32,
         instance_count: u32,
-        mode: &'static str,
         blend: &'static str,
         texture: u64,
         camera: u8,
@@ -422,7 +421,6 @@ fn plan_snapshot(scratch: &DrawScratch, stats: PrepareStats) -> PlanSnapshot {
                 DrawOp::Mesh(run) => PlanOpSnapshot::Mesh {
                     vertex_start: run.vertex_start,
                     vertex_count: run.vertex_count,
-                    mode: mesh_mode_name(run.mode),
                     blend: blend_name(run.blend),
                     camera: run.camera,
                 },
@@ -430,7 +428,6 @@ fn plan_snapshot(scratch: &DrawScratch, stats: PrepareStats) -> PlanSnapshot {
                     source: tmesh_source_snapshot(run.source),
                     instance_start: run.instance_start,
                     instance_count: run.instance_count,
-                    mode: mesh_mode_name(run.mode),
                     blend: blend_name(run.blend),
                     texture: run.texture_handle,
                     camera: run.camera,
@@ -540,12 +537,6 @@ fn blend_name(blend: BlendMode) -> &'static str {
         BlendMode::Add => "add",
         BlendMode::Multiply => "multiply",
         BlendMode::Subtract => "subtract",
-    }
-}
-
-fn mesh_mode_name(mode: MeshMode) -> &'static str {
-    match mode {
-        MeshMode::Triangles => "triangles",
     }
 }
 

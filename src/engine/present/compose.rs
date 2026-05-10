@@ -1924,16 +1924,14 @@ fn push_shadow_objects_for_range(
                 tint[3] *= color[3];
                 *transform = t_world * *transform;
             }
-            renderer::ObjectType::TexturedMesh {
-                transform, tint, ..
-            } => {
+            renderer::ObjectType::TexturedMesh { instance, .. } => {
                 let mut shadow_tint = color;
-                shadow_tint[0] *= tint[0];
-                shadow_tint[1] *= tint[1];
-                shadow_tint[2] *= tint[2];
-                shadow_tint[3] *= tint[3];
-                *tint = shadow_tint;
-                *transform = t_world * *transform;
+                shadow_tint[0] *= instance.tint[0];
+                shadow_tint[1] *= instance.tint[1];
+                shadow_tint[2] *= instance.tint[2];
+                shadow_tint[3] *= instance.tint[3];
+                instance.tint = shadow_tint;
+                instance.set_transform(t_world * instance.transform());
             }
         }
 
@@ -2296,7 +2294,7 @@ fn build_actor_recursive<'a>(
             offset,
             size,
             vertices,
-            mode,
+            mode: _,
             visible,
             blend,
             z,
@@ -2317,7 +2315,6 @@ fn build_actor_recursive<'a>(
                     transform,
                     tint: [1.0; 4],
                     vertices: Arc::clone(vertices),
-                    mode: *mode,
                 },
                 texture_handle: renderer::INVALID_TEXTURE_HANDLE,
                 blend: style.blend.unwrap_or(*blend),
@@ -2348,7 +2345,7 @@ fn build_actor_recursive<'a>(
             glow,
             vertices,
             geom_cache_key,
-            mode,
+            mode: _,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -2373,15 +2370,16 @@ fn build_actor_recursive<'a>(
             let texture_key_ptr = str_ptr(texture_key);
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::TexturedMesh {
-                    transform,
-                    tint: *tint,
+                    instance: renderer::TexturedMeshInstanceRaw::new(
+                        transform,
+                        *tint,
+                        *uv_scale,
+                        *uv_offset,
+                        *uv_tex_shift,
+                        false,
+                    ),
                     vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
                     geom_cache_key: *geom_cache_key,
-                    mode: *mode,
-                    uv_scale: *uv_scale,
-                    uv_offset: *uv_offset,
-                    uv_tex_shift: *uv_tex_shift,
-                    texture_mask: false,
                     depth_test: *depth_test,
                 },
                 texture_handle: texture_cache.texture_handle(texture_key_ptr, texture_key),
@@ -2404,15 +2402,16 @@ fn build_actor_recursive<'a>(
                 let before = out.len();
                 out.push(renderer::RenderObject {
                     object_type: renderer::ObjectType::TexturedMesh {
-                        transform,
-                        tint: *glow,
+                        instance: renderer::TexturedMeshInstanceRaw::new(
+                            transform,
+                            *glow,
+                            *uv_scale,
+                            *uv_offset,
+                            *uv_tex_shift,
+                            true,
+                        ),
                         vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
                         geom_cache_key: *geom_cache_key,
-                        mode: *mode,
-                        uv_scale: *uv_scale,
-                        uv_offset: *uv_offset,
-                        uv_tex_shift: *uv_tex_shift,
-                        texture_mask: true,
                         depth_test: *depth_test,
                     },
                     texture_handle: texture_cache.texture_handle(texture_key_ptr, texture_key),
@@ -2712,11 +2711,13 @@ fn build_actor_recursive<'a>(
                     };
                     obj.blend = actor_blend;
                     obj.camera = camera;
-                    if let renderer::ObjectType::TexturedMesh { tint, .. } = &mut obj.object_type {
-                        tint[0] *= effect_color[0];
-                        tint[1] *= effect_color[1];
-                        tint[2] *= effect_color[2];
-                        tint[3] *= effect_color[3];
+                    if let renderer::ObjectType::TexturedMesh { instance, .. } =
+                        &mut obj.object_type
+                    {
+                        instance.tint[0] *= effect_color[0];
+                        instance.tint[1] *= effect_color[1];
+                        instance.tint[2] *= effect_color[2];
+                        instance.tint[3] *= effect_color[3];
                     }
                 }
                 if has_shadow(*shadow_len) {
@@ -3410,15 +3411,16 @@ fn push_text_mesh_batches(
         let texture_key = unsafe { str_from_cached_ptr(batch.texture_key) };
         out.push(RenderObject {
             object_type: renderer::ObjectType::TexturedMesh {
-                transform,
-                tint,
+                instance: renderer::TexturedMeshInstanceRaw::new(
+                    transform,
+                    tint,
+                    [1.0, 1.0],
+                    [0.0, 0.0],
+                    [0.0, 0.0],
+                    false,
+                ),
                 vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(&batch.vertices)),
                 geom_cache_key: batch.geom_cache_key,
-                mode: renderer::MeshMode::Triangles,
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                uv_tex_shift: [0.0, 0.0],
-                texture_mask: false,
                 depth_test: false,
             },
             texture_handle: texture_cache.texture_handle(batch.texture_key, texture_key),
@@ -3460,15 +3462,16 @@ fn push_transient_text_mesh_builders(
         let texture_key = unsafe { str_from_cached_ptr(builder.texture_key) };
         out.push(RenderObject {
             object_type: renderer::ObjectType::TexturedMesh {
-                transform,
-                tint,
+                instance: renderer::TexturedMeshInstanceRaw::new(
+                    transform,
+                    tint,
+                    [1.0, 1.0],
+                    [0.0, 0.0],
+                    [0.0, 0.0],
+                    false,
+                ),
                 vertices: renderer::TexturedMeshVertices::Transient(builder.vertices),
                 geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
-                mode: renderer::MeshMode::Triangles,
-                uv_scale: [1.0, 1.0],
-                uv_offset: [0.0, 0.0],
-                uv_tex_shift: [0.0, 0.0],
-                texture_mask: false,
                 depth_test: false,
             },
             texture_handle: texture_cache.texture_handle(builder.texture_key, texture_key),
@@ -3558,19 +3561,18 @@ fn object_world_area(object_type: &renderer::ObjectType) -> f32 {
     match object_type {
         renderer::ObjectType::Sprite(sprite) => (sprite.size[0] * sprite.size[1]).abs(),
         renderer::ObjectType::TexturedMesh {
-            transform,
-            vertices,
-            ..
+            instance, vertices, ..
         } => {
             if vertices.len() < 3 {
                 return 0.0;
             }
+            let transform = instance.transform();
             let mut area = 0.0_f32;
             let mut i = 0usize;
             while i + 2 < vertices.len() {
-                let p0 = world_xy_3d(transform, vertices[i].pos);
-                let p1 = world_xy_3d(transform, vertices[i + 1].pos);
-                let p2 = world_xy_3d(transform, vertices[i + 2].pos);
+                let p0 = world_xy_3d(&transform, vertices[i].pos);
+                let p1 = world_xy_3d(&transform, vertices[i + 1].pos);
+                let p2 = world_xy_3d(&transform, vertices[i + 2].pos);
                 let a = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]);
                 area += 0.5 * a.abs();
                 i += 3;
@@ -3649,11 +3651,10 @@ fn clip_sprite_object_to_world_rect_with_recycled(
     match &obj.object_type {
         renderer::ObjectType::Mesh { .. } => return true,
         renderer::ObjectType::TexturedMesh {
-            transform,
-            vertices,
-            ..
+            instance, vertices, ..
         } => {
-            let Some(bounds) = textured_mesh_world_bounds(vertices.as_ref(), *transform) else {
+            let transform = instance.transform();
+            let Some(bounds) = textured_mesh_world_bounds(vertices.as_ref(), transform) else {
                 return false;
             };
             if bounds.right < clip.left
@@ -3783,17 +3784,11 @@ fn clipped_sprite_object_to_world_rect(
             })
         }
         renderer::ObjectType::TexturedMesh {
-            transform,
-            tint,
-            vertices,
-            uv_scale,
-            uv_offset,
-            uv_tex_shift,
-            texture_mask,
-            ..
+            instance, vertices, ..
         } => {
             let vertices = vertices.as_ref();
-            let Some(bounds) = textured_mesh_world_bounds(vertices, *transform) else {
+            let transform = instance.transform();
+            let Some(bounds) = textured_mesh_world_bounds(vertices, transform) else {
                 return None;
             };
             if bounds.right < clip.left
@@ -3813,14 +3808,14 @@ fn clipped_sprite_object_to_world_rect(
                 });
             }
             clip_textured_mesh_to_world_rect(
-                *tint,
+                instance.tint,
                 vertices,
-                *transform,
-                *uv_scale,
-                *uv_offset,
-                *uv_tex_shift,
+                transform,
+                instance.uv_scale,
+                instance.uv_offset,
+                instance.uv_tex_shift,
                 clip,
-                *texture_mask,
+                instance.texture_mask != 0.0,
                 recycled_vertices,
             )
         }
@@ -4095,15 +4090,16 @@ fn clip_textured_mesh_to_world_rect(
 
     Some(ClippedSpriteObject {
         object_type: renderer::ObjectType::TexturedMesh {
-            transform: Matrix4::IDENTITY,
-            tint,
+            instance: renderer::TexturedMeshInstanceRaw::new(
+                Matrix4::IDENTITY,
+                tint,
+                [1.0, 1.0],
+                [0.0, 0.0],
+                [0.0, 0.0],
+                texture_mask,
+            ),
             vertices: renderer::TexturedMeshVertices::Transient(out),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
-            mode: renderer::MeshMode::Triangles,
-            uv_scale: [1.0, 1.0],
-            uv_offset: [0.0, 0.0],
-            uv_tex_shift: [0.0, 0.0],
-            texture_mask,
             depth_test: false,
         },
     })
@@ -4170,15 +4166,16 @@ fn clip_rotated_sprite_to_world_rect(
 
     Some(ClippedSpriteObject {
         object_type: renderer::ObjectType::TexturedMesh {
-            transform: Matrix4::IDENTITY,
-            tint,
+            instance: renderer::TexturedMeshInstanceRaw::new(
+                Matrix4::IDENTITY,
+                tint,
+                [1.0, 1.0],
+                [0.0, 0.0],
+                [0.0, 0.0],
+                texture_mask,
+            ),
             vertices: renderer::TexturedMeshVertices::Transient(out.into_vec()),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
-            mode: renderer::MeshMode::Triangles,
-            uv_scale: [1.0, 1.0],
-            uv_offset: [0.0, 0.0],
-            uv_tex_shift: [0.0, 0.0],
-            texture_mask,
             depth_test: false,
         },
     })
@@ -4196,7 +4193,7 @@ mod tests {
     use crate::assets;
     use crate::engine::gfx::{
         BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, ObjectType, RenderObject,
-        SpriteInstanceRaw, TMeshCacheKey, TexturedMeshVertex,
+        SpriteInstanceRaw, TMeshCacheKey, TexturedMeshInstanceRaw, TexturedMeshVertex,
     };
     use crate::engine::present::actors::{Actor, SizeSpec, TextAlign, TextAttribute, TextContent};
     use crate::engine::present::font::{Font, Glyph};
@@ -4349,7 +4346,6 @@ mod tests {
             transform: nested_transform,
             tint: nested_tint,
             vertices: nested_vertices,
-            mode: nested_mode,
         } = &nested_obj.object_type
         else {
             panic!("expected nested mesh render object");
@@ -4358,7 +4354,6 @@ mod tests {
             transform: flat_transform,
             tint: flat_tint,
             vertices: flat_vertices,
-            mode: flat_mode,
         } = &flat_obj.object_type
         else {
             panic!("expected flat mesh render object");
@@ -4368,7 +4363,6 @@ mod tests {
             flat_transform.to_cols_array()
         );
         assert_eq!(nested_tint, flat_tint);
-        assert_eq!(nested_mode, flat_mode);
         assert_eq!(nested_vertices.len(), flat_vertices.len());
         for (nested_vertex, flat_vertex) in nested_vertices.iter().zip(flat_vertices.iter()) {
             assert_eq!(nested_vertex.pos, flat_vertex.pos);
@@ -4705,12 +4699,10 @@ mod tests {
 
         match &obj.object_type {
             ObjectType::TexturedMesh {
-                transform,
-                vertices,
-                ..
+                instance, vertices, ..
             } => {
                 assert_eq!(obj.texture_handle, 17);
-                assert_eq!(*transform, Matrix4::IDENTITY);
+                assert_eq!(instance.transform(), Matrix4::IDENTITY);
                 assert!(!vertices.is_empty());
             }
             _ => panic!("expected rotated clip to produce textured mesh"),
@@ -4872,18 +4864,19 @@ mod tests {
             cameras: Vec::new(),
             objects: vec![RenderObject {
                 object_type: ObjectType::TexturedMesh {
-                    transform: Matrix4::IDENTITY,
-                    tint: [1.0; 4],
+                    instance: TexturedMeshInstanceRaw::new(
+                        Matrix4::IDENTITY,
+                        [1.0; 4],
+                        [1.0, 1.0],
+                        [0.0, 0.0],
+                        [0.0, 0.0],
+                        false,
+                    ),
                     vertices: crate::engine::gfx::TexturedMeshVertices::Transient(vec![
                         TexturedMeshVertex::default();
                         6
                     ]),
                     geom_cache_key: INVALID_TMESH_CACHE_KEY,
-                    mode: MeshMode::Triangles,
-                    uv_scale: [1.0, 1.0],
-                    uv_offset: [0.0, 0.0],
-                    uv_tex_shift: [0.0, 0.0],
-                    texture_mask: false,
                     depth_test: false,
                 },
                 texture_handle: 9,
@@ -4988,20 +4981,20 @@ mod tests {
         match (&shadow.object_type, &original.object_type) {
             (
                 crate::engine::gfx::ObjectType::TexturedMesh {
-                    tint: shadow_tint,
+                    instance: shadow_instance,
                     geom_cache_key: shadow_key,
                     ..
                 },
                 crate::engine::gfx::ObjectType::TexturedMesh {
-                    tint: original_tint,
+                    instance: original_instance,
                     geom_cache_key: original_key,
                     ..
                 },
             ) => {
                 assert_eq!(*shadow_key, CACHE_KEY);
                 assert_eq!(*original_key, CACHE_KEY);
-                assert_eq!(*original_tint, [0.25, 0.5, 0.75, 0.8]);
-                assert_eq!(*shadow_tint, [0.125, 0.125, 0.5625, 0.4]);
+                assert_eq!(original_instance.tint, [0.25, 0.5, 0.75, 0.8]);
+                assert_eq!(shadow_instance.tint, [0.125, 0.125, 0.5625, 0.4]);
             }
             _ => panic!("expected textured-mesh objects"),
         }
@@ -5051,12 +5044,12 @@ mod tests {
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
             ObjectType::TexturedMesh {
-                tint,
+                instance,
                 vertices,
                 geom_cache_key,
                 ..
             } => {
-                assert_eq!(*tint, [0.5, 0.75, 1.0, 1.0]);
+                assert_eq!(instance.tint, [0.5, 0.75, 1.0, 1.0]);
                 assert_eq!(vertices.len(), 12);
                 assert_ne!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
             }
