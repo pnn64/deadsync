@@ -1908,12 +1908,12 @@ fn push_shadow_objects_for_range(
         let obj = &out[i];
         let mut obj_type = obj.object_type.clone();
         match &mut obj_type {
-            renderer::ObjectType::Sprite { center, tint, .. } => {
+            renderer::ObjectType::Sprite(sprite) => {
                 let mut shadow_tint = color;
-                shadow_tint[3] *= (*tint)[3];
-                *tint = shadow_tint;
-                center[0] += len[0];
-                center[1] += len[1];
+                shadow_tint[3] *= sprite.tint[3];
+                sprite.tint = shadow_tint;
+                sprite.center[0] += len[0];
+                sprite.center[1] += len[1];
             }
             renderer::ObjectType::Mesh {
                 transform, tint, ..
@@ -3314,7 +3314,7 @@ fn push_sprite<'a>(
     };
 
     out.push(renderer::RenderObject {
-        object_type: renderer::ObjectType::Sprite {
+        object_type: renderer::ObjectType::Sprite(renderer::SpriteInstanceRaw {
             center: [center_x, center_y, world_z, 0.0],
             size: [size_x, size_y],
             rot_sin_cos: [sin_z, cos_z],
@@ -3324,8 +3324,8 @@ fn push_sprite<'a>(
             local_offset,
             local_offset_rot_sin_cos,
             edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
-            texture_mask,
-        },
+            texture_mask: texture_mask as u8 as f32,
+        }),
         texture_handle,
         blend,
         z: 0,
@@ -3556,7 +3556,7 @@ struct ClippedSpriteObject {
 #[inline(always)]
 fn object_world_area(object_type: &renderer::ObjectType) -> f32 {
     match object_type {
-        renderer::ObjectType::Sprite { size, .. } => (size[0] * size[1]).abs(),
+        renderer::ObjectType::Sprite(sprite) => (sprite.size[0] * sprite.size[1]).abs(),
         renderer::ObjectType::TexturedMesh {
             transform,
             vertices,
@@ -3671,7 +3671,7 @@ fn clip_sprite_object_to_world_rect_with_recycled(
                 return true;
             }
         }
-        renderer::ObjectType::Sprite { .. } => {}
+        renderer::ObjectType::Sprite(_) => {}
     }
 
     let Some(clipped) = clipped_sprite_object_to_world_rect(obj, clip, recycled_vertices) else {
@@ -3690,46 +3690,38 @@ fn clipped_sprite_object_to_world_rect(
         return None;
     }
     match &obj.object_type {
-        renderer::ObjectType::Sprite {
-            center,
-            size,
-            rot_sin_cos,
-            tint,
-            uv_scale,
-            uv_offset,
-            local_offset,
-            local_offset_rot_sin_cos,
-            edge_fade,
-            texture_mask,
-        } => {
+        renderer::ObjectType::Sprite(sprite) => {
             let eps = 1e-6;
             let offset_world = [
-                local_offset_rot_sin_cos[1].mul_add(
-                    local_offset[0],
-                    -(local_offset_rot_sin_cos[0] * local_offset[1]),
+                sprite.local_offset_rot_sin_cos[1].mul_add(
+                    sprite.local_offset[0],
+                    -(sprite.local_offset_rot_sin_cos[0] * sprite.local_offset[1]),
                 ),
-                local_offset_rot_sin_cos[0].mul_add(
-                    local_offset[0],
-                    local_offset_rot_sin_cos[1] * local_offset[1],
+                sprite.local_offset_rot_sin_cos[0].mul_add(
+                    sprite.local_offset[0],
+                    sprite.local_offset_rot_sin_cos[1] * sprite.local_offset[1],
                 ),
             ];
-            let world_center = [center[0] + offset_world[0], center[1] + offset_world[1]];
-            if rot_sin_cos[0].abs() > eps || rot_sin_cos[1] < 1.0 - eps {
+            let world_center = [
+                sprite.center[0] + offset_world[0],
+                sprite.center[1] + offset_world[1],
+            ];
+            if sprite.rot_sin_cos[0].abs() > eps || sprite.rot_sin_cos[1] < 1.0 - eps {
                 return clip_rotated_sprite_to_world_rect(
-                    *tint,
-                    *center,
-                    *size,
-                    *rot_sin_cos,
-                    *uv_scale,
-                    *uv_offset,
+                    sprite.tint,
+                    sprite.center,
+                    sprite.size,
+                    sprite.rot_sin_cos,
+                    sprite.uv_scale,
+                    sprite.uv_offset,
                     offset_world,
                     clip,
-                    *texture_mask,
+                    sprite.texture_mask != 0.0,
                 );
             }
 
-            let w = size[0];
-            let h = size[1];
+            let w = sprite.size[0];
+            let h = sprite.size[1];
             if w <= eps || h <= eps {
                 return None;
             }
@@ -3765,10 +3757,10 @@ fn clipped_sprite_object_to_world_rect(
             }
 
             let uv_offset = [
-                uv_offset[0] + uv_scale[0] * cl,
-                uv_offset[1] + uv_scale[1] * ct,
+                sprite.uv_offset[0] + sprite.uv_scale[0] * cl,
+                sprite.uv_offset[1] + sprite.uv_scale[1] * ct,
             ];
-            let uv_scale = [uv_scale[0] * sx_crop, uv_scale[1] * sy_crop];
+            let uv_scale = [sprite.uv_scale[0] * sx_crop, sprite.uv_scale[1] * sy_crop];
 
             let center_x = ((cl - cr) * w).mul_add(0.5, world_center[0]) - offset_world[0];
             let center_y = ((cb - ct) * h).mul_add(0.5, world_center[1]) - offset_world[1];
@@ -3776,18 +3768,18 @@ fn clipped_sprite_object_to_world_rect(
             let new_h = h * sy_crop;
 
             Some(ClippedSpriteObject {
-                object_type: renderer::ObjectType::Sprite {
-                    center: [center_x, center_y, center[2], center[3]],
+                object_type: renderer::ObjectType::Sprite(renderer::SpriteInstanceRaw {
+                    center: [center_x, center_y, sprite.center[2], sprite.center[3]],
                     size: [new_w, new_h],
-                    rot_sin_cos: *rot_sin_cos,
-                    tint: *tint,
+                    rot_sin_cos: sprite.rot_sin_cos,
+                    tint: sprite.tint,
                     uv_scale,
                     uv_offset,
-                    local_offset: *local_offset,
-                    local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
-                    edge_fade: *edge_fade,
-                    texture_mask: *texture_mask,
-                },
+                    local_offset: sprite.local_offset,
+                    local_offset_rot_sin_cos: sprite.local_offset_rot_sin_cos,
+                    edge_fade: sprite.edge_fade,
+                    texture_mask: sprite.texture_mask,
+                }),
             })
         }
         renderer::ObjectType::TexturedMesh {
@@ -4204,7 +4196,7 @@ mod tests {
     use crate::assets;
     use crate::engine::gfx::{
         BlendMode, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex, ObjectType, RenderObject,
-        TMeshCacheKey, TexturedMeshVertex,
+        SpriteInstanceRaw, TMeshCacheKey, TexturedMeshVertex,
     };
     use crate::engine::present::actors::{Actor, SizeSpec, TextAlign, TextAttribute, TextContent};
     use crate::engine::present::font::{Font, Glyph};
@@ -4503,7 +4495,7 @@ mod tests {
 
     fn test_render_object(z: i16, order: u32) -> RenderObject {
         RenderObject {
-            object_type: ObjectType::Sprite {
+            object_type: ObjectType::Sprite(SpriteInstanceRaw {
                 center: [0.0, 0.0, 0.0, 0.0],
                 size: [1.0, 1.0],
                 rot_sin_cos: [0.0, 1.0],
@@ -4513,8 +4505,8 @@ mod tests {
                 local_offset: [0.0, 0.0],
                 local_offset_rot_sin_cos: [0.0, 1.0],
                 edge_fade: [0.0; 4],
-                texture_mask: false,
-            },
+                texture_mask: 0.0,
+            }),
             texture_handle: 0,
             blend: BlendMode::Alpha,
             z,
@@ -4633,7 +4625,7 @@ mod tests {
     #[test]
     fn mask_clip_chooses_largest_intersection() {
         let mut obj = RenderObject {
-            object_type: ObjectType::Sprite {
+            object_type: ObjectType::Sprite(SpriteInstanceRaw {
                 center: [0.0, 0.0, 0.0, 0.0],
                 size: [10.0, 10.0],
                 rot_sin_cos: [0.0, 1.0],
@@ -4643,8 +4635,8 @@ mod tests {
                 local_offset: [0.0, 0.0],
                 local_offset_rot_sin_cos: [0.0, 1.0],
                 edge_fade: [0.0; 4],
-                texture_mask: false,
-            },
+                texture_mask: 0.0,
+            }),
             texture_handle: 0,
             blend: BlendMode::Alpha,
             z: 0,
@@ -4670,16 +4662,10 @@ mod tests {
             ],
         ));
 
-        if let ObjectType::Sprite {
-            size,
-            uv_scale,
-            uv_offset,
-            ..
-        } = &obj.object_type
-        {
-            assert_eq!(*size, [10.0, 10.0]);
-            assert_eq!(*uv_scale, [1.0, 1.0]);
-            assert_eq!(*uv_offset, [0.0, 0.0]);
+        if let ObjectType::Sprite(sprite) = &obj.object_type {
+            assert_eq!(sprite.size, [10.0, 10.0]);
+            assert_eq!(sprite.uv_scale, [1.0, 1.0]);
+            assert_eq!(sprite.uv_offset, [0.0, 0.0]);
         } else {
             panic!("expected sprite to remain in fast clip path");
         }
@@ -4688,7 +4674,7 @@ mod tests {
     #[test]
     fn rotated_clip_preserves_texture_handle() {
         let mut obj = RenderObject {
-            object_type: ObjectType::Sprite {
+            object_type: ObjectType::Sprite(SpriteInstanceRaw {
                 center: [0.0, 0.0, 0.0, 0.0],
                 size: [10.0, 10.0],
                 rot_sin_cos: [45.0_f32.to_radians().sin(), 45.0_f32.to_radians().cos()],
@@ -4698,8 +4684,8 @@ mod tests {
                 local_offset: [0.0, 0.0],
                 local_offset_rot_sin_cos: [0.0, 1.0],
                 edge_fade: [0.0; 4],
-                texture_mask: false,
-            },
+                texture_mask: 0.0,
+            }),
             texture_handle: 17,
             blend: BlendMode::Alpha,
             z: 0,

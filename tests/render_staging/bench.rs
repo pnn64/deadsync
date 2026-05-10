@@ -118,18 +118,7 @@ enum BlendMode {
 
 #[derive(Clone)]
 enum ObjectType {
-    Sprite {
-        center: [f32; 4],
-        size: [f32; 2],
-        rot_sin_cos: [f32; 2],
-        tint: [f32; 4],
-        uv_scale: [f32; 2],
-        uv_offset: [f32; 2],
-        local_offset: [f32; 2],
-        local_offset_rot_sin_cos: [f32; 2],
-        edge_fade: [f32; 4],
-        texture_mask: bool,
-    },
+    Sprite(SpriteInstanceRaw),
     TexturedMesh {
         transform: [f32; 16],
         tint: [f32; 4],
@@ -409,7 +398,7 @@ fn stage_sprites(input: &[SpriteInput], objects: &mut Vec<RenderObject>) {
     objects.reserve(input.len());
     for sprite in input {
         objects.push(RenderObject {
-            object_type: ObjectType::Sprite {
+            object_type: ObjectType::Sprite(SpriteInstanceRaw {
                 center: sprite.center,
                 size: sprite.size,
                 rot_sin_cos: [0.0, 1.0],
@@ -419,8 +408,8 @@ fn stage_sprites(input: &[SpriteInput], objects: &mut Vec<RenderObject>) {
                 local_offset: [0.0, 0.0],
                 local_offset_rot_sin_cos: [0.0, 1.0],
                 edge_fade: [0.0; 4],
-                texture_mask: false,
-            },
+                texture_mask: 0.0,
+            }),
             texture_handle: sprite.texture_handle,
             blend: BlendMode::Alpha,
             z: 0,
@@ -464,32 +453,12 @@ fn prepare(objects: &[RenderObject], scratch: &mut Scratch) {
     let mut sprite_run = None;
     for obj in objects {
         match &obj.object_type {
-            ObjectType::Sprite {
-                center,
-                size,
-                rot_sin_cos,
-                tint,
-                uv_scale,
-                uv_offset,
-                local_offset,
-                local_offset_rot_sin_cos,
-                edge_fade,
-                texture_mask,
-            } => push_sprite_instance(
+            ObjectType::Sprite(instance) => push_sprite_instance(
                 &mut scratch.sprites,
                 &mut scratch.ops,
                 &mut sprite_run,
                 obj.texture_handle,
-                *center,
-                *size,
-                *rot_sin_cos,
-                *tint,
-                *uv_scale,
-                *uv_offset,
-                *local_offset,
-                *local_offset_rot_sin_cos,
-                *edge_fade,
-                *texture_mask,
+                *instance,
             ),
             ObjectType::TexturedMesh {
                 transform,
@@ -534,16 +503,18 @@ fn direct_sprites(input: &[SpriteInput], scratch: &mut Scratch) {
             &mut scratch.ops,
             &mut sprite_run,
             sprite.texture_handle,
-            sprite.center,
-            sprite.size,
-            [0.0, 1.0],
-            sprite.tint,
-            [1.0, 1.0],
-            [0.0, 0.0],
-            [0.0, 0.0],
-            [0.0, 1.0],
-            [0.0; 4],
-            false,
+            SpriteInstanceRaw {
+                center: sprite.center,
+                size: sprite.size,
+                rot_sin_cos: [0.0, 1.0],
+                tint: sprite.tint,
+                uv_scale: [1.0, 1.0],
+                uv_offset: [0.0, 0.0],
+                local_offset: [0.0, 0.0],
+                local_offset_rot_sin_cos: [0.0, 1.0],
+                edge_fade: [0.0; 4],
+                texture_mask: 0.0,
+            },
         );
     }
     flush_sprite_run(&mut sprite_run, &mut scratch.ops);
@@ -577,30 +548,10 @@ fn push_sprite_instance(
     ops: &mut Vec<DrawOp>,
     sprite_run: &mut Option<SpriteRun>,
     texture_handle: TextureHandle,
-    center: [f32; 4],
-    size: [f32; 2],
-    rot_sin_cos: [f32; 2],
-    tint: [f32; 4],
-    uv_scale: [f32; 2],
-    uv_offset: [f32; 2],
-    local_offset: [f32; 2],
-    local_offset_rot_sin_cos: [f32; 2],
-    edge_fade: [f32; 4],
-    texture_mask: bool,
+    instance: SpriteInstanceRaw,
 ) {
     let instance_start = sprites.len() as u32;
-    sprites.push(SpriteInstanceRaw {
-        center,
-        size,
-        rot_sin_cos,
-        tint,
-        uv_scale,
-        uv_offset,
-        local_offset,
-        local_offset_rot_sin_cos,
-        edge_fade,
-        texture_mask: texture_mask as u8 as f32,
-    });
+    sprites.push(instance);
 
     if let Some(last) = sprite_run.as_mut()
         && last.texture_handle == texture_handle

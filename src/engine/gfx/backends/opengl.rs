@@ -1,9 +1,8 @@
 use crate::engine::gfx::{
     BlendMode, DrawStats, FastU64Map, MeshMode, RenderList, SamplerDesc, SamplerFilter,
-    SamplerWrap, TMeshCacheKey, Texture as RendererTexture, TextureHandleMap, TexturedMeshVertex,
-    draw_prep::{
-        self, DrawOp, DrawScratch, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshSource,
-    },
+    SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, Texture as RendererTexture, TextureHandleMap,
+    TexturedMeshVertex,
+    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshInstanceRaw, TexturedMeshSource},
 };
 use crate::engine::space::ortho_for_window;
 use glam::Mat4 as Matrix4;

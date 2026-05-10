@@ -1,8 +1,9 @@
 use deadsync::engine::gfx::draw_prep::{
-    self, DrawOp, DrawScratch, PrepareStats, SpriteInstanceRaw, TexturedMeshInstanceRaw,
-    TexturedMeshSource,
+    self, DrawOp, DrawScratch, PrepareStats, TexturedMeshInstanceRaw, TexturedMeshSource,
 };
-use deadsync::engine::gfx::{BlendMode, MeshMode, MeshVertex, RenderList, TexturedMeshVertex};
+use deadsync::engine::gfx::{
+    BlendMode, MeshMode, MeshVertex, RenderList, SpriteInstanceRaw, TexturedMeshVertex,
+};
 use deadsync::engine::present::compose;
 use deadsync::test_support::{compose_case, compose_scenarios};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -520,7 +521,7 @@ fn ensure_texture_handles(render: &mut RenderList) {
             continue;
         }
         obj.texture_handle = match &obj.object_type {
-            deadsync::engine::gfx::ObjectType::Sprite { .. }
+            deadsync::engine::gfx::ObjectType::Sprite(_)
             | deadsync::engine::gfx::ObjectType::TexturedMesh { .. } => {
                 let handle = next_handle;
                 next_handle = next_handle.wrapping_add(1).max(1);

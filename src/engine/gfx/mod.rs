@@ -168,20 +168,33 @@ pub enum MeshMode {
     Triangles,
 }
 
+#[repr(C)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
+)]
+pub struct SpriteInstanceRaw {
+    pub center: [f32; 4],
+    pub size: [f32; 2],
+    pub rot_sin_cos: [f32; 2],
+    pub tint: [f32; 4],
+    pub uv_scale: [f32; 2],
+    pub uv_offset: [f32; 2],
+    pub local_offset: [f32; 2],
+    pub local_offset_rot_sin_cos: [f32; 2],
+    pub edge_fade: [f32; 4],
+    pub texture_mask: f32,
+}
+
 #[derive(Clone)]
 pub enum ObjectType {
-    Sprite {
-        center: [f32; 4],
-        size: [f32; 2],
-        rot_sin_cos: [f32; 2],
-        tint: [f32; 4],
-        uv_scale: [f32; 2],
-        uv_offset: [f32; 2],
-        local_offset: [f32; 2],
-        local_offset_rot_sin_cos: [f32; 2],
-        edge_fade: [f32; 4],
-        texture_mask: bool,
-    },
+    Sprite(SpriteInstanceRaw),
     Mesh {
         transform: Matrix4,
         tint: [f32; 4],

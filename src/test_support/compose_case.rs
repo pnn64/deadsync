@@ -1,6 +1,7 @@
 use crate::assets;
 use crate::engine::gfx::{
-    BlendMode, MeshMode, MeshVertex, ObjectType, RenderList, RenderObject, TexturedMeshVertex,
+    BlendMode, MeshMode, MeshVertex, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
+    TexturedMeshVertex,
 };
 use crate::engine::present::actors::{
     Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent,
@@ -1366,34 +1367,23 @@ pub fn render_list_snapshot(render: &RenderList) -> RenderListSnapshot {
 
 fn render_object_snapshot(render: &RenderObject) -> RenderObjectSnapshot {
     let transform = match &render.object_type {
-        ObjectType::Sprite {
-            center,
-            size,
-            rot_sin_cos,
-            ..
-        } => sprite_transform(*center, *size, *rot_sin_cos),
+        ObjectType::Sprite(sprite) => {
+            sprite_transform(sprite.center, sprite.size, sprite.rot_sin_cos)
+        }
         ObjectType::Mesh { transform, .. } | ObjectType::TexturedMesh { transform, .. } => {
             *transform
         }
     };
     RenderObjectSnapshot {
         object_type: match &render.object_type {
-            ObjectType::Sprite {
-                tint,
-                uv_scale,
-                uv_offset,
-                local_offset,
-                local_offset_rot_sin_cos,
-                edge_fade,
-                ..
-            } => RenderObjectTypeSnapshot::Sprite {
+            ObjectType::Sprite(sprite) => RenderObjectTypeSnapshot::Sprite {
                 texture_id: None,
-                tint: *tint,
-                uv_scale: *uv_scale,
-                uv_offset: *uv_offset,
-                local_offset: *local_offset,
-                local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
-                edge_fade: *edge_fade,
+                tint: sprite.tint,
+                uv_scale: sprite.uv_scale,
+                uv_offset: sprite.uv_offset,
+                local_offset: sprite.local_offset,
+                local_offset_rot_sin_cos: sprite.local_offset_rot_sin_cos,
+                edge_fade: sprite.edge_fade,
             },
             ObjectType::Mesh {
                 tint,
@@ -1467,7 +1457,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                 ..
             } => {
                 let (center, size, rot_sin_cos) = sprite_parts_from_transform(&snapshot_transform);
-                ObjectType::Sprite {
+                ObjectType::Sprite(SpriteInstanceRaw {
                     center,
                     size,
                     rot_sin_cos,
@@ -1477,8 +1467,8 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject {
                     local_offset: *local_offset,
                     local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
                     edge_fade: *edge_fade,
-                    texture_mask: false,
-                }
+                    texture_mask: 0.0,
+                })
             }
             RenderObjectTypeSnapshot::Mesh {
                 tint,

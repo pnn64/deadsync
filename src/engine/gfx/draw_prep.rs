@@ -1,6 +1,7 @@
 use crate::engine::gfx::{
     BlendMode, FastU64Map, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshMode, MeshVertex,
-    ObjectType, RenderList, TMeshCacheKey, TextureHandle, TexturedMeshVertex, TexturedMeshVertices,
+    ObjectType, RenderList, SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
+    TexturedMeshVertices,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use std::{collections::HashMap, hash::BuildHasherDefault};
@@ -8,30 +9,6 @@ use twox_hash::XxHash64;
 
 type TMeshHasher = BuildHasherDefault<XxHash64>;
 type TMeshGeomMap = HashMap<TMeshGeomKey, FrameTMeshGeom, TMeshHasher>;
-
-#[repr(C)]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    serde::Serialize,
-    serde::Deserialize,
-    bytemuck::Pod,
-    bytemuck::Zeroable,
-)]
-pub struct SpriteInstanceRaw {
-    pub center: [f32; 4],
-    pub size: [f32; 2],
-    pub rot_sin_cos: [f32; 2],
-    pub tint: [f32; 4],
-    pub uv_scale: [f32; 2],
-    pub uv_offset: [f32; 2],
-    pub local_offset: [f32; 2],
-    pub local_offset_rot_sin_cos: [f32; 2],
-    pub edge_fade: [f32; 4],
-    pub texture_mask: f32,
-}
 
 #[repr(C)]
 #[derive(
@@ -308,37 +285,14 @@ where
 
     for obj in render_list.objects.iter() {
         match &obj.object_type {
-            ObjectType::Sprite {
-                center,
-                size,
-                rot_sin_cos,
-                tint,
-                uv_scale,
-                uv_offset,
-                local_offset,
-                local_offset_rot_sin_cos,
-                edge_fade,
-                texture_mask,
-                ..
-            } => {
+            ObjectType::Sprite(instance) => {
                 let texture_handle = obj.texture_handle;
                 if texture_handle == INVALID_TEXTURE_HANDLE {
                     continue;
                 }
 
                 let instance_start = scratch.sprite_instances.len() as u32;
-                scratch.sprite_instances.push(SpriteInstanceRaw {
-                    center: *center,
-                    size: *size,
-                    rot_sin_cos: *rot_sin_cos,
-                    tint: *tint,
-                    uv_scale: *uv_scale,
-                    uv_offset: *uv_offset,
-                    local_offset: *local_offset,
-                    local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
-                    edge_fade: *edge_fade,
-                    texture_mask: *texture_mask as u8 as f32,
-                });
+                scratch.sprite_instances.push(*instance);
 
                 if let Some(last) = sprite_run.as_mut()
                     && last.texture_handle == texture_handle
@@ -518,13 +472,13 @@ where
 mod tests {
     use super::{DrawScratch, prepare};
     use crate::engine::gfx::{
-        BlendMode, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, RenderObject,
+        BlendMode, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
     };
     use glam::Mat4 as Matrix4;
 
     fn sprite_object(order: u32) -> RenderObject {
         RenderObject {
-            object_type: ObjectType::Sprite {
+            object_type: ObjectType::Sprite(SpriteInstanceRaw {
                 center: [0.0, 0.0, 0.0, 1.0],
                 size: [1.0, 1.0],
                 rot_sin_cos: [0.0, 1.0],
@@ -534,8 +488,8 @@ mod tests {
                 local_offset: [0.0, 0.0],
                 local_offset_rot_sin_cos: [0.0, 1.0],
                 edge_fade: [0.0, 0.0, 0.0, 0.0],
-                texture_mask: false,
-            },
+                texture_mask: 0.0,
+            }),
             texture_handle: INVALID_TEXTURE_HANDLE,
             blend: BlendMode::Alpha,
             z: 0,

@@ -2355,14 +2355,12 @@ fn checksum_gfx_render(render: &deadsync::engine::gfx::RenderList) -> u64 {
             .wrapping_add((obj.order as u64) << 16)
             .wrapping_add((obj.camera as u64) << 48);
         match &obj.object_type {
-            deadsync::engine::gfx::ObjectType::Sprite {
-                center, size, tint, ..
-            } => {
+            deadsync::engine::gfx::ObjectType::Sprite(sprite) => {
                 out = out
-                    .wrapping_add(center[0].to_bits() as u64)
-                    .wrapping_add(center[1].to_bits() as u64)
-                    .wrapping_add(size[0].to_bits() as u64)
-                    .wrapping_add((tint[3].to_bits() as u64) << 1);
+                    .wrapping_add(sprite.center[0].to_bits() as u64)
+                    .wrapping_add(sprite.center[1].to_bits() as u64)
+                    .wrapping_add(sprite.size[0].to_bits() as u64)
+                    .wrapping_add((sprite.tint[3].to_bits() as u64) << 1);
             }
             deadsync::engine::gfx::ObjectType::Mesh { tint, vertices, .. } => {
                 out = out

@@ -222,33 +222,21 @@ fn draw_rows(
             .copied()
             .unwrap_or(default_proj);
         let drawn = match &obj.object_type {
-            ObjectType::Sprite {
-                center,
-                size,
-                rot_sin_cos,
-                tint,
-                uv_scale,
-                uv_offset,
-                local_offset,
-                local_offset_rot_sin_cos,
-                edge_fade: _,
-                texture_mask,
-                ..
-            } => {
+            ObjectType::Sprite(sprite) => {
                 let Some(RendererTexture::Software(tex)) = textures.get(&obj.texture_handle) else {
                     continue;
                 };
                 rasterize_sprite(
                     &proj,
-                    *center,
-                    *size,
-                    *rot_sin_cos,
-                    *tint,
-                    *uv_scale,
-                    *uv_offset,
-                    *local_offset,
-                    *local_offset_rot_sin_cos,
-                    *texture_mask,
+                    sprite.center,
+                    sprite.size,
+                    sprite.rot_sin_cos,
+                    sprite.tint,
+                    sprite.uv_scale,
+                    sprite.uv_offset,
+                    sprite.local_offset,
+                    sprite.local_offset_rot_sin_cos,
+                    sprite.texture_mask != 0.0,
                     obj.blend,
                     &tex.image,
                     tex.sampler,
