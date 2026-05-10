@@ -398,36 +398,24 @@ struct SharedLayoutEntry {
 type TextLayoutHasher = BuildHasherDefault<XxHash64>;
 type OwnedLayoutMap = HashMap<Box<str>, OwnedLayoutEntry, TextLayoutHasher>;
 type SharedAliasMap = HashMap<usize, SharedLayoutEntry, TextLayoutHasher>;
-type TextureMetaMap = HashMap<String, assets::TexMeta, TextLayoutHasher>;
-type TextureSheetMap = HashMap<String, (u32, u32), TextLayoutHasher>;
-type TextureHandleLookupMap = HashMap<String, renderer::TextureHandle, TextLayoutHasher>;
-type PtrTextureMetaMap = HashMap<usize, assets::TexMeta, TextLayoutHasher>;
-type PtrTextureSheetMap = HashMap<usize, (u32, u32), TextLayoutHasher>;
-type PtrTextureHandleLookupMap = HashMap<usize, renderer::TextureHandle, TextLayoutHasher>;
+type TextureMetaMap = HashMap<usize, assets::TexMeta, TextLayoutHasher>;
+type TextureSheetMap = HashMap<usize, (u32, u32), TextLayoutHasher>;
+type TextureHandleLookupMap = HashMap<usize, renderer::TextureHandle, TextLayoutHasher>;
 
 #[derive(Default)]
 struct TextureLookupCache {
     generation: u64,
     dims: TextureMetaMap,
-    stable_dims: PtrTextureMetaMap,
     sheets: TextureSheetMap,
-    stable_sheets: PtrTextureSheetMap,
     handles: TextureHandleLookupMap,
-    stable_handles: PtrTextureHandleLookupMap,
 }
 
 impl TextureLookupCache {
     fn begin_frame(&mut self) {
-        let generation = assets::texture_registry_generation();
-        if self.generation != generation {
-            self.generation = generation;
-            self.dims.clear();
-            self.stable_dims.clear();
-            self.sheets.clear();
-            self.stable_sheets.clear();
-            self.handles.clear();
-            self.stable_handles.clear();
-        }
+        self.generation = assets::texture_registry_generation();
+        self.dims.clear();
+        self.sheets.clear();
+        self.handles.clear();
     }
 
     #[inline(always)]
@@ -436,113 +424,36 @@ impl TextureLookupCache {
     }
 
     #[inline(always)]
-    fn texture_dims(&mut self, key: &str) -> Option<assets::TexMeta> {
-        if let Some(&meta) = self.dims.get(key) {
+    fn texture_dims(&mut self, key_ptr: *const str, key: &str) -> Option<assets::TexMeta> {
+        let key_ptr = Self::ptr_cache_key(key_ptr);
+        if let Some(&meta) = self.dims.get(&key_ptr) {
             return Some(meta);
         }
         let meta = assets::texture_dims(key)?;
-        self.dims.insert(key.to_owned(), meta);
+        self.dims.insert(key_ptr, meta);
         Some(meta)
     }
 
     #[inline(always)]
-    fn texture_dims_stable_ptr(
-        &mut self,
-        key_ptr: *const str,
-        key: &str,
-    ) -> Option<assets::TexMeta> {
+    fn sprite_sheet_dims(&mut self, key_ptr: *const str, key: &str) -> (u32, u32) {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&meta) = self.stable_dims.get(&key_ptr) {
-            return Some(meta);
-        }
-        let meta = self.texture_dims(key)?;
-        self.stable_dims.insert(key_ptr, meta);
-        Some(meta)
-    }
-
-    #[inline(always)]
-    fn texture_dims_cached(
-        &mut self,
-        key_ptr: Option<*const str>,
-        key: &str,
-        stable_ptr: bool,
-    ) -> Option<assets::TexMeta> {
-        if stable_ptr && let Some(key_ptr) = key_ptr {
-            return self.texture_dims_stable_ptr(key_ptr, key);
-        }
-        self.texture_dims(key)
-    }
-
-    #[inline(always)]
-    fn sprite_sheet_dims(&mut self, key: &str) -> (u32, u32) {
-        if let Some(&dims) = self.sheets.get(key) {
+        if let Some(&dims) = self.sheets.get(&key_ptr) {
             return dims;
         }
         let dims = assets::sprite_sheet_dims(key);
-        self.sheets.insert(key.to_owned(), dims);
+        self.sheets.insert(key_ptr, dims);
         dims
     }
 
     #[inline(always)]
-    fn sprite_sheet_dims_stable_ptr(&mut self, key_ptr: *const str, key: &str) -> (u32, u32) {
+    fn texture_handle(&mut self, key_ptr: *const str, key: &str) -> renderer::TextureHandle {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&dims) = self.stable_sheets.get(&key_ptr) {
-            return dims;
-        }
-        let dims = self.sprite_sheet_dims(key);
-        self.stable_sheets.insert(key_ptr, dims);
-        dims
-    }
-
-    #[inline(always)]
-    fn sprite_sheet_dims_cached(
-        &mut self,
-        key_ptr: Option<*const str>,
-        key: &str,
-        stable_ptr: bool,
-    ) -> (u32, u32) {
-        if stable_ptr && let Some(key_ptr) = key_ptr {
-            return self.sprite_sheet_dims_stable_ptr(key_ptr, key);
-        }
-        self.sprite_sheet_dims(key)
-    }
-
-    #[inline(always)]
-    fn texture_handle(&mut self, key: &str) -> renderer::TextureHandle {
-        if let Some(&handle) = self.handles.get(key) {
+        if let Some(&handle) = self.handles.get(&key_ptr) {
             return handle;
         }
         let handle = assets::texture_handle(key);
-        self.handles.insert(key.to_owned(), handle);
+        self.handles.insert(key_ptr, handle);
         handle
-    }
-
-    #[inline(always)]
-    fn texture_handle_stable_ptr(
-        &mut self,
-        key_ptr: *const str,
-        key: &str,
-    ) -> renderer::TextureHandle {
-        let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&handle) = self.stable_handles.get(&key_ptr) {
-            return handle;
-        }
-        let handle = self.texture_handle(key);
-        self.stable_handles.insert(key_ptr, handle);
-        handle
-    }
-
-    #[inline(always)]
-    fn texture_handle_cached(
-        &mut self,
-        key_ptr: Option<*const str>,
-        key: &str,
-        stable_ptr: bool,
-    ) -> renderer::TextureHandle {
-        if stable_ptr && let Some(key_ptr) = key_ptr {
-            return self.texture_handle_stable_ptr(key_ptr, key);
-        }
-        self.texture_handle(key)
     }
 }
 
@@ -2174,22 +2085,20 @@ fn build_actor_recursive<'a>(
                 return;
             }
 
-            let (is_solid, texture_name, texture_key_ptr, texture_key_stable) = match source {
-                actors::SpriteSource::TextureStatic(name) => {
-                    (false, *name, Some(str_ptr(name)), true)
-                }
+            let (is_solid, texture_name, texture_key_ptr) = match source {
+                actors::SpriteSource::TextureStatic(name) => (false, *name, str_ptr(name)),
                 actors::SpriteSource::TextureStaticHandle { key, .. } => {
-                    (false, *key, Some(str_ptr(key)), true)
+                    (false, *key, str_ptr(key))
                 }
                 actors::SpriteSource::Texture(name) => {
                     let name = name.as_ref();
-                    (false, name, Some(str_ptr(name)), false)
+                    (false, name, str_ptr(name))
                 }
                 actors::SpriteSource::TextureHandle { key, .. } => {
                     let name = key.as_ref();
-                    (false, name, Some(str_ptr(name)), false)
+                    (false, name, str_ptr(name))
                 }
-                actors::SpriteSource::Solid => (true, "__white", Some(str_ptr("__white")), true),
+                actors::SpriteSource::Solid => (true, "__white", str_ptr("__white")),
             };
 
             let mut chosen_cell = *cell;
@@ -2197,11 +2106,7 @@ fn build_actor_recursive<'a>(
 
             if !is_solid && uv_rect.is_none() {
                 let (cols, rows) = grid.unwrap_or_else(|| {
-                    texture_cache.sprite_sheet_dims_cached(
-                        texture_key_ptr,
-                        texture_name,
-                        texture_key_stable,
-                    )
+                    texture_cache.sprite_sheet_dims(texture_key_ptr, texture_name)
                 });
                 let total = cols.saturating_mul(rows).max(1);
 
@@ -2244,7 +2149,6 @@ fn build_actor_recursive<'a>(
                 is_solid,
                 texture_name,
                 texture_key_ptr,
-                texture_key_stable,
                 *uv_rect,
                 chosen_cell,
                 chosen_grid,
@@ -2273,7 +2177,6 @@ fn build_actor_recursive<'a>(
                 is_solid,
                 texture_name,
                 texture_key_ptr,
-                texture_key_stable,
                 effect_tint,
                 *uv_rect,
                 chosen_cell,
@@ -2339,7 +2242,6 @@ fn build_actor_recursive<'a>(
                     is_solid,
                     texture_name,
                     texture_key_ptr,
-                    texture_key_stable,
                     *glow,
                     *uv_rect,
                     chosen_cell,
@@ -2465,6 +2367,8 @@ fn build_actor_recursive<'a>(
                 * *local_transform;
 
             let before = out.len();
+            let texture_key = texture.as_ref();
+            let texture_key_ptr = str_ptr(texture_key);
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::TexturedMesh {
                     tint: *tint,
@@ -2477,7 +2381,7 @@ fn build_actor_recursive<'a>(
                     texture_mask: false,
                     depth_test: *depth_test,
                 },
-                texture_handle: texture_cache.texture_handle(texture.as_ref()),
+                texture_handle: texture_cache.texture_handle(texture_key_ptr, texture_key),
                 transform,
                 blend: style.blend.unwrap_or(*blend),
                 z: 0,
@@ -2508,7 +2412,7 @@ fn build_actor_recursive<'a>(
                         texture_mask: true,
                         depth_test: *depth_test,
                     },
-                    texture_handle: texture_cache.texture_handle(texture.as_ref()),
+                    texture_handle: texture_cache.texture_handle(texture_key_ptr, texture_key),
                     transform,
                     blend: style.blend.unwrap_or(*blend),
                     z: 0,
@@ -2847,8 +2751,7 @@ fn build_actor_recursive<'a>(
                             m,
                             true,
                             "__white",
-                            Some(str_ptr("__white")),
-                            true,
+                            str_ptr("__white"),
                             *c,
                             None,
                             None,
@@ -2894,8 +2797,7 @@ fn build_actor_recursive<'a>(
                             m,
                             false,
                             tex,
-                            Some(str_ptr(tex)),
-                            true,
+                            str_ptr(tex),
                             [1.0; 4],
                             None,
                             None,
@@ -2978,8 +2880,7 @@ fn build_actor_recursive<'a>(
                             m,
                             true,
                             "__white",
-                            Some(str_ptr("__white")),
-                            true,
+                            str_ptr("__white"),
                             *c,
                             None,
                             None,
@@ -3025,8 +2926,7 @@ fn build_actor_recursive<'a>(
                             m,
                             false,
                             tex,
-                            Some(str_ptr(tex)),
-                            true,
+                            str_ptr(tex),
                             [1.0; 4],
                             None,
                             None,
@@ -3095,8 +2995,7 @@ fn resolve_sprite_size_like_sm(
     size: [SizeSpec; 2],
     is_solid: bool,
     texture_name: &str,
-    texture_key_ptr: Option<*const str>,
-    texture_key_stable: bool,
+    texture_key_ptr: *const str,
     _uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
     grid: Option<(u32, u32)>,
@@ -3109,8 +3008,7 @@ fn resolve_sprite_size_like_sm(
     fn native_dims(
         is_solid: bool,
         texture_name: &str,
-        texture_key_ptr: Option<*const str>,
-        texture_key_stable: bool,
+        texture_key_ptr: *const str,
         cell: Option<(u32, u32)>,
         grid: Option<(u32, u32)>,
         texture_cache: &mut TextureLookupCache,
@@ -3118,20 +3016,13 @@ fn resolve_sprite_size_like_sm(
         if is_solid {
             return (1.0, 1.0);
         }
-        let Some(meta) =
-            texture_cache.texture_dims_cached(texture_key_ptr, texture_name, texture_key_stable)
-        else {
+        let Some(meta) = texture_cache.texture_dims(texture_key_ptr, texture_name) else {
             return (0.0, 0.0);
         };
         let (mut tw, mut th) = (meta.w as f32, meta.h as f32);
         if cell.is_some() {
-            let (gc, gr) = grid.unwrap_or_else(|| {
-                texture_cache.sprite_sheet_dims_cached(
-                    texture_key_ptr,
-                    texture_name,
-                    texture_key_stable,
-                )
-            });
+            let (gc, gr) = grid
+                .unwrap_or_else(|| texture_cache.sprite_sheet_dims(texture_key_ptr, texture_name));
             let cols = gc.max(1);
             let rows = gr.max(1);
             tw /= cols as f32;
@@ -3151,7 +3042,6 @@ fn resolve_sprite_size_like_sm(
         is_solid,
         texture_name,
         texture_key_ptr,
-        texture_key_stable,
         cell,
         grid,
         texture_cache,
@@ -3193,8 +3083,7 @@ fn place_rect(parent: SmRect, align: [f32; 2], offset: [f32; 2], size: [SizeSpec
 #[inline(always)]
 fn calculate_uvs(
     texture: &str,
-    texture_key_ptr: Option<*const str>,
-    texture_key_stable: bool,
+    texture_key_ptr: *const str,
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
     grid: Option<(u32, u32)>,
@@ -3213,9 +3102,8 @@ fn calculate_uvs(
         let dv = (v1 - v0).abs().max(1e-6);
         ([du, dv], [u0.min(u1), v0.min(v1)])
     } else if let Some((cx, cy)) = cell {
-        let (gc, gr) = grid.unwrap_or_else(|| {
-            texture_cache.sprite_sheet_dims_cached(texture_key_ptr, texture, texture_key_stable)
-        });
+        let (gc, gr) =
+            grid.unwrap_or_else(|| texture_cache.sprite_sheet_dims(texture_key_ptr, texture));
         let cols = gc.max(1);
         let rows = gr.max(1);
         let (col, row) = if cy == u32::MAX {
@@ -3295,8 +3183,7 @@ fn push_sprite<'a>(
     m: &Metrics,
     is_solid: bool,
     texture_id: &'a str,
-    texture_key_ptr: Option<*const str>,
-    texture_key_stable: bool,
+    texture_key_ptr: *const str,
     tint: [f32; 4],
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
@@ -3353,7 +3240,6 @@ fn push_sprite<'a>(
         calculate_uvs(
             texture_id,
             texture_key_ptr,
-            texture_key_stable,
             uv_rect,
             cell,
             grid,
@@ -3421,7 +3307,7 @@ fn push_sprite<'a>(
         Some(handle) => handle,
         None => {
             let texture_key = if is_solid { "__white" } else { texture_id };
-            texture_cache.texture_handle_cached(texture_key_ptr, texture_key, texture_key_stable)
+            texture_cache.texture_handle(texture_key_ptr, texture_key)
         }
     };
 
@@ -3533,7 +3419,7 @@ fn push_text_mesh_batches(
                 texture_mask: false,
                 depth_test: false,
             },
-            texture_handle: texture_cache.texture_handle_stable_ptr(batch.texture_key, texture_key),
+            texture_handle: texture_cache.texture_handle(batch.texture_key, texture_key),
             transform,
             blend: BlendMode::Alpha,
             z: 0,
@@ -3583,8 +3469,7 @@ fn push_transient_text_mesh_builders(
                 texture_mask: false,
                 depth_test: false,
             },
-            texture_handle: texture_cache
-                .texture_handle_stable_ptr(builder.texture_key, texture_key),
+            texture_handle: texture_cache.texture_handle(builder.texture_key, texture_key),
             transform,
             blend: BlendMode::Alpha,
             z: 0,
@@ -4311,7 +4196,7 @@ mod tests {
         TextLayoutKey, TextureLookupCache, WorldRect, build_cached_text_layout, build_screen,
         build_screen_cached_with_scratch, clip_object_to_world_masks,
         clip_sprite_object_to_world_rect, fold_sprite_xy_rot, resolve_sprite_size_like_sm,
-        sort_render_objects, wrap_text_lines_by_words,
+        sort_render_objects, str_ptr, wrap_text_lines_by_words,
     };
     use crate::assets;
     use crate::engine::gfx::{
@@ -4841,86 +4726,31 @@ mod tests {
     }
 
     #[test]
-    fn texture_lookup_cache_uses_string_tables_for_dynamic_ptrs() {
+    fn texture_lookup_cache_uses_frame_ptr_tables() {
         let mut cache = TextureLookupCache::default();
         let key = Arc::<str>::from("frame_tex");
         let key_ptr = key.as_ref() as *const str;
-        cache.generation = assets::texture_registry_generation();
-        cache
-            .dims
-            .insert(key.to_string(), assets::TexMeta { w: 64, h: 32 });
-        cache.sheets.insert(key.to_string(), (4, 2));
-        cache.handles.insert(key.to_string(), 11);
-
-        let Some(meta) = cache.texture_dims_cached(Some(key_ptr), key.as_ref(), false) else {
-            panic!("expected cached texture dims");
-        };
-        assert_eq!(meta.w, 64);
-        assert_eq!(meta.h, 32);
-        assert_eq!(
-            cache.sprite_sheet_dims_cached(Some(key_ptr), key.as_ref(), false),
-            (4, 2)
-        );
-        assert_eq!(
-            cache.texture_handle_cached(Some(key_ptr), key.as_ref(), false),
-            11
-        );
-
-        cache.begin_frame();
-
-        let Some(meta) = cache.dims.get("frame_tex") else {
-            panic!("expected persistent texture dims");
-        };
-        assert_eq!(meta.w, 64);
-        assert_eq!(meta.h, 32);
-        assert_eq!(cache.sheets.get("frame_tex"), Some(&(4, 2)));
-        assert_eq!(cache.handles.get("frame_tex"), Some(&11));
-    }
-
-    #[test]
-    fn texture_lookup_cache_keeps_stable_ptr_tables_across_frames() {
-        let mut cache = TextureLookupCache::default();
-        const KEY: &str = "stable_tex";
-        let key_ptr = KEY as *const str;
         let key_addr = TextureLookupCache::ptr_cache_key(key_ptr);
         cache.generation = assets::texture_registry_generation();
         cache
             .dims
-            .insert(KEY.to_string(), assets::TexMeta { w: 128, h: 64 });
-        cache.sheets.insert(KEY.to_string(), (8, 4));
-        cache.handles.insert(KEY.to_string(), 23);
+            .insert(key_addr, assets::TexMeta { w: 64, h: 32 });
+        cache.sheets.insert(key_addr, (4, 2));
+        cache.handles.insert(key_addr, 11);
 
-        let Some(meta) = cache.texture_dims_cached(Some(key_ptr), KEY, true) else {
+        let Some(meta) = cache.texture_dims(key_ptr, key.as_ref()) else {
             panic!("expected cached texture dims");
         };
-        assert_eq!(meta.w, 128);
-        assert_eq!(meta.h, 64);
-        assert_eq!(
-            cache.sprite_sheet_dims_cached(Some(key_ptr), KEY, true),
-            (8, 4)
-        );
-        assert_eq!(cache.texture_handle_cached(Some(key_ptr), KEY, true), 23);
-        assert_eq!(
-            cache
-                .stable_dims
-                .get(&key_addr)
-                .map(|meta| (meta.w, meta.h)),
-            Some((128, 64))
-        );
-        assert_eq!(cache.stable_sheets.get(&key_addr), Some(&(8, 4)));
-        assert_eq!(cache.stable_handles.get(&key_addr), Some(&23));
+        assert_eq!(meta.w, 64);
+        assert_eq!(meta.h, 32);
+        assert_eq!(cache.sprite_sheet_dims(key_ptr, key.as_ref()), (4, 2));
+        assert_eq!(cache.texture_handle(key_ptr, key.as_ref()), 11);
 
         cache.begin_frame();
 
-        assert_eq!(
-            cache
-                .stable_dims
-                .get(&key_addr)
-                .map(|meta| (meta.w, meta.h)),
-            Some((128, 64))
-        );
-        assert_eq!(cache.stable_sheets.get(&key_addr), Some(&(8, 4)));
-        assert_eq!(cache.stable_handles.get(&key_addr), Some(&23));
+        assert!(cache.dims.is_empty());
+        assert!(cache.sheets.is_empty());
+        assert!(cache.handles.is_empty());
     }
 
     #[test]
@@ -4933,8 +4763,7 @@ mod tests {
             [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             false,
             KEY,
-            None,
-            false,
+            str_ptr(KEY),
             None,
             None,
             None,
@@ -4945,8 +4774,7 @@ mod tests {
             [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             false,
             KEY,
-            None,
-            false,
+            str_ptr(KEY),
             Some([0.0, 0.0, 60.0, 60.0]),
             None,
             None,
@@ -4957,8 +4785,7 @@ mod tests {
             [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             false,
             KEY,
-            None,
-            false,
+            str_ptr(KEY),
             Some([0.0, 0.0, 60.0, 60.0]),
             None,
             None,

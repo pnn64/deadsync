@@ -1261,15 +1261,10 @@ fn run_texture_lookup_pair(name: &str, texture_count: usize, op_count: usize) {
 
 fn run_compose_texture_lookup_pair(name: &str, texture_count: usize, op_count: usize) {
     let (keys, handles, mut cache) = make_compose_texture_work(texture_count, op_count);
-    let old_frame_ptr = bench(
-        format!("{name}: old frame ptr + String map"),
+    let frame_ptr = bench(
+        format!("{name}: frame ptr cache"),
         COMPOSE_TEXTURE_LOOKUP_ITERS,
         || lookup_compose_textures_frame_ptr(black_box(&keys), &mut cache),
-    );
-    let string_map = bench(
-        format!("{name}: String map only"),
-        COMPOSE_TEXTURE_LOOKUP_ITERS,
-        || lookup_compose_textures_string_map(black_box(&keys), &cache),
     );
     let direct = bench(
         format!("{name}: direct TextureHandle"),
@@ -1277,11 +1272,9 @@ fn run_compose_texture_lookup_pair(name: &str, texture_count: usize, op_count: u
         || lookup_compose_textures_direct(black_box(&handles)),
     );
 
-    print_result(&old_frame_ptr);
-    print_result(&string_map);
-    print_ratio("String map vs old frame ptr", &old_frame_ptr, &string_map);
+    print_result(&frame_ptr);
     print_result(&direct);
-    print_ratio("direct handles vs String map", &string_map, &direct);
+    print_ratio("direct handles vs frame ptr", &frame_ptr, &direct);
 }
 
 fn run_shadow_build_pair(name: &str, count: usize) {
@@ -1658,10 +1651,6 @@ impl TextureLookupSim {
         self.frame_handles.insert(key_ptr, handle);
         handle
     }
-
-    fn handle_string_map(&self, key: &str) -> TextureHandle {
-        *self.handles.get(key).unwrap_or(&0)
-    }
 }
 
 fn make_compose_texture_work(
@@ -1688,16 +1677,6 @@ fn lookup_compose_textures_frame_ptr(keys: &[Arc<str>], cache: &mut TextureLooku
         out = out
             .wrapping_mul(131)
             .wrapping_add(cache.handle_with_ptr(key.as_ref()));
-    }
-    out
-}
-
-fn lookup_compose_textures_string_map(keys: &[Arc<str>], cache: &TextureLookupSim) -> u64 {
-    let mut out = 0u64;
-    for key in keys {
-        out = out
-            .wrapping_mul(131)
-            .wrapping_add(cache.handle_string_map(key.as_ref()));
     }
     out
 }
