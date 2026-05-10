@@ -2066,10 +2066,7 @@ fn prewarm_gameplay_text_layout_cache(
     // Gameplay prewarm owns the whole cache for the next song, so start from an
     // empty working set instead of scan-pruning stale entries from older screens.
     cache.clear();
-    cache.configure(
-        GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
-        crate::engine::present::compose::TextLayoutOverflowPolicy::Saturating,
-    );
+    cache.configure(GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT);
     cache.begin_frame_stats();
 
     let fonts = assets.fonts();
@@ -3407,15 +3404,14 @@ impl App {
             fsr_monitor: fsr::Monitor::new(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
-            // Screen transitions clear the UI cache, so saturating avoids full
-            // prune sweeps during a live compose without changing its footprint.
-            ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache::saturating(
+            // Screen transitions clear the UI cache, so misses stop inserting
+            // once the cache reaches its fixed footprint.
+            ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache::new(
                 UI_TEXT_LAYOUT_CACHE_LIMIT,
             ),
-            gameplay_text_layout_cache:
-                crate::engine::present::compose::TextLayoutCache::saturating(
-                    GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
-                ),
+            gameplay_text_layout_cache: crate::engine::present::compose::TextLayoutCache::new(
+                GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
+            ),
             ui_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
             gameplay_compose_scratch: crate::engine::present::compose::ComposeScratch::default(),
             gameplay_actor_scratch: Vec::with_capacity(256),
@@ -5384,7 +5380,7 @@ impl App {
         let actor_stats = actor_tree_stats(actors);
         let audio_stats = crate::engine::audio::get_output_timing_snapshot();
         log::trace!(
-            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] compose_dbg=[actors:{:.3} build:{:.3} resolve:{:.3} nodes:{} sprites:{} text:{} chars:{} frames:{} mesh:{} tmesh:{} cameras:{} shadows:{} objects:{} render_cameras:{} txt_hits:{} txt_shared:{} txt_miss:{} txt_lines:{} txt_glyphs:{} txt_prunes:{} txt_entries:{} txt_aliases:{}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] display_dbg=[active:{} err_ms:{:+.3} catch:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
+            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] compose_dbg=[actors:{:.3} build:{:.3} resolve:{:.3} nodes:{} sprites:{} text:{} chars:{} frames:{} mesh:{} tmesh:{} cameras:{} shadows:{} objects:{} render_cameras:{} txt_hits:{} txt_shared:{} txt_miss:{} txt_lines:{} txt_glyphs:{} txt_entries:{} txt_aliases:{}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] display_dbg=[active:{} err_ms:{:+.3} catch:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
             total_elapsed,
             severity,
             screen,
@@ -5420,7 +5416,6 @@ impl App {
             compose_breakdown.text_layout.misses,
             compose_breakdown.text_layout.built_lines,
             compose_breakdown.text_layout.built_glyphs,
-            compose_breakdown.text_layout.prunes,
             compose_breakdown.text_layout.owned_entries,
             compose_breakdown.text_layout.shared_aliases,
             redraw_late_us as f32 / 1000.0,

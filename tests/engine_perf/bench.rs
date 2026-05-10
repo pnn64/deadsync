@@ -542,7 +542,7 @@ fn bench_text_layout_cache_churn() {
     let mut churn_scenario = compose_scenarios::build_scenario("perf-text-plain")
         .expect("perf-text-plain scenario should exist");
     let text_pool = make_text_pool(TEXT_CACHE_CHURN_POOL);
-    let mut churn_cache = compose::TextLayoutCache::saturating(64);
+    let mut churn_cache = compose::TextLayoutCache::new(64);
     let mut churn_scratch = compose::ComposeScratch::default();
     let mut frame = 0usize;
     let churn = bench(
@@ -570,38 +570,6 @@ fn bench_text_layout_cache_churn() {
         },
     );
 
-    let mut prune_scenario = compose_scenarios::build_scenario("perf-text-plain")
-        .expect("perf-text-plain scenario should exist");
-    let mut prune_cache = compose::TextLayoutCache::pruning(64);
-    let mut prune_scratch = compose::ComposeScratch::default();
-    let mut prune_frame = 0usize;
-    let pruning = bench(
-        "rotating shared text, prune capped 64",
-        COMPOSE_TEXT_CACHE_ITERS,
-        || {
-            let text_count =
-                retarget_text_contents(&mut prune_scenario.actors, &text_pool, prune_frame);
-            prune_frame = prune_frame.wrapping_add(1);
-            prune_cache.begin_frame_stats();
-            let render = compose::build_screen_cached_with_scratch(
-                black_box(&prune_scenario.actors),
-                prune_scenario.clear_color,
-                &prune_scenario.metrics,
-                &prune_scenario.fonts,
-                prune_scenario.total_elapsed,
-                &mut prune_cache,
-                &mut prune_scratch,
-            );
-            let stats = prune_cache.frame_stats();
-            checksum_gfx_render(black_box(&render))
-                .wrapping_add(text_count as u64)
-                .wrapping_add((u64::from(stats.shared_hits)) << 8)
-                .wrapping_add((u64::from(stats.misses)) << 24)
-                .wrapping_add((u64::from(stats.prunes)) << 32)
-                .wrapping_add((u64::from(stats.built_glyphs)) << 40)
-        },
-    );
-
     print_result(&stable);
     print_result(&churn);
     print_ratio(
@@ -609,8 +577,6 @@ fn bench_text_layout_cache_churn() {
         &churn,
         &stable,
     );
-    print_result(&pruning);
-    print_ratio("pruning vs saturating capped cache", &churn, &pruning);
     println!();
 }
 

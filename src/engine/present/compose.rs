@@ -565,16 +565,8 @@ pub struct TextLayoutFrameStats {
     pub misses: u32,
     pub built_lines: u32,
     pub built_glyphs: u32,
-    pub prunes: u32,
     pub owned_entries: u32,
     pub shared_aliases: u32,
-}
-
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub enum TextLayoutOverflowPolicy {
-    PruneOwnedEntries,
-    #[default]
-    Saturating,
 }
 
 pub struct TextLayoutCache {
@@ -586,31 +578,17 @@ pub struct TextLayoutCache {
     max_aliases: usize,
     use_tick: u64,
     frame_stats: TextLayoutFrameStats,
-    overflow_policy: TextLayoutOverflowPolicy,
     uncached_layout: Option<Arc<CachedTextLayout>>,
-    prune_ages: Vec<u64>,
 }
 
 impl Default for TextLayoutCache {
     fn default() -> Self {
-        Self::saturating(4096)
+        Self::new(4096)
     }
 }
 
 impl TextLayoutCache {
     pub fn new(max_entries: usize) -> Self {
-        Self::saturating(max_entries)
-    }
-
-    pub fn saturating(max_entries: usize) -> Self {
-        Self::new_with_policy(max_entries, TextLayoutOverflowPolicy::Saturating)
-    }
-
-    pub fn pruning(max_entries: usize) -> Self {
-        Self::new_with_policy(max_entries, TextLayoutOverflowPolicy::PruneOwnedEntries)
-    }
-
-    pub fn new_with_policy(max_entries: usize, overflow_policy: TextLayoutOverflowPolicy) -> Self {
         let max_entries = max_entries.max(1);
         Self {
             owned_entries: HashMap::default(),
@@ -621,24 +599,20 @@ impl TextLayoutCache {
             max_aliases: max_entries,
             use_tick: 0,
             frame_stats: TextLayoutFrameStats::default(),
-            overflow_policy,
             uncached_layout: None,
-            prune_ages: Vec::new(),
         }
     }
 
-    pub fn configure(&mut self, max_entries: usize, overflow_policy: TextLayoutOverflowPolicy) {
+    pub fn configure(&mut self, max_entries: usize) {
         self.max_entries = max_entries.max(1);
         self.max_aliases = self.max_entries;
-        self.overflow_policy = overflow_policy;
     }
 
     /// Freeze the cache at its current size so future misses saturate instead of
-    /// pruning or growing during a live frame.
+    /// growing during a live frame.
     pub fn lock_growth(&mut self) {
         self.max_entries = self.entry_count.max(1);
         self.max_aliases = self.alias_count;
-        self.overflow_policy = TextLayoutOverflowPolicy::Saturating;
     }
 
     pub fn clear(&mut self) {
@@ -649,7 +623,6 @@ impl TextLayoutCache {
         self.use_tick = 0;
         self.frame_stats = TextLayoutFrameStats::default();
         self.uncached_layout = None;
-        self.prune_ages.clear();
     }
 
     #[inline(always)]
@@ -670,88 +643,6 @@ impl TextLayoutCache {
     fn next_use_tick(&mut self) -> u64 {
         self.use_tick = self.use_tick.saturating_add(1);
         self.use_tick
-    }
-
-    fn prune_owned_entries(&mut self) {
-        if self.entry_count < self.max_entries {
-            return;
-        }
-        let keep = self
-            .max_entries
-            .saturating_sub((self.max_entries / 4).max(1));
-        let remove = self.entry_count.saturating_sub(keep).max(1);
-        let cutoff = {
-            let ages = &mut self.prune_ages;
-            ages.clear();
-            ages.reserve(self.entry_count.saturating_sub(ages.len()));
-            for font_entries in self.owned_entries.values() {
-                ages.extend(font_entries.values().map(|entry| entry.last_used));
-            }
-            if ages.is_empty() {
-                self.clear();
-                return;
-            }
-            let cutoff_ix = remove.saturating_sub(1).min(ages.len().saturating_sub(1));
-            ages.select_nth_unstable(cutoff_ix);
-            ages[cutoff_ix]
-        };
-        let mut removed = 0usize;
-        self.owned_entries.retain(|_, font_entries| {
-            font_entries.retain(|_, entry| {
-                let drop = removed < remove && entry.last_used <= cutoff;
-                removed += usize::from(drop);
-                !drop
-            });
-            !font_entries.is_empty()
-        });
-        if removed == 0 {
-            self.clear();
-            return;
-        }
-        self.frame_stats.prunes = self.frame_stats.prunes.saturating_add(1);
-        self.entry_count = self.entry_count.saturating_sub(removed);
-    }
-
-    fn prune_shared_aliases(&mut self) {
-        if self.alias_count < self.max_aliases {
-            return;
-        }
-        let keep = self
-            .max_aliases
-            .saturating_sub((self.max_aliases / 4).max(1));
-        let remove = self.alias_count.saturating_sub(keep).max(1);
-        let cutoff = {
-            let ages = &mut self.prune_ages;
-            ages.clear();
-            ages.reserve(self.alias_count.saturating_sub(ages.len()));
-            for font_entries in self.shared_aliases.values() {
-                ages.extend(font_entries.values().map(|entry| entry.last_used));
-            }
-            if ages.is_empty() {
-                self.shared_aliases.clear();
-                self.alias_count = 0;
-                return;
-            }
-            let cutoff_ix = remove.saturating_sub(1).min(ages.len().saturating_sub(1));
-            ages.select_nth_unstable(cutoff_ix);
-            ages[cutoff_ix]
-        };
-        let mut removed = 0usize;
-        self.shared_aliases.retain(|_, font_entries| {
-            font_entries.retain(|_, entry| {
-                let drop = removed < remove && entry.last_used <= cutoff;
-                removed += usize::from(drop);
-                !drop
-            });
-            !font_entries.is_empty()
-        });
-        if removed == 0 {
-            self.shared_aliases.clear();
-            self.alias_count = 0;
-            return;
-        }
-        self.frame_stats.prunes = self.frame_stats.prunes.saturating_add(1);
-        self.alias_count = self.alias_count.saturating_sub(removed);
     }
 
     #[inline(always)]
@@ -829,17 +720,8 @@ impl TextLayoutCache {
         tick: u64,
     ) -> bool {
         if self.entry_count >= self.max_entries {
-            match self.overflow_policy {
-                TextLayoutOverflowPolicy::PruneOwnedEntries => {
-                    // Avoid hard-clearing the entire cache; that was causing visible
-                    // compose spikes once gameplay churn hit the entry cap.
-                    self.prune_owned_entries();
-                }
-                TextLayoutOverflowPolicy::Saturating => {
-                    self.uncached_layout = Some(layout);
-                    return false;
-                }
-            }
+            self.uncached_layout = Some(layout);
+            return false;
         }
         let replaced = self.owned_entries.entry(key).or_default().insert(
             text.into(),
@@ -862,15 +744,8 @@ impl TextLayoutCache {
         tick: u64,
     ) -> bool {
         if self.alias_count >= self.max_aliases {
-            match self.overflow_policy {
-                TextLayoutOverflowPolicy::PruneOwnedEntries => {
-                    self.prune_shared_aliases();
-                }
-                TextLayoutOverflowPolicy::Saturating => {
-                    self.uncached_layout = Some(layout);
-                    return false;
-                }
-            }
+            self.uncached_layout = Some(layout);
+            return false;
         }
         let replaced = self.shared_aliases.entry(key).or_default().insert(
             text_key,
@@ -973,9 +848,7 @@ impl TextLayoutCache {
 
         if self.touch_owned_layout(key, text_ref, tick) {
             self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
-            if self.alias_count >= self.max_aliases
-                && self.overflow_policy == TextLayoutOverflowPolicy::Saturating
-            {
+            if self.alias_count >= self.max_aliases {
                 return self
                     .owned_layout(key, text_ref)
                     .expect("owned text layout cache entry available");
@@ -4435,10 +4308,10 @@ fn clip_rotated_sprite_to_world_rect(
 mod tests {
     use super::{
         CachedTextLayout, CachedTextMeshVariants, ComposeScratch, TextAttrCursor, TextLayoutCache,
-        TextLayoutKey, TextLayoutOverflowPolicy, TextureLookupCache, WorldRect,
-        build_cached_text_layout, build_screen, build_screen_cached_with_scratch,
-        clip_object_to_world_masks, clip_sprite_object_to_world_rect, fold_sprite_xy_rot,
-        resolve_sprite_size_like_sm, sort_render_objects, wrap_text_lines_by_words,
+        TextLayoutKey, TextureLookupCache, WorldRect, build_cached_text_layout, build_screen,
+        build_screen_cached_with_scratch, clip_object_to_world_masks,
+        clip_sprite_object_to_world_rect, fold_sprite_xy_rot, resolve_sprite_size_like_sm,
+        sort_render_objects, wrap_text_lines_by_words,
     };
     use crate::assets;
     use crate::engine::gfx::{
@@ -5141,8 +5014,7 @@ mod tests {
             line_spacing: 10,
             wrap_width_pixels: -1,
         };
-        let mut cache =
-            TextLayoutCache::new_with_policy(4, TextLayoutOverflowPolicy::PruneOwnedEntries);
+        let mut cache = TextLayoutCache::new(4);
         assert!(cache.insert_owned_layout(key, "alpha", Arc::new(test_layout()), 1));
         assert_eq!(cache.entry_count, 1);
 
@@ -5150,23 +5022,27 @@ mod tests {
 
         assert_eq!(cache.max_entries, 1);
         assert_eq!(cache.max_aliases, 0);
-        assert!(cache.overflow_policy == TextLayoutOverflowPolicy::Saturating);
         assert!(!cache.insert_owned_layout(key, "beta", Arc::new(test_layout()), 2));
         assert_eq!(cache.entry_count, 1);
-        assert_eq!(cache.frame_stats.prunes, 0);
         assert!(cache.owned_layout(key, "beta").is_none());
         assert!(cache.uncached_layout.is_some());
     }
 
     #[test]
-    fn text_layout_cache_defaults_to_saturating() {
-        assert!(TextLayoutOverflowPolicy::default() == TextLayoutOverflowPolicy::Saturating);
-        assert!(TextLayoutCache::default().overflow_policy == TextLayoutOverflowPolicy::Saturating);
-        assert!(TextLayoutCache::new(4).overflow_policy == TextLayoutOverflowPolicy::Saturating);
-        assert!(
-            TextLayoutCache::pruning(4).overflow_policy
-                == TextLayoutOverflowPolicy::PruneOwnedEntries
-        );
+    fn text_layout_cache_saturates_at_capacity() {
+        let key = TextLayoutKey {
+            font_key: 7,
+            line_spacing: 10,
+            wrap_width_pixels: -1,
+        };
+        let mut cache = TextLayoutCache::new(1);
+
+        assert!(cache.insert_owned_layout(key, "alpha", Arc::new(test_layout()), 1));
+        assert!(!cache.insert_owned_layout(key, "beta", Arc::new(test_layout()), 2));
+        assert_eq!(cache.entry_count, 1);
+        assert!(cache.owned_layout(key, "alpha").is_some());
+        assert!(cache.owned_layout(key, "beta").is_none());
+        assert!(cache.uncached_layout.is_some());
     }
 
     #[test]
