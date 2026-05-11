@@ -9721,56 +9721,46 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     actors.push(act!(quad: align(0.5, 0.5): xy(lst_cx, lst_cy): setsize(32.0, 152.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
 
     const VISIBLE_STEPS_SLOTS: usize = 5;
-    let (steps_charts, sel_p1, sel_p2) = match entry_opt {
-        Some(MusicWheelEntry::Song(song)) => {
-            let cached_standard_indices = state.cached_song.as_ref().and_then(|cached_song| {
-                if Arc::ptr_eq(cached_song, song) && state.cached_chart_type == target_chart_type {
-                    Some(&state.cached_standard_chart_ixs)
-                } else {
-                    None
-                }
-            });
-            let mut v: Vec<Option<&ChartData>> = Vec::with_capacity(NUM_STANDARD_DIFFICULTIES);
-            for diff_ix in 0..NUM_STANDARD_DIFFICULTIES {
-                let chart = if let Some(indices) = cached_standard_indices {
-                    indices[diff_ix].and_then(|ix| song.charts.get(ix))
-                } else {
-                    let diff = color::FILE_DIFFICULTY_NAMES[diff_ix];
-                    song.charts.iter().find(|c| {
-                        c.chart_type.eq_ignore_ascii_case(target_chart_type)
-                            && c.difficulty.eq_ignore_ascii_case(diff)
-                    })
-                };
-                v.push(chart);
-            }
-            let cached_edit_indices = state.cached_edits.as_ref().and_then(|c| {
-                if Arc::ptr_eq(&c.song, song) && c.chart_type == target_chart_type {
-                    Some(c.indices.as_slice())
-                } else {
-                    None
-                }
-            });
-            if let Some(indices) = cached_edit_indices {
-                v.reserve(indices.len());
-                for &chart_ix in indices {
-                    v.push(song.charts.get(chart_ix));
-                }
-            } else {
-                v.extend(
-                    edit_charts_sorted(song, target_chart_type)
-                        .into_iter()
-                        .map(Some),
-                );
-            }
-            (v, state.selected_steps_index, state.p2_selected_steps_index)
-        }
+    let (steps_song, sel_p1, sel_p2) = match entry_opt {
+        Some(MusicWheelEntry::Song(song)) => (
+            Some(song),
+            state.selected_steps_index,
+            state.p2_selected_steps_index,
+        ),
         _ => (
-            vec![None; NUM_STANDARD_DIFFICULTIES],
+            None,
             state.preferred_difficulty_index,
             state.p2_preferred_difficulty_index,
         ),
     };
-    let list_len = steps_charts.len();
+    let steps_cache_matches = match steps_song {
+        Some(song) => {
+            state
+                .cached_song
+                .as_ref()
+                .is_some_and(|cached_song| Arc::ptr_eq(cached_song, song))
+                && state.cached_chart_type == target_chart_type
+        }
+        None => false,
+    };
+    let edit_indices: &[usize] = if steps_cache_matches {
+        state
+            .cached_edits
+            .as_ref()
+            .and_then(|cache| {
+                let song = steps_song?;
+                (Arc::ptr_eq(&cache.song, song) && cache.chart_type == target_chart_type)
+                    .then_some(cache.indices.as_slice())
+            })
+            .unwrap_or(&[])
+    } else {
+        &[]
+    };
+    let list_len = if steps_song.is_some() {
+        NUM_STANDARD_DIFFICULTIES + edit_indices.len()
+    } else {
+        NUM_STANDARD_DIFFICULTIES
+    };
     let sel_p1 = sel_p1.min(list_len.saturating_sub(1));
     let sel_p2 = sel_p2.min(list_len.saturating_sub(1));
     let focus_sel = if is_versus {
@@ -9796,7 +9786,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         if idx >= list_len {
             continue;
         }
-        if let Some(chart) = steps_charts[idx] {
+        let chart = if steps_cache_matches {
+            steps_song.and_then(|song| {
+                chart_ix_for_steps_index(&state.cached_standard_chart_ixs, idx, edit_indices)
+                    .and_then(|chart_ix| song.charts.get(chart_ix))
+            })
+        } else {
+            None
+        };
+        if let Some(chart) = chart {
             let c = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
             actors.push(act!(text: font(current_machine_font_key(FontRole::Header)): settext(cached_u32_text(chart.meter)): align(0.5, 0.5): xy(lst_cx, lst_cy + y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
         }
