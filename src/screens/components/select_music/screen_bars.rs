@@ -8,7 +8,7 @@ use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 
-pub fn build(top_title: &str) -> [Actor; 2] {
+pub fn push(out: &mut Vec<Actor>, top_title: &str) {
     let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
     let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
     let p1_avatar = p1_profile
@@ -54,32 +54,30 @@ pub fn build(top_title: &str) -> [Actor; 2] {
         (Some(press_start.as_ref()), None)
     };
 
-    [
-        screen_bar::build(ScreenBarParams {
-            title: top_title,
-            title_placement: ScreenBarTitlePlacement::Left,
-            position: ScreenBarPosition::Top,
-            transparent: false,
-            fg_color: [1.0; 4],
-            left_text: None,
-            center_text: None,
-            right_text: None,
-            left_avatar: None,
-            right_avatar: None,
-        }),
-        screen_bar::build(ScreenBarParams {
-            title: event_mode.as_ref(),
-            title_placement: ScreenBarTitlePlacement::Center,
-            position: ScreenBarPosition::Bottom,
-            transparent: false,
-            fg_color: [1.0; 4],
-            left_text: footer_left,
-            center_text: None,
-            right_text: footer_right,
-            left_avatar,
-            right_avatar,
-        }),
-    ]
+    out.push(screen_bar::build(ScreenBarParams {
+        title: top_title,
+        title_placement: ScreenBarTitlePlacement::Left,
+        position: ScreenBarPosition::Top,
+        transparent: false,
+        fg_color: [1.0; 4],
+        left_text: None,
+        center_text: None,
+        right_text: None,
+        left_avatar: None,
+        right_avatar: None,
+    }));
+    out.push(screen_bar::build(ScreenBarParams {
+        title: event_mode.as_ref(),
+        title_placement: ScreenBarTitlePlacement::Center,
+        position: ScreenBarPosition::Bottom,
+        transparent: false,
+        fg_color: [1.0; 4],
+        left_text: footer_left,
+        center_text: None,
+        right_text: footer_right,
+        left_avatar,
+        right_avatar,
+    }));
 }
 
 pub fn build_stage_display(stage_number: usize) -> Actor {

@@ -1993,7 +1993,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(screen_bars::build(&tr("ScreenTitles", "SelectCourse")));
+    screen_bars::push(&mut actors, &tr("ScreenTitles", "SelectCourse"));
     actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
@@ -2141,19 +2141,22 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         show_rivals: false,
         loading_text: None,
     };
-    actors.extend(select_pane::build_base(select_pane::StatsPaneParams {
-        pane_cx,
-        accent_color: pane_sel_col,
-        values: select_pane::StatsValues {
-            steps: steps_text,
-            mines: mines_text,
-            jumps: jumps_text,
-            hands: hands_text,
-            holds: holds_text,
-            rolls: rolls_text,
+    select_pane::push_base(
+        &mut actors,
+        select_pane::StatsPaneParams {
+            pane_cx,
+            accent_color: pane_sel_col,
+            values: select_pane::StatsValues {
+                steps: steps_text,
+                mines: mines_text,
+                jumps: jumps_text,
+                hands: hands_text,
+                holds: holds_text,
+                rolls: rolls_text,
+            },
+            meter: (!gs_view.show_rivals).then_some(meter_text),
         },
-        meter: (!gs_view.show_rivals).then_some(meter_text),
-    }));
+    );
     let pane_layout = select_pane::layout();
     let lines = [
         (gs_view.machine_name.clone(), gs_view.machine_score.clone()),
@@ -2405,7 +2408,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         screen_center_x() - 345.5
     };
     let step_artist_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
-    actors.extend(step_artist_bar::build(
+    step_artist_bar::push(
+        &mut actors,
         step_artist_bar::StepArtistBarParams {
             x0: step_artist_x0,
             center_y: step_artist_y,
@@ -2423,7 +2427,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
                 1.0,
             ],
         },
-    ));
+    );
 
     if has_desc {
         actors.push(act!(quad:

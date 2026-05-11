@@ -48,7 +48,7 @@ pub fn layout() -> PaneLayout {
     }
 }
 
-pub fn build_base(p: StatsPaneParams) -> Vec<Actor> {
+pub fn push_base(out: &mut Vec<Actor>, p: StatsPaneParams) {
     let StatsPaneParams {
         pane_cx,
         accent_color,
@@ -56,7 +56,6 @@ pub fn build_base(p: StatsPaneParams) -> Vec<Actor> {
         meter,
     } = p;
     let l = layout();
-    let mut out = Vec::with_capacity(16);
     out.push(act!(quad:
         align(0.5, 0.0):
         xy(pane_cx, l.pane_top):
@@ -113,5 +112,4 @@ pub fn build_base(p: StatsPaneParams) -> Vec<Actor> {
         }
         out.push(meter_actor);
     }
-    out
 }

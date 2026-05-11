@@ -8900,7 +8900,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(screen_bars::build("SELECT MUSIC"));
+    screen_bars::push(&mut actors, "SELECT MUSIC");
 
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
     let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
@@ -9093,7 +9093,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     let base_y = (screen_center_y() - 9.0) - 0.5 * (screen_height() / 28.0);
     let steps_label = tr("SelectMusic", "StepsLabel");
     let mut push_step_artist = |y_cen: f32, x0: f32, sel_col: [f32; 4], step_artist: &str| {
-        actors.extend(step_artist_bar::build(
+        step_artist_bar::push(
+            &mut actors,
             step_artist_bar::StepArtistBarParams {
                 x0,
                 center_y: y_cen,
@@ -9106,7 +9107,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
                 artist_max_width: 124.0,
                 artist_color: [0.0, 0.0, 0.0, 1.0],
             },
-        ));
+        );
     };
 
     if is_versus {
@@ -9312,18 +9313,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     let cols = pane_layout.cols;
     let rows = pane_layout.rows;
 
-    let build_pane = |pane_cx: f32,
-                      sel_col: [f32; 4],
-                      side: profile::PlayerSide,
-                      player_initials: &str,
-                      steps: Arc<str>,
-                      mines: Arc<str>,
-                      jumps: Arc<str>,
-                      hands: Arc<str>,
-                      holds: Arc<str>,
-                      rolls: Arc<str>,
-                      meter: Arc<str>,
-                      chart: Option<&ChartData>| {
+    let push_pane = |out: &mut Vec<Actor>,
+                     pane_cx: f32,
+                     sel_col: [f32; 4],
+                     side: profile::PlayerSide,
+                     player_initials: &str,
+                     steps: Arc<str>,
+                     mines: Arc<str>,
+                     jumps: Arc<str>,
+                     hands: Arc<str>,
+                     holds: Arc<str>,
+                     rolls: Arc<str>,
+                     meter: Arc<str>,
+                     chart: Option<&ChartData>| {
         let gs_active = scores::is_gs_active_for_side(side);
         let show_rivals = gs_active && cfg.show_select_music_scorebox && scorebox_cycle_enabled;
         let show_ex_score = profile::get_for_side(side).show_ex_score;
@@ -9333,19 +9335,22 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         } else {
             None
         };
-        let mut out = select_pane::build_base(select_pane::StatsPaneParams {
-            pane_cx,
-            accent_color: sel_col,
-            values: select_pane::StatsValues {
-                steps,
-                mines,
-                jumps,
-                hands,
-                holds,
-                rolls,
+        select_pane::push_base(
+            out,
+            select_pane::StatsPaneParams {
+                pane_cx,
+                accent_color: sel_col,
+                values: select_pane::StatsValues {
+                    steps,
+                    mines,
+                    jumps,
+                    hands,
+                    holds,
+                    rolls,
+                },
+                meter: (!show_rivals).then_some(meter),
             },
-            meter: (!show_rivals).then_some(meter),
-        });
+        );
 
         if show_rivals {
             let placeholder = (
@@ -9407,12 +9412,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             }
             out.push(act!(text: font("miso"): settext(if show_ex_score { tr("SelectMusic", "ExScore") } else { tr("SelectMusic", "ItgScore") }): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
         }
-
-        out
     };
 
     if is_versus {
-        actors.extend(build_pane(
+        push_pane(
+            &mut actors,
             screen_width() * 0.25 - 5.0,
             sel_col_p1,
             profile::PlayerSide::P1,
@@ -9425,8 +9429,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             rolls,
             meter,
             immediate_chart_p1,
-        ));
-        actors.extend(build_pane(
+        );
+        push_pane(
+            &mut actors,
             screen_width() * 0.75 + 5.0,
             sel_col_p2,
             profile::PlayerSide::P2,
@@ -9439,14 +9444,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             rolls_p2,
             meter_p2,
             immediate_chart_p2,
-        ));
+        );
     } else {
         let pane_cx = if is_p2_single {
             screen_width() * 0.75 + 5.0
         } else {
             screen_width() * 0.25 - 5.0
         };
-        actors.extend(build_pane(
+        push_pane(
+            &mut actors,
             pane_cx,
             sel_col_p1,
             if is_p2_single {
@@ -9467,7 +9473,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             rolls,
             meter,
             immediate_chart_p1,
-        ));
+        );
     }
 
     if !is_versus {
