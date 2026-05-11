@@ -26,7 +26,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::hash::Hasher;
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
@@ -6344,13 +6344,7 @@ const fn grade_to_window(grade: JudgeGrade) -> Option<&'static str> {
 
 #[inline(always)]
 fn timing_hit_log_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        std::env::var("DEADSYNC_TIMING_HIT_LOG").is_ok_and(|v| {
-            let v = v.trim();
-            v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes")
-        })
-    })
+    log::log_enabled!(log::Level::Debug)
 }
 
 #[inline(always)]
@@ -7833,13 +7827,7 @@ fn track_held_miss_windows(
 
 #[inline(always)]
 fn mine_avoid_log_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        std::env::var("DEADSYNC_MINE_AVOID_LOG").is_ok_and(|v| {
-            let v = v.trim();
-            v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes")
-        })
-    })
+    log::log_enabled!(log::Level::Trace)
 }
 
 #[inline(always)]

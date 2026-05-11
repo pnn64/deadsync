@@ -595,7 +595,6 @@ static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
-static AUDIO_TIMING_DIAG_ENABLED: OnceLock<bool> = OnceLock::new();
 static AUDIO_TIMING_DIAG_LAST_SOURCE: AtomicU8 = AtomicU8::new(0);
 static AUDIO_TIMING_DIAG_LAST_NANOS: AtomicU64 = AtomicU64::new(0);
 static AUDIO_TIMING_DIAG_LAST_GAP_NS: AtomicU64 = AtomicU64::new(0);
@@ -665,17 +664,7 @@ impl CallbackClockSource {
 
 #[inline(always)]
 pub(crate) fn timing_diag_enabled() -> bool {
-    *AUDIO_TIMING_DIAG_ENABLED.get_or_init(|| {
-        let Ok(value) = std::env::var("DEADSYNC_AUDIO_TIMING_DIAG") else {
-            return false;
-        };
-        let value = value.trim();
-        !(value.is_empty()
-            || value == "0"
-            || value.eq_ignore_ascii_case("false")
-            || value.eq_ignore_ascii_case("off")
-            || value.eq_ignore_ascii_case("no"))
-    })
+    log::log_enabled!(log::Level::Debug)
 }
 
 #[inline(always)]
