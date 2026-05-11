@@ -25,10 +25,6 @@ const ROW_STEP: f32 = 43.0;
 const PROGRESS_STEP_BEATS: usize = 4;
 const MAX_MSGS_PER_FRAME: usize = 64;
 const POLL_BUDGET: Duration = Duration::from_millis(2);
-pub(crate) fn all_label() -> std::sync::Arc<str> {
-    tr("PackSync", "AllPacksLabel")
-}
-
 pub(crate) struct TargetSpec {
     pub simfile_path: PathBuf,
     pub song_title: String,
@@ -92,12 +88,6 @@ struct RowState {
     error_text: Option<String>,
 }
 
-#[derive(Clone, Debug)]
-enum ApplyMode {
-    PerRow,
-    Uniform { simfile_paths: Vec<PathBuf> },
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum OverlayPhase {
     Running,
@@ -124,7 +114,6 @@ pub(crate) struct OverlayStateData {
     rx: mpsc::Receiver<WorkerMsg>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     three_key_focus: ThreeKeyFocus,
-    apply_mode: ApplyMode,
 }
 
 pub(crate) enum OverlayState {
@@ -527,32 +516,6 @@ pub(crate) fn hide(state: &mut OverlayState) {
 }
 
 pub(crate) fn begin(state: &mut OverlayState, pack_name: String, targets: Vec<TargetSpec>) -> bool {
-    begin_with_mode(state, pack_name, targets, ApplyMode::PerRow)
-}
-
-pub(crate) fn begin_uniform(
-    state: &mut OverlayState,
-    pack_name: String,
-    targets: Vec<TargetSpec>,
-    simfile_paths: Vec<PathBuf>,
-) -> bool {
-    if simfile_paths.is_empty() {
-        return false;
-    }
-    begin_with_mode(
-        state,
-        pack_name,
-        targets,
-        ApplyMode::Uniform { simfile_paths },
-    )
-}
-
-fn begin_with_mode(
-    state: &mut OverlayState,
-    pack_name: String,
-    targets: Vec<TargetSpec>,
-    apply_mode: ApplyMode,
-) -> bool {
     if targets.is_empty() {
         return false;
     }
@@ -661,7 +624,6 @@ fn begin_with_mode(
         rx,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         three_key_focus: ThreeKeyFocus::Rows,
-        apply_mode,
     });
     true
 }
@@ -974,46 +936,27 @@ fn summary(overlay: &OverlayStateData) -> Summary {
 
 #[inline(always)]
 fn can_save(overlay: &OverlayStateData) -> bool {
-    match &overlay.apply_mode {
-        ApplyMode::PerRow => summary(overlay).eligible > 0,
-        ApplyMode::Uniform { simfile_paths } => {
-            !simfile_paths.is_empty() && uniform_delta_seconds(overlay).is_some()
-        }
-    }
+    summary(overlay).eligible > 0
 }
 
 fn collect_changes(overlay: &OverlayStateData) -> Vec<SongOffsetSyncChange> {
-    match &overlay.apply_mode {
-        ApplyMode::PerRow => overlay
-            .rows
-            .iter()
-            .filter(|row| row_disposition(row, overlay.min_confidence) == RowDisposition::Eligible)
-            .filter_map(|row| {
-                Some(SongOffsetSyncChange {
-                    simfile_path: row.simfile_path.clone(),
-                    delta_seconds: row_delta_seconds(row)?,
-                })
+    overlay
+        .rows
+        .iter()
+        .filter(|row| row_disposition(row, overlay.min_confidence) == RowDisposition::Eligible)
+        .filter_map(|row| {
+            Some(SongOffsetSyncChange {
+                simfile_path: row.simfile_path.clone(),
+                delta_seconds: row_delta_seconds(row)?,
             })
-            .collect(),
-        ApplyMode::Uniform { simfile_paths } => {
-            let Some(delta_seconds) = uniform_delta_seconds(overlay) else {
-                return Vec::new();
-            };
-            unique_simfile_paths(simfile_paths)
-                .into_iter()
-                .map(|simfile_path| SongOffsetSyncChange {
-                    simfile_path,
-                    delta_seconds,
-                })
-                .collect()
-        }
-    }
+        })
+        .collect()
 }
 
 fn save_prompt(overlay: &OverlayStateData) -> String {
     let summary = summary(overlay);
     let min_conf_pct = confidence_threshold_percent();
-    if !can_save(overlay) {
+    if summary.eligible == 0 {
         return tr_fmt(
             "PackSync",
             "NothingToSaveMessage",
@@ -1026,88 +969,18 @@ fn save_prompt(overlay: &OverlayStateData) -> String {
         )
         .to_string();
     }
-    match &overlay.apply_mode {
-        ApplyMode::PerRow => tr_fmt(
-            "PackSync",
-            "SaveConfirmFormat",
-            &[
-                ("count", &summary.eligible.to_string()),
-                ("below", &summary.below_threshold.to_string()),
-                ("threshold", &min_conf_pct.to_string()),
-                ("nochange", &summary.no_change.to_string()),
-                ("failed", &summary.failed.to_string()),
-            ],
-        )
-        .to_string(),
-        ApplyMode::Uniform { simfile_paths } => {
-            let delta_seconds = uniform_delta_seconds(overlay).unwrap_or(0.0);
-            let direction = sync_direction_text(delta_seconds);
-            tr_fmt(
-                "PackSync",
-                "UniformSaveConfirmFormat",
-                &[
-                    ("delta", &format_delta_seconds(delta_seconds)),
-                    ("direction", direction.as_ref()),
-                    (
-                        "files",
-                        &unique_simfile_paths(simfile_paths).len().to_string(),
-                    ),
-                    ("sources", &summary.eligible.to_string()),
-                    ("below", &summary.below_threshold.to_string()),
-                    ("threshold", &min_conf_pct.to_string()),
-                    ("nochange", &summary.no_change.to_string()),
-                    ("failed", &summary.failed.to_string()),
-                ],
-            )
-            .to_string()
-        }
-    }
-}
-
-fn uniform_delta_seconds(overlay: &OverlayStateData) -> Option<f32> {
-    let mut deltas = Vec::new();
-    for row in &overlay.rows {
-        if row_disposition(row, overlay.min_confidence) == RowDisposition::Eligible {
-            deltas.push(row_delta_seconds(row)?);
-        }
-    }
-    median_delta_seconds(deltas)
-}
-
-fn median_delta_seconds(mut deltas: Vec<f32>) -> Option<f32> {
-    deltas.retain(|v| v.is_finite());
-    deltas.sort_by(|a, b| a.total_cmp(b));
-    match deltas.len() {
-        0 => None,
-        len if len % 2 == 1 => Some(deltas[len / 2]),
-        len => Some((deltas[len / 2 - 1] + deltas[len / 2]) * 0.5),
-    }
-    .filter(|delta| delta.abs() >= 0.000_001_f32)
-}
-
-fn unique_simfile_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
-    let mut unique = Vec::with_capacity(paths.len());
-    for path in paths {
-        if !unique.iter().any(|known| known == path) {
-            unique.push(path.clone());
-        }
-    }
-    unique
-}
-
-fn format_delta_seconds(delta_seconds: f32) -> String {
-    format!("{:+.3}", (delta_seconds / 0.001).round() * 0.001)
-}
-
-fn sync_direction_text(delta_seconds: f32) -> std::sync::Arc<str> {
-    tr(
+    tr_fmt(
         "PackSync",
-        if delta_seconds > 0.0 {
-            "NotesEarlier"
-        } else {
-            "NotesLater"
-        },
+        "SaveConfirmFormat",
+        &[
+            ("count", &summary.eligible.to_string()),
+            ("below", &summary.below_threshold.to_string()),
+            ("threshold", &min_conf_pct.to_string()),
+            ("nochange", &summary.no_change.to_string()),
+            ("failed", &summary.failed.to_string()),
+        ],
     )
+    .to_string()
 }
 
 #[inline(always)]
@@ -1304,21 +1177,12 @@ fn poll_overlay(overlay: &mut OverlayStateData) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        ApplyMode, OverlayPhase, OverlayStateData, RowDisposition, RowPhase, RowState,
-        ThreeKeyFocus, can_save, collect_changes, result_text, row_disposition,
-    };
+    use super::{RowDisposition, RowPhase, RowState, result_text, row_disposition};
     use std::path::PathBuf;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::{Arc, mpsc};
 
     fn pack_row(bias_ms: f64, confidence: f64) -> RowState {
-        pack_row_at("Songs/Test/song.ssc", bias_ms, confidence)
-    }
-
-    fn pack_row_at(path: &str, bias_ms: f64, confidence: f64) -> RowState {
         RowState {
-            simfile_path: PathBuf::from(path),
+            simfile_path: PathBuf::from("Songs/Test/song.ssc"),
             song_title: "Test Song".to_string(),
             chart_label: "Challenge".to_string(),
             total_beats: 100,
@@ -1327,25 +1191,6 @@ mod tests {
             final_confidence: Some(confidence),
             phase: RowPhase::Ready,
             error_text: None,
-        }
-    }
-
-    fn test_overlay(rows: Vec<RowState>, apply_mode: ApplyMode) -> OverlayStateData {
-        let (_tx, rx) = mpsc::channel();
-        OverlayStateData {
-            pack_name: "Test Pack".to_string(),
-            rows,
-            scroll_index: 0,
-            auto_follow: false,
-            yes_selected: true,
-            phase: OverlayPhase::Review,
-            min_confidence: 0.80,
-            cancel: Arc::new(AtomicBool::new(false)),
-            current_row: None,
-            rx,
-            menu_lr_chord: crate::screens::input::MenuLrChordTracker::default(),
-            three_key_focus: ThreeKeyFocus::Rows,
-            apply_mode,
         }
     }
 
@@ -1360,35 +1205,5 @@ mod tests {
         let row = pack_row(12.5, 0.87);
         let text = result_text(&row, 0.80);
         assert!(text.contains("87% confidence"));
-    }
-
-    #[test]
-    fn uniform_pack_sync_applies_one_delta_to_all_pack_files() {
-        let rows = vec![
-            pack_row_at("Songs/Pack/a.ssc", 10.0, 0.90),
-            pack_row_at("Songs/Pack/b.ssc", 20.0, 0.90),
-            pack_row_at("Songs/Pack/c.ssc", 99.0, 0.40),
-        ];
-        let overlay = test_overlay(
-            rows,
-            ApplyMode::Uniform {
-                simfile_paths: vec![
-                    PathBuf::from("Songs/Pack/a.ssc"),
-                    PathBuf::from("Songs/Pack/b.ssc"),
-                    PathBuf::from("Songs/Pack/c.ssc"),
-                    PathBuf::from("Songs/Pack/b.ssc"),
-                ],
-            },
-        );
-
-        assert!(can_save(&overlay));
-        let changes = collect_changes(&overlay);
-        assert_eq!(changes.len(), 3);
-        assert_eq!(changes[0].simfile_path, PathBuf::from("Songs/Pack/a.ssc"));
-        assert_eq!(changes[1].simfile_path, PathBuf::from("Songs/Pack/b.ssc"));
-        assert_eq!(changes[2].simfile_path, PathBuf::from("Songs/Pack/c.ssc"));
-        for change in changes {
-            assert!((change.delta_seconds + 0.015).abs() < f32::EPSILON);
-        }
     }
 }

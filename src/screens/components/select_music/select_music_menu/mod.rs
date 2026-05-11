@@ -47,6 +47,8 @@ pub enum Action {
     ReloadSongsCourses,
     ShowLobbies,
     ViewDownloads,
+    NullOrDie,
+    NullOrDiePack,
     SyncSong,
     SyncPack,
     PlayReplay,
@@ -181,6 +183,16 @@ pub const ITEM_VIEW_DOWNLOADS: Item = Item {
     top_label: TextContent::Static("Need More RAM"),
     bottom_label: TextContent::Static("View Downloads"),
     action: Action::ViewDownloads,
+};
+pub const ITEM_NULL_OR_DIE: Item = Item {
+    top_label: TextContent::Static("Sync song with"),
+    bottom_label: TextContent::Static("NULL-OR-DIE"),
+    action: Action::NullOrDie,
+};
+pub const ITEM_NULL_OR_DIE_PACK: Item = Item {
+    top_label: TextContent::Static("Sync pack with"),
+    bottom_label: TextContent::Static("NULL-OR-DIE"),
+    action: Action::NullOrDiePack,
 };
 pub const ITEM_SYNC_SONG: Item = Item {
     top_label: TextContent::Static("Incorrect offset?"),
