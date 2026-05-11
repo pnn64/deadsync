@@ -64,6 +64,7 @@ pub enum ItemId {
     // Lights Options submenu
     LightsDriver,
     LightsGameplayPadLights,
+    LightsTest,
 
     // Machine Options submenu
     MchSelectProfile,

@@ -34,7 +34,7 @@ use crate::screens::{
     SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
     initials, input as input_screen, manage_local_profiles, mappings, menu, options,
     player_options, practice, profile_load, sandbox, select_color, select_course, select_mode,
-    select_music, select_profile, select_style,
+    select_music, select_profile, select_style, test_lights,
 };
 use winit::{
     application::ApplicationHandler,
@@ -234,6 +234,7 @@ const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
     match screen {
         CurrentScreen::Init => LightMode::Attract,
         CurrentScreen::Gameplay | CurrentScreen::Practice => LightMode::Gameplay,
+        CurrentScreen::TestLights => LightMode::TestAutoCycle,
         CurrentScreen::Evaluation | CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
             LightMode::Cleared
         }
@@ -1073,6 +1074,7 @@ pub struct ScreensState {
     manage_local_profiles_state: manage_local_profiles::State,
     mappings_state: mappings::State,
     input_state: input_screen::State,
+    test_lights_state: test_lights::State,
     player_options_state: Option<player_options::State>,
     init_state: init::State,
     select_profile_state: select_profile::State,
@@ -2667,6 +2669,9 @@ impl ScreensState {
         let mut input_state = input_screen::init();
         input_state.active_color_index = color_index;
 
+        let mut test_lights_state = test_lights::init();
+        test_lights_state.active_color_index = color_index;
+
         let mut init_state = init::init();
         init_state.active_color_index = color_index;
 
@@ -2692,6 +2697,7 @@ impl ScreensState {
             manage_local_profiles_state,
             mappings_state,
             input_state,
+            test_lights_state,
             player_options_state: None,
             init_state,
             select_profile_state,
@@ -2746,6 +2752,10 @@ impl ScreensState {
             }
             CurrentScreen::Input => (
                 input_screen::update(&mut self.input_state, delta_time),
+                false,
+            ),
+            CurrentScreen::TestLights => (
+                test_lights::update(&mut self.test_lights_state, delta_time),
                 false,
             ),
             CurrentScreen::PlayerOptions => (
@@ -3041,7 +3051,9 @@ impl App {
         self.lights
             .set_gameplay_pad_lights(config.lights_gameplay_pad_lights);
         let screen = self.state.screens.current_screen;
-        self.lights.set_mode(light_mode_for_screen(screen));
+        if screen != CurrentScreen::TestLights {
+            self.lights.set_mode(light_mode_for_screen(screen));
+        }
         self.lights.set_joined([
             profile::is_session_side_joined(profile::PlayerSide::P1),
             profile::is_session_side_joined(profile::PlayerSide::P2),
@@ -3667,6 +3679,8 @@ impl App {
         self.state.screens.options_state.active_color_index = current_color_index;
         if matches!(from, CurrentScreen::Mappings | CurrentScreen::Input) {
             options::open_input_submenu(&mut self.state.screens.options_state);
+        } else if from == CurrentScreen::TestLights {
+            options::open_lights_submenu(&mut self.state.screens.options_state);
         }
     }
 
@@ -4030,6 +4044,19 @@ impl App {
                 self.state.shell.set_overlay_mode(mode);
                 config::update_show_stats_mode(mode);
                 options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
+                Vec::new()
+            }
+            ScreenAction::TestLightsSetAuto => {
+                test_lights::on_enter(&mut self.state.screens.test_lights_state);
+                self.lights.set_test_auto_cycle();
+                Vec::new()
+            }
+            ScreenAction::TestLightsStepCabinet(delta) => {
+                self.lights.step_test_cabinet(delta);
+                Vec::new()
+            }
+            ScreenAction::TestLightsStepButton(delta) => {
+                self.lights.step_test_button(delta);
                 Vec::new()
             }
             ScreenAction::ConsumeInput => Vec::new(),
@@ -4841,6 +4868,10 @@ impl App {
             CurrentScreen::Input => {
                 crate::screens::input::handle_input(&mut self.state.screens.input_state, &ev)
             }
+            CurrentScreen::TestLights => crate::screens::test_lights::handle_input(
+                &mut self.state.screens.test_lights_state,
+                &ev,
+            ),
             CurrentScreen::SelectMusic => crate::screens::select_music::handle_input(
                 &mut self.state.screens.select_music_state,
                 &ev,
@@ -5172,6 +5203,12 @@ impl App {
                 screen_alpha_multiplier,
             ),
             CurrentScreen::Input => input_screen::get_actors(&self.state.screens.input_state),
+            CurrentScreen::TestLights => test_lights::get_actors(
+                &self.state.screens.test_lights_state,
+                self.lights.state_snapshot(),
+                self.lights.mode(),
+                screen_alpha_multiplier,
+            ),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &self.state.screens.player_options_state {
                     player_options::get_actors(pos, &self.asset_manager)
@@ -6570,6 +6607,12 @@ impl App {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.mappings_state = mappings::init();
             self.state.screens.mappings_state.active_color_index = color_index;
+        } else if target == CurrentScreen::TestLights {
+            let color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.test_lights_state = test_lights::init();
+            self.state.screens.test_lights_state.active_color_index = color_index;
+            test_lights::on_enter(&mut self.state.screens.test_lights_state);
+            self.lights.set_test_auto_cycle();
         } else if target == CurrentScreen::SelectProfile {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
             self.state.screens.select_profile_state = select_profile::init();
@@ -6773,6 +6816,7 @@ impl App {
             .manage_local_profiles_state
             .active_color_index = idx;
         self.state.screens.input_state.active_color_index = idx;
+        self.state.screens.test_lights_state.active_color_index = idx;
         self.state
             .screens
             .evaluation_summary_state

@@ -12,6 +12,7 @@ const CABINET_COUNT: usize = 6;
 const BUTTON_COUNT: usize = 5;
 const BLINK_SECONDS: f32 = 0.1;
 const SERIAL_PORT_NAME_CAP: usize = 64;
+const TEST_AUTO_CYCLE_SECONDS: f32 = 1.0;
 
 #[cfg(windows)]
 pub const DEFAULT_LITBOARD_PORT: &str = "COM54";
@@ -155,6 +156,8 @@ pub enum Mode {
     Gameplay,
     Stage,
     Cleared,
+    TestAutoCycle,
+    TestManualCycle,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -217,6 +220,14 @@ const MARQUEE_LIGHTS: [CabinetLight; 4] = [
 ];
 
 const BASS_LIGHTS: [CabinetLight; 2] = [CabinetLight::BassLeft, CabinetLight::BassRight];
+const TEST_CABINET_LIGHTS: [CabinetLight; CABINET_COUNT] = [
+    CabinetLight::MarqueeUpperLeft,
+    CabinetLight::MarqueeUpperRight,
+    CabinetLight::MarqueeLowerLeft,
+    CabinetLight::MarqueeLowerRight,
+    CabinetLight::BassLeft,
+    CabinetLight::BassRight,
+];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ButtonLight {
@@ -244,6 +255,18 @@ const DIRECTION_BUTTONS: [ButtonLight; 4] = [
     ButtonLight::Down,
     ButtonLight::Up,
     ButtonLight::Right,
+];
+const TEST_BUTTON_LIGHTS: [(Player, ButtonLight); PLAYER_COUNT * BUTTON_COUNT] = [
+    (Player::P1, ButtonLight::Left),
+    (Player::P1, ButtonLight::Down),
+    (Player::P1, ButtonLight::Up),
+    (Player::P1, ButtonLight::Right),
+    (Player::P1, ButtonLight::Start),
+    (Player::P2, ButtonLight::Left),
+    (Player::P2, ButtonLight::Down),
+    (Player::P2, ButtonLight::Up),
+    (Player::P2, ButtonLight::Right),
+    (Player::P2, ButtonLight::Start),
 ];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -297,6 +320,9 @@ pub struct Manager {
     button_pressed: [[bool; BUTTON_COUNT]; PLAYER_COUNT],
     button_blink: [[f32; BUTTON_COUNT]; PLAYER_COUNT],
     cabinet_blink: [f32; CABINET_COUNT],
+    test_auto_seconds: f32,
+    test_cabinet_ix: usize,
+    test_button_ix: usize,
     last_sent: Option<State>,
 }
 
@@ -313,6 +339,9 @@ impl Manager {
             button_pressed: [[false; BUTTON_COUNT]; PLAYER_COUNT],
             button_blink: [[0.0; BUTTON_COUNT]; PLAYER_COUNT],
             cabinet_blink: [0.0; CABINET_COUNT],
+            test_auto_seconds: 0.0,
+            test_cabinet_ix: 0,
+            test_button_ix: 0,
             last_sent: None,
         }
     }
@@ -332,7 +361,33 @@ impl Manager {
     }
 
     pub fn set_mode(&mut self, mode: Mode) {
+        if self.mode != mode && mode == Mode::TestAutoCycle {
+            self.test_auto_seconds = 0.0;
+        }
         self.mode = mode;
+    }
+
+    pub fn mode(&self) -> Mode {
+        self.mode
+    }
+
+    pub fn state_snapshot(&self) -> State {
+        self.last_sent.unwrap_or_default()
+    }
+
+    pub fn set_test_auto_cycle(&mut self) {
+        self.mode = Mode::TestAutoCycle;
+        self.test_auto_seconds = 0.0;
+    }
+
+    pub fn step_test_cabinet(&mut self, delta: i8) {
+        self.mode = Mode::TestManualCycle;
+        self.test_cabinet_ix = step_index(self.test_cabinet_ix, delta, TEST_CABINET_LIGHTS.len());
+    }
+
+    pub fn step_test_button(&mut self, delta: i8) {
+        self.mode = Mode::TestManualCycle;
+        self.test_button_ix = step_index(self.test_button_ix, delta, TEST_BUTTON_LIGHTS.len());
     }
 
     pub fn set_gameplay_pad_lights(&mut self, mode: GameplayPadLightMode) {
@@ -369,6 +424,10 @@ impl Manager {
         for timers in &mut self.button_blink {
             fade_timers(timers, delta);
         }
+        if self.mode == Mode::TestAutoCycle {
+            self.test_auto_seconds = (self.test_auto_seconds + delta)
+                % (TEST_AUTO_CYCLE_SECONDS * CABINET_COUNT as f32 * 100.0);
+        }
         let state = self.build_state(elapsed_seconds);
         self.push_state(state);
     }
@@ -381,6 +440,8 @@ impl Manager {
             Mode::MenuStartAndDirections => self.build_menu(&mut state, elapsed_seconds, true),
             Mode::Gameplay => self.build_gameplay(&mut state),
             Mode::Stage | Mode::Cleared => self.build_stage(&mut state, elapsed_seconds),
+            Mode::TestAutoCycle => self.build_test_auto(&mut state),
+            Mode::TestManualCycle => self.build_test_manual(&mut state),
         }
         self.apply_physical_buttons(&mut state);
         state
@@ -447,6 +508,21 @@ impl Manager {
         }
     }
 
+    fn build_test_auto(&self, state: &mut State) {
+        let step = (self.test_auto_seconds / TEST_AUTO_CYCLE_SECONDS) as usize;
+        let cabinet = TEST_CABINET_LIGHTS[step % TEST_CABINET_LIGHTS.len()];
+        let (player, button) = TEST_BUTTON_LIGHTS[step % TEST_BUTTON_LIGHTS.len()];
+        state.set_cabinet(cabinet, true);
+        state.set_button(player, button, true);
+    }
+
+    fn build_test_manual(&self, state: &mut State) {
+        let cabinet = TEST_CABINET_LIGHTS[self.test_cabinet_ix % TEST_CABINET_LIGHTS.len()];
+        let (player, button) = TEST_BUTTON_LIGHTS[self.test_button_ix % TEST_BUTTON_LIGHTS.len()];
+        state.set_cabinet(cabinet, true);
+        state.set_button(player, button, true);
+    }
+
     fn hidden(&self, light: CabinetLight) -> bool {
         self.joined.iter().zip(self.hide).any(|(joined, hide)| {
             *joined
@@ -457,6 +533,9 @@ impl Manager {
     }
 
     fn apply_physical_buttons(&self, state: &mut State) {
+        if matches!(self.mode, Mode::TestAutoCycle | Mode::TestManualCycle) {
+            return;
+        }
         let chart_pad_lights =
             self.mode == Mode::Gameplay && self.gameplay_pad_lights == GameplayPadLightMode::Chart;
         for player in [Player::P1, Player::P2] {
@@ -500,6 +579,10 @@ fn fade_timers<const N: usize>(timers: &mut [f32; N], delta: f32) {
     for timer in timers {
         *timer = (*timer - delta).max(0.0);
     }
+}
+
+fn step_index(index: usize, delta: i8, len: usize) -> usize {
+    ((index as isize + delta as isize).rem_euclid(len as isize)) as usize
 }
 
 struct Worker {
@@ -682,5 +765,33 @@ mod tests {
         let chart = lights.build_state(0.0);
         assert!(!chart.button(Player::P1, ButtonLight::Left));
         assert!(chart.button(Player::P1, ButtonLight::Right));
+    }
+
+    #[test]
+    fn test_auto_cycle_lights_fixed_outputs() {
+        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        lights.set_test_auto_cycle();
+        lights.set_button_pressed(Player::P2, ButtonLight::Start, true);
+
+        let first = lights.build_state(0.0);
+        assert!(first.cabinet(CabinetLight::MarqueeUpperLeft));
+        assert!(first.button(Player::P1, ButtonLight::Left));
+        assert!(!first.button(Player::P2, ButtonLight::Start));
+
+        lights.tick(1.0, 0.0);
+        let second = lights.state_snapshot();
+        assert!(second.cabinet(CabinetLight::MarqueeUpperRight));
+        assert!(second.button(Player::P1, ButtonLight::Down));
+    }
+
+    #[test]
+    fn test_manual_cycle_steps_outputs() {
+        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        lights.step_test_cabinet(1);
+        lights.step_test_button(4);
+
+        let state = lights.build_state(0.0);
+        assert!(state.cabinet(CabinetLight::MarqueeUpperRight));
+        assert!(state.button(Player::P1, ButtonLight::Start));
     }
 }

@@ -78,9 +78,9 @@ pub use state::{State, init};
 pub use submenus::update_monitor_specs;
 pub use transitions::{in_transition, out_transition};
 pub use update::{
-    open_input_submenu, sync_display_mode, sync_display_resolution, sync_high_dpi, sync_max_fps,
-    sync_present_mode_policy, sync_show_stats_mode, sync_translated_titles, sync_video_renderer,
-    sync_vsync, update,
+    open_input_submenu, open_lights_submenu, sync_display_mode, sync_display_resolution,
+    sync_high_dpi, sync_max_fps, sync_present_mode_policy, sync_show_stats_mode,
+    sync_translated_titles, sync_video_renderer, sync_vsync, update,
 };
 
 #[cfg(test)]

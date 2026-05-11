@@ -3,6 +3,7 @@ use super::{
     evaluation, evaluation_summary, gameover, gameplay, init, initials, input_screen,
     manage_local_profiles, mappings, menu, options, player_options, profile_load, sandbox,
     select_color, select_course, select_mode, select_music, select_profile, select_style,
+    test_lights,
 };
 use crate::assets::visual_styles;
 use crate::config;
@@ -141,6 +142,7 @@ impl App {
                 | CurrentScreen::ManageLocalProfiles
                 | CurrentScreen::Mappings
                 | CurrentScreen::Input
+                | CurrentScreen::TestLights
         )
     }
 
@@ -229,6 +231,12 @@ impl App {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.mappings_state = mappings::init();
             self.state.screens.mappings_state.active_color_index = color_index;
+        } else if target_screen == CurrentScreen::TestLights {
+            let color_index = self.state.screens.options_state.active_color_index;
+            self.state.screens.test_lights_state = test_lights::init();
+            self.state.screens.test_lights_state.active_color_index = color_index;
+            test_lights::on_enter(&mut self.state.screens.test_lights_state);
+            self.lights.set_test_auto_cycle();
         }
 
         if prev == CurrentScreen::SelectColor {
@@ -375,6 +383,8 @@ impl App {
             || (from == CurrentScreen::SelectStyle && to == CurrentScreen::SelectColor)
             || (from == CurrentScreen::Options && to == CurrentScreen::Mappings)
             || (from == CurrentScreen::Mappings && to == CurrentScreen::Options)
+            || (from == CurrentScreen::Options && to == CurrentScreen::TestLights)
+            || (from == CurrentScreen::TestLights && to == CurrentScreen::Options)
             || (from == CurrentScreen::Options && to == CurrentScreen::ManageLocalProfiles)
             || (from == CurrentScreen::ManageLocalProfiles && to == CurrentScreen::Options)
     }
@@ -486,6 +496,7 @@ impl App {
             CurrentScreen::Credits => credits::out_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::out_transition(),
             CurrentScreen::Mappings => mappings::out_transition(),
+            CurrentScreen::TestLights => test_lights::out_transition(),
             CurrentScreen::PlayerOptions => player_options::out_transition(),
             CurrentScreen::SelectProfile => select_profile::out_transition(),
             CurrentScreen::SelectColor => select_color::out_transition(),
@@ -523,6 +534,7 @@ impl App {
             CurrentScreen::Credits => credits::in_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),
             CurrentScreen::Mappings => mappings::in_transition(),
+            CurrentScreen::TestLights => test_lights::in_transition(),
             CurrentScreen::PlayerOptions => player_options::in_transition(),
             CurrentScreen::SelectProfile => select_profile::in_transition(),
             CurrentScreen::SelectColor => select_color::in_transition(),

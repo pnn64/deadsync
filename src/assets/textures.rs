@@ -1053,6 +1053,38 @@ impl AssetManager {
                 "test_input/highlightarrow.png".to_string(),
                 "test_input/highlightarrow.png".to_string(),
             ),
+            (
+                "test_lights/bass light (blue).png".to_string(),
+                "test_lights/bass light (blue).png".to_string(),
+            ),
+            (
+                "test_lights/blue.png".to_string(),
+                "test_lights/blue.png".to_string(),
+            ),
+            (
+                "test_lights/cabinet ITG2.png".to_string(),
+                "test_lights/cabinet ITG2.png".to_string(),
+            ),
+            (
+                "test_lights/dance.png".to_string(),
+                "test_lights/dance.png".to_string(),
+            ),
+            (
+                "test_lights/highlight.png".to_string(),
+                "test_lights/highlight.png".to_string(),
+            ),
+            (
+                "test_lights/pink.png".to_string(),
+                "test_lights/pink.png".to_string(),
+            ),
+            (
+                "test_lights/red.png".to_string(),
+                "test_lights/red.png".to_string(),
+            ),
+            (
+                "test_lights/white.png".to_string(),
+                "test_lights/white.png".to_string(),
+            ),
             ("meter_arrow.png".to_string(), "meter_arrow.png".to_string()),
             (
                 "name_entry_cursor.png".to_string(),

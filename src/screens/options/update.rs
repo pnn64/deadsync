@@ -156,7 +156,15 @@ pub fn sync_present_mode_policy(state: &mut State, mode: PresentModePolicy) {
 }
 
 pub fn open_input_submenu(state: &mut State) {
-    state.view = OptionsView::Submenu(SubmenuKind::Input);
+    open_submenu_now(state, SubmenuKind::Input);
+}
+
+pub fn open_lights_submenu(state: &mut State) {
+    open_submenu_now(state, SubmenuKind::Lights);
+}
+
+fn open_submenu_now(state: &mut State, kind: SubmenuKind) {
+    state.view = OptionsView::Submenu(kind);
     state.pending_submenu_kind = None;
     state.pending_submenu_parent_kind = None;
     state.submenu_parent_kind = None;
