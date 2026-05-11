@@ -25,7 +25,7 @@ use crate::game::gameplay::{
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{
-    ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
+    ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot,
 };
 use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
 use crate::game::{
@@ -1074,6 +1074,23 @@ fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
     }
     let logical = slot.logical_size();
     [logical[0] * scale, logical[1] * scale]
+}
+
+#[inline(always)]
+fn hold_explosion_slot_for_col(
+    explosion_ns: Option<&Noteskin>,
+    col: usize,
+    is_roll: bool,
+) -> Option<&SpriteSlot> {
+    let ns = explosion_ns?;
+    let visuals = ns.hold_visuals_for_col(col, is_roll);
+    visuals.explosion.as_ref().or_else(|| {
+        if is_roll {
+            ns.roll.explosion.as_ref()
+        } else {
+            ns.hold.explosion.as_ref()
+        }
+    })
 }
 
 #[inline(always)]
@@ -4547,12 +4564,11 @@ pub fn build_bundles(
                 .filter(|active| active_hold_is_engaged(active))
             {
                 let note_type = &state.notes[active.note_index].note_type;
-                let visuals = ns.hold_visuals_for_col(i, matches!(note_type, NoteType::Roll));
-                if let Some(slot) = visuals.explosion.as_ref() {
-                    Some(slot)
-                } else {
-                    ns.hold.explosion.as_ref().map(|slot| slot)
-                }
+                hold_explosion_slot_for_col(
+                    tap_explosion_ns,
+                    i,
+                    matches!(note_type, NoteType::Roll),
+                )
             } else {
                 None
             };
@@ -8477,8 +8493,8 @@ mod tests {
         append_mini_part, append_perspective_parts, append_turn_parts, arrow_effect_zoom,
         bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
         confusion_rotation_deg, hallway_judgment_zoom, hold_body_segment_budget, hold_draw_span,
-        hold_head_render_flags, hold_segment_pose, hold_strip_actor, hold_strip_row_3d,
-        hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
+        hold_explosion_slot_for_col, hold_head_render_flags, hold_segment_pose, hold_strip_actor,
+        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
         judgment_tilt_rotation_deg, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped,
         move_x_extra, move_y_extra, note_alpha, note_glow, note_slot_base_size,
         note_world_z_for_bumpy, note_x_extra, offset_center, predictive_itg_percents,
@@ -9572,6 +9588,44 @@ mod tests {
         assert!(
             (scale_h - model_h).abs() <= 1e-4,
             "model-backed tap notes must scale by model height; got scale_h={scale_h}, model_h={model_h}"
+        );
+    }
+
+    #[test]
+    fn hold_explosion_slot_respects_explosion_noteskin_choice() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let cel_ns =
+            load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
+        let default_ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        let ddr_vivid_ns = load_itg_skin(&style, "ddr-vivid")
+            .expect("dance/ddr-vivid should load from assets/noteskins");
+
+        let base_slot = hold_explosion_slot_for_col(Some(&cel_ns), 0, false)
+            .expect("cel should define a hold explosion");
+        let selected_slot = hold_explosion_slot_for_col(Some(&ddr_vivid_ns), 0, false)
+            .expect("ddr-vivid should define a hold explosion");
+
+        assert_ne!(
+            selected_slot.texture_key(),
+            base_slot.texture_key(),
+            "hold explosions should come from the selected explosion noteskin"
+        );
+        assert!(
+            selected_slot.texture_key().contains("ddr-vivid"),
+            "selected hold explosion should resolve from ddr-vivid, got '{}'",
+            selected_slot.texture_key()
+        );
+        assert!(
+            hold_explosion_slot_for_col(Some(&default_ns), 0, false).is_none(),
+            "a selected noteskin with blank hold explosions must not fall back to the base noteskin"
+        );
+        assert!(
+            hold_explosion_slot_for_col(None, 0, false).is_none(),
+            "the no-explosion choice should also hide hold explosions"
         );
     }
 
