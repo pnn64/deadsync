@@ -54,6 +54,7 @@ pub enum SubRowId {
     Debounce,
     // Lights Options
     LightsDriver,
+    GameplayPadLights,
     // Machine Options
     SelectProfile,
     SelectColor,

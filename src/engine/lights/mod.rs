@@ -1,3 +1,4 @@
+mod hid_blue_dot;
 mod litboard;
 mod snek;
 
@@ -64,6 +65,7 @@ pub enum DriverKind {
     Off,
     Snek,
     Litboard,
+    HidBlueDot,
 }
 
 impl DriverKind {
@@ -72,6 +74,7 @@ impl DriverKind {
             Self::Off => "None",
             Self::Snek => "Snek",
             Self::Litboard => "Litboard",
+            Self::HidBlueDot => "HidBlueDot",
         }
     }
 }
@@ -98,6 +101,47 @@ impl FromStr for DriverKind {
             "lit" | "litboard" | "win32serial" | "sextetserial" | "sextetstream" => {
                 Ok(Self::Litboard)
             }
+            "hidbluedot" | "bluedot" => Ok(Self::HidBlueDot),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GameplayPadLightMode {
+    #[default]
+    Input,
+    Chart,
+}
+
+impl GameplayPadLightMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Input => "Input",
+            Self::Chart => "Chart",
+        }
+    }
+}
+
+impl std::fmt::Display for GameplayPadLightMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for GameplayPadLightMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "input" | "buttons" | "press" | "pressed" => Ok(Self::Input),
+            "chart" | "notes" | "notedata" | "arrows" => Ok(Self::Chart),
             _ => Err(()),
         }
     }
@@ -246,6 +290,7 @@ pub struct Manager {
     worker: Option<Worker>,
     driver_kind: DriverKind,
     litboard_port: String,
+    gameplay_pad_lights: GameplayPadLightMode,
     mode: Mode,
     joined: [bool; PLAYER_COUNT],
     hide: [HideFlags; PLAYER_COUNT],
@@ -261,6 +306,7 @@ impl Manager {
             worker: Worker::new(kind, litboard_port),
             driver_kind: kind,
             litboard_port: litboard_port.to_owned(),
+            gameplay_pad_lights: GameplayPadLightMode::Input,
             mode: Mode::Attract,
             joined: [false; PLAYER_COUNT],
             hide: [HideFlags::default(); PLAYER_COUNT],
@@ -287,6 +333,10 @@ impl Manager {
 
     pub fn set_mode(&mut self, mode: Mode) {
         self.mode = mode;
+    }
+
+    pub fn set_gameplay_pad_lights(&mut self, mode: GameplayPadLightMode) {
+        self.gameplay_pad_lights = mode;
     }
 
     pub fn set_joined(&mut self, joined: [bool; PLAYER_COUNT]) {
@@ -370,14 +420,11 @@ impl Manager {
                 state.set_cabinet(light, true);
             }
         }
+        if self.gameplay_pad_lights != GameplayPadLightMode::Chart {
+            return;
+        }
         for player in [Player::P1, Player::P2] {
-            for button in [
-                ButtonLight::Left,
-                ButtonLight::Down,
-                ButtonLight::Up,
-                ButtonLight::Right,
-                ButtonLight::Start,
-            ] {
+            for button in DIRECTION_BUTTONS {
                 if self.button_blink[player.ix()][button.ix()] > 0.0 {
                     state.set_button(player, button, true);
                 }
@@ -410,6 +457,8 @@ impl Manager {
     }
 
     fn apply_physical_buttons(&self, state: &mut State) {
+        let chart_pad_lights =
+            self.mode == Mode::Gameplay && self.gameplay_pad_lights == GameplayPadLightMode::Chart;
         for player in [Player::P1, Player::P2] {
             for button in [
                 ButtonLight::Left,
@@ -418,6 +467,9 @@ impl Manager {
                 ButtonLight::Right,
                 ButtonLight::Start,
             ] {
+                if chart_pad_lights && button != ButtonLight::Start {
+                    continue;
+                }
                 if self.button_pressed[player.ix()][button.ix()] {
                     state.set_button(player, button, true);
                 }
@@ -512,6 +564,7 @@ fn run_worker(kind: DriverKind, litboard_port: String, rx: Receiver<Command>) {
 enum Driver {
     Snek(snek::Driver),
     Litboard(litboard::Driver),
+    HidBlueDot(hid_blue_dot::Driver),
 }
 
 impl Driver {
@@ -520,6 +573,7 @@ impl Driver {
             DriverKind::Off => None,
             DriverKind::Snek => Some(Self::Snek(snek::Driver::new())),
             DriverKind::Litboard => Some(Self::Litboard(litboard::Driver::new(litboard_port))),
+            DriverKind::HidBlueDot => Some(Self::HidBlueDot(hid_blue_dot::Driver::new())),
         }
     }
 
@@ -527,6 +581,7 @@ impl Driver {
         match self {
             Self::Snek(driver) => driver.set(state),
             Self::Litboard(driver) => driver.set(state),
+            Self::HidBlueDot(driver) => driver.set(state),
         }
     }
 }
@@ -534,6 +589,16 @@ impl Driver {
 pub fn parse_driver_or_default(raw: &str, default: DriverKind) -> DriverKind {
     DriverKind::from_str(raw).unwrap_or_else(|_| {
         warn!("Ignoring unknown LightsDriver value '{raw}'");
+        default
+    })
+}
+
+pub fn parse_gameplay_pad_lights_or_default(
+    raw: &str,
+    default: GameplayPadLightMode,
+) -> GameplayPadLightMode {
+    GameplayPadLightMode::from_str(raw).unwrap_or_else(|_| {
+        warn!("Ignoring unknown GameplayPadLights value '{raw}'");
         default
     })
 }
@@ -555,6 +620,23 @@ mod tests {
         assert_eq!(
             DriverKind::from_str("Win32Serial").unwrap(),
             DriverKind::Litboard
+        );
+        assert_eq!(
+            DriverKind::from_str("HidBlueDot").unwrap(),
+            DriverKind::HidBlueDot
+        );
+    }
+
+    #[test]
+    fn parses_gameplay_pad_light_modes() {
+        assert_eq!(GameplayPadLightMode::default().as_str(), "Input");
+        assert_eq!(
+            GameplayPadLightMode::from_str("Input").unwrap(),
+            GameplayPadLightMode::Input
+        );
+        assert_eq!(
+            GameplayPadLightMode::from_str("Chart").unwrap(),
+            GameplayPadLightMode::Chart
         );
     }
 
@@ -583,5 +665,22 @@ mod tests {
         lights.set_joined([true, false]);
         let hidden = lights.build_state(0.0);
         assert!(!hidden.cabinet(CabinetLight::MarqueeUpperLeft));
+    }
+
+    #[test]
+    fn gameplay_pad_lights_use_selected_source() {
+        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        lights.set_mode(Mode::Gameplay);
+        lights.set_button_pressed(Player::P1, ButtonLight::Left, true);
+        lights.blink_button(Player::P1, ButtonLight::Right);
+
+        let input = lights.build_state(0.0);
+        assert!(input.button(Player::P1, ButtonLight::Left));
+        assert!(!input.button(Player::P1, ButtonLight::Right));
+
+        lights.set_gameplay_pad_lights(GameplayPadLightMode::Chart);
+        let chart = lights.build_state(0.0);
+        assert!(!chart.button(Player::P1, ButtonLight::Left));
+        assert!(chart.button(Player::P1, ButtonLight::Right));
     }
 }

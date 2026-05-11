@@ -481,6 +481,15 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "LightsDriver")
         .map(|v| crate::engine::lights::parse_driver_or_default(&v, default.lights_driver))
         .unwrap_or(default.lights_driver);
+    cfg.lights_gameplay_pad_lights = conf
+        .get("Options", "GameplayPadLights")
+        .map(|v| {
+            crate::engine::lights::parse_gameplay_pad_lights_or_default(
+                &v,
+                default.lights_gameplay_pad_lights,
+            )
+        })
+        .unwrap_or(default.lights_gameplay_pad_lights);
     cfg.lights_com_port = conf
         .get("Options", "LightsComPort")
         .map(|v| crate::engine::lights::SerialPortName::parse(&v, default.lights_com_port))

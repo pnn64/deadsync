@@ -63,6 +63,7 @@ pub enum ItemId {
 
     // Lights Options submenu
     LightsDriver,
+    LightsGameplayPadLights,
 
     // Machine Options submenu
     MchSelectProfile,
@@ -293,6 +294,7 @@ pub const ITEMS: &[Item] = &[
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsHelp", "LightsOptionsHelp")),
             HelpEntry::Bullet(lookup_key("OptionsLights", "Driver")),
+            HelpEntry::Bullet(lookup_key("OptionsLights", "GameplayPadLights")),
         ],
     },
     Item {

@@ -167,6 +167,9 @@ fn blink_note_lights(
     if let Some(cabinet) = cabinet_light_for_col(local_col) {
         lights.blink_cabinet(cabinet);
     }
+    if let Some((player, button)) = pad_light_for_col(state, column) {
+        lights.blink_button(player, button);
+    }
 }
 
 fn physical_light_col(state: &crate::game::gameplay::State, column: usize) -> Option<usize> {
@@ -186,6 +189,43 @@ const fn cabinet_light_for_col(local_col: usize) -> Option<CabinetLight> {
         1 => Some(CabinetLight::MarqueeUpperRight),
         2 => Some(CabinetLight::MarqueeLowerLeft),
         3 => Some(CabinetLight::MarqueeLowerRight),
+        _ => None,
+    }
+}
+
+fn pad_light_for_col(
+    state: &crate::game::gameplay::State,
+    column: usize,
+) -> Option<(LightPlayer, ButtonLight)> {
+    if state.cols_per_player == 0 {
+        return None;
+    }
+    let local = column % state.cols_per_player;
+    let (player, local_col) = if state.cols_per_player >= 8 && state.num_players == 1 {
+        let player = if local < 4 {
+            LightPlayer::P1
+        } else {
+            LightPlayer::P2
+        };
+        (player, local % 4)
+    } else {
+        let player_ix = column / state.cols_per_player;
+        let player = match player_ix {
+            0 => LightPlayer::P1,
+            1 => LightPlayer::P2,
+            _ => return None,
+        };
+        (player, local)
+    };
+    button_light_for_col(local_col).map(|button| (player, button))
+}
+
+const fn button_light_for_col(local_col: usize) -> Option<ButtonLight> {
+    match local_col {
+        0 => Some(ButtonLight::Left),
+        1 => Some(ButtonLight::Down),
+        2 => Some(ButtonLight::Up),
+        3 => Some(ButtonLight::Right),
         _ => None,
     }
 }
@@ -2998,6 +3038,8 @@ impl App {
         let config = config::get();
         self.lights
             .set_driver(config.lights_driver, config.lights_com_port.as_str());
+        self.lights
+            .set_gameplay_pad_lights(config.lights_gameplay_pad_lights);
         let screen = self.state.screens.current_screen;
         self.lights.set_mode(light_mode_for_screen(screen));
         self.lights.set_joined([

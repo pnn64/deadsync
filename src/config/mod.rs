@@ -52,7 +52,7 @@ use self::runtime::{
 use self::store::{normalize_machine_default_noteskin, save_without_keymaps};
 use crate::engine::gfx::{BackendType, PresentModePolicy};
 use crate::engine::input::WindowsPadBackend;
-use crate::engine::lights::{DriverKind as LightsDriverKind, SerialPortName};
+use crate::engine::lights::{DriverKind as LightsDriverKind, GameplayPadLightMode, SerialPortName};
 use crate::engine::logging;
 use log::{info, warn};
 use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
@@ -267,6 +267,8 @@ pub struct Config {
     pub use_fsrs: bool,
     /// Native cabinet/pad light output driver.
     pub lights_driver: LightsDriverKind,
+    /// Source for gameplay arrow pad lights.
+    pub lights_gameplay_pad_lights: GameplayPadLightMode,
     /// Serial port used by the Litboard/SextetStream lights driver.
     pub lights_com_port: SerialPortName,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
@@ -394,6 +396,7 @@ impl Default for Config {
             three_key_navigation: false,
             use_fsrs: false,
             lights_driver: LightsDriverKind::Off,
+            lights_gameplay_pad_lights: GameplayPadLightMode::Input,
             lights_com_port: SerialPortName::default(),
             only_dedicated_menu_buttons: false,
         }

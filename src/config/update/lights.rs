@@ -10,3 +10,14 @@ pub fn update_lights_driver(driver: LightsDriverKind) {
     }
     save_without_keymaps();
 }
+
+pub fn update_lights_gameplay_pad_lights(mode: GameplayPadLightMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.lights_gameplay_pad_lights == mode {
+            return;
+        }
+        cfg.lights_gameplay_pad_lights = mode;
+    }
+    save_without_keymaps();
+}
