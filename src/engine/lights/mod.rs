@@ -1,6 +1,7 @@
 mod hid_blue_dot;
 mod litboard;
 mod snek;
+mod stac2;
 
 use log::warn;
 use std::str::FromStr;
@@ -67,6 +68,7 @@ pub enum DriverKind {
     Snek,
     Litboard,
     HidBlueDot,
+    Stac2,
 }
 
 impl DriverKind {
@@ -76,6 +78,7 @@ impl DriverKind {
             Self::Snek => "Snek",
             Self::Litboard => "Litboard",
             Self::HidBlueDot => "HidBlueDot",
+            Self::Stac2 => "STAC2",
         }
     }
 }
@@ -103,6 +106,7 @@ impl FromStr for DriverKind {
                 Ok(Self::Litboard)
             }
             "hidbluedot" | "bluedot" => Ok(Self::HidBlueDot),
+            "stac2" | "stacv2" | "stac2hid" | "icedragonstac2" => Ok(Self::Stac2),
             _ => Err(()),
         }
     }
@@ -648,6 +652,7 @@ enum Driver {
     Snek(snek::Driver),
     Litboard(litboard::Driver),
     HidBlueDot(hid_blue_dot::Driver),
+    Stac2(stac2::Driver),
 }
 
 impl Driver {
@@ -657,6 +662,7 @@ impl Driver {
             DriverKind::Snek => Some(Self::Snek(snek::Driver::new())),
             DriverKind::Litboard => Some(Self::Litboard(litboard::Driver::new(litboard_port))),
             DriverKind::HidBlueDot => Some(Self::HidBlueDot(hid_blue_dot::Driver::new())),
+            DriverKind::Stac2 => Some(Self::Stac2(stac2::Driver::new())),
         }
     }
 
@@ -665,6 +671,7 @@ impl Driver {
             Self::Snek(driver) => driver.set(state),
             Self::Litboard(driver) => driver.set(state),
             Self::HidBlueDot(driver) => driver.set(state),
+            Self::Stac2(driver) => driver.set(state),
         }
     }
 }
@@ -708,6 +715,7 @@ mod tests {
             DriverKind::from_str("HidBlueDot").unwrap(),
             DriverKind::HidBlueDot
         );
+        assert_eq!(DriverKind::from_str("stac2").unwrap(), DriverKind::Stac2);
     }
 
     #[test]
