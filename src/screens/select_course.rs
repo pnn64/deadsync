@@ -194,7 +194,6 @@ struct CourseRatingMeta {
 
 struct InitData {
     all_entries: Vec<MusicWheelEntry>,
-    pack_course_counts: HashMap<String, usize>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
 }
@@ -240,7 +239,6 @@ pub struct State {
     pub session_elapsed: f32,
 
     all_entries: Vec<MusicWheelEntry>,
-    pack_course_counts: HashMap<String, usize>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
     course_text_color_overrides: HashMap<usize, [f32; 4]>,
     bg: visual_style_bg::State,
@@ -1012,7 +1010,6 @@ fn build_init_data() -> InitData {
 
     InitData {
         all_entries,
-        pack_course_counts: HashMap::new(),
         course_meta_by_path,
         course_text_color_overrides,
     }
@@ -1195,7 +1192,6 @@ pub fn init() -> State {
         current_banner_key: "banner1.png".to_string(),
         session_elapsed: 0.0,
         all_entries: init.all_entries,
-        pack_course_counts: init.pack_course_counts,
         course_meta_by_path: init.course_meta_by_path,
         course_text_color_overrides: init.course_text_color_overrides,
         bg: visual_style_bg::State::new(),
@@ -2455,7 +2451,6 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         position_offset_from_selection: state.wheel_offset_from_selection,
         selection_animation_timer: state.selection_animation_timer,
         selection_animation_beat,
-        pack_song_counts: &state.pack_course_counts,
         color_pack_headers: true,
         preferred_difficulty_index: [0, 0],
         selected_steps_index: [0, 0],

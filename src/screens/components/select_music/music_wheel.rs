@@ -334,7 +334,6 @@ pub struct MusicWheelParams<'a> {
     pub position_offset_from_selection: f32,
     pub selection_animation_timer: f32,
     pub selection_animation_beat: f32,
-    pub pack_song_counts: &'a HashMap<String, usize>,
     pub color_pack_headers: bool,
     pub preferred_difficulty_index: [usize; profile::PLAYER_SLOTS],
     pub selected_steps_index: [usize; profile::PLAYER_SLOTS],
@@ -479,6 +478,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                 MusicWheelEntry::PackHeader {
                     name,
                     original_index,
+                    song_count,
                     ..
                 } => {
                     let bg_col = col_pack_header_box();
@@ -530,12 +530,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             z(53)
                         ));
                     }
-                    if let Some(count) = p.pack_song_counts.get(name.as_str())
-                        && *count > 0
-                    {
+                    if *song_count > 0 {
                         actors.push(act!(text:
                             font("miso"):
-                            settext(cached_pack_count_text(*count)):
+                            settext(cached_pack_count_text(*song_count)):
                             align(1.0, 0.5):
                             xy(highlight_left_world + pack_count_x_local, y_center_item):
                             zoom(0.75):

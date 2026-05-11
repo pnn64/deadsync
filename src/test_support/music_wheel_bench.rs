@@ -13,7 +13,6 @@ pub const SCENARIO_NAME: &str = "music-wheel";
 
 pub struct MusicWheelBenchFixture {
     entries: Vec<MusicWheelEntry>,
-    pack_song_counts: HashMap<String, usize>,
     song_text_color_overrides: HashMap<usize, [f32; 4]>,
     song_has_edit_ptrs: HashSet<usize>,
     selected_index: usize,
@@ -32,7 +31,6 @@ impl MusicWheelBenchFixture {
             position_offset_from_selection: self.position_offset_from_selection,
             selection_animation_timer: self.selection_animation_timer,
             selection_animation_beat: self.selection_animation_beat,
-            pack_song_counts: &self.pack_song_counts,
             color_pack_headers: true,
             preferred_difficulty_index: [self.preferred_difficulty_index; 2],
             selected_steps_index: [self.selected_steps_index; 2],
@@ -54,7 +52,6 @@ impl MusicWheelBenchFixture {
 
 pub fn fixture() -> MusicWheelBenchFixture {
     let mut entries = Vec::with_capacity(36);
-    let mut pack_song_counts = HashMap::with_capacity(4);
     let mut song_text_color_overrides = HashMap::with_capacity(10);
     let mut song_has_edit_ptrs = HashSet::with_capacity(12);
     let pack_names = ["Stamina Lab", "Tech Alley", "Groove Works", "Night Shift"];
@@ -64,8 +61,8 @@ pub fn fixture() -> MusicWheelBenchFixture {
             name: (*pack_name).to_string(),
             original_index: pack_idx,
             banner_path: None,
+            song_count: 7,
         });
-        pack_song_counts.insert((*pack_name).to_string(), 7);
 
         for song_idx in 0..7 {
             let song = bench_song(pack_idx, song_idx);
@@ -86,7 +83,6 @@ pub fn fixture() -> MusicWheelBenchFixture {
 
     MusicWheelBenchFixture {
         entries,
-        pack_song_counts,
         song_text_color_overrides,
         song_has_edit_ptrs,
         selected_index: 11,

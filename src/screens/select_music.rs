@@ -917,6 +917,7 @@ pub enum MusicWheelEntry {
         name: String,
         original_index: usize,
         banner_path: Option<PathBuf>,
+        song_count: usize,
     },
     Song(Arc<SongData>),
 }
@@ -941,11 +942,10 @@ struct PlaylistMenuEntry {
     bottom_label: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct PlaylistCacheEntry {
     menu_entry: PlaylistMenuEntry,
     entries: Vec<MusicWheelEntry>,
-    pack_song_counts: HashMap<String, usize>,
 }
 
 struct PlaylistSongLookup {
@@ -1075,25 +1075,6 @@ pub struct State {
     cached_standard_chart_ixs: [Option<usize>; NUM_STANDARD_DIFFICULTIES],
     pack_total_seconds_by_index: Vec<f64>,
     song_has_edit_ptrs: HashSet<usize>,
-    pub pack_song_counts: HashMap<String, usize>,
-    group_pack_song_counts: HashMap<String, usize>,
-    title_pack_song_counts: HashMap<String, usize>,
-    artist_pack_song_counts: HashMap<String, usize>,
-    genre_pack_song_counts: HashMap<String, usize>,
-    bpm_pack_song_counts: HashMap<String, usize>,
-    length_pack_song_counts: HashMap<String, usize>,
-    meter_pack_song_counts: HashMap<String, usize>,
-    popularity_pack_song_counts: HashMap<String, usize>,
-    recent_pack_song_counts: HashMap<String, usize>,
-    top_grades_pack_song_counts: HashMap<String, usize>,
-    popularity_p1_pack_song_counts: HashMap<String, usize>,
-    popularity_p2_pack_song_counts: HashMap<String, usize>,
-    recent_p1_pack_song_counts: HashMap<String, usize>,
-    recent_p2_pack_song_counts: HashMap<String, usize>,
-    top_grades_p1_pack_song_counts: HashMap<String, usize>,
-    top_grades_p2_pack_song_counts: HashMap<String, usize>,
-    favorites_pack_song_counts: HashMap<String, usize>,
-    playlist_pack_song_counts: HashMap<String, usize>,
     pack_sync_prefs: HashMap<String, rssp::pack::SyncPref>,
     new_pack_names: HashSet<String>,
 }
@@ -1605,9 +1586,20 @@ fn first_header_name(entries: &[MusicWheelEntry]) -> Option<String> {
     })
 }
 
-fn build_title_grouped_entries(
-    grouped_entries: &[MusicWheelEntry],
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+fn write_header_song_count(
+    entries: &mut [MusicWheelEntry],
+    header_index: Option<usize>,
+    count: usize,
+) {
+    let Some(header_index) = header_index else {
+        return;
+    };
+    if let MusicWheelEntry::PackHeader { song_count, .. } = &mut entries[header_index] {
+        *song_count = count;
+    }
+}
+
+fn build_title_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
     let mut songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -1626,26 +1618,32 @@ fn build_title_grouped_entries(
     });
 
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(32);
     let mut current_group: Option<String> = None;
+    let mut current_header_index: Option<usize> = None;
+    let mut current_count = 0usize;
     let mut header_idx = 0usize;
 
     for song in songs {
         let group_name = title_group_label(song.as_ref());
         if current_group.as_deref() != Some(group_name.as_str()) {
+            write_header_song_count(&mut entries, current_header_index, current_count);
             entries.push(MusicWheelEntry::PackHeader {
                 name: group_name.clone(),
                 original_index: header_idx,
                 banner_path: None,
+                song_count: 0,
             });
+            current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
+            current_count = 0;
             header_idx += 1;
         }
-        *counts.entry(group_name).or_insert(0) += 1;
+        current_count += 1;
         entries.push(MusicWheelEntry::Song(song));
     }
 
-    (entries, counts)
+    write_header_song_count(&mut entries, current_header_index, current_count);
+    entries
 }
 
 #[inline(always)]
@@ -1656,9 +1654,7 @@ fn song_artist_sort_key(song: &SongData) -> (String, String) {
     )
 }
 
-fn build_artist_grouped_entries(
-    grouped_entries: &[MusicWheelEntry],
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+fn build_artist_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
     let mut songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -1676,31 +1672,35 @@ fn build_artist_grouped_entries(
     });
 
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(32);
     let mut current_group: Option<String> = None;
+    let mut current_header_index: Option<usize> = None;
+    let mut current_count = 0usize;
     let mut header_idx = 0usize;
 
     for song in songs {
         let (_, group_name) = alpha_group_meta_from_text(&song.artist);
         if current_group.as_deref() != Some(group_name.as_str()) {
+            write_header_song_count(&mut entries, current_header_index, current_count);
             entries.push(MusicWheelEntry::PackHeader {
                 name: group_name.clone(),
                 original_index: header_idx,
                 banner_path: None,
+                song_count: 0,
             });
+            current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
+            current_count = 0;
             header_idx += 1;
         }
-        *counts.entry(group_name).or_insert(0) += 1;
+        current_count += 1;
         entries.push(MusicWheelEntry::Song(song));
     }
 
-    (entries, counts)
+    write_header_song_count(&mut entries, current_header_index, current_count);
+    entries
 }
 
-fn build_genre_grouped_entries(
-    grouped_entries: &[MusicWheelEntry],
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+fn build_genre_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
     let mut songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -1719,8 +1719,9 @@ fn build_genre_grouped_entries(
     });
 
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(32);
     let mut current_group: Option<String> = None;
+    let mut current_header_index: Option<usize> = None;
+    let mut current_count = 0usize;
     let mut header_idx = 0usize;
 
     for song in songs {
@@ -1730,19 +1731,24 @@ fn build_genre_grouped_entries(
             song.genre.clone()
         };
         if current_group.as_deref() != Some(group_name.as_str()) {
+            write_header_song_count(&mut entries, current_header_index, current_count);
             entries.push(MusicWheelEntry::PackHeader {
                 name: group_name.clone(),
                 original_index: header_idx,
                 banner_path: None,
+                song_count: 0,
             });
+            current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
+            current_count = 0;
             header_idx += 1;
         }
-        *counts.entry(group_name).or_insert(0) += 1;
+        current_count += 1;
         entries.push(MusicWheelEntry::Song(song));
     }
 
-    (entries, counts)
+    write_header_song_count(&mut entries, current_header_index, current_count);
+    entries
 }
 
 #[inline(always)]
@@ -1860,9 +1866,7 @@ fn bpm_bucket_name(max_bpm: i32) -> String {
     format!("{lo:03}-{hi:03}")
 }
 
-fn build_bpm_grouped_entries(
-    grouped_entries: &[MusicWheelEntry],
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+fn build_bpm_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
     let mut songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -1879,26 +1883,32 @@ fn build_bpm_grouped_entries(
     });
 
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(32);
     let mut current_group: Option<String> = None;
+    let mut current_header_index: Option<usize> = None;
+    let mut current_count = 0usize;
     let mut header_idx = 0usize;
 
     for song in songs {
         let group_name = bpm_bucket_name(song_bpm_for_sort(song.as_ref()));
         if current_group.as_deref() != Some(group_name.as_str()) {
+            write_header_song_count(&mut entries, current_header_index, current_count);
             entries.push(MusicWheelEntry::PackHeader {
                 name: group_name.clone(),
                 original_index: header_idx,
                 banner_path: None,
+                song_count: 0,
             });
+            current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
+            current_count = 0;
             header_idx += 1;
         }
-        *counts.entry(group_name).or_insert(0) += 1;
+        current_count += 1;
         entries.push(MusicWheelEntry::Song(song));
     }
 
-    (entries, counts)
+    write_header_song_count(&mut entries, current_header_index, current_count);
+    entries
 }
 
 #[inline(always)]
@@ -1920,9 +1930,7 @@ fn length_bucket_name(length_seconds: i32) -> String {
     format!("{}-{}", format_chart_length(lo), format_chart_length(hi))
 }
 
-fn build_length_grouped_entries(
-    grouped_entries: &[MusicWheelEntry],
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+fn build_length_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
     let mut songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -1939,26 +1947,32 @@ fn build_length_grouped_entries(
     });
 
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(32);
     let mut current_group: Option<String> = None;
+    let mut current_header_index: Option<usize> = None;
+    let mut current_count = 0usize;
     let mut header_idx = 0usize;
 
     for song in songs {
         let group_name = length_bucket_name(song_length_for_sort(song.as_ref()));
         if current_group.as_deref() != Some(group_name.as_str()) {
+            write_header_song_count(&mut entries, current_header_index, current_count);
             entries.push(MusicWheelEntry::PackHeader {
                 name: group_name.clone(),
                 original_index: header_idx,
                 banner_path: None,
+                song_count: 0,
             });
+            current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
+            current_count = 0;
             header_idx += 1;
         }
-        *counts.entry(group_name).or_insert(0) += 1;
+        current_count += 1;
         entries.push(MusicWheelEntry::Song(song));
     }
 
-    (entries, counts)
+    write_header_song_count(&mut entries, current_header_index, current_count);
+    entries
 }
 
 fn song_meter_for_sort(song: &SongData, chart_type: &str) -> Option<u32> {
@@ -1987,7 +2001,7 @@ fn meter_bucket_name(meter: Option<u32>) -> String {
 fn build_meter_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
     chart_type: &str,
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+) -> Vec<MusicWheelEntry> {
     let mut songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -2004,31 +2018,35 @@ fn build_meter_grouped_entries(
     });
 
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(32);
     let mut current_group: Option<String> = None;
+    let mut current_header_index: Option<usize> = None;
+    let mut current_count = 0usize;
     let mut header_idx = 0usize;
 
     for song in songs {
         let group_name = meter_bucket_name(song_meter_for_sort(song.as_ref(), chart_type));
         if current_group.as_deref() != Some(group_name.as_str()) {
+            write_header_song_count(&mut entries, current_header_index, current_count);
             entries.push(MusicWheelEntry::PackHeader {
                 name: group_name.clone(),
                 original_index: header_idx,
                 banner_path: None,
+                song_count: 0,
             });
+            current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
+            current_count = 0;
             header_idx += 1;
         }
-        *counts.entry(group_name).or_insert(0) += 1;
+        current_count += 1;
         entries.push(MusicWheelEntry::Song(song));
     }
 
-    (entries, counts)
+    write_header_song_count(&mut entries, current_header_index, current_count);
+    entries
 }
 
-fn build_popularity_grouped_entries(
-    grouped_entries: &[MusicWheelEntry],
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+fn build_popularity_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
     let songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -2072,6 +2090,7 @@ fn build_popularity_grouped_entries(
         name: tr("SelectMusic", "MostPopular").to_string(),
         original_index: 0,
         banner_path: None,
+        song_count: count,
     });
     entries.extend(
         ranked
@@ -2079,14 +2098,10 @@ fn build_popularity_grouped_entries(
             .map(|(song, _)| MusicWheelEntry::Song(song)),
     );
 
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
-    counts.insert(tr("SelectMusic", "MostPopular").to_string(), count);
-    (entries, counts)
+    entries
 }
 
-fn build_recent_grouped_entries(
-    grouped_entries: &[MusicWheelEntry],
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+fn build_recent_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
     let songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -2131,6 +2146,7 @@ fn build_recent_grouped_entries(
         name: tr("SelectMusic", "RecentlyPlayed").to_string(),
         original_index: 0,
         banner_path: None,
+        song_count: count,
     });
     entries.extend(
         recent_song_ixs
@@ -2138,15 +2154,13 @@ fn build_recent_grouped_entries(
             .map(|song_ix| MusicWheelEntry::Song(songs[song_ix].clone())),
     );
 
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
-    counts.insert(tr("SelectMusic", "RecentlyPlayed").to_string(), count);
-    (entries, counts)
+    entries
 }
 
 fn build_top_grades_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
     chart_type: &str,
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+) -> Vec<MusicWheelEntry> {
     let songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -2190,8 +2204,9 @@ fn build_top_grades_grouped_entries(
 
     let mut entries: Vec<MusicWheelEntry> =
         Vec::with_capacity(graded_songs.len().saturating_add(20));
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(20);
     let mut current_group: Option<String> = None;
+    let mut current_header_index: Option<usize> = None;
+    let mut current_count = 0usize;
     let mut header_idx = 0usize;
 
     for (song, best) in graded_songs {
@@ -2200,19 +2215,24 @@ fn build_top_grades_grouped_entries(
             None => tr("SelectMusic", "Unplayed").to_string(),
         };
         if current_group.as_deref() != Some(group_name.as_str()) {
+            write_header_song_count(&mut entries, current_header_index, current_count);
             entries.push(MusicWheelEntry::PackHeader {
                 name: group_name.clone(),
                 original_index: header_idx,
                 banner_path: None,
+                song_count: 0,
             });
+            current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
+            current_count = 0;
             header_idx += 1;
         }
-        *counts.entry(group_name).or_insert(0) += 1;
+        current_count += 1;
         entries.push(MusicWheelEntry::Song(song));
     }
 
-    (entries, counts)
+    write_header_song_count(&mut entries, current_header_index, current_count);
+    entries
 }
 
 fn grade_sort_order(grade: scores::Grade) -> u8 {
@@ -2266,7 +2286,7 @@ fn grade_group_name(grade: scores::Grade) -> String {
 fn build_popularity_grouped_entries_for_profile(
     grouped_entries: &[MusicWheelEntry],
     profile_id: &str,
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+) -> Vec<MusicWheelEntry> {
     let songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -2308,9 +2328,10 @@ fn build_popularity_grouped_entries_for_profile(
     let header = format!("{} (Profile)", tr("SelectMusic", "MostPopular"));
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
     entries.push(MusicWheelEntry::PackHeader {
-        name: header.clone(),
+        name: header,
         original_index: 0,
         banner_path: None,
+        song_count: count,
     });
     entries.extend(
         ranked
@@ -2318,15 +2339,13 @@ fn build_popularity_grouped_entries_for_profile(
             .map(|(song, _)| MusicWheelEntry::Song(song)),
     );
 
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
-    counts.insert(header, count);
-    (entries, counts)
+    entries
 }
 
 fn build_recent_grouped_entries_for_profile(
     grouped_entries: &[MusicWheelEntry],
     profile_id: &str,
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+) -> Vec<MusicWheelEntry> {
     let songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -2369,9 +2388,10 @@ fn build_recent_grouped_entries_for_profile(
     let header = format!("{} (Profile)", tr("SelectMusic", "RecentlyPlayed"));
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
     entries.push(MusicWheelEntry::PackHeader {
-        name: header.clone(),
+        name: header,
         original_index: 0,
         banner_path: None,
+        song_count: count,
     });
     entries.extend(
         recent_song_ixs
@@ -2379,16 +2399,14 @@ fn build_recent_grouped_entries_for_profile(
             .map(|song_ix| MusicWheelEntry::Song(songs[song_ix].clone())),
     );
 
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
-    counts.insert(header, count);
-    (entries, counts)
+    entries
 }
 
 fn build_top_grades_grouped_entries_for_side(
     grouped_entries: &[MusicWheelEntry],
     chart_type: &str,
     side: profile::PlayerSide,
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+) -> Vec<MusicWheelEntry> {
     let songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -2430,8 +2448,9 @@ fn build_top_grades_grouped_entries_for_side(
 
     let mut entries: Vec<MusicWheelEntry> =
         Vec::with_capacity(graded_songs.len().saturating_add(20));
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(20);
     let mut current_group: Option<String> = None;
+    let mut current_header_index: Option<usize> = None;
+    let mut current_count = 0usize;
     let mut header_idx = 0usize;
 
     for (song, best) in graded_songs {
@@ -2440,24 +2459,27 @@ fn build_top_grades_grouped_entries_for_side(
             None => tr("SelectMusic", "Unplayed").to_string(),
         };
         if current_group.as_deref() != Some(group_name.as_str()) {
+            write_header_song_count(&mut entries, current_header_index, current_count);
             entries.push(MusicWheelEntry::PackHeader {
                 name: group_name.clone(),
                 original_index: header_idx,
                 banner_path: None,
+                song_count: 0,
             });
+            current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
+            current_count = 0;
             header_idx += 1;
         }
-        *counts.entry(group_name).or_insert(0) += 1;
+        current_count += 1;
         entries.push(MusicWheelEntry::Song(song));
     }
 
-    (entries, counts)
+    write_header_song_count(&mut entries, current_header_index, current_count);
+    entries
 }
 
-fn build_favorites_grouped_entries(
-    grouped_entries: &[MusicWheelEntry],
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+fn build_favorites_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
     let songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
@@ -2489,12 +2511,11 @@ fn build_favorites_grouped_entries(
         name: tr("SelectMusic", "Favorites").to_string(),
         original_index: 0,
         banner_path: None,
+        song_count: count,
     });
     entries.extend(favorite_songs.into_iter().map(MusicWheelEntry::Song));
 
-    let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
-    counts.insert(tr("SelectMusic", "Favorites").to_string(), count);
-    (entries, counts)
+    entries
 }
 
 #[inline(always)]
@@ -2663,7 +2684,6 @@ fn find_playlist_song(lookup: &PlaylistSongLookup, line: &str) -> Option<Arc<Son
 
 fn push_playlist_section(
     entries: &mut Vec<MusicWheelEntry>,
-    counts: &mut HashMap<String, usize>,
     section_name: Option<&str>,
     fallback_name: &str,
     songs: &mut Vec<Arc<SongData>>,
@@ -2677,11 +2697,12 @@ fn push_playlist_section(
         .filter(|name| !name.is_empty())
         .unwrap_or(fallback_name)
         .to_string();
-    counts.insert(name.clone(), songs.len());
+    let song_count = songs.len();
     entries.push(MusicWheelEntry::PackHeader {
         name,
         original_index: *header_idx,
         banner_path: None,
+        song_count,
     });
     *header_idx += 1;
     entries.extend(songs.drain(..).map(MusicWheelEntry::Song));
@@ -2691,9 +2712,8 @@ fn build_playlist_entries_from_text(
     text: &str,
     fallback_name: &str,
     lookup: &PlaylistSongLookup,
-) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+) -> Vec<MusicWheelEntry> {
     let mut entries = Vec::new();
-    let mut counts = HashMap::new();
     let mut current_section: Option<String> = None;
     let mut current_songs = Vec::new();
     let mut header_idx = 0usize;
@@ -2706,7 +2726,6 @@ fn build_playlist_entries_from_text(
         if let Some(section_name) = line.strip_prefix("---") {
             push_playlist_section(
                 &mut entries,
-                &mut counts,
                 current_section.as_deref(),
                 fallback_name,
                 &mut current_songs,
@@ -2733,13 +2752,12 @@ fn build_playlist_entries_from_text(
 
     push_playlist_section(
         &mut entries,
-        &mut counts,
         current_section.as_deref(),
         fallback_name,
         &mut current_songs,
         &mut header_idx,
     );
-    (entries, counts)
+    entries
 }
 
 fn build_playlist_library(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistCacheEntry> {
@@ -2757,8 +2775,7 @@ fn build_playlist_library(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistCa
             }
             match fs::read_to_string(path.as_path()) {
                 Ok(text) => {
-                    let (entries, pack_song_counts) =
-                        build_playlist_entries_from_text(&text, &bottom_label, &lookup);
+                    let entries = build_playlist_entries_from_text(&text, &bottom_label, &lookup);
                     playlists.push(PlaylistCacheEntry {
                         menu_entry: PlaylistMenuEntry {
                             id: path_ci_key(path.as_path()),
@@ -2766,7 +2783,6 @@ fn build_playlist_library(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistCa
                             bottom_label,
                         },
                         entries,
-                        pack_song_counts,
                     });
                 }
                 Err(err) => warn!("Failed to read playlist '{}': {err}", path.display()),
@@ -2802,8 +2818,7 @@ fn build_playlist_library(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistCa
             };
             match fs::read_to_string(path.as_path()) {
                 Ok(text) => {
-                    let (entries, pack_song_counts) =
-                        build_playlist_entries_from_text(&text, &bottom_label, &lookup);
+                    let entries = build_playlist_entries_from_text(&text, &bottom_label, &lookup);
                     playlists.push(PlaylistCacheEntry {
                         menu_entry: PlaylistMenuEntry {
                             id: path_ci_key(path.as_path()),
@@ -2811,7 +2826,6 @@ fn build_playlist_library(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistCa
                             bottom_label,
                         },
                         entries,
-                        pack_song_counts,
                     });
                 }
                 Err(err) => warn!("Failed to read playlist '{}': {err}", path.display()),
@@ -2837,17 +2851,11 @@ fn playlist_cache_entry<'a>(state: &'a State, id: &str) -> Option<&'a PlaylistCa
 }
 
 fn refresh_recent_cache(state: &mut State) {
-    let (recent_entries, recent_pack_song_counts) =
-        build_recent_grouped_entries(&state.group_entries);
-    state.recent_entries = recent_entries;
-    state.recent_pack_song_counts = recent_pack_song_counts;
+    state.recent_entries = build_recent_grouped_entries(&state.group_entries);
 }
 
 fn refresh_popularity_cache(state: &mut State) {
-    let (popularity_entries, popularity_pack_song_counts) =
-        build_popularity_grouped_entries(&state.group_entries);
-    state.popularity_entries = popularity_entries;
-    state.popularity_pack_song_counts = popularity_pack_song_counts;
+    state.popularity_entries = build_popularity_grouped_entries(&state.group_entries);
 }
 
 fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
@@ -2861,7 +2869,6 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
     match sort_mode {
         WheelSortMode::Group => {
             state.all_entries = state.group_entries.clone();
-            state.pack_song_counts = state.group_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.group_entries, song))
@@ -2869,7 +2876,6 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::Title => {
             state.all_entries = state.title_entries.clone();
-            state.pack_song_counts = state.title_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.title_entries, song))
@@ -2877,7 +2883,6 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::Artist => {
             state.all_entries = state.artist_entries.clone();
-            state.pack_song_counts = state.artist_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.artist_entries, song))
@@ -2885,7 +2890,6 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::Genre => {
             state.all_entries = state.genre_entries.clone();
-            state.pack_song_counts = state.genre_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.genre_entries, song))
@@ -2893,7 +2897,6 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::Bpm => {
             state.all_entries = state.bpm_entries.clone();
-            state.pack_song_counts = state.bpm_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.bpm_entries, song))
@@ -2901,7 +2904,6 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::Length => {
             state.all_entries = state.length_entries.clone();
-            state.pack_song_counts = state.length_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.length_entries, song))
@@ -2909,7 +2911,6 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::Meter => {
             state.all_entries = state.meter_entries.clone();
-            state.pack_song_counts = state.meter_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.meter_entries, song))
@@ -2917,7 +2918,6 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::Popularity => {
             state.all_entries = state.popularity_entries.clone();
-            state.pack_song_counts = state.popularity_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.popularity_entries, song))
@@ -2925,7 +2925,6 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::Recent => {
             state.all_entries = state.recent_entries.clone();
-            state.pack_song_counts = state.recent_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.recent_entries, song))
@@ -2933,7 +2932,6 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::TopGrades => {
             state.all_entries = state.top_grades_entries.clone();
-            state.pack_song_counts = state.top_grades_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.top_grades_entries, song))
@@ -2941,27 +2939,22 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::PopularityP1 => {
             state.all_entries = state.popularity_p1_entries.clone();
-            state.pack_song_counts = state.popularity_p1_pack_song_counts.clone();
             state.expanded_pack_name = first_header_name(&state.popularity_p1_entries);
         }
         WheelSortMode::PopularityP2 => {
             state.all_entries = state.popularity_p2_entries.clone();
-            state.pack_song_counts = state.popularity_p2_pack_song_counts.clone();
             state.expanded_pack_name = first_header_name(&state.popularity_p2_entries);
         }
         WheelSortMode::RecentP1 => {
             state.all_entries = state.recent_p1_entries.clone();
-            state.pack_song_counts = state.recent_p1_pack_song_counts.clone();
             state.expanded_pack_name = first_header_name(&state.recent_p1_entries);
         }
         WheelSortMode::RecentP2 => {
             state.all_entries = state.recent_p2_entries.clone();
-            state.pack_song_counts = state.recent_p2_pack_song_counts.clone();
             state.expanded_pack_name = first_header_name(&state.recent_p2_entries);
         }
         WheelSortMode::TopGradesP1 => {
             state.all_entries = state.top_grades_p1_entries.clone();
-            state.pack_song_counts = state.top_grades_p1_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.top_grades_p1_entries, song))
@@ -2969,7 +2962,6 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::TopGradesP2 => {
             state.all_entries = state.top_grades_p2_entries.clone();
-            state.pack_song_counts = state.top_grades_p2_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.top_grades_p2_entries, song))
@@ -2977,24 +2969,22 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
         }
         WheelSortMode::Favorites => {
             // Rebuild favorites on the fly so toggling is immediately reflected
-            let (fav_entries, fav_counts) = build_favorites_grouped_entries(&state.group_entries);
-            state.favorites_entries = fav_entries;
-            state.favorites_pack_song_counts = fav_counts;
+            state.favorites_entries = build_favorites_grouped_entries(&state.group_entries);
             state.all_entries = state.favorites_entries.clone();
-            state.pack_song_counts = state.favorites_pack_song_counts.clone();
             state.expanded_pack_name = selected_song
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.favorites_entries, song))
                 .or_else(|| first_header_name(&state.favorites_entries));
         }
         WheelSortMode::Playlist => {
-            if let Some(active_id) = state.active_playlist_id.as_deref()
-                && let Some(playlist) = playlist_cache_entry(state, active_id).cloned()
+            if let Some(playlist_entries) = state
+                .active_playlist_id
+                .as_deref()
+                .and_then(|active_id| playlist_cache_entry(state, active_id))
+                .map(|playlist| playlist.entries.clone())
             {
-                state.playlist_entries = playlist.entries.clone();
-                state.playlist_pack_song_counts = playlist.pack_song_counts.clone();
+                state.playlist_entries = playlist_entries;
                 state.all_entries = state.playlist_entries.clone();
-                state.pack_song_counts = state.playlist_pack_song_counts.clone();
                 state.expanded_pack_name = selected_song
                     .as_ref()
                     .and_then(|song| group_name_for_song(&state.playlist_entries, song))
@@ -3003,7 +2993,6 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
                 effective_sort_mode = WheelSortMode::Group;
                 state.active_playlist_id = None;
                 state.all_entries = state.group_entries.clone();
-                state.pack_song_counts = state.group_pack_song_counts.clone();
                 state.expanded_pack_name = selected_song
                     .as_ref()
                     .and_then(|song| group_name_for_song(&state.group_entries, song))
@@ -3059,7 +3048,7 @@ pub fn init() -> State {
     let joined_profile_ids = joined_local_profile_ids();
 
     let mut all_entries = Vec::with_capacity(total_packs.saturating_add(total_songs));
-    let mut pack_song_counts = HashMap::with_capacity(total_packs);
+    let mut scanned_pack_names = Vec::with_capacity(total_packs);
     let mut pack_sync_prefs = HashMap::with_capacity(total_packs);
     let mut pack_total_seconds_by_index = vec![0.0_f64; total_packs];
     let mut song_has_edit_ptrs = HashSet::with_capacity(total_songs);
@@ -3084,6 +3073,7 @@ pub fn init() -> State {
     // Filter and build entries in one pass
     for (i, pack) in song_cache.iter().enumerate() {
         let mut pack_name: Option<String> = None;
+        let mut pack_header_index: Option<usize> = None;
         let mut pack_song_count = 0usize;
         let mut pack_total_seconds = 0.0_f64;
         let mut pack_has_cached_score = false;
@@ -3118,7 +3108,9 @@ pub fn init() -> State {
                     name: name.clone(),
                     original_index: i,
                     banner_path: pack.banner_path.clone(),
+                    song_count: 0,
                 });
+                pack_header_index = Some(all_entries.len() - 1);
                 name
             });
 
@@ -3146,68 +3138,63 @@ pub fn init() -> State {
         }
 
         if let Some(name) = pack_name {
+            write_header_song_count(&mut all_entries, pack_header_index, pack_song_count);
             // Compute cache for get_actors (HOT PATH OPTIMIZATION)
             if pack_has_cached_score {
                 scored_pack_names.insert(name.clone());
             }
             pack_sync_prefs.insert(name.clone(), pack.sync_pref);
-            pack_song_counts.insert(name, pack_song_count);
+            scanned_pack_names.push(name);
             pack_total_seconds_by_index[i] = pack_total_seconds;
         }
     }
 
-    let (title_entries, title_pack_song_counts) = build_title_grouped_entries(&all_entries);
-    let (artist_entries, artist_pack_song_counts) = build_artist_grouped_entries(&all_entries);
-    let (genre_entries, genre_pack_song_counts) = build_genre_grouped_entries(&all_entries);
-    let (bpm_entries, bpm_pack_song_counts) = build_bpm_grouped_entries(&all_entries);
-    let (length_entries, length_pack_song_counts) = build_length_grouped_entries(&all_entries);
-    let (meter_entries, meter_pack_song_counts) =
-        build_meter_grouped_entries(&all_entries, target_chart_type);
-    let (popularity_entries, popularity_pack_song_counts) =
-        build_popularity_grouped_entries(&all_entries);
-    let (recent_entries, recent_pack_song_counts) = build_recent_grouped_entries(&all_entries);
-    let (top_grades_entries, top_grades_pack_song_counts) =
-        build_top_grades_grouped_entries(&all_entries, target_chart_type);
+    let title_entries = build_title_grouped_entries(&all_entries);
+    let artist_entries = build_artist_grouped_entries(&all_entries);
+    let genre_entries = build_genre_grouped_entries(&all_entries);
+    let bpm_entries = build_bpm_grouped_entries(&all_entries);
+    let length_entries = build_length_grouped_entries(&all_entries);
+    let meter_entries = build_meter_grouped_entries(&all_entries, target_chart_type);
+    let popularity_entries = build_popularity_grouped_entries(&all_entries);
+    let recent_entries = build_recent_grouped_entries(&all_entries);
+    let top_grades_entries = build_top_grades_grouped_entries(&all_entries, target_chart_type);
 
     // Per-player sort entries (keyed by profile ID for popularity/recent, by side for grades)
     let p1_profile_id = profile::active_local_profile_id_for_side(profile::PlayerSide::P1);
     let p2_profile_id = profile::active_local_profile_id_for_side(profile::PlayerSide::P2);
 
-    let (popularity_p1_entries, popularity_p1_pack_song_counts) = p1_profile_id
+    let popularity_p1_entries = p1_profile_id
         .as_deref()
         .map(|id| build_popularity_grouped_entries_for_profile(&all_entries, id))
         .unwrap_or_default();
-    let (popularity_p2_entries, popularity_p2_pack_song_counts) = p2_profile_id
+    let popularity_p2_entries = p2_profile_id
         .as_deref()
         .map(|id| build_popularity_grouped_entries_for_profile(&all_entries, id))
         .unwrap_or_default();
-    let (recent_p1_entries, recent_p1_pack_song_counts) = p1_profile_id
+    let recent_p1_entries = p1_profile_id
         .as_deref()
         .map(|id| build_recent_grouped_entries_for_profile(&all_entries, id))
         .unwrap_or_default();
-    let (recent_p2_entries, recent_p2_pack_song_counts) = p2_profile_id
+    let recent_p2_entries = p2_profile_id
         .as_deref()
         .map(|id| build_recent_grouped_entries_for_profile(&all_entries, id))
         .unwrap_or_default();
-    let (top_grades_p1_entries, top_grades_p1_pack_song_counts) =
-        build_top_grades_grouped_entries_for_side(
-            &all_entries,
-            target_chart_type,
-            profile::PlayerSide::P1,
-        );
-    let (top_grades_p2_entries, top_grades_p2_pack_song_counts) =
-        build_top_grades_grouped_entries_for_side(
-            &all_entries,
-            target_chart_type,
-            profile::PlayerSide::P2,
-        );
-    let (favorites_entries, favorites_pack_song_counts) =
-        build_favorites_grouped_entries(&all_entries);
+    let top_grades_p1_entries = build_top_grades_grouped_entries_for_side(
+        &all_entries,
+        target_chart_type,
+        profile::PlayerSide::P1,
+    );
+    let top_grades_p2_entries = build_top_grades_grouped_entries_for_side(
+        &all_entries,
+        target_chart_type,
+        profile::PlayerSide::P2,
+    );
+    let favorites_entries = build_favorites_grouped_entries(&all_entries);
     let playlist_library = build_playlist_library(&all_entries);
 
     let new_pack_names = sync_new_pack_names(
         &joined_profile_ids,
-        pack_song_counts.keys().cloned().collect(),
+        scanned_pack_names,
         &scored_pack_names,
         new_pack_mode,
     );
@@ -3329,25 +3316,6 @@ pub fn init() -> State {
         cached_standard_chart_ixs: [None; NUM_STANDARD_DIFFICULTIES],
         pack_total_seconds_by_index,
         song_has_edit_ptrs,
-        pack_song_counts: pack_song_counts.clone(),
-        group_pack_song_counts: pack_song_counts,
-        title_pack_song_counts,
-        artist_pack_song_counts,
-        genre_pack_song_counts,
-        bpm_pack_song_counts,
-        length_pack_song_counts,
-        meter_pack_song_counts,
-        popularity_pack_song_counts,
-        recent_pack_song_counts,
-        top_grades_pack_song_counts,
-        popularity_p1_pack_song_counts,
-        popularity_p2_pack_song_counts,
-        recent_p1_pack_song_counts,
-        recent_p2_pack_song_counts,
-        top_grades_p1_pack_song_counts,
-        top_grades_p2_pack_song_counts,
-        favorites_pack_song_counts,
-        playlist_pack_song_counts: HashMap::new(),
         pack_sync_prefs,
         new_pack_names,
     };
@@ -3540,25 +3508,6 @@ pub fn init_placeholder() -> State {
         cached_standard_chart_ixs: [None; NUM_STANDARD_DIFFICULTIES],
         pack_total_seconds_by_index: Vec::new(),
         song_has_edit_ptrs: HashSet::new(),
-        pack_song_counts: HashMap::new(),
-        group_pack_song_counts: HashMap::new(),
-        title_pack_song_counts: HashMap::new(),
-        artist_pack_song_counts: HashMap::new(),
-        genre_pack_song_counts: HashMap::new(),
-        bpm_pack_song_counts: HashMap::new(),
-        length_pack_song_counts: HashMap::new(),
-        meter_pack_song_counts: HashMap::new(),
-        popularity_pack_song_counts: HashMap::new(),
-        recent_pack_song_counts: HashMap::new(),
-        top_grades_pack_song_counts: HashMap::new(),
-        popularity_p1_pack_song_counts: HashMap::new(),
-        popularity_p2_pack_song_counts: HashMap::new(),
-        recent_p1_pack_song_counts: HashMap::new(),
-        recent_p2_pack_song_counts: HashMap::new(),
-        top_grades_p1_pack_song_counts: HashMap::new(),
-        top_grades_p2_pack_song_counts: HashMap::new(),
-        favorites_pack_song_counts: HashMap::new(),
-        playlist_pack_song_counts: HashMap::new(),
         pack_sync_prefs: HashMap::new(),
         new_pack_names: HashSet::new(),
     }
@@ -3732,9 +3681,7 @@ fn toggle_favorite_for_selected_song(state: &mut State, side: profile::PlayerSid
             chart_for_steps_index(&song, target_chart_type, state.selected_steps_index)
         {
             let is_now_fav = profile::toggle_favorite(side, &chart.short_hash);
-            let (fav_entries, fav_counts) = build_favorites_grouped_entries(&state.group_entries);
-            state.favorites_entries = fav_entries;
-            state.favorites_pack_song_counts = fav_counts;
+            state.favorites_entries = build_favorites_grouped_entries(&state.group_entries);
             audio::play_sfx(if is_now_fav {
                 "assets/sounds/start.ogg"
             } else {
@@ -7327,10 +7274,7 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
                 {
                     let is_now_fav = profile::toggle_favorite(side, &chart.short_hash);
                     // Rebuild favorites entries so the favorites sort stays current
-                    let (fav_entries, fav_counts) =
-                        build_favorites_grouped_entries(&state.group_entries);
-                    state.favorites_entries = fav_entries;
-                    state.favorites_pack_song_counts = fav_counts;
+                    state.favorites_entries = build_favorites_grouped_entries(&state.group_entries);
                     audio::play_sfx(if is_now_fav {
                         "assets/sounds/start.ogg"
                     } else {
@@ -9866,7 +9810,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         position_offset_from_selection: state.wheel_offset_from_selection,
         selection_animation_timer: state.selection_animation_timer,
         selection_animation_beat,
-        pack_song_counts: &state.pack_song_counts, // O(1) Lookup
         color_pack_headers: state.sort_mode == WheelSortMode::Group,
         preferred_difficulty_index: [
             state.preferred_difficulty_index,
@@ -10566,6 +10509,7 @@ mod tests {
                 name: "Pack A".to_string(),
                 original_index: 0,
                 banner_path: None,
+                song_count: 2,
             },
             super::MusicWheelEntry::Song(test_song("Song A1")),
             super::MusicWheelEntry::Song(test_song("Song A2")),
@@ -10573,6 +10517,7 @@ mod tests {
                 name: "Pack B".to_string(),
                 original_index: 1,
                 banner_path: None,
+                song_count: 1,
             },
             super::MusicWheelEntry::Song(test_song("Song B1")),
         ]
@@ -10584,6 +10529,7 @@ mod tests {
                 name: "Pack A".to_string(),
                 original_index: 0,
                 banner_path: None,
+                song_count: 2,
             },
             super::MusicWheelEntry::Song(test_song_in_pack("Pack A", "Song A1", "Alpha")),
             super::MusicWheelEntry::Song(test_song_in_pack("Pack A", "Song A2", "Beta")),
@@ -10591,6 +10537,7 @@ mod tests {
                 name: "Pack B".to_string(),
                 original_index: 1,
                 banner_path: None,
+                song_count: 1,
             },
             super::MusicWheelEntry::Song(test_song_in_pack("Pack B", "Song B1", "Gamma")),
         ]
@@ -10840,17 +10787,15 @@ mod tests {
     fn playlist_parser_supports_sections_and_pack_wildcards() {
         let entries = test_playlist_entries();
         let lookup = build_playlist_song_lookup(&entries);
-        let (playlist_entries, counts) = build_playlist_entries_from_text(
+        let playlist_entries = build_playlist_entries_from_text(
             "---Warmup\nPack A/*\n---Finale\nPack B/Song B1\n",
             "Night Shift",
             &lookup,
         );
 
-        assert_eq!(counts.get("Warmup"), Some(&2));
-        assert_eq!(counts.get("Finale"), Some(&1));
         assert!(matches!(
             playlist_entries[0],
-            super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Warmup"
+            super::MusicWheelEntry::PackHeader { ref name, song_count: 2, .. } if name == "Warmup"
         ));
         assert!(matches!(
             playlist_entries[1],
@@ -10862,7 +10807,7 @@ mod tests {
         ));
         assert!(matches!(
             playlist_entries[3],
-            super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Finale"
+            super::MusicWheelEntry::PackHeader { ref name, song_count: 1, .. } if name == "Finale"
         ));
         assert!(matches!(
             playlist_entries[4],
@@ -10874,16 +10819,15 @@ mod tests {
     fn playlist_parser_uses_playlist_name_when_no_header_exists() {
         let entries = test_playlist_entries();
         let lookup = build_playlist_song_lookup(&entries);
-        let (playlist_entries, counts) = build_playlist_entries_from_text(
+        let playlist_entries = build_playlist_entries_from_text(
             "Pack A/Song A2\nPack B/Song B1\n",
             "Night Shift",
             &lookup,
         );
 
-        assert_eq!(counts.get("Night Shift"), Some(&2));
         assert!(matches!(
             playlist_entries[0],
-            super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Night Shift"
+            super::MusicWheelEntry::PackHeader { ref name, song_count: 2, .. } if name == "Night Shift"
         ));
         assert!(matches!(
             playlist_entries[1],
