@@ -60,8 +60,7 @@ const STR_REF_CACHE_LIMIT: usize = 4096;
 // keep both lines within that same visual footprint.
 const ITL_SCORE_ZOOM: f32 = 0.2;
 const ITL_POINTS_SCORE_ZOOM: f32 = 0.13;
-const PACK_SYNC_NULL_COLOR: [f32; 4] = color::rgba_hex("#45b8a6");
-const PACK_SYNC_ITG_COLOR: [f32; 4] = color::rgba_hex("#d49a36");
+const SONG_NULL_SYNC_RIGHT_EDGE: [f32; 4] = [80.0 / 255.0, 20.0 / 255.0, 27.0 / 255.0, 1.0];
 
 thread_local! {
     static ITL_RANK_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
@@ -173,24 +172,25 @@ fn cached_pack_count_text(count: usize) -> Arc<str> {
 }
 
 #[inline(always)]
-const fn pack_sync_style_text(style: DefaultSyncOffset) -> &'static str {
-    match style {
-        DefaultSyncOffset::Null => "NULL",
-        DefaultSyncOffset::Itg => "ITG",
-    }
-}
-
-#[inline(always)]
-const fn pack_sync_style_color(style: DefaultSyncOffset) -> [f32; 4] {
-    match style {
-        DefaultSyncOffset::Null => PACK_SYNC_NULL_COLOR,
-        DefaultSyncOffset::Itg => PACK_SYNC_ITG_COLOR,
-    }
-}
-
-#[inline(always)]
 fn cached_str_ref(text: &str) -> Arc<str> {
     cached_shared_str(&STR_REF_CACHE, text, STR_REF_CACHE_LIMIT)
+}
+
+fn song_pack_sync_style(
+    song: &SongData,
+    prefs: Option<&HashMap<String, rssp::pack::SyncPref>>,
+    default: DefaultSyncOffset,
+) -> Option<DefaultSyncOffset> {
+    let prefs = prefs?;
+    let pref = song
+        .simfile_path
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.file_name())
+        .and_then(|s| s.to_str())
+        .and_then(|group| prefs.get(group).copied())
+        .unwrap_or(rssp::pack::SyncPref::Default);
+    Some(crate::game::song::pack_sync_pref_default(pref, default))
 }
 
 #[inline(always)]
@@ -481,14 +481,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     original_index,
                     ..
                 } => {
-                    let sync_style = p.pack_sync_prefs.and_then(|prefs| {
-                        prefs.get(name.as_str()).map(|pref| {
-                            crate::game::song::pack_sync_pref_default(*pref, p.default_sync_offset)
-                        })
-                    });
-                    let bg_col = sync_style.map_or_else(col_pack_header_box, |style| {
-                        lerp_color(col_pack_header_box(), pack_sync_style_color(style), 0.22)
-                    });
+                    let bg_col = col_pack_header_box();
                     let header_color = if p.color_pack_headers {
                         color::simply_love_rgba(*original_index as i32)
                     } else {
@@ -511,26 +504,6 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         diffuse(bg_col[0], bg_col[1], bg_col[2], bg_col[3]):
                         z(52)
                     ));
-                    if let Some(style) = sync_style {
-                        let tag_col = pack_sync_style_color(style);
-                        actors.push(act!(quad:
-                            align(0.0, 0.5):
-                            xy(highlight_left_world, y_center_item):
-                            zoomto(widescale(4.0, 5.0), item_h_colored):
-                            diffuse(tag_col[0], tag_col[1], tag_col[2], 1.0):
-                            z(53)
-                        ));
-                        actors.push(act!(text:
-                            font("miso"):
-                            settext(pack_sync_style_text(style)):
-                            align(0.0, 0.5):
-                            xy(highlight_left_world + widescale(8.0, 10.0), y_center_item):
-                            maxwidth(widescale(42.0, 52.0)):
-                            zoom(0.45):
-                            diffuse(tag_col[0], tag_col[1], tag_col[2], 1.0):
-                            z(54)
-                        ));
-                    }
                     actors.push(act!(text:
                         font("miso"):
                         settext(cached_str_ref(name.as_str())):
@@ -639,6 +612,18 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         diffuse(song_box_color[0], song_box_color[1], song_box_color[2], song_box_color[3]):
                         z(52)
                     ));
+                    if song_pack_sync_style(info, p.pack_sync_prefs, p.default_sync_offset)
+                        == Some(DefaultSyncOffset::Null)
+                    {
+                        actors.push(act!(quad:
+                            align(0.0, 0.5):
+                            xy(highlight_left_world, y_center_item):
+                            zoomto(highlight_w, item_h_colored):
+                            diffuse(SONG_NULL_SYNC_RIGHT_EDGE[0], SONG_NULL_SYNC_RIGHT_EDGE[1], SONG_NULL_SYNC_RIGHT_EDGE[2], SONG_NULL_SYNC_RIGHT_EDGE[3]):
+                            fadeleft(1.0):
+                            z(52)
+                        ));
+                    }
 
                     let subtitle_y_offset = if has_subtitle { -line_gap_units } else { 0.0 };
                     actors.push(act!(text:

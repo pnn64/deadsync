@@ -9454,7 +9454,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         itl_wheel_mode: cfg.select_music_itl_wheel_mode,
         allow_online_fetch: allow_gs_fetch,
         new_pack_names: (state.sort_mode == WheelSortMode::Group).then_some(&state.new_pack_names),
-        pack_sync_prefs: (cfg.machine_pack_ini_offsets && state.sort_mode == WheelSortMode::Group)
+        pack_sync_prefs: cfg
+            .machine_pack_ini_offsets
             .then_some(&state.pack_sync_prefs),
         default_sync_offset: cfg.machine_default_sync_offset,
     }));
