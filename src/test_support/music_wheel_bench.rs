@@ -20,7 +20,6 @@ pub struct MusicWheelBenchFixture {
     selection_animation_timer: f32,
     selection_animation_beat: f32,
     preferred_difficulty_index: usize,
-    selected_steps_index: usize,
 }
 
 impl MusicWheelBenchFixture {
@@ -32,8 +31,8 @@ impl MusicWheelBenchFixture {
             selection_animation_timer: self.selection_animation_timer,
             selection_animation_beat: self.selection_animation_beat,
             color_pack_headers: true,
+            selected_charts: [None, None],
             preferred_difficulty_index: [self.preferred_difficulty_index; 2],
-            selected_steps_index: [self.selected_steps_index; 2],
             song_box_color: None,
             song_text_color: Some([0.95, 0.96, 1.0, 1.0]),
             song_text_color_overrides: Some(&self.song_text_color_overrides),
@@ -90,7 +89,6 @@ pub fn fixture() -> MusicWheelBenchFixture {
         selection_animation_timer: 1.375,
         selection_animation_beat: 37.5,
         preferred_difficulty_index: 3,
-        selected_steps_index: 4,
     }
 }
 

@@ -293,9 +293,11 @@ fn chart_for_preferred_or_nearest_standard<'a>(
     }
 
     let preferred = preferred_index.min(num_standard - 1);
-    if let Some(chart) =
-        crate::screens::select_music::chart_for_steps_index(song, chart_type, preferred)
-    {
+    let preferred_name = color::FILE_DIFFICULTY_NAMES[preferred];
+    if let Some(chart) = song.charts.iter().find(|chart| {
+        chart.chart_type.eq_ignore_ascii_case(chart_type)
+            && chart.difficulty.eq_ignore_ascii_case(preferred_name)
+    }) {
         return Some(chart);
     }
 
@@ -335,8 +337,8 @@ pub struct MusicWheelParams<'a> {
     pub selection_animation_timer: f32,
     pub selection_animation_beat: f32,
     pub color_pack_headers: bool,
+    pub selected_charts: [Option<&'a ChartData>; profile::PLAYER_SLOTS],
     pub preferred_difficulty_index: [usize; profile::PLAYER_SLOTS],
-    pub selected_steps_index: [usize; profile::PLAYER_SLOTS],
     pub song_box_color: Option<[f32; 4]>,
     pub song_text_color: Option<[f32; 4]>,
     pub song_text_color_overrides: Option<&'a HashMap<usize, [f32; 4]>>,
@@ -412,16 +414,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let itl_wheel_mode = itl_wheel_mode_for_sides(p.itl_wheel_mode, joined_sides);
     let is_double_style = target_chart_type.to_ascii_lowercase().contains("double");
     let selected_chart_hash_for_side = |side: profile::PlayerSide| {
-        let Some(MusicWheelEntry::Song(info)) = p.entries.get(p.selected_index) else {
+        let Some(MusicWheelEntry::Song(_)) = p.entries.get(p.selected_index) else {
             return None;
         };
         let ix = steps_slot_for_side(play_style, side);
-        crate::screens::select_music::chart_for_steps_index(
-            info,
-            target_chart_type,
-            p.selected_steps_index[ix],
-        )
-        .map(|chart| chart.short_hash.as_str())
+        p.selected_charts[ix].map(|chart| chart.short_hash.as_str())
     };
     if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall) && p.allow_online_fetch {
         for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
@@ -564,11 +561,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     let wheel_chart_for_side = |side: profile::PlayerSide| {
                         let ix = steps_slot_for_side(play_style, side);
                         if is_selected_slot {
-                            crate::screens::select_music::chart_for_steps_index(
-                                info,
-                                target_chart_type,
-                                p.selected_steps_index[ix],
-                            )
+                            p.selected_charts[ix]
                         } else {
                             chart_for_preferred_or_nearest_standard(
                                 info,

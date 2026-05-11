@@ -8852,19 +8852,45 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
     let target_chart_type = play_style.chart_type();
     let selected_entry = state.entries.get(state.selected_index);
     let selected_song = match selected_entry {
-        Some(MusicWheelEntry::Song(song)) => Some(song.as_ref()),
+        Some(MusicWheelEntry::Song(song)) => Some(song),
         _ => None,
     };
-    let immediate_chart_p1 = selected_song.and_then(|song| {
-        chart_for_steps_index(song, target_chart_type, state.selected_steps_index)
-    });
-    let immediate_chart_p2 = if is_versus {
+    let selected_chart_cache_matches = match selected_song {
+        Some(song) => {
+            state
+                .cached_song
+                .as_ref()
+                .is_some_and(|cached_song| Arc::ptr_eq(cached_song, song))
+                && state.cached_chart_type == target_chart_type
+        }
+        None => false,
+    };
+    let immediate_chart_p1 = if selected_chart_cache_matches {
         selected_song.and_then(|song| {
-            chart_for_steps_index(song, target_chart_type, state.p2_selected_steps_index)
+            state
+                .cached_chart_ix_p1
+                .and_then(|chart_ix| song.charts.get(chart_ix))
         })
     } else {
         None
     };
+    let immediate_chart_p2 = if is_versus {
+        if selected_chart_cache_matches {
+            selected_song.and_then(|song| {
+                state
+                    .cached_chart_ix_p2
+                    .and_then(|chart_ix| song.charts.get(chart_ix))
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let selected_chart_hashes = [
+        immediate_chart_p1.map(|chart| chart.short_hash.as_str()),
+        immediate_chart_p2.map(|chart| chart.short_hash.as_str()),
+    ];
     let allow_gs_fetch = allow_gs_fetch_for_selection(state);
     let cfg = config::get();
 
@@ -9809,11 +9835,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         selection_animation_timer: state.selection_animation_timer,
         selection_animation_beat,
         color_pack_headers: state.sort_mode == WheelSortMode::Group,
+        selected_charts: [immediate_chart_p1, immediate_chart_p2],
         preferred_difficulty_index: [
             state.preferred_difficulty_index,
             state.p2_preferred_difficulty_index,
         ],
-        selected_steps_index: [state.selected_steps_index, state.p2_selected_steps_index],
         song_box_color: None,
         song_text_color: None,
         song_text_color_overrides: None,
@@ -9852,21 +9878,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
             cfg.select_music_scorebox_placement == SelectMusicScoreboxPlacement::StepPane;
         let mut push_scorebox =
             |side: profile::PlayerSide, center_x: f32, center_y: f32, zoom: f32, z_boost: i16| {
-                let steps_idx = steps_index_for_side(
-                    play_style,
-                    side,
-                    state.selected_steps_index,
-                    state.p2_selected_steps_index,
-                );
                 let chart_hash =
                     if allow_gs_fetch && cfg.show_select_music_scorebox && scorebox_cycle_enabled {
-                        match selected_entry {
-                            Some(MusicWheelEntry::Song(song)) => {
-                                chart_for_steps_index(song, target_chart_type, steps_idx)
-                                    .map(|c| c.short_hash.as_str())
-                            }
-                            _ => None,
-                        }
+                        let slot = match (play_style, side) {
+                            (profile::PlayStyle::Versus, profile::PlayerSide::P2) => 1,
+                            _ => 0,
+                        };
+                        selected_chart_hashes[slot]
                     } else {
                         None
                     };
