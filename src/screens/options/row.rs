@@ -73,6 +73,8 @@ pub enum SubRowId {
     VisualStyle,
     Replays,
     PerPlayerGlobalOffsets,
+    PackIniOffsets,
+    DefaultSyncOffset,
     KeyboardFeatures,
     VideoBgs,
     // Gameplay Options

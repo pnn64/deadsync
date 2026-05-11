@@ -593,6 +593,18 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
+        SubRowId::PackIniOffsets,
+        usize::from(cfg.machine_pack_ini_offsets),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
+        SubRowId::DefaultSyncOffset,
+        cfg.machine_default_sync_offset.choice_index(),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
         SubRowId::KeyboardFeatures,
         usize::from(cfg.keyboard_features),
     );

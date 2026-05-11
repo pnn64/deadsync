@@ -2469,6 +2469,8 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
         allow_online_fetch: false,
         new_pack_names: None,
+        pack_sync_prefs: None,
+        default_sync_offset: crate::config::DefaultSyncOffset::Null,
     }));
 
     if !matches!(selected_entry, Some(MusicWheelEntry::Song(_))) {

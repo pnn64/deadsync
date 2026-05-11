@@ -46,6 +46,8 @@ impl MusicWheelBenchFixture {
             itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
             allow_online_fetch: false,
             new_pack_names: None,
+            pack_sync_prefs: None,
+            default_sync_offset: crate::config::DefaultSyncOffset::Null,
         })
     }
 }

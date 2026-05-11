@@ -78,6 +78,15 @@ fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Theme", "MachineAllowPerPlayerGlobalOffsets")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.machine_allow_per_player_global_offsets);
+    cfg.machine_pack_ini_offsets = conf
+        .get("Theme", "MachinePackIniOffsets")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.machine_pack_ini_offsets);
+    cfg.machine_default_sync_offset = conf
+        .get("Theme", "MachineDefaultSyncOffset")
+        .or_else(|| conf.get("Theme", "DefaultSyncOffset"))
+        .and_then(|v| DefaultSyncOffset::from_str(&v).ok())
+        .unwrap_or(default.machine_default_sync_offset);
     cfg.machine_preferred_style = conf
         .get("Theme", "MachinePreferredStyle")
         .and_then(|v| MachinePreferredPlayStyle::from_str(&v).ok())

@@ -267,6 +267,28 @@ pub fn update_machine_allow_per_player_global_offsets(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_machine_pack_ini_offsets(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.machine_pack_ini_offsets == enabled {
+            return;
+        }
+        cfg.machine_pack_ini_offsets = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_machine_default_sync_offset(offset: DefaultSyncOffset) {
+    {
+        let mut cfg = lock_config();
+        if cfg.machine_default_sync_offset == offset {
+            return;
+        }
+        cfg.machine_default_sync_offset = offset;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_enable_groovestats(enabled: bool) {
     {
         let mut cfg = lock_config();

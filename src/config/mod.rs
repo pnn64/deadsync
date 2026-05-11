@@ -28,8 +28,8 @@ pub use self::runtime::{
 };
 pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
-    AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, GameFlag, LanguageFlag,
-    LogLevel, MACHINE_FONT_VARIANTS, MachineFont, MachinePreferredPlayMode,
+    AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
+    LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineFont, MachinePreferredPlayMode,
     MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SyncGraphMode,
     ThemeFlag, VisualStyle, auto_screenshot_bit, auto_screenshot_mask_from_str,
@@ -188,6 +188,10 @@ pub struct Config {
     pub machine_enable_replays: bool,
     /// Allow players to add a personal timing shift on top of machine global offset.
     pub machine_allow_per_player_global_offsets: bool,
+    /// Apply ITGmania Pack.ini SyncOffset values to gameplay timing.
+    pub machine_pack_ini_offsets: bool,
+    /// Sync offset to assume for packs without a Pack.ini SyncOffset value.
+    pub machine_default_sync_offset: DefaultSyncOffset,
     /// Post-session flow from Select Music/Course: show Evaluation Summary.
     pub machine_show_eval_summary: bool,
     /// Post-session flow from Select Music/Course: show Name Entry.
@@ -336,6 +340,8 @@ impl Default for Config {
             machine_font: MachineFont::Wendy,
             machine_enable_replays: true,
             machine_allow_per_player_global_offsets: false,
+            machine_pack_ini_offsets: false,
+            machine_default_sync_offset: DefaultSyncOffset::Null,
             machine_show_eval_summary: true,
             machine_show_name_entry: true,
             machine_show_gameover: true,

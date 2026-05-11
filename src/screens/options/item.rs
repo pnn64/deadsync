@@ -83,6 +83,8 @@ pub enum ItemId {
     MchVisualStyle,
     MchReplays,
     MchPerPlayerGlobalOffsets,
+    MchPackIniOffsets,
+    MchDefaultSyncOffset,
     MchKeyboardFeatures,
     MchVideoBgs,
 
@@ -313,6 +315,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsMachine", "NameEntry")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "GameoverScreen")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "MenuMusic")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "PackIniOffsets")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "KeyboardFeatures")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "VideoBGs")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "WriteCurrentScreen")),

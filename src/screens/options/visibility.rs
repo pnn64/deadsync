@@ -203,6 +203,12 @@ pub(super) fn submenu_visible_row_indices(
             )
             .unwrap_or(1)
                 == 0;
+            let show_default_sync_offset = get_choice_by_id(
+                &state.sub[SubmenuKind::Machine].choice_indices,
+                MACHINE_OPTIONS_ROWS,
+                SubRowId::PackIniOffsets,
+            )
+            .is_some_and(yes_no_from_choice);
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
@@ -211,6 +217,8 @@ pub(super) fn submenu_visible_row_indices(
                     } else if row.id == SubRowId::PreferredStyle && !show_preferred_style {
                         None
                     } else if row.id == SubRowId::PreferredMode && !show_preferred_mode {
+                        None
+                    } else if row.id == SubRowId::DefaultSyncOffset && !show_default_sync_offset {
                         None
                     } else {
                         Some(idx)

@@ -141,6 +141,24 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::PackIniOffsets,
+        label: lookup_key("OptionsMachine", "PackIniOffsets"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
+        id: SubRowId::DefaultSyncOffset,
+        label: lookup_key("OptionsMachine", "DefaultSyncOffset"),
+        choices: &[
+            localized_choice("OptionsMachine", "DefaultSyncOffsetNull"),
+            localized_choice("OptionsMachine", "DefaultSyncOffsetItg"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::KeyboardFeatures,
         label: lookup_key("OptionsMachine", "KeyboardFeatures"),
         choices: &[
@@ -290,6 +308,22 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::MchPackIniOffsets,
+        name: lookup_key("OptionsMachine", "PackIniOffsets"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "PackIniOffsetsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::MchDefaultSyncOffset,
+        name: lookup_key("OptionsMachine", "DefaultSyncOffset"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "DefaultSyncOffsetHelp",
+        ))],
+    },
+    Item {
         id: ItemId::MchKeyboardFeatures,
         name: lookup_key("OptionsMachine", "KeyboardFeatures"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -328,6 +362,11 @@ impl ChoiceEnum for MachinePreferredPlayMode {
 impl ChoiceEnum for MachineFont {
     const ALL: &'static [Self] = &[Self::Wendy, Self::Mega];
     const DEFAULT: Self = Self::Wendy;
+}
+
+impl ChoiceEnum for DefaultSyncOffset {
+    const ALL: &'static [Self] = &[Self::Null, Self::Itg];
+    const DEFAULT: Self = Self::Null;
 }
 
 impl ChoiceEnum for VisualStyle {

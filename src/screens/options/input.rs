@@ -377,6 +377,10 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::PerPlayerGlobalOffsets => {
                 config::update_machine_allow_per_player_global_offsets(enabled)
             }
+            SubRowId::PackIniOffsets => config::update_machine_pack_ini_offsets(enabled),
+            SubRowId::DefaultSyncOffset => config::update_machine_default_sync_offset(
+                DefaultSyncOffset::from_choice(new_index),
+            ),
             SubRowId::KeyboardFeatures => config::update_keyboard_features(enabled),
             SubRowId::VideoBgs => config::update_show_video_backgrounds(enabled),
             SubRowId::WriteCurrentScreen => config::update_write_current_screen(enabled),

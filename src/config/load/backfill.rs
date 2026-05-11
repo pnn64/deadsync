@@ -93,6 +93,8 @@ const THEME_KEYS: &[&str] = &[
     "MachineShowSelectProfile",
     "MachineShowSelectStyle",
     "MachineEnableReplays",
+    "MachinePackIniOffsets",
+    "MachineDefaultSyncOffset",
     "MachinePreferredStyle",
     "MachinePreferredPlayMode",
     "MachineFont",

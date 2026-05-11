@@ -2,10 +2,11 @@ use crate::act;
 use crate::assets::{self, AssetManager, visual_styles};
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::{
-    self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel, MachineFont,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
-    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicWheelStyle, SimpleIni, SyncGraphMode, VisualStyle, dirs,
+    self, BreakdownStyle, DefaultFailType, DefaultSyncOffset, DisplayMode, FullscreenType,
+    LogLevel, MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
+    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SimpleIni, SyncGraphMode, VisualStyle,
+    dirs,
 };
 use crate::engine::audio;
 use crate::engine::display::{self, MonitorSpec};

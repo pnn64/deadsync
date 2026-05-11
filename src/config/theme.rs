@@ -54,6 +54,34 @@ impl FromStr for DefaultFailType {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum DefaultSyncOffset {
+    #[default]
+    Null,
+    Itg,
+}
+
+impl DefaultSyncOffset {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Null => "NULL",
+            Self::Itg => "ITG",
+        }
+    }
+}
+
+impl FromStr for DefaultSyncOffset {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "null" | "none" | "off" => Ok(Self::Null),
+            "itg" => Ok(Self::Itg),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectMusicPatternInfoMode {
     Tech,
@@ -762,5 +790,22 @@ mod tests {
         assert_eq!(MACHINE_FONT_VARIANTS.len(), 2);
         assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Wendy));
         assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Mega));
+    }
+
+    #[test]
+    fn default_sync_offset_defaults_to_null() {
+        assert_eq!(DefaultSyncOffset::default(), DefaultSyncOffset::Null);
+    }
+
+    #[test]
+    fn default_sync_offset_round_trips() {
+        assert_eq!(
+            DefaultSyncOffset::from_str(DefaultSyncOffset::Null.as_str()),
+            Ok(DefaultSyncOffset::Null)
+        );
+        assert_eq!(
+            DefaultSyncOffset::from_str(DefaultSyncOffset::Itg.as_str()),
+            Ok(DefaultSyncOffset::Itg)
+        );
     }
 }

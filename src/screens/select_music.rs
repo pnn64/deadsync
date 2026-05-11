@@ -1072,6 +1072,7 @@ pub struct State {
     top_grades_p2_pack_song_counts: HashMap<String, usize>,
     favorites_pack_song_counts: HashMap<String, usize>,
     playlist_pack_song_counts: HashMap<String, usize>,
+    pack_sync_prefs: HashMap<String, rssp::pack::SyncPref>,
     new_pack_names: HashSet<String>,
 }
 
@@ -3030,12 +3031,14 @@ pub fn init() -> State {
     let target_chart_type = profile::get_session_play_style().chart_type();
     let total_packs = song_cache.len();
     let total_songs: usize = song_cache.iter().map(|p| p.songs.len()).sum();
-    let new_pack_mode = config::get().select_music_new_pack_mode;
+    let cfg = config::get();
+    let new_pack_mode = cfg.select_music_new_pack_mode;
     let clear_new_packs_on_score = new_pack_mode == NewPackMode::HasScore;
     let joined_profile_ids = joined_local_profile_ids();
 
     let mut all_entries = Vec::with_capacity(total_packs.saturating_add(total_songs));
     let mut pack_song_counts = HashMap::with_capacity(total_packs);
+    let mut pack_sync_prefs = HashMap::with_capacity(total_packs);
     let mut pack_total_seconds_by_index = vec![0.0_f64; total_packs];
     let mut song_has_edit_ptrs = HashSet::with_capacity(total_songs);
     let mut scored_pack_names = HashSet::new();
@@ -3125,6 +3128,7 @@ pub fn init() -> State {
             if pack_has_cached_score {
                 scored_pack_names.insert(name.clone());
             }
+            pack_sync_prefs.insert(name.clone(), pack.sync_pref);
             pack_song_counts.insert(name, pack_song_count);
             pack_total_seconds_by_index[i] = pack_total_seconds;
         }
@@ -3322,6 +3326,7 @@ pub fn init() -> State {
         top_grades_p2_pack_song_counts,
         favorites_pack_song_counts,
         playlist_pack_song_counts: HashMap::new(),
+        pack_sync_prefs,
         new_pack_names,
     };
 
@@ -3532,6 +3537,7 @@ pub fn init_placeholder() -> State {
         top_grades_p2_pack_song_counts: HashMap::new(),
         favorites_pack_song_counts: HashMap::new(),
         playlist_pack_song_counts: HashMap::new(),
+        pack_sync_prefs: HashMap::new(),
         new_pack_names: HashSet::new(),
     }
 }
@@ -9448,6 +9454,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         itl_wheel_mode: cfg.select_music_itl_wheel_mode,
         allow_online_fetch: allow_gs_fetch,
         new_pack_names: (state.sort_mode == WheelSortMode::Group).then_some(&state.new_pack_names),
+        pack_sync_prefs: (cfg.machine_pack_ini_offsets && state.sort_mode == WheelSortMode::Group)
+            .then_some(&state.pack_sync_prefs),
+        default_sync_offset: cfg.machine_default_sync_offset,
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());
 

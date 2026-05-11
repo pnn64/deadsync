@@ -342,6 +342,16 @@ fn push_default_theme(content: &mut String, default: &Config) {
         "MachineAllowPerPlayerGlobalOffsets",
         default.machine_allow_per_player_global_offsets,
     );
+    push_bool(
+        content,
+        "MachinePackIniOffsets",
+        default.machine_pack_ini_offsets,
+    );
+    push_line(
+        content,
+        "MachineDefaultSyncOffset",
+        default.machine_default_sync_offset.as_str(),
+    );
     push_line(
         content,
         "MachinePreferredStyle",

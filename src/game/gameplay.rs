@@ -12,7 +12,7 @@ use crate::game::parsing::song_lua::{
     SongLuaCapturedActor, SongLuaNoteHideWindow, SongLuaOverlayActor,
 };
 use crate::game::scores;
-use crate::game::song::SongData;
+use crate::game::song::{self, SongData};
 use crate::game::timing::{
     BeatInfoCache, ROWS_PER_BEAT, TIMING_WINDOW_ADD_S, TimingData, TimingProfile, TimingProfileNs,
 };
@@ -5250,13 +5250,20 @@ pub fn init(
             .unwrap_or("")
             .to_owned(),
     );
-    let pack_banner_path: Option<PathBuf> = if pack_group.is_empty() {
-        None
+    let (pack_banner_path, pack_sync_pref): (Option<PathBuf>, rssp::pack::SyncPref) =
+        if pack_group.is_empty() {
+            (None, rssp::pack::SyncPref::Default)
+        } else {
+            crate::game::song::get_song_cache()
+                .iter()
+                .find(|p| p.group_name == pack_group.as_ref())
+                .map(|p| (p.banner_path.clone(), p.sync_pref))
+                .unwrap_or((None, rssp::pack::SyncPref::Default))
+        };
+    let pack_sync_offset_seconds = if config.machine_pack_ini_offsets {
+        song::pack_sync_pref_offset(pack_sync_pref, config.machine_default_sync_offset)
     } else {
-        crate::game::song::get_song_cache()
-            .iter()
-            .find(|p| p.group_name == pack_group.as_ref())
-            .and_then(|p| p.banner_path.clone())
+        0.0
     };
     let player_global_offset_shift_seconds: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         if !config.machine_allow_per_player_global_offsets || player >= num_players {
@@ -5268,10 +5275,12 @@ pub fn init(
             / 1000.0
     });
     let mut timing_base = gameplay_charts[0].timing.clone();
+    timing_base.shift_song_offset_seconds(pack_sync_offset_seconds);
     timing_base.set_global_offset_seconds(config.global_offset_seconds);
     let timing = Arc::new(timing_base);
     let mut timing_players: [Arc<TimingData>; MAX_PLAYERS] = std::array::from_fn(|player| {
         let mut t = gameplay_charts[player].timing.clone();
+        t.shift_song_offset_seconds(pack_sync_offset_seconds);
         t.set_global_offset_seconds(
             config.global_offset_seconds + player_global_offset_shift_seconds[player],
         );

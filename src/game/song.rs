@@ -3,6 +3,40 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+pub const ITG_SYNC_OFFSET_SECONDS: f32 = -0.009;
+
+#[inline(always)]
+pub const fn default_sync_pref_offset(pref: crate::config::DefaultSyncOffset) -> f32 {
+    match pref {
+        crate::config::DefaultSyncOffset::Null => 0.0,
+        crate::config::DefaultSyncOffset::Itg => ITG_SYNC_OFFSET_SECONDS,
+    }
+}
+
+#[inline(always)]
+pub const fn pack_sync_pref_offset(
+    pref: rssp::pack::SyncPref,
+    default: crate::config::DefaultSyncOffset,
+) -> f32 {
+    match pref {
+        rssp::pack::SyncPref::Default => default_sync_pref_offset(default),
+        rssp::pack::SyncPref::Null => 0.0,
+        rssp::pack::SyncPref::Itg => ITG_SYNC_OFFSET_SECONDS,
+    }
+}
+
+#[inline(always)]
+pub const fn pack_sync_pref_default(
+    pref: rssp::pack::SyncPref,
+    default: crate::config::DefaultSyncOffset,
+) -> crate::config::DefaultSyncOffset {
+    match pref {
+        rssp::pack::SyncPref::Default => default,
+        rssp::pack::SyncPref::Null => crate::config::DefaultSyncOffset::Null,
+        rssp::pack::SyncPref::Itg => crate::config::DefaultSyncOffset::Itg,
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum SongBackgroundChangeTarget {
     File(PathBuf),
@@ -80,7 +114,6 @@ pub struct SongPack {
     pub series: String,
     #[allow(dead_code)]
     pub year: i32,
-    #[allow(dead_code)]
     pub sync_pref: rssp::pack::SyncPref,
     #[allow(dead_code)]
     pub directory: PathBuf,
@@ -324,5 +357,36 @@ impl SongData {
             Some(SongBackgroundChangeTarget::NoSongBg) => None,
             None => self.fallback_background_path(allow_video),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::DefaultSyncOffset;
+    use rssp::pack::SyncPref;
+
+    #[test]
+    fn pack_sync_pref_offset_matches_itg_group_offset() {
+        assert_eq!(
+            pack_sync_pref_offset(SyncPref::Null, DefaultSyncOffset::Itg),
+            0.0
+        );
+        assert_eq!(
+            pack_sync_pref_offset(SyncPref::Itg, DefaultSyncOffset::Null),
+            ITG_SYNC_OFFSET_SECONDS
+        );
+    }
+
+    #[test]
+    fn default_pack_sync_pref_uses_machine_default() {
+        assert_eq!(
+            pack_sync_pref_offset(SyncPref::Default, DefaultSyncOffset::Null),
+            0.0
+        );
+        assert_eq!(
+            pack_sync_pref_offset(SyncPref::Default, DefaultSyncOffset::Itg),
+            ITG_SYNC_OFFSET_SECONDS
+        );
     }
 }
