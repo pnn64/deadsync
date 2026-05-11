@@ -316,6 +316,8 @@ fn push_saved_options(
     );
     push_bool(content, "ThreeKeyNavigation", cfg.three_key_navigation);
     push_bool(content, "UseFSRs", cfg.use_fsrs);
+    push_line(content, "LightsDriver", cfg.lights_driver.as_str());
+    push_line(content, "LightsComPort", cfg.lights_com_port.as_str());
     push_bool(
         content,
         "OnlyDedicatedMenuButtons",

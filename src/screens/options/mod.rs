@@ -13,6 +13,7 @@ use crate::engine::gfx::{BackendType, PresentModePolicy};
 #[cfg(target_os = "windows")]
 use crate::engine::input::WindowsPadBackend;
 use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::lights::DriverKind as LightsDriverKind;
 use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading};
 use crate::game::{course, profile, scores};

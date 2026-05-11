@@ -3,6 +3,7 @@ mod course;
 mod gameplay;
 mod graphics;
 mod input_dev;
+mod lights;
 mod machine;
 mod null_or_die;
 mod online;
@@ -23,6 +24,8 @@ pub use graphics::update_monitor_specs;
 pub(super) use graphics::*;
 #[allow(unused_imports)]
 pub(super) use input_dev::*;
+#[allow(unused_imports)]
+pub(super) use lights::*;
 #[allow(unused_imports)]
 pub(super) use machine::*;
 #[allow(unused_imports)]

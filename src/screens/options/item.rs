@@ -9,6 +9,7 @@ pub enum ItemId {
     GraphicsOptions,
     SoundOptions,
     InputOptions,
+    LightsOptions,
     MachineOptions,
     GameplayOptions,
     SelectMusicOptions,
@@ -59,6 +60,9 @@ pub enum ItemId {
     InpOptionsNavigation,
     InpMenuNavigation,
     InpDebounce,
+
+    // Lights Options submenu
+    LightsDriver,
 
     // Machine Options submenu
     MchSelectProfile,
@@ -281,6 +285,14 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsInput", "ConfigureMappings")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "TestInput")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "InputOptions")),
+        ],
+    },
+    Item {
+        id: ItemId::LightsOptions,
+        name: lookup_key("Options", "LightsOptions"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsHelp", "LightsOptionsHelp")),
+            HelpEntry::Bullet(lookup_key("OptionsLights", "Driver")),
         ],
     },
     Item {

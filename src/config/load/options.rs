@@ -477,6 +477,14 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "UseFSRs")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.use_fsrs);
+    cfg.lights_driver = conf
+        .get("Options", "LightsDriver")
+        .map(|v| crate::engine::lights::parse_driver_or_default(&v, default.lights_driver))
+        .unwrap_or(default.lights_driver);
+    cfg.lights_com_port = conf
+        .get("Options", "LightsComPort")
+        .map(|v| crate::engine::lights::SerialPortName::parse(&v, default.lights_com_port))
+        .unwrap_or(default.lights_com_port);
     cfg.only_dedicated_menu_buttons = conf
         .get("Options", "OnlyDedicatedMenuButtons")
         .and_then(|v| v.parse::<u8>().ok())

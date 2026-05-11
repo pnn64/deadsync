@@ -18,6 +18,7 @@ pub enum SubmenuKind {
     Graphics,
     Input,
     InputBackend,
+    Lights,
     OnlineScoring,
     NullOrDie,
     NullOrDieOptions,
@@ -34,11 +35,12 @@ pub enum SubmenuKind {
 }
 
 impl SubmenuKind {
-    pub(super) const ALL: [Self; 17] = [
+    pub(super) const ALL: [Self; 18] = [
         Self::System,
         Self::Graphics,
         Self::Input,
         Self::InputBackend,
+        Self::Lights,
         Self::OnlineScoring,
         Self::NullOrDie,
         Self::NullOrDieOptions,
@@ -484,6 +486,12 @@ pub fn init() -> State {
         INPUT_BACKEND_OPTIONS_ROWS,
         SubRowId::MenuButtons,
         usize::from(cfg.only_dedicated_menu_buttons),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Lights].choice_indices,
+        LIGHTS_OPTIONS_ROWS,
+        SubRowId::LightsDriver,
+        lights_driver_choice_index(cfg.lights_driver),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,

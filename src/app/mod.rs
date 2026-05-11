@@ -21,8 +21,12 @@ use crate::engine::gfx::{
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use crate::engine::host_time;
 use crate::engine::input::{self, InputEvent};
+use crate::engine::lights::{
+    self, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
+};
 use crate::engine::present::color;
 use crate::engine::space::{self as space, Metrics};
+use crate::game::note::NoteType;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
@@ -101,6 +105,181 @@ const LIVE_TEXTURE_UPLOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
 const STUTTER_DIAG_DUMP_WINDOW_NS: u64 = 500_000_000;
 const STUTTER_DIAG_MIN_DUMP_GAP_NS: u64 = 250_000_000;
 const STUTTER_DIAG_FRAME_SAMPLE_COUNT: usize = 128;
+const LIGHTS_AHEAD_NS: crate::game::gameplay::SongTimeNs = 50_000_000;
+const LIGHTS_MAX_CATCHUP_NS: crate::game::gameplay::SongTimeNs = 500_000_000;
+
+#[derive(Clone, Copy, Debug, Default)]
+struct GameplayLightTracker {
+    notes_ptr: usize,
+    notes_len: usize,
+    cursor: usize,
+    last_time_ns: crate::game::gameplay::SongTimeNs,
+}
+
+impl GameplayLightTracker {
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    fn queue_blinks(&mut self, lights: &mut lights::Manager, state: &crate::game::gameplay::State) {
+        let now_ns = state.current_music_time_ns.saturating_add(LIGHTS_AHEAD_NS);
+        let notes_ptr = state.notes.as_ptr() as usize;
+        let reset = self.notes_ptr != notes_ptr
+            || self.notes_len != state.notes.len()
+            || now_ns < self.last_time_ns
+            || now_ns.saturating_sub(self.last_time_ns) > LIGHTS_MAX_CATCHUP_NS;
+        if reset {
+            self.notes_ptr = notes_ptr;
+            self.notes_len = state.notes.len();
+            self.cursor = state.note_time_cache_ns.partition_point(|&t| t <= now_ns);
+            self.last_time_ns = now_ns;
+            return;
+        }
+
+        while self.cursor < state.notes.len() && state.note_time_cache_ns[self.cursor] <= now_ns {
+            let note = &state.notes[self.cursor];
+            if gameplay_note_lights(note) {
+                blink_note_lights(lights, state, note.column);
+            }
+            self.cursor += 1;
+        }
+        self.last_time_ns = now_ns;
+    }
+}
+
+fn gameplay_note_lights(note: &crate::game::note::Note) -> bool {
+    note.can_be_judged
+        && !note.is_fake
+        && matches!(
+            note.note_type,
+            NoteType::Tap | NoteType::Hold | NoteType::Roll
+        )
+}
+
+fn blink_note_lights(
+    lights: &mut lights::Manager,
+    state: &crate::game::gameplay::State,
+    column: usize,
+) {
+    let Some(local_col) = physical_light_col(state, column) else {
+        return;
+    };
+    if let Some(cabinet) = cabinet_light_for_col(local_col) {
+        lights.blink_cabinet(cabinet);
+    }
+}
+
+fn physical_light_col(state: &crate::game::gameplay::State, column: usize) -> Option<usize> {
+    if state.cols_per_player == 0 {
+        return None;
+    }
+    let local = column % state.cols_per_player;
+    if state.cols_per_player >= 8 && state.num_players == 1 {
+        return Some(local % 4);
+    }
+    (local < 4).then_some(local)
+}
+
+const fn cabinet_light_for_col(local_col: usize) -> Option<CabinetLight> {
+    match local_col {
+        0 => Some(CabinetLight::MarqueeUpperLeft),
+        1 => Some(CabinetLight::MarqueeUpperRight),
+        2 => Some(CabinetLight::MarqueeLowerLeft),
+        3 => Some(CabinetLight::MarqueeLowerRight),
+        _ => None,
+    }
+}
+
+const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
+    match screen {
+        CurrentScreen::Init => LightMode::Attract,
+        CurrentScreen::Gameplay | CurrentScreen::Practice => LightMode::Gameplay,
+        CurrentScreen::Evaluation | CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
+            LightMode::Cleared
+        }
+        CurrentScreen::GameOver => LightMode::Stage,
+        CurrentScreen::Menu
+        | CurrentScreen::Options
+        | CurrentScreen::Credits
+        | CurrentScreen::ManageLocalProfiles
+        | CurrentScreen::Mappings
+        | CurrentScreen::Input
+        | CurrentScreen::SelectProfile
+        | CurrentScreen::SelectColor
+        | CurrentScreen::SelectStyle
+        | CurrentScreen::SelectPlayMode
+        | CurrentScreen::ProfileLoad
+        | CurrentScreen::SelectMusic
+        | CurrentScreen::SelectCourse
+        | CurrentScreen::Sandbox
+        | CurrentScreen::PlayerOptions => LightMode::MenuStartAndDirections,
+    }
+}
+
+const fn light_button_from_action(
+    action: input::VirtualAction,
+) -> Option<(LightPlayer, ButtonLight)> {
+    match action {
+        input::VirtualAction::p1_left | input::VirtualAction::p1_menu_left => {
+            Some((LightPlayer::P1, ButtonLight::Left))
+        }
+        input::VirtualAction::p1_down | input::VirtualAction::p1_menu_down => {
+            Some((LightPlayer::P1, ButtonLight::Down))
+        }
+        input::VirtualAction::p1_up | input::VirtualAction::p1_menu_up => {
+            Some((LightPlayer::P1, ButtonLight::Up))
+        }
+        input::VirtualAction::p1_right | input::VirtualAction::p1_menu_right => {
+            Some((LightPlayer::P1, ButtonLight::Right))
+        }
+        input::VirtualAction::p1_start => Some((LightPlayer::P1, ButtonLight::Start)),
+        input::VirtualAction::p2_left | input::VirtualAction::p2_menu_left => {
+            Some((LightPlayer::P2, ButtonLight::Left))
+        }
+        input::VirtualAction::p2_down | input::VirtualAction::p2_menu_down => {
+            Some((LightPlayer::P2, ButtonLight::Down))
+        }
+        input::VirtualAction::p2_up | input::VirtualAction::p2_menu_up => {
+            Some((LightPlayer::P2, ButtonLight::Up))
+        }
+        input::VirtualAction::p2_right | input::VirtualAction::p2_menu_right => {
+            Some((LightPlayer::P2, ButtonLight::Right))
+        }
+        input::VirtualAction::p2_start => Some((LightPlayer::P2, ButtonLight::Start)),
+        _ => None,
+    }
+}
+
+fn hide_flags_for_gameplay(state: &crate::game::gameplay::State) -> [HideFlags; 2] {
+    std::array::from_fn(|player| {
+        hide_flags_from_profile(state.player_profiles[player].hide_light_type)
+    })
+}
+
+const fn hide_flags_from_profile(hide: profile::HideLightType) -> HideFlags {
+    match hide {
+        profile::HideLightType::NoHideLights => HideFlags {
+            all: false,
+            marquee: false,
+            bass: false,
+        },
+        profile::HideLightType::HideAllLights => HideFlags {
+            all: true,
+            marquee: true,
+            bass: true,
+        },
+        profile::HideLightType::HideMarqueeLights => HideFlags {
+            all: false,
+            marquee: true,
+            bass: false,
+        },
+        profile::HideLightType::HideBassLights => HideFlags {
+            all: false,
+            marquee: false,
+            bass: true,
+        },
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 struct GameplayOffsetSavePrompt {
@@ -2697,6 +2876,8 @@ pub struct App {
     backend: Option<renderer::Backend>,
     backend_type: BackendType,
     fsr_monitor: input::fsr::Monitor,
+    lights: lights::Manager,
+    gameplay_lights: GameplayLightTracker,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
     ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
@@ -2773,6 +2954,7 @@ impl App {
             self.state.shell.tab_held = false;
             self.state.shell.backquote_held = false;
             input::clear_debounce_state();
+            self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
         } else if let Some(w) = window {
             self.request_redraw(w, "focus");
@@ -2810,6 +2992,65 @@ impl App {
             &mut self.state.screens.select_music_state,
             on_select_music.then_some(view).flatten(),
         );
+    }
+
+    fn sync_lights(&mut self, delta_time: f32, elapsed_seconds: f32) {
+        let config = config::get();
+        self.lights
+            .set_driver(config.lights_driver, config.lights_com_port.as_str());
+        let screen = self.state.screens.current_screen;
+        self.lights.set_mode(light_mode_for_screen(screen));
+        self.lights.set_joined([
+            profile::is_session_side_joined(profile::PlayerSide::P1),
+            profile::is_session_side_joined(profile::PlayerSide::P2),
+        ]);
+        self.lights.set_hide_flags(self.current_light_hide_flags());
+        self.sync_gameplay_light_blinks();
+        self.lights.tick(delta_time, elapsed_seconds);
+    }
+
+    fn sync_light_input(&mut self, ev: &InputEvent) {
+        let Some((player, button)) = light_button_from_action(ev.action) else {
+            return;
+        };
+        self.lights.set_button_pressed(player, button, ev.pressed);
+    }
+
+    fn current_light_hide_flags(&self) -> [HideFlags; 2] {
+        let screen = self.state.screens.current_screen;
+        let gameplay_state = match screen {
+            CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_ref(),
+            CurrentScreen::Practice => self
+                .state
+                .screens
+                .practice_state
+                .as_ref()
+                .map(|state| &state.gameplay),
+            _ => None,
+        };
+        gameplay_state.map_or([HideFlags::default(); 2], |state| {
+            hide_flags_for_gameplay(state)
+        })
+    }
+
+    fn sync_gameplay_light_blinks(&mut self) {
+        match self.state.screens.current_screen {
+            CurrentScreen::Gameplay => {
+                if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
+                    self.gameplay_lights.queue_blinks(&mut self.lights, gs);
+                    return;
+                }
+            }
+            CurrentScreen::Practice => {
+                if let Some(ps) = self.state.screens.practice_state.as_ref() {
+                    self.gameplay_lights
+                        .queue_blinks(&mut self.lights, &ps.gameplay);
+                    return;
+                }
+            }
+            _ => {}
+        }
+        self.gameplay_lights.clear();
     }
 
     #[inline(always)]
@@ -3089,6 +3330,7 @@ impl App {
             self.on_fade_complete(target, event_loop);
         }
         let update_us: u32 = elapsed_us_since(update_started);
+        self.sync_lights(delta_time, total_elapsed);
 
         if self.window.as_ref().map(|w| w.id()) != Some(window.id()) {
             self.state.shell.last_frame_end_time = Instant::now();
@@ -3401,6 +3643,8 @@ impl App {
             backend: None,
             backend_type,
             fsr_monitor: input::fsr::Monitor::new(),
+            lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
+            gameplay_lights: GameplayLightTracker::default(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
             // Screen transitions clear the UI cache, so misses stop inserting
@@ -4459,6 +4703,7 @@ impl App {
         event_loop: &ActiveEventLoop,
         ev: InputEvent,
     ) -> Result<(), Box<dyn Error>> {
+        self.sync_light_input(&ev);
         if self.route_gameplay_offset_prompt_input(event_loop, &ev) {
             return Ok(());
         }

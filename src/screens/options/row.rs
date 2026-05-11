@@ -52,6 +52,8 @@ pub enum SubRowId {
     OptionsNavigation,
     MenuButtons,
     Debounce,
+    // Lights Options
+    LightsDriver,
     // Machine Options
     SelectProfile,
     SelectColor,

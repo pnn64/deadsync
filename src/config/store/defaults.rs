@@ -249,6 +249,8 @@ fn push_default_options(content: &mut String, default: &Config) {
     );
     push_bool(content, "ThreeKeyNavigation", default.three_key_navigation);
     push_bool(content, "UseFSRs", default.use_fsrs);
+    push_line(content, "LightsDriver", default.lights_driver.as_str());
+    push_line(content, "LightsComPort", default.lights_com_port.as_str());
     push_bool(
         content,
         "OnlyDedicatedMenuButtons",

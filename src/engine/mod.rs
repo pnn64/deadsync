@@ -3,6 +3,7 @@ pub mod display;
 pub mod gfx;
 pub mod host_time;
 pub mod input;
+pub mod lights;
 pub mod logging;
 pub mod network;
 pub mod present;

@@ -339,6 +339,11 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::MenuButtons {
             state.pending_dedicated_menu_buttons = Some(new_index == 1);
         }
+    } else if matches!(kind, SubmenuKind::Lights) {
+        let row = &rows[row_index];
+        if row.id == SubRowId::LightsDriver {
+            config::update_lights_driver(lights_driver_from_choice(new_index));
+        }
     } else if matches!(kind, SubmenuKind::Machine) {
         let row = &rows[row_index];
         let enabled = new_index == 1;
@@ -691,6 +696,12 @@ pub(super) fn activate_current_selection(
                 ItemId::InputOptions => {
                     audio::play_sfx("assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Input);
+                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                    state.submenu_fade_t = 0.0;
+                }
+                ItemId::LightsOptions => {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    state.pending_submenu_kind = Some(SubmenuKind::Lights);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
