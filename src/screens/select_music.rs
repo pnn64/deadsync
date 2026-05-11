@@ -8767,13 +8767,15 @@ fn step_artist_cycle_text(chart: &ChartData, cycle_elapsed: f32) -> &str {
         chart.description.as_str(),
         chart.chart_name.as_str(),
     ];
-    let mut non_empty: Vec<&str> = Vec::with_capacity(3);
-    for &s in &candidates {
-        if !s.trim().is_empty() && !non_empty.contains(&s) {
-            non_empty.push(s);
+    let mut non_empty = [""; 3];
+    let mut count = 0usize;
+    for s in candidates {
+        if !s.trim().is_empty() && !non_empty[..count].contains(&s) {
+            non_empty[count] = s;
+            count += 1;
         }
     }
-    match non_empty.len() {
+    match count {
         0 => "",
         1 => non_empty[0],
         n => {
