@@ -10,6 +10,7 @@ pub(in crate::screens::options) const LIGHTS_OPTIONS_ROWS: &[SubRow] = &[
             literal_choice("Litboard"),
             literal_choice("HidBlueDot"),
             literal_choice("STAC2"),
+            literal_choice("MinimaidHID"),
         ],
         inline: true,
     },
@@ -71,6 +72,7 @@ pub(in crate::screens::options) const fn lights_driver_choice_index(
         LightsDriverKind::Litboard => 2,
         LightsDriverKind::HidBlueDot => 3,
         LightsDriverKind::Stac2 => 4,
+        LightsDriverKind::MinimaidHid => 5,
     }
 }
 
@@ -80,6 +82,7 @@ pub(in crate::screens::options) const fn lights_driver_from_choice(idx: usize) -
         2 => LightsDriverKind::Litboard,
         3 => LightsDriverKind::HidBlueDot,
         4 => LightsDriverKind::Stac2,
+        5 => LightsDriverKind::MinimaidHid,
         _ => LightsDriverKind::Off,
     }
 }

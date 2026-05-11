@@ -1,5 +1,6 @@
 mod hid_blue_dot;
 mod litboard;
+mod minimaid_hid;
 mod snek;
 mod stac2;
 
@@ -69,6 +70,7 @@ pub enum DriverKind {
     Litboard,
     HidBlueDot,
     Stac2,
+    MinimaidHid,
 }
 
 impl DriverKind {
@@ -79,6 +81,7 @@ impl DriverKind {
             Self::Litboard => "Litboard",
             Self::HidBlueDot => "HidBlueDot",
             Self::Stac2 => "STAC2",
+            Self::MinimaidHid => "MinimaidHID",
         }
     }
 }
@@ -107,6 +110,7 @@ impl FromStr for DriverKind {
             }
             "hidbluedot" | "bluedot" => Ok(Self::HidBlueDot),
             "stac2" | "stacv2" | "stac2hid" | "icedragonstac2" => Ok(Self::Stac2),
+            "minimaid" | "minimaidhid" | "linuxminimaid" | "win32minimaid" => Ok(Self::MinimaidHid),
             _ => Err(()),
         }
     }
@@ -653,6 +657,7 @@ enum Driver {
     Litboard(litboard::Driver),
     HidBlueDot(hid_blue_dot::Driver),
     Stac2(stac2::Driver),
+    MinimaidHid(minimaid_hid::Driver),
 }
 
 impl Driver {
@@ -663,6 +668,7 @@ impl Driver {
             DriverKind::Litboard => Some(Self::Litboard(litboard::Driver::new(litboard_port))),
             DriverKind::HidBlueDot => Some(Self::HidBlueDot(hid_blue_dot::Driver::new())),
             DriverKind::Stac2 => Some(Self::Stac2(stac2::Driver::new())),
+            DriverKind::MinimaidHid => Some(Self::MinimaidHid(minimaid_hid::Driver::new())),
         }
     }
 
@@ -672,6 +678,7 @@ impl Driver {
             Self::Litboard(driver) => driver.set(state),
             Self::HidBlueDot(driver) => driver.set(state),
             Self::Stac2(driver) => driver.set(state),
+            Self::MinimaidHid(driver) => driver.set(state),
         }
     }
 }
@@ -716,6 +723,10 @@ mod tests {
             DriverKind::HidBlueDot
         );
         assert_eq!(DriverKind::from_str("stac2").unwrap(), DriverKind::Stac2);
+        assert_eq!(
+            DriverKind::from_str("LinuxMinimaid").unwrap(),
+            DriverKind::MinimaidHid
+        );
     }
 
     #[test]
