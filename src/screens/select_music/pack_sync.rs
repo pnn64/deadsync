@@ -42,7 +42,8 @@ fn preferred_difficulty_index(state: &State) -> usize {
 }
 
 fn show_for_group(state: &mut State, pack_group: Option<&str>) -> bool {
-    let Some((pack_name, targets)) = pack_sync_targets_for_group(state, pack_group) else {
+    let Some((pack_name, targets, simfile_paths)) = pack_sync_targets_for_group(state, pack_group)
+    else {
         return false;
     };
 
@@ -64,13 +65,22 @@ fn show_for_group(state: &mut State, pack_group: Option<&str>) -> bool {
     state.last_steps_nav_dir_p2 = None;
     state.last_steps_nav_time_p2 = None;
 
-    shared_pack_sync::begin(&mut state.pack_sync_overlay, pack_name, targets)
+    shared_pack_sync::begin_uniform(
+        &mut state.pack_sync_overlay,
+        pack_name,
+        targets,
+        simfile_paths,
+    )
 }
 
 fn pack_sync_targets_for_group(
     state: &State,
     pack_group: Option<&str>,
-) -> Option<(String, Vec<shared_pack_sync::TargetSpec>)> {
+) -> Option<(
+    String,
+    Vec<shared_pack_sync::TargetSpec>,
+    Vec<std::path::PathBuf>,
+)> {
     let pack_name = pack_group
         .map(|s| s.to_string())
         .unwrap_or_else(|| shared_pack_sync::all_label().to_string());
@@ -78,6 +88,7 @@ fn pack_sync_targets_for_group(
     let preferred_difficulty_index = preferred_difficulty_index(state);
     let mut current_pack_name: Option<&str> = None;
     let mut targets = Vec::new();
+    let mut simfile_paths = Vec::new();
 
     for entry in &state.group_entries {
         match entry {
@@ -86,6 +97,7 @@ fn pack_sync_targets_for_group(
                 if pack_group.is_some() && current_pack_name != pack_group {
                     continue;
                 }
+                simfile_paths.push(song.simfile_path.clone());
                 let Some(steps_index) =
                     best_steps_index(song.as_ref(), target_chart_type, preferred_difficulty_index)
                 else {
@@ -112,6 +124,6 @@ fn pack_sync_targets_for_group(
     if targets.is_empty() {
         None
     } else {
-        Some((pack_name, targets))
+        Some((pack_name, targets, simfile_paths))
     }
 }
