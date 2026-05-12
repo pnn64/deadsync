@@ -410,9 +410,17 @@ struct SharedLayoutEntry {
 type TextLayoutHasher = BuildHasherDefault<XxHash64>;
 type OwnedLayoutMap = HashMap<Box<str>, OwnedLayoutEntry, TextLayoutHasher>;
 type SharedAliasMap = HashMap<usize, SharedLayoutEntry, TextLayoutHasher>;
-type TextureMetaMap = HashMap<usize, assets::TexMeta, TextLayoutHasher>;
-type TextureSheetMap = HashMap<usize, (u32, u32), TextLayoutHasher>;
-type TextureHandleLookupMap = HashMap<usize, renderer::TextureHandle, TextLayoutHasher>;
+
+#[derive(Clone, Copy)]
+struct TextureCacheEntry<T> {
+    fingerprint: u64,
+    value: T,
+}
+
+type TextureMetaMap = HashMap<usize, TextureCacheEntry<assets::TexMeta>, TextLayoutHasher>;
+type TextureSheetMap = HashMap<usize, TextureCacheEntry<(u32, u32)>, TextLayoutHasher>;
+type TextureHandleLookupMap =
+    HashMap<usize, TextureCacheEntry<renderer::TextureHandle>, TextLayoutHasher>;
 
 #[derive(Default)]
 struct TextureLookupCache {
@@ -424,7 +432,11 @@ struct TextureLookupCache {
 
 impl TextureLookupCache {
     fn begin_frame(&mut self) {
-        self.generation = assets::texture_registry_generation();
+        let generation = assets::texture_registry_generation();
+        if self.generation == generation {
+            return;
+        }
+        self.generation = generation;
         self.dims.clear();
         self.sheets.clear();
         self.handles.clear();
@@ -436,35 +448,69 @@ impl TextureLookupCache {
     }
 
     #[inline(always)]
+    fn key_fingerprint(key: &str) -> u64 {
+        let mut hasher = XxHash64::default();
+        key.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[inline(always)]
     fn texture_dims(&mut self, key_ptr: *const str, key: &str) -> Option<assets::TexMeta> {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&meta) = self.dims.get(&key_ptr) {
-            return Some(meta);
+        let fingerprint = Self::key_fingerprint(key);
+        if let Some(entry) = self.dims.get(&key_ptr) {
+            if entry.fingerprint == fingerprint {
+                return Some(entry.value);
+            }
         }
         let meta = assets::texture_dims(key)?;
-        self.dims.insert(key_ptr, meta);
+        self.dims.insert(
+            key_ptr,
+            TextureCacheEntry {
+                fingerprint,
+                value: meta,
+            },
+        );
         Some(meta)
     }
 
     #[inline(always)]
     fn sprite_sheet_dims(&mut self, key_ptr: *const str, key: &str) -> (u32, u32) {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&dims) = self.sheets.get(&key_ptr) {
-            return dims;
+        let fingerprint = Self::key_fingerprint(key);
+        if let Some(entry) = self.sheets.get(&key_ptr) {
+            if entry.fingerprint == fingerprint {
+                return entry.value;
+            }
         }
         let dims = assets::sprite_sheet_dims(key);
-        self.sheets.insert(key_ptr, dims);
+        self.sheets.insert(
+            key_ptr,
+            TextureCacheEntry {
+                fingerprint,
+                value: dims,
+            },
+        );
         dims
     }
 
     #[inline(always)]
     fn texture_handle(&mut self, key_ptr: *const str, key: &str) -> renderer::TextureHandle {
         let key_ptr = Self::ptr_cache_key(key_ptr);
-        if let Some(&handle) = self.handles.get(&key_ptr) {
-            return handle;
+        let fingerprint = Self::key_fingerprint(key);
+        if let Some(entry) = self.handles.get(&key_ptr) {
+            if entry.fingerprint == fingerprint {
+                return entry.value;
+            }
         }
         let handle = assets::texture_handle(key);
-        self.handles.insert(key_ptr, handle);
+        self.handles.insert(
+            key_ptr,
+            TextureCacheEntry {
+                fingerprint,
+                value: handle,
+            },
+        );
         handle
     }
 }
@@ -4304,8 +4350,8 @@ fn clip_rotated_sprite_to_world_rect(
 mod tests {
     use super::{
         CachedTextLayout, CachedTextMeshVariants, ComposeScratch, TextAttrCursor, TextLayoutCache,
-        TextLayoutKey, TextureLookupCache, WorldRect, build_cached_text_layout, build_screen,
-        build_screen_cached_with_scratch, clip_object_to_world_masks,
+        TextLayoutKey, TextureCacheEntry, TextureLookupCache, WorldRect, build_cached_text_layout,
+        build_screen, build_screen_cached_with_scratch, clip_object_to_world_masks,
         clip_sprite_object_to_world_rect, fold_sprite_xy_rot, resolve_sprite_size_like_sm,
         sort_render_objects, str_ptr, wrap_text_lines_by_words,
     };
@@ -4826,12 +4872,29 @@ mod tests {
         let key = Arc::<str>::from("frame_tex");
         let key_ptr = key.as_ref() as *const str;
         let key_addr = TextureLookupCache::ptr_cache_key(key_ptr);
+        let fingerprint = TextureLookupCache::key_fingerprint(key.as_ref());
         cache.generation = assets::texture_registry_generation();
-        cache
-            .dims
-            .insert(key_addr, assets::TexMeta { w: 64, h: 32 });
-        cache.sheets.insert(key_addr, (4, 2));
-        cache.handles.insert(key_addr, 11);
+        cache.dims.insert(
+            key_addr,
+            TextureCacheEntry {
+                fingerprint,
+                value: assets::TexMeta { w: 64, h: 32 },
+            },
+        );
+        cache.sheets.insert(
+            key_addr,
+            TextureCacheEntry {
+                fingerprint,
+                value: (4, 2),
+            },
+        );
+        cache.handles.insert(
+            key_addr,
+            TextureCacheEntry {
+                fingerprint,
+                value: 11,
+            },
+        );
 
         let Some(meta) = cache.texture_dims(key_ptr, key.as_ref()) else {
             panic!("expected cached texture dims");
@@ -4840,7 +4903,15 @@ mod tests {
         assert_eq!(meta.h, 32);
         assert_eq!(cache.sprite_sheet_dims(key_ptr, key.as_ref()), (4, 2));
         assert_eq!(cache.texture_handle(key_ptr, key.as_ref()), 11);
+        assert!(cache.texture_dims(key_ptr, "other_frame_tex").is_none());
 
+        cache.begin_frame();
+
+        assert_eq!(cache.dims.len(), 1);
+        assert_eq!(cache.sheets.len(), 1);
+        assert_eq!(cache.handles.len(), 1);
+
+        cache.generation = cache.generation.wrapping_sub(1);
         cache.begin_frame();
 
         assert!(cache.dims.is_empty());
