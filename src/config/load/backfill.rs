@@ -98,6 +98,7 @@ const THEME_KEYS: &[&str] = &[
     "MachinePreferredStyle",
     "MachinePreferredPlayMode",
     "MachineFont",
+    "MachineBarColor",
     "ZmodRatingBoxText",
     "ShowBpmDecimal",
 ];

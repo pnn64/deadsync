@@ -363,6 +363,11 @@ fn push_default_theme(content: &mut String, default: &Config) {
         default.machine_preferred_play_mode.as_str(),
     );
     push_line(content, "MachineFont", default.machine_font.as_str());
+    push_line(
+        content,
+        "MachineBarColor",
+        default.machine_bar_color.as_str(),
+    );
     push_bool(
         content,
         "ShowSelectMusicGameplayTimer",

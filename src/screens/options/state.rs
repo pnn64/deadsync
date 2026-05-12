@@ -551,6 +551,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
+        SubRowId::BarColor,
+        cfg.machine_bar_color.choice_index(),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
         SubRowId::EvalSummary,
         usize::from(cfg.machine_show_eval_summary),
     );

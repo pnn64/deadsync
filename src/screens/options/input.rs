@@ -366,6 +366,9 @@ pub(super) fn apply_submenu_choice_delta(
                 MachinePreferredPlayMode::from_choice(new_index),
             ),
             SubRowId::Font => config::update_machine_font(MachineFont::from_choice(new_index)),
+            SubRowId::BarColor => {
+                config::update_machine_bar_color(MachineBarColor::from_choice(new_index))
+            }
             SubRowId::EvalSummary => config::update_machine_show_eval_summary(enabled),
             SubRowId::NameEntry => config::update_machine_show_name_entry(enabled),
             SubRowId::GameoverScreen => config::update_machine_show_gameover(enabled),

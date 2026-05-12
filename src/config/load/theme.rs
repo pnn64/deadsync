@@ -100,4 +100,8 @@ fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .or_else(|| conf.get("Theme", "ThemeFont"))
         .and_then(|v| MachineFont::from_str(&v).ok())
         .unwrap_or(default.machine_font);
+    cfg.machine_bar_color = conf
+        .get("Theme", "MachineBarColor")
+        .and_then(|v| MachineBarColor::from_str(&v).ok())
+        .unwrap_or(default.machine_bar_color);
 }

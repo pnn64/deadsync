@@ -11,6 +11,17 @@ pub fn update_machine_font(font: MachineFont) {
     save_without_keymaps();
 }
 
+pub fn update_machine_bar_color(color: MachineBarColor) {
+    {
+        let mut cfg = lock_config();
+        if cfg.machine_bar_color == color {
+            return;
+        }
+        cfg.machine_bar_color = color;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_select_music_breakdown_style(style: BreakdownStyle) {
     {
         let mut cfg = lock_config();

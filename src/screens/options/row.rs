@@ -65,6 +65,7 @@ pub enum SubRowId {
     SelectPlayMode,
     PreferredMode,
     Font,
+    BarColor,
     EvalSummary,
     NameEntry,
     GameoverScreen,

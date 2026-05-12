@@ -3,8 +3,8 @@ use crate::assets::{self, AssetManager, visual_styles};
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DefaultSyncOffset, DisplayMode, FullscreenType,
-    LogLevel, MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
-    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    LogLevel, MachineBarColor, MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle,
+    NewPackMode, SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
     SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SimpleIni, SyncGraphMode, VisualStyle,
     dirs,
 };

@@ -17,6 +17,16 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::BarColor,
+        label: lookup_key("OptionsMachine", "BarColor"),
+        choices: &[
+            localized_choice("OptionsMachine", "BarColorDefault"),
+            localized_choice("OptionsMachine", "BarColorColored"),
+            localized_choice("OptionsMachine", "BarColorTransparent"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SelectProfile,
         label: lookup_key("OptionsMachine", "SelectProfile"),
         choices: &[
@@ -196,6 +206,14 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::MchBarColor,
+        name: lookup_key("OptionsMachine", "BarColor"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsMachineHelp",
+            "BarColorHelp",
+        ))],
+    },
+    Item {
         id: ItemId::MchSelectProfile,
         name: lookup_key("OptionsMachine", "SelectProfile"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -362,6 +380,11 @@ impl ChoiceEnum for MachinePreferredPlayMode {
 impl ChoiceEnum for MachineFont {
     const ALL: &'static [Self] = &[Self::Wendy, Self::Mega];
     const DEFAULT: Self = Self::Wendy;
+}
+
+impl ChoiceEnum for MachineBarColor {
+    const ALL: &'static [Self] = &[Self::Default, Self::Colored, Self::Transparent];
+    const DEFAULT: Self = Self::Default;
 }
 
 impl ChoiceEnum for DefaultSyncOffset {

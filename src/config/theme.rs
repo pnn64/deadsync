@@ -565,6 +565,45 @@ impl FromStr for MachineFont {
 
 pub const MACHINE_FONT_VARIANTS: [MachineFont; 2] = [MachineFont::Wendy, MachineFont::Mega];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum MachineBarColor {
+    #[default]
+    Default,
+    Colored,
+    Transparent,
+}
+
+impl MachineBarColor {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Default => "Default",
+            Self::Colored => "Colored",
+            Self::Transparent => "Transparent",
+        }
+    }
+}
+
+impl FromStr for MachineBarColor {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "default" => Ok(Self::Default),
+            "colored" | "color" | "colour" | "coloured" | "srpg" | "srpg9" => {
+                Ok(Self::Colored)
+            }
+            "transparent" | "clear" | "technique" => Ok(Self::Transparent),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameFlag {
     Dance,
@@ -790,6 +829,34 @@ mod tests {
         assert_eq!(MACHINE_FONT_VARIANTS.len(), 2);
         assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Wendy));
         assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Mega));
+    }
+
+    #[test]
+    fn machine_bar_color_defaults_to_default() {
+        assert_eq!(MachineBarColor::default(), MachineBarColor::Default);
+    }
+
+    #[test]
+    fn machine_bar_color_round_trips() {
+        for value in [
+            MachineBarColor::Default,
+            MachineBarColor::Colored,
+            MachineBarColor::Transparent,
+        ] {
+            assert_eq!(MachineBarColor::from_str(value.as_str()), Ok(value));
+        }
+    }
+
+    #[test]
+    fn machine_bar_color_accepts_theme_style_aliases() {
+        assert_eq!(
+            MachineBarColor::from_str("SRPG9"),
+            Ok(MachineBarColor::Colored)
+        );
+        assert_eq!(
+            MachineBarColor::from_str("Technique"),
+            Ok(MachineBarColor::Transparent)
+        );
     }
 
     #[test]

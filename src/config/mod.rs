@@ -29,11 +29,11 @@ pub use self::runtime::{
 pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
     AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
-    LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineFont, MachinePreferredPlayMode,
-    MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
-    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SyncGraphMode,
-    ThemeFlag, VisualStyle, auto_screenshot_bit, auto_screenshot_mask_from_str,
-    auto_screenshot_mask_to_str,
+    LanguageFlag, LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor, MachineFont,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlRankMode,
+    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VisualStyle, auto_screenshot_bit,
+    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 
@@ -184,6 +184,9 @@ pub struct Config {
     /// Default `Wendy` keeps Wendy; `Mega` swaps those roles to Mega.
     /// Body text (Normal role) stays Miso regardless.
     pub machine_font: MachineFont,
+    /// Machine-wide screen bar color behavior.
+    /// Default preserves each screen's current bar background choice.
+    pub machine_bar_color: MachineBarColor,
     /// Machine-wide replay recording and replay menu visibility.
     pub machine_enable_replays: bool,
     /// Allow players to add a personal timing shift on top of machine global offset.
@@ -338,6 +341,7 @@ impl Default for Config {
             machine_preferred_style: MachinePreferredPlayStyle::Single,
             machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
             machine_font: MachineFont::Wendy,
+            machine_bar_color: MachineBarColor::Default,
             machine_enable_replays: true,
             machine_allow_per_player_global_offsets: false,
             machine_pack_ini_offsets: false,

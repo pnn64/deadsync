@@ -75,6 +75,7 @@ pub enum ItemId {
     MchSelectPlayMode,
     MchPreferredMode,
     MchFont,
+    MchBarColor,
     MchEvalSummary,
     MchNameEntry,
     MchGameoverScreen,
@@ -306,6 +307,7 @@ pub const ITEMS: &[Item] = &[
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsHelp", "MachineOptionsHelp")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "VisualStyle")),
+            HelpEntry::Bullet(lookup_key("OptionsMachine", "BarColor")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectProfile")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectColor")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "PreferredColor")),

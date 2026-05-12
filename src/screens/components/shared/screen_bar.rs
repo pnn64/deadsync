@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
+use crate::config::{self, MachineBarColor};
 use crate::engine::present::actors::{self, Actor, Background, SizeSpec};
 use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
@@ -67,6 +68,18 @@ fn cached_str_ref(text: &str) -> Arc<str> {
     cached_shared_str(&STR_REF_CACHE, text, TEXT_CACHE_LIMIT)
 }
 
+fn bar_background(transparent: bool) -> Option<Background> {
+    let cfg = config::get();
+    match cfg.machine_bar_color {
+        MachineBarColor::Default if transparent => None,
+        MachineBarColor::Default => Some(Background::Color(color::rgba_hex("#a6a6a6"))),
+        MachineBarColor::Colored => Some(Background::Color(color::decorative_rgba(
+            cfg.simply_love_color,
+        ))),
+        MachineBarColor::Transparent => None,
+    }
+}
+
 pub fn build(params: ScreenBarParams) -> Actor {
     // Base placement per bar (height & anchor)
     let (align, offset) = match params.position {
@@ -74,11 +87,7 @@ pub fn build(params: ScreenBarParams) -> Actor {
         ScreenBarPosition::Bottom => ([0.0, 1.0], [0.0, screen_height()]),
     };
 
-    let background = if params.transparent {
-        None
-    } else {
-        Some(Background::Color(color::rgba_hex("#a6a6a6")))
-    };
+    let background = bar_background(params.transparent);
 
     let mut children = Vec::with_capacity(4);
     let title = cached_str_ref(params.title);
