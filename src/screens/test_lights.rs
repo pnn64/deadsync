@@ -426,6 +426,7 @@ fn active_button_text(lights: LightState) -> String {
             ButtonLight::Up,
             ButtonLight::Right,
             ButtonLight::Start,
+            ButtonLight::Select,
         ] {
             if lights.button(player, button) {
                 return format!("{} {}", player_name(player), button_name(button));
@@ -449,5 +450,6 @@ const fn button_name(button: ButtonLight) -> &'static str {
         ButtonLight::Up => "Up",
         ButtonLight::Right => "Right",
         ButtonLight::Start => "Start",
+        ButtonLight::Select => "Select",
     }
 }

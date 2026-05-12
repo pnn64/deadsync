@@ -274,6 +274,7 @@ const fn light_button_from_action(
             Some((LightPlayer::P1, ButtonLight::Right))
         }
         input::VirtualAction::p1_start => Some((LightPlayer::P1, ButtonLight::Start)),
+        input::VirtualAction::p1_select => Some((LightPlayer::P1, ButtonLight::Select)),
         input::VirtualAction::p2_left | input::VirtualAction::p2_menu_left => {
             Some((LightPlayer::P2, ButtonLight::Left))
         }
@@ -287,6 +288,7 @@ const fn light_button_from_action(
             Some((LightPlayer::P2, ButtonLight::Right))
         }
         input::VirtualAction::p2_start => Some((LightPlayer::P2, ButtonLight::Start)),
+        input::VirtualAction::p2_select => Some((LightPlayer::P2, ButtonLight::Select)),
         _ => None,
     }
 }

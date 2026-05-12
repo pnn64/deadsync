@@ -123,8 +123,9 @@ fn pack_controller(state: &State, player: Player, out: &mut [u8]) {
     let up = state.button(player, ButtonLight::Up);
     let down = state.button(player, ButtonLight::Down);
     let start = state.button(player, ButtonLight::Start);
+    let select = state.button(player, ButtonLight::Select);
 
-    out[0] = pack_printable(left, right, up, down, start, false);
+    out[0] = pack_printable(left, right, up, down, start, select);
     out[1] = pack_printable(false, false, false, false, false, false);
     out[2] = pack_printable(left, right, up, down, false, false);
     out[3] = pack_printable(false, false, false, false, false, false);

@@ -1,3 +1,5 @@
+mod fusion;
+mod gpb;
 mod hid_blue_dot;
 mod litboard;
 mod minimaid_hid;
@@ -11,7 +13,7 @@ use std::thread::{self, JoinHandle};
 
 const PLAYER_COUNT: usize = 2;
 const CABINET_COUNT: usize = 6;
-const BUTTON_COUNT: usize = 5;
+const BUTTON_COUNT: usize = 6;
 const BLINK_SECONDS: f32 = 0.1;
 const SERIAL_PORT_NAME_CAP: usize = 64;
 const TEST_AUTO_CYCLE_SECONDS: f32 = 1.0;
@@ -68,6 +70,8 @@ pub enum DriverKind {
     Off,
     Snek,
     Litboard,
+    Fusion,
+    Gpb,
     HidBlueDot,
     Stac2,
     MinimaidHid,
@@ -79,6 +83,8 @@ impl DriverKind {
             Self::Off => "None",
             Self::Snek => "Snek",
             Self::Litboard => "Litboard",
+            Self::Fusion => "Fusion",
+            Self::Gpb => "GPB",
             Self::HidBlueDot => "HidBlueDot",
             Self::Stac2 => "STAC2",
             Self::MinimaidHid => "MinimaidHID",
@@ -108,6 +114,8 @@ impl FromStr for DriverKind {
             "lit" | "litboard" | "win32serial" | "sextetserial" | "sextetstream" => {
                 Ok(Self::Litboard)
             }
+            "fusion" | "icedragonfusion" | "lightsdriverfusion" => Ok(Self::Fusion),
+            "gpb" | "icedragongpb" | "lightsdrivergpb" => Ok(Self::Gpb),
             "hidbluedot" | "bluedot" => Ok(Self::HidBlueDot),
             "stac2" | "stacv2" | "stac2hid" | "icedragonstac2" => Ok(Self::Stac2),
             "minimaid" | "minimaidhid" | "linuxminimaid" | "win32minimaid" => Ok(Self::MinimaidHid),
@@ -244,6 +252,7 @@ pub enum ButtonLight {
     Up,
     Right,
     Start,
+    Select,
 }
 
 impl ButtonLight {
@@ -254,6 +263,7 @@ impl ButtonLight {
             Self::Up => 2,
             Self::Right => 3,
             Self::Start => 4,
+            Self::Select => 5,
         }
     }
 }
@@ -270,11 +280,13 @@ const TEST_BUTTON_LIGHTS: [(Player, ButtonLight); PLAYER_COUNT * BUTTON_COUNT] =
     (Player::P1, ButtonLight::Up),
     (Player::P1, ButtonLight::Right),
     (Player::P1, ButtonLight::Start),
+    (Player::P1, ButtonLight::Select),
     (Player::P2, ButtonLight::Left),
     (Player::P2, ButtonLight::Down),
     (Player::P2, ButtonLight::Up),
     (Player::P2, ButtonLight::Right),
     (Player::P2, ButtonLight::Start),
+    (Player::P2, ButtonLight::Select),
 ];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -553,8 +565,17 @@ impl Manager {
                 ButtonLight::Up,
                 ButtonLight::Right,
                 ButtonLight::Start,
+                ButtonLight::Select,
             ] {
-                if chart_pad_lights && button != ButtonLight::Start {
+                if chart_pad_lights
+                    && matches!(
+                        button,
+                        ButtonLight::Left
+                            | ButtonLight::Down
+                            | ButtonLight::Up
+                            | ButtonLight::Right
+                    )
+                {
                     continue;
                 }
                 if self.button_pressed[player.ix()][button.ix()] {
@@ -655,6 +676,8 @@ fn run_worker(kind: DriverKind, litboard_port: String, rx: Receiver<Command>) {
 enum Driver {
     Snek(snek::Driver),
     Litboard(litboard::Driver),
+    Fusion(fusion::Driver),
+    Gpb(gpb::Driver),
     HidBlueDot(hid_blue_dot::Driver),
     Stac2(stac2::Driver),
     MinimaidHid(minimaid_hid::Driver),
@@ -666,6 +689,8 @@ impl Driver {
             DriverKind::Off => None,
             DriverKind::Snek => Some(Self::Snek(snek::Driver::new())),
             DriverKind::Litboard => Some(Self::Litboard(litboard::Driver::new(litboard_port))),
+            DriverKind::Fusion => Some(Self::Fusion(fusion::Driver::new())),
+            DriverKind::Gpb => Some(Self::Gpb(gpb::Driver::new())),
             DriverKind::HidBlueDot => Some(Self::HidBlueDot(hid_blue_dot::Driver::new())),
             DriverKind::Stac2 => Some(Self::Stac2(stac2::Driver::new())),
             DriverKind::MinimaidHid => Some(Self::MinimaidHid(minimaid_hid::Driver::new())),
@@ -676,6 +701,8 @@ impl Driver {
         match self {
             Self::Snek(driver) => driver.set(state),
             Self::Litboard(driver) => driver.set(state),
+            Self::Fusion(driver) => driver.set(state),
+            Self::Gpb(driver) => driver.set(state),
             Self::HidBlueDot(driver) => driver.set(state),
             Self::Stac2(driver) => driver.set(state),
             Self::MinimaidHid(driver) => driver.set(state),
@@ -718,6 +745,11 @@ mod tests {
             DriverKind::from_str("Win32Serial").unwrap(),
             DriverKind::Litboard
         );
+        assert_eq!(
+            DriverKind::from_str("LightsDriver_fusion").unwrap(),
+            DriverKind::Fusion
+        );
+        assert_eq!(DriverKind::from_str("GPB").unwrap(), DriverKind::Gpb);
         assert_eq!(
             DriverKind::from_str("HidBlueDot").unwrap(),
             DriverKind::HidBlueDot

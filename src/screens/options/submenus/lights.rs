@@ -8,6 +8,8 @@ pub(in crate::screens::options) const LIGHTS_OPTIONS_ROWS: &[SubRow] = &[
             literal_choice("None"),
             literal_choice("Snek"),
             literal_choice("Litboard"),
+            literal_choice("Fusion"),
+            literal_choice("GPB"),
             literal_choice("HidBlueDot"),
             literal_choice("STAC2"),
             literal_choice("MinimaidHID"),
@@ -70,9 +72,11 @@ pub(in crate::screens::options) const fn lights_driver_choice_index(
         LightsDriverKind::Off => 0,
         LightsDriverKind::Snek => 1,
         LightsDriverKind::Litboard => 2,
-        LightsDriverKind::HidBlueDot => 3,
-        LightsDriverKind::Stac2 => 4,
-        LightsDriverKind::MinimaidHid => 5,
+        LightsDriverKind::Fusion => 3,
+        LightsDriverKind::Gpb => 4,
+        LightsDriverKind::HidBlueDot => 5,
+        LightsDriverKind::Stac2 => 6,
+        LightsDriverKind::MinimaidHid => 7,
     }
 }
 
@@ -80,9 +84,11 @@ pub(in crate::screens::options) const fn lights_driver_from_choice(idx: usize) -
     match idx {
         1 => LightsDriverKind::Snek,
         2 => LightsDriverKind::Litboard,
-        3 => LightsDriverKind::HidBlueDot,
-        4 => LightsDriverKind::Stac2,
-        5 => LightsDriverKind::MinimaidHid,
+        3 => LightsDriverKind::Fusion,
+        4 => LightsDriverKind::Gpb,
+        5 => LightsDriverKind::HidBlueDot,
+        6 => LightsDriverKind::Stac2,
+        7 => LightsDriverKind::MinimaidHid,
         _ => LightsDriverKind::Off,
     }
 }
