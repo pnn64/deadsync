@@ -54,7 +54,7 @@ pub fn push(out: &mut Vec<Actor>, top_title: &str) {
         (Some(press_start.as_ref()), None)
     };
 
-    out.push(screen_bar::build(ScreenBarParams {
+    out.push(screen_bar::build_select_music(ScreenBarParams {
         title: top_title,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -66,7 +66,7 @@ pub fn push(out: &mut Vec<Actor>, top_title: &str) {
         left_avatar: None,
         right_avatar: None,
     }));
-    out.push(screen_bar::build(ScreenBarParams {
+    out.push(screen_bar::build_select_music(ScreenBarParams {
         title: event_mode.as_ref(),
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,

@@ -35,6 +35,12 @@ pub enum ScreenBarTitlePlacement {
 }
 
 #[derive(Clone, Copy)]
+enum ScreenBarContext {
+    Normal,
+    SelectMusic,
+}
+
+#[derive(Clone, Copy)]
 pub struct AvatarParams<'a> {
     pub texture_key: &'a str,
 }
@@ -68,26 +74,37 @@ fn cached_str_ref(text: &str) -> Arc<str> {
     cached_shared_str(&STR_REF_CACHE, text, TEXT_CACHE_LIMIT)
 }
 
-fn bar_background(transparent: bool) -> Option<Background> {
+fn bar_background(transparent: bool, context: ScreenBarContext) -> Option<Background> {
     let cfg = config::get();
-    match cfg.machine_bar_color {
+    match cfg.machine_bar_color.resolve(cfg.visual_style) {
         MachineBarColor::Default if transparent => None,
         MachineBarColor::Default => Some(Background::Color(color::rgba_hex("#a6a6a6"))),
-        MachineBarColor::Colored => Some(Background::Color(color::decorative_rgba(
-            cfg.simply_love_color,
-        ))),
+        MachineBarColor::Colored => {
+            Some(Background::Color(color::srpg9_rgba(cfg.simply_love_color)))
+        }
+        MachineBarColor::Transparent if matches!(context, ScreenBarContext::SelectMusic) => {
+            Some(Background::Color([0.0, 0.0, 0.0, 0.5]))
+        }
         MachineBarColor::Transparent => None,
     }
 }
 
 pub fn build(params: ScreenBarParams) -> Actor {
+    build_with_context(params, ScreenBarContext::Normal)
+}
+
+pub fn build_select_music(params: ScreenBarParams) -> Actor {
+    build_with_context(params, ScreenBarContext::SelectMusic)
+}
+
+fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Actor {
     // Base placement per bar (height & anchor)
     let (align, offset) = match params.position {
         ScreenBarPosition::Top => ([0.0, 0.0], [0.0, 0.0]),
         ScreenBarPosition::Bottom => ([0.0, 1.0], [0.0, screen_height()]),
     };
 
-    let background = bar_background(params.transparent);
+    let background = bar_background(params.transparent, context);
 
     let mut children = Vec::with_capacity(4);
     let title = cached_str_ref(params.title);

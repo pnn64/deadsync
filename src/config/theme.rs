@@ -581,6 +581,14 @@ impl MachineBarColor {
             Self::Transparent => "Transparent",
         }
     }
+
+    pub const fn resolve(self, visual_style: VisualStyle) -> Self {
+        match (self, visual_style) {
+            (Self::Default, VisualStyle::Technique) => Self::Transparent,
+            (Self::Default, VisualStyle::Srpg9) => Self::Colored,
+            _ => self,
+        }
+    }
 }
 
 impl FromStr for MachineBarColor {
@@ -595,9 +603,7 @@ impl FromStr for MachineBarColor {
         }
         match key.as_str() {
             "default" => Ok(Self::Default),
-            "colored" | "color" | "colour" | "coloured" | "srpg" | "srpg9" => {
-                Ok(Self::Colored)
-            }
+            "colored" | "color" | "colour" | "coloured" | "srpg" | "srpg9" => Ok(Self::Colored),
             "transparent" | "clear" | "technique" => Ok(Self::Transparent),
             _ => Err(()),
         }
@@ -856,6 +862,26 @@ mod tests {
         assert_eq!(
             MachineBarColor::from_str("Technique"),
             Ok(MachineBarColor::Transparent)
+        );
+    }
+
+    #[test]
+    fn machine_bar_color_default_resolves_from_visual_style() {
+        assert_eq!(
+            MachineBarColor::Default.resolve(VisualStyle::Hearts),
+            MachineBarColor::Default
+        );
+        assert_eq!(
+            MachineBarColor::Default.resolve(VisualStyle::Technique),
+            MachineBarColor::Transparent
+        );
+        assert_eq!(
+            MachineBarColor::Default.resolve(VisualStyle::Srpg9),
+            MachineBarColor::Colored
+        );
+        assert_eq!(
+            MachineBarColor::Transparent.resolve(VisualStyle::Srpg9),
+            MachineBarColor::Transparent
         );
     }
 

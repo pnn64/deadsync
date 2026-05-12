@@ -171,6 +171,22 @@ pub const DECORATIVE_RGBA: [[f32; 4]; 12] = [
     rgba_hex("#FF7D00"),
 ];
 
+/// Simply Love SRPG9 event palette (`SL.SRPG9.Colors`).
+pub const SRPG9_RGBA: [[f32; 4]; 12] = [
+    rgba_hex("#666000"),
+    rgba_hex("#3d6526"),
+    rgba_hex("#36855b"),
+    rgba_hex("#36a392"),
+    rgba_hex("#51c0c8"),
+    rgba_hex("#009bcf"),
+    rgba_hex("#006ecb"),
+    rgba_hex("#5131a4"),
+    rgba_hex("#9c0082"),
+    rgba_hex("#bf0052"),
+    rgba_hex("#c32020"),
+    rgba_hex("#954f00"),
+];
+
 /// Simply Love-ish UI accent palette
 pub const SIMPLY_LOVE_RGBA: [[f32; 4]; 12] = [
     rgba_hex("#FF5D47"),
@@ -249,6 +265,11 @@ const fn wrap(n: usize, i: i32) -> usize {
 #[inline(always)]
 pub fn decorative_rgba(idx: i32) -> [f32; 4] {
     DECORATIVE_RGBA[wrap(DECORATIVE_RGBA.len(), idx)]
+}
+
+#[inline(always)]
+pub fn srpg9_rgba(idx: i32) -> [f32; 4] {
+    SRPG9_RGBA[wrap(SRPG9_RGBA.len(), idx)]
 }
 
 #[inline(always)]

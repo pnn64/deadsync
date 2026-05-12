@@ -1,6 +1,9 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::config::{DefaultSyncOffset, SelectMusicItlRankMode, SelectMusicItlWheelMode};
+use crate::config::{
+    self, DefaultSyncOffset, MachineBarColor, SelectMusicItlRankMode, SelectMusicItlWheelMode,
+    VisualStyle,
+};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::cache::{SharedStrCache, cached_shared_str};
 use crate::engine::present::color;
@@ -355,10 +358,25 @@ pub struct MusicWheelParams<'a> {
 
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(NUM_WHEEL_SLOTS * 8 + 1);
-    let translated_titles = crate::config::get().translated_titles;
+    let cfg = config::get();
+    let translated_titles = cfg.translated_titles;
+    let effective_bar_color = cfg.machine_bar_color.resolve(cfg.visual_style);
+    let song_bg_alpha = if cfg.visual_style == VisualStyle::Srpg9
+        || effective_bar_color == MachineBarColor::Transparent
+    {
+        0.5
+    } else {
+        1.0
+    };
+    let section_bg_alpha = if effective_bar_color == MachineBarColor::Transparent {
+        0.5
+    } else {
+        1.0
+    };
     let play_style = profile::get_session_play_style();
     let target_chart_type = play_style.chart_type();
-    let song_box_color = p.song_box_color.unwrap_or_else(col_music_wheel_box);
+    let mut song_box_color = p.song_box_color.unwrap_or_else(col_music_wheel_box);
+    song_box_color[3] *= song_bg_alpha;
     let default_song_text_color = p.song_text_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
 
     const WHEEL_WIDTH_DIVISOR: f32 = 2.125;
@@ -478,7 +496,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     song_count,
                     ..
                 } => {
-                    let bg_col = col_pack_header_box();
+                    let mut bg_col = col_pack_header_box();
+                    bg_col[3] *= section_bg_alpha;
                     let header_color = if p.color_pack_headers {
                         color::simply_love_rgba(*original_index as i32)
                     } else {
@@ -491,7 +510,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         align(0.0, 0.5):
                         xy(highlight_left_world, y_center_item):
                         zoomto(highlight_w, item_h_full):
-                        diffuse(0.0, 0.0, 0.0, 1.0):
+                        diffuse(0.0, 0.0, 0.0, section_bg_alpha):
                         z(51)
                     ));
                     actors.push(act!(quad:
@@ -610,7 +629,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             align(0.0, 0.5):
                             xy(highlight_left_world, y_center_item):
                             zoomto(highlight_w, item_h_colored):
-                            diffuse(SONG_NULL_SYNC_RIGHT_EDGE[0], SONG_NULL_SYNC_RIGHT_EDGE[1], SONG_NULL_SYNC_RIGHT_EDGE[2], SONG_NULL_SYNC_RIGHT_EDGE[3]):
+                            diffuse(SONG_NULL_SYNC_RIGHT_EDGE[0], SONG_NULL_SYNC_RIGHT_EDGE[1], SONG_NULL_SYNC_RIGHT_EDGE[2], SONG_NULL_SYNC_RIGHT_EDGE[3] * song_bg_alpha):
                             fadeleft(1.0):
                             z(52)
                         ));
@@ -1030,14 +1049,15 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
             let y_center_item = offset_from_center_f.mul_add(slot_spacing, center_y);
 
             // Use pack header colors for the empty state
-            let bg_col = col_pack_header_box();
+            let mut bg_col = col_pack_header_box();
+            bg_col[3] *= section_bg_alpha;
 
             // Add black background for 1px gap effect, just like real pack headers
             actors.push(act!(quad:
                 align(0.0, 0.5):
                 xy(highlight_left_world, y_center_item):
                 zoomto(highlight_w, item_h_full):
-                diffuse(0.0, 0.0, 0.0, 1.0):
+                diffuse(0.0, 0.0, 0.0, section_bg_alpha):
                 z(51)
             ));
 
