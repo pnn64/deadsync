@@ -25,6 +25,7 @@ const TIME_PREWARM_CAP_S: u32 = 600;
 const STEP_STATS_BANNER_W: f32 = 418.0;
 const STEP_STATS_BANNER_H: f32 = 164.0;
 const STEP_STATS_SONG_BANNER_ZOOM: f32 = 0.4;
+const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
 
 thread_local! {
     static PADDED_NUM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
@@ -268,6 +269,32 @@ fn cached_blue_window_label(ms: i32) -> Arc<str> {
     cached_text(&BLUE_WINDOW_LABEL_CACHE, ms, TEXT_CACHE_LIMIT, || {
         tr_fmt("Gameplay", "BlueWindowLabel", &[("ms", &ms.to_string())]).to_string()
     })
+}
+
+#[inline(always)]
+fn standard_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
+    row < 5 && disabled_windows[row]
+}
+
+#[inline(always)]
+fn split_row_disabled(disabled_windows: [bool; 5], row: usize) -> bool {
+    match row {
+        0 | 1 => disabled_windows[0],
+        2 => disabled_windows[1],
+        3 => disabled_windows[2],
+        4 => disabled_windows[3],
+        5 => disabled_windows[4],
+        _ => false,
+    }
+}
+
+#[inline(always)]
+fn padded_runs_for_window(count: u32, digits: usize, disabled: bool) -> (Arc<str>, Arc<str>) {
+    if disabled {
+        (cached_padded_num(count, digits), Arc::<str>::from(""))
+    } else {
+        cached_padded_runs(count, digits)
+    }
 }
 
 #[inline(always)]
@@ -762,6 +789,7 @@ pub fn push_versus_step_stats(
                 let show_fa_plus_window = player_profile.show_fa_plus_window;
                 let show_fa_split = show_fa_plus_window || player_profile.custom_fantastic_window;
                 let row_height = if show_fa_split { 29.0 } else { 35.0 };
+                let disabled_windows = player_profile.timing_windows.disabled_windows();
 
                 let (start, end) = state.note_ranges[player_idx];
                 if show_fa_split && end > start {
@@ -788,9 +816,21 @@ pub fn push_versus_step_stats(
                         color::JUDGMENT_DIM_RGBA[5],
                     ];
                     for (row_i, count) in counts.iter().copied().enumerate() {
+                        let disabled = split_row_disabled(disabled_windows, row_i);
                         let y =
                             group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
-                        let (dim_text, bright_text) = cached_padded_runs(count, digits);
+                        let (dim_text, bright_text) =
+                            padded_runs_for_window(count, digits, disabled);
+                        let dim_color = if disabled {
+                            DISABLED_WINDOW_RGBA
+                        } else {
+                            dim_colors[row_i]
+                        };
+                        let bright_color = if disabled {
+                            DISABLED_WINDOW_RGBA
+                        } else {
+                            bright_colors[row_i]
+                        };
                         push_versus_count_texts(
                             actors,
                             is_p1,
@@ -801,8 +841,8 @@ pub fn push_versus_step_stats(
                             numbers_zoom_y,
                             dim_text,
                             bright_text,
-                            dim_colors[row_i],
-                            bright_colors[row_i],
+                            dim_color,
+                            bright_color,
                             z_fg,
                         );
                     }
@@ -816,9 +856,21 @@ pub fn push_versus_step_stats(
                         gameplay::display_judgment_count(state, player_idx, JudgeGrade::Miss),
                     ];
                     for (row_i, count) in counts.iter().copied().enumerate() {
+                        let disabled = standard_row_disabled(disabled_windows, row_i);
                         let y =
                             group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
-                        let (dim_text, bright_text) = cached_padded_runs(count, digits);
+                        let (dim_text, bright_text) =
+                            padded_runs_for_window(count, digits, disabled);
+                        let dim_color = if disabled {
+                            DISABLED_WINDOW_RGBA
+                        } else {
+                            color::JUDGMENT_DIM_RGBA[row_i]
+                        };
+                        let bright_color = if disabled {
+                            DISABLED_WINDOW_RGBA
+                        } else {
+                            color::JUDGMENT_RGBA[row_i]
+                        };
                         push_versus_count_texts(
                             actors,
                             is_p1,
@@ -829,8 +881,8 @@ pub fn push_versus_step_stats(
                             numbers_zoom_y,
                             dim_text,
                             bright_text,
-                            color::JUDGMENT_DIM_RGBA[row_i],
-                            color::JUDGMENT_RGBA[row_i],
+                            dim_color,
+                            bright_color,
                             z_fg,
                         );
                     }
@@ -983,6 +1035,7 @@ pub fn push_double_step_stats(
         let show_fa_split = show_fa_plus_window || player_profile.custom_fantastic_window;
         let show_blue_ms_label = player_profile.custom_fantastic_window
             || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
+        let disabled_windows = player_profile.timing_windows.disabled_windows();
         let blue_window_ms = gameplay::player_blue_window_ms(state, 0);
         let blue_window_label = cached_blue_window_label(blue_window_ms.round() as i32);
         let row_height = if show_fa_split { 29.0 } else { 35.0 };
@@ -1013,13 +1066,23 @@ pub fn push_double_step_stats(
                     ];
                     let labels: Vec<Arc<str>> = (0..6).map(judgment_label).collect();
                     for row_i in 0..labels.len() {
+                        let disabled = standard_row_disabled(disabled_windows, row_i);
                         let local_y = y_base + (row_i as f32 * row_height);
                         let y_numbers = origin_y + (local_y * base_zoom);
                         let y_label = origin_y + ((local_y + 1.0) * base_zoom);
-                        let bright = color::JUDGMENT_RGBA[row_i];
-                        let dim = color::JUDGMENT_DIM_RGBA[row_i];
+                        let bright = if disabled {
+                            DISABLED_WINDOW_RGBA
+                        } else {
+                            color::JUDGMENT_RGBA[row_i]
+                        };
+                        let dim = if disabled {
+                            DISABLED_WINDOW_RGBA
+                        } else {
+                            color::JUDGMENT_DIM_RGBA[row_i]
+                        };
                         let count = counts[row_i];
-                        let (dim_text, bright_text) = cached_padded_runs(count, digits);
+                        let (dim_text, bright_text) =
+                            padded_runs_for_window(count, digits, disabled);
                         let dim_len = dim_text.len() as f32;
 
                         if !dim_text.is_empty() {
@@ -1099,13 +1162,23 @@ pub fn push_double_step_stats(
                         judgment_label(5),
                     ];
                     for row_i in 0..labels.len() {
+                        let disabled = split_row_disabled(disabled_windows, row_i);
                         let local_y = y_base + (row_i as f32 * row_height);
                         let y_numbers = origin_y + (local_y * base_zoom);
                         let y_label = origin_y + ((local_y + 1.0) * base_zoom);
-                        let bright = bright_colors[row_i];
-                        let dim = dim_colors[row_i];
+                        let bright = if disabled {
+                            DISABLED_WINDOW_RGBA
+                        } else {
+                            bright_colors[row_i]
+                        };
+                        let dim = if disabled {
+                            DISABLED_WINDOW_RGBA
+                        } else {
+                            dim_colors[row_i]
+                        };
                         let count = counts[row_i];
-                        let (dim_text, bright_text) = cached_padded_runs(count, digits);
+                        let (dim_text, bright_text) =
+                            padded_runs_for_window(count, digits, disabled);
                         let dim_len = dim_text.len() as f32;
 
                         if !dim_text.is_empty() {
@@ -1853,6 +1926,7 @@ fn build_side_pane(
     let show_fa_split = show_fa_plus_window || player_profile.custom_fantastic_window;
     let show_blue_ms_label = player_profile.custom_fantastic_window
         || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
+    let disabled_windows = player_profile.timing_windows.disabled_windows();
     let blue_window_ms = gameplay::player_blue_window_ms(state, player_idx);
     let blue_window_label = cached_blue_window_label(blue_window_ms.round() as i32);
     actors.reserve(if show_fa_split {
@@ -1882,13 +1956,22 @@ fn build_side_pane(
             for (index, grade) in JUDGMENT_ORDER.iter().enumerate() {
                 let info = judgment_info(*grade);
                 let count = gameplay::display_judgment_count(state, 0, *grade);
+                let disabled = standard_row_disabled(disabled_windows, index);
 
                 let local_y = y_base + (index as f32 * row_height);
                 let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
 
-                let bright = info.color;
-                let dim = color::JUDGMENT_DIM_RGBA[index];
-                let (dim_text, bright_text) = cached_padded_runs(count, digits);
+                let bright = if disabled {
+                    DISABLED_WINDOW_RGBA
+                } else {
+                    info.color
+                };
+                let dim = if disabled {
+                    DISABLED_WINDOW_RGBA
+                } else {
+                    color::JUDGMENT_DIM_RGBA[index]
+                };
+                let (dim_text, bright_text) = padded_runs_for_window(count, digits, disabled);
                 let dim_len = dim_text.len() as f32;
                 let bright_len = bright_text.len() as f32;
 
@@ -1984,10 +2067,22 @@ fn build_side_pane(
             ];
 
             for (index, (label_index, bright, dim, count)) in rows.iter().enumerate() {
+                let disabled = split_row_disabled(disabled_windows, index);
                 let local_y = y_base + (index as f32 * row_height);
                 let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
 
-                let (dim_text, bright_text) = cached_padded_runs(*count, digits);
+                let bright = if disabled {
+                    DISABLED_WINDOW_RGBA
+                } else {
+                    *bright
+                };
+                let dim = if disabled {
+                    DISABLED_WINDOW_RGBA
+                } else {
+                    *dim
+                };
+                let (dim_text, bright_text) =
+                    padded_runs_for_window(*count, digits, disabled);
                 let dim_len = dim_text.len() as f32;
                 let bright_len = bright_text.len() as f32;
 

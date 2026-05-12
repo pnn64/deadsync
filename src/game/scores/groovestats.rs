@@ -12,7 +12,7 @@ use crate::engine::network;
 use crate::game::gameplay;
 use crate::game::judgment;
 use crate::game::online;
-use crate::game::profile::{self, Profile};
+use crate::game::profile::{self, Profile, TimingWindowsOption};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map as JsonMap, Value as JsonValue};
@@ -124,8 +124,10 @@ pub(super) struct GrooveStatsJudgmentCounts {
     pub(super) fantastic: u32,
     pub(super) excellent: u32,
     pub(super) great: u32,
-    pub(super) decent: u32,
-    pub(super) way_off: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) decent: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) way_off: Option<u32>,
     pub(super) miss: u32,
     pub(super) total_steps: u32,
     pub(super) holds_held: u32,
@@ -134,6 +136,26 @@ pub(super) struct GrooveStatsJudgmentCounts {
     pub(super) total_mines: u32,
     pub(super) rolls_held: u32,
     pub(super) total_rolls: u32,
+}
+
+impl GrooveStatsJudgmentCounts {
+    #[inline(always)]
+    const fn optional_count(count: Option<u32>) -> u32 {
+        match count {
+            Some(count) => count,
+            None => 0,
+        }
+    }
+
+    #[inline(always)]
+    pub(super) const fn decent_count(&self) -> u32 {
+        Self::optional_count(self.decent)
+    }
+
+    #[inline(always)]
+    pub(super) const fn way_off_count(&self) -> u32 {
+        Self::optional_count(self.way_off)
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -156,6 +178,7 @@ struct GrooveStatsSubmitPlayerPayload {
     rescore_counts: GrooveStatsRescoreCounts,
     used_cmod: bool,
     comment: String,
+    player_options: String,
 }
 
 #[derive(Debug)]
@@ -638,8 +661,8 @@ fn groovestats_manual_qr_url(
         counts.fantastic,
         counts.excellent,
         counts.great,
-        counts.decent,
-        counts.way_off,
+        counts.decent_count(),
+        counts.way_off_count(),
         counts.miss,
         counts.holds_held,
         counts.total_holds,
@@ -741,19 +764,27 @@ fn groovestats_submit_invalid_reason(
 }
 
 #[inline(always)]
+const fn groovestats_submit_bad_window_count(disabled: bool, count: u32) -> Option<u32> {
+    if disabled { None } else { Some(count) }
+}
+
+#[inline(always)]
 pub(super) fn groovestats_judgment_counts(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> GrooveStatsJudgmentCounts {
     let player = &gs.players[player_idx];
     let windows = gs.live_window_counts[player_idx];
+    let disabled_windows = gs.player_profiles[player_idx]
+        .timing_windows
+        .disabled_windows();
     GrooveStatsJudgmentCounts {
         fantastic_plus: windows.w0,
         fantastic: windows.w1,
         excellent: windows.w2,
         great: windows.w3,
-        decent: windows.w4,
-        way_off: windows.w5,
+        decent: groovestats_submit_bad_window_count(disabled_windows[3], windows.w4),
+        way_off: groovestats_submit_bad_window_count(disabled_windows[4], windows.w5),
         miss: windows.miss,
         total_steps: gs.total_steps[player_idx],
         holds_held: player.holds_held,
@@ -821,7 +852,7 @@ fn groovestats_rescore_counts(gs: &gameplay::State, player_idx: usize) -> Groove
 fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String {
     let profile = &gs.player_profiles[player_idx];
     let counts = groovestats_judgment_counts(gs, player_idx);
-    let mut parts: Vec<String> = Vec::with_capacity(10);
+    let mut parts: Vec<String> = Vec::with_capacity(11);
 
     if profile.show_fa_plus_window {
         let (start, end) = gs.note_ranges[player_idx];
@@ -855,13 +886,17 @@ fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String
         (counts.fantastic, "w"),
         (counts.excellent, "e"),
         (counts.great, "g"),
-        (counts.decent, "d"),
-        (counts.way_off, "wo"),
+        (counts.decent_count(), "d"),
+        (counts.way_off_count(), "wo"),
         (counts.miss, "m"),
     ] {
         if count != 0 {
             parts.push(format!("{count}{suffix}"));
         }
+    }
+
+    if let Some(timing_windows) = groovestats_timing_windows_comment(profile.timing_windows) {
+        parts.push(timing_windows.to_string());
     }
 
     if let crate::game::scroll::ScrollSpeedSetting::CMod(value) = profile.scroll_speed {
@@ -873,6 +908,100 @@ fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String
     } else {
         format!("{GROOVESTATS_COMMENT_PREFIX}, {}", parts.join(", "))
     }
+}
+
+#[inline(always)]
+fn groovestats_timing_windows_comment(setting: TimingWindowsOption) -> Option<&'static str> {
+    match setting {
+        TimingWindowsOption::None => None,
+        TimingWindowsOption::WayOffs => Some("No WO"),
+        TimingWindowsOption::DecentsAndWayOffs => Some("No Dec/WO"),
+        TimingWindowsOption::FantasticsAndExcellents => Some("No Fan/Exc"),
+    }
+}
+
+fn groovestats_player_options_json(profile: &Profile) -> String {
+    let (speed_mod_type, speed_mod) = match profile.scroll_speed {
+        crate::game::scroll::ScrollSpeedSetting::XMod(value) => (1, value),
+        crate::game::scroll::ScrollSpeedSetting::CMod(value) => (2, value),
+        crate::game::scroll::ScrollSpeedSetting::MMod(value) => (3, value),
+    };
+    let mut options = JsonMap::with_capacity(18);
+    options.insert("SpeedModType".to_string(), JsonValue::from(speed_mod_type));
+    options.insert(
+        "SpeedMod".to_string(),
+        JsonValue::from(f64::from(speed_mod)),
+    );
+    options.insert(
+        "BackgroundFilter".to_string(),
+        JsonValue::from(profile.background_filter.percent()),
+    );
+    options.insert(
+        "HideTargets".to_string(),
+        JsonValue::from(profile.hide_targets),
+    );
+    options.insert(
+        "HideSongBG".to_string(),
+        JsonValue::from(profile.hide_song_bg),
+    );
+    options.insert("HideCombo".to_string(), JsonValue::from(profile.hide_combo));
+    options.insert(
+        "HideLifebar".to_string(),
+        JsonValue::from(profile.hide_lifebar),
+    );
+    options.insert("HideScore".to_string(), JsonValue::from(profile.hide_score));
+    options.insert(
+        "HideDanger".to_string(),
+        JsonValue::from(profile.hide_danger),
+    );
+    options.insert(
+        "HideComboExplosions".to_string(),
+        JsonValue::from(profile.hide_combo_explosions),
+    );
+    options.insert(
+        "ColumnFlashOnMiss".to_string(),
+        JsonValue::from(profile.column_flash_on_miss),
+    );
+    options.insert(
+        "SubtractiveScoring".to_string(),
+        JsonValue::from(profile.subtractive_scoring),
+    );
+    options.insert("Mini".to_string(), JsonValue::from(profile.mini_percent));
+    options.insert(
+        "VisualDelay".to_string(),
+        JsonValue::from(profile.visual_delay_ms),
+    );
+    options.insert("Cover".to_string(), JsonValue::from(profile.hide_song_bg));
+    options.insert(
+        "NoMines".to_string(),
+        JsonValue::from(
+            profile
+                .remove_active_mask
+                .contains(profile::RemoveMask::NO_MINES),
+        ),
+    );
+    options.insert(
+        "Reverse".to_string(),
+        JsonValue::from(
+            profile
+                .scroll_option
+                .contains(profile::ScrollOption::Reverse),
+        ),
+    );
+    options.insert(
+        "ShowFaPlusWindow".to_string(),
+        JsonValue::from(profile.show_fa_plus_window),
+    );
+    options.insert(
+        "ShowExScore".to_string(),
+        JsonValue::from(profile.show_ex_score),
+    );
+    options.insert(
+        "ShowFaPlusPane".to_string(),
+        JsonValue::from(profile.show_fa_plus_pane),
+    );
+    serde_json::to_string(&JsonValue::Object(options))
+        .expect("serialize GrooveStats playerOptions JSON")
 }
 
 fn groovestats_payload_for_player(
@@ -905,6 +1034,7 @@ fn groovestats_payload_for_player(
             crate::game::scroll::ScrollSpeedSetting::CMod(_)
         ),
         comment: groovestats_comment_string(gs, player_idx),
+        player_options: groovestats_player_options_json(&gs.player_profiles[player_idx]),
     })
 }
 
@@ -1274,6 +1404,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             continue;
         }
 
+        let itl_score_hundredths = itl::current_score_hundredths_for_submit(gs, player_idx);
         let Some(payload) = groovestats_payload_for_player(gs, player_idx) else {
             groovestats_warn_submit_skip(side, chart_hash, "failed to build submit payload");
             continue;
@@ -1285,7 +1416,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             username: profile.groovestats_username.trim().to_string(),
             profile_name: profile.display_name.clone(),
             profile_id: profile::active_local_profile_id_for_side(side),
-            itl_score_hundredths: Some(itl::current_score_hundredths(gs, player_idx)),
+            itl_score_hundredths,
             show_ex_score: profile.show_ex_score,
             api_key: profile.groovestats_api_key.trim().to_string(),
             payload: payload.clone(),
@@ -1308,7 +1439,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             profile_name: profile.display_name.clone(),
             profile_id: profile::active_local_profile_id_for_side(side),
             token,
-            itl_score_hundredths: Some(itl::current_score_hundredths(gs, player_idx)),
+            itl_score_hundredths,
             show_ex_score: profile.show_ex_score,
             score_10000: payload.score,
             comment: payload.comment.clone(),
@@ -1576,8 +1707,8 @@ mod tests {
                 fantastic: 12,
                 excellent: 18,
                 great: 4,
-                decent: 1,
-                way_off: 0,
+                decent: Some(1),
+                way_off: Some(0),
                 miss: 2,
                 total_steps: 213,
                 holds_held: 5,
@@ -1597,6 +1728,7 @@ mod tests {
             },
             used_cmod: true,
             comment: "[DS], FA+, 99.50EX, 2w, 1m, C650".to_string(),
+            player_options: "{\"SpeedModType\":2,\"SpeedMod\":650}".to_string(),
         };
 
         let value = serde_json::to_value(&payload).expect("serialize GrooveStats submit payload");
@@ -1604,10 +1736,45 @@ mod tests {
         assert_eq!(value["score"], json!(9_975));
         assert!(value.get("isFail").is_none());
         assert_eq!(value["judgmentCounts"]["fantasticPlus"], json!(7));
+        assert_eq!(value["judgmentCounts"]["decent"], json!(1));
+        assert_eq!(value["judgmentCounts"]["wayOff"], json!(0));
         assert_eq!(value["judgmentCounts"]["totalMines"], json!(8));
         assert_eq!(value["rescoreCounts"]["wayOff"], json!(6));
         assert_eq!(value["usedCmod"], json!(true));
         assert_eq!(value["comment"], json!("[DS], FA+, 99.50EX, 2w, 1m, C650"));
+        assert_eq!(
+            value["playerOptions"],
+            json!("{\"SpeedModType\":2,\"SpeedMod\":650}")
+        );
+    }
+
+    #[test]
+    fn groovestats_payload_omits_disabled_bad_windows() {
+        let counts = GrooveStatsJudgmentCounts {
+            fantastic_plus: 8,
+            fantastic: 17,
+            excellent: 98,
+            great: 270,
+            decent: None,
+            way_off: None,
+            miss: 1,
+            total_steps: 394,
+            holds_held: 18,
+            total_holds: 18,
+            mines_hit: 0,
+            total_mines: 0,
+            rolls_held: 8,
+            total_rolls: 8,
+        };
+
+        let value = serde_json::to_value(&counts).expect("serialize judgment counts");
+        assert_eq!(value["fantasticPlus"], json!(8));
+        assert_eq!(value["great"], json!(270));
+        assert_eq!(value["totalSteps"], json!(394));
+        assert!(value.get("decent").is_none());
+        assert!(value.get("wayOff").is_none());
+        assert_eq!(counts.decent_count(), 0);
+        assert_eq!(counts.way_off_count(), 0);
     }
 
     #[test]
@@ -1617,8 +1784,8 @@ mod tests {
             fantastic: 0x0b,
             excellent: 0x0c,
             great: 0x0d,
-            decent: 0x0e,
-            way_off: 0x0f,
+            decent: Some(0x0e),
+            way_off: Some(0x0f),
             miss: 0x10,
             total_steps: 0x1d,
             holds_held: 0x11,
@@ -1724,6 +1891,47 @@ mod tests {
             ),
             Some("simfile relies on lua".to_string())
         );
+    }
+
+    #[test]
+    fn groovestats_comment_marks_disabled_timing_windows() {
+        assert_eq!(
+            groovestats_timing_windows_comment(TimingWindowsOption::None),
+            None
+        );
+        assert_eq!(
+            groovestats_timing_windows_comment(TimingWindowsOption::WayOffs),
+            Some("No WO")
+        );
+        assert_eq!(
+            groovestats_timing_windows_comment(TimingWindowsOption::DecentsAndWayOffs),
+            Some("No Dec/WO")
+        );
+        assert_eq!(
+            groovestats_timing_windows_comment(TimingWindowsOption::FantasticsAndExcellents),
+            Some("No Fan/Exc")
+        );
+    }
+
+    #[test]
+    fn groovestats_player_options_include_submit_relevant_mods() {
+        let mut profile = Profile {
+            scroll_speed: crate::game::scroll::ScrollSpeedSetting::CMod(650.0),
+            hide_song_bg: true,
+            show_fa_plus_window: true,
+            ..Profile::default()
+        };
+        profile.remove_active_mask |= profile::RemoveMask::NO_MINES;
+        profile.scroll_option = profile.scroll_option.union(profile::ScrollOption::Reverse);
+
+        let value: serde_json::Value =
+            serde_json::from_str(&groovestats_player_options_json(&profile)).unwrap();
+        assert_eq!(value["SpeedModType"], json!(2));
+        assert_eq!(value["SpeedMod"], json!(650.0));
+        assert_eq!(value["Cover"], json!(true));
+        assert_eq!(value["NoMines"], json!(true));
+        assert_eq!(value["Reverse"], json!(true));
+        assert_eq!(value["ShowFaPlusWindow"], json!(true));
     }
 
     fn sample_submit_job(show_ex_score: bool) -> GrooveStatsSubmitPlayerJob {

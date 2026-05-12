@@ -555,6 +555,7 @@ struct GameplayModsTextKey {
     dark: i16,
     blind: i16,
     cover: i16,
+    disabled_timing_windows: u8,
 }
 
 #[inline(always)]
@@ -756,6 +757,38 @@ fn turn_option_name(turn: profile::TurnOption) -> Option<&'static str> {
 }
 
 #[inline(always)]
+fn disabled_timing_window_bits(setting: profile::TimingWindowsOption) -> u8 {
+    setting
+        .disabled_windows()
+        .into_iter()
+        .enumerate()
+        .fold(0, |bits, (i, disabled)| {
+            bits | if disabled { 1 << i } else { 0 }
+        })
+}
+
+fn disabled_timing_windows_name(bits: u8) -> Option<String> {
+    if bits == 0 {
+        return None;
+    }
+    let mut text = String::from("No ");
+    let mut first = true;
+    for i in 0..5 {
+        if bits & (1 << i) == 0 {
+            continue;
+        }
+        if first {
+            first = false;
+        } else {
+            text.push('/');
+        }
+        text.push('W');
+        text.push(char::from(b'1' + i as u8));
+    }
+    Some(text)
+}
+
+#[inline(always)]
 const fn turn_option_bits(turn: profile::TurnOption) -> u16 {
     match turn {
         profile::TurnOption::None => 0,
@@ -954,6 +987,7 @@ fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextK
         dark: mod_percent_key(dark),
         blind: mod_percent_key(visibility.blind),
         cover: mod_percent_key(cover),
+        disabled_timing_windows: disabled_timing_window_bits(profile.timing_windows),
     }
 }
 
@@ -2150,6 +2184,9 @@ pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
         parts.push(state.player_profiles[player_idx].noteskin.to_string());
         if key.visual_delay_ms != 0 {
             parts.push(format!("{}ms VisualDelay", key.visual_delay_ms));
+        }
+        if let Some(disabled_windows) = disabled_timing_windows_name(key.disabled_timing_windows) {
+            parts.push(disabled_windows);
         }
 
         parts.join(", ")
@@ -8492,7 +8529,8 @@ mod tests {
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, arrow_effect_zoom,
         bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
-        confusion_rotation_deg, hallway_judgment_zoom, hold_body_segment_budget, hold_draw_span,
+        confusion_rotation_deg, disabled_timing_window_bits, disabled_timing_windows_name,
+        hallway_judgment_zoom, hold_body_segment_budget, hold_draw_span,
         hold_explosion_slot_for_col, hold_head_render_flags, hold_segment_pose, hold_strip_actor,
         hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
         judgment_tilt_rotation_deg, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped,
@@ -9315,6 +9353,22 @@ mod tests {
                 "Big".to_string(),
                 "Mines".to_string(),
             ]
+        );
+    }
+
+    #[test]
+    fn display_mods_use_itg_disabled_timing_window_names() {
+        let bits = disabled_timing_window_bits(profile::TimingWindowsOption::DecentsAndWayOffs);
+        assert_eq!(
+            disabled_timing_windows_name(bits),
+            Some("No W4/W5".to_string())
+        );
+
+        let bits =
+            disabled_timing_window_bits(profile::TimingWindowsOption::FantasticsAndExcellents);
+        assert_eq!(
+            disabled_timing_windows_name(bits),
+            Some("No W1/W2".to_string())
         );
     }
 

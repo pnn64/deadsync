@@ -126,6 +126,7 @@ fn bench_score_info() -> ScoreInfo {
         show_hard_ex_score: true,
         show_fa_plus_pane: true,
         track_early_judgments: true,
+        disabled_timing_windows: [false; 5],
         machine_records: Vec::new(),
         machine_record_highlight_rank: None,
         personal_records: Vec::new(),

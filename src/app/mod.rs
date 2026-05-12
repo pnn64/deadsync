@@ -1834,6 +1834,9 @@ fn score_info_from_stage(
         show_hard_ex_score: player.show_hard_ex_score,
         show_fa_plus_pane: player.show_fa_plus_pane,
         track_early_judgments: player.track_early_judgments,
+        disabled_timing_windows: profile::get_for_side(side)
+            .timing_windows
+            .disabled_windows(),
         machine_records,
         machine_record_highlight_rank,
         personal_records,
@@ -1868,6 +1871,16 @@ fn fallback_eval_mods_text(side: profile::PlayerSide, speed_mod: ScrollSpeedSett
         parts.push("Centered".to_string());
     }
     parts.push(profile.perspective.to_string());
+    let disabled_windows = profile.timing_windows.disabled_windows();
+    if disabled_windows.iter().any(|disabled| *disabled) {
+        let windows = disabled_windows
+            .iter()
+            .enumerate()
+            .filter_map(|(i, disabled)| disabled.then(|| format!("W{}", i + 1)))
+            .collect::<Vec<_>>()
+            .join("/");
+        parts.push(format!("No {windows}"));
+    }
     parts.push(profile.noteskin.to_string());
     Arc::<str>::from(parts.join(", "))
 }
@@ -8455,6 +8468,7 @@ mod tests {
             show_hard_ex_score: false,
             show_fa_plus_pane: false,
             track_early_judgments: false,
+            disabled_timing_windows: [false; 5],
             machine_records: Vec::new(),
             machine_record_highlight_rank: None,
             personal_records: Vec::new(),

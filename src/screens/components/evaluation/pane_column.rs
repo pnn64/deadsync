@@ -17,6 +17,8 @@ use twox_hash::XxHash64;
 
 use super::utils::pane_origin_x;
 
+const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
+
 #[inline(always)]
 fn pane3_solid_arrow_mask_key(texture_key: &str) -> String {
     let mut hasher = XxHash64::default();
@@ -132,6 +134,18 @@ fn column_row_counts(cj: ColumnJudgments, kind: RowKind) -> RowCounts {
             early: None,
             early_all: None,
         },
+    }
+}
+
+#[inline(always)]
+fn row_disabled(disabled_windows: [bool; 5], kind: RowKind) -> bool {
+    match kind {
+        RowKind::FanCombined | RowKind::FanW0 | RowKind::FanW1 => disabled_windows[0],
+        RowKind::Ex => disabled_windows[1],
+        RowKind::Gr => disabled_windows[2],
+        RowKind::Dec => disabled_windows[3],
+        RowKind::Wo => disabled_windows[4],
+        RowKind::Miss => false,
     }
 }
 
@@ -278,13 +292,18 @@ pub fn build_column_judgments_pane(
             // Row labels
             for (row_idx, row) in rows.iter().enumerate() {
                 let y = labels_frame_y + (row_idx as f32 + 1.0).mul_add(row_height, 0.0);
+                let row_color = if row_disabled(score_info.disabled_timing_windows, row.kind) {
+                    DISABLED_WINDOW_RGBA
+                } else {
+                    row.color
+                };
                 actors.push(act!(text: font("miso"): settext(row.label.to_string()):
                     align(1.0, 0.5):
                     xy(labels_right_x, y):
                     zoom(label_zoom):
                     maxwidth(65.0 / label_zoom):
                     horizalign(right):
-                    diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
+                    diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
                     z(101)
                 ));
 
@@ -302,7 +321,7 @@ pub fn build_column_judgments_pane(
                         xy(early_x, y + early_y_offset):
                         zoom(small_zoom):
                         horizalign(right):
-                        diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
+                        diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
                         z(101)
                     ));
 
@@ -312,7 +331,7 @@ pub fn build_column_judgments_pane(
                             xy(labels_right_x, y + all_y_offset):
                             zoom(small_zoom):
                             horizalign(right):
-                            diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
+                            diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
                             z(101)
                         ));
                     }
@@ -577,11 +596,17 @@ pub fn build_column_judgments_pane(
                 for (row_idx, row) in rows.iter().enumerate() {
                     let counts = column_row_counts(cj, row.kind);
                     let y = labels_frame_y + (row_idx as f32 + 1.0).mul_add(row_height, 0.0);
+                    let row_color = if row_disabled(score_info.disabled_timing_windows, row.kind) {
+                        DISABLED_WINDOW_RGBA
+                    } else {
+                        [1.0; 4]
+                    };
                     actors.push(act!(text: font("miso"): settext(counts.count.to_string()):
                         align(0.5, 0.5):
                         xy(col_center_x, y):
                         zoom(number_zoom):
                         horizalign(center):
+                        diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
                         z(101)
                     ));
 
@@ -593,6 +618,7 @@ pub fn build_column_judgments_pane(
                             xy(right_edge_x, y + early_y_offset):
                             zoom(small_zoom):
                             horizalign(right):
+                            diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
                             z(101)
                         ));
                     }
@@ -604,6 +630,7 @@ pub fn build_column_judgments_pane(
                                 xy(col_center_x - 1.0, y + all_y_offset):
                                 zoom(small_zoom):
                                 horizalign(left):
+                                diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
                                 z(101)
                             ));
                         } else {
@@ -612,6 +639,7 @@ pub fn build_column_judgments_pane(
                                 xy(right_edge_x, y + all_y_offset):
                                 zoom(small_zoom):
                                 horizalign(right):
+                                diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
                                 z(101)
                             ));
                         }
@@ -636,7 +664,7 @@ pub fn build_column_judgments_pane(
 
 #[cfg(test)]
 mod tests {
-    use super::{RowCounts, RowKind, column_row_counts};
+    use super::{RowCounts, RowKind, column_row_counts, row_disabled};
     use crate::screens::evaluation::ColumnJudgments;
 
     #[test]
@@ -717,5 +745,14 @@ mod tests {
                 early_all: None,
             }
         );
+    }
+
+    #[test]
+    fn column_rows_map_to_disabled_timing_windows() {
+        let disabled = [false, false, false, true, true];
+        assert!(row_disabled(disabled, RowKind::Dec));
+        assert!(row_disabled(disabled, RowKind::Wo));
+        assert!(!row_disabled(disabled, RowKind::Gr));
+        assert!(!row_disabled(disabled, RowKind::Miss));
     }
 }
