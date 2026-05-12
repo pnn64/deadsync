@@ -397,13 +397,13 @@ struct TextLayoutPlacement {
 }
 
 struct OwnedLayoutEntry {
-    layout: Arc<CachedTextLayout>,
+    layout_index: usize,
     last_used: u64,
 }
 
 struct SharedLayoutEntry {
     _owner: Arc<str>,
-    layout: Arc<CachedTextLayout>,
+    layout_index: usize,
     last_used: u64,
 }
 
@@ -493,6 +493,7 @@ pub struct TextLayoutFrameStats {
 }
 
 pub struct TextLayoutCache {
+    layouts: Vec<Arc<CachedTextLayout>>,
     owned_entries: HashMap<TextLayoutKey, OwnedLayoutMap, TextLayoutHasher>,
     shared_aliases: HashMap<TextLayoutKey, SharedAliasMap, TextLayoutHasher>,
     entry_count: usize,
@@ -514,6 +515,7 @@ impl TextLayoutCache {
     pub fn new(max_entries: usize) -> Self {
         let max_entries = max_entries.max(1);
         Self {
+            layouts: Vec::new(),
             owned_entries: HashMap::default(),
             shared_aliases: HashMap::default(),
             entry_count: 0,
@@ -539,6 +541,7 @@ impl TextLayoutCache {
     }
 
     pub fn clear(&mut self) {
+        self.layouts.clear();
         self.owned_entries.clear();
         self.shared_aliases.clear();
         self.entry_count = 0;
@@ -568,51 +571,10 @@ impl TextLayoutCache {
         self.use_tick
     }
 
-    #[inline(always)]
-    fn touch_owned_layout(&mut self, key: TextLayoutKey, text: &str, tick: u64) -> bool {
-        let Some(entry) = self
-            .owned_entries
-            .get_mut(&key)
-            .and_then(|font_entries| font_entries.get_mut(text))
-        else {
-            return false;
-        };
-        entry.last_used = tick;
-        true
-    }
-
-    #[inline(always)]
+    #[cfg(test)]
     fn owned_layout(&self, key: TextLayoutKey, text: &str) -> Option<&CachedTextLayout> {
-        Some(self.owned_entries.get(&key)?.get(text)?.layout.as_ref())
-    }
-
-    #[inline(always)]
-    fn owned_layout_arc(&self, key: TextLayoutKey, text: &str) -> Option<&Arc<CachedTextLayout>> {
-        Some(&self.owned_entries.get(&key)?.get(text)?.layout)
-    }
-
-    #[inline(always)]
-    fn touch_shared_layout(&mut self, key: TextLayoutKey, text_key: usize, tick: u64) -> bool {
-        let Some(entry) = self
-            .shared_aliases
-            .get_mut(&key)
-            .and_then(|font_entries| font_entries.get_mut(&text_key))
-        else {
-            return false;
-        };
-        entry.last_used = tick;
-        true
-    }
-
-    #[inline(always)]
-    fn shared_layout(&self, key: TextLayoutKey, text_key: usize) -> Option<&CachedTextLayout> {
-        Some(
-            self.shared_aliases
-                .get(&key)?
-                .get(&text_key)?
-                .layout
-                .as_ref(),
-        )
+        let layout_index = self.owned_entries.get(&key)?.get(text)?.layout_index;
+        Some(self.layouts.get(layout_index)?.as_ref())
     }
 
     #[inline(always)]
@@ -641,21 +603,23 @@ impl TextLayoutCache {
         text: &str,
         layout: Arc<CachedTextLayout>,
         tick: u64,
-    ) -> bool {
+    ) -> Option<usize> {
         if self.entry_count >= self.max_entries {
             self.uncached_layout = Some(layout);
-            return false;
+            return None;
         }
+        let layout_index = self.layouts.len();
         let replaced = self.owned_entries.entry(key).or_default().insert(
             text.into(),
             OwnedLayoutEntry {
-                layout,
+                layout_index,
                 last_used: tick,
             },
         );
         debug_assert!(replaced.is_none());
         self.entry_count += usize::from(replaced.is_none());
-        true
+        self.layouts.push(layout);
+        Some(layout_index)
     }
 
     fn insert_shared_layout(
@@ -665,22 +629,24 @@ impl TextLayoutCache {
         text: Arc<str>,
         layout: Arc<CachedTextLayout>,
         tick: u64,
-    ) -> bool {
+    ) -> Option<usize> {
         if self.alias_count >= self.max_aliases {
             self.uncached_layout = Some(layout);
-            return false;
+            return None;
         }
+        let layout_index = self.layouts.len();
         let replaced = self.shared_aliases.entry(key).or_default().insert(
             text_key,
             SharedLayoutEntry {
                 _owner: text,
-                layout,
+                layout_index,
                 last_used: tick,
             },
         );
         debug_assert!(replaced.is_none());
         self.alias_count += usize::from(replaced.is_none());
-        true
+        self.layouts.push(layout);
+        Some(layout_index)
     }
 
     pub fn prewarm_text(
@@ -729,11 +695,15 @@ impl TextLayoutCache {
         text: &str,
     ) -> &CachedTextLayout {
         let tick = self.next_use_tick();
-        if self.touch_owned_layout(key, text, tick) {
+        if let Some(entry) = self
+            .owned_entries
+            .get_mut(&key)
+            .and_then(|font_entries| font_entries.get_mut(text))
+        {
+            entry.last_used = tick;
+            let layout_index = entry.layout_index;
             self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
-            return self
-                .owned_layout(key, text)
-                .expect("owned text layout cache entry touched");
+            return self.layouts[layout_index].as_ref();
         }
         let layout = Arc::new(build_cached_text_layout(
             font,
@@ -744,9 +714,8 @@ impl TextLayoutCache {
             text_layout_mesh_seed(key, text),
         ));
         self.record_layout_build(layout.as_ref());
-        if self.insert_owned_layout(key, text, layout, tick) {
-            self.owned_layout(key, text)
-                .expect("owned text layout cache entry inserted")
+        if let Some(layout_index) = self.insert_owned_layout(key, text, layout, tick) {
+            self.layouts[layout_index].as_ref()
         } else {
             self.uncached_layout_ref()
         }
@@ -762,32 +731,38 @@ impl TextLayoutCache {
         let tick = self.next_use_tick();
         let text_key = Arc::as_ptr(text) as *const () as usize;
         let text_ref = text.as_ref();
-        if self.touch_shared_layout(key, text_key, tick) {
+        if let Some(entry) = self
+            .shared_aliases
+            .get_mut(&key)
+            .and_then(|font_entries| font_entries.get_mut(&text_key))
+        {
+            entry.last_used = tick;
+            let layout_index = entry.layout_index;
             self.frame_stats.shared_hits = self.frame_stats.shared_hits.saturating_add(1);
-            return self
-                .shared_layout(key, text_key)
-                .expect("shared text layout cache entry touched");
+            return self.layouts[layout_index].as_ref();
         }
 
-        if self.touch_owned_layout(key, text_ref, tick) {
+        if let Some(entry) = self
+            .owned_entries
+            .get_mut(&key)
+            .and_then(|font_entries| font_entries.get_mut(text_ref))
+        {
+            entry.last_used = tick;
+            let layout_index = entry.layout_index;
             self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
-            if self.alias_count >= self.max_aliases {
-                return self
-                    .owned_layout(key, text_ref)
-                    .expect("owned text layout cache entry available");
+            if self.alias_count < self.max_aliases {
+                let replaced = self.shared_aliases.entry(key).or_default().insert(
+                    text_key,
+                    SharedLayoutEntry {
+                        _owner: Arc::clone(text),
+                        layout_index,
+                        last_used: tick,
+                    },
+                );
+                debug_assert!(replaced.is_none());
+                self.alias_count += usize::from(replaced.is_none());
             }
-            let layout = Arc::clone(
-                self.owned_layout_arc(key, text_ref)
-                    .expect("owned text layout cache entry touched"),
-            );
-            if self.insert_shared_layout(key, text_key, Arc::clone(text), layout, tick) {
-                return self
-                    .shared_layout(key, text_key)
-                    .expect("shared text layout cache entry inserted from owned layout");
-            }
-            return self
-                .owned_layout(key, text_ref)
-                .expect("owned text layout cache entry available");
+            return self.layouts[layout_index].as_ref();
         }
 
         let layout = Arc::new(build_cached_text_layout(
@@ -799,9 +774,10 @@ impl TextLayoutCache {
             text_layout_mesh_seed(key, text_ref),
         ));
         self.record_layout_build(layout.as_ref());
-        if self.insert_shared_layout(key, text_key, Arc::clone(text), layout, tick) {
-            self.shared_layout(key, text_key)
-                .expect("shared text layout cache entry inserted")
+        if let Some(layout_index) =
+            self.insert_shared_layout(key, text_key, Arc::clone(text), layout, tick)
+        {
+            self.layouts[layout_index].as_ref()
         } else {
             self.uncached_layout_ref()
         }
@@ -4961,14 +4937,22 @@ mod tests {
             wrap_width_pixels: -1,
         };
         let mut cache = TextLayoutCache::new(4);
-        assert!(cache.insert_owned_layout(key, "alpha", Arc::new(test_layout()), 1));
+        assert!(
+            cache
+                .insert_owned_layout(key, "alpha", Arc::new(test_layout()), 1)
+                .is_some()
+        );
         assert_eq!(cache.entry_count, 1);
 
         cache.lock_growth();
 
         assert_eq!(cache.max_entries, 1);
         assert_eq!(cache.max_aliases, 0);
-        assert!(!cache.insert_owned_layout(key, "beta", Arc::new(test_layout()), 2));
+        assert!(
+            cache
+                .insert_owned_layout(key, "beta", Arc::new(test_layout()), 2)
+                .is_none()
+        );
         assert_eq!(cache.entry_count, 1);
         assert!(cache.owned_layout(key, "beta").is_none());
         assert!(cache.uncached_layout.is_some());
@@ -4983,8 +4967,16 @@ mod tests {
         };
         let mut cache = TextLayoutCache::new(1);
 
-        assert!(cache.insert_owned_layout(key, "alpha", Arc::new(test_layout()), 1));
-        assert!(!cache.insert_owned_layout(key, "beta", Arc::new(test_layout()), 2));
+        assert!(
+            cache
+                .insert_owned_layout(key, "alpha", Arc::new(test_layout()), 1)
+                .is_some()
+        );
+        assert!(
+            cache
+                .insert_owned_layout(key, "beta", Arc::new(test_layout()), 2)
+                .is_none()
+        );
         assert_eq!(cache.entry_count, 1);
         assert!(cache.owned_layout(key, "alpha").is_some());
         assert!(cache.owned_layout(key, "beta").is_none());
