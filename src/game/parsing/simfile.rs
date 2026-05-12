@@ -1697,6 +1697,12 @@ fn is_song_art_image(path: &Path) -> bool {
         })
 }
 
+#[inline(always)]
+fn is_mac_resource_fork(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|name| name.to_string_lossy().starts_with("._"))
+}
+
 fn list_song_art_images(song_dir: &Path) -> Vec<PathBuf> {
     let Ok(read_dir) = fs::read_dir(song_dir) else {
         return Vec::new();
@@ -1704,7 +1710,7 @@ fn list_song_art_images(song_dir: &Path) -> Vec<PathBuf> {
     let mut paths = read_dir
         .flatten()
         .map(|entry| entry.path())
-        .filter(|path| path.is_file() && is_song_art_image(path))
+        .filter(|path| !is_mac_resource_fork(path) && path.is_file() && is_song_art_image(path))
         .collect::<Vec<_>>();
     paths.sort_by_cached_key(|path| {
         path.file_name()
