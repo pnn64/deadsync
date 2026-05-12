@@ -3635,9 +3635,10 @@ impl App {
         let total_elapsed_end = frame_finished
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
+        let frame_host_nanos = crate::engine::host_time::now_nanos();
         self.update_stutter_samples(frame_seconds, total_elapsed_end);
         self.record_stutter_diag_frame(
-            frame_finished,
+            frame_host_nanos,
             self.state.screens.current_screen,
             frame_seconds,
             pre_redraw_gap_us,
@@ -3667,7 +3668,7 @@ impl App {
             compose_breakdown,
         );
         self.trace_stutter_diag_dump_if_needed(
-            frame_finished,
+            frame_host_nanos,
             total_elapsed_end,
             self.state.screens.current_screen,
             frame_seconds,
@@ -5421,7 +5422,7 @@ impl App {
     #[inline(always)]
     fn record_stutter_diag_frame(
         &mut self,
-        frame_finished: Instant,
+        frame_host_nanos: u64,
         screen: CurrentScreen,
         frame_seconds: f32,
         pre_redraw_gap_us: u32,
@@ -5453,7 +5454,7 @@ impl App {
             .shell
             .stutter_diag
             .push_frame(StutterDiagFrameSample {
-                host_nanos: crate::engine::host_time::instant_nanos(frame_finished),
+                host_nanos: frame_host_nanos,
                 screen,
                 redraw_request_reason,
                 frame_us: seconds_to_us_u32(frame_seconds),
@@ -5602,7 +5603,7 @@ impl App {
 
     fn trace_stutter_diag_dump_if_needed(
         &mut self,
-        frame_finished: Instant,
+        now_host_nanos: u64,
         total_elapsed: f32,
         screen: CurrentScreen,
         frame_seconds: f32,
@@ -5610,7 +5611,6 @@ impl App {
         if !stutter_diag_enabled() {
             return;
         }
-        let now_host_nanos = crate::engine::host_time::instant_nanos(frame_finished);
         if now_host_nanos == 0 {
             return;
         }

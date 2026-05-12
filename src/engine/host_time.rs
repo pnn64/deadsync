@@ -15,8 +15,19 @@ pub(crate) fn instant_nanos(at: Instant) -> u64 {
         .unwrap_or(0)
 }
 
-#[cfg(unix)]
 #[inline(always)]
 pub(crate) fn now_nanos() -> u64 {
+    platform_now_nanos()
+}
+
+#[cfg(windows)]
+#[inline(always)]
+fn platform_now_nanos() -> u64 {
+    crate::engine::windows_rt::current_host_nanos()
+}
+
+#[cfg(unix)]
+#[inline(always)]
+fn platform_now_nanos() -> u64 {
     instant_nanos(Instant::now())
 }

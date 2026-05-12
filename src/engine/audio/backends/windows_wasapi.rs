@@ -450,7 +450,7 @@ fn render_thread_inner(
             &mut render,
             &prep,
             frames_available,
-            frames_available,
+            padding,
         )?;
     };
 

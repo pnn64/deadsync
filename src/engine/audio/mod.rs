@@ -3,7 +3,7 @@ pub(crate) mod decode;
 mod resample;
 
 use crate::config::dirs;
-use crate::engine::host_time::instant_nanos;
+use crate::engine::host_time::{instant_nanos, now_nanos};
 #[cfg(windows)]
 use crate::engine::windows_rt::current_qpc_nanos;
 use log::{debug, info, warn};
@@ -783,7 +783,7 @@ fn note_timing_diag_callback_gap(anchor_nanos: u64, source: CallbackClockSource)
         if stutter_diag && gap_ns >= stutter_diag_callback_gap_threshold_ns() {
             record_stutter_diag_event(
                 StutterDiagAudioEventKind::CallbackGap,
-                anchor_nanos,
+                now_nanos(),
                 gap_ns,
                 OutputTimingQuality::load(),
             );
@@ -1575,7 +1575,7 @@ pub(crate) fn note_output_underrun() {
     OUTPUT_TIMING_UNDERRUNS.fetch_add(1, Ordering::Relaxed);
     record_stutter_diag_event(
         StutterDiagAudioEventKind::Underrun,
-        instant_nanos(Instant::now()),
+        now_nanos(),
         0,
         OutputTimingQuality::load(),
     );
@@ -1595,7 +1595,7 @@ pub(crate) fn note_output_timing_sanity_failure(quality: OutputTimingQuality) {
     if !matches!(quality, OutputTimingQuality::Fallback) {
         record_stutter_diag_event(
             StutterDiagAudioEventKind::TimingSanity,
-            instant_nanos(Instant::now()),
+            now_nanos(),
             0,
             quality,
         );
@@ -1609,7 +1609,7 @@ pub(crate) fn note_output_clock_fallback() {
     OUTPUT_TIMING_CLOCK_FALLBACKS.fetch_add(1, Ordering::Relaxed);
     record_stutter_diag_event(
         StutterDiagAudioEventKind::ClockFallback,
-        instant_nanos(Instant::now()),
+        now_nanos(),
         0,
         OutputTimingQuality::Fallback,
     );
