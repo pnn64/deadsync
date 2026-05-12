@@ -232,14 +232,20 @@ fn online_itl_self_score_key_for_side(
         return None;
     }
     let side_profile = profile::get_for_side(side);
-    let api_key = side_profile.groovestats_api_key.trim();
-    if api_key.is_empty() {
-        return None;
-    }
+    let api_key = online_itl_cache_key_for_profile(&side_profile)?;
     Some(OnlineItlSelfScoreKey {
         chart_hash: chart_hash.to_string(),
         api_key: api_key.to_string(),
     })
+}
+
+pub(super) fn online_itl_cache_key_for_profile(profile: &profile::Profile) -> Option<&str> {
+    let gs_key = profile.groovestats_api_key.trim();
+    if !gs_key.is_empty() {
+        return Some(gs_key);
+    }
+    let ac_key = profile.arrowcloud_api_key.trim();
+    (!ac_key.is_empty()).then_some(ac_key)
 }
 
 fn online_itl_self_score_index_path_for_profile(profile_id: &str) -> PathBuf {
@@ -572,10 +578,7 @@ fn online_itl_overall_rank_cache_key_for_side(
         return None;
     }
     let side_profile = profile::get_for_side(side);
-    let api_key = side_profile.groovestats_api_key.trim();
-    if api_key.is_empty() {
-        return None;
-    }
+    let api_key = online_itl_cache_key_for_profile(&side_profile)?;
 
     let profile_id = profile::active_local_profile_id_for_side(side);
     if let Some(profile_id) = profile_id.as_deref() {
@@ -604,10 +607,7 @@ fn cached_online_itl_scores_by_chart_for_side(
         return None;
     }
     let side_profile = profile::get_for_side(side);
-    let api_key = side_profile.groovestats_api_key.trim();
-    if api_key.is_empty() {
-        return None;
-    }
+    let api_key = online_itl_cache_key_for_profile(&side_profile)?;
 
     let profile_id = profile::active_local_profile_id_for_side(side);
     if let Some(profile_id) = profile_id.as_deref() {
@@ -1974,6 +1974,18 @@ mod tests {
             profile.timing_windows = setting;
             assert!(!itl_all_timing_windows_enabled(&profile));
         }
+    }
+
+    #[test]
+    fn online_itl_cache_key_prefers_gs_and_falls_back_to_arrowcloud() {
+        let mut profile = profile::Profile::default();
+        assert_eq!(online_itl_cache_key_for_profile(&profile), None);
+
+        profile.arrowcloud_api_key = " ac-key ".to_string();
+        assert_eq!(online_itl_cache_key_for_profile(&profile), Some("ac-key"));
+
+        profile.groovestats_api_key = " gs-key ".to_string();
+        assert_eq!(online_itl_cache_key_for_profile(&profile), Some("gs-key"));
     }
 
     #[test]

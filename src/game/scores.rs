@@ -4882,6 +4882,60 @@ fn fetch_player_score_from_endpoint(
     ))
 }
 
+fn cache_score_import_result_for_profile(
+    profile_id: &str,
+    profile: &Profile,
+    chart_hash: &str,
+    result: ScoreImportFetchResult,
+) -> bool {
+    if result.itl_self_found
+        && let Some(api_key) = itl::online_itl_cache_key_for_profile(profile)
+    {
+        itl::set_cached_online_self_score(
+            Some(profile_id),
+            api_key,
+            chart_hash,
+            result.itl_self_score,
+        );
+        itl::set_cached_online_self_rank(
+            Some(profile_id),
+            api_key,
+            chart_hash,
+            result.itl_self_rank,
+        );
+    }
+
+    if let Some(score) = result.score {
+        cache_gs_score_for_profile(
+            profile_id,
+            chart_hash,
+            score,
+            profile.groovestats_username.trim(),
+        );
+        true
+    } else {
+        false
+    }
+}
+
+fn cache_arrowcloud_bulk_itl_self_score(
+    profile_id: &str,
+    profile: &Profile,
+    chart_hash: &str,
+    scores: ArrowCloudScores,
+) {
+    let Some(score) = scores.ex else {
+        return;
+    };
+    let Some(api_key) = itl::online_itl_cache_key_for_profile(profile) else {
+        return;
+    };
+    let ex_hundredths = (score.score_percent * 10_000.0)
+        .round()
+        .clamp(0.0, 10_000.0) as u32;
+    itl::set_cached_online_self_score(Some(profile_id), api_key, chart_hash, Some(ex_hundredths));
+}
+
 fn fetch_player_score_from_api(
     profile: &Profile,
     chart_hash: &str,
@@ -5076,7 +5130,7 @@ where
 
             let chunk_vec = chunk.to_vec();
             let request_started = Instant::now();
-            let detail = match fetch_arrowcloud_bulk_scores(
+            match fetch_arrowcloud_bulk_scores(
                 &api_key,
                 user_id.as_deref(),
                 &chunk_vec,
@@ -5089,13 +5143,11 @@ where
                     if !scores_by_chart.is_empty() {
                         set_cached_ac_scores_for_profile_bulk(
                             &profile_id,
-                            scores_by_chart.into_iter(),
+                            scores_by_chart
+                                .iter()
+                                .map(|(hash, scores)| (hash.clone(), *scores)),
                         );
                     }
-                    imported_scores += hits;
-                    missing_scores += misses;
-                    pack_hits += hits;
-                    pack_misses += misses;
                     debug!(
                         "ArrowCloud /v1/retrieve-scores pack={}/{} pack_name='{}' chunk={} took={:.0}ms hits={} misses={}",
                         pack_idx + 1,
@@ -5106,12 +5158,75 @@ where
                         hits,
                         misses,
                     );
-                    format!(
-                        "Pack {}/{}: {pack_name} -> {hits} hit, {misses} missing ({:.0}ms)",
-                        pack_idx + 1,
-                        total_packs,
-                        request_elapsed.as_secs_f32() * 1000.0,
-                    )
+
+                    for chart_hash in &chunk_vec {
+                        if should_cancel() {
+                            canceled = true;
+                            break 'packs;
+                        }
+
+                        if let Some(scores) = scores_by_chart.get(chart_hash).copied() {
+                            cache_arrowcloud_bulk_itl_self_score(
+                                &profile_id,
+                                &profile,
+                                chart_hash,
+                                scores,
+                            );
+                            wait_for_next_import_request(last_request_started_at);
+                            if should_cancel() {
+                                canceled = true;
+                                break 'packs;
+                            }
+                            last_request_started_at = Some(Instant::now());
+                            match fetch_player_score_from_endpoint(
+                                ScoreImportEndpoint::ArrowCloud,
+                                &profile,
+                                chart_hash,
+                            ) {
+                                Ok(result) => {
+                                    cache_score_import_result_for_profile(
+                                        &profile_id,
+                                        &profile,
+                                        chart_hash,
+                                        result,
+                                    );
+                                }
+                                Err(e) => {
+                                    failed_requests += 1;
+                                    pack_failures += 1;
+                                    warn!(
+                                        "ArrowCloud detail import request failed for chart {}: {}",
+                                        chart_hash, e,
+                                    );
+                                }
+                            }
+                            imported_scores += 1;
+                            pack_hits += 1;
+                        } else {
+                            missing_scores += 1;
+                            pack_misses += 1;
+                        }
+
+                        processed_charts += 1;
+                        let detail = format!(
+                            "Pack {}/{}: {pack_name} -> {pack_hits} hit, {pack_misses} missing{}",
+                            pack_idx + 1,
+                            total_packs,
+                            if pack_failures > 0 {
+                                format!(", {pack_failures} failed")
+                            } else {
+                                String::new()
+                            },
+                        );
+                        on_progress(ScoreImportProgress {
+                            processed_charts,
+                            total_charts: requested_charts,
+                            imported_scores,
+                            missing_scores,
+                            failed_requests,
+                            detail,
+                        });
+                    }
                 }
                 Err(e) => {
                     let request_elapsed = request_started.elapsed();
@@ -5125,20 +5240,17 @@ where
                         request_elapsed.as_secs_f32() * 1000.0,
                     );
                     warn!("{msg}");
-                    msg
+                    processed_charts += chunk_vec.len();
+                    on_progress(ScoreImportProgress {
+                        processed_charts,
+                        total_charts: requested_charts,
+                        imported_scores,
+                        missing_scores,
+                        failed_requests,
+                        detail: msg,
+                    });
                 }
-            };
-
-            processed_charts += chunk_vec.len();
-            on_progress(ScoreImportProgress {
-                processed_charts,
-                total_charts: requested_charts,
-                imported_scores,
-                missing_scores,
-                failed_requests,
-                detail: detail.clone(),
-            });
-            debug!("{detail}");
+            }
         }
 
         debug!(
@@ -5270,27 +5382,12 @@ where
             last_request_started_at = Some(Instant::now());
             match fetch_player_score_from_endpoint(endpoint, &profile, chart_hash) {
                 Ok(result) => {
-                    if result.itl_self_found {
-                        itl::set_cached_online_self_score(
-                            Some(profile_id.as_str()),
-                            api_key,
-                            chart_hash,
-                            result.itl_self_score,
-                        );
-                        itl::set_cached_online_self_rank(
-                            Some(profile_id.as_str()),
-                            api_key,
-                            chart_hash,
-                            result.itl_self_rank,
-                        );
-                    }
-                    if let Some(score) = result.score {
-                        cache_gs_score_for_profile(
-                            &profile_id,
-                            chart_hash,
-                            score,
-                            username.as_str(),
-                        );
+                    if cache_score_import_result_for_profile(
+                        &profile_id,
+                        &profile,
+                        chart_hash,
+                        result,
+                    ) {
                         imported_scores += 1;
                         pack_hits += 1;
                     } else {
