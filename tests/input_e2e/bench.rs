@@ -365,8 +365,9 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     state.current_beat_visible.fill(0.0);
     state.current_music_time_visible.fill(0.0);
     state.current_background_path = None;
+    state.current_background_key = None;
     state.next_background_change_ix = 0;
-    state.background_texture_key.clear();
+    state.background_texture_key = std::sync::Arc::from("__black");
     state.notes.clear();
     state.note_ranges.fill((0, 0));
     state.row_entry_ranges.fill((0, 0));

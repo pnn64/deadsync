@@ -22,10 +22,11 @@ use crate::game::{
 };
 use log::{debug, info, trace, warn};
 use rssp::streams::StreamSegment;
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::hash::Hasher;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
@@ -3584,11 +3585,15 @@ pub struct State {
     pub stage_intro_text: Arc<str>,
     pub pack_group: Arc<str>,
     pub pack_banner_path: Option<PathBuf>,
+    pub song_banner_key: Option<Arc<str>>,
+    pub pack_banner_key: Option<Arc<str>>,
     pub current_background_path: Option<PathBuf>,
+    pub current_background_key: Option<Arc<str>>,
     pub background_path_dirty: bool,
     pub background_allow_video: bool,
     pub next_background_change_ix: usize,
-    pub background_texture_key: String,
+    pub background_texture_key: Arc<str>,
+    pub foreground_texture_keys: Vec<Arc<str>>,
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
     pub gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
     pub num_cols: usize,
@@ -3816,6 +3821,26 @@ pub struct State {
 }
 
 impl State {
+    pub fn active_foreground_media(&self, beat: f32) -> Option<(&Path, Arc<str>)> {
+        debug_assert_eq!(
+            self.foreground_texture_keys.len(),
+            self.song.foreground_changes.len()
+        );
+        let mut active_ix = None;
+        for (ix, change) in self.song.foreground_changes.iter().enumerate() {
+            if change.start_beat > beat {
+                break;
+            }
+            active_ix = Some(ix);
+        }
+        let ix = active_ix?;
+        let path = self.song.foreground_changes.get(ix)?.path.as_path();
+        if !path.is_file() {
+            return None;
+        }
+        Some((path, self.foreground_texture_keys.get(ix)?.clone()))
+    }
+
     pub fn reset_notefield_model_cache_stats(&self) {
         for cache in &self.notefield_model_cache {
             cache.borrow_mut().reset_stats();
@@ -3836,6 +3861,13 @@ impl State {
                 acc
             },
         )
+    }
+}
+
+pub fn media_path_key(path: &Path) -> Arc<str> {
+    match path.to_string_lossy() {
+        Cow::Borrowed(key) => Arc::from(key),
+        Cow::Owned(key) => Arc::from(key),
     }
 }
 
@@ -5260,6 +5292,13 @@ pub fn init(
                 .map(|p| (p.banner_path.clone(), p.sync_pref))
                 .unwrap_or((None, rssp::pack::SyncPref::Default))
         };
+    let song_banner_key = song.banner_path.as_deref().map(media_path_key);
+    let pack_banner_key = pack_banner_path.as_deref().map(media_path_key);
+    let foreground_texture_keys = song
+        .foreground_changes
+        .iter()
+        .map(|change| media_path_key(&change.path))
+        .collect();
     let pack_sync_offset_seconds = if config.machine_pack_ini_offsets {
         song::pack_sync_pref_offset(pack_sync_pref, config.machine_default_sync_offset)
     } else {
@@ -6081,13 +6120,17 @@ pub fn init(
         stage_intro_text,
         pack_group,
         pack_banner_path,
+        song_banner_key,
+        pack_banner_key,
         current_background_path: None,
+        current_background_key: None,
         background_path_dirty: true,
         background_allow_video: false,
         next_background_change_ix,
         charts,
         gameplay_charts,
-        background_texture_key: "__black".to_string(),
+        background_texture_key: Arc::from("__black"),
+        foreground_texture_keys,
         num_cols,
         cols_per_player,
         num_players,

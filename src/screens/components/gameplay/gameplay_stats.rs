@@ -919,8 +919,7 @@ pub fn push_versus_step_stats(
         ));
     }
 
-    if let Some(banner_path) = &state.song.banner_path {
-        let key = banner_path.to_string_lossy().into_owned();
+    if let Some(key) = &state.song_banner_key {
         actors.push(act!(sprite(key):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y() + 70.0):
@@ -991,8 +990,7 @@ pub fn push_double_step_stats(
 
     // Banner.lua (double): xy(GetNotefieldWidth() - 140, -200)
     let song_banner_x = pane_cx + ((notefield_width - 140.0) * banner_data_zoom);
-    if let Some(banner_path) = &state.song.banner_path {
-        let banner_key = banner_path.to_string_lossy().into_owned();
+    if let Some(banner_key) = &state.song_banner_key {
         let banner_y = pane_cy + (-200.0 * banner_data_zoom);
         actors.push(act!(sprite(banner_key):
             align(0.5, 0.5): xy(song_banner_x, banner_y):
@@ -1003,8 +1001,7 @@ pub fn push_double_step_stats(
     }
 
     // Banner2.lua (zmod pack banner): static (no animation) at the final position.
-    if let Some(pack_banner_path) = state.pack_banner_path.as_ref() {
-        let pack_key = pack_banner_path.to_string_lossy().into_owned();
+    if let Some(pack_key) = state.pack_banner_key.as_ref() {
         let final_size = if note_field_is_centered { 0.2 } else { 0.25 };
         let song_w = STEP_STATS_BANNER_W * STEP_STATS_SONG_BANNER_ZOOM * banner_data_zoom;
         let pack_w = STEP_STATS_BANNER_W * final_size * banner_data_zoom;
@@ -1399,8 +1396,7 @@ fn build_banner(
     wide: bool,
     player_side: profile::PlayerSide,
 ) {
-    if let Some(banner_path) = &state.song.banner_path {
-        let banner_key = banner_path.to_string_lossy().into_owned();
+    if let Some(banner_key) = &state.song_banner_key {
         let local_banner_x = song_banner_local_x(layout, wide, player_side, state.num_players);
         let local_banner_y = -200.0;
         let banner_x = layout.sidepane_center_x + (local_banner_x * layout.banner_data_zoom);
@@ -1444,10 +1440,9 @@ fn build_pack_banner(
     if !wide {
         return;
     }
-    let Some(pack_banner_path) = state.pack_banner_path.as_ref() else {
+    let Some(pack_key) = state.pack_banner_key.as_ref() else {
         return;
     };
-    let pack_key = pack_banner_path.to_string_lossy().into_owned();
 
     let final_size = if layout.note_field_is_centered {
         0.2

@@ -1174,7 +1174,7 @@ fn build_foreground_media(
     layer_local_states: &mut Vec<SongLuaOverlayState>,
     layer_states: &mut Vec<SongLuaOverlayState>,
 ) -> Option<Actor> {
-    let path = state.song.active_foreground_path(state.current_beat)?;
+    let (path, texture_key) = state.active_foreground_media(state.current_beat)?;
     if song_lua_owns_fg_media(
         state,
         overlay_states,
@@ -1185,7 +1185,7 @@ fn build_foreground_media(
         return None;
     }
     Some(shared_banner::cover_sprite(
-        path.to_string_lossy().into_owned(),
+        texture_key,
         screen_center_x(),
         screen_center_y(),
         screen_width(),

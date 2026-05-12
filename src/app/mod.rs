@@ -4958,6 +4958,7 @@ impl App {
                 show_video_backgrounds,
             )
             .cloned();
+        state.current_background_key = path.as_deref().map(crate::game::gameplay::media_path_key);
         state.current_background_path = path.clone();
         state.background_allow_video = show_video_backgrounds;
         state.background_path_dirty = false;
@@ -4972,7 +4973,7 @@ impl App {
             return;
         }
         let show_video_backgrounds = config::get().show_video_backgrounds;
-        let desired_path = {
+        let (desired_path, desired_key) = {
             let gs = match self.state.screens.current_screen {
                 CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_mut(),
                 CurrentScreen::Practice => self
@@ -5000,7 +5001,10 @@ impl App {
             if gs.background_path_dirty || gs.background_allow_video != show_video_backgrounds {
                 Self::refresh_gameplay_background_path(gs, show_video_backgrounds);
             }
-            gs.current_background_path.clone()
+            (
+                gs.current_background_path.clone(),
+                gs.current_background_key.clone(),
+            )
         };
 
         let next_key = self.backend.as_mut().and_then(|backend| {
@@ -5008,10 +5012,12 @@ impl App {
                 &mut self.asset_manager,
                 backend,
                 desired_path.as_deref(),
+                desired_key.as_deref(),
                 show_video_backgrounds,
             )
         });
         if let Some(key) = next_key {
+            let key = Arc::<str>::from(key);
             match self.state.screens.current_screen {
                 CurrentScreen::Gameplay => {
                     if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
