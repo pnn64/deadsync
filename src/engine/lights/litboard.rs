@@ -184,7 +184,7 @@ fn configure_serial(file: &File) -> io::Result<()> {
     use std::mem::size_of;
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Devices::Communication::{
-        COMMTIMEOUTS, DCB, GetCommState, NOPARITY, ONESTOPBIT, SetCommState, SetCommTimeouts,
+        GetCommState, SetCommState, SetCommTimeouts, COMMTIMEOUTS, DCB, NOPARITY, ONESTOPBIT,
     };
     use windows_sys::Win32::Foundation::HANDLE;
 

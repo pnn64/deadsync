@@ -3,6 +3,7 @@ mod gpb;
 mod hid_blue_dot;
 mod litboard;
 mod minimaid_hid;
+mod pac_drive;
 mod snek;
 mod stac2;
 
@@ -72,6 +73,7 @@ pub enum DriverKind {
     Litboard,
     Fusion,
     Gpb,
+    PacDrive,
     HidBlueDot,
     Stac2,
     MinimaidHid,
@@ -85,6 +87,7 @@ impl DriverKind {
             Self::Litboard => "Litboard",
             Self::Fusion => "Fusion",
             Self::Gpb => "GPB",
+            Self::PacDrive => "PacDrive",
             Self::HidBlueDot => "HidBlueDot",
             Self::Stac2 => "STAC2",
             Self::MinimaidHid => "MinimaidHID",
@@ -116,6 +119,7 @@ impl FromStr for DriverKind {
             }
             "fusion" | "icedragonfusion" | "lightsdriverfusion" => Ok(Self::Fusion),
             "gpb" | "icedragongpb" | "lightsdrivergpb" => Ok(Self::Gpb),
+            "pac" | "pacdrive" | "ultimarcpacdrive" => Ok(Self::PacDrive),
             "hidbluedot" | "bluedot" => Ok(Self::HidBlueDot),
             "stac2" | "stacv2" | "stac2hid" | "icedragonstac2" => Ok(Self::Stac2),
             "minimaid" | "minimaidhid" | "linuxminimaid" | "win32minimaid" => Ok(Self::MinimaidHid),
@@ -678,6 +682,7 @@ enum Driver {
     Litboard(litboard::Driver),
     Fusion(fusion::Driver),
     Gpb(gpb::Driver),
+    PacDrive(pac_drive::Driver),
     HidBlueDot(hid_blue_dot::Driver),
     Stac2(stac2::Driver),
     MinimaidHid(minimaid_hid::Driver),
@@ -691,6 +696,7 @@ impl Driver {
             DriverKind::Litboard => Some(Self::Litboard(litboard::Driver::new(litboard_port))),
             DriverKind::Fusion => Some(Self::Fusion(fusion::Driver::new())),
             DriverKind::Gpb => Some(Self::Gpb(gpb::Driver::new())),
+            DriverKind::PacDrive => Some(Self::PacDrive(pac_drive::Driver::new())),
             DriverKind::HidBlueDot => Some(Self::HidBlueDot(hid_blue_dot::Driver::new())),
             DriverKind::Stac2 => Some(Self::Stac2(stac2::Driver::new())),
             DriverKind::MinimaidHid => Some(Self::MinimaidHid(minimaid_hid::Driver::new())),
@@ -703,6 +709,7 @@ impl Driver {
             Self::Litboard(driver) => driver.set(state),
             Self::Fusion(driver) => driver.set(state),
             Self::Gpb(driver) => driver.set(state),
+            Self::PacDrive(driver) => driver.set(state),
             Self::HidBlueDot(driver) => driver.set(state),
             Self::Stac2(driver) => driver.set(state),
             Self::MinimaidHid(driver) => driver.set(state),
@@ -750,6 +757,10 @@ mod tests {
             DriverKind::Fusion
         );
         assert_eq!(DriverKind::from_str("GPB").unwrap(), DriverKind::Gpb);
+        assert_eq!(
+            DriverKind::from_str("PacDrive").unwrap(),
+            DriverKind::PacDrive
+        );
         assert_eq!(
             DriverKind::from_str("HidBlueDot").unwrap(),
             DriverKind::HidBlueDot

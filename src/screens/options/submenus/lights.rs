@@ -10,6 +10,7 @@ pub(in crate::screens::options) const LIGHTS_OPTIONS_ROWS: &[SubRow] = &[
             literal_choice("Litboard"),
             literal_choice("Fusion"),
             literal_choice("GPB"),
+            literal_choice("PacDrive"),
             literal_choice("HidBlueDot"),
             literal_choice("STAC2"),
             literal_choice("MinimaidHID"),
@@ -74,9 +75,10 @@ pub(in crate::screens::options) const fn lights_driver_choice_index(
         LightsDriverKind::Litboard => 2,
         LightsDriverKind::Fusion => 3,
         LightsDriverKind::Gpb => 4,
-        LightsDriverKind::HidBlueDot => 5,
-        LightsDriverKind::Stac2 => 6,
-        LightsDriverKind::MinimaidHid => 7,
+        LightsDriverKind::PacDrive => 5,
+        LightsDriverKind::HidBlueDot => 6,
+        LightsDriverKind::Stac2 => 7,
+        LightsDriverKind::MinimaidHid => 8,
     }
 }
 
@@ -86,9 +88,10 @@ pub(in crate::screens::options) const fn lights_driver_from_choice(idx: usize) -
         2 => LightsDriverKind::Litboard,
         3 => LightsDriverKind::Fusion,
         4 => LightsDriverKind::Gpb,
-        5 => LightsDriverKind::HidBlueDot,
-        6 => LightsDriverKind::Stac2,
-        7 => LightsDriverKind::MinimaidHid,
+        5 => LightsDriverKind::PacDrive,
+        6 => LightsDriverKind::HidBlueDot,
+        7 => LightsDriverKind::Stac2,
+        8 => LightsDriverKind::MinimaidHid,
         _ => LightsDriverKind::Off,
     }
 }
