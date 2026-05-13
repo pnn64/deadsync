@@ -181,12 +181,12 @@ fn build_report(state: &State) -> [u8; REPORT_SIZE] {
     set_bit(
         &mut lights,
         P1_MENU,
-        state.button(Player::P1, ButtonLight::Start),
+        state.menu_button(Player::P1, ButtonLight::Start),
     );
     set_bit(
         &mut lights,
         P2_MENU,
-        state.button(Player::P2, ButtonLight::Start),
+        state.menu_button(Player::P2, ButtonLight::Start),
     );
     set_player(&mut lights, Player::P1, state);
     set_player(&mut lights, Player::P2, state);
@@ -227,7 +227,7 @@ mod tests {
         state.set_cabinet(CabinetLight::MarqueeUpperLeft, true);
         state.set_cabinet(CabinetLight::MarqueeLowerRight, true);
         state.set_cabinet(CabinetLight::BassRight, true);
-        state.set_button(Player::P1, ButtonLight::Start, true);
+        state.set_menu_button(Player::P1, ButtonLight::Start, true);
         state.set_button(Player::P1, ButtonLight::Up, true);
         state.set_button(Player::P1, ButtonLight::Left, true);
         state.set_button(Player::P2, ButtonLight::Down, true);

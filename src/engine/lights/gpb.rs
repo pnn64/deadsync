@@ -151,64 +151,64 @@ fn build_report(state: &State) -> [u8; REPORT_SIZE] {
     set(
         &mut report,
         BTN01,
-        state.button(Player::P1, ButtonLight::Select),
+        state.menu_button(Player::P1, ButtonLight::Select),
     );
     set(
         &mut report,
         BTN02,
-        state.button(Player::P1, ButtonLight::Left),
+        state.menu_button(Player::P1, ButtonLight::Left),
     );
     set(
         &mut report,
         BTN03,
-        state.button(Player::P1, ButtonLight::Right),
+        state.menu_button(Player::P1, ButtonLight::Right),
     );
     set(
         &mut report,
         BTN04,
-        state.button(Player::P1, ButtonLight::Start),
+        state.menu_button(Player::P1, ButtonLight::Start),
     );
 
     set(
         &mut report,
         BTN05,
-        state.button(Player::P2, ButtonLight::Select),
+        state.menu_button(Player::P2, ButtonLight::Select),
     );
     set(
         &mut report,
         BTN06,
-        state.button(Player::P2, ButtonLight::Left),
+        state.menu_button(Player::P2, ButtonLight::Left),
     );
     set(
         &mut report,
         BTN07,
-        state.button(Player::P2, ButtonLight::Right),
+        state.menu_button(Player::P2, ButtonLight::Right),
     );
     set(
         &mut report,
         BTN08,
-        state.button(Player::P2, ButtonLight::Start),
+        state.menu_button(Player::P2, ButtonLight::Start),
     );
 
     set(
         &mut report,
         BTN09,
-        state.button(Player::P1, ButtonLight::Up),
+        state.menu_button(Player::P1, ButtonLight::Up),
     );
     set(
         &mut report,
         BTN10,
-        state.button(Player::P1, ButtonLight::Down),
+        state.menu_button(Player::P1, ButtonLight::Down),
     );
     set(
         &mut report,
         BTN11,
-        state.button(Player::P2, ButtonLight::Up),
+        state.menu_button(Player::P2, ButtonLight::Up),
     );
     set(
         &mut report,
         BTN12,
-        state.button(Player::P2, ButtonLight::Down),
+        state.menu_button(Player::P2, ButtonLight::Down),
     );
     for light in [BTN13, BTN14, BTN15, BTN16] {
         set(&mut report, light, false);
@@ -227,12 +227,12 @@ mod tests {
     #[test]
     fn report_maps_buttons_to_gpb_order() {
         let mut state = State::default();
-        state.set_button(Player::P1, ButtonLight::Select, true);
-        state.set_button(Player::P1, ButtonLight::Right, true);
-        state.set_button(Player::P1, ButtonLight::Up, true);
-        state.set_button(Player::P2, ButtonLight::Left, true);
-        state.set_button(Player::P2, ButtonLight::Start, true);
-        state.set_button(Player::P2, ButtonLight::Down, true);
+        state.set_menu_button(Player::P1, ButtonLight::Select, true);
+        state.set_menu_button(Player::P1, ButtonLight::Right, true);
+        state.set_menu_button(Player::P1, ButtonLight::Up, true);
+        state.set_menu_button(Player::P2, ButtonLight::Left, true);
+        state.set_menu_button(Player::P2, ButtonLight::Start, true);
+        state.set_menu_button(Player::P2, ButtonLight::Down, true);
 
         let report = build_report(&state);
         assert_eq!(report[0], REPORT_ID);

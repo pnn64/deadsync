@@ -59,6 +59,7 @@ impl App {
     ) -> Result<bool, Box<dyn Error>> {
         if !matches!(self.state.shell.transition, TransitionState::Idle) {
             input::clear_debounce_state();
+            self.lights.clear_button_pressed();
             return Ok(false);
         }
         let mut flushed = false;

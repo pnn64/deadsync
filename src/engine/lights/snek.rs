@@ -167,12 +167,12 @@ fn build_report(state: &State) -> [u8; REPORT_SIZE] {
     set(
         &mut report,
         P1_START,
-        state.button(Player::P1, ButtonLight::Start),
+        state.menu_button(Player::P1, ButtonLight::Start),
     );
     set(
         &mut report,
         P2_START,
-        state.button(Player::P2, ButtonLight::Start),
+        state.menu_button(Player::P2, ButtonLight::Start),
     );
     set(
         &mut report,
@@ -231,7 +231,7 @@ mod tests {
         state.set_cabinet(CabinetLight::MarqueeUpperLeft, true);
         state.set_cabinet(CabinetLight::BassRight, true);
         state.set_button(Player::P1, ButtonLight::Left, true);
-        state.set_button(Player::P2, ButtonLight::Start, true);
+        state.set_menu_button(Player::P2, ButtonLight::Start, true);
 
         let report = build_report(&state);
         assert_eq!(report[0], REPORT_ID);

@@ -32,12 +32,12 @@ const ITGIO_LIGHTS: [MappedLight; 16] = [
     cabinet(11, CabinetLight::MarqueeLowerRight),
     cabinet(15, CabinetLight::BassLeft),
     cabinet(15, CabinetLight::BassRight),
-    button(13, Player::P1, ButtonLight::Start),
+    menu_button(13, Player::P1, ButtonLight::Start),
     button(1, Player::P1, ButtonLight::Left),
     button(0, Player::P1, ButtonLight::Right),
     button(3, Player::P1, ButtonLight::Up),
     button(2, Player::P1, ButtonLight::Down),
-    button(12, Player::P2, ButtonLight::Start),
+    menu_button(12, Player::P2, ButtonLight::Start),
     button(5, Player::P2, ButtonLight::Left),
     button(4, Player::P2, ButtonLight::Right),
     button(7, Player::P2, ButtonLight::Up),
@@ -169,6 +169,7 @@ struct MappedLight {
 enum Source {
     Cabinet(CabinetLight),
     Button(Player, ButtonLight),
+    MenuButton(Player, ButtonLight),
 }
 
 const fn cabinet(output: usize, light: CabinetLight) -> MappedLight {
@@ -182,6 +183,13 @@ const fn button(output: usize, player: Player, light: ButtonLight) -> MappedLigh
     MappedLight {
         output,
         source: Source::Button(player, light),
+    }
+}
+
+const fn menu_button(output: usize, player: Player, light: ButtonLight) -> MappedLight {
+    MappedLight {
+        output,
+        source: Source::MenuButton(player, light),
     }
 }
 
@@ -203,6 +211,7 @@ fn source_on(state: &State, source: Source) -> bool {
     match source {
         Source::Cabinet(light) => state.cabinet(light),
         Source::Button(player, button) => state.button(player, button),
+        Source::MenuButton(player, button) => state.menu_button(player, button),
     }
 }
 
@@ -232,7 +241,7 @@ mod tests {
     fn itgio_maps_dance_outputs() {
         let mut state = State::default();
         state.set_cabinet(CabinetLight::BassLeft, true);
-        state.set_button(Player::P1, ButtonLight::Start, true);
+        state.set_menu_button(Player::P1, ButtonLight::Start, true);
         state.set_button(Player::P1, ButtonLight::Right, true);
         state.set_button(Player::P2, ButtonLight::Up, true);
 

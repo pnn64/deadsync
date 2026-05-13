@@ -313,6 +313,7 @@ pub struct HideFlags {
 pub struct State {
     cabinet: [bool; CABINET_COUNT],
     buttons: [[bool; BUTTON_COUNT]; PLAYER_COUNT],
+    menu_buttons: [[bool; BUTTON_COUNT]; PLAYER_COUNT],
 }
 
 impl State {
@@ -324,12 +325,25 @@ impl State {
         self.buttons[player.ix()][button.ix()]
     }
 
+    pub const fn menu_button(self, player: Player, button: ButtonLight) -> bool {
+        self.menu_buttons[player.ix()][button.ix()]
+    }
+
     fn set_cabinet(&mut self, light: CabinetLight, on: bool) {
         self.cabinet[light.ix()] = on;
     }
 
     fn set_button(&mut self, player: Player, button: ButtonLight, on: bool) {
         self.buttons[player.ix()][button.ix()] = on;
+    }
+
+    fn set_menu_button(&mut self, player: Player, button: ButtonLight, on: bool) {
+        self.menu_buttons[player.ix()][button.ix()] = on;
+    }
+
+    fn set_any_button(&mut self, player: Player, button: ButtonLight, on: bool) {
+        self.set_button(player, button, on);
+        self.set_menu_button(player, button, on);
     }
 }
 
@@ -341,7 +355,7 @@ impl State {
 /// snapshots. Warmup: constructed at app startup. Gameplay miss behavior: no
 /// disk or GPU work, only timer math and channel send. Eviction/pruning:
 /// none. Destruction: `Drop` sends all-off and joins the worker. Worst-case
-/// frame cost is O(1) over fixed two-player cabinet/button arrays.
+/// frame cost is O(1) over fixed two-player cabinet/button/menu-button arrays.
 pub struct Manager {
     worker: Option<Worker>,
     driver_kind: DriverKind,
@@ -351,6 +365,7 @@ pub struct Manager {
     joined: [bool; PLAYER_COUNT],
     hide: [HideFlags; PLAYER_COUNT],
     button_pressed: [[bool; BUTTON_COUNT]; PLAYER_COUNT],
+    menu_button_pressed: [[bool; BUTTON_COUNT]; PLAYER_COUNT],
     button_blink: [[f32; BUTTON_COUNT]; PLAYER_COUNT],
     cabinet_blink: [f32; CABINET_COUNT],
     test_auto_seconds: f32,
@@ -370,6 +385,7 @@ impl Manager {
             joined: [false; PLAYER_COUNT],
             hide: [HideFlags::default(); PLAYER_COUNT],
             button_pressed: [[false; BUTTON_COUNT]; PLAYER_COUNT],
+            menu_button_pressed: [[false; BUTTON_COUNT]; PLAYER_COUNT],
             button_blink: [[0.0; BUTTON_COUNT]; PLAYER_COUNT],
             cabinet_blink: [0.0; CABINET_COUNT],
             test_auto_seconds: 0.0,
@@ -439,8 +455,13 @@ impl Manager {
         self.button_pressed[player.ix()][button.ix()] = pressed;
     }
 
+    pub fn set_menu_button_pressed(&mut self, player: Player, button: ButtonLight, pressed: bool) {
+        self.menu_button_pressed[player.ix()][button.ix()] = pressed;
+    }
+
     pub fn clear_button_pressed(&mut self) {
         self.button_pressed = [[false; BUTTON_COUNT]; PLAYER_COUNT];
+        self.menu_button_pressed = [[false; BUTTON_COUNT]; PLAYER_COUNT];
     }
 
     pub fn blink_cabinet(&mut self, light: CabinetLight) {
@@ -485,6 +506,7 @@ impl Manager {
             .min(MARQUEE_LIGHTS.len() - 1);
         state.set_cabinet(MARQUEE_LIGHTS[ix], true);
         state.set_cabinet(CabinetLight::BassLeft, true);
+        state.set_cabinet(CabinetLight::BassRight, true);
     }
 
     fn build_menu(&self, state: &mut State, elapsed_seconds: f32, directions: bool) {
@@ -493,11 +515,10 @@ impl Manager {
         let pulse = ((elapsed_seconds.max(0.0) * 2.0).fract()) < 0.5;
         state.set_cabinet(marquee, true);
         for player in [Player::P1, Player::P2] {
-            let p = player.ix();
-            state.set_button(player, ButtonLight::Start, self.joined[p] || pulse);
-            if directions {
+            state.set_menu_button(player, ButtonLight::Start, pulse);
+            if directions && self.joined[player.ix()] {
                 for button in DIRECTION_BUTTONS {
-                    state.set_button(player, button, pulse);
+                    state.set_menu_button(player, button, pulse);
                 }
             }
         }
@@ -526,17 +547,16 @@ impl Manager {
         }
     }
 
-    fn build_stage(&self, state: &mut State, elapsed_seconds: f32) {
-        let pulse = ((elapsed_seconds.max(0.0) * 2.0).fract()) < 0.5;
+    fn build_stage(&self, state: &mut State, _elapsed_seconds: f32) {
         for light in MARQUEE_LIGHTS {
             state.set_cabinet(light, true);
         }
         for light in BASS_LIGHTS {
-            state.set_cabinet(light, pulse);
+            state.set_cabinet(light, true);
         }
         for player in [Player::P1, Player::P2] {
             if self.joined[player.ix()] {
-                state.set_button(player, ButtonLight::Start, true);
+                state.set_menu_button(player, ButtonLight::Start, true);
             }
         }
     }
@@ -546,14 +566,14 @@ impl Manager {
         let cabinet = TEST_CABINET_LIGHTS[step % TEST_CABINET_LIGHTS.len()];
         let (player, button) = TEST_BUTTON_LIGHTS[step % TEST_BUTTON_LIGHTS.len()];
         state.set_cabinet(cabinet, true);
-        state.set_button(player, button, true);
+        state.set_any_button(player, button, true);
     }
 
     fn build_test_manual(&self, state: &mut State) {
         let cabinet = TEST_CABINET_LIGHTS[self.test_cabinet_ix % TEST_CABINET_LIGHTS.len()];
         let (player, button) = TEST_BUTTON_LIGHTS[self.test_button_ix % TEST_BUTTON_LIGHTS.len()];
         state.set_cabinet(cabinet, true);
-        state.set_button(player, button, true);
+        state.set_any_button(player, button, true);
     }
 
     fn hidden(&self, light: CabinetLight) -> bool {
@@ -580,19 +600,19 @@ impl Manager {
                 ButtonLight::Start,
                 ButtonLight::Select,
             ] {
-                if chart_pad_lights
+                let chart_drives_pad = chart_pad_lights
                     && matches!(
                         button,
                         ButtonLight::Left
                             | ButtonLight::Down
                             | ButtonLight::Up
                             | ButtonLight::Right
-                    )
-                {
-                    continue;
-                }
-                if self.button_pressed[player.ix()][button.ix()] {
+                    );
+                if !chart_drives_pad && self.button_pressed[player.ix()][button.ix()] {
                     state.set_button(player, button, true);
+                }
+                if self.menu_button_pressed[player.ix()][button.ix()] {
+                    state.set_menu_button(player, button, true);
                 }
             }
         }
@@ -847,6 +867,36 @@ mod tests {
         let chart = lights.build_state(0.0);
         assert!(!chart.button(Player::P1, ButtonLight::Left));
         assert!(chart.button(Player::P1, ButtonLight::Right));
+    }
+
+    #[test]
+    fn menu_lights_do_not_drive_pad_outputs() {
+        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        lights.set_mode(Mode::MenuStartAndDirections);
+        lights.set_joined([true, false]);
+
+        let pulse_on = lights.build_state(0.0);
+        assert!(pulse_on.menu_button(Player::P1, ButtonLight::Start));
+        assert!(pulse_on.menu_button(Player::P1, ButtonLight::Left));
+        assert!(pulse_on.menu_button(Player::P2, ButtonLight::Start));
+        assert!(!pulse_on.menu_button(Player::P2, ButtonLight::Left));
+        assert!(!pulse_on.button(Player::P1, ButtonLight::Start));
+        assert!(!pulse_on.button(Player::P1, ButtonLight::Left));
+
+        let pulse_off = lights.build_state(0.3);
+        assert!(!pulse_off.menu_button(Player::P1, ButtonLight::Start));
+        assert!(!pulse_off.menu_button(Player::P1, ButtonLight::Left));
+    }
+
+    #[test]
+    fn physical_pad_presses_light_pads_in_menu() {
+        let mut lights = Manager::new(DriverKind::Off, DEFAULT_LITBOARD_PORT);
+        lights.set_mode(Mode::MenuStartAndDirections);
+        lights.set_button_pressed(Player::P1, ButtonLight::Left, true);
+
+        let state = lights.build_state(0.3);
+        assert!(state.button(Player::P1, ButtonLight::Left));
+        assert!(!state.menu_button(Player::P1, ButtonLight::Left));
     }
 
     #[test]

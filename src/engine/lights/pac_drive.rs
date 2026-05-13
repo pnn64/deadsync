@@ -207,7 +207,7 @@ fn build_report(state: &State) -> [u8; REPORT_SIZE] {
     set_led(
         &mut report,
         LED10,
-        state.button(Player::P1, ButtonLight::Start),
+        state.menu_button(Player::P1, ButtonLight::Start),
     );
 
     set_led(
@@ -233,7 +233,7 @@ fn build_report(state: &State) -> [u8; REPORT_SIZE] {
     set_led(
         &mut report,
         LED15,
-        state.button(Player::P2, ButtonLight::Start),
+        state.menu_button(Player::P2, ButtonLight::Start),
     );
     set_led(&mut report, LED16, false);
     report
@@ -259,7 +259,7 @@ mod tests {
         let mut state = State::default();
         state.set_button(Player::P1, ButtonLight::Left, true);
         state.set_button(Player::P1, ButtonLight::Up, true);
-        state.set_button(Player::P1, ButtonLight::Start, true);
+        state.set_menu_button(Player::P1, ButtonLight::Start, true);
         state.set_button(Player::P2, ButtonLight::Right, true);
         state.set_button(Player::P2, ButtonLight::Down, true);
         state.set_cabinet(CabinetLight::MarqueeUpperLeft, true);

@@ -271,6 +271,7 @@ impl App {
         let from = self.state.screens.current_screen;
         let mut target = target;
         let cfg = config::get();
+        self.lights.clear_button_pressed();
 
         if (from == CurrentScreen::SelectMusic || from == CurrentScreen::SelectCourse)
             && target == CurrentScreen::Menu

@@ -118,14 +118,18 @@ fn pack_cabinet(state: &State) -> u8 {
 }
 
 fn pack_controller(state: &State, player: Player, out: &mut [u8]) {
+    let menu_left = state.menu_button(player, ButtonLight::Left);
+    let menu_right = state.menu_button(player, ButtonLight::Right);
+    let menu_up = state.menu_button(player, ButtonLight::Up);
+    let menu_down = state.menu_button(player, ButtonLight::Down);
+    let start = state.menu_button(player, ButtonLight::Start);
+    let select = state.menu_button(player, ButtonLight::Select);
     let left = state.button(player, ButtonLight::Left);
     let right = state.button(player, ButtonLight::Right);
     let up = state.button(player, ButtonLight::Up);
     let down = state.button(player, ButtonLight::Down);
-    let start = state.button(player, ButtonLight::Start);
-    let select = state.button(player, ButtonLight::Select);
 
-    out[0] = pack_printable(left, right, up, down, start, select);
+    out[0] = pack_printable(menu_left, menu_right, menu_up, menu_down, start, select);
     out[1] = pack_printable(false, false, false, false, false, false);
     out[2] = pack_printable(left, right, up, down, false, false);
     out[3] = pack_printable(false, false, false, false, false, false);
@@ -235,15 +239,15 @@ mod tests {
         state.set_cabinet(CabinetLight::MarqueeUpperLeft, true);
         state.set_cabinet(CabinetLight::BassRight, true);
         state.set_button(Player::P1, ButtonLight::Left, true);
-        state.set_button(Player::P1, ButtonLight::Start, true);
+        state.set_menu_button(Player::P1, ButtonLight::Start, true);
         state.set_button(Player::P2, ButtonLight::Right, true);
 
         let report = build_report(&state);
         assert_eq!(report.len(), REPORT_SIZE);
         assert_eq!(report[0] & 0x3f, 0x21);
-        assert_eq!(report[1] & 0x3f, 0x11);
+        assert_eq!(report[1] & 0x3f, 0x10);
         assert_eq!(report[3] & 0x3f, 0x01);
-        assert_eq!(report[7] & 0x3f, 0x02);
+        assert_eq!(report[7] & 0x3f, 0x00);
         assert_eq!(report[9] & 0x3f, 0x02);
         assert_eq!(report[13], LINE_FEED);
     }

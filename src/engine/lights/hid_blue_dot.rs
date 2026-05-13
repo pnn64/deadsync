@@ -160,12 +160,12 @@ fn build_cabinet_report(state: &State) -> [u8; REPORT_SIZE] {
     set_bit(
         &mut bits,
         CAB_P1_START,
-        state.button(Player::P1, ButtonLight::Start),
+        state.menu_button(Player::P1, ButtonLight::Start),
     );
     set_bit(
         &mut bits,
         CAB_P2_START,
-        state.button(Player::P2, ButtonLight::Start),
+        state.menu_button(Player::P2, ButtonLight::Start),
     );
     set_bit(
         &mut bits,
@@ -236,7 +236,7 @@ mod tests {
         state.set_cabinet(CabinetLight::MarqueeUpperLeft, true);
         state.set_cabinet(CabinetLight::BassRight, true);
         state.set_button(Player::P1, ButtonLight::Left, true);
-        state.set_button(Player::P1, ButtonLight::Start, true);
+        state.set_menu_button(Player::P1, ButtonLight::Start, true);
         state.set_button(Player::P2, ButtonLight::Down, true);
 
         assert_eq!(

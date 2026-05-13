@@ -161,6 +161,8 @@ fn blink_note_lights(
     state: &crate::game::gameplay::State,
     column: usize,
 ) {
+    lights.blink_cabinet(CabinetLight::BassLeft);
+    lights.blink_cabinet(CabinetLight::BassRight);
     let Some(local_col) = physical_light_col(state, column) else {
         return;
     };
@@ -257,40 +259,78 @@ const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
     }
 }
 
-const fn light_button_from_action(
-    action: input::VirtualAction,
-) -> Option<(LightPlayer, ButtonLight)> {
+const fn light_button_from_action(action: input::VirtualAction) -> Option<LightButtonSource> {
     match action {
-        input::VirtualAction::p1_left | input::VirtualAction::p1_menu_left => {
-            Some((LightPlayer::P1, ButtonLight::Left))
+        input::VirtualAction::p1_left => {
+            Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Left))
         }
-        input::VirtualAction::p1_down | input::VirtualAction::p1_menu_down => {
-            Some((LightPlayer::P1, ButtonLight::Down))
+        input::VirtualAction::p1_down => {
+            Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Down))
         }
-        input::VirtualAction::p1_up | input::VirtualAction::p1_menu_up => {
-            Some((LightPlayer::P1, ButtonLight::Up))
+        input::VirtualAction::p1_up => {
+            Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Up))
         }
-        input::VirtualAction::p1_right | input::VirtualAction::p1_menu_right => {
-            Some((LightPlayer::P1, ButtonLight::Right))
+        input::VirtualAction::p1_right => {
+            Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Right))
         }
-        input::VirtualAction::p1_start => Some((LightPlayer::P1, ButtonLight::Start)),
-        input::VirtualAction::p1_select => Some((LightPlayer::P1, ButtonLight::Select)),
-        input::VirtualAction::p2_left | input::VirtualAction::p2_menu_left => {
-            Some((LightPlayer::P2, ButtonLight::Left))
+        input::VirtualAction::p1_menu_left => {
+            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Left))
         }
-        input::VirtualAction::p2_down | input::VirtualAction::p2_menu_down => {
-            Some((LightPlayer::P2, ButtonLight::Down))
+        input::VirtualAction::p1_menu_down => {
+            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Down))
         }
-        input::VirtualAction::p2_up | input::VirtualAction::p2_menu_up => {
-            Some((LightPlayer::P2, ButtonLight::Up))
+        input::VirtualAction::p1_menu_up => {
+            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Up))
         }
-        input::VirtualAction::p2_right | input::VirtualAction::p2_menu_right => {
-            Some((LightPlayer::P2, ButtonLight::Right))
+        input::VirtualAction::p1_menu_right => {
+            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Right))
         }
-        input::VirtualAction::p2_start => Some((LightPlayer::P2, ButtonLight::Start)),
-        input::VirtualAction::p2_select => Some((LightPlayer::P2, ButtonLight::Select)),
+        input::VirtualAction::p1_start => {
+            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Start))
+        }
+        input::VirtualAction::p1_select => Some(LightButtonSource::Menu(
+            LightPlayer::P1,
+            ButtonLight::Select,
+        )),
+        input::VirtualAction::p2_left => {
+            Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Left))
+        }
+        input::VirtualAction::p2_down => {
+            Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Down))
+        }
+        input::VirtualAction::p2_up => {
+            Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Up))
+        }
+        input::VirtualAction::p2_right => {
+            Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Right))
+        }
+        input::VirtualAction::p2_menu_left => {
+            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Left))
+        }
+        input::VirtualAction::p2_menu_down => {
+            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Down))
+        }
+        input::VirtualAction::p2_menu_up => {
+            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Up))
+        }
+        input::VirtualAction::p2_menu_right => {
+            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Right))
+        }
+        input::VirtualAction::p2_start => {
+            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Start))
+        }
+        input::VirtualAction::p2_select => Some(LightButtonSource::Menu(
+            LightPlayer::P2,
+            ButtonLight::Select,
+        )),
         _ => None,
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LightButtonSource {
+    Pad(LightPlayer, ButtonLight),
+    Menu(LightPlayer, ButtonLight),
 }
 
 fn hide_flags_for_gameplay(state: &crate::game::gameplay::State) -> [HideFlags; 2] {
@@ -3079,10 +3119,18 @@ impl App {
     }
 
     fn sync_light_input(&mut self, ev: &InputEvent) {
-        let Some((player, button)) = light_button_from_action(ev.action) else {
+        let Some(source) = light_button_from_action(ev.action) else {
             return;
         };
-        self.lights.set_button_pressed(player, button, ev.pressed);
+        match source {
+            LightButtonSource::Pad(player, button) => {
+                self.lights.set_button_pressed(player, button, ev.pressed);
+            }
+            LightButtonSource::Menu(player, button) => {
+                self.lights
+                    .set_menu_button_pressed(player, button, ev.pressed);
+            }
+        }
     }
 
     fn current_light_hide_flags(&self) -> [HideFlags; 2] {
@@ -6270,6 +6318,7 @@ impl App {
 
         if is_transitioning {
             input::clear_debounce_state();
+            self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
             return true;
         }
@@ -6388,6 +6437,7 @@ impl App {
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
         if is_transitioning {
             input::clear_debounce_state();
+            self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
             return;
         }
