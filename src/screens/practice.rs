@@ -59,6 +59,13 @@ enum CursorHoldDir {
     Down,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PracticeNavMode {
+    GameplayButtons,
+    DedicatedFiveKey,
+    DedicatedThreeKey,
+}
+
 pub struct State {
     pub(crate) gameplay: gameplay_screen::State,
     mode: Mode,
@@ -205,7 +212,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     if !ev.pressed {
         if matches!(state.mode, Mode::Editing)
-            && let Some(dir) = cursor_hold_dir_for_action(ev.action)
+            && let Some(dir) = edit_cursor_hold_dir_for_action(ev.action)
         {
             release_cursor_hold_input(state, dir);
             return ScreenAction::None;
@@ -227,45 +234,34 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 ScreenAction::None
             }
         },
-        Mode::Editing => match ev.action {
-            VirtualAction::p1_up
-            | VirtualAction::p2_up
-            | VirtualAction::p1_menu_up
-            | VirtualAction::p2_menu_up => {
-                press_cursor_hold_input(state, CursorHoldDir::Up);
-                move_cursor_by_hold_dir(state, CursorHoldDir::Up);
-                ScreenAction::None
-            }
-            VirtualAction::p1_down
-            | VirtualAction::p2_down
-            | VirtualAction::p1_menu_down
-            | VirtualAction::p2_menu_down => {
-                press_cursor_hold_input(state, CursorHoldDir::Down);
-                move_cursor_by_hold_dir(state, CursorHoldDir::Down);
-                ScreenAction::None
-            }
-            VirtualAction::p1_left | VirtualAction::p2_left | VirtualAction::p1_menu_left => {
-                change_snap(state, -1);
-                ScreenAction::None
-            }
-            VirtualAction::p1_right | VirtualAction::p2_right | VirtualAction::p1_menu_right => {
-                change_snap(state, 1);
-                ScreenAction::None
-            }
-            VirtualAction::p1_start | VirtualAction::p2_start => {
-                open_main_menu(state);
-                ScreenAction::None
-            }
-            VirtualAction::p1_back | VirtualAction::p2_back => {
-                open_main_menu(state);
-                ScreenAction::None
-            }
-            VirtualAction::p1_select | VirtualAction::p2_select => {
-                set_area_marker(state);
-                ScreenAction::None
-            }
-            _ => ScreenAction::None,
-        },
+        Mode::Editing => handle_edit_input(state, ev),
+    }
+}
+
+fn handle_edit_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if let Some(dir) = edit_cursor_hold_dir_for_action(ev.action) {
+        press_cursor_hold_input(state, dir);
+        move_cursor_by_hold_dir(state, dir);
+        return ScreenAction::None;
+    }
+    if let Some(delta) = edit_snap_delta_for_action(ev.action) {
+        change_snap(state, delta);
+        return ScreenAction::None;
+    }
+    match ev.action {
+        VirtualAction::p1_start | VirtualAction::p2_start => {
+            open_main_menu(state);
+            ScreenAction::None
+        }
+        VirtualAction::p1_back | VirtualAction::p2_back => {
+            open_main_menu(state);
+            ScreenAction::None
+        }
+        VirtualAction::p1_select | VirtualAction::p2_select => {
+            set_area_marker(state);
+            ScreenAction::None
+        }
+        _ => ScreenAction::None,
     }
 }
 
@@ -439,21 +435,11 @@ fn handle_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if !ev.pressed {
         return ScreenAction::None;
     }
+    if let Some(delta) = menu_step_delta_for_action(ev.action) {
+        step_menu(state, delta);
+        return ScreenAction::None;
+    }
     match ev.action {
-        VirtualAction::p1_up
-        | VirtualAction::p2_up
-        | VirtualAction::p1_menu_up
-        | VirtualAction::p2_menu_up => {
-            step_menu(state, -1);
-            ScreenAction::None
-        }
-        VirtualAction::p1_down
-        | VirtualAction::p2_down
-        | VirtualAction::p1_menu_down
-        | VirtualAction::p2_menu_down => {
-            step_menu(state, 1);
-            ScreenAction::None
-        }
         VirtualAction::p1_start
         | VirtualAction::p2_start
         | VirtualAction::p1_select
@@ -580,6 +566,119 @@ const fn menu_item_enabled(_item: MenuItem) -> bool {
     true
 }
 
+fn practice_nav_mode() -> PracticeNavMode {
+    let cfg = crate::config::get();
+    practice_nav_mode_from_config(cfg.only_dedicated_menu_buttons, cfg.three_key_navigation)
+}
+
+const fn practice_nav_mode_from_config(
+    only_dedicated_menu_buttons: bool,
+    three_key_navigation: bool,
+) -> PracticeNavMode {
+    if !only_dedicated_menu_buttons {
+        PracticeNavMode::GameplayButtons
+    } else if three_key_navigation {
+        PracticeNavMode::DedicatedThreeKey
+    } else {
+        PracticeNavMode::DedicatedFiveKey
+    }
+}
+
+fn edit_cursor_hold_dir_for_action(action: VirtualAction) -> Option<CursorHoldDir> {
+    edit_cursor_hold_dir_for_action_in_mode(practice_nav_mode(), action)
+}
+
+const fn edit_cursor_hold_dir_for_action_in_mode(
+    mode: PracticeNavMode,
+    action: VirtualAction,
+) -> Option<CursorHoldDir> {
+    match mode {
+        PracticeNavMode::GameplayButtons => match action {
+            VirtualAction::p1_up
+            | VirtualAction::p2_up
+            | VirtualAction::p1_menu_up
+            | VirtualAction::p2_menu_up => Some(CursorHoldDir::Up),
+            VirtualAction::p1_down
+            | VirtualAction::p2_down
+            | VirtualAction::p1_menu_down
+            | VirtualAction::p2_menu_down => Some(CursorHoldDir::Down),
+            _ => None,
+        },
+        PracticeNavMode::DedicatedFiveKey => match action {
+            VirtualAction::p1_menu_up | VirtualAction::p2_menu_up => Some(CursorHoldDir::Up),
+            VirtualAction::p1_menu_down | VirtualAction::p2_menu_down => Some(CursorHoldDir::Down),
+            _ => None,
+        },
+        PracticeNavMode::DedicatedThreeKey => match action {
+            VirtualAction::p1_menu_left | VirtualAction::p2_menu_left => Some(CursorHoldDir::Up),
+            VirtualAction::p1_menu_right | VirtualAction::p2_menu_right => {
+                Some(CursorHoldDir::Down)
+            }
+            _ => None,
+        },
+    }
+}
+
+fn edit_snap_delta_for_action(action: VirtualAction) -> Option<isize> {
+    edit_snap_delta_for_action_in_mode(practice_nav_mode(), action)
+}
+
+const fn edit_snap_delta_for_action_in_mode(
+    mode: PracticeNavMode,
+    action: VirtualAction,
+) -> Option<isize> {
+    match mode {
+        PracticeNavMode::GameplayButtons => match action {
+            VirtualAction::p1_left | VirtualAction::p2_left | VirtualAction::p1_menu_left => {
+                Some(-1)
+            }
+            VirtualAction::p1_right | VirtualAction::p2_right | VirtualAction::p1_menu_right => {
+                Some(1)
+            }
+            _ => None,
+        },
+        PracticeNavMode::DedicatedFiveKey => match action {
+            VirtualAction::p1_menu_left | VirtualAction::p2_menu_left => Some(-1),
+            VirtualAction::p1_menu_right | VirtualAction::p2_menu_right => Some(1),
+            _ => None,
+        },
+        PracticeNavMode::DedicatedThreeKey => None,
+    }
+}
+
+fn menu_step_delta_for_action(action: VirtualAction) -> Option<isize> {
+    menu_step_delta_for_action_in_mode(practice_nav_mode(), action)
+}
+
+const fn menu_step_delta_for_action_in_mode(
+    mode: PracticeNavMode,
+    action: VirtualAction,
+) -> Option<isize> {
+    match mode {
+        PracticeNavMode::GameplayButtons => match action {
+            VirtualAction::p1_up
+            | VirtualAction::p2_up
+            | VirtualAction::p1_menu_up
+            | VirtualAction::p2_menu_up => Some(-1),
+            VirtualAction::p1_down
+            | VirtualAction::p2_down
+            | VirtualAction::p1_menu_down
+            | VirtualAction::p2_menu_down => Some(1),
+            _ => None,
+        },
+        PracticeNavMode::DedicatedFiveKey => match action {
+            VirtualAction::p1_menu_up | VirtualAction::p2_menu_up => Some(-1),
+            VirtualAction::p1_menu_down | VirtualAction::p2_menu_down => Some(1),
+            _ => None,
+        },
+        PracticeNavMode::DedicatedThreeKey => match action {
+            VirtualAction::p1_menu_left | VirtualAction::p2_menu_left => Some(-1),
+            VirtualAction::p1_menu_right | VirtualAction::p2_menu_right => Some(1),
+            _ => None,
+        },
+    }
+}
+
 fn start_selection_like_itg(state: &mut State) {
     let (start_beat, stop_beat) = selection_range(state)
         .filter(|(start, stop)| stop > start)
@@ -617,20 +716,6 @@ fn stop_playback(state: &mut State) {
     let current_beat = state.gameplay.current_beat.max(MIN_CURSOR_BEAT);
     state.mode = Mode::Editing;
     set_cursor(state, current_beat);
-}
-
-const fn cursor_hold_dir_for_action(action: VirtualAction) -> Option<CursorHoldDir> {
-    match action {
-        VirtualAction::p1_up
-        | VirtualAction::p2_up
-        | VirtualAction::p1_menu_up
-        | VirtualAction::p2_menu_up => Some(CursorHoldDir::Up),
-        VirtualAction::p1_down
-        | VirtualAction::p2_down
-        | VirtualAction::p1_menu_down
-        | VirtualAction::p2_menu_down => Some(CursorHoldDir::Down),
-        _ => None,
-    }
 }
 
 const fn opposite_cursor_hold_dir(dir: CursorHoldDir) -> CursorHoldDir {
@@ -1394,4 +1479,94 @@ fn append_help_section(
         shadowlength(1.0):
         z(3000)
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        CursorHoldDir, PracticeNavMode, edit_cursor_hold_dir_for_action_in_mode,
+        edit_snap_delta_for_action_in_mode, menu_step_delta_for_action_in_mode,
+        practice_nav_mode_from_config,
+    };
+    use crate::engine::input::VirtualAction;
+
+    #[test]
+    fn practice_nav_mode_follows_dedicated_menu_config() {
+        assert_eq!(
+            practice_nav_mode_from_config(false, false),
+            PracticeNavMode::GameplayButtons
+        );
+        assert_eq!(
+            practice_nav_mode_from_config(true, false),
+            PracticeNavMode::DedicatedFiveKey
+        );
+        assert_eq!(
+            practice_nav_mode_from_config(true, true),
+            PracticeNavMode::DedicatedThreeKey
+        );
+    }
+
+    #[test]
+    fn dedicated_five_key_ignores_gameplay_arrows_in_practice_editing() {
+        assert_eq!(
+            edit_cursor_hold_dir_for_action_in_mode(
+                PracticeNavMode::DedicatedFiveKey,
+                VirtualAction::p1_up,
+            ),
+            None
+        );
+        assert_eq!(
+            edit_cursor_hold_dir_for_action_in_mode(
+                PracticeNavMode::DedicatedFiveKey,
+                VirtualAction::p1_menu_up,
+            ),
+            Some(CursorHoldDir::Up)
+        );
+        assert_eq!(
+            edit_snap_delta_for_action_in_mode(
+                PracticeNavMode::DedicatedFiveKey,
+                VirtualAction::p1_left,
+            ),
+            None
+        );
+        assert_eq!(
+            edit_snap_delta_for_action_in_mode(
+                PracticeNavMode::DedicatedFiveKey,
+                VirtualAction::p1_menu_left,
+            ),
+            Some(-1)
+        );
+    }
+
+    #[test]
+    fn dedicated_three_key_uses_menu_left_right_for_practice_navigation() {
+        assert_eq!(
+            edit_cursor_hold_dir_for_action_in_mode(
+                PracticeNavMode::DedicatedThreeKey,
+                VirtualAction::p1_menu_left,
+            ),
+            Some(CursorHoldDir::Up)
+        );
+        assert_eq!(
+            edit_cursor_hold_dir_for_action_in_mode(
+                PracticeNavMode::DedicatedThreeKey,
+                VirtualAction::p1_menu_right,
+            ),
+            Some(CursorHoldDir::Down)
+        );
+        assert_eq!(
+            menu_step_delta_for_action_in_mode(
+                PracticeNavMode::DedicatedThreeKey,
+                VirtualAction::p1_menu_left,
+            ),
+            Some(-1)
+        );
+        assert_eq!(
+            menu_step_delta_for_action_in_mode(
+                PracticeNavMode::DedicatedThreeKey,
+                VirtualAction::p1_up,
+            ),
+            None
+        );
+    }
 }
