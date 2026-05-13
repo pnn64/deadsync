@@ -6692,6 +6692,7 @@ pub fn push_actors(
                 settext(status_text):
                 align(0.5, 0.5):
                 xy(screen_center_x(), screen_center_y() + 150.0):
+                horizalign(center):
                 shadowlength(2.0):
                 strokecolor(0.0, 0.0, 0.0, 1.0):
                 diffuse(1.0, 1.0, 1.0, 1.0):
@@ -6736,6 +6737,7 @@ pub fn push_actors(
                 settext(adjustments):
                 align(0.5, 0.5):
                 xy(screen_center_x() + 160.0, screen_center_y()):
+                horizalign(center):
                 diffuse(1.0, 1.0, 1.0, 1.0):
                 z(2101)
             ));
