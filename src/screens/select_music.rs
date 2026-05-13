@@ -1429,6 +1429,37 @@ pub(crate) fn best_steps_index(
     }
 }
 
+fn apply_initial_steps_for_song(
+    state: &mut State,
+    song: &SongData,
+    target_chart_type: &str,
+    chart_hash: Option<&str>,
+) -> bool {
+    if let Some(hash) = chart_hash
+        && let Some(idx) = steps_index_for_chart_hash(song, target_chart_type, hash)
+    {
+        state.selected_steps_index = idx;
+        if idx < color::FILE_DIFFICULTY_NAMES.len() {
+            state.preferred_difficulty_index = idx;
+        }
+        state.p2_selected_steps_index = state.selected_steps_index;
+        state.p2_preferred_difficulty_index = state.preferred_difficulty_index;
+        return true;
+    }
+
+    if let Some(idx) = best_steps_index(song, target_chart_type, state.preferred_difficulty_index) {
+        state.selected_steps_index = idx;
+    }
+    if let Some(idx) =
+        best_steps_index(song, target_chart_type, state.p2_preferred_difficulty_index)
+    {
+        state.p2_selected_steps_index = idx;
+    } else {
+        state.p2_selected_steps_index = state.selected_steps_index;
+    }
+    false
+}
+
 fn rebuild_displayed_entries(state: &mut State) {
     state.entries = build_displayed_entries(
         &state.all_entries,
@@ -1490,6 +1521,12 @@ fn song_entry_index(entries: &[MusicWheelEntry], target_song: &Arc<SongData>) ->
     entries
         .iter()
         .position(|e| matches!(e, MusicWheelEntry::Song(song) if Arc::ptr_eq(song, target_song)))
+}
+
+fn first_song_entry_index(entries: &[MusicWheelEntry]) -> Option<usize> {
+    entries
+        .iter()
+        .position(|entry| matches!(entry, MusicWheelEntry::Song(_)))
 }
 
 fn group_name_for_song(
@@ -3198,6 +3235,8 @@ pub fn init() -> State {
         &scored_pack_names,
         new_pack_mode,
     );
+    // ITGmania falls back to the first selectable song and opens its group.
+    let initial_expanded_pack_name = last_pack_name.or_else(|| first_header_name(&all_entries));
 
     let mut state = State {
         all_entries: all_entries.clone(),
@@ -3247,7 +3286,7 @@ pub fn init() -> State {
         leaderboard: select_music_menu::LeaderboardOverlayState::Hidden,
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
-        expanded_pack_name: last_pack_name,
+        expanded_pack_name: initial_expanded_pack_name,
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
@@ -3327,46 +3366,37 @@ pub fn init() -> State {
     let displayed_entries_len = state.entries.len();
 
     // Restore selection
-    if let Some(last_song) = last_song_arc
-        && let Some(idx) = state.entries.iter().position(|e| match e {
-            MusicWheelEntry::Song(s) => Arc::ptr_eq(s, &last_song),
-            _ => false,
-        })
-    {
-        state.selected_index = idx;
-        if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-            if let Some(hash) = last_played.chart_hash.as_deref()
-                && let Some(idx2) = steps_index_for_chart_hash(song, target_chart_type, hash)
-            {
-                state.selected_steps_index = idx2;
-                if idx2 < color::FILE_DIFFICULTY_NAMES.len() {
-                    state.preferred_difficulty_index = idx2;
-                }
-                state.p2_selected_steps_index = state.selected_steps_index;
-                state.p2_preferred_difficulty_index = state.preferred_difficulty_index;
-                state.prev_selected_index = state.selected_index;
-                debug!(
-                    "SelectMusic state ready: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
-                    total_songs,
-                    lock_wait,
-                    rebuild_dur,
-                    started.elapsed()
-                );
-                return state;
-            }
+    let restored_last_song = if let Some(last_song) = last_song_arc {
+        if let Some(idx) = song_entry_index(&state.entries, &last_song) {
+            state.selected_index = idx;
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    };
 
-            if let Some(idx2) =
-                best_steps_index(song, target_chart_type, state.preferred_difficulty_index)
-            {
-                state.selected_steps_index = idx2;
-            }
-            if let Some(idx2) =
-                best_steps_index(song, target_chart_type, state.p2_preferred_difficulty_index)
-            {
-                state.p2_selected_steps_index = idx2;
-            } else {
-                state.p2_selected_steps_index = state.selected_steps_index;
-            }
+    if !restored_last_song && let Some(idx) = first_song_entry_index(&state.entries) {
+        state.selected_index = idx;
+    }
+
+    if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index).cloned() {
+        let chart_hash = if restored_last_song {
+            last_played.chart_hash.as_deref()
+        } else {
+            None
+        };
+        if apply_initial_steps_for_song(&mut state, song.as_ref(), target_chart_type, chart_hash) {
+            state.prev_selected_index = state.selected_index;
+            debug!(
+                "SelectMusic state ready: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
+                total_songs,
+                lock_wait,
+                rebuild_dur,
+                started.elapsed()
+            );
+            return state;
         }
     }
 
@@ -10439,9 +10469,9 @@ mod tests {
     use super::{
         PREVIEW_DELAY_SECONDS, WheelSortMode, build_displayed_entries,
         build_playlist_entries_from_text, build_playlist_song_lookup,
-        delayed_selection_updates_blocked, handle_raw_key_event, init_placeholder,
-        reset_preview_after_gameplay, select_music_lobby_lock_text_for, steps_index_for_side,
-        sync_low_confidence_warning,
+        delayed_selection_updates_blocked, first_song_entry_index, handle_raw_key_event,
+        init_placeholder, reset_preview_after_gameplay, select_music_lobby_lock_text_for,
+        steps_index_for_side, sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
     use crate::engine::input::{PadDir, RawKeyboardEvent};
@@ -10789,6 +10819,15 @@ mod tests {
                 super::MusicWheelEntry::PackHeader { name, .. } if name == "Pack B"
             )
         }));
+    }
+
+    #[test]
+    fn fallback_selection_uses_first_song_not_pack_header() {
+        let entries =
+            build_displayed_entries(&test_entries(), Some("Pack A"), SelectMusicWheelStyle::Iidx);
+
+        assert_eq!(first_song_entry_index(&entries), Some(1));
+        assert!(matches!(entries[1], super::MusicWheelEntry::Song(_)));
     }
 
     #[test]
