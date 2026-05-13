@@ -15,6 +15,7 @@ use crate::game::scores;
 use crate::game::song::{self, SongData};
 use crate::game::timing::{
     BeatInfoCache, ROWS_PER_BEAT, TIMING_WINDOW_ADD_S, TimingData, TimingProfile, TimingProfileNs,
+    beat_to_note_row,
 };
 use crate::game::{
     profile::{self, TimingTickMode as TickMode},
@@ -3615,6 +3616,9 @@ pub struct State {
     display_clock: FrameStableDisplayClock,
     display_clock_diag: DisplayClockDiagRing,
     pub lane_note_indices: [Vec<usize>; MAX_COLS],
+    // Render candidates are keyed like ITG NoteData rows. Note::row_index is
+    // Dead Sync's dense RSSP row and is not comparable to BeatToNoteRow spans.
+    pub lane_note_row_indices: [Vec<usize>; MAX_COLS],
     pub lane_hold_indices: [Vec<usize>; MAX_COLS],
     pub row_entry_ranges: [(usize, usize); MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
@@ -4324,6 +4328,20 @@ fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_s
             debug_assert!(note_index < state.notes.len());
             debug_assert_eq!(state.notes[note_index].column, col);
         }
+        debug_assert_eq!(
+            state.lane_note_row_indices[col].len(),
+            state.lane_note_indices[col].len()
+        );
+        debug_assert!(state.lane_note_row_indices[col].windows(2).all(|pair| {
+            let left = pair[0];
+            let right = pair[1];
+            (beat_to_note_row(state.notes[left].beat), left)
+                <= (beat_to_note_row(state.notes[right].beat), right)
+        }));
+        for &note_index in &state.lane_note_row_indices[col] {
+            debug_assert!(note_index < state.notes.len());
+            debug_assert_eq!(state.notes[note_index].column, col);
+        }
         debug_assert!(state.lane_hold_indices[col].windows(2).all(|pair| {
             let left = pair[0];
             let right = pair[1];
@@ -4340,6 +4358,7 @@ fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_s
     }
     for col in state.num_cols..MAX_COLS {
         debug_assert!(state.lane_note_indices[col].is_empty());
+        debug_assert!(state.lane_note_row_indices[col].is_empty());
         debug_assert!(state.lane_hold_indices[col].is_empty());
     }
     let mut lane_positions = [0usize; MAX_COLS];
@@ -5791,6 +5810,15 @@ pub fn init(
             }
         }
     }
+    let mut lane_note_row_indices = lane_note_indices.clone();
+    for indices in lane_note_row_indices
+        .iter_mut()
+        .take(num_cols.min(MAX_COLS))
+    {
+        indices.sort_unstable_by_key(|&note_index| {
+            (beat_to_note_row(notes[note_index].beat), note_index)
+        });
+    }
     let pending_edges_capacity = input_queue_cap(num_cols);
     let replay_seconds = (song_time_ns_to_seconds(music_end_time_ns) + start_delay)
         .max(song_time_ns_to_seconds(notes_end_time_ns) + start_delay);
@@ -6150,6 +6178,7 @@ pub fn init(
         display_clock: FrameStableDisplayClock::new(song_time_ns_from_seconds(init_music_time)),
         display_clock_diag: DisplayClockDiagRing::new(),
         lane_note_indices,
+        lane_note_row_indices,
         lane_hold_indices,
         row_entry_ranges,
         judged_row_cursor: row_entry_range_start,

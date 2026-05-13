@@ -3481,12 +3481,18 @@ fn lane_window_bounds_by_note_row(
     if max_row < 0 {
         return (0, 0);
     }
-    let min_row = min_row.max(0) as usize;
-    let max_row = max_row as usize;
+    let min_row = min_row.max(0);
     (
-        note_indices.partition_point(|&note_index| notes[note_index].row_index < min_row),
-        note_indices.partition_point(|&note_index| notes[note_index].row_index <= max_row),
+        note_indices.partition_point(|&note_index| note_itg_row(&notes[note_index]) < min_row),
+        note_indices.partition_point(|&note_index| note_itg_row(&notes[note_index]) <= max_row),
     )
+}
+
+#[inline(always)]
+fn note_itg_row(note: &Note) -> i32 {
+    // ITG's TrackMap rows are BeatToNoteRow(beat). Dead Sync keeps a separate
+    // dense row_index for gameplay row bookkeeping.
+    beat_to_note_row(note.beat)
 }
 
 #[inline(always)]
@@ -3497,14 +3503,14 @@ fn lane_hold_window_bounds_by_note_row(
     max_row: i32,
 ) -> (usize, usize) {
     let (mut start, end) = lane_window_bounds_by_note_row(hold_indices, notes, min_row, max_row);
-    let min_row = min_row.max(0) as usize;
+    let min_row = min_row.max(0);
     while start > 0 {
         let prev_note_index = hold_indices[start - 1];
         let prev_end_row = notes[prev_note_index]
             .hold
             .as_ref()
-            .map_or(notes[prev_note_index].row_index, |hold| {
-                beat_to_note_row(hold.end_beat).max(0) as usize
+            .map_or(note_itg_row(&notes[prev_note_index]), |hold| {
+                beat_to_note_row(hold.end_beat)
             });
         if prev_end_row < min_row {
             break;
@@ -3637,12 +3643,12 @@ fn hold_overlaps_visible_window(
         let hold_end_row = notes[note_index]
             .hold
             .as_ref()
-            .map_or(notes[note_index].row_index, |hold| {
-                beat_to_note_row(hold.end_beat).max(0) as usize
+            .map_or(note_itg_row(&notes[note_index]), |hold| {
+                beat_to_note_row(hold.end_beat)
             });
         return max_row >= 0
-            && hold_end_row >= min_row.max(0) as usize
-            && notes[note_index].row_index <= max_row as usize;
+            && hold_end_row >= min_row.max(0)
+            && note_itg_row(&notes[note_index]) <= max_row;
     }
     true
 }
@@ -3944,6 +3950,9 @@ pub fn build_bundles(
         let current_time_ns = state.current_music_time_visible_ns[player_idx];
         let current_time = song_time_ns_to_seconds(current_time_ns);
         let current_beat = state.current_beat_visible[player_idx];
+        // ITG's FindFirst/FindLastDisplayedBeat search from m_fSongBeat, while
+        // ArrowEffects::GetYOffset uses m_fSongBeatVisible internally.
+        let current_search_beat = timing.get_beat_for_time_ns(state.current_music_time_ns);
         // The column swap for Step's hold-turn section is handled at the player bundle
         // level. Keep the actual note/receptor/ghost visuals on the normal noteskin
         // path here; applying an extra local Y turn breaks model-backed arrows and hit
@@ -4019,7 +4028,7 @@ pub fn build_bundles(
         // no accel mods are active.
         let visible_row_range = {
             let first_beat_to_draw = find_first_displayed_beat(
-                current_beat,
+                current_search_beat,
                 draw_distance_after_targets,
                 &state.note_count_stats[player_idx],
                 |beat| {
@@ -4033,7 +4042,7 @@ pub fn build_bundles(
                 },
             );
             let last_beat_to_draw = find_last_displayed_beat(
-                current_beat,
+                current_search_beat,
                 draw_distance_before_targets,
                 display_speed_percent,
                 accel.boomerang > f32::EPSILON,
@@ -6700,7 +6709,7 @@ pub fn build_bundles(
         // Visible tap and mine notes
         for col_idx in 0..num_cols {
             let col = col_start + col_idx;
-            let column_note_indices = &state.lane_note_indices[col];
+            let column_note_indices = &state.lane_note_row_indices[col];
             let dir = column_dirs[col_idx];
             let receptor_y_lane = column_receptor_ys[col_idx];
             let fill_slot = mine_ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
@@ -6715,10 +6724,10 @@ pub fn build_bundles(
             for_each_visible_note_index(
                 column_note_indices,
                 &state.notes,
-                // Tap positions are culled below by exact travel offset. A
-                // row-derived prefilter can hide valid taps when displayed
-                // timing and chart rows are not ordered the same way.
-                None,
+                // ITGmania gets tap candidates from a row-keyed TrackMap via
+                // GetTapNoteRangeInclusive, then NoteDisplay::IsOnScreen
+                // performs the exact ArrowEffects visibility check below.
+                visible_row_range,
                 |note_index| {
                     let note = &state.notes[note_index];
                     if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
@@ -8588,6 +8597,12 @@ mod tests {
         }
     }
 
+    fn test_note_at_dense_row(beat: f32, row_index: usize) -> Note {
+        let mut note = test_note_at_beat(beat);
+        note.row_index = row_index;
+        note
+    }
+
     #[test]
     fn edit_beat_bar_labels_default_measure_indices() {
         assert_eq!(
@@ -8680,6 +8695,25 @@ mod tests {
             |note_index| visited.push(note_index),
         );
         assert_eq!(visited, vec![0, 1]);
+    }
+
+    #[test]
+    fn visible_note_window_uses_itg_rows_not_dense_rows() {
+        let notes = vec![
+            test_note_at_dense_row(0.0, 0),
+            test_note_at_dense_row(4.0, 1),
+        ];
+        let note_indices = vec![0usize, 1usize];
+        let mut visited = Vec::new();
+
+        super::for_each_visible_note_index(
+            &note_indices,
+            &notes,
+            Some((beat_to_note_row(3.5), beat_to_note_row(4.5))),
+            |note_index| visited.push(note_index),
+        );
+
+        assert_eq!(visited, vec![1]);
     }
 
     #[test]
