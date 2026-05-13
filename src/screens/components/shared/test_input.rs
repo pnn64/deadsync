@@ -4,7 +4,7 @@ pub use crate::engine::input::fsr::{
     BarView as FsrBarView, VIEW_SENSOR_COUNT as FSR_BAR_COUNT, View as FsrView,
 };
 use crate::engine::input::{
-    InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
+    InputEvent, InputSource, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
 };
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
@@ -430,7 +430,7 @@ pub fn apply_virtual_input(state: &mut State, ev: &InputEvent) -> FsrEditResult 
     {
         state.buttons_held.insert((player, btn), ev.pressed);
     }
-    if !ev.pressed || state.fsr_view.is_none() {
+    if !ev.pressed || state.fsr_view.is_none() || ev.source == InputSource::Gamepad {
         return FsrEditResult::None;
     }
     match fsr_ui_action(ev.action) {
@@ -1000,7 +1000,7 @@ fn push_fsr_readout(
     }
     actors.push(act!(text:
         font("miso"):
-        settext(format!("L/R sensor   U/D threshold +/-{}", FSR_THRESHOLD_STEP)):
+        settext(format!("Keyboard L/R sensor   U/D threshold +/-{}", FSR_THRESHOLD_STEP)):
         align(0.5, 0.0):
         xy(panel_x, panel_y + panel_h - 20.0 * scale):
         zoom(0.5 * scale):
@@ -1192,18 +1192,22 @@ mod tests {
         }
     }
 
-    fn input_event(action: VirtualAction) -> InputEvent {
+    fn input_event_from(action: VirtualAction, source: InputSource) -> InputEvent {
         let now = Instant::now();
         InputEvent {
             action,
             input_slot: 0,
             pressed: true,
-            source: InputSource::Keyboard,
+            source,
             timestamp: now,
             timestamp_host_nanos: 0,
             stored_at: now,
             emitted_at: now,
         }
+    }
+
+    fn input_event(action: VirtualAction) -> InputEvent {
+        input_event_from(action, InputSource::Keyboard)
     }
 
     #[test]
@@ -1342,6 +1346,36 @@ mod tests {
                 sensor_index: 1,
                 threshold: 115,
             })
+        );
+    }
+
+    #[test]
+    fn fsr_gamepad_input_does_not_edit_thresholds() {
+        let mut state = State::default();
+        set_fsr_view(&mut state, Some(test_fsr_view()));
+
+        assert_eq!(
+            apply_virtual_input(
+                &mut state,
+                &input_event_from(VirtualAction::p1_right, InputSource::Gamepad),
+            ),
+            FsrEditResult::None
+        );
+        assert_eq!(
+            apply_virtual_input(
+                &mut state,
+                &input_event_from(VirtualAction::p1_up, InputSource::Gamepad),
+            ),
+            FsrEditResult::None
+        );
+        assert_eq!(selected_fsr_bar(&state), 0);
+        assert_eq!(take_fsr_command(&mut state), None);
+        assert_eq!(
+            state
+                .buttons_held
+                .get(&(PlayerSlot::P1, LogicalButton::Up))
+                .copied(),
+            Some(true)
         );
     }
 }
