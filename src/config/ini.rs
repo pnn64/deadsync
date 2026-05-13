@@ -13,6 +13,11 @@ impl SimpleIni {
 
     pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<(), std::io::Error> {
         let content = std::fs::read_to_string(path)?;
+        self.load_str(&content);
+        Ok(())
+    }
+
+    pub fn load_str(&mut self, content: &str) {
         self.sections.clear();
 
         let mut current_section: Option<String> = None;
@@ -45,8 +50,6 @@ impl SimpleIni {
                     .insert(key.to_string(), value);
             }
         }
-
-        Ok(())
     }
 
     pub fn get(&self, section: &str, key: &str) -> Option<String> {

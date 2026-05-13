@@ -52,17 +52,21 @@ pub(super) fn create_default_config_file() -> Result<(), std::io::Error> {
     std::fs::write(path, defaults::build_content())
 }
 
-pub(super) fn save_without_keymaps() {
+pub(super) fn current_save_content() -> String {
     let cfg = *lock_config();
     let keymap = crate::engine::input::get_keymap();
     let machine_default_noteskin = MACHINE_DEFAULT_NOTESKIN.lock().unwrap().clone();
     let additional_song_folders = ADDITIONAL_SONG_FOLDERS.lock().unwrap().clone();
-    queue_save_write(save::build_content(
+    save::build_content(
         &cfg,
         &keymap,
         &machine_default_noteskin,
         &additional_song_folders,
-    ));
+    )
+}
+
+pub(super) fn save_without_keymaps() {
+    queue_save_write(current_save_content());
 }
 
 fn push_section(content: &mut String, name: &str) {
