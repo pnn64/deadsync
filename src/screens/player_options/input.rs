@@ -186,55 +186,17 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             let w = compute_row_window(visible_rows, selected_visible, active);
             let mid_pos = (VISIBLE_ROWS as f32) * 0.5 - 0.5;
             let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
-            let measure_counter_anchor_visible_idx = parent_anchor_visible_index(
-                &state.pane().row_map,
-                RowId::MeasureCounter,
-                visibility,
-            );
-            let judgment_tilt_anchor_visible_idx =
-                parent_anchor_visible_index(&state.pane().row_map, RowId::JudgmentTilt, visibility);
-            let error_bar_anchor_visible_idx =
-                parent_anchor_visible_index(&state.pane().row_map, RowId::ErrorBar, visibility);
-            let hide_anchor_visible_idx =
-                parent_anchor_visible_index(&state.pane().row_map, RowId::Hide, visibility);
-            let gameplay_extras_anchor_visible_idx = parent_anchor_visible_index(
-                &state.pane().row_map,
-                RowId::GameplayExtras,
-                visibility,
-            );
-            let fa_plus_anchor_visible_idx = parent_anchor_visible_index(
-                &state.pane().row_map,
-                RowId::FAPlusOptions,
-                visibility,
-            );
             let mut visible_idx = 0i32;
             for i in 0..total_rows {
-                let visible = is_row_visible(&state.pane().row_map, i, visibility);
-                let (f_pos, hidden) = if visible {
-                    let ii = visible_idx;
-                    visible_idx += 1;
-                    f_pos_for_visible_idx(ii, w, mid_pos, bottom_pos)
-                } else {
-                    let anchor =
-                        state.pane().row_map.get_at(i).and_then(
-                            |row| match conditional_row_parent(row.id) {
-                                Some(RowId::MeasureCounter) => measure_counter_anchor_visible_idx,
-                                Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
-                                Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
-                                Some(RowId::Hide) => hide_anchor_visible_idx,
-                                Some(RowId::GameplayExtras) => gameplay_extras_anchor_visible_idx,
-                                Some(RowId::FAPlusOptions) => fa_plus_anchor_visible_idx,
-                                _ => None,
-                            },
-                        );
-                    if let Some(anchor_idx) = anchor {
-                        let (anchor_f_pos, _) =
-                            f_pos_for_visible_idx(anchor_idx, w, mid_pos, bottom_pos);
-                        (anchor_f_pos, true)
-                    } else {
-                        (-0.5, true)
-                    }
-                };
+                let (f_pos, hidden) = row_f_pos_for_index(
+                    &state.pane().row_map,
+                    i,
+                    visibility,
+                    &mut visible_idx,
+                    w,
+                    mid_pos,
+                    bottom_pos,
+                );
 
                 let dest_y = first_row_center_y + row_step * f_pos;
                 let dest_a = if hidden { 0.0 } else { 1.0 };

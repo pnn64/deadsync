@@ -8,11 +8,12 @@ pub(super) mod tests {
         CycleInit, ErrorBarMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
         NAV_REPEAT_SCROLL_INTERVAL, NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row,
-        RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, handle_arcade_start_event,
-        handle_start_event, hud_offset_choices, init_cycle_row_from_binding,
-        init_numeric_row_from_binding, is_row_visible, judgment_tilt_options_visible,
-        player_option_column_x, repeat_held_arcade_start, row_visibility, session_active_players,
-        sync_profile_scroll_speed, sync_speed_mod_type_row,
+        RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, compute_row_window,
+        count_visible_rows, handle_arcade_start_event, handle_start_event, hud_offset_choices,
+        init_cycle_row_from_binding, init_numeric_row_from_binding, is_row_visible,
+        judgment_tilt_options_visible, player_option_column_x, repeat_held_arcade_start,
+        row_f_pos_for_index, row_visibility, session_active_players, sync_profile_scroll_speed,
+        sync_speed_mod_type_row,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -73,6 +74,28 @@ pub(super) mod tests {
             map.insert(row);
         }
         map
+    }
+
+    fn hidden_child_f_pos(row_map: &RowMap) -> (f32, bool) {
+        let active = [true, false];
+        let masks = [PlayerOptionMasks::default(), PlayerOptionMasks::default()];
+        let visibility = row_visibility(row_map, active, masks, false);
+        assert!(is_row_visible(row_map, 0, visibility));
+        assert!(!is_row_visible(row_map, 1, visibility));
+
+        let visible_rows = count_visible_rows(row_map, visibility);
+        let window = compute_row_window(visible_rows, [0, 0], active);
+        let mut visible_idx = 0;
+        let (parent_f_pos, parent_hidden) =
+            row_f_pos_for_index(row_map, 0, visibility, &mut visible_idx, window, 0.0, 0.0);
+        assert!(!parent_hidden);
+        let (child_f_pos, child_hidden) =
+            row_f_pos_for_index(row_map, 1, visibility, &mut visible_idx, window, 0.0, 0.0);
+        assert!(
+            (child_f_pos - parent_f_pos).abs() < 0.001,
+            "hidden child should collapse into its parent row"
+        );
+        (child_f_pos, child_hidden)
     }
 
     /// Stub writeback for synthetic test bindings whose tests only exercise
@@ -147,6 +170,60 @@ pub(super) mod tests {
                 .selected_choice_index,
             [2, 0],
         );
+    }
+
+    #[test]
+    fn hidden_dropdown_children_anchor_to_parent_row() {
+        ensure_i18n();
+        for (parent, child, choices, off_idx) in [
+            (
+                RowId::JudgmentFont,
+                RowId::JudgmentOffsetX,
+                &["Wendy", "None"][..],
+                1,
+            ),
+            (
+                RowId::ComboFont,
+                RowId::ComboOffsetX,
+                &["Wendy", "None"][..],
+                1,
+            ),
+            (
+                RowId::RescoreEarlyHits,
+                RowId::EarlyDecentWayOffOptions,
+                &["No", "Yes"][..],
+                0,
+            ),
+            (
+                RowId::CustomBlueFantasticWindow,
+                RowId::CustomBlueFantasticWindowMs,
+                &["No", "Yes"][..],
+                0,
+            ),
+            (
+                RowId::DataVisualizations,
+                RowId::TargetScore,
+                &["None", "Target Score Graph", "Step Statistics"][..],
+                0,
+            ),
+        ] {
+            let row_map = test_row_map(vec![
+                test_row(
+                    parent,
+                    lookup_key("PlayerOptions", "JudgmentFont"),
+                    choices,
+                    [off_idx; 2],
+                ),
+                test_row(
+                    child,
+                    lookup_key("PlayerOptions", "JudgmentOffsetX"),
+                    &["0"],
+                    [0; 2],
+                ),
+            ]);
+            let (_, child_hidden) = hidden_child_f_pos(&row_map);
+            assert!(child_hidden, "{child:?} should hide at its parent row");
+        }
     }
 
     #[test]

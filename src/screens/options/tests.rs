@@ -71,7 +71,10 @@ fn input_backend_items_match_rows() {
         (SubRowId::Debounce, ItemId::InpDebounce),
     ];
 
-    assert_eq!(INPUT_BACKEND_OPTIONS_ROWS.len() + 1, INPUT_BACKEND_OPTIONS_ITEMS.len());
+    assert_eq!(
+        INPUT_BACKEND_OPTIONS_ROWS.len() + 1,
+        INPUT_BACKEND_OPTIONS_ITEMS.len()
+    );
     for (idx, (row_id, item_id)) in expected.into_iter().enumerate() {
         assert_eq!(INPUT_BACKEND_OPTIONS_ROWS[idx].id, row_id);
         assert_eq!(INPUT_BACKEND_OPTIONS_ITEMS[idx].id, item_id);
