@@ -7903,11 +7903,10 @@ pub fn push_actors(
         let p1_guest = hud_snapshot.p1.guest;
         let p2_guest = hud_snapshot.p2.guest;
 
-        let insert_card_text = tr("Common", "InsertCard");
         let (p1_footer_text, p1_footer_avatar) = if p1_joined {
             (
                 Some(if p1_guest {
-                    &*insert_card_text
+                    ""
                 } else {
                     hud_snapshot.p1.display_name.as_str()
                 }),
@@ -7919,7 +7918,7 @@ pub fn push_actors(
         let (p2_footer_text, p2_footer_avatar) = if p2_joined {
             (
                 Some(if p2_guest {
-                    &*insert_card_text
+                    ""
                 } else {
                     hud_snapshot.p2.display_name.as_str()
                 }),
