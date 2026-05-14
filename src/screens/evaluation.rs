@@ -1721,7 +1721,27 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 }
             };
             let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
-            let graph_last_second = gs.song.total_length_seconds as f32;
+            let chart_last_second = {
+                let mut latest_ns: i64 = i64::MIN;
+                for (idx, &t_ns) in note_times.iter().enumerate() {
+                    if !crate::game::gameplay::song_time_ns_invalid(t_ns) && t_ns > latest_ns {
+                        latest_ns = t_ns;
+                    }
+                    if let Some(end_ns) = hold_end_times.get(idx).copied().flatten()
+                        && !crate::game::gameplay::song_time_ns_invalid(end_ns)
+                        && end_ns > latest_ns
+                    {
+                        latest_ns = end_ns;
+                    }
+                }
+                if latest_ns == i64::MIN {
+                    (gs.song.total_length_seconds.max(0) as f32).max(graph_first_second + 0.001)
+                } else {
+                    crate::game::gameplay::song_time_ns_to_seconds(latest_ns)
+                        .max(graph_first_second + 0.001)
+                }
+            };
+            let graph_last_second = chart_last_second;
 
             let score_percent = judgment::calculate_itg_score_percent_from_counts(
                 &p.scoring_counts,
@@ -1926,7 +1946,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
             density_graph_mesh[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let last_second = si.song.total_length_seconds.max(0) as f32;
+                let last_second = si.graph_last_second.max(si.graph_first_second + 0.001);
                 let verts = crate::engine::present::density::build_density_histogram_mesh(
                     &si.chart.measure_nps_vec,
                     si.chart.max_nps,
