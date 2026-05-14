@@ -2,14 +2,15 @@ use super::{
     AccelEffectsMask, AppearanceEffectsMask, AttackMode, BackgroundFilter, ComboColors, ComboFont,
     ComboMode, DataVisualizations, ErrorBarMask, ErrorBarTrim, HUD_OFFSET_MAX, HUD_OFFSET_MIN,
     HeldMissGraphic, HideLightType, HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic,
-    LifeMeterType, MINI_PERCENT_MAX, MINI_PERCENT_MIN, MeasureCounter, MeasureLines, MiniIndicator,
-    MiniIndicatorScoreType, NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN,
-    NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoteSkin, Perspective, PlayStyle, PlayerSide,
-    RemoveMask, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN, ScrollOption, ScrollSpeedSetting,
-    TargetScoreSetting, TimingWindowsOption, TurnOption, VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN,
-    VisualEffectsMask, clamp_custom_fantastic_window_ms, clamp_tilt_threshold_ms,
-    error_bar_style_from_mask, error_bar_text_from_mask, lock_profiles, sanitize_player_initials,
-    save_profile_ini_for_side, save_profile_stats_for_side, session_side_is_guest, side_ix,
+    LifeMeterType, LiveTimingStatsMask, MINI_PERCENT_MAX, MINI_PERCENT_MIN, MeasureCounter,
+    MeasureLines, MiniIndicator, MiniIndicatorScoreType, NOTE_FIELD_OFFSET_X_MAX,
+    NOTE_FIELD_OFFSET_X_MIN, NOTE_FIELD_OFFSET_Y_MAX, NOTE_FIELD_OFFSET_Y_MIN, NoteSkin,
+    Perspective, PlayStyle, PlayerSide, RemoveMask, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN,
+    ScrollOption, ScrollSpeedSetting, TargetScoreSetting, TimingWindowsOption, TurnOption,
+    VISUAL_DELAY_MS_MAX, VISUAL_DELAY_MS_MIN, VisualEffectsMask, clamp_custom_fantastic_window_ms,
+    clamp_tilt_threshold_ms, error_bar_style_from_mask, error_bar_text_from_mask, lock_profiles,
+    sanitize_player_initials, save_profile_ini_for_side, save_profile_stats_for_side,
+    session_side_is_guest, side_ix,
 };
 use chrono::Local;
 use std::path::Path;
@@ -883,6 +884,30 @@ pub fn update_display_scorebox_for_side(side: PlayerSide, enabled: bool) {
             return;
         }
         profile.display_scorebox = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_live_timing_stats_mask_for_side(side: PlayerSide, mask: LiveTimingStatsMask) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.live_timing_stats_mask == mask {
+            return;
+        }
+        profile.live_timing_stats_mask = mask;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_live_timing_stats_enabled_for_side(side: PlayerSide, enabled: bool) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.live_timing_stats == enabled {
+            return;
+        }
+        profile.live_timing_stats = enabled;
     }
     save_profile_ini_for_side(side);
 }

@@ -458,6 +458,16 @@ bitflags! {
     }
 }
 
+bitflags! {
+    /// Persisted bitmask of live timing statistics shown during gameplay.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct LiveTimingStatsMask: u8 {
+        const MEAN     = 1 << 0;
+        const MEAN_ABS = 1 << 1;
+        const MAX      = 1 << 2;
+    }
+}
+
 // --- Profile Data ---
 const DEFAULT_PROFILE_ID: &str = "00000000";
 const PROFILE_STATS_VERSION_V1: u16 = 1;
@@ -676,6 +686,14 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
     content.push_str(&format!(
         "DisplayScorebox={}\n",
         i32::from(options.display_scorebox)
+    ));
+    content.push_str(&format!(
+        "LiveTimingStats={}\n",
+        i32::from(options.live_timing_stats)
+    ));
+    content.push_str(&format!(
+        "LiveTimingStatsMask={}\n",
+        options.live_timing_stats_mask.bits()
     ));
     content.push_str(&format!("RainbowMax={}\n", i32::from(options.rainbow_max)));
     content.push_str(&format!(
@@ -1006,6 +1024,23 @@ fn load_player_options(
         .get(section, "DisplayScorebox")
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.display_scorebox, |v| v != 0);
+    let legacy_live_timing_stats = profile_conf
+        .get(section, "LiveTimingStats")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.live_timing_stats, |v| v != 0);
+    if let Some(mask) = profile_conf
+        .get(section, "LiveTimingStatsMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(LiveTimingStatsMask::from_bits_truncate)
+    {
+        options.live_timing_stats_mask = mask;
+        options.live_timing_stats = legacy_live_timing_stats;
+    } else {
+        options.live_timing_stats = legacy_live_timing_stats;
+        if legacy_live_timing_stats {
+            options.live_timing_stats_mask = LiveTimingStatsMask::all();
+        }
+    }
     options.rainbow_max = profile_conf
         .get(section, "RainbowMax")
         .and_then(|s| s.parse::<u8>().ok())
@@ -2649,6 +2684,8 @@ pub struct PlayerOptionsData {
     pub judgment_back: bool,
     pub error_ms_display: bool,
     pub display_scorebox: bool,
+    pub live_timing_stats: bool,
+    pub live_timing_stats_mask: LiveTimingStatsMask,
     pub rainbow_max: bool,
     pub responsive_colors: bool,
     pub show_life_percent: bool,
@@ -2746,6 +2783,8 @@ fn default_player_options() -> PlayerOptionsData {
         judgment_back: false,
         error_ms_display: false,
         display_scorebox: true,
+        live_timing_stats: false,
+        live_timing_stats_mask: LiveTimingStatsMask::empty(),
         rainbow_max: false,
         responsive_colors: false,
         show_life_percent: false,
@@ -2888,6 +2927,8 @@ pub struct Profile {
     // zmod ExtraAesthetics: offset indicator (ErrorMSDisplay).
     pub error_ms_display: bool,
     pub display_scorebox: bool,
+    pub live_timing_stats: bool,
+    pub live_timing_stats_mask: LiveTimingStatsMask,
     // zmod LifeBarOptions (Arrow Cloud semantics).
     pub rainbow_max: bool,
     pub responsive_colors: bool,
@@ -3049,6 +3090,8 @@ impl Default for Profile {
             judgment_back: player_options.judgment_back,
             error_ms_display: player_options.error_ms_display,
             display_scorebox: player_options.display_scorebox,
+            live_timing_stats: player_options.live_timing_stats,
+            live_timing_stats_mask: player_options.live_timing_stats_mask,
             rainbow_max: player_options.rainbow_max,
             responsive_colors: player_options.responsive_colors,
             show_life_percent: player_options.show_life_percent,
@@ -3207,6 +3250,8 @@ impl Profile {
             judgment_back: self.judgment_back,
             error_ms_display: self.error_ms_display,
             display_scorebox: self.display_scorebox,
+            live_timing_stats: self.live_timing_stats,
+            live_timing_stats_mask: self.live_timing_stats_mask,
             rainbow_max: self.rainbow_max,
             responsive_colors: self.responsive_colors,
             show_life_percent: self.show_life_percent,
@@ -3306,6 +3351,8 @@ impl Profile {
         self.judgment_back = options.judgment_back;
         self.error_ms_display = options.error_ms_display;
         self.display_scorebox = options.display_scorebox;
+        self.live_timing_stats = options.live_timing_stats;
+        self.live_timing_stats_mask = options.live_timing_stats_mask;
         self.rainbow_max = options.rainbow_max;
         self.responsive_colors = options.responsive_colors;
         self.show_life_percent = options.show_life_percent;
@@ -5175,7 +5222,7 @@ mod tests {
     fn persisted_row_mask_bit_layouts_are_stable() {
         use super::{
             AccelEffectsMask, AppearanceEffectsMask, ErrorBarMask, HoldsMask, InsertMask,
-            RemoveMask, VisualEffectsMask,
+            LiveTimingStatsMask, RemoveMask, VisualEffectsMask,
         };
 
         // InsertMask: persisted bits 0..=6 (Mines is runtime-only and
@@ -5239,6 +5286,11 @@ mod tests {
         assert_eq!(ErrorBarMask::HIGHLIGHT.bits(), 1 << 3);
         assert_eq!(ErrorBarMask::AVERAGE.bits(), 1 << 4);
         assert_eq!(ErrorBarMask::all().bits(), 0b0001_1111);
+
+        assert_eq!(LiveTimingStatsMask::MEAN.bits(), 1 << 0);
+        assert_eq!(LiveTimingStatsMask::MEAN_ABS.bits(), 1 << 1);
+        assert_eq!(LiveTimingStatsMask::MAX.bits(), 1 << 2);
+        assert_eq!(LiveTimingStatsMask::all().bits(), 0b0000_0111);
     }
 
     #[test]

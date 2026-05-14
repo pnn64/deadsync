@@ -1240,6 +1240,124 @@ pub struct TimingStats {
     pub max_abs_ms: f32,
 }
 
+const LIVE_TIMING_RECENT: usize = 64;
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct LiveTimingSnapshot {
+    pub recent: TimingStats,
+    pub all: TimingStats,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct LiveTimingStats {
+    all_sum_abs_ms: f32,
+    all_sum_ms: f32,
+    all_sum_sq_ms: f32,
+    all_max_abs_ms: f32,
+    all_count: u32,
+    recent_errors_ms: [f32; LIVE_TIMING_RECENT],
+    recent_next: usize,
+    recent_len: usize,
+    recent_sum_abs_ms: f32,
+    recent_sum_ms: f32,
+    recent_sum_sq_ms: f32,
+}
+
+impl Default for LiveTimingStats {
+    fn default() -> Self {
+        Self {
+            all_sum_abs_ms: 0.0,
+            all_sum_ms: 0.0,
+            all_sum_sq_ms: 0.0,
+            all_max_abs_ms: 0.0,
+            all_count: 0,
+            recent_errors_ms: [0.0; LIVE_TIMING_RECENT],
+            recent_next: 0,
+            recent_len: 0,
+            recent_sum_abs_ms: 0.0,
+            recent_sum_ms: 0.0,
+            recent_sum_sq_ms: 0.0,
+        }
+    }
+}
+
+#[inline(always)]
+fn stats_from_sums(
+    count: u32,
+    sum_ms: f32,
+    sum_abs_ms: f32,
+    sum_sq_ms: f32,
+    max_abs_ms: f32,
+) -> TimingStats {
+    if count == 0 {
+        return TimingStats::default();
+    }
+    let count_f = count as f32;
+    let mean_ms = sum_ms / count_f;
+    let mean_abs_ms = sum_abs_ms / count_f;
+    let variance = (sum_sq_ms / count_f - mean_ms * mean_ms).max(0.0);
+    TimingStats {
+        mean_abs_ms,
+        mean_ms,
+        stddev_ms: variance.sqrt(),
+        max_abs_ms,
+    }
+}
+
+#[inline(always)]
+pub fn record_live_timing_stats(stats: &mut LiveTimingStats, judgment: &Judgment) {
+    if judgment.grade == JudgeGrade::Miss {
+        return;
+    }
+
+    let e = judgment.time_error_ms;
+    let abs = e.abs();
+    let sq = e * e;
+    stats.all_sum_ms += e;
+    stats.all_sum_abs_ms += abs;
+    stats.all_sum_sq_ms += sq;
+    stats.all_max_abs_ms = stats.all_max_abs_ms.max(abs);
+    stats.all_count = stats.all_count.saturating_add(1);
+
+    if stats.recent_len == LIVE_TIMING_RECENT {
+        let old = stats.recent_errors_ms[stats.recent_next];
+        stats.recent_sum_ms -= old;
+        stats.recent_sum_abs_ms -= old.abs();
+        stats.recent_sum_sq_ms -= old * old;
+    } else {
+        stats.recent_len += 1;
+    }
+    stats.recent_errors_ms[stats.recent_next] = e;
+    stats.recent_sum_ms += e;
+    stats.recent_sum_abs_ms += abs;
+    stats.recent_sum_sq_ms += sq;
+    stats.recent_next = (stats.recent_next + 1) % LIVE_TIMING_RECENT;
+}
+
+#[inline(always)]
+pub fn live_timing_stats_snapshot(stats: &LiveTimingStats) -> LiveTimingSnapshot {
+    let mut recent_max_abs = 0.0_f32;
+    for e in stats.recent_errors_ms.iter().take(stats.recent_len) {
+        recent_max_abs = recent_max_abs.max(e.abs());
+    }
+    LiveTimingSnapshot {
+        recent: stats_from_sums(
+            stats.recent_len as u32,
+            stats.recent_sum_ms,
+            stats.recent_sum_abs_ms,
+            stats.recent_sum_sq_ms,
+            recent_max_abs,
+        ),
+        all: stats_from_sums(
+            stats.all_count,
+            stats.all_sum_ms,
+            stats.all_sum_abs_ms,
+            stats.all_sum_sq_ms,
+            stats.all_max_abs_ms,
+        ),
+    }
+}
+
 #[inline(always)]
 fn for_each_row_final_judgment<F>(notes: &[Note], mut f: F)
 where
@@ -1733,6 +1851,35 @@ mod tests {
         assert!((stats.mean_abs_ms - 10.0).abs() < 0.0001);
         assert!((stats.max_abs_ms - 10.0).abs() < 0.0001);
         assert!(stats.stddev_ms.abs() < 0.0001);
+    }
+
+    #[test]
+    fn live_timing_stats_keep_recent_64_and_all_samples() {
+        let mut stats = LiveTimingStats::default();
+        for i in 0..70 {
+            let note = test_note(i, 0, JudgeGrade::Fantastic, i as f32 - 35.0);
+            record_live_timing_stats(
+                &mut stats,
+                note.result
+                    .as_ref()
+                    .expect("test_note always creates a judgment result"),
+            );
+        }
+        let miss = test_note(71, 0, JudgeGrade::Miss, 180.0);
+        record_live_timing_stats(
+            &mut stats,
+            miss.result
+                .as_ref()
+                .expect("test_note always creates a judgment result"),
+        );
+
+        let snapshot = live_timing_stats_snapshot(&stats);
+        assert!((snapshot.all.mean_ms + 0.5).abs() < 0.0001);
+        assert!((snapshot.all.mean_abs_ms - 17.5).abs() < 0.0001);
+        assert!((snapshot.all.max_abs_ms - 35.0).abs() < 0.0001);
+        assert!((snapshot.recent.mean_ms - 2.5).abs() < 0.0001);
+        assert!((snapshot.recent.mean_abs_ms - 16.09375).abs() < 0.0001);
+        assert!((snapshot.recent.max_abs_ms - 34.0).abs() < 0.0001);
     }
 
     #[test]

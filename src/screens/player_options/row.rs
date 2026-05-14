@@ -44,6 +44,7 @@ pub enum RowId {
     MiniIndicator,
     IndicatorScoreType,
     GameplayExtras,
+    LiveTimingStats,
     ComboColors,
     ComboColorMode,
     CarryCombo,
@@ -992,6 +993,7 @@ pub(super) fn row_shows_all_choices_inline(id: RowId) -> bool {
         || id == RowId::ComboColorMode
         || id == RowId::CarryCombo
         || id == RowId::GameplayExtras
+        || id == RowId::LiveTimingStats
         || id == RowId::GameplayExtrasMore
         || id == RowId::ResultsExtras
         || id == RowId::RescoreEarlyHits

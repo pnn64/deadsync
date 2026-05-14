@@ -36,12 +36,20 @@ thread_local! {
     static SCORE_2DP_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(1024));
     static GAME_TIME_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(1024));
     static GAME_TIME_WIDTH_CACHE: RefCell<HashMap<(u32, u8), f32>> = RefCell::new(HashMap::with_capacity(1024));
+    static LIVE_TIMING_PAIR_CACHE: RefCell<TextCache<(i32, i32)>> = RefCell::new(HashMap::with_capacity(4096));
     static STR_REF_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(512));
 }
 
 static DIGIT_TEXT: LazyLock<[Arc<str>; 10]> =
     LazyLock::new(|| ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].map(Arc::<str>::from));
 static SLASH_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("/"));
+static LIVE_TIMING_LABELS: LazyLock<[Arc<str>; 3]> = LazyLock::new(|| {
+    [
+        Arc::<str>::from("Mean (64n/All [ms])"),
+        Arc::<str>::from("Mean Abs (64n/All [ms])"),
+        Arc::<str>::from("Max (64n/All [ms])"),
+    ]
+});
 
 #[derive(Clone, Copy)]
 struct LabeledColor {
@@ -347,6 +355,47 @@ fn cached_game_time(seconds: u32, mode: u8) -> Arc<str> {
 }
 
 #[inline(always)]
+fn timing_tenths(ms: f32) -> i32 {
+    if ms.is_finite() {
+        (ms * 10.0).round() as i32
+    } else {
+        0
+    }
+}
+
+fn cached_live_timing_pair(recent_ms: f32, all_ms: f32) -> Arc<str> {
+    let key = (timing_tenths(recent_ms), timing_tenths(all_ms));
+    cached_text(&LIVE_TIMING_PAIR_CACHE, key, TEXT_CACHE_LIMIT, || {
+        format!("{:.1}/{:.1}", key.0 as f32 * 0.1, key.1 as f32 * 0.1)
+    })
+}
+
+#[inline(always)]
+fn live_timing_stat_mask(index: usize) -> profile::LiveTimingStatsMask {
+    match index {
+        0 => profile::LiveTimingStatsMask::MEAN,
+        1 => profile::LiveTimingStatsMask::MEAN_ABS,
+        _ => profile::LiveTimingStatsMask::MAX,
+    }
+}
+
+#[inline(always)]
+fn live_timing_enabled_count(mask: profile::LiveTimingStatsMask) -> usize {
+    usize::from(mask.contains(profile::LiveTimingStatsMask::MEAN))
+        + usize::from(mask.contains(profile::LiveTimingStatsMask::MEAN_ABS))
+        + usize::from(mask.contains(profile::LiveTimingStatsMask::MAX))
+}
+
+#[inline(always)]
+fn live_timing_value(stats: crate::game::timing::LiveTimingSnapshot, index: usize) -> Arc<str> {
+    match index {
+        0 => cached_live_timing_pair(stats.recent.mean_ms, stats.all.mean_ms),
+        1 => cached_live_timing_pair(stats.recent.mean_abs_ms, stats.all.mean_abs_ms),
+        _ => cached_live_timing_pair(stats.recent.max_abs_ms, stats.all.max_abs_ms),
+    }
+}
+
+#[inline(always)]
 fn game_time_mode(total_seconds: f32) -> u8 {
     if total_seconds >= 3600.0 {
         0
@@ -585,6 +634,11 @@ pub fn prewarm_text_layout(
     cache.prewarm_text(fonts, "miso", &time_song_right_text(), None);
     cache.prewarm_text(fonts, "miso", &time_remaining_right_text(), None);
     cache.prewarm_text(fonts, "miso", SLASH_TEXT.as_ref(), None);
+    for label in LIVE_TIMING_LABELS.iter() {
+        cache.prewarm_text(fonts, "miso", label.as_ref(), None);
+    }
+    let zero_timing = cached_live_timing_pair(0.0, 0.0);
+    cache.prewarm_text(fonts, "miso", zero_timing.as_ref(), None);
     for label in (0..4).map(step_info_label).collect::<Vec<_>>().iter() {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
@@ -1351,6 +1405,20 @@ pub fn push_double_step_stats(
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(71)
         ));
+
+        let timing_label_x = label_x + (104.0 * number_zoom);
+        push_live_timing_stats_at(
+            actors,
+            state,
+            0,
+            profile::PlayerSide::P1,
+            timing_label_x,
+            timing_label_x + (156.0 * number_zoom),
+            base_y,
+            20.0 * number_zoom,
+            label_zoom,
+            71,
+        );
     }
 
     // Peak NPS text (DensityGraph.lua drives this in SL).
@@ -1875,6 +1943,82 @@ fn build_scorebox_pane(
     ));
 }
 
+#[allow(clippy::too_many_arguments)]
+fn push_live_timing_stats_at(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    player_idx: usize,
+    player_side: profile::PlayerSide,
+    label_x: f32,
+    value_x: f32,
+    first_y: f32,
+    row_h: f32,
+    zoom: f32,
+    z: i16,
+) {
+    if player_idx >= state.num_players {
+        return;
+    }
+
+    let profile = &state.player_profiles[player_idx];
+    if !profile.live_timing_stats {
+        return;
+    }
+
+    let mask = profile.live_timing_stats_mask;
+    let enabled_count = live_timing_enabled_count(mask);
+    if enabled_count == 0 {
+        return;
+    }
+
+    let stats = gameplay::display_live_timing_stats(state, player_idx);
+    let compact = enabled_count >= 3;
+    let row_h = if compact { row_h * 0.68 } else { row_h };
+    let zoom = if compact { zoom * 0.82 } else { zoom };
+    let first_y = if compact {
+        first_y - row_h * 0.12
+    } else {
+        first_y
+    };
+    let label_max_w = if compact { 150.0 } else { 170.0 } * zoom;
+    let mut row = 0usize;
+
+    for index in 0..LIVE_TIMING_LABELS.len() {
+        if !mask.contains(live_timing_stat_mask(index)) {
+            continue;
+        }
+
+        let y = first_y + row_h * row as f32;
+        let label = LIVE_TIMING_LABELS[index].clone();
+        let value = live_timing_value(stats, index);
+        row += 1;
+
+        if player_side == profile::PlayerSide::P1 {
+            actors.push(act!(text: font("miso"): settext(label):
+                align(0.0, 0.5): xy(label_x, y):
+                zoom(zoom): maxwidth(label_max_w): horizalign(left):
+                diffuse(1.0, 1.0, 1.0, 1.0): z(z)
+            ));
+            actors.push(act!(text: font("miso"): settext(value):
+                align(0.0, 0.5): xy(value_x, y):
+                zoom(zoom): horizalign(left):
+                diffuse(1.0, 1.0, 1.0, 1.0): z(z)
+            ));
+        } else {
+            actors.push(act!(text: font("miso"): settext(label):
+                align(1.0, 0.5): xy(label_x, y):
+                zoom(zoom): maxwidth(label_max_w): horizalign(right):
+                diffuse(1.0, 1.0, 1.0, 1.0): z(z)
+            ));
+            actors.push(act!(text: font("miso"): settext(value):
+                align(1.0, 0.5): xy(value_x, y):
+                zoom(zoom): horizalign(right):
+                diffuse(1.0, 1.0, 1.0, 1.0): z(z)
+            ));
+        }
+    }
+}
+
 fn build_side_pane(
     actors: &mut Vec<Actor>,
     state: &State,
@@ -2188,7 +2332,7 @@ fn build_side_pane(
             let total_time_key = game_time_key(total_display_seconds, total_display_seconds);
             let total_time_str = cached_game_time(total_time_key.0, total_time_key.1);
 
-            let remaining_display_seconds = if let Some(fail_time) = state.players[0].fail_time {
+            let remaining_display_seconds = if let Some(fail_time) = state.players[player_idx].fail_time {
                 let fail_disp = if rate == 0.0 {
                     fail_time.max(0.0)
                 } else {
@@ -2220,7 +2364,11 @@ fn build_side_pane(
 
             let red_color = color::rgba_hex("#ff3030");
             let white_color = [1.0, 1.0, 1.0, 1.0];
-            let remaining_color = if state.players[0].is_failing { red_color } else { white_color };
+            let remaining_color = if state.players[player_idx].is_failing {
+                red_color
+            } else {
+                white_color
+            };
 
             // --- Total Time Row ---
             let y_pos_total = layout.sidepane_center_y + local_y + 13.0;
@@ -2305,6 +2453,27 @@ fn build_side_pane(
                     diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
                 ));
             }
+
+            let timing_gap = 104.0 * layout.banner_data_zoom;
+            let timing_value_gap = 156.0 * layout.banner_data_zoom;
+            let timing_label_anchor = if player_side == profile::PlayerSide::P1 {
+                time_x + label_offset_total.max(label_offset_remaining) + timing_gap
+            } else {
+                time_x - label_offset_total.max(label_offset_remaining) - timing_gap
+            };
+            let timing_value_anchor = timing_label_anchor + timing_value_gap;
+            push_live_timing_stats_at(
+                actors,
+                state,
+                player_idx,
+                player_side,
+                timing_label_anchor,
+                timing_value_anchor,
+                y_pos_remaining,
+                20.0,
+                text_zoom,
+                71,
+            );
         }
     }));
 

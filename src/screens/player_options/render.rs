@@ -559,6 +559,10 @@ pub(super) fn multi_select_mask(state: &State, row_id: RowId, player_idx: usize)
         FAPlusOptions => (state.option_masks[player_idx].fa_plus.bits() & 0b0000_1111).into(),
         FAPlusWindowOptions => ((state.option_masks[player_idx].fa_plus.bits() >> 4) & 0b11).into(),
         GameplayExtras => state.option_masks[player_idx].gameplay_extras.bits().into(),
+        LiveTimingStats => state.option_masks[player_idx]
+            .live_timing_stats
+            .bits()
+            .into(),
         GameplayExtrasMore => state.option_masks[player_idx]
             .gameplay_extras_more
             .bits()
@@ -597,6 +601,7 @@ pub(super) fn is_multi_select_row(row_id: RowId) -> bool {
             | FAPlusOptions
             | FAPlusWindowOptions
             | GameplayExtras
+            | LiveTimingStats
             | GameplayExtrasMore
             | ResultsExtras
             | MeasureCounterOptions

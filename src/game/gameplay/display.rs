@@ -195,6 +195,13 @@ pub fn display_judgment_count(state: &State, player_idx: usize, grade: JudgeGrad
     base.saturating_add(carry.judgment_counts[display_judge_ix(grade)])
 }
 
+pub fn display_live_timing_stats(state: &State, player_idx: usize) -> timing::LiveTimingSnapshot {
+    if player_idx >= state.num_players {
+        return timing::LiveTimingSnapshot::default();
+    }
+    timing::live_timing_stats_snapshot(&state.players[player_idx].live_timing_stats)
+}
+
 pub fn display_window_counts(
     state: &State,
     player_idx: usize,

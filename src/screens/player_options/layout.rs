@@ -174,6 +174,8 @@ pub(super) fn init_row_tweens(
     let error_bar_anchor_visible_idx =
         parent_anchor_visible_index(row_map, RowId::ErrorBar, visibility);
     let hide_anchor_visible_idx = parent_anchor_visible_index(row_map, RowId::Hide, visibility);
+    let gameplay_extras_anchor_visible_idx =
+        parent_anchor_visible_index(row_map, RowId::GameplayExtras, visibility);
     let fa_plus_anchor_visible_idx =
         parent_anchor_visible_index(row_map, RowId::FAPlusOptions, visibility);
 
@@ -197,6 +199,7 @@ pub(super) fn init_row_tweens(
                     Some(RowId::ComboFont) => combo_font_anchor_visible_idx,
                     Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
                     Some(RowId::Hide) => hide_anchor_visible_idx,
+                    Some(RowId::GameplayExtras) => gameplay_extras_anchor_visible_idx,
                     Some(RowId::FAPlusOptions) => fa_plus_anchor_visible_idx,
                     _ => None,
                 });

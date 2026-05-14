@@ -15,6 +15,7 @@ pub(super) struct RowVisibility {
     pub(super) show_combo_rows: bool,
     pub(super) show_lifebar_rows: bool,
     pub(super) show_indicator_score_type: bool,
+    pub(super) show_live_timing_stats: bool,
     pub(super) show_global_offset_shift: bool,
 }
 
@@ -66,6 +67,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     if id == RowId::IndicatorScoreType {
         return visibility.show_indicator_score_type;
     }
+    if id == RowId::LiveTimingStats {
+        return visibility.show_live_timing_stats;
+    }
     if id == RowId::GlobalOffsetShift {
         return visibility.show_global_offset_shift;
     }
@@ -112,6 +116,9 @@ pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
     }
     if id == RowId::IndicatorScoreType {
         return Some(RowId::MiniIndicator);
+    }
+    if id == RowId::LiveTimingStats {
+        return Some(RowId::GameplayExtras);
     }
     if id == RowId::EarlyDecentWayOffOptions {
         return Some(RowId::RescoreEarlyHits);
@@ -365,6 +372,23 @@ pub(super) fn indicator_score_type_visible(row_map: &RowMap, active: [bool; PLAY
     !any_active
 }
 
+pub(super) fn live_timing_stats_visible(
+    active: [bool; PLAYER_SLOTS],
+    option_masks: [PlayerOptionMasks; PLAYER_SLOTS],
+) -> bool {
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        if option_masks[player_idx]
+            .gameplay_extras
+            .contains(GameplayExtrasMask::LIVE_TIMING_STATS)
+        {
+            return true;
+        }
+    }
+    !any_active
+}
+
 #[inline(always)]
 pub(super) fn row_visibility(
     row_map: &RowMap,
@@ -386,6 +410,7 @@ pub(super) fn row_visibility(
         show_combo_rows: combo_rows_visible(active, option_masks),
         show_lifebar_rows: lifebar_rows_visible(active, option_masks),
         show_indicator_score_type: indicator_score_type_visible(row_map, active),
+        show_live_timing_stats: live_timing_stats_visible(active, option_masks),
         show_global_offset_shift: allow_per_player_global_offsets,
     }
 }

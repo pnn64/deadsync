@@ -197,6 +197,11 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 parent_anchor_visible_index(&state.pane().row_map, RowId::ErrorBar, visibility);
             let hide_anchor_visible_idx =
                 parent_anchor_visible_index(&state.pane().row_map, RowId::Hide, visibility);
+            let gameplay_extras_anchor_visible_idx = parent_anchor_visible_index(
+                &state.pane().row_map,
+                RowId::GameplayExtras,
+                visibility,
+            );
             let fa_plus_anchor_visible_idx = parent_anchor_visible_index(
                 &state.pane().row_map,
                 RowId::FAPlusOptions,
@@ -217,6 +222,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                                 Some(RowId::JudgmentTilt) => judgment_tilt_anchor_visible_idx,
                                 Some(RowId::ErrorBar) => error_bar_anchor_visible_idx,
                                 Some(RowId::Hide) => hide_anchor_visible_idx,
+                                Some(RowId::GameplayExtras) => gameplay_extras_anchor_visible_idx,
                                 Some(RowId::FAPlusOptions) => fa_plus_anchor_visible_idx,
                                 _ => None,
                             },

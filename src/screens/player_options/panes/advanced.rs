@@ -6,8 +6,8 @@ use super::super::row::{
 use super::super::row::{fanout_bitmask_binding, index_binding};
 use super::super::state::{
     EarlyDwMask, ErrorBarOptionsMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
-    HideMask, LifeBarOptionsMask, MeasureCounterOptionsMask, PlayerOptionMasks, ResultsExtrasMask,
-    ScrollMask,
+    HideMask, LifeBarOptionsMask, LiveTimingStatsMask, MeasureCounterOptionsMask,
+    PlayerOptionMasks, ResultsExtrasMask, ScrollMask,
 };
 use super::*;
 use crate::game::profile as gp;
@@ -403,6 +403,9 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
             if p.column_cues {
                 bits.insert(GameplayExtrasMask::COLUMN_CUES);
             }
+            if p.live_timing_stats {
+                bits.insert(GameplayExtrasMask::LIVE_TIMING_STATS);
+            }
             if p.display_scorebox {
                 bits.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
             }
@@ -425,6 +428,7 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
             p.column_flash_on_miss = mask.contains(GameplayExtrasMask::FLASH_COLUMN_FOR_MISS);
             p.nps_graph_at_top = mask.contains(GameplayExtrasMask::DENSITY_GRAPH_AT_TOP);
             p.column_cues = mask.contains(GameplayExtrasMask::COLUMN_CUES);
+            p.live_timing_stats = mask.contains(GameplayExtrasMask::LIVE_TIMING_STATS);
             p.display_scorebox = mask.contains(GameplayExtrasMask::DISPLAY_SCOREBOX);
             let mut more = GameplayExtrasMoreMask::empty();
             if p.column_cues {
@@ -444,9 +448,37 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
                 p.nps_graph_at_top,
             );
             gp::update_column_cues_for_side(s, p.column_cues);
+            gp::update_live_timing_stats_enabled_for_side(s, p.live_timing_stats);
             gp::update_display_scorebox_for_side(s, p.display_scorebox);
         },
-        bit_mapping: BitMapping::Sequential { width: 4 },
+        bit_mapping: BitMapping::Sequential { width: 5 },
+        sync_visibility: true,
+    },
+};
+const LIVE_TIMING_STATS: BitmaskBinding = BitmaskBinding::Generic {
+    init: BitmaskInit {
+        from_profile: |p| p.live_timing_stats_mask.bits() as u32,
+        get_active: |m| m.live_timing_stats.bits() as u32,
+        set_active: |m, b| {
+            debug_assert_eq!(
+                b & !(u8::MAX as u32),
+                0,
+                "LiveTimingStatsMask init bits exceed u8 width",
+            );
+            m.live_timing_stats = LiveTimingStatsMask::from_bits_retain(b as u8);
+        },
+        cursor: CursorInit::FirstActiveBit,
+    },
+    writeback: BitmaskWriteback {
+        project: |m, p, b| {
+            let mask = LiveTimingStatsMask::from_bits_truncate(b as u8);
+            p.live_timing_stats_mask = mask;
+            m.live_timing_stats = mask;
+        },
+        persist_for_side: |s, p| {
+            gp::update_live_timing_stats_mask_for_side(s, p.live_timing_stats_mask);
+        },
+        bit_mapping: BitMapping::Sequential { width: 3 },
         sync_visibility: false,
     },
 };
@@ -834,11 +866,17 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         tr("PlayerOptions", "GameplayExtrasFlashColumnForMiss").to_string(),
         tr("PlayerOptions", "GameplayExtrasDensityGraphAtTop").to_string(),
         tr("PlayerOptions", "GameplayExtrasColumnCues").to_string(),
+        tr("PlayerOptions", "GameplayExtrasLiveTimingStats").to_string(),
     ];
     if crate::game::scores::is_gs_get_scores_service_allowed() {
         gameplay_extras_choices
             .push(tr("PlayerOptions", "GameplayExtrasDisplayScorebox").to_string());
     }
+    let live_timing_stats_choices = vec![
+        tr("PlayerOptions", "LiveTimingStatsMean").to_string(),
+        tr("PlayerOptions", "LiveTimingStatsMeanAbs").to_string(),
+        tr("PlayerOptions", "LiveTimingStatsMax").to_string(),
+    ];
 
     let mut b = RowBuilder::new();
     b.push(Row::cycle(
@@ -997,6 +1035,13 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         lookup_key("PlayerOptionsHelp", "GameplayExtrasHelp"),
         GAMEPLAY_EXTRAS,
         gameplay_extras_choices,
+    ));
+    b.push(Row::bitmask(
+        RowId::LiveTimingStats,
+        lookup_key("PlayerOptions", "LiveTimingStats"),
+        lookup_key("PlayerOptionsHelp", "LiveTimingStatsHelp"),
+        LIVE_TIMING_STATS,
+        live_timing_stats_choices,
     ));
     b.push(Row::cycle(
         RowId::ComboColors,

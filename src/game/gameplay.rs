@@ -110,8 +110,8 @@ use self::display::scored_hold_totals_with_carry;
 use self::display::{capture_failed_ex_score_inputs, record_display_window_counts};
 pub use self::display::{
     display_carry_for_player, display_ex_score_percent, display_hard_ex_score_percent,
-    display_itg_score_percent, display_judgment_count, display_totals_for_player,
-    display_window_counts,
+    display_itg_score_percent, display_judgment_count, display_live_timing_stats,
+    display_totals_for_player, display_window_counts,
 };
 pub(crate) use self::display::{display_ex_score_data, display_scored_ex_score_data};
 #[cfg(test)]
@@ -3314,6 +3314,7 @@ pub struct PlayerRuntime {
     pub error_bar_avg_next: usize,
     pub error_bar_avg_bar_started_at: Option<f32>,
     pub error_bar_avg_samples: VecDeque<(f32, f32)>,
+    pub live_timing_stats: crate::game::timing::LiveTimingStats,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -3418,6 +3419,7 @@ fn init_player_runtime() -> PlayerRuntime {
         error_bar_avg_next: 0,
         error_bar_avg_bar_started_at: None,
         error_bar_avg_samples: VecDeque::with_capacity(64),
+        live_timing_stats: crate::game::timing::LiveTimingStats::default(),
     }
 }
 

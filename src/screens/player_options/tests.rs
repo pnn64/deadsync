@@ -206,6 +206,46 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn live_timing_stats_options_hide_until_parent_toggle_active() {
+        ensure_i18n();
+        let row_map = test_row_map(vec![
+            test_row(
+                RowId::GameplayExtras,
+                lookup_key("PlayerOptions", "GameplayExtras"),
+                &["LiveTiming"],
+                [0, 0],
+            ),
+            test_row(
+                RowId::LiveTimingStats,
+                lookup_key("PlayerOptions", "LiveTimingStats"),
+                &["Mean", "MeanAbs", "Max"],
+                [0, 0],
+            ),
+        ]);
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [PlayerOptionMasks::default(), PlayerOptionMasks::default()],
+            false,
+        );
+        assert!(!is_row_visible(&row_map, 1, visibility));
+
+        let visibility = row_visibility(
+            &row_map,
+            [true, false],
+            [
+                PlayerOptionMasks {
+                    gameplay_extras: GameplayExtrasMask::LIVE_TIMING_STATS,
+                    ..Default::default()
+                },
+                PlayerOptionMasks::default(),
+            ],
+            false,
+        );
+        assert!(is_row_visible(&row_map, 1, visibility));
+    }
+
+    #[test]
     fn judgment_offsets_hide_when_judgment_font_is_none() {
         ensure_i18n();
         let row_map = test_row_map(vec![
@@ -733,6 +773,7 @@ pub(super) mod tests {
         ensure_i18n();
         let mut profile = Profile::default();
         profile.column_cues = true;
+        profile.live_timing_stats = true;
         profile.display_scorebox = true;
 
         // No GameplayExtrasMore row exists (orphan; see the
@@ -751,6 +792,9 @@ pub(super) mod tests {
                     if p.column_cues {
                         bits.insert(GameplayExtrasMask::COLUMN_CUES);
                     }
+                    if p.live_timing_stats {
+                        bits.insert(GameplayExtrasMask::LIVE_TIMING_STATS);
+                    }
                     if p.display_scorebox {
                         bits.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
                     }
@@ -767,7 +811,13 @@ pub(super) mod tests {
         let mut rows = test_row_map(vec![test_bitmask_row(
             RowId::GameplayExtras,
             lookup_key("PlayerOptions", "GameplayExtras"),
-            &["FlashMiss", "DensityTop", "ColumnCues", "Scorebox"],
+            &[
+                "FlashMiss",
+                "DensityTop",
+                "ColumnCues",
+                "LiveTiming",
+                "Scorebox",
+            ],
             gameplay_extras_binding,
         )]);
 
@@ -779,6 +829,12 @@ pub(super) mod tests {
                 .gameplay_extras
                 .contains(GameplayExtrasMask::COLUMN_CUES),
             "GameplayExtras COLUMN_CUES bit set from profile",
+        );
+        assert!(
+            masks
+                .gameplay_extras
+                .contains(GameplayExtrasMask::LIVE_TIMING_STATS),
+            "GameplayExtras LIVE_TIMING_STATS bit set from profile",
         );
         assert!(
             masks

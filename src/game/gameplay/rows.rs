@@ -1,4 +1,5 @@
 use crate::game::judgment::{self, JudgeGrade};
+use crate::game::timing;
 
 use super::{
     FinalizedRowOutcome, RowEntry, SongTimeNs, State, active_hold_is_engaged,
@@ -45,6 +46,10 @@ pub(super) fn finalize_row_judgment(
     let final_grade = final_judgment.grade;
     state.row_entries[row_entry_index].final_outcome = Some(FinalizedRowOutcome { final_grade });
     record_display_window_counts(state, player, &final_judgment);
+    timing::record_live_timing_stats(
+        &mut state.players[player].live_timing_stats,
+        &final_judgment,
+    );
     let suppress_final_early_bad_visual =
         suppress_final_bad_rescore_visual(skip_life_change, final_grade);
     if scoring_blocked {
