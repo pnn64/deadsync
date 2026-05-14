@@ -4971,6 +4971,39 @@ pub fn disable_score_for_practice(state: &mut State) {
     state.replay_status_text = Some(Arc::from("Practice Mode"));
 }
 
+/// Updates the music rate on a live gameplay state, rebuilding the
+/// rate-dependent caches (judgment timing windows and end-time markers) so
+/// later judging and completion checks remain consistent. Returns `true` when
+/// the rate actually changed.
+///
+/// This does not touch the audio engine or the session-stored rate; callers
+/// (e.g. practice-mode hotkeys) are responsible for keeping `audio::set_music_rate`
+/// and `profile::set_session_music_rate` in sync.
+pub fn set_music_rate(state: &mut State, rate: f32) -> bool {
+    let normalized = if rate.is_finite() && rate > 0.0 {
+        rate
+    } else {
+        1.0
+    };
+    if (normalized - state.music_rate).abs() <= f32::EPSILON {
+        return false;
+    }
+    state.music_rate = normalized;
+    let timing_profile = state.timing_profile;
+    state.player_judgment_timing = std::array::from_fn(|player| {
+        build_player_judgment_timing(timing_profile, &state.player_profiles[player], normalized)
+    });
+    let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
+        &state.notes,
+        &state.note_time_cache_ns,
+        &state.hold_end_time_cache_ns,
+        normalized,
+    );
+    state.notes_end_time_ns = notes_end_time_ns;
+    state.music_end_time_ns = music_end_time_ns;
+    true
+}
+
 fn first_note_index_at_or_after_time(state: &State, player: usize, time_ns: SongTimeNs) -> usize {
     let (start, end) = player_note_range(state, player);
     start + state.note_time_cache_ns[start..end].partition_point(|&t| t < time_ns)
@@ -12742,5 +12775,43 @@ return Def.ActorFrame{}
         assert_eq!(tap_hit.window, lift_hit.window);
         assert_eq!(tap_hit.measured_offset_music_ns, 0);
         assert_eq!(lift_hit.measured_offset_music_ns, 0);
+    }
+
+    #[test]
+    fn set_music_rate_rebuilds_judgment_and_end_times() {
+        let mut state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let baseline_great_ns = state.player_judgment_timing[0].profile_music_ns.windows_ns[2];
+        let baseline_music_end = state.music_end_time_ns;
+
+        assert!(super::set_music_rate(&mut state, 1.5));
+        assert!((state.music_rate - 1.5).abs() < 1e-6);
+
+        let scaled_great_ns = state.player_judgment_timing[0].profile_music_ns.windows_ns[2];
+        // Scaled timing windows are larger in music time when the rate is faster.
+        assert!(
+            scaled_great_ns > baseline_great_ns,
+            "music-rate=1.5 should widen the W3 window in song-time ns ({} vs {})",
+            scaled_great_ns,
+            baseline_great_ns,
+        );
+        assert!(
+            state.music_end_time_ns > baseline_music_end,
+            "music-rate=1.5 should also widen the late-resolution slack on the music end time \
+             ({} vs {})",
+            state.music_end_time_ns,
+            baseline_music_end,
+        );
+
+        // Calling with the same rate is a no-op.
+        assert!(!super::set_music_rate(&mut state, 1.5));
+
+        // Non-finite or non-positive inputs are normalized to 1.0.
+        assert!(super::set_music_rate(&mut state, f32::NAN));
+        assert!((state.music_rate - 1.0).abs() < 1e-6);
+
+        assert!(super::set_music_rate(&mut state, 1.5));
+        assert!(super::set_music_rate(&mut state, -2.0));
+        assert!((state.music_rate - 1.0).abs() < 1e-6);
     }
 }
