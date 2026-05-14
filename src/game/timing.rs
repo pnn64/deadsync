@@ -723,6 +723,12 @@ impl TimingData {
         Some(idx)
     }
 
+    #[inline(always)]
+    pub fn cutoff_row_for_note_row(&self, cutoff_note_row: i32) -> usize {
+        self.row_to_beat
+            .partition_point(|beat| beat_to_note_row(*beat) < cutoff_note_row)
+    }
+
     pub fn get_beat_info_from_time(&self, target_time_sec: f32) -> BeatInfo {
         self.get_beat_info_from_time_ns(timing_ns_from_seconds(target_time_sec))
     }

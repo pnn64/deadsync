@@ -7905,11 +7905,11 @@ fn mine_avoid_log_enabled() -> bool {
 #[inline(always)]
 fn missed_note_cutoff_row_for_timing(timing: &TimingData, cutoff_time_ns: SongTimeNs) -> usize {
     let beat_info = timing.get_beat_info_from_time_ns(cutoff_time_ns);
-    let mut row = timing_row_nearest(timing, beat_info.beat);
+    let mut cutoff_note_row = beat_to_note_row(beat_info.beat);
     if beat_info.is_in_freeze && !beat_info.is_in_delay {
-        row = row.saturating_add(1);
+        cutoff_note_row = cutoff_note_row.saturating_add(1);
     }
-    row
+    timing.cutoff_row_for_note_row(cutoff_note_row)
 }
 
 #[inline(always)]
@@ -8103,6 +8103,22 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
         }
         state.next_tap_miss_cursor[player] = cursor;
     }
+}
+
+#[inline(always)]
+fn score_rows_finalized(state: &State) -> bool {
+    (0..state.num_players).all(|player| {
+        let (start, end) = state.row_entry_ranges[player];
+        state.row_entries[start..end]
+            .iter()
+            .all(|row| row.final_outcome.is_some())
+    })
+}
+
+#[inline(always)]
+fn settle_completion_rows(state: &mut State) -> bool {
+    update_judged_rows(state);
+    score_rows_finalized(state)
 }
 
 pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
@@ -8379,6 +8395,9 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     // ends, and misses before leaving gameplay, otherwise the last frame can
     // cut to evaluation before final judgments land.
     if state.current_music_time_ns >= state.music_end_time_ns {
+        if !settle_completion_rows(state) && trace_enabled {
+            trace!("Music end time reached with pending score rows; completing gameplay.");
+        }
         debug!("Music end time reached. Transitioning to evaluation.");
         state.song_completed_naturally = true;
         finalize_completed_mines(state);
@@ -8547,12 +8566,12 @@ mod tests {
         remove_provisional_early_score, replay_edge_cap, resolve_pending_missed_holds,
         row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
-        single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
-        stage_music_cut, start_active_hold, step_calories, step_stats_notefield_width,
-        suppress_final_bad_rescore_visual, tick_mode_status_line, tick_visual_effects,
-        trigger_completed_row_tap_explosions, trigger_note_receptor_feedback,
+        settle_completion_rows, single_runtime_player_is_p2, song_time_ns_from_seconds,
+        song_time_ns_to_seconds, stage_music_cut, start_active_hold, step_calories,
+        step_stats_notefield_width, suppress_final_bad_rescore_visual, tick_mode_status_line,
+        tick_visual_effects, trigger_completed_row_tap_explosions, trigger_note_receptor_feedback,
         trigger_receptor_step_pulse, try_hit_crossed_mines_while_held, turn_option_bits,
-        update_active_holds, update_lane_input_slot, visible_notefield_time_ns,
+        update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
     use crate::engine::input::{InputEdge, InputEvent, InputSource, Lane, VirtualAction};
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
@@ -11872,6 +11891,51 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn missed_note_cutoff_row_advances_past_final_row() {
+        let final_row = ROWS_PER_BEAT as usize;
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 60.0)],
+                ..TimingSegments::default()
+            },
+            &test_row_to_beat(final_row),
+        );
+        let cutoff_time = timing
+            .get_time_for_beat_ns(1.0)
+            .saturating_add(song_time_ns_from_seconds(0.1));
+
+        assert!(missed_note_cutoff_row_for_timing(&timing, cutoff_time) > final_row);
+    }
+
+    #[test]
+    fn missed_note_cutoff_row_uses_chart_row_indices() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 60.0)],
+                ..TimingSegments::default()
+            },
+            &[0.0, 4.0, 8.0],
+        );
+
+        assert_eq!(
+            missed_note_cutoff_row_for_timing(&timing, timing.get_time_for_beat_ns(3.0)),
+            1
+        );
+        assert_eq!(
+            missed_note_cutoff_row_for_timing(&timing, timing.get_time_for_beat_ns(4.0)),
+            1
+        );
+        assert_eq!(
+            missed_note_cutoff_row_for_timing(&timing, timing.get_time_for_beat_ns(4.1)),
+            2
+        );
+    }
+
+    #[test]
     fn delayed_rows_do_not_time_miss_or_avoid_until_delay_finishes() {
         let timing = Arc::new(TimingData::from_segments(
             0.0,
@@ -11960,6 +12024,67 @@ return Def.ActorFrame{}
         finalize_completed_mines(&mut state);
         assert_eq!(state.players[0].mines_avoided, 1);
         assert_eq!(state.notes[0].mine_result, Some(MineResult::Avoided));
+    }
+
+    #[test]
+    fn completed_song_finalizes_last_tap_miss_before_eval() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        assert_eq!(state.num_players, 1);
+
+        let (note_start, note_end) = state.note_ranges[0];
+        let first_note = note_start;
+        let last_note = note_end - 1;
+        let first_row_entry = state.note_row_entry_indices[first_note] as usize;
+        let last_row_entry = state.note_row_entry_indices[last_note] as usize;
+        let miss_ix = judgment::judge_grade_ix(JudgeGrade::Miss);
+
+        set_final_note_result(
+            &mut state,
+            0,
+            first_note,
+            Judgment {
+                time_error_ms: 0.0,
+                time_error_music_ns: 0,
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W1),
+                miss_because_held: false,
+            },
+        );
+        state.current_music_time_ns = state.note_time_cache_ns[first_note].saturating_add(
+            max_step_distance_ns(&state.timing_profile, state.music_rate),
+        );
+        assert!(!settle_completion_rows(&mut state));
+        assert!(state.row_entries[first_row_entry].final_outcome.is_some());
+        assert!(state.row_entries[last_row_entry].final_outcome.is_none());
+
+        let miss_time_ns = state.note_time_cache_ns[last_note]
+            .saturating_add(max_step_distance_ns(
+                &state.timing_profile,
+                state.music_rate,
+            ))
+            .saturating_add(song_time_ns_from_seconds(0.1));
+        state.current_music_time_ns = miss_time_ns;
+
+        // The normal frame order has already scanned rows before overdue taps
+        // are promoted to misses.
+        update_judged_rows(&mut state);
+        apply_time_based_tap_misses(&mut state, miss_time_ns);
+        assert_eq!(
+            state.notes[last_note].result.as_ref().map(|j| j.grade),
+            Some(JudgeGrade::Miss)
+        );
+        assert!(state.row_entries[last_row_entry].final_outcome.is_none());
+        assert_eq!(state.players[0].judgment_counts[miss_ix], 0);
+
+        assert!(settle_completion_rows(&mut state));
+        assert_eq!(
+            state.row_entries[last_row_entry].final_outcome,
+            Some(FinalizedRowOutcome {
+                final_grade: JudgeGrade::Miss,
+            })
+        );
+        assert_eq!(state.players[0].judgment_counts[miss_ix], 1);
     }
 
     #[test]
