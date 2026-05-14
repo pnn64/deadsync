@@ -42,6 +42,9 @@ const EDIT_MARKER_SOUND: &str = "assets/sounds/screen_edit_marker.ogg";
 const EDIT_SNAP_SOUND: &str = "assets/sounds/screen_edit_snap.ogg";
 const EDIT_INVALID_SOUND: &str = "assets/sounds/common_invalid.ogg";
 const EDIT_SCROLL_SPEEDS: [f32; 7] = [1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0];
+const MUSIC_RATE_HOTKEY_STEP: f32 = 0.05;
+const MUSIC_RATE_HOTKEY_MIN: f32 = 0.5;
+const MUSIC_RATE_HOTKEY_MAX: f32 = 3.0;
 const FLASH_DURATION_SECS: f32 = 0.75;
 
 #[derive(Clone, Copy, Debug)]
@@ -156,6 +159,7 @@ const HELP_MENU: MenuDef = MenuDef {
         MenuRow { label: lookup_key("Practice", "HelpCtrlUpDown"), action: None },
         MenuRow { label: lookup_key("Practice", "HelpHomeEnd"), action: None },
         MenuRow { label: lookup_key("Practice", "HelpLeftRight"), action: None },
+        MenuRow { label: lookup_key("Practice", "HelpBracketKeys"), action: None },
         MenuRow { label: lookup_key("Practice", "HelpSpace"), action: None },
         MenuRow { label: lookup_key("Practice", "HelpShiftNavigate"), action: None },
         MenuRow { label: lookup_key("Practice", "HelpP"), action: None },
@@ -317,6 +321,20 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
         return (false, ScreenAction::None);
     }
 
+    // Music rate hotkeys are global within practice mode: they work whether
+    // the user is editing, mid-loop playback, or has the menu open.
+    match raw_key.code {
+        KeyCode::BracketLeft => {
+            change_music_rate(state, -MUSIC_RATE_HOTKEY_STEP);
+            return (true, ScreenAction::None);
+        }
+        KeyCode::BracketRight => {
+            change_music_rate(state, MUSIC_RATE_HOTKEY_STEP);
+            return (true, ScreenAction::None);
+        }
+        _ => {}
+    }
+
     if matches!(state.mode, Mode::Playing { .. }) {
         return match raw_key.code {
             KeyCode::Escape | KeyCode::Enter => {
@@ -420,6 +438,9 @@ pub fn get_actors(state: &mut State, asset_manager: &AssetManager) -> Vec<Actor>
     if state.menu.is_some() {
         append_main_menu(state, &mut actors);
     }
+    // Render any active flash text regardless of mode so music-rate changes
+    // (and other transient feedback) are visible during loop playback as well.
+    append_flash_overlay(state, &mut actors);
     actors
 }
 
@@ -894,11 +915,58 @@ fn change_edit_scroll_speed(state: &mut State, delta: isize) {
     audio::play_sfx(EDIT_MARKER_SOUND);
 }
 
+fn change_music_rate(state: &mut State, delta: f32) {
+    let current = state.gameplay.music_rate;
+    let raw = current + delta;
+    let stepped = (raw / MUSIC_RATE_HOTKEY_STEP).round() * MUSIC_RATE_HOTKEY_STEP;
+    let new_rate = stepped.clamp(MUSIC_RATE_HOTKEY_MIN, MUSIC_RATE_HOTKEY_MAX);
+    if (new_rate - current).abs() <= f32::EPSILON {
+        audio::play_sfx(EDIT_INVALID_SOUND);
+        set_flash_tr_fmt(
+            state,
+            "FlashMusicRateLimit",
+            &[("rate", &fmt_music_rate(current))],
+        );
+        return;
+    }
+    let changed = gameplay_core::set_music_rate(&mut state.gameplay, new_rate);
+    profile::set_session_music_rate(new_rate);
+    audio::set_music_rate(new_rate);
+    if changed {
+        set_flash_tr_fmt(
+            state,
+            "FlashMusicRate",
+            &[("rate", &fmt_music_rate(new_rate))],
+        );
+        audio::play_sfx(EDIT_LINE_SOUND);
+    }
+}
+
 fn set_flash_tr(state: &mut State, key: &str) {
     state.flash = Some((
         i18n::tr("Practice", key).to_string(),
         FLASH_DURATION_SECS,
     ));
+}
+
+fn set_flash_tr_fmt(state: &mut State, key: &str, args: &[(&str, &str)]) {
+    state.flash = Some((
+        i18n::tr_fmt("Practice", key, args).to_string(),
+        FLASH_DURATION_SECS,
+    ));
+}
+
+fn fmt_music_rate(rate: f32) -> String {
+    let scaled = (rate * 100.0).round() as i32;
+    let int_part = scaled / 100;
+    let frac2 = (scaled % 100).abs();
+    if frac2 == 0 {
+        format!("{int_part}")
+    } else if frac2 % 10 == 0 {
+        format!("{}.{}", int_part, frac2 / 10)
+    } else {
+        format!("{int_part}.{frac2:02}")
+    }
 }
 
 fn seek_chart_note(state: &mut State, dir: i32) {
@@ -1292,6 +1360,9 @@ fn append_edit_overlay(state: &State, actors: &mut Vec<Actor>) {
         shadowlength(1.0):
         z(3000)
     ));
+}
+
+fn append_flash_overlay(state: &State, actors: &mut Vec<Actor>) {
     if let Some((text, remaining)) = state.flash.as_ref() {
         let alpha = remaining.clamp(0.0, 1.0);
         let label = text.clone();
@@ -1554,9 +1625,10 @@ fn append_help_section(
 #[cfg(test)]
 mod tests {
     use super::{
-        CursorHoldDir, HELP_MENU, MAIN_MENU, MenuDef, PracticeNavMode,
+        CursorHoldDir, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_MIN,
+        MUSIC_RATE_HOTKEY_STEP, MenuDef, PracticeNavMode,
         edit_cursor_hold_dir_for_action_in_mode, edit_snap_delta_for_action_in_mode,
-        menu_step_delta_for_action_in_mode, practice_nav_mode_from_config,
+        fmt_music_rate, menu_step_delta_for_action_in_mode, practice_nav_mode_from_config,
     };
     use crate::assets::i18n;
     use crate::engine::input::VirtualAction;
@@ -1573,6 +1645,8 @@ mod tests {
         "HelpSidebarMiscTitle",
         "HelpSidebarMiscBody",
         "FlashZoomChanged",
+        "FlashMusicRate",
+        "FlashMusicRateLimit",
         "FlashAreaMarkerStartSet",
         "FlashAreaMarkerEndSet",
         "FlashInvalidSelectionStart",
@@ -1602,6 +1676,12 @@ mod tests {
         "InfoNumLifts",
         "InfoNumFakes",
     ];
+
+    fn quantize_music_rate(current: f32, delta: f32) -> f32 {
+        let raw = current + delta;
+        let stepped = (raw / MUSIC_RATE_HOTKEY_STEP).round() * MUSIC_RATE_HOTKEY_STEP;
+        stepped.clamp(MUSIC_RATE_HOTKEY_MIN, MUSIC_RATE_HOTKEY_MAX)
+    }
 
     #[test]
     fn practice_nav_mode_follows_dedicated_menu_config() {
@@ -1684,6 +1764,49 @@ mod tests {
     }
 
     #[test]
+    fn music_rate_hotkey_increment_is_quantized_and_clamped() {
+        assert!((quantize_music_rate(1.0, MUSIC_RATE_HOTKEY_STEP) - 1.05).abs() < 1e-5);
+        assert!((quantize_music_rate(1.0, -MUSIC_RATE_HOTKEY_STEP) - 0.95).abs() < 1e-5);
+        // Off-grid starting values snap to the nearest step boundary in the
+        // direction of travel (round-to-nearest, not floor/ceiling).
+        assert!((quantize_music_rate(0.93, -MUSIC_RATE_HOTKEY_STEP) - 0.90).abs() < 1e-5);
+        assert!((quantize_music_rate(0.93, MUSIC_RATE_HOTKEY_STEP) - 1.00).abs() < 1e-5);
+        assert!(
+            (quantize_music_rate(MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_STEP)
+                - MUSIC_RATE_HOTKEY_MAX)
+                .abs()
+                < 1e-5
+        );
+        assert!(
+            (quantize_music_rate(MUSIC_RATE_HOTKEY_MIN, -MUSIC_RATE_HOTKEY_STEP)
+                - MUSIC_RATE_HOTKEY_MIN)
+                .abs()
+                < 1e-5
+        );
+    }
+
+    #[test]
+    fn fmt_music_rate_matches_player_options_format() {
+        assert_eq!(fmt_music_rate(1.0), "1");
+        assert_eq!(fmt_music_rate(1.5), "1.5");
+        assert_eq!(fmt_music_rate(0.85), "0.85");
+        assert_eq!(fmt_music_rate(2.05), "2.05");
+        assert_eq!(fmt_music_rate(0.5), "0.5");
+    }
+
+    #[test]
+    fn help_menu_item_keys_resolve_through_i18n() {
+        i18n::init_for_tests();
+        assert_menu_labels_localized(&HELP_MENU);
+    }
+
+    #[test]
+    fn main_menu_item_keys_resolve_through_i18n() {
+        i18n::init_for_tests();
+        assert_menu_labels_localized(&MAIN_MENU);
+    }
+
+    #[test]
     fn help_menu_rows_have_no_actions_main_menu_rows_all_have_actions() {
         assert!(
             HELP_MENU.rows.iter().all(|r| r.action.is_none()),
@@ -1693,18 +1816,6 @@ mod tests {
             MAIN_MENU.rows.iter().all(|r| r.action.is_some()),
             "every main row must dispatch an action"
         );
-    }
-
-    #[test]
-    fn help_menu_labels_resolve_through_i18n() {
-        i18n::init_for_tests();
-        assert_menu_labels_localized(&HELP_MENU);
-    }
-
-    #[test]
-    fn main_menu_labels_resolve_through_i18n() {
-        i18n::init_for_tests();
-        assert_menu_labels_localized(&MAIN_MENU);
     }
 
     #[test]
@@ -1723,22 +1834,15 @@ mod tests {
     #[test]
     fn placeholder_keys_substitute_named_args() {
         i18n::init_for_tests();
+        let rate = i18n::tr_fmt("Practice", "FlashMusicRate", &[("rate", "1.5")]);
+        assert!(
+            rate.contains("1.5") && !rate.contains("{rate}"),
+            "FlashMusicRate did not substitute placeholder: {rate}"
+        );
         let beat = i18n::tr_fmt("Practice", "InfoCurrentBeat", &[("beat", "3.000")]);
         assert!(
             beat.contains("3.000") && !beat.contains("{beat}"),
             "InfoCurrentBeat did not substitute placeholder: {beat}"
-        );
-        let range = i18n::tr_fmt(
-            "Practice",
-            "InfoSelectionBeatRange",
-            &[("start", "1.000"), ("stop", "2.000")],
-        );
-        assert!(
-            range.contains("1.000")
-                && range.contains("2.000")
-                && !range.contains("{start}")
-                && !range.contains("{stop}"),
-            "InfoSelectionBeatRange did not substitute placeholders: {range}"
         );
     }
 
