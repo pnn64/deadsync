@@ -2662,6 +2662,16 @@ fn waiting_for_groovestats_submit(state: &State) -> bool {
         .or(state.submit_groovestats_fallback[player_idx]);
         match status {
             None | Some(scores::GrooveStatsSubmitUiStatus::Submitting) => return true,
+            Some(scores::GrooveStatsSubmitUiStatus::Submitted) => {
+                if scores::get_groovestats_submit_itl_progress_for_side(
+                    si.chart.short_hash.as_str(),
+                    si.side,
+                )
+                .is_some()
+                {
+                    return true;
+                }
+            }
             _ => {}
         }
     }

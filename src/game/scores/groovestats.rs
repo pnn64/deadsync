@@ -1191,6 +1191,14 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     continue;
                 }
 
+                groovestats_update_submit_event_ui_if_token(
+                    player.side,
+                    player.chart_hash.as_str(),
+                    player.token,
+                    itl::progress_from_submit(player, player_response),
+                    submit_record_banner(player, player_response),
+                );
+                itl::handle_submit_player_unlocks(player, player_response);
                 let accepted = groovestats_update_submit_ui_status_if_token(
                     player.side,
                     player.chart_hash.as_str(),
@@ -1214,14 +1222,6 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                         player.username.as_str(),
                     );
                 }
-                groovestats_update_submit_event_ui_if_token(
-                    player.side,
-                    player.chart_hash.as_str(),
-                    player.token,
-                    itl::progress_from_submit(player, player_response),
-                    submit_record_banner(player, player_response),
-                );
-                itl::handle_submit_player_unlocks(player, player_response);
                 debug!(
                     "{} submit succeeded for {:?} ({}) result='{}'",
                     online::groovestats_service_name(),
