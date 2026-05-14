@@ -154,16 +154,46 @@ const MAIN_MENU: MenuDef = MenuDef {
 
 const HELP_MENU: MenuDef = MenuDef {
     rows: &[
-        MenuRow { label: lookup_key("Practice", "HelpHoldUpDown"), action: None },
-        MenuRow { label: lookup_key("Practice", "HelpSemicolonApostrophe"), action: None },
-        MenuRow { label: lookup_key("Practice", "HelpCtrlUpDown"), action: None },
-        MenuRow { label: lookup_key("Practice", "HelpHomeEnd"), action: None },
-        MenuRow { label: lookup_key("Practice", "HelpLeftRight"), action: None },
-        MenuRow { label: lookup_key("Practice", "HelpBracketKeys"), action: None },
-        MenuRow { label: lookup_key("Practice", "HelpSpace"), action: None },
-        MenuRow { label: lookup_key("Practice", "HelpShiftNavigate"), action: None },
-        MenuRow { label: lookup_key("Practice", "HelpP"), action: None },
-        MenuRow { label: lookup_key("Practice", "HelpEscEnter"), action: None },
+        MenuRow {
+            label: lookup_key("Practice", "HelpHoldUpDown"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpSemicolonApostrophe"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpCtrlUpDown"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpHomeEnd"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpLeftRight"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpBracketKeys"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpSpace"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpShiftNavigate"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpP"),
+            action: None,
+        },
+        MenuRow {
+            label: lookup_key("Practice", "HelpEscEnter"),
+            action: None,
+        },
     ],
 };
 
@@ -943,10 +973,7 @@ fn change_music_rate(state: &mut State, delta: f32) {
 }
 
 fn set_flash_tr(state: &mut State, key: &str) {
-    state.flash = Some((
-        i18n::tr("Practice", key).to_string(),
-        FLASH_DURATION_SECS,
-    ));
+    state.flash = Some((i18n::tr("Practice", key).to_string(), FLASH_DURATION_SECS));
 }
 
 fn set_flash_tr_fmt(state: &mut State, key: &str, args: &[(&str, &str)]) {
@@ -1402,11 +1429,7 @@ fn edit_info_text(state: &State) -> String {
         &[("sec", &format!("{current_second:.6}"))],
     ));
     status.push('\n');
-    status.push_str(&i18n::tr_fmt(
-        "Practice",
-        "InfoSnapTo",
-        &[("snap", snap)],
-    ));
+    status.push_str(&i18n::tr_fmt("Practice", "InfoSnapTo", &[("snap", snap)]));
     status.push('\n');
     if let Some(selection) = selection_info_text(state) {
         status.push_str(&selection);
@@ -1626,9 +1649,9 @@ fn append_help_section(
 mod tests {
     use super::{
         CursorHoldDir, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_MIN,
-        MUSIC_RATE_HOTKEY_STEP, MenuDef, PracticeNavMode,
-        edit_cursor_hold_dir_for_action_in_mode, edit_snap_delta_for_action_in_mode,
-        fmt_music_rate, menu_step_delta_for_action_in_mode, practice_nav_mode_from_config,
+        MUSIC_RATE_HOTKEY_STEP, MenuDef, PracticeNavMode, edit_cursor_hold_dir_for_action_in_mode,
+        edit_snap_delta_for_action_in_mode, fmt_music_rate, menu_step_delta_for_action_in_mode,
+        practice_nav_mode_from_config,
     };
     use crate::assets::i18n;
     use crate::engine::input::VirtualAction;

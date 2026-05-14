@@ -8007,13 +8007,14 @@ impl ApplicationHandler<UserEvent> for App {
                 }
                 let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
                 let handled_started = Instant::now();
+                let mut raw_pad_consumed = false;
                 if self.state.screens.current_screen == CurrentScreen::Sandbox {
                     crate::screens::sandbox::handle_raw_pad_event(
                         &mut self.state.screens.sandbox_state,
                         &ev,
                     );
                 } else if self.state.screens.current_screen == CurrentScreen::Mappings {
-                    crate::screens::mappings::handle_raw_pad_event(
+                    raw_pad_consumed = crate::screens::mappings::handle_raw_pad_event(
                         &mut self.state.screens.mappings_state,
                         &ev,
                     );
@@ -8028,7 +8029,9 @@ impl ApplicationHandler<UserEvent> for App {
                         &ev,
                     );
                 }
-                self.handle_pad_event(event_loop, ev);
+                if !raw_pad_consumed {
+                    self.handle_pad_event(event_loop, ev);
+                }
                 self.state
                     .shell
                     .note_gameplay_pad_handler(gameplay_screen, elapsed_us_since(handled_started));

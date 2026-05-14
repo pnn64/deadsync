@@ -940,7 +940,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deadsync"
-version = "0.4.125"
+version = "0.4.126"
 dependencies = [
  "alsa",
  "ash",
@@ -3107,18 +3107,18 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "pin-project"
-version = "1.1.12"
+version = "1.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf0d9e68100b3a7989b4901972f265cd542e560a3a8a724e1e20322f4d06ce9"
+checksum = "2466b2336ed02bcdca6b294417127b90ec92038d1d5c4fbeac971a922e0e0924"
 dependencies = [
  "pin-project-internal",
 ]
 
 [[package]]
 name = "pin-project-internal"
-version = "1.1.12"
+version = "1.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a990e22f43e84855daf260dded30524ef4a9021cc7541c26540500a50b624389"
+checksum = "c96395f0a926bc13b1c17622aaddda1ecb55d49c8f1bf9777e4d877800a43f8b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3633,8 +3633,8 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.4.0"
-source = "git+https://github.com/pnn64/rssp?branch=main#133fdf2c476f386b9956da194d9672aaf1605271"
+version = "0.4.3"
+source = "git+https://github.com/pnn64/rssp?branch=main#377cf57e85e1801e4d7034e2f169e6869432db6e"
 dependencies = [
  "rssp-core",
  "serde_json",
@@ -3642,8 +3642,8 @@ dependencies = [
 
 [[package]]
 name = "rssp-core"
-version = "0.4.0"
-source = "git+https://github.com/pnn64/rssp?branch=main#133fdf2c476f386b9956da194d9672aaf1605271"
+version = "0.4.3"
+source = "git+https://github.com/pnn64/rssp?branch=main#377cf57e85e1801e4d7034e2f169e6869432db6e"
 
 [[package]]
 name = "rubato"
