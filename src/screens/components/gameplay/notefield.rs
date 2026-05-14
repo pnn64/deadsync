@@ -3461,6 +3461,15 @@ fn hold_head_render_flags(
 }
 
 #[inline(always)]
+fn hold_explosion_active(
+    active_state: Option<&ActiveHold>,
+    current_beat: f32,
+    note_beat: f32,
+) -> bool {
+    current_beat >= note_beat && active_state.is_some_and(active_hold_is_engaged)
+}
+
+#[inline(always)]
 fn let_go_head_beat(note_beat: f32, end_beat: f32, last_held_beat: f32, visible_beat: f32) -> f32 {
     // ITG updates and renders from one song position. deadsync keeps separate
     // gameplay and display clocks, so a dropped hold head must never render
@@ -4614,18 +4623,18 @@ pub fn build_bundles(
             }
             let hold_slot = if receptor_hidden_by_song_lua {
                 None
-            } else if let Some(active) = state.active_holds[col]
-                .as_ref()
-                .filter(|active| active_hold_is_engaged(active))
-            {
-                let note_type = &state.notes[active.note_index].note_type;
-                hold_explosion_slot_for_col(
-                    tap_explosion_ns,
-                    i,
-                    matches!(note_type, NoteType::Roll),
-                )
             } else {
-                None
+                state.active_holds[col].as_ref().and_then(|active| {
+                    let note = state.notes.get(active.note_index)?;
+                    if !hold_explosion_active(Some(active), current_beat, note.beat) {
+                        return None;
+                    }
+                    hold_explosion_slot_for_col(
+                        tap_explosion_ns,
+                        i,
+                        matches!(note.note_type, NoteType::Roll),
+                    )
+                })
             };
             if let Some(hold_slot) = hold_slot {
                 let draw = song_lua_note_model_draw(
@@ -8549,7 +8558,7 @@ mod tests {
         append_mini_part, append_perspective_parts, append_turn_parts, arrow_effect_zoom,
         bottom_cap_uv_window, calc_note_rotation_z, clipped_hold_body_bounds, combo_actor_zoom,
         confusion_rotation_deg, disabled_timing_window_bits, disabled_timing_windows_name,
-        hallway_judgment_zoom, hold_body_segment_budget, hold_draw_span,
+        hallway_judgment_zoom, hold_body_segment_budget, hold_draw_span, hold_explosion_active,
         hold_explosion_slot_for_col, hold_head_render_flags, hold_segment_pose, hold_strip_actor,
         hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
         judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
@@ -8758,6 +8767,51 @@ mod tests {
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 99.99, 100.0);
         assert!(!engaged);
         assert!(!use_active);
+    }
+
+    #[test]
+    fn hold_explosion_waits_for_receptor_on_early_hit() {
+        let active = ActiveHold {
+            note_index: 42,
+            start_time_ns: 100_000_000_000,
+            end_time_ns: 12_000_000_000,
+            note_type: NoteType::Hold,
+            let_go: false,
+            is_pressed: true,
+            life: 1.0,
+            last_update_time_ns: 100_000_000_000,
+        };
+
+        assert!(!hold_explosion_active(Some(&active), 99.99, 100.0));
+        assert!(hold_explosion_active(Some(&active), 100.0, 100.0));
+    }
+
+    #[test]
+    fn hold_explosion_requires_live_hold_state() {
+        let exhausted = ActiveHold {
+            note_index: 7,
+            start_time_ns: 100_000_000_000,
+            end_time_ns: 8_000_000_000,
+            note_type: NoteType::Hold,
+            let_go: false,
+            is_pressed: true,
+            life: 0.0,
+            last_update_time_ns: 100_000_000_000,
+        };
+        let let_go = ActiveHold {
+            note_index: 7,
+            start_time_ns: 100_000_000_000,
+            end_time_ns: 8_000_000_000,
+            note_type: NoteType::Hold,
+            let_go: true,
+            is_pressed: true,
+            life: 1.0,
+            last_update_time_ns: 100_000_000_000,
+        };
+
+        assert!(!hold_explosion_active(Some(&exhausted), 100.0, 100.0));
+        assert!(!hold_explosion_active(Some(&let_go), 100.0, 100.0));
+        assert!(!hold_explosion_active(None, 100.0, 100.0));
     }
 
     #[test]
