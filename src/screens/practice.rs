@@ -42,9 +42,12 @@ const EDIT_MARKER_SOUND: &str = "assets/sounds/screen_edit_marker.ogg";
 const EDIT_SNAP_SOUND: &str = "assets/sounds/screen_edit_snap.ogg";
 const EDIT_INVALID_SOUND: &str = "assets/sounds/common_invalid.ogg";
 const EDIT_SCROLL_SPEEDS: [f32; 7] = [1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0];
-const MUSIC_RATE_HOTKEY_STEP: f32 = 0.05;
+const MUSIC_RATE_HOTKEY_STEP: f32 = 0.01;
 const MUSIC_RATE_HOTKEY_MIN: f32 = 0.5;
 const MUSIC_RATE_HOTKEY_MAX: f32 = 3.0;
+const MUSIC_RATE_REPEAT_DELAY_SECONDS: f32 = 0.375;
+const MUSIC_RATE_REPEAT_INTERVAL_SECONDS: f32 = 0.05;
+const MAX_MUSIC_RATE_REPEATS_PER_FRAME: usize = 64;
 const FLASH_DURATION_SECS: f32 = 0.75;
 
 #[derive(Clone, Copy, Debug)]
@@ -63,6 +66,12 @@ enum MarkerPlacement {
 enum CursorHoldDir {
     Up,
     Down,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MusicRateHoldDir {
+    Lower,
+    Raise,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -89,6 +98,11 @@ pub struct State {
     cursor_hold_down_count: u8,
     cursor_hold_delay_left: f32,
     cursor_hold_repeat_left: f32,
+    music_rate_hold_dir: Option<MusicRateHoldDir>,
+    music_rate_hold_lower_count: u8,
+    music_rate_hold_raise_count: u8,
+    music_rate_hold_delay_left: f32,
+    music_rate_hold_repeat_left: f32,
     flash: Option<(String, f32)>,
 }
 
@@ -240,6 +254,11 @@ pub fn init(mut gameplay: gameplay_screen::State) -> State {
         cursor_hold_down_count: 0,
         cursor_hold_delay_left: 0.0,
         cursor_hold_repeat_left: EDIT_CURSOR_REPEAT_INTERVAL_SECONDS,
+        music_rate_hold_dir: None,
+        music_rate_hold_lower_count: 0,
+        music_rate_hold_raise_count: 0,
+        music_rate_hold_delay_left: 0.0,
+        music_rate_hold_repeat_left: MUSIC_RATE_REPEAT_INTERVAL_SECONDS,
         flash: None,
     };
     set_cursor(&mut state, MIN_CURSOR_BEAT);
@@ -263,6 +282,7 @@ pub(crate) fn restore_edit_snapshot(state: &mut State, snapshot: EditSnapshot) {
     state.shift_anchor = None;
     state.shift_held = false;
     state.ctrl_held = false;
+    clear_music_rate_hold_inputs(state);
     state.snap_index = snapshot.snap_index.min(SNAP_LABELS.len().saturating_sub(1));
     state.edit_scroll_speed_index = snapshot
         .edit_scroll_speed_index
@@ -289,6 +309,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             state.flash = None;
         }
     }
+    update_music_rate_hold(state, delta_time);
 
     let Mode::Playing {
         start_beat,
@@ -388,21 +409,20 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
     }
 
     if !raw_key.pressed {
+        if let Some(dir) = music_rate_hold_dir_for_key(raw_key.code) {
+            release_music_rate_hold_input(state, dir);
+            return (true, ScreenAction::None);
+        }
         return (false, ScreenAction::None);
     }
 
     // Music rate hotkeys are global within practice mode: they work whether
     // the user is editing, mid-loop playback, or has the menu open.
-    match raw_key.code {
-        KeyCode::BracketLeft => {
-            change_music_rate(state, -MUSIC_RATE_HOTKEY_STEP);
-            return (true, ScreenAction::None);
+    if let Some(dir) = music_rate_hold_dir_for_key(raw_key.code) {
+        if !raw_key.repeat {
+            press_music_rate_hold_input(state, dir);
         }
-        KeyCode::BracketRight => {
-            change_music_rate(state, MUSIC_RATE_HOTKEY_STEP);
-            return (true, ScreenAction::None);
-        }
-        _ => {}
+        return (true, ScreenAction::None);
     }
 
     if matches!(state.mode, Mode::Playing { .. }) {
@@ -882,6 +902,93 @@ fn clear_cursor_hold_inputs(state: &mut State) {
     clear_cursor_hold_timer(state);
 }
 
+const fn opposite_music_rate_hold_dir(dir: MusicRateHoldDir) -> MusicRateHoldDir {
+    match dir {
+        MusicRateHoldDir::Lower => MusicRateHoldDir::Raise,
+        MusicRateHoldDir::Raise => MusicRateHoldDir::Lower,
+    }
+}
+
+const fn music_rate_delta_for_dir(dir: MusicRateHoldDir) -> f32 {
+    match dir {
+        MusicRateHoldDir::Lower => -MUSIC_RATE_HOTKEY_STEP,
+        MusicRateHoldDir::Raise => MUSIC_RATE_HOTKEY_STEP,
+    }
+}
+
+const fn music_rate_hold_dir_for_key(code: KeyCode) -> Option<MusicRateHoldDir> {
+    match code {
+        KeyCode::BracketLeft => Some(MusicRateHoldDir::Lower),
+        KeyCode::BracketRight => Some(MusicRateHoldDir::Raise),
+        _ => None,
+    }
+}
+
+fn music_rate_hold_count(state: &State, dir: MusicRateHoldDir) -> u8 {
+    match dir {
+        MusicRateHoldDir::Lower => state.music_rate_hold_lower_count,
+        MusicRateHoldDir::Raise => state.music_rate_hold_raise_count,
+    }
+}
+
+fn music_rate_hold_count_mut(state: &mut State, dir: MusicRateHoldDir) -> &mut u8 {
+    match dir {
+        MusicRateHoldDir::Lower => &mut state.music_rate_hold_lower_count,
+        MusicRateHoldDir::Raise => &mut state.music_rate_hold_raise_count,
+    }
+}
+
+fn press_music_rate_hold_input(state: &mut State, dir: MusicRateHoldDir) {
+    let count = music_rate_hold_count_mut(state, dir);
+    if *count > 0 {
+        return;
+    }
+    *count = 1;
+    start_music_rate_hold(state, dir);
+    if !change_music_rate_by_hold_dir(state, dir) {
+        stop_music_rate_hold_dir(state, dir);
+    }
+}
+
+fn release_music_rate_hold_input(state: &mut State, dir: MusicRateHoldDir) {
+    let count = music_rate_hold_count_mut(state, dir);
+    if *count == 0 {
+        return;
+    }
+    *count = 0;
+    if state.music_rate_hold_dir != Some(dir) {
+        return;
+    }
+    stop_music_rate_hold_dir(state, dir);
+}
+
+fn start_music_rate_hold(state: &mut State, dir: MusicRateHoldDir) {
+    state.music_rate_hold_dir = Some(dir);
+    state.music_rate_hold_delay_left = MUSIC_RATE_REPEAT_DELAY_SECONDS;
+    state.music_rate_hold_repeat_left = MUSIC_RATE_REPEAT_INTERVAL_SECONDS;
+}
+
+fn clear_music_rate_hold_timer(state: &mut State) {
+    state.music_rate_hold_dir = None;
+    state.music_rate_hold_delay_left = 0.0;
+    state.music_rate_hold_repeat_left = MUSIC_RATE_REPEAT_INTERVAL_SECONDS;
+}
+
+fn clear_music_rate_hold_inputs(state: &mut State) {
+    state.music_rate_hold_lower_count = 0;
+    state.music_rate_hold_raise_count = 0;
+    clear_music_rate_hold_timer(state);
+}
+
+fn stop_music_rate_hold_dir(state: &mut State, dir: MusicRateHoldDir) {
+    let other = opposite_music_rate_hold_dir(dir);
+    if music_rate_hold_count(state, other) > 0 {
+        start_music_rate_hold(state, other);
+    } else {
+        clear_music_rate_hold_timer(state);
+    }
+}
+
 fn update_cursor_hold(state: &mut State, delta_time: f32) {
     if state.menu.is_some() || state.ctrl_held || delta_time <= 0.0 {
         return;
@@ -913,6 +1020,49 @@ fn update_cursor_hold(state: &mut State, delta_time: f32) {
         state.cursor_hold_repeat_left += EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
         repeats += 1;
     }
+}
+
+fn update_music_rate_hold(state: &mut State, delta_time: f32) {
+    if delta_time <= 0.0 {
+        return;
+    }
+    let Some(dir) = state.music_rate_hold_dir else {
+        return;
+    };
+    if music_rate_hold_count(state, dir) == 0 {
+        clear_music_rate_hold_timer(state);
+        return;
+    }
+
+    let mut remaining = delta_time;
+    if state.music_rate_hold_delay_left > 0.0 {
+        let elapsed = remaining.min(state.music_rate_hold_delay_left);
+        state.music_rate_hold_delay_left -= elapsed;
+        remaining -= elapsed;
+        if state.music_rate_hold_delay_left > 0.0 {
+            return;
+        }
+        if !change_music_rate_by_hold_dir(state, dir) {
+            stop_music_rate_hold_dir(state, dir);
+            return;
+        }
+        state.music_rate_hold_repeat_left = MUSIC_RATE_REPEAT_INTERVAL_SECONDS;
+    }
+
+    state.music_rate_hold_repeat_left -= remaining;
+    let mut repeats = 0;
+    while state.music_rate_hold_repeat_left <= 0.0 && repeats < MAX_MUSIC_RATE_REPEATS_PER_FRAME {
+        if !change_music_rate_by_hold_dir(state, dir) {
+            stop_music_rate_hold_dir(state, dir);
+            return;
+        }
+        state.music_rate_hold_repeat_left += MUSIC_RATE_REPEAT_INTERVAL_SECONDS;
+        repeats += 1;
+    }
+}
+
+fn change_music_rate_by_hold_dir(state: &mut State, dir: MusicRateHoldDir) -> bool {
+    change_music_rate(state, music_rate_delta_for_dir(dir))
 }
 
 fn move_cursor_by_hold_dir(state: &mut State, dir: CursorHoldDir) {
@@ -985,11 +1135,17 @@ fn change_edit_scroll_speed(state: &mut State, delta: isize) {
     audio::play_sfx(EDIT_MARKER_SOUND);
 }
 
-fn change_music_rate(state: &mut State, delta: f32) {
+fn quantized_music_rate(current: f32, delta: f32) -> f32 {
+    let current_step = (current / MUSIC_RATE_HOTKEY_STEP).round() as i32;
+    let delta_step = (delta / MUSIC_RATE_HOTKEY_STEP).round() as i32;
+    let min_step = (MUSIC_RATE_HOTKEY_MIN / MUSIC_RATE_HOTKEY_STEP).round() as i32;
+    let max_step = (MUSIC_RATE_HOTKEY_MAX / MUSIC_RATE_HOTKEY_STEP).round() as i32;
+    (current_step + delta_step).clamp(min_step, max_step) as f32 * MUSIC_RATE_HOTKEY_STEP
+}
+
+fn change_music_rate(state: &mut State, delta: f32) -> bool {
     let current = state.gameplay.music_rate;
-    let raw = current + delta;
-    let stepped = (raw / MUSIC_RATE_HOTKEY_STEP).round() * MUSIC_RATE_HOTKEY_STEP;
-    let new_rate = stepped.clamp(MUSIC_RATE_HOTKEY_MIN, MUSIC_RATE_HOTKEY_MAX);
+    let new_rate = quantized_music_rate(current, delta);
     if (new_rate - current).abs() <= f32::EPSILON {
         audio::play_sfx(EDIT_INVALID_SOUND);
         set_flash_tr_fmt(
@@ -997,7 +1153,7 @@ fn change_music_rate(state: &mut State, delta: f32) {
             "FlashMusicRateLimit",
             &[("rate", &fmt_music_rate(current))],
         );
-        return;
+        return false;
     }
     let changed = gameplay_core::set_music_rate(&mut state.gameplay, new_rate);
     profile::set_session_music_rate(new_rate);
@@ -1010,6 +1166,7 @@ fn change_music_rate(state: &mut State, delta: f32) {
         );
         audio::play_sfx(EDIT_LINE_SOUND);
     }
+    changed
 }
 
 fn set_flash_tr(state: &mut State, key: &str) {
@@ -1712,12 +1869,14 @@ fn append_help_section(
 mod tests {
     use super::{
         CursorHoldDir, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_MIN,
-        MUSIC_RATE_HOTKEY_STEP, MenuDef, PracticeNavMode, clamp_selection,
+        MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PracticeNavMode, clamp_selection,
         edit_cursor_hold_dir_for_action_in_mode, edit_snap_delta_for_action_in_mode,
-        fmt_music_rate, menu_step_delta_for_action_in_mode, practice_nav_mode_from_config,
+        fmt_music_rate, menu_step_delta_for_action_in_mode, music_rate_delta_for_dir,
+        music_rate_hold_dir_for_key, practice_nav_mode_from_config, quantized_music_rate,
     };
     use crate::assets::i18n;
     use crate::engine::input::VirtualAction;
+    use winit::keyboard::KeyCode;
 
     /// Every i18n key the practice screen looks up at runtime, outside of the
     /// menu definitions (which already have their own coverage tests). Keep
@@ -1762,12 +1921,6 @@ mod tests {
         "InfoNumLifts",
         "InfoNumFakes",
     ];
-
-    fn quantize_music_rate(current: f32, delta: f32) -> f32 {
-        let raw = current + delta;
-        let stepped = (raw / MUSIC_RATE_HOTKEY_STEP).round() * MUSIC_RATE_HOTKEY_STEP;
-        stepped.clamp(MUSIC_RATE_HOTKEY_MIN, MUSIC_RATE_HOTKEY_MAX)
-    }
 
     #[test]
     fn practice_nav_mode_follows_dedicated_menu_config() {
@@ -1851,23 +2004,42 @@ mod tests {
 
     #[test]
     fn music_rate_hotkey_increment_is_quantized_and_clamped() {
-        assert!((quantize_music_rate(1.0, MUSIC_RATE_HOTKEY_STEP) - 1.05).abs() < 1e-5);
-        assert!((quantize_music_rate(1.0, -MUSIC_RATE_HOTKEY_STEP) - 0.95).abs() < 1e-5);
-        // Off-grid starting values snap to the nearest step boundary in the
-        // direction of travel (round-to-nearest, not floor/ceiling).
-        assert!((quantize_music_rate(0.93, -MUSIC_RATE_HOTKEY_STEP) - 0.90).abs() < 1e-5);
-        assert!((quantize_music_rate(0.93, MUSIC_RATE_HOTKEY_STEP) - 1.00).abs() < 1e-5);
+        assert!((quantized_music_rate(1.0, MUSIC_RATE_HOTKEY_STEP) - 1.01).abs() < 1e-5);
+        assert!((quantized_music_rate(1.0, -MUSIC_RATE_HOTKEY_STEP) - 0.99).abs() < 1e-5);
+        assert!((quantized_music_rate(0.93, -MUSIC_RATE_HOTKEY_STEP) - 0.92).abs() < 1e-5);
+        assert!((quantized_music_rate(0.93, MUSIC_RATE_HOTKEY_STEP) - 0.94).abs() < 1e-5);
         assert!(
-            (quantize_music_rate(MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_STEP)
+            (quantized_music_rate(MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_STEP)
                 - MUSIC_RATE_HOTKEY_MAX)
                 .abs()
                 < 1e-5
         );
         assert!(
-            (quantize_music_rate(MUSIC_RATE_HOTKEY_MIN, -MUSIC_RATE_HOTKEY_STEP)
+            (quantized_music_rate(MUSIC_RATE_HOTKEY_MIN, -MUSIC_RATE_HOTKEY_STEP)
                 - MUSIC_RATE_HOTKEY_MIN)
                 .abs()
                 < 1e-5
+        );
+    }
+
+    #[test]
+    fn music_rate_brackets_map_to_hold_deltas() {
+        assert_eq!(
+            music_rate_hold_dir_for_key(KeyCode::BracketLeft),
+            Some(MusicRateHoldDir::Lower)
+        );
+        assert_eq!(
+            music_rate_hold_dir_for_key(KeyCode::BracketRight),
+            Some(MusicRateHoldDir::Raise)
+        );
+        assert_eq!(music_rate_hold_dir_for_key(KeyCode::KeyP), None);
+        assert_eq!(
+            music_rate_delta_for_dir(MusicRateHoldDir::Lower),
+            -MUSIC_RATE_HOTKEY_STEP
+        );
+        assert_eq!(
+            music_rate_delta_for_dir(MusicRateHoldDir::Raise),
+            MUSIC_RATE_HOTKEY_STEP
         );
     }
 
