@@ -4477,10 +4477,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let p1_guest = profile::is_session_side_guest(profile::PlayerSide::P1);
     let p2_guest = profile::is_session_side_guest(profile::PlayerSide::P2);
 
+    let insert_card = tr("Common", "InsertCard");
+
     let (p1_footer_text, p1_footer_avatar) = if p1_joined {
         (
             Some(if p1_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p1_profile.display_name.as_str()
             }),
@@ -4492,7 +4494,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let (p2_footer_text, p2_footer_avatar) = if p2_joined {
         (
             Some(if p2_guest {
-                "INSERT CARD"
+                insert_card.as_ref()
             } else {
                 p2_profile.display_name.as_str()
             }),
