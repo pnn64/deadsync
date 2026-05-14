@@ -103,6 +103,7 @@ const CREDITS: &[CreditLine] = &[
     name("rehtlaw"),
     name("Romain Roffé (rofferom)"),
     name("Sereni"),
+    name("din"),
     name("Bkid"),
     spacer(),
     spacer(),
