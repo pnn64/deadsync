@@ -6929,6 +6929,16 @@ impl App {
         if target == CurrentScreen::Practice {
             crate::engine::audio::stop_music();
             if let Some(po_state) = self.state.screens.player_options_state.take() {
+                let edit_snapshot = (prev == CurrentScreen::PlayerOptions
+                    && po_state.return_screen == CurrentScreen::Practice)
+                    .then(|| {
+                        self.state
+                            .screens
+                            .practice_state
+                            .as_ref()
+                            .map(practice::edit_snapshot)
+                    })
+                    .flatten();
                 let song_arc = po_state.song.clone();
                 let play_style = profile::get_session_play_style();
                 let player_side = profile::get_session_player_side();
@@ -7129,7 +7139,11 @@ impl App {
                 let background_path =
                     Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
                 commands.push(Command::SetDynamicBackground(background_path));
-                self.state.screens.practice_state = Some(practice::init(gs));
+                let mut practice_state = practice::init(gs);
+                if let Some(snapshot) = edit_snapshot {
+                    practice::restore_edit_snapshot(&mut practice_state, snapshot);
+                }
+                self.state.screens.practice_state = Some(practice_state);
                 if let Some(ps) = self.state.screens.practice_state.as_mut() {
                     crate::screens::practice::on_enter(ps);
                 }

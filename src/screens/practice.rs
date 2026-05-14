@@ -92,6 +92,15 @@ pub struct State {
     flash: Option<(String, f32)>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct EditSnapshot {
+    cursor_beat: f32,
+    selection_anchor: Option<f32>,
+    selection_end: Option<f32>,
+    snap_index: usize,
+    edit_scroll_speed_index: usize,
+}
+
 #[derive(Clone, Copy)]
 struct MenuState {
     def: &'static MenuDef,
@@ -235,6 +244,37 @@ pub fn init(mut gameplay: gameplay_screen::State) -> State {
     };
     set_cursor(&mut state, MIN_CURSOR_BEAT);
     state
+}
+
+pub(crate) fn edit_snapshot(state: &State) -> EditSnapshot {
+    EditSnapshot {
+        cursor_beat: state.cursor_beat,
+        selection_anchor: state.selection_anchor,
+        selection_end: state.selection_end,
+        snap_index: state.snap_index,
+        edit_scroll_speed_index: state.edit_scroll_speed_index,
+    }
+}
+
+pub(crate) fn restore_edit_snapshot(state: &mut State, snapshot: EditSnapshot) {
+    clear_cursor_hold_inputs(state);
+    state.mode = Mode::Editing;
+    state.menu = None;
+    state.shift_anchor = None;
+    state.shift_held = false;
+    state.ctrl_held = false;
+    state.snap_index = snapshot.snap_index.min(SNAP_LABELS.len().saturating_sub(1));
+    state.edit_scroll_speed_index = snapshot
+        .edit_scroll_speed_index
+        .min(EDIT_SCROLL_SPEEDS.len().saturating_sub(1));
+    let (selection_anchor, selection_end) = clamp_selection(
+        snapshot.selection_anchor,
+        snapshot.selection_end,
+        max_play_beat(state),
+    );
+    state.selection_anchor = selection_anchor;
+    state.selection_end = selection_end;
+    set_cursor(state, snapshot.cursor_beat);
 }
 
 pub fn on_enter(state: &mut State) {
@@ -1087,6 +1127,29 @@ fn set_marker_range(state: &mut State, a: f32, b: f32) {
     state.selection_end = Some(a.max(b));
 }
 
+fn clamp_selection(
+    anchor: Option<f32>,
+    end: Option<f32>,
+    max_beat: f32,
+) -> (Option<f32>, Option<f32>) {
+    let anchor = anchor.map(|beat| clamp_marker_beat(beat, max_beat));
+    let end = end.map(|beat| clamp_marker_beat(beat, max_beat));
+    match (anchor, end) {
+        (Some(a), Some(b)) if !same_beat(a, b) => (Some(a.min(b)), Some(a.max(b))),
+        (Some(a), None) => (Some(a), None),
+        (None, Some(b)) => (None, Some(b)),
+        _ => (None, None),
+    }
+}
+
+fn clamp_marker_beat(beat: f32, max_beat: f32) -> f32 {
+    if beat.is_finite() {
+        beat.clamp(MIN_CURSOR_BEAT, max_beat)
+    } else {
+        MIN_CURSOR_BEAT
+    }
+}
+
 fn same_beat(a: f32, b: f32) -> bool {
     (a - b).abs() <= BEAT_EPSILON
 }
@@ -1649,9 +1712,9 @@ fn append_help_section(
 mod tests {
     use super::{
         CursorHoldDir, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_MIN,
-        MUSIC_RATE_HOTKEY_STEP, MenuDef, PracticeNavMode, edit_cursor_hold_dir_for_action_in_mode,
-        edit_snap_delta_for_action_in_mode, fmt_music_rate, menu_step_delta_for_action_in_mode,
-        practice_nav_mode_from_config,
+        MUSIC_RATE_HOTKEY_STEP, MenuDef, PracticeNavMode, clamp_selection,
+        edit_cursor_hold_dir_for_action_in_mode, edit_snap_delta_for_action_in_mode,
+        fmt_music_rate, menu_step_delta_for_action_in_mode, practice_nav_mode_from_config,
     };
     use crate::assets::i18n;
     use crate::engine::input::VirtualAction;
@@ -1815,6 +1878,19 @@ mod tests {
         assert_eq!(fmt_music_rate(0.85), "0.85");
         assert_eq!(fmt_music_rate(2.05), "2.05");
         assert_eq!(fmt_music_rate(0.5), "0.5");
+    }
+
+    #[test]
+    fn practice_selection_restore_preserves_valid_range() {
+        assert_eq!(
+            clamp_selection(Some(64.0), Some(32.0), 128.0),
+            (Some(32.0), Some(64.0))
+        );
+    }
+
+    #[test]
+    fn practice_selection_restore_drops_collapsed_range() {
+        assert_eq!(clamp_selection(Some(96.0), Some(128.0), 64.0), (None, None));
     }
 
     #[test]

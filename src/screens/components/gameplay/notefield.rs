@@ -9506,12 +9506,20 @@ mod tests {
     #[test]
     fn judgment_frame_size_uses_logical_atlas_frame_dims() {
         let censored = "judgements/Test Censored 1x7 (doubleres).png";
+        let tight_censored = "judgements/Test Censored Tight 1x7 (doubleres).png";
         let love = "judgements/Test Love 2x7 (doubleres).png";
         assets::register_texture_dims(censored, 600, 1400);
+        assets::register_texture_dims(tight_censored, 600, 1050);
         assets::register_texture_dims(love, 880, 1036);
 
         assert_eq!(judgment_frame_size(censored), [300.0, 100.0]);
+        assert_eq!(judgment_frame_size(tight_censored), [300.0, 75.0]);
         assert_eq!(judgment_frame_size(love), [220.0, 74.0]);
+
+        let visible_art_h = 68.0 / 2.0;
+        let original_drawn_art_h = visible_art_h * judgment_frame_size(censored)[1] / 100.0;
+        let tight_drawn_art_h = visible_art_h * judgment_frame_size(tight_censored)[1] / 75.0;
+        assert_eq!(original_drawn_art_h, tight_drawn_art_h);
     }
 
     #[test]
