@@ -1,0 +1,12 @@
+Place `.ogg` files in this folder named after restart counts:
+
+    1.ogg     - played on the first restart
+    2.ogg     - played on the second restart
+    3.ogg     - played on the third restart
+    ...
+    restart.ogg  - fallback when no `{count}.ogg` file exists
+
+If neither `{count}.ogg` nor `restart.ogg` is present, no sound plays
+on restart.
+
+Enable / disable the whole feature with `CustomSoundsEnabled` in options.ini.

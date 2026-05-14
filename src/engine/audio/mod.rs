@@ -1,5 +1,6 @@
 mod backends;
 pub(crate) mod decode;
+pub mod folder;
 mod resample;
 
 use crate::config::dirs;

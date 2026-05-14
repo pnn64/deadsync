@@ -87,6 +87,7 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(content, "VisualDelaySeconds", default.visual_delay_seconds);
     push_line(content, "MasterVolume", default.master_volume);
     push_bool(content, "MenuMusic", default.menu_music);
+    push_bool(content, "CustomSoundsEnabled", default.custom_sounds_enabled);
     push_bool(content, "MineHitSound", default.mine_hit_sound);
     push_line(content, "MusicVolume", default.music_volume);
     push_line(

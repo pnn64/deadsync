@@ -186,7 +186,7 @@ impl App {
         if target_menu_music {
             if !prev_menu_music {
                 crate::engine::audio::play_music(
-                    dirs::app_dirs().resolve_asset_path(visual_styles::menu_music_asset_path()),
+                    visual_styles::menu_music_resolved_path(),
                     crate::engine::audio::Cut::default(),
                     true,
                     1.0,

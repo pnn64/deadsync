@@ -1546,6 +1546,7 @@ pub struct State {
     pub auto_screenshot_taken: bool,
     pub itl_overlay_visible: bool,
     itl_overlay_shown: bool,
+    submit_record_sfx_played: bool,
     submit_groovestats_fallback: [Option<scores::GrooveStatsSubmitUiStatus>; MAX_PLAYERS],
     submit_arrowcloud_fallback: [Option<scores::ArrowCloudSubmitUiStatus>; MAX_PLAYERS],
     lobby_disconnect_hold_p1: Option<Instant>,
@@ -1585,6 +1586,7 @@ impl Clone for State {
             auto_screenshot_taken: self.auto_screenshot_taken,
             itl_overlay_visible: self.itl_overlay_visible,
             itl_overlay_shown: self.itl_overlay_shown,
+            submit_record_sfx_played: self.submit_record_sfx_played,
             submit_groovestats_fallback: self.submit_groovestats_fallback,
             submit_arrowcloud_fallback: self.submit_arrowcloud_fallback,
             lobby_disconnect_hold_p1: self.lobby_disconnect_hold_p1,
@@ -2144,6 +2146,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         auto_screenshot_taken: false,
         itl_overlay_visible: false,
         itl_overlay_shown: false,
+        submit_record_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
         lobby_disconnect_hold_p1: None,
@@ -2224,6 +2227,7 @@ pub fn init_from_score_info(
         auto_screenshot_taken: false,
         itl_overlay_visible: false,
         itl_overlay_shown: false,
+        submit_record_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
         lobby_disconnect_hold_p1: None,
@@ -2264,6 +2268,46 @@ fn sync_submit_itl_progress(state: &mut State) {
         state.itl_overlay_visible = true;
         state.itl_overlay_shown = true;
     }
+}
+
+/// Fires a one-shot PB / WR sound effect (zmod parity, issue #375) when the
+/// GrooveStats submit response first lands with a record banner. Triggers
+/// once per evaluation visit; subsequent retries or repeated banners do not
+/// re-fire the SFX.
+fn sync_submit_record_sfx(state: &mut State) {
+    if state.submit_record_sfx_played {
+        return;
+    }
+    let mut best: Option<scores::GrooveStatsSubmitRecordBanner> = None;
+    for player_idx in 0..MAX_PLAYERS {
+        let Some(si) = state.score_info[player_idx].as_ref() else {
+            continue;
+        };
+        let Some(banner) = scores::get_groovestats_submit_record_banner_for_side(
+            si.chart.short_hash.as_str(),
+            si.side,
+        ) else {
+            continue;
+        };
+        // WorldRecord{,Ex} beats PersonalBest if any joined player earned it.
+        best = Some(match (best, banner) {
+            (Some(scores::GrooveStatsSubmitRecordBanner::WorldRecord), _)
+            | (Some(scores::GrooveStatsSubmitRecordBanner::WorldRecordEx), _) => best.unwrap(),
+            (_, scores::GrooveStatsSubmitRecordBanner::WorldRecord)
+            | (_, scores::GrooveStatsSubmitRecordBanner::WorldRecordEx) => banner,
+            _ => best.unwrap_or(banner),
+        });
+    }
+    let Some(banner) = best else {
+        return;
+    };
+    let folder = match banner {
+        scores::GrooveStatsSubmitRecordBanner::WorldRecord
+        | scores::GrooveStatsSubmitRecordBanner::WorldRecordEx => "assets/sounds/evaluation_wr",
+        scores::GrooveStatsSubmitRecordBanner::PersonalBest => "assets/sounds/evaluation_pb",
+    };
+    crate::engine::audio::folder::play_random_sfx(folder);
+    state.submit_record_sfx_played = true;
 }
 
 fn sync_missing_submit_status_fallbacks(state: &mut State) {
@@ -2330,6 +2374,7 @@ pub fn update(state: &mut State, dt: f32) {
     }
     sync_submit_itl_progress(state);
     sync_missing_submit_status_fallbacks(state);
+    sync_submit_record_sfx(state);
     scores::tick_groovestats_auto_retries();
     scores::tick_arrowcloud_auto_retries();
     for controller_idx in 0..MAX_PLAYERS {
@@ -2509,7 +2554,7 @@ fn eval_grade_for_result(
     }
 }
 
-fn all_joined_players_failed(state: &State) -> bool {
+pub(crate) fn all_joined_players_failed(state: &State) -> bool {
     let play_style = profile::get_session_play_style();
     let side_to_idx = |side: profile::PlayerSide| match (play_style, side) {
         (profile::PlayStyle::Versus, profile::PlayerSide::P1) => 0,

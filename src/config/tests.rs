@@ -37,6 +37,15 @@ fn clamp_null_or_die_magic_offset_uses_tenths() {
 }
 
 #[test]
+fn config_default_enables_custom_sounds() {
+    let cfg = Config::default();
+    assert!(
+        cfg.custom_sounds_enabled,
+        "custom_sounds_enabled should default to true so the bundled folders are active out of the box"
+    );
+}
+
+#[test]
 fn parse_keycode_common_keys() {
     let cases = [
         ("KeyCode::Enter", KeyCode::Enter),

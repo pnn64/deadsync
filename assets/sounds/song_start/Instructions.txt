@@ -1,0 +1,9 @@
+Place `.ogg` files in this folder to play one at random when gameplay
+starts (the first time a chart is played, not on restart).
+
+Multiple files: a random one is chosen per play.
+Files starting with `_` are ignored.
+
+Enable / disable the whole feature with `CustomSoundsEnabled` in options.ini.
+
+See `restart/Instructions.txt` for the per-restart count behavior.
