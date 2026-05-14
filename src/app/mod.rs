@@ -1028,6 +1028,7 @@ pub struct ShellState {
     pending_exit: bool,
     shift_held: bool,
     ctrl_held: bool,
+    alt_held: bool,
     tab_held: bool,
     backquote_held: bool,
     tab_acceleration_enabled: bool,
@@ -1198,6 +1199,7 @@ impl ShellState {
             pending_exit: false,
             shift_held: false,
             ctrl_held: false,
+            alt_held: false,
             tab_held: false,
             backquote_held: false,
             tab_acceleration_enabled: cfg.tab_acceleration,
@@ -3056,6 +3058,7 @@ impl App {
         if !focused {
             self.state.shell.shift_held = false;
             self.state.shell.ctrl_held = false;
+            self.state.shell.alt_held = false;
             self.state.shell.tab_held = false;
             self.state.shell.backquote_held = false;
             input::clear_debounce_state();
@@ -6162,6 +6165,9 @@ impl App {
             KeyCode::ControlLeft | KeyCode::ControlRight => {
                 self.state.shell.ctrl_held = raw_key.pressed;
             }
+            KeyCode::AltLeft | KeyCode::AltRight => {
+                self.state.shell.alt_held = raw_key.pressed;
+            }
             KeyCode::Tab => {
                 self.state.shell.tab_held = raw_key.pressed;
             }
@@ -6169,6 +6175,12 @@ impl App {
                 self.state.shell.backquote_held = raw_key.pressed;
             }
             _ => {}
+        }
+
+        if raw_key.pressed && raw_key.code == KeyCode::F4 && self.state.shell.alt_held {
+            info!("Alt+F4 quit shortcut pressed. Shutting down.");
+            event_loop.exit();
+            return true;
         }
 
         if self.state.screens.current_screen == CurrentScreen::Sandbox {
