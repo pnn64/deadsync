@@ -2318,6 +2318,15 @@ fn resolved_held_miss_texture(
 }
 
 #[inline(always)]
+fn judgment_frame_size(texture_key: &str) -> [f32; 2] {
+    let Some(meta) = assets::texture_dims(texture_key) else {
+        return [0.0, 76.0];
+    };
+    let (w, h) = assets::texture_source_frame_dims_from_real(texture_key, meta.w, meta.h);
+    [w as f32, h as f32]
+}
+
+#[inline(always)]
 fn tap_judgment_rows(
     profile: &profile::Profile,
     judgment: &Judgment,
@@ -8373,15 +8382,16 @@ pub fn build_bundles(
                 let col_index = if columns > 1 { frame_offset } else { 0 };
                 let linear_index = (frame_row * columns + col_index) as u32;
                 let rot_deg = judgment_tilt_rotation_deg(profile, judgment);
+                let [judgment_w, judgment_h] = judgment_frame_size(judgment_texture.key.as_ref());
                 hud_actors.push(act!(sprite(judgment_texture.texture_key_handle()):
                     align(0.5, 0.5): xy(judgment_x, judgment_y):
-                    z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
+                    z(judgment_z): rotationz(rot_deg): setsize(judgment_w, judgment_h): setstate(linear_index): zoom(zoom)
                 ));
                 if let Some(overlay_row) = overlay_row {
                     let overlay_index = (overlay_row * columns + col_index) as u32;
                     hud_actors.push(act!(sprite(judgment_texture.texture_key_handle()):
                         align(0.5, 0.5): xy(judgment_x, judgment_y):
-                        z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(overlay_index): zoom(zoom):
+                        z(judgment_z): rotationz(rot_deg): setsize(judgment_w, judgment_h): setstate(overlay_index): zoom(zoom):
                         diffuse(1.0, 1.0, 1.0, SPLIT_15_10MS_OVERLAY_ALPHA)
                     ));
                 }
@@ -8542,14 +8552,15 @@ mod tests {
         hallway_judgment_zoom, hold_body_segment_budget, hold_draw_span,
         hold_explosion_slot_for_col, hold_head_render_flags, hold_segment_pose, hold_strip_actor,
         hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, judgment_actor_zoom,
-        judgment_tilt_rotation_deg, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped,
-        move_x_extra, move_y_extra, note_alpha, note_glow, note_slot_base_size,
-        note_world_z_for_bumpy, note_x_extra, offset_center, predictive_itg_percents,
-        pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts, receptor_row_center,
-        scroll_receptor_y, song_lua_hides_note_window, tap_judgment_rows, tap_part_for_note_type,
-        tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
-        zmod_subtractive_counter_state,
+        judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
+        maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_alpha,
+        note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra, offset_center,
+        predictive_itg_percents, pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts,
+        receptor_row_center, scroll_receptor_y, song_lua_hides_note_window, tap_judgment_rows,
+        tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg,
+        turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
     };
+    use crate::assets;
     use crate::engine::gfx::BlendMode;
     use crate::engine::present::actors::Actor;
     use crate::game::gameplay::{
@@ -9490,6 +9501,17 @@ mod tests {
         assert!((judgment_actor_zoom(0.35, true) - 0.825).abs() <= 1e-6);
         assert!((judgment_actor_zoom(1.5, true) - 0.35).abs() <= 1e-6);
         assert!((judgment_actor_zoom(-1.0, true) - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn judgment_frame_size_uses_logical_atlas_frame_dims() {
+        let censored = "judgements/Test Censored 1x7 (doubleres).png";
+        let love = "judgements/Test Love 2x7 (doubleres).png";
+        assets::register_texture_dims(censored, 600, 1400);
+        assets::register_texture_dims(love, 880, 1036);
+
+        assert_eq!(judgment_frame_size(censored), [300.0, 100.0]);
+        assert_eq!(judgment_frame_size(love), [220.0, 74.0]);
     }
 
     #[test]
