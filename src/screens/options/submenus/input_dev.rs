@@ -145,11 +145,11 @@ pub(in crate::screens::options) const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
-        id: ItemId::InpMenuButtons,
-        name: lookup_key("OptionsInput", "MenuButtons"),
+        id: ItemId::InpMenuNavigation,
+        name: lookup_key("OptionsInput", "MenuNavigation"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
-            "MenuButtonsHelp",
+            "MenuNavigationHelp",
         ))],
     },
     Item {
@@ -161,11 +161,11 @@ pub(in crate::screens::options) const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
-        id: ItemId::InpMenuNavigation,
-        name: lookup_key("OptionsInput", "MenuNavigation"),
+        id: ItemId::InpMenuButtons,
+        name: lookup_key("OptionsInput", "MenuButtons"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
-            "MenuNavigationHelp",
+            "MenuButtonsHelp",
         ))],
     },
     Item {

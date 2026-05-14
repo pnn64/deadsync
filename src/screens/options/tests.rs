@@ -60,6 +60,26 @@ fn max_fps_hold_delta_accelerates() {
 }
 
 #[test]
+fn input_backend_items_match_rows() {
+    let expected = [
+        (SubRowId::GamepadBackend, ItemId::InpGamepadBackend),
+        (SubRowId::UseFsrs, ItemId::InpUseFsrs),
+        (SubRowId::DebugFsrDump, ItemId::InpDebugFsrDump),
+        (SubRowId::MenuNavigation, ItemId::InpMenuNavigation),
+        (SubRowId::OptionsNavigation, ItemId::InpOptionsNavigation),
+        (SubRowId::MenuButtons, ItemId::InpMenuButtons),
+        (SubRowId::Debounce, ItemId::InpDebounce),
+    ];
+
+    assert_eq!(INPUT_BACKEND_OPTIONS_ROWS.len() + 1, INPUT_BACKEND_OPTIONS_ITEMS.len());
+    for (idx, (row_id, item_id)) in expected.into_iter().enumerate() {
+        assert_eq!(INPUT_BACKEND_OPTIONS_ROWS[idx].id, row_id);
+        assert_eq!(INPUT_BACKEND_OPTIONS_ITEMS[idx].id, item_id);
+    }
+    assert_eq!(INPUT_BACKEND_OPTIONS_ITEMS.last().unwrap().id, ItemId::Exit);
+}
+
+#[test]
 fn p2_can_navigate_and_change_system_options() {
     let asset_manager = AssetManager::new();
     let mut state = init();

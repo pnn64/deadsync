@@ -56,9 +56,9 @@ pub enum ItemId {
     InpGamepadBackend,
     InpUseFsrs,
     InpDebugFsrDump,
-    InpMenuButtons,
-    InpOptionsNavigation,
     InpMenuNavigation,
+    InpOptionsNavigation,
+    InpMenuButtons,
     InpDebounce,
 
     // Lights Options submenu
