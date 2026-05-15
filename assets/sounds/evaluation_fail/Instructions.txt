@@ -1,0 +1,7 @@
+Place `.ogg` files in this folder to play one at random when the player
+fails a chart on the Evaluation screen.
+
+Multiple files: a random one is chosen per play.
+Files starting with `_` are ignored.
+
+Enable / disable the whole feature with `CustomSoundsEnabled` in options.ini.

@@ -4626,6 +4626,19 @@ impl App {
             self.state.session.course_run.is_some();
         self.state.screens.evaluation_state.auto_advance_seconds = None;
 
+        // Pass / Fail SFX (zmod parity, issue #375). Based on the per-stage
+        // result that was just captured into `eval_snapshot` — the
+        // course-summary replacement below would only run on the very last
+        // course stage, and the per-stage pass/fail is still the right cue
+        // for the player at that moment.
+        let failed = crate::screens::evaluation::all_joined_players_failed(&eval_snapshot);
+        let folder = if failed {
+            "assets/sounds/evaluation_fail"
+        } else {
+            "assets/sounds/evaluation_pass"
+        };
+        crate::engine::audio::folder::play_random_sfx(folder);
+
         if let Some(course_run) = self.state.session.course_run.as_mut() {
             if course_run.next_stage_index >= course_run.stages.len() {
                 let score_hash = course_run.score_hash.clone();
@@ -6538,8 +6551,7 @@ impl App {
         if target_menu_music {
             if !prev_menu_music {
                 commands.push(Command::PlayMusic {
-                    path: dirs::app_dirs()
-                        .resolve_asset_path(visual_styles::menu_music_asset_path()),
+                    path: visual_styles::menu_music_resolved_path(),
                     looped: true,
                     volume: 1.0,
                 });
@@ -7534,6 +7546,21 @@ impl App {
                 self.state.screens.gameplay_state = Some(gs);
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                     crate::screens::gameplay::on_enter(gs);
+                }
+                // Song Start / Restart SFX (zmod parity, issue #375). At this
+                // point `gameplay_restart_count` has already been zeroed for
+                // fresh entries (line above) and preserved for in-screen
+                // restarts (`try_gameplay_restart` incremented it before we
+                // arrived).
+                let restart_count = self.state.session.gameplay_restart_count;
+                if restart_count == 0 {
+                    crate::engine::audio::folder::play_random_sfx("assets/sounds/song_start");
+                } else {
+                    crate::engine::audio::folder::play_indexed_sfx(
+                        "assets/sounds/song_start/restart",
+                        restart_count,
+                        "restart.ogg",
+                    );
                 }
                 if let Some(course) = self.state.session.course_run.as_mut() {
                     course.next_stage_index = course.next_stage_index.saturating_add(1);

@@ -130,6 +130,22 @@ pub fn menu_music_asset_path() -> &'static str {
     for_style(current_style()).menu_music
 }
 
+/// Returns the absolute path to the menu music file that should play for the
+/// current visual style. If the user has dropped one or more `.ogg` files
+/// into `{data_dir}/assets/music/menu/{style}/` (lowercase style name) a
+/// random one of those is returned; otherwise the bundled per-style file
+/// from [`menu_music_asset_path`] is used. Folder override + bundled file
+/// satisfy issue #375 without requiring users to overwrite anything inside
+/// the bundle.
+pub fn menu_music_resolved_path() -> std::path::PathBuf {
+    let style = current_style();
+    let folder_rel = format!("assets/music/menu/{}", style.as_str().to_ascii_lowercase());
+    if let Some(p) = crate::engine::audio::folder::random_music_path(&folder_rel) {
+        return p;
+    }
+    crate::config::dirs::app_dirs().resolve_asset_path(menu_music_asset_path())
+}
+
 #[inline(always)]
 pub fn select_color_aspect(style: VisualStyle) -> f32 {
     let size = for_style(style).select_color_size;

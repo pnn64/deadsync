@@ -155,6 +155,36 @@ A `save` directory is created inside the data directory to store your personal d
 *   To enable online features with **GrooveStats**, edit `<data dir>/save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores.
 *   You can also change your in-game display name in `<data dir>/save/profiles/00000000/profile.ini`.
 
+### Custom sound packs
+
+DeadSync supports zmod-style "drop in a folder, play a random one" custom
+sounds. The bundled `assets/sounds/` directory ships several folders that
+you can fill with your own `.ogg` files; the data-directory overlay
+(`{data dir}/assets/sounds/...`) is honored as well, so you don't have to
+modify the install. Files whose name starts with `_` are ignored.
+
+| Folder | Plays when |
+|---|---|
+| `assets/sounds/evaluation_pass/` | Any joined player clears (passes) on the Evaluation screen |
+| `assets/sounds/evaluation_fail/` | All joined players failed on the Evaluation screen |
+| `assets/sounds/evaluation_pb/` | GrooveStats submit response reports a Personal Best |
+| `assets/sounds/evaluation_wr/` | GrooveStats submit response reports a World Record (rank 1) |
+| `assets/sounds/song_start/` | Gameplay starts (first try; not on restart) |
+| `assets/sounds/song_start/restart/` | Gameplay restarts. Naming is `{n}.ogg` (1.ogg, 2.ogg, ...). Falls back to `restart.ogg` for any restart count without a matching file |
+
+`{n}` in `song_start/restart/` is the restart count since the last fresh
+entry into Gameplay; it resets to zero on `SelectMusic → Gameplay` and
+between course songs.
+
+Custom per-style menu music works the same way: drop `.ogg` files into
+`assets/music/menu/{style}/` (one of `hearts`, `arrows`, `bears`,
+`ducks`, `cats`, `spooky`, `gay`, `stars`, `thonk`, `technique`, `srpg9`)
+and the menu music for that visual style will randomly pick from your
+files. If the folder is empty the bundled per-style track plays.
+
+The whole feature is gated by `CustomSoundsEnabled` in `deadsync.ini`
+(default `1`). Set it to `0` to disable all folder-based sound triggers.
+
 ## Data Directories
 
 By default, DeadSync stores user data outside the install directory so that upgrading the game doesn't risk overwriting your config, saves, or scores. Linux and FreeBSD use a single `~/.deadsync` root; Windows and macOS use platform-native locations.
