@@ -4888,6 +4888,9 @@ impl App {
                         .select_music_state
                         .test_input_overlay_visible
                 }
+                CurrentScreen::Evaluation => crate::screens::evaluation::test_input_pane_active(
+                    &self.state.screens.evaluation_state,
+                ),
                 _ => false,
             };
             if !allow_gameplay_arrow {
@@ -6302,6 +6305,10 @@ impl App {
                 }
             }
         } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
+            crate::screens::evaluation::handle_raw_key_event(
+                &mut self.state.screens.evaluation_state,
+                &raw_key,
+            );
             if App::raw_keyboard_restart_screen(self.state.screens.current_screen)
                 && raw_key.pressed
                 && !raw_key.repeat
@@ -8099,6 +8106,11 @@ impl ApplicationHandler<UserEvent> for App {
                 } else if self.state.screens.current_screen == CurrentScreen::SelectMusic {
                     crate::screens::select_music::handle_raw_pad_event(
                         &mut self.state.screens.select_music_state,
+                        &ev,
+                    );
+                } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
+                    crate::screens::evaluation::handle_raw_pad_event(
+                        &mut self.state.screens.evaluation_state,
                         &ev,
                     );
                 }

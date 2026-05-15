@@ -6,7 +6,7 @@ const MONTH_ABBR: [&str; 12] = [
 ];
 
 #[inline(always)]
-pub(super) fn pane_origin_x(controller: profile::PlayerSide) -> f32 {
+pub(crate) fn pane_origin_x(controller: profile::PlayerSide) -> f32 {
     match controller {
         profile::PlayerSide::P1 => screen_center_x() - 155.0,
         profile::PlayerSide::P2 => screen_center_x() + 155.0,
