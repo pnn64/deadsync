@@ -11,6 +11,8 @@ pub mod pane_stats;
 pub mod pane_timing;
 mod utils;
 
+pub(crate) use utils::pane_origin_x as test_input_pane_origin_x;
+
 pub use event_progress::build_itl_event_overlay;
 pub use event_progress::build_itl_progress_box;
 pub use pane_column::build_column_judgments_pane;

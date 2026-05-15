@@ -12,7 +12,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::{
     evaluation::{self as eval_panes, eval_grades},
     shared::{
-        banner as shared_banner, lobby_hud, mode_pads, screen_bar, timers, transitions,
+        banner as shared_banner, lobby_hud, mode_pads, screen_bar, test_input, timers, transitions,
         visual_style_bg,
     },
 };
@@ -39,7 +39,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::input::{InputEvent, PadEvent, RawKeyboardEvent, VirtualAction};
 use crate::game::profile;
 use crate::game::profile::ScatterWindow;
 use crate::screens::ScreenAction;
@@ -1249,6 +1249,7 @@ mod tests {
             EvalPane::ArrowCloud,
             EvalPane::Timing,
             EvalPane::TimingEx,
+            EvalPane::TestInput,
         ];
 
         for window in cycle.windows(2) {
@@ -1286,6 +1287,7 @@ mod tests {
             EvalPane::ArrowCloud,
             EvalPane::Timing,
             EvalPane::TimingEx,
+            EvalPane::TestInput,
         ];
 
         for window in cycle.windows(2) {
@@ -1315,6 +1317,7 @@ mod tests {
             EvalPane::Timing,
             EvalPane::TimingEx,
             EvalPane::TimingHardEx,
+            EvalPane::TestInput,
         ];
 
         for window in cycle.windows(2) {
@@ -1378,6 +1381,7 @@ pub(crate) enum EvalPane {
     Timing,
     TimingEx,
     TimingHardEx,
+    TestInput,
 }
 
 #[inline(always)]
@@ -1422,6 +1426,7 @@ fn eval_pane_cycle(
     has_gs: bool,
     has_itl: bool,
     has_arrowcloud: bool,
+    has_test_input: bool,
 ) -> Vec<EvalPane> {
     let mut panes = Vec::with_capacity(13);
     panes.push(EvalPane::Standard);
@@ -1449,7 +1454,18 @@ fn eval_pane_cycle(
     if has_hard_ex {
         panes.push(EvalPane::TimingHardEx);
     }
+    if has_test_input {
+        panes.push(EvalPane::TestInput);
+    }
     panes
+}
+
+#[inline(always)]
+fn eval_has_test_input_pane() -> bool {
+    // SL parity: ScreenEvaluation Pane6 is gated on OnlyDedicatedMenuButtons so
+    // that pad arrows can't accidentally cycle panes while the player is testing
+    // their inputs and get stuck on the TestInput pane.
+    crate::config::get().only_dedicated_menu_buttons
 }
 
 #[inline(always)]
@@ -1462,7 +1478,14 @@ fn eval_pane_shift(
     has_itl: bool,
     has_arrowcloud: bool,
 ) -> EvalPane {
-    let panes = eval_pane_cycle(has_hard_ex, has_qr, has_gs, has_itl, has_arrowcloud);
+    let panes = eval_pane_cycle(
+        has_hard_ex,
+        has_qr,
+        has_gs,
+        has_itl,
+        has_arrowcloud,
+        eval_has_test_input_pane(),
+    );
     let Some(cur_idx) = panes.iter().position(|&candidate| candidate == pane) else {
         return panes.first().copied().unwrap_or(EvalPane::Standard);
     };
@@ -1556,6 +1579,7 @@ pub struct State {
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; MAX_PLAYERS],
     favorite_code: crate::screens::favorite_code::FavoriteCodeTracker,
+    test_input_state: test_input::State,
 }
 
 impl Clone for State {
@@ -1595,6 +1619,7 @@ impl Clone for State {
             menu_lr_chord: self.menu_lr_chord,
             menu_lr_undo: self.menu_lr_undo,
             favorite_code: self.favorite_code.clone(),
+            test_input_state: self.test_input_state.clone(),
         }
     }
 }
@@ -2154,6 +2179,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
         favorite_code: Default::default(),
+        test_input_state: test_input::State::default(),
     }
 }
 
@@ -2234,6 +2260,7 @@ pub fn init_from_score_info(
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
         favorite_code: Default::default(),
+        test_input_state: test_input::State::default(),
     }
 }
 
@@ -2485,6 +2512,14 @@ pub fn retry_submissions(state: &State) -> bool {
         retried |= scores::retry_arrowcloud_submit(si.chart.short_hash.as_str(), si.side);
     }
     retried
+}
+
+/// Returns true if any controller currently has the TestInput pane active.
+pub fn test_input_pane_active(state: &State) -> bool {
+    state
+        .active_pane
+        .iter()
+        .any(|&pane| matches!(pane, EvalPane::TestInput))
 }
 
 #[inline(always)]
@@ -2780,7 +2815,30 @@ fn barely_marker_sample(si: &ScoreInfo) -> Option<(f32, f32)> {
     Some((t, min_life))
 }
 
+pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
+    test_input::apply_raw_pad_event(&mut state.test_input_state, pad_event);
+}
+
+pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) {
+    test_input::apply_raw_key_event(&mut state.test_input_state, key_event);
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    // Feed virtual input through the test_input state so the highlight feedback on the
+    // EvalPane::TestInput pad reflects MENU buttons / Start / Select while the pane is active.
+    let _ = test_input::apply_virtual_input(&mut state.test_input_state, ev);
+
+    // When the TestInput pane is active and OnlyDedicatedMenuButtons is on, gameplay
+    // arrow presses are routed here purely to drive the pad's highlight feedback —
+    // they must NOT also trigger pane cycling, favorite-code tracking, or other
+    // arrow-driven side effects. Short-circuit before the rest of the handler.
+    if ev.action.is_gameplay_arrow()
+        && crate::config::get().only_dedicated_menu_buttons
+        && test_input_pane_active(state)
+    {
+        return ScreenAction::None;
+    }
+
     let chord_side = if crate::config::get().three_key_navigation {
         state.menu_lr_chord.update(ev)
     } else {
@@ -3823,6 +3881,65 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         asset_manager,
                         state.screen_elapsed,
                     ));
+                }
+                EvalPane::TestInput => {
+                    // Centered, uniformly scaled TestInput panel (text on left, pad on right).
+                    let pane_ox =
+                        crate::screens::components::evaluation::test_input_pane_origin_x(
+                            controller,
+                        );
+                    let panel_scale = 1.0_f32;
+                    let (panel_w, panel_h) = test_input::evaluation_panel_size();
+                    let panel_w_scaled = panel_w * panel_scale;
+                    let panel_h_scaled = panel_h * panel_scale;
+
+                    // Center the panel horizontally in the per-controller pane,
+                    // and vertically around screen_center_y + 50 (matches the other panes' visible area).
+                    let panel_center_x = pane_ox;
+                    let panel_center_y = screen_center_y() + 50.0;
+                    let anchor_x = panel_center_x - panel_w_scaled * 0.5;
+                    let anchor_y = panel_center_y - panel_h_scaled * 0.5;
+
+                    let title_font = current_machine_font_key(FontRole::Normal);
+                    let body_font = current_machine_font_key(FontRole::Normal);
+                    let title = tr("Evaluation", "TestInputTitle");
+                    let instructions = tr("Evaluation", "TestInputInstructions");
+
+                    if play_style == profile::PlayStyle::Double {
+                        let pad_scale = 0.75_f32 * panel_scale;
+                        let pad_half = test_input::evaluation_pad_half_width(pad_scale);
+                        let gap = pad_half + 6.0;
+                        actors.extend(test_input::build_evaluation_pad(
+                            &state.test_input_state,
+                            test_input::PlayerSlot::P1,
+                            pane_ox - gap,
+                            panel_center_y,
+                            pad_scale,
+                        ));
+                        actors.extend(test_input::build_evaluation_pad(
+                            &state.test_input_state,
+                            test_input::PlayerSlot::P2,
+                            pane_ox + gap,
+                            panel_center_y,
+                            pad_scale,
+                        ));
+                    } else {
+                        let slot = match controller {
+                            profile::PlayerSide::P1 => test_input::PlayerSlot::P1,
+                            profile::PlayerSide::P2 => test_input::PlayerSlot::P2,
+                        };
+                        actors.extend(test_input::build_evaluation_panel(
+                            &state.test_input_state,
+                            slot,
+                            anchor_x,
+                            anchor_y,
+                            panel_scale,
+                            title_font,
+                            title,
+                            body_font,
+                            instructions,
+                        ));
+                    }
                 }
             }
         }

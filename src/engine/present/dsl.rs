@@ -661,6 +661,9 @@ impl SpriteBuilder {
     pub fn wrapwidthpixels(&mut self, _w: f32) {}
 
     #[inline(always)]
+    pub fn vertspacing(&mut self, _s: f32) {}
+
+    #[inline(always)]
     pub fn maxwidth(&mut self, _w: f32) {}
 
     #[inline(always)]
@@ -812,6 +815,7 @@ pub struct TextBuilder {
     fit_w: Option<f32>,
     fit_h: Option<f32>,
     wrap_width_pixels: Option<i32>,
+    line_spacing: Option<i32>,
     max_w: Option<f32>,
     max_h: Option<f32>,
     saw_max_w: bool,
@@ -847,6 +851,7 @@ impl TextBuilder {
             fit_w: None,
             fit_h: None,
             wrap_width_pixels: None,
+            line_spacing: None,
             max_w: None,
             max_h: None,
             saw_max_w: false,
@@ -1013,6 +1018,13 @@ impl TextBuilder {
     pub fn wrapwidthpixels(&mut self, w: f32) {
         let wrap = w as i32;
         self.wrap_width_pixels = (wrap >= 0).then_some(wrap);
+    }
+
+    #[inline(always)]
+    pub fn vertspacing(&mut self, spacing: f32) {
+        // Mirrors SM5 `BitmapText:vertspacing(n)` — overrides the font's
+        // default line spacing (i.e. the distance between successive lines).
+        self.line_spacing = Some(spacing as i32);
     }
 
     #[inline(always)]
@@ -1223,7 +1235,7 @@ impl TextBuilder {
             scale: [self.sx, self.sy],
             fit_width: self.fit_w,
             fit_height: self.fit_h,
-            line_spacing: None,
+            line_spacing: self.line_spacing,
             wrap_width_pixels: self.wrap_width_pixels,
             max_width: self.max_w,
             max_height: self.max_h,
@@ -1641,6 +1653,9 @@ macro_rules! __dsl_apply_one {
     }};
     (wrapwidthpixels ($w:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.wrapwidthpixels(($w) as f32);
+    }};
+    (vertspacing ($s:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.vertspacing(($s) as f32);
     }};
     // --- NEW: max constraints for text -------------------------------
     (maxwidth ($w:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{

@@ -42,6 +42,7 @@ pub(crate) fn build_pane_percentage_display(
             | EvalPane::GrooveStatsEx
             | EvalPane::Itl
             | EvalPane::ArrowCloud
+            | EvalPane::TestInput
     ) {
         return vec![];
     }
@@ -83,6 +84,7 @@ pub(crate) fn build_pane_percentage_display(
         EvalPane::GrooveStatsEx => {}
         EvalPane::Itl => {}
         EvalPane::ArrowCloud => {}
+        EvalPane::TestInput => {}
         EvalPane::Column => {
             // Pane3 percentage container: small and not mirrored.
             frame_x = pane_origin_x - 115.0;
