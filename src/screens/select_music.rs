@@ -149,6 +149,10 @@ const CHORD_UP: u8 = 1 << 0;
 const CHORD_DOWN: u8 = 1 << 1;
 const MENU_CHORD_LEFT: u8 = 1 << 0;
 const MENU_CHORD_RIGHT: u8 = 1 << 1;
+// Simply Love [ScreenSelectMusic] CodeEscapeFromEventMode:
+// "MenuLeft,MenuLeft,MenuRight,MenuRight,MenuLeft,MenuLeft,MenuRight,MenuRight".
+// ITGmania InputQueueCode allows `(presses - 1) * 0.6s` for multi-press codes.
+const EXIT_CODE_TIMEOUT: Duration = Duration::from_millis(4200);
 
 // Simply Love [ScreenSelectMusic] [MusicWheel]: RecentSongsToShow=30.
 const RECENT_SONGS_TO_SHOW: usize = 30;
@@ -769,6 +773,83 @@ enum ExitPromptState {
     },
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct ExitCodeSideState {
+    index: usize,
+    first_input_at: Option<Instant>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct ExitCodeTracker {
+    p1: ExitCodeSideState,
+    p2: ExitCodeSideState,
+}
+
+const EXIT_CODE_SEQUENCE: [NavDirection; 8] = [
+    NavDirection::Left,
+    NavDirection::Left,
+    NavDirection::Right,
+    NavDirection::Right,
+    NavDirection::Left,
+    NavDirection::Left,
+    NavDirection::Right,
+    NavDirection::Right,
+];
+
+impl ExitCodeSideState {
+    #[inline(always)]
+    fn reset(&mut self) {
+        self.index = 0;
+        self.first_input_at = None;
+    }
+
+    fn check(&mut self, dir: NavDirection, timestamp: Instant) -> bool {
+        if let Some(first) = self.first_input_at {
+            match timestamp.checked_duration_since(first) {
+                Some(elapsed) if elapsed <= EXIT_CODE_TIMEOUT => {}
+                _ => self.reset(),
+            }
+        }
+
+        if EXIT_CODE_SEQUENCE[self.index] == dir {
+            if self.index == 0 {
+                self.first_input_at = Some(timestamp);
+            }
+            self.index += 1;
+            if self.index == EXIT_CODE_SEQUENCE.len() {
+                self.reset();
+                return true;
+            }
+        } else if EXIT_CODE_SEQUENCE[0] == dir {
+            self.index = 1;
+            self.first_input_at = Some(timestamp);
+        } else {
+            self.reset();
+        }
+        false
+    }
+}
+
+impl ExitCodeTracker {
+    #[inline(always)]
+    fn side_mut(&mut self, side: profile::PlayerSide) -> &mut ExitCodeSideState {
+        match side {
+            profile::PlayerSide::P1 => &mut self.p1,
+            profile::PlayerSide::P2 => &mut self.p2,
+        }
+    }
+
+    #[inline(always)]
+    fn reset(&mut self, side: profile::PlayerSide) {
+        self.side_mut(side).reset();
+    }
+
+    #[inline(always)]
+    fn check(&mut self, side: profile::PlayerSide, dir: NavDirection, timestamp: Instant) -> bool {
+        self.side_mut(side).check(dir, timestamp)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ReloadPhase {
     Songs,
@@ -1037,6 +1118,7 @@ pub struct State {
     p2_select_held: bool,
     menu_chord_left_pressed_at: Option<Instant>,
     menu_chord_right_pressed_at: Option<Instant>,
+    exit_code: ExitCodeTracker,
     favorite_code: crate::screens::favorite_code::FavoriteCodeTracker,
     last_steps_nav_dir_p1: Option<PadDir>,
     last_steps_nav_time_p1: Option<Instant>,
@@ -3316,6 +3398,7 @@ pub fn init() -> State {
         p2_select_held: false,
         menu_chord_left_pressed_at: None,
         menu_chord_right_pressed_at: None,
+        exit_code: Default::default(),
         favorite_code: Default::default(),
         last_steps_nav_dir_p1: None,
         last_steps_nav_time_p1: None,
@@ -3499,6 +3582,7 @@ pub fn init_placeholder() -> State {
         p2_select_held: false,
         menu_chord_left_pressed_at: None,
         menu_chord_right_pressed_at: None,
+        exit_code: Default::default(),
         favorite_code: Default::default(),
         last_steps_nav_dir_p1: None,
         last_steps_nav_time_p1: None,
@@ -3789,12 +3873,79 @@ const fn overlay_nav_dir(action: VirtualAction) -> Option<NavDirection> {
 }
 
 #[inline(always)]
+const fn wheel_lr_dir(dir: PadDir) -> Option<NavDirection> {
+    match dir {
+        PadDir::Left => Some(NavDirection::Left),
+        PadDir::Right => Some(NavDirection::Right),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+const fn input_side(action: VirtualAction) -> Option<profile::PlayerSide> {
+    match action {
+        VirtualAction::p1_up
+        | VirtualAction::p1_down
+        | VirtualAction::p1_left
+        | VirtualAction::p1_right
+        | VirtualAction::p1_start
+        | VirtualAction::p1_back
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p1_select
+        | VirtualAction::p1_operator
+        | VirtualAction::p1_restart => Some(profile::PlayerSide::P1),
+        VirtualAction::p2_up
+        | VirtualAction::p2_down
+        | VirtualAction::p2_left
+        | VirtualAction::p2_right
+        | VirtualAction::p2_start
+        | VirtualAction::p2_back
+        | VirtualAction::p2_menu_up
+        | VirtualAction::p2_menu_down
+        | VirtualAction::p2_menu_left
+        | VirtualAction::p2_menu_right
+        | VirtualAction::p2_select
+        | VirtualAction::p2_operator
+        | VirtualAction::p2_restart => Some(profile::PlayerSide::P2),
+    }
+}
+
+#[inline(always)]
+const fn exit_code_action_dir(action: VirtualAction) -> Option<NavDirection> {
+    match action {
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => Some(NavDirection::Left),
+        VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => Some(NavDirection::Right),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn reset_exit_code_on_non_lr_press(state: &mut State, ev: &InputEvent) {
+    if ev.pressed
+        && exit_code_action_dir(ev.action).is_none()
+        && let Some(side) = input_side(ev.action)
+    {
+        state.exit_code.reset(side);
+    }
+}
+
+#[inline(always)]
 fn show_select_music_menu(state: &mut State) {
     state.select_music_menu = select_music_menu::State::Visible(select_music_menu::open());
     rebuild_select_music_menu(state);
     clear_menu_chord(state);
     clear_overlay_nav_hold(state);
     clear_nav_hold(state);
+    state.exit_code = ExitCodeTracker::default();
     clear_preview(state);
     audio::play_sfx("assets/sounds/start.ogg");
 }
@@ -7499,10 +7650,22 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
 
 pub fn handle_pad_dir(
     state: &mut State,
+    side: profile::PlayerSide,
     dir: PadDir,
     pressed: bool,
     timestamp: Instant,
 ) -> ScreenAction {
+    let exit_code_entered =
+        pressed && wheel_lr_dir(dir).is_some_and(|dir| state.exit_code.check(side, dir, timestamp));
+
+    #[inline(always)]
+    fn finish(state: &mut State, exit_code_entered: bool) -> ScreenAction {
+        if exit_code_entered {
+            begin_exit_prompt(state);
+        }
+        ScreenAction::None
+    }
+
     if pressed {
         // Track favorite code sequence (Simply Love: Favorite1/Favorite2 codes)
         if let Some(side) = state.favorite_code.check(dir, timestamp) {
@@ -7514,7 +7677,7 @@ pub fn handle_pad_dir(
                 state.menu_chord_mask |= MENU_CHORD_RIGHT;
                 state.menu_chord_right_pressed_at = Some(timestamp);
                 if try_open_select_music_menu(state) {
-                    return ScreenAction::None;
+                    return finish(state, exit_code_entered);
                 }
                 if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
                     == (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
@@ -7523,10 +7686,10 @@ pub fn handle_pad_dir(
                     // then automatic hold scrolling stops while both are down.
                     music_wheel_change(state, 1);
                     clear_nav_hold(state);
-                    return ScreenAction::None;
+                    return finish(state, exit_code_entered);
                 }
                 if state.nav_key_held_direction == Some(NavDirection::Right) {
-                    return ScreenAction::None;
+                    return finish(state, exit_code_entered);
                 }
                 music_wheel_change(state, 1);
                 start_nav_hold(state, NavDirection::Right);
@@ -7535,7 +7698,7 @@ pub fn handle_pad_dir(
                 state.menu_chord_mask |= MENU_CHORD_LEFT;
                 state.menu_chord_left_pressed_at = Some(timestamp);
                 if try_open_select_music_menu(state) {
-                    return ScreenAction::None;
+                    return finish(state, exit_code_entered);
                 }
                 if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
                     == (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
@@ -7544,10 +7707,10 @@ pub fn handle_pad_dir(
                     // then automatic hold scrolling stops while both are down.
                     music_wheel_change(state, -1);
                     clear_nav_hold(state);
-                    return ScreenAction::None;
+                    return finish(state, exit_code_entered);
                 }
                 if state.nav_key_held_direction == Some(NavDirection::Left) {
-                    return ScreenAction::None;
+                    return finish(state, exit_code_entered);
                 }
                 music_wheel_change(state, -1);
                 start_nav_hold(state, NavDirection::Left);
@@ -7676,7 +7839,7 @@ pub fn handle_pad_dir(
             }
         }
     }
-    ScreenAction::None
+    finish(state, exit_code_entered)
 }
 
 fn handle_pad_dir_p2(
@@ -8105,21 +8268,39 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return handle_select_music_menu_input(state, ev);
     }
 
+    reset_exit_code_on_non_lr_press(state, ev);
+
     let play_style = crate::game::profile::get_session_play_style();
     if play_style == crate::game::profile::PlayStyle::Versus {
         return match ev.action {
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-                handle_pad_dir(state, PadDir::Left, ev.pressed, ev.timestamp)
-            }
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-                handle_pad_dir(state, PadDir::Right, ev.pressed, ev.timestamp)
-            }
-            VirtualAction::p1_up | VirtualAction::p1_menu_up => {
-                handle_pad_dir(state, PadDir::Up, ev.pressed, ev.timestamp)
-            }
-            VirtualAction::p1_down | VirtualAction::p1_menu_down => {
-                handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
-            }
+            VirtualAction::p1_left | VirtualAction::p1_menu_left => handle_pad_dir(
+                state,
+                profile::PlayerSide::P1,
+                PadDir::Left,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p1_right | VirtualAction::p1_menu_right => handle_pad_dir(
+                state,
+                profile::PlayerSide::P1,
+                PadDir::Right,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_pad_dir(
+                state,
+                profile::PlayerSide::P1,
+                PadDir::Up,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p1_down | VirtualAction::p1_menu_down => handle_pad_dir(
+                state,
+                profile::PlayerSide::P1,
+                PadDir::Down,
+                ev.pressed,
+                ev.timestamp,
+            ),
             VirtualAction::p1_start if ev.pressed => {
                 if try_open_select_music_menu_with_select_start(
                     state,
@@ -8136,12 +8317,20 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 ScreenAction::None
             }
 
-            VirtualAction::p2_left | VirtualAction::p2_menu_left => {
-                handle_pad_dir(state, PadDir::Left, ev.pressed, ev.timestamp)
-            }
-            VirtualAction::p2_right | VirtualAction::p2_menu_right => {
-                handle_pad_dir(state, PadDir::Right, ev.pressed, ev.timestamp)
-            }
+            VirtualAction::p2_left | VirtualAction::p2_menu_left => handle_pad_dir(
+                state,
+                profile::PlayerSide::P2,
+                PadDir::Left,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p2_right | VirtualAction::p2_menu_right => handle_pad_dir(
+                state,
+                profile::PlayerSide::P2,
+                PadDir::Right,
+                ev.pressed,
+                ev.timestamp,
+            ),
             VirtualAction::p2_up | VirtualAction::p2_menu_up => {
                 handle_pad_dir_p2(state, PadDir::Up, ev.pressed, ev.timestamp)
             }
@@ -8169,18 +8358,34 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     match crate::game::profile::get_session_player_side() {
         crate::game::profile::PlayerSide::P2 => match ev.action {
-            VirtualAction::p2_left | VirtualAction::p2_menu_left => {
-                handle_pad_dir(state, PadDir::Left, ev.pressed, ev.timestamp)
-            }
-            VirtualAction::p2_right | VirtualAction::p2_menu_right => {
-                handle_pad_dir(state, PadDir::Right, ev.pressed, ev.timestamp)
-            }
-            VirtualAction::p2_up | VirtualAction::p2_menu_up => {
-                handle_pad_dir(state, PadDir::Up, ev.pressed, ev.timestamp)
-            }
-            VirtualAction::p2_down | VirtualAction::p2_menu_down => {
-                handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
-            }
+            VirtualAction::p2_left | VirtualAction::p2_menu_left => handle_pad_dir(
+                state,
+                profile::PlayerSide::P2,
+                PadDir::Left,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p2_right | VirtualAction::p2_menu_right => handle_pad_dir(
+                state,
+                profile::PlayerSide::P2,
+                PadDir::Right,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p2_up | VirtualAction::p2_menu_up => handle_pad_dir(
+                state,
+                profile::PlayerSide::P2,
+                PadDir::Up,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p2_down | VirtualAction::p2_menu_down => handle_pad_dir(
+                state,
+                profile::PlayerSide::P2,
+                PadDir::Down,
+                ev.pressed,
+                ev.timestamp,
+            ),
             VirtualAction::p2_start if ev.pressed => {
                 if try_open_select_music_menu_with_select_start(
                     state,
@@ -8199,18 +8404,34 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             _ => ScreenAction::None,
         },
         crate::game::profile::PlayerSide::P1 => match ev.action {
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-                handle_pad_dir(state, PadDir::Left, ev.pressed, ev.timestamp)
-            }
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-                handle_pad_dir(state, PadDir::Right, ev.pressed, ev.timestamp)
-            }
-            VirtualAction::p1_up | VirtualAction::p1_menu_up => {
-                handle_pad_dir(state, PadDir::Up, ev.pressed, ev.timestamp)
-            }
-            VirtualAction::p1_down | VirtualAction::p1_menu_down => {
-                handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
-            }
+            VirtualAction::p1_left | VirtualAction::p1_menu_left => handle_pad_dir(
+                state,
+                profile::PlayerSide::P1,
+                PadDir::Left,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p1_right | VirtualAction::p1_menu_right => handle_pad_dir(
+                state,
+                profile::PlayerSide::P1,
+                PadDir::Right,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_pad_dir(
+                state,
+                profile::PlayerSide::P1,
+                PadDir::Up,
+                ev.pressed,
+                ev.timestamp,
+            ),
+            VirtualAction::p1_down | VirtualAction::p1_menu_down => handle_pad_dir(
+                state,
+                profile::PlayerSide::P1,
+                PadDir::Down,
+                ev.pressed,
+                ev.timestamp,
+            ),
             VirtualAction::p1_start if ev.pressed => {
                 if try_open_select_music_menu_with_select_start(
                     state,
@@ -10338,7 +10559,9 @@ fn begin_exit_prompt(state: &mut State) {
         switch_elapsed: 0.0,
     };
     // Match SL's `MusicWheel:Move(0)` intent: stop any ongoing hold-scroll.
+    clear_menu_chord(state);
     clear_nav_hold(state);
+    state.exit_code = ExitCodeTracker::default();
 }
 
 #[inline(always)]
@@ -10698,7 +10921,13 @@ mod tests {
         state.prev_selected_index = 2;
 
         let now = Instant::now();
-        super::handle_pad_dir(&mut state, PadDir::Right, true, now);
+        super::handle_pad_dir(
+            &mut state,
+            profile::PlayerSide::P1,
+            PadDir::Right,
+            true,
+            now,
+        );
         assert_eq!(state.selected_index, 3);
         assert_eq!(
             state.nav_key_held_direction,
@@ -10707,6 +10936,7 @@ mod tests {
 
         super::handle_pad_dir(
             &mut state,
+            profile::PlayerSide::P1,
             PadDir::Left,
             true,
             now + Duration::from_millis(60),
@@ -10716,6 +10946,7 @@ mod tests {
 
         super::handle_pad_dir(
             &mut state,
+            profile::PlayerSide::P1,
             PadDir::Right,
             false,
             now + Duration::from_millis(70),
@@ -10724,6 +10955,51 @@ mod tests {
             state.nav_key_held_direction,
             Some(super::NavDirection::Left)
         );
+    }
+
+    #[test]
+    fn menu_lr_exit_code_opens_exit_prompt() {
+        let mut state = init_placeholder();
+        state.entries = test_entries();
+        state.selected_index = 2;
+        state.prev_selected_index = 2;
+
+        let now = Instant::now();
+        let sequence = [
+            PadDir::Left,
+            PadDir::Left,
+            PadDir::Right,
+            PadDir::Right,
+            PadDir::Left,
+            PadDir::Left,
+            PadDir::Right,
+            PadDir::Right,
+        ];
+        let sequence_len = sequence.len();
+        for (idx, dir) in sequence.into_iter().enumerate() {
+            let t = now + Duration::from_millis(idx as u64 * 100);
+            super::handle_pad_dir(&mut state, profile::PlayerSide::P1, dir, true, t);
+            if idx + 1 < sequence_len {
+                assert_eq!(state.exit_prompt, super::ExitPromptState::None);
+                super::handle_pad_dir(
+                    &mut state,
+                    profile::PlayerSide::P1,
+                    dir,
+                    false,
+                    t + Duration::from_millis(20),
+                );
+            }
+        }
+
+        assert!(matches!(
+            state.exit_prompt,
+            super::ExitPromptState::Active {
+                active_choice: 0,
+                ..
+            }
+        ));
+        assert_eq!(state.nav_key_held_direction, None);
+        assert_eq!(state.menu_chord_mask, 0);
     }
 
     #[test]
