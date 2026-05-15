@@ -1148,36 +1148,61 @@ fn change_music_rate(state: &mut State, delta: f32) -> bool {
     let new_rate = quantized_music_rate(current, delta);
     if (new_rate - current).abs() <= f32::EPSILON {
         audio::play_sfx(EDIT_INVALID_SOUND);
-        set_flash_tr_fmt(
-            state,
-            "FlashMusicRateLimit",
-            &[("rate", &fmt_music_rate(current))],
-        );
+        set_music_rate_flash(state, "FlashMusicRateLimit", current);
         return false;
     }
     let changed = gameplay_core::set_music_rate(&mut state.gameplay, new_rate);
     profile::set_session_music_rate(new_rate);
     audio::set_music_rate(new_rate);
     if changed {
-        set_flash_tr_fmt(
-            state,
-            "FlashMusicRate",
-            &[("rate", &fmt_music_rate(new_rate))],
-        );
+        set_music_rate_flash(state, "FlashMusicRate", new_rate);
         audio::play_sfx(EDIT_LINE_SOUND);
     }
     changed
 }
 
-fn set_flash_tr(state: &mut State, key: &str) {
-    state.flash = Some((i18n::tr("Practice", key).to_string(), FLASH_DURATION_SECS));
+fn set_music_rate_flash(state: &mut State, key: &str, rate: f32) {
+    let bpm_str = effective_bpm_str(state, rate);
+    let text = i18n::tr_fmt(
+        "Practice",
+        key,
+        &[("rate", &fmt_music_rate(rate)), ("bpm", &bpm_str)],
+    )
+    .replace("\\n", "\n");
+    state.flash = Some((text, FLASH_DURATION_SECS));
 }
 
-fn set_flash_tr_fmt(state: &mut State, key: &str, args: &[(&str, &str)]) {
-    state.flash = Some((
-        i18n::tr_fmt("Practice", key, args).to_string(),
-        FLASH_DURATION_SECS,
-    ));
+fn effective_bpm_str(state: &State, rate: f32) -> String {
+    let song = &state.gameplay.song;
+    let chart = state.gameplay.charts.first().map(|c| c.as_ref());
+    let is_random = chart.is_some_and(|c| {
+        matches!(
+            c.display_bpm,
+            Some(crate::game::chart::ChartDisplayBpm::Random)
+        )
+    });
+    if is_random {
+        return "???".to_string();
+    }
+    let reference_bpm = song
+        .chart_display_bpm_range(chart)
+        .map(|(_, hi)| hi as f32)
+        .unwrap_or(song.max_bpm as f32);
+    let reference_bpm = if reference_bpm.is_finite() && reference_bpm > 0.0 {
+        reference_bpm
+    } else {
+        120.0
+    };
+    let effective_bpm = f64::from(reference_bpm) * f64::from(rate);
+    if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
+        format!("{}", effective_bpm.round() as i32)
+    } else {
+        format!("{effective_bpm:.1}")
+    }
+}
+
+fn set_flash_tr(state: &mut State, key: &str) {
+    state.flash = Some((i18n::tr("Practice", key).to_string(), FLASH_DURATION_SECS));
 }
 
 fn fmt_music_rate(rate: f32) -> String {
