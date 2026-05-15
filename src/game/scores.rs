@@ -480,7 +480,7 @@ impl ArrowCloudScore {
     pub fn to_cached_score(&self) -> CachedScore {
         let percent_0_100 = (self.score_percent * 100.0).clamp(0.0, 100.0);
         let score_10000 = percent_0_100 * 100.0;
-        cached_score_from_gs(score_10000, None, "", self.is_fail)
+        cached_score_from_gs(score_10000, None, "", self.is_fail, GsExEvidence::default())
     }
 }
 
@@ -2877,6 +2877,7 @@ fn push_leaderboard_pane(
 struct FetchedPlayerLeaderboards {
     data: PlayerLeaderboardData,
     gs_entries: Vec<LeaderboardApiEntry>,
+    ex_entries: Vec<LeaderboardApiEntry>,
     itl_self_found: bool,
 }
 
@@ -2911,12 +2912,28 @@ fn leaderboard_self_entry<'a>(
 }
 
 #[inline(always)]
-fn leaderboard_self_score_10000(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
-    let entry = leaderboard_self_entry(entries, username)?;
+fn entry_score_10000(entry: &LeaderboardApiEntry) -> Option<f64> {
     if entry.is_fail || !entry.score.is_finite() {
-        return None;
+        None
+    } else {
+        Some(entry.score.clamp(0.0, 10000.0))
     }
-    Some(entry.score.round().clamp(0.0, 10000.0) as u32)
+}
+
+#[inline(always)]
+fn leaderboard_self_score_10000(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
+    Some(entry_score_10000(leaderboard_self_entry(entries, username)?)?.round() as u32)
+}
+
+fn gs_ex_evidence_from_leaderboard(
+    ex_entries: &[LeaderboardApiEntry],
+    username: &str,
+    comment: Option<&str>,
+) -> GsExEvidence {
+    GsExEvidence::from_sources(
+        leaderboard_self_entry(ex_entries, username).and_then(entry_score_10000),
+        comment,
+    )
 }
 
 #[inline(always)]
@@ -2970,11 +2987,12 @@ fn cached_score_from_gs(
     comments: Option<&str>,
     chart_hash: &str,
     is_fail: bool,
+    ex_evidence: GsExEvidence,
 ) -> CachedScore {
     if is_fail {
         return cached_failed_gs_score(score_10000);
     }
-    let lamp_index = compute_lamp_index(score_10000, comments, chart_hash);
+    let lamp_index = compute_lamp_index(score_10000, comments, chart_hash, ex_evidence);
     let lamp_judge_count = compute_lamp_judge_count(lamp_index, comments);
     let mut grade = score_to_grade(score_10000);
     if lamp_index == Some(0) {
@@ -2983,14 +3001,30 @@ fn cached_score_from_gs(
     cached_score(grade, score_10000 / 10000.0, lamp_index, lamp_judge_count)
 }
 
+#[inline(always)]
+fn replaces_stale_inferred_quint(
+    score: &CachedScore,
+    existing: &CachedScore,
+    proves_nonquint_ex: bool,
+) -> bool {
+    proves_nonquint_ex
+        && existing.grade == Grade::Quint
+        && existing.lamp_index == Some(0)
+        && score.grade == Grade::Tier01
+        && score.lamp_index == Some(1)
+        && same_score_10000(cached_score_10000(score), cached_score_10000(existing))
+}
+
 fn cache_gs_score_for_profile(
     profile_id: &str,
     chart_hash: &str,
     score: CachedScore,
     username: &str,
+    proves_nonquint_ex: bool,
 ) {
     let score = fix_gs_cached_score(score);
     if let Some(existing) = get_cached_gs_score_for_profile(profile_id, chart_hash)
+        && !replaces_stale_inferred_quint(&score, &existing, proves_nonquint_ex)
         && !(score.grade == Grade::Failed
             && existing.grade != Grade::Failed
             && same_score_10000(cached_score_10000(&score), cached_score_10000(&existing)))
@@ -3009,6 +3043,7 @@ fn cache_gs_score_from_leaderboard(
     username: &str,
     chart_hash: &str,
     gs_entries: &[LeaderboardApiEntry],
+    ex_entries: &[LeaderboardApiEntry],
 ) {
     let Some(entry) = leaderboard_self_entry(gs_entries, username) else {
         // Select Music and gameplay scoreboxes fetch shallow leaderboard pages.
@@ -3021,13 +3056,22 @@ fn cache_gs_score_from_leaderboard(
             score.grade == Grade::Failed && same_score_10000(cached_score_10000(score), entry.score)
         })
         .is_some();
+    let ex_evidence =
+        gs_ex_evidence_from_leaderboard(ex_entries, username, entry.comments.as_deref());
     let score = cached_score_from_gs(
         entry.score,
         entry.comments.as_deref(),
         chart_hash,
         entry.is_fail || local_failed_match,
+        ex_evidence,
     );
-    cache_gs_score_for_profile(profile_id, chart_hash, score, username);
+    cache_gs_score_for_profile(
+        profile_id,
+        chart_hash,
+        score,
+        username,
+        ex_evidence.proves_nonquint(),
+    );
 }
 
 #[inline(always)]
@@ -3564,6 +3608,7 @@ fn fetch_player_leaderboards_internal(
     let decoded: LeaderboardsApiResponse = response.into_body().read_json()?;
     let mut panes = Vec::with_capacity(5);
     let mut gs_entries = Vec::new();
+    let mut ex_entries = Vec::new();
     let mut itl_self_score = None;
     let mut itl_self_rank = None;
     let mut itl_self_found = false;
@@ -3577,6 +3622,7 @@ fn fetch_player_leaderboards_internal(
         } = player;
 
         gs_entries.clone_from(&gs_leaderboard);
+        ex_entries.clone_from(&ex_leaderboard);
         if show_ex_score {
             push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
             push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
@@ -3632,6 +3678,7 @@ fn fetch_player_leaderboards_internal(
             itl_self_rank,
         },
         gs_entries,
+        ex_entries,
         itl_self_found,
     })
 }
@@ -3757,6 +3804,7 @@ fn spawn_player_leaderboard_fetch(
                             let FetchedPlayerLeaderboards {
                                 data,
                                 gs_entries,
+                                ex_entries,
                                 itl_self_found,
                             } = fetched;
                             if itl_self_found {
@@ -3781,6 +3829,7 @@ fn spawn_player_leaderboard_fetch(
                                     gs_username.as_str(),
                                     key.chart_hash.as_str(),
                                     gs_entries.as_slice(),
+                                    ex_entries.as_slice(),
                                 );
                             }
                             cache.by_key.insert(
@@ -4378,6 +4427,80 @@ fn parse_comment_counts(comment: &str) -> ParsedCommentCounts {
     counts
 }
 
+fn parse_comment_ex_percent(comment: &str) -> Option<f64> {
+    let bytes = comment.as_bytes();
+    let mut idx = 0usize;
+    while idx < bytes.len() {
+        if !bytes[idx].is_ascii_digit() {
+            idx += 1;
+            continue;
+        }
+
+        let start = idx;
+        while idx < bytes.len() && bytes[idx].is_ascii_digit() {
+            idx += 1;
+        }
+        if idx < bytes.len() && bytes[idx] == b'.' {
+            idx += 1;
+            while idx < bytes.len() && bytes[idx].is_ascii_digit() {
+                idx += 1;
+            }
+        }
+
+        let value_end = idx;
+        if idx < bytes.len() && bytes[idx] == b'%' {
+            idx += 1;
+        }
+        while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
+            idx += 1;
+        }
+
+        if idx + 2 <= bytes.len()
+            && bytes[idx].eq_ignore_ascii_case(&b'e')
+            && bytes[idx + 1].eq_ignore_ascii_case(&b'x')
+            && bytes
+                .get(idx + 2)
+                .is_none_or(|next| !next.is_ascii_alphabetic())
+        {
+            return comment[start..value_end].parse::<f64>().ok();
+        }
+    }
+    None
+}
+
+#[inline(always)]
+fn ex_scoreboard_is_quint(score_10000: f64) -> bool {
+    score_10000.is_finite() && score_10000.round().clamp(0.0, 10000.0) >= 10000.0
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct GsExEvidence {
+    leaderboard_score_10000: Option<f64>,
+    comment_percent: Option<f64>,
+}
+
+impl GsExEvidence {
+    fn from_sources(leaderboard_score_10000: Option<f64>, comment: Option<&str>) -> Self {
+        Self {
+            leaderboard_score_10000,
+            comment_percent: comment.and_then(parse_comment_ex_percent),
+        }
+    }
+
+    #[inline(always)]
+    fn is_quint(self) -> Option<bool> {
+        if let Some(score) = self.leaderboard_score_10000 {
+            return Some(ex_scoreboard_is_quint(score));
+        }
+        self.comment_percent.map(|ex| ex >= 100.0)
+    }
+
+    #[inline(always)]
+    fn proves_nonquint(self) -> bool {
+        self.is_quint() == Some(false)
+    }
+}
+
 fn find_chart_stats_for_hash(chart_hash: &str) -> Option<rssp::stats::ArrowStats> {
     let cache = get_song_cache();
     for pack in cache.iter() {
@@ -4392,39 +4515,53 @@ fn find_chart_stats_for_hash(chart_hash: &str) -> Option<rssp::stats::ArrowStats
     None
 }
 
-fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Option<u8> {
+fn compute_lamp_index(
+    score: f64,
+    comment: Option<&str>,
+    chart_hash: &str,
+    ex_evidence: GsExEvidence,
+) -> Option<u8> {
     let score_percent = score / 10000.0;
 
-    // Perfect 100%: a comment with no white/excellent-or-worse judgments is a
-    // true quint; otherwise it is at least a W1 full combo lamp.
+    // Perfect 100% ITG can still be a quad. Trust the GS/BS EX scoreboard
+    // first; only fall back to the EX comment when that board is unavailable.
     if (score_percent - 1.0).abs() <= 1e-9 {
-        if let Some(comment) = comment {
-            let counts = parse_comment_counts(comment);
-            if counts.w == 0
-                && counts.e == 0
-                && counts.g == 0
-                && counts.d == 0
-                && counts.wo == 0
-                && counts.m == 0
-            {
+        if let Some(is_quint) = ex_evidence.is_quint() {
+            if is_quint {
                 debug!(
-                    "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> Quint lamp (index=0)",
+                    "GrooveStats lamp: hash={} score={:.4}% -> Quint lamp (EX=100, index=0)",
                     chart_hash,
-                    score_percent * 100.0,
-                    comment
+                    score_percent * 100.0
                 );
                 return Some(0);
             }
             debug!(
-                "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> Quad lamp (W1 FC, index=1)",
+                "GrooveStats lamp: hash={} score={:.4}% -> Quad lamp (EX < 100, index=1)",
                 chart_hash,
-                score_percent * 100.0,
-                comment
+                score_percent * 100.0
             );
             return Some(1);
         }
+        if let Some(comment) = comment {
+            let counts = parse_comment_counts(comment);
+            let explicit_nonquint_counts = counts.w != 0
+                || counts.e != 0
+                || counts.g != 0
+                || counts.d != 0
+                || counts.wo != 0
+                || counts.m != 0;
+            if explicit_nonquint_counts {
+                debug!(
+                    "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> Quad lamp (W1 FC, index=1)",
+                    chart_hash,
+                    score_percent * 100.0,
+                    comment
+                );
+                return Some(1);
+            }
+        }
         debug!(
-            "GrooveStats lamp: hash={} score={:.4}% -> Quad lamp (W1 FC, no comment available)",
+            "GrooveStats lamp: hash={} score={:.4}% -> Quad lamp (no EX=100 evidence)",
             chart_hash,
             score_percent * 100.0
         );
@@ -4764,6 +4901,7 @@ pub struct ScoreImportProgress {
 
 struct ScoreImportFetchResult {
     score: Option<CachedScore>,
+    score_proves_nonquint_ex: bool,
     itl_self_score: Option<u32>,
     itl_self_rank: Option<u32>,
     itl_self_found: bool,
@@ -4800,6 +4938,7 @@ fn score_import_result_from_response(
 ) -> ScoreImportFetchResult {
     let mut result = ScoreImportFetchResult {
         score: None,
+        score_proves_nonquint_ex: false,
         itl_self_score: None,
         itl_self_rank: None,
         itl_self_found: false,
@@ -4808,18 +4947,26 @@ fn score_import_result_from_response(
         return result;
     };
 
-    result.score = player
+    if let Some(entry) = player
         .gs_leaderboard
         .iter()
         .find(|entry| score_entry_matches_profile(entry, endpoint, username))
-        .map(|entry| {
-            cached_score_from_gs(
-                entry.score,
-                entry.comments.as_deref(),
-                chart_hash,
-                entry.is_fail,
-            )
-        });
+    {
+        let ex_score = player
+            .ex_leaderboard
+            .iter()
+            .find(|entry| score_entry_matches_profile(entry, endpoint, username))
+            .and_then(entry_score_10000);
+        let ex_evidence = GsExEvidence::from_sources(ex_score, entry.comments.as_deref());
+        result.score_proves_nonquint_ex = ex_evidence.proves_nonquint();
+        result.score = Some(cached_score_from_gs(
+            entry.score,
+            entry.comments.as_deref(),
+            chart_hash,
+            entry.is_fail,
+            ex_evidence,
+        ));
+    }
 
     if let Some(itl) = player.itl
         && !itl.itl_leaderboard.is_empty()
@@ -4880,18 +5027,6 @@ fn fetch_player_score_from_endpoint(
     Ok(score_import_result_from_response(
         decoded, endpoint, username, chart_hash,
     ))
-}
-
-fn fetch_player_score_from_api(
-    profile: &Profile,
-    chart_hash: &str,
-) -> Result<Option<CachedScore>, Box<dyn Error + Send + Sync>> {
-    let endpoint = if crate::game::online::is_boogiestats_active() {
-        ScoreImportEndpoint::BoogieStats
-    } else {
-        ScoreImportEndpoint::GrooveStats
-    };
-    Ok(fetch_player_score_from_endpoint(endpoint, profile, chart_hash)?.score)
 }
 
 fn collect_chart_hashes_for_import(
@@ -5290,6 +5425,7 @@ where
                             chart_hash,
                             score,
                             username.as_str(),
+                            result.score_proves_nonquint_ex,
                         );
                         imported_scores += 1;
                         pack_hits += 1;
@@ -5383,12 +5519,19 @@ pub fn fetch_and_store_grade(
         profile.groovestats_username, chart_hash
     );
 
-    if let Some(cached_score) = fetch_player_score_from_api(&profile, chart_hash.as_str())? {
+    let endpoint = if crate::game::online::is_boogiestats_active() {
+        ScoreImportEndpoint::BoogieStats
+    } else {
+        ScoreImportEndpoint::GrooveStats
+    };
+    let result = fetch_player_score_from_endpoint(endpoint, &profile, chart_hash.as_str())?;
+    if let Some(cached_score) = result.score {
         cache_gs_score_for_profile(
             &profile_id,
             &chart_hash,
             cached_score,
             profile.groovestats_username.trim(),
+            result.score_proves_nonquint_ex,
         );
     } else {
         warn!(
@@ -5424,6 +5567,16 @@ mod tests {
     }
 
     #[test]
+    fn groovestats_comment_ex_percent_accepts_ds_formats() {
+        assert_eq!(parse_comment_ex_percent("[DS], FA+, 99.78EX"), Some(99.78));
+        assert_eq!(
+            parse_comment_ex_percent("[DS], FA+, 99.78% EX, C650"),
+            Some(99.78)
+        );
+        assert_eq!(parse_comment_ex_percent("[DS], 3 excellents"), None);
+    }
+
+    #[test]
     fn groovestats_lamp_judge_count_ignores_ds_prefix() {
         assert_eq!(compute_lamp_judge_count(Some(1), Some("[DS], 4w")), Some(4));
         assert_eq!(compute_lamp_judge_count(Some(2), Some("[DS], 5e")), Some(5));
@@ -5431,8 +5584,15 @@ mod tests {
     }
 
     #[test]
-    fn cached_score_from_gs_detects_quint_from_fa_comment() {
-        let cached = cached_score_from_gs(10_000.0, Some("[DS], FA+, 100.00EX"), "deadbeef", false);
+    fn cached_score_from_gs_uses_quint_comment_as_fallback() {
+        let comment = "[DS], FA+, 100.00EX";
+        let cached = cached_score_from_gs(
+            10_000.0,
+            Some(comment),
+            "deadbeef",
+            false,
+            GsExEvidence::from_sources(None, Some(comment)),
+        );
 
         assert_eq!(cached.grade, Grade::Quint);
         assert_eq!(cached.lamp_index, Some(0));
@@ -5440,13 +5600,80 @@ mod tests {
     }
 
     #[test]
+    fn cached_score_from_gs_trusts_ex_leaderboard_for_quint() {
+        let cached = cached_score_from_gs(
+            10_000.0,
+            Some("[DS], FA+, 99.78EX"),
+            "deadbeef",
+            false,
+            GsExEvidence::from_sources(Some(10_000.0), Some("[DS], FA+, 99.78EX")),
+        );
+
+        assert_eq!(cached.grade, Grade::Quint);
+        assert_eq!(cached.lamp_index, Some(0));
+        assert_eq!(cached.lamp_judge_count, None);
+    }
+
+    #[test]
+    fn cached_score_from_gs_rejects_quint_comment_when_ex_leaderboard_is_lower() {
+        let cached = cached_score_from_gs(
+            10_000.0,
+            Some("[DS], FA+, 100.00EX, C875"),
+            "deadbeef",
+            false,
+            GsExEvidence::from_sources(Some(9_978.0), Some("[DS], FA+, 100.00EX, C875")),
+        );
+
+        assert_eq!(cached.grade, Grade::Tier01);
+        assert_eq!(cached.lamp_index, Some(1));
+        assert_eq!(cached.lamp_judge_count, None);
+    }
+
+    #[test]
     fn cached_score_from_gs_keeps_quad_white_count() {
-        let cached =
-            cached_score_from_gs(10_000.0, Some("[DS], FA+, 99.71EX, 3w"), "deadbeef", false);
+        let comment = "[DS], FA+, 99.71EX, 3w";
+        let cached = cached_score_from_gs(
+            10_000.0,
+            Some(comment),
+            "deadbeef",
+            false,
+            GsExEvidence::from_sources(None, Some(comment)),
+        );
 
         assert_eq!(cached.grade, Grade::Tier01);
         assert_eq!(cached.lamp_index, Some(1));
         assert_eq!(cached.lamp_judge_count, Some(3));
+    }
+
+    #[test]
+    fn cached_score_from_gs_keeps_quad_from_nonperfect_ex_comment() {
+        let comment = "[DS], FA+, 99.78EX";
+        let cached = cached_score_from_gs(
+            10_000.0,
+            Some(comment),
+            "deadbeef",
+            false,
+            GsExEvidence::from_sources(None, Some(comment)),
+        );
+
+        assert_eq!(cached.grade, Grade::Tier01);
+        assert_eq!(cached.lamp_index, Some(1));
+        assert_eq!(cached.lamp_judge_count, None);
+    }
+
+    #[test]
+    fn cached_score_from_gs_does_not_infer_quint_without_ex_evidence() {
+        let cached = cached_score_from_gs(
+            10_000.0,
+            Some("[DS], FA+"),
+            "deadbeef",
+            false,
+            GsExEvidence::default(),
+        );
+
+        assert_eq!(cached.grade, Grade::Tier01);
+        assert_eq!(cached.lamp_index, Some(1));
+        assert_eq!(cached.lamp_judge_count, None);
     }
 
     #[test]
@@ -5524,6 +5751,34 @@ mod tests {
         assert!(is_better_itg(&quint, &quad));
         assert!(is_better_itg(&quad, &bland_quad));
         assert!(!is_better_itg(&bland_quad, &quad));
+    }
+
+    #[test]
+    fn stale_inferred_quint_replacement_requires_nonperfect_ex() {
+        let stale_quint = CachedScore {
+            grade: Grade::Quint,
+            score_percent: 1.0,
+            lamp_index: Some(0),
+            lamp_judge_count: None,
+        };
+        let corrected_quad = CachedScore {
+            grade: Grade::Tier01,
+            score_percent: 1.0,
+            lamp_index: Some(1),
+            lamp_judge_count: None,
+        };
+
+        assert!(replaces_stale_inferred_quint(
+            &corrected_quad,
+            &stale_quint,
+            true
+        ));
+        assert!(!replaces_stale_inferred_quint(
+            &corrected_quad,
+            &stale_quint,
+            false
+        ));
+        assert!(!is_better_itg(&corrected_quad, &stale_quint));
     }
 
     #[test]
@@ -5646,6 +5901,91 @@ mod tests {
     }
 
     #[test]
+    fn score_import_result_uses_ex_leaderboard_for_quint() {
+        let result = score_import_result_from_response(
+            LeaderboardsApiResponse {
+                player1: Some(LeaderboardApiPlayer {
+                    is_ranked: true,
+                    gs_leaderboard: vec![LeaderboardApiEntry {
+                        rank: 8,
+                        name: "PerfectTaste".to_string(),
+                        machine_tag: None,
+                        score: 10_000.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: true,
+                        is_fail: false,
+                        comments: Some("[DS], FA+, 99.78EX".to_string()),
+                    }],
+                    ex_leaderboard: vec![LeaderboardApiEntry {
+                        rank: 8,
+                        name: "PerfectTaste".to_string(),
+                        machine_tag: None,
+                        score: 10_000.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: true,
+                        is_fail: false,
+                        comments: None,
+                    }],
+                    rpg: None,
+                    itl: None,
+                }),
+            },
+            ScoreImportEndpoint::GrooveStats,
+            "perfecttaste",
+            "deadbeef",
+        );
+
+        let score = result.score.expect("score cached");
+        assert_eq!(score.grade, Grade::Quint);
+        assert_eq!(score.lamp_index, Some(0));
+    }
+
+    #[test]
+    fn score_import_result_rejects_quint_comment_when_ex_leaderboard_is_lower() {
+        let result = score_import_result_from_response(
+            LeaderboardsApiResponse {
+                player1: Some(LeaderboardApiPlayer {
+                    is_ranked: true,
+                    gs_leaderboard: vec![LeaderboardApiEntry {
+                        rank: 8,
+                        name: "PerfectTaste".to_string(),
+                        machine_tag: None,
+                        score: 10_000.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: true,
+                        is_fail: false,
+                        comments: Some("[DS], FA+, 100.00EX, C875".to_string()),
+                    }],
+                    ex_leaderboard: vec![LeaderboardApiEntry {
+                        rank: 8,
+                        name: "PerfectTaste".to_string(),
+                        machine_tag: None,
+                        score: 9_978.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: true,
+                        is_fail: false,
+                        comments: None,
+                    }],
+                    rpg: None,
+                    itl: None,
+                }),
+            },
+            ScoreImportEndpoint::GrooveStats,
+            "perfecttaste",
+            "deadbeef",
+        );
+
+        let score = result.score.expect("score cached");
+        assert_eq!(score.grade, Grade::Tier01);
+        assert_eq!(score.lamp_index, Some(1));
+        assert!(result.score_proves_nonquint_ex);
+    }
+
+    #[test]
     fn cache_gs_score_from_leaderboard_keeps_existing_score_when_self_missing() {
         let profile_id = "test-profile-missing-self";
         let chart_hash = "deadbeef";
@@ -5678,6 +6018,7 @@ mod tests {
                 is_fail: false,
                 comments: None,
             }],
+            &[],
         );
 
         let cached = GS_SCORE_CACHE
@@ -5698,7 +6039,13 @@ mod tests {
 
     #[test]
     fn cached_score_from_gs_preserves_failed_percent() {
-        let cached = cached_score_from_gs(9482.0, Some("[DS], 3e"), "deadbeef", true);
+        let cached = cached_score_from_gs(
+            9482.0,
+            Some("[DS], 3e"),
+            "deadbeef",
+            true,
+            GsExEvidence::default(),
+        );
 
         assert_eq!(cached.grade, Grade::Failed);
         assert_eq!(cached.score_percent, 0.9482);
@@ -5830,6 +6177,7 @@ mod tests {
                 lamp_judge_count: None,
             },
             "PerfectTaste",
+            false,
         );
 
         let cached = GS_SCORE_CACHE
@@ -5886,6 +6234,7 @@ mod tests {
                 is_fail: false,
                 comments: None,
             }],
+            &[],
         );
 
         let cached = GS_SCORE_CACHE

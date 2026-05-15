@@ -5,8 +5,8 @@ use super::{
     cached_score_from_gs, compact_f32_text, de_i32_from_string_or_number,
     de_string_from_string_or_number, de_u32_from_string_or_number, gameplay_run_failed,
     gameplay_run_passed, gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
-    invalidate_player_leaderboards_for_side, itl, log_body_snippet, lua_chart_submit_allowed,
-    submit_record_banner, submit_side_ix,
+    gs_ex_evidence_from_leaderboard, invalidate_player_leaderboards_for_side, itl,
+    log_body_snippet, lua_chart_submit_allowed, submit_record_banner, submit_side_ix,
 };
 use crate::engine::network;
 use crate::game::gameplay;
@@ -1209,17 +1209,24 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     groovestats_record_submit_success(player.side, player.chart_hash.as_str());
                 }
                 if let Some(profile_id) = player.profile_id.as_deref() {
+                    let ex_evidence = gs_ex_evidence_from_leaderboard(
+                        player_response.ex_leaderboard.as_slice(),
+                        player.username.as_str(),
+                        Some(player.comment.as_str()),
+                    );
                     let score = cached_score_from_gs(
                         f64::from(player.score_10000),
                         Some(player.comment.as_str()),
                         player.chart_hash.as_str(),
                         false,
+                        ex_evidence,
                     );
                     cache_gs_score_for_profile(
                         profile_id,
                         player.chart_hash.as_str(),
                         score,
                         player.username.as_str(),
+                        ex_evidence.proves_nonquint(),
                     );
                 }
                 debug!(
