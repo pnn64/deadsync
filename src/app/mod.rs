@@ -371,6 +371,27 @@ struct GameplayOffsetSavePrompt {
     active_choice: u8, // 0 = Yes, 1 = No
 }
 
+#[inline(always)]
+const fn gameplay_offset_prompt_choice_delta(
+    action: input::VirtualAction,
+    dedicated_menu_only: bool,
+) -> Option<i8> {
+    if dedicated_menu_only && action.is_gameplay_arrow() {
+        return None;
+    }
+    match action {
+        input::VirtualAction::p1_left
+        | input::VirtualAction::p1_menu_left
+        | input::VirtualAction::p2_left
+        | input::VirtualAction::p2_menu_left => Some(-1),
+        input::VirtualAction::p1_right
+        | input::VirtualAction::p1_menu_right
+        | input::VirtualAction::p2_right
+        | input::VirtualAction::p2_menu_right => Some(1),
+        _ => None,
+    }
+}
+
 #[derive(Clone)]
 struct CourseStageRuntime {
     song: Arc<crate::game::song::SongData>,
@@ -4307,11 +4328,11 @@ impl App {
         if !ev.pressed {
             return true;
         }
-        let decision = match ev.action {
-            input::VirtualAction::p1_left
-            | input::VirtualAction::p1_menu_left
-            | input::VirtualAction::p2_left
-            | input::VirtualAction::p2_menu_left => {
+        let decision = match gameplay_offset_prompt_choice_delta(
+            ev.action,
+            config::get().only_dedicated_menu_buttons,
+        ) {
+            Some(-1) => {
                 let mut moved = false;
                 if let Some(prompt) = self.state.gameplay_offset_save_prompt.as_mut()
                     && prompt.active_choice > 0
@@ -4324,10 +4345,7 @@ impl App {
                 }
                 None
             }
-            input::VirtualAction::p1_right
-            | input::VirtualAction::p1_menu_right
-            | input::VirtualAction::p2_right
-            | input::VirtualAction::p2_menu_right => {
+            Some(1) => {
                 let mut moved = false;
                 if let Some(prompt) = self.state.gameplay_offset_save_prompt.as_mut()
                     && prompt.active_choice < 1
@@ -4340,20 +4358,22 @@ impl App {
                 }
                 None
             }
-            input::VirtualAction::p1_start
-            | input::VirtualAction::p2_start
-            | input::VirtualAction::p1_select
-            | input::VirtualAction::p2_select => {
-                let save_changes = self
-                    .state
-                    .gameplay_offset_save_prompt
-                    .as_ref()
-                    .is_some_and(|prompt| prompt.active_choice == 0);
-                crate::engine::audio::play_sfx("assets/sounds/start.ogg");
-                Some(save_changes)
-            }
-            input::VirtualAction::p1_back | input::VirtualAction::p2_back => None,
-            _ => None,
+            _ => match ev.action {
+                input::VirtualAction::p1_start
+                | input::VirtualAction::p2_start
+                | input::VirtualAction::p1_select
+                | input::VirtualAction::p2_select => {
+                    let save_changes = self
+                        .state
+                        .gameplay_offset_save_prompt
+                        .as_ref()
+                        .is_some_and(|prompt| prompt.active_choice == 0);
+                    crate::engine::audio::play_sfx("assets/sounds/start.ogg");
+                    Some(save_changes)
+                }
+                input::VirtualAction::p1_back | input::VirtualAction::p2_back => None,
+                _ => None,
+            },
         };
         if let Some(save_changes) = decision {
             self.finalize_gameplay_offset_prompt(save_changes, event_loop);
@@ -8410,6 +8430,58 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: vec![test_chart(hashes[0]), test_chart(hashes[1])],
         }
+    }
+
+    #[test]
+    fn gameplay_offset_prompt_ignores_pad_lr_in_dedicated_menu_mode() {
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_left, true),
+            None
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_right, true),
+            None
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p2_left, true),
+            None
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p2_right, true),
+            None
+        );
+    }
+
+    #[test]
+    fn gameplay_offset_prompt_keeps_menu_lr_in_dedicated_menu_mode() {
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_menu_left, true),
+            Some(-1)
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_menu_right, true),
+            Some(1)
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p2_menu_left, true),
+            Some(-1)
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p2_menu_right, true),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn gameplay_offset_prompt_allows_pad_lr_when_fallback_enabled() {
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_left, false),
+            Some(-1)
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(input::VirtualAction::p1_right, false),
+            Some(1)
+        );
     }
 
     #[test]
