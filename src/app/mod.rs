@@ -4880,7 +4880,10 @@ impl App {
             return Ok(());
         }
         if ev.pressed
-            && self.state.screens.current_screen == CurrentScreen::Gameplay
+            && matches!(
+                self.state.screens.current_screen,
+                CurrentScreen::Gameplay | CurrentScreen::Evaluation
+            )
             && self.state.gameplay_offset_save_prompt.is_none()
             && self.state.session.course_run.is_none()
             && matches!(
