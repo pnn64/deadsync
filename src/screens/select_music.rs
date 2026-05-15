@@ -9153,7 +9153,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    screen_bars::push(&mut actors, "SELECT MUSIC");
+    
+    let select_music_label = tr("ScreenTitles", "SelectMusic");
+    screen_bars::push(&mut actors, select_music_label.as_ref());
 
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
     let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
