@@ -100,6 +100,7 @@ fn push_default_options(content: &mut String, default: &Config) {
         "RateModPreservesPitch",
         default.rate_mod_preserves_pitch,
     );
+    push_bool(content, "ReplayGain", default.enable_replaygain);
     push_line(
         content,
         "SelectMusicBreakdown",

@@ -815,6 +815,12 @@ pub fn init() -> State {
         usize::from(cfg.rate_mod_preserves_pitch),
     );
     set_choice_by_id(
+        &mut state.sub[SubmenuKind::Sound].choice_indices,
+        SOUND_OPTIONS_ROWS,
+        SubRowId::ReplayGain,
+        usize::from(cfg.enable_replaygain),
+    );
+    set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowBanners,

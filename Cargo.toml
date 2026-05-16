@@ -75,6 +75,7 @@ claxon = "0.4.3"
 opusic-c = "1.6.1"
 rubato = "0.16.2"
 memmap2 = "0.9.10"
+ebur128 = "0.1.10"
 
 # Networking
 ureq = { version = "3.3.0", features = ["json", "rustls"] }
