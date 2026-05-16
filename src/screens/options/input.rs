@@ -521,6 +521,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::RateModPreservesPitch => {
                 config::update_rate_mod_preserves_pitch(new_index == 1);
             }
+            SubRowId::ReplayGain => {
+                config::update_enable_replaygain(new_index == 1);
+            }
             _ => {}
         }
     } else if matches!(kind, SubmenuKind::SelectMusic) {

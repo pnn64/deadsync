@@ -61,6 +61,10 @@ impl AppDirs {
         self.cache_dir.join("cdtitle")
     }
 
+    pub fn replaygain_cache_dir(&self) -> PathBuf {
+        self.cache_dir.join("replaygain")
+    }
+
     pub fn downloads_dir(&self) -> PathBuf {
         self.cache_dir.join("downloads")
     }
