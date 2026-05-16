@@ -8372,20 +8372,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 ev.pressed,
                 ev.timestamp,
             ),
-            VirtualAction::p2_up | VirtualAction::p2_menu_up => handle_pad_dir(
-                state,
-                profile::PlayerSide::P2,
-                PadDir::Up,
-                ev.pressed,
-                ev.timestamp,
-            ),
-            VirtualAction::p2_down | VirtualAction::p2_menu_down => handle_pad_dir(
-                state,
-                profile::PlayerSide::P2,
-                PadDir::Down,
-                ev.pressed,
-                ev.timestamp,
-            ),
+            VirtualAction::p2_up | VirtualAction::p2_menu_up => {
+                handle_pad_dir_p2(state, PadDir::Up, ev.pressed, ev.timestamp)
+            }
+            VirtualAction::p2_down | VirtualAction::p2_menu_down => {
+                handle_pad_dir_p2(state, PadDir::Down, ev.pressed, ev.timestamp)
+            }
             VirtualAction::p2_start if ev.pressed => {
                 if try_open_select_music_menu_with_select_start(
                     state,
