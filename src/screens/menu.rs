@@ -443,7 +443,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let event_mode = tr("Common", "EventMode");
     let press_start = tr("Common", "PressStart");
 
-    actors.push(screen_bar::build(screen_bar::ScreenBarParams {
+    actors.push(screen_bar::build_title_menu(screen_bar::ScreenBarParams {
         title: event_mode.as_ref(),
         title_placement: screen_bar::ScreenBarTitlePlacement::Center,
         position: screen_bar::ScreenBarPosition::Bottom,

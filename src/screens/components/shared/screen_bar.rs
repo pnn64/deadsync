@@ -38,6 +38,7 @@ pub enum ScreenBarTitlePlacement {
 enum ScreenBarContext {
     Normal,
     SelectMusic,
+    TitleMenu,
 }
 
 #[derive(Clone, Copy)]
@@ -75,6 +76,10 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 }
 
 fn bar_background(transparent: bool, context: ScreenBarContext) -> Option<Background> {
+    if matches!(context, ScreenBarContext::TitleMenu) {
+        return None;
+    }
+
     let cfg = config::get();
     match cfg.machine_bar_color.resolve(cfg.visual_style) {
         MachineBarColor::Default if transparent => None,
@@ -95,6 +100,10 @@ pub fn build(params: ScreenBarParams) -> Actor {
 
 pub fn build_select_music(params: ScreenBarParams) -> Actor {
     build_with_context(params, ScreenBarContext::SelectMusic)
+}
+
+pub fn build_title_menu(params: ScreenBarParams) -> Actor {
+    build_with_context(params, ScreenBarContext::TitleMenu)
 }
 
 fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Actor {
