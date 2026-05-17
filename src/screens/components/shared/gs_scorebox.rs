@@ -598,7 +598,7 @@ fn gameplay_row_from_entry(
 
     let score_color = if entry.is_fail {
         [1.0, 0.0, 0.0, 1.0]
-    } else if matches!(kind, PaneKind::Ex) {
+    } else if matches!(kind, PaneKind::Ex | PaneKind::Itl) {
         color::JUDGMENT_RGBA[0]
     } else if matches!(kind, PaneKind::HardEx) {
         color::HARD_EX_SCORE_RGBA
@@ -1530,6 +1530,21 @@ mod tests {
 
         assert_eq!(ranks, vec![1, 2, 3, 4, 473]);
         assert!(names.iter().any(|name| name == "self"));
+    }
+
+    #[test]
+    fn itl_scorebox_uses_ex_score_color() {
+        let entries = vec![
+            entry(1, "world", false, false),
+            entry(2, "self", true, false),
+            entry(3, "rival", false, true),
+        ];
+
+        let rows = scorebox_rows_for_kind(entries.as_slice(), PaneKind::Itl);
+
+        for row in rows.iter().take(3) {
+            assert_eq!(row.score_color, color::JUDGMENT_RGBA[0]);
+        }
     }
 
     #[test]
