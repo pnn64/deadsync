@@ -1,6 +1,7 @@
 mod backends;
 pub(crate) mod decode;
 pub mod folder;
+pub mod replaygain;
 mod resample;
 
 use crate::config::dirs;
@@ -582,6 +583,15 @@ static MUSIC_TOTAL_FRAMES: AtomicU64 = AtomicU64::new(0);
 static MUSIC_TRACK_START_FRAME: AtomicU64 = AtomicU64::new(0);
 static MUSIC_TRACK_HAS_STARTED: AtomicBool = AtomicBool::new(false);
 static MUSIC_TRACK_ACTIVE: AtomicBool = AtomicBool::new(false);
+// Per-play monotonic id used to associate asynchronous ReplayGain results
+// with the track that requested them. `set_music_replaygain_if_matches` is
+// a no-op if the id no longer matches the active track, preventing a stale
+// gain value from being applied to a different song.
+static MUSIC_TRACK_ID: AtomicU64 = AtomicU64::new(0);
+// Bits of an f32 linear gain (default 1.0) applied to the music stream by
+// the audio output callback. Updated either synchronously by `play_music`
+// (cache hit) or asynchronously by the ReplayGain worker.
+static MUSIC_GAIN_LINEAR_BITS: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
 static MUSIC_MAP_GEN: AtomicU64 = AtomicU64::new(1);
 
 // Last audio callback timing, used to interpolate the playback position
@@ -1418,14 +1428,59 @@ pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
         1.0
     };
     reset_music_stream_clock();
+
+    // Resolve a per-play track id and decide on the initial ReplayGain
+    // value. If the user has the experimental ReplayGain setting on, and we
+    // already have a cached/computed value, apply it immediately; otherwise
+    // queue a background analysis job. If the setting is off, force unity
+    // gain so a previous track's value doesn't leak forward.
+    let track_id = MUSIC_TRACK_ID
+        .fetch_add(1, Ordering::AcqRel)
+        .wrapping_add(1);
+    let initial_gain: f32 = if crate::config::get().enable_replaygain {
+        replaygain::get_or_queue_gain_linear(&path, track_id).unwrap_or(1.0)
+    } else {
+        1.0
+    };
+    MUSIC_GAIN_LINEAR_BITS.store(initial_gain.to_bits(), Ordering::Relaxed);
+
     let _ = ENGINE
         .command_sender
         .send(AudioCommand::PlayMusic(path, cut, looping, rate));
 }
 
+/// Applies a ReplayGain result from the background analyzer, but only if it
+/// still corresponds to the currently active music track. Called by
+/// [`replaygain`]; safe to call from any thread.
+pub fn set_music_replaygain_if_matches(track_id: u64, gain_linear: f32) {
+    let active_id = MUSIC_TRACK_ID.load(Ordering::Acquire);
+    if active_id != track_id {
+        return;
+    }
+    if !MUSIC_TRACK_ACTIVE.load(Ordering::Acquire) {
+        return;
+    }
+    let gain = if gain_linear.is_finite() && gain_linear > 0.0 {
+        gain_linear
+    } else {
+        1.0
+    };
+    MUSIC_GAIN_LINEAR_BITS.store(gain.to_bits(), Ordering::Relaxed);
+}
+
+/// Called from the config layer when the user toggles the ReplayGain
+/// setting. When disabled, forces unity gain immediately so the change is
+/// audible without requiring track restart.
+pub fn on_replaygain_setting_changed(enabled: bool) {
+    if !enabled {
+        MUSIC_GAIN_LINEAR_BITS.store(1.0f32.to_bits(), Ordering::Relaxed);
+    }
+}
+
 /// Stops the currently playing music track.
 pub fn stop_music() {
     reset_music_stream_clock();
+    MUSIC_GAIN_LINEAR_BITS.store(1.0f32.to_bits(), Ordering::Relaxed);
     let _ = ENGINE.command_sender.send(AudioCommand::StopMusic);
 }
 
@@ -1741,8 +1796,10 @@ impl RenderState {
         }
 
         let (music_vol, sfx_vol, assist_tick_vol) = Self::mix_levels();
+        let music_gain = f32::from_bits(MUSIC_GAIN_LINEAR_BITS.load(Ordering::Relaxed));
+        let music_scale = music_vol * music_gain;
         for (dst, src) in self.mix_f32.iter_mut().zip(&self.mix_i16) {
-            *dst = i16_to_f32(*src) * music_vol;
+            *dst = i16_to_f32(*src) * music_scale;
         }
 
         for new_sfx in self.sfx_receiver.try_iter() {
