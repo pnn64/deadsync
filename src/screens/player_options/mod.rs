@@ -21,7 +21,7 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 // --- Submodules ---
 mod choice;

@@ -30,11 +30,17 @@ pub(super) fn sync_i18n_cache(state: &mut State) {
 
 pub(super) fn clear_navigation_holds(state: &mut State) {
     state.nav_key_held_direction = None;
-    state.nav_key_held_since = None;
-    state.nav_key_last_scrolled_at = None;
+    screen_input::reset_hold_repeat(
+        &mut state.nav_key_held_for,
+        &mut state.nav_key_next_repeat_at,
+        NAV_INITIAL_HOLD_DELAY,
+    );
     state.nav_lr_held_direction = None;
-    state.nav_lr_held_since = None;
-    state.nav_lr_last_adjusted_at = None;
+    screen_input::reset_hold_repeat(
+        &mut state.nav_lr_held_for,
+        &mut state.nav_lr_next_repeat_at,
+        NAV_INITIAL_HOLD_DELAY,
+    );
     state.start_input = [OptionsStartInput::default(); 2];
 }
 
@@ -419,22 +425,20 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         return pending_action;
     }
 
-    if let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
-        state.nav_key_held_direction,
-        state.nav_key_held_since,
-        state.nav_key_last_scrolled_at,
-    ) {
-        let now = Instant::now();
-        if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
-            && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL
-        {
+    if let Some(direction) = state.nav_key_held_direction {
+        let repeat_due = screen_input::advance_hold_repeat(
+            &mut state.nav_key_held_for,
+            &mut state.nav_key_next_repeat_at,
+            NAV_REPEAT_SCROLL_INTERVAL,
+            dt,
+        );
+        if repeat_due {
             if state.score_import_pack_picker.is_some() {
                 let delta = match direction {
                     NavDirection::Up => -1,
                     NavDirection::Down => 1,
                 };
                 pack_picker_step(state, delta);
-                state.nav_key_last_scrolled_at = Some(now);
             } else {
                 match state.view {
                     OptionsView::Main => {
@@ -453,7 +457,6 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                                     }
                                 }
                             }
-                            state.nav_key_last_scrolled_at = Some(now);
                         }
                     }
                     OptionsView::Submenu(kind) => {
@@ -464,29 +467,25 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                             direction,
                             NavWrap::Clamp,
                         );
-                        state.nav_key_last_scrolled_at = Some(now);
                     }
                 }
             }
         }
     }
 
-    if let (Some(delta_lr), Some(held_since), Some(last_adjusted)) = (
-        state.nav_lr_held_direction,
-        state.nav_lr_held_since,
-        state.nav_lr_last_adjusted_at,
-    ) {
-        let now = Instant::now();
-        if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
-            && now.duration_since(last_adjusted) >= NAV_REPEAT_SCROLL_INTERVAL
+    if let Some(delta_lr) = state.nav_lr_held_direction {
+        let repeat_due = screen_input::advance_hold_repeat(
+            &mut state.nav_lr_held_for,
+            &mut state.nav_lr_next_repeat_at,
+            NAV_REPEAT_SCROLL_INTERVAL,
+            dt,
+        );
+        if repeat_due
             && matches!(state.view, OptionsView::Submenu(_))
-            && state
-                .start_input
-                .iter()
-                .all(|start| start.held_since.is_none())
+            && state.start_input.iter().all(|start| !start.held)
         {
             let repeat_delta = if on_max_fps_value_row(state) {
-                max_fps_hold_delta(delta_lr, now.duration_since(held_since))
+                max_fps_hold_delta(delta_lr, state.nav_lr_held_for)
             } else {
                 delta_lr
             };
@@ -496,16 +495,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             } else {
                 apply_submenu_choice_delta(state, asset_manager, repeat_delta, NavWrap::Clamp);
             }
-            state.nav_lr_last_adjusted_at = Some(now);
         }
     }
 
-    let now = Instant::now();
     for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
         if pending_action.is_none() {
-            pending_action = repeat_held_dedicated_three_key_start(state, asset_manager, side, now);
+            pending_action = repeat_held_dedicated_three_key_start(state, asset_manager, side, dt);
         } else {
-            repeat_held_dedicated_three_key_start(state, asset_manager, side, now);
+            repeat_held_dedicated_three_key_start(state, asset_manager, side, dt);
         }
     }
 

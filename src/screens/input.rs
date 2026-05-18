@@ -15,6 +15,39 @@ const MENU_LR_CHORD_WINDOW: Duration = Duration::from_millis(75);
 const MENU_LR_LEFT: u8 = 1 << 0;
 const MENU_LR_RIGHT: u8 = 1 << 1;
 
+#[inline(always)]
+pub fn reset_hold_repeat(
+    held_for: &mut Duration,
+    next_repeat_at: &mut Duration,
+    initial_delay: Duration,
+) {
+    *held_for = Duration::ZERO;
+    *next_repeat_at = initial_delay;
+}
+
+pub fn advance_hold_repeat(
+    held_for: &mut Duration,
+    next_repeat_at: &mut Duration,
+    repeat_interval: Duration,
+    dt: f32,
+) -> bool {
+    if dt <= 0.0 || !dt.is_finite() {
+        return false;
+    }
+    *held_for = held_for.saturating_add(Duration::from_secs_f32(dt));
+    if *held_for <= *next_repeat_at {
+        return false;
+    }
+    if repeat_interval == Duration::ZERO {
+        *next_repeat_at = *held_for;
+        return true;
+    }
+    while *next_repeat_at <= *held_for {
+        *next_repeat_at = next_repeat_at.saturating_add(repeat_interval);
+    }
+    true
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct MenuLrChordSideState {
     held_mask: u8,

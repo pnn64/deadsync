@@ -7,13 +7,13 @@ pub(super) mod tests {
         BitMapping, BitmaskBinding, BitmaskInit, BitmaskWriteback, ChoiceBinding, CursorInit,
         CycleInit, ErrorBarMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
-        NAV_REPEAT_SCROLL_INTERVAL, NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row,
-        RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, compute_row_window,
-        count_visible_rows, handle_arcade_start_event, handle_start_event, hud_offset_choices,
+        NavDirection, NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row, RowBehavior,
+        RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, compute_row_window, count_visible_rows,
+        handle_arcade_start_event, handle_nav_event, handle_start_event, hud_offset_choices,
         init_cycle_row_from_binding, init_numeric_row_from_binding, is_row_visible,
-        judgment_tilt_options_visible, player_option_column_x, repeat_held_arcade_start,
-        row_f_pos_for_index, row_visibility, session_active_players, sync_profile_scroll_speed,
-        sync_speed_mod_type_row,
+        judgment_tilt_options_visible, on_start_press, player_option_column_x,
+        repeat_held_arcade_start, row_f_pos_for_index, row_visibility, session_active_players,
+        sync_profile_scroll_speed, sync_speed_mod_type_row, update,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -21,7 +21,7 @@ pub(super) mod tests {
     use crate::game::scroll::ScrollSpeedSetting;
     use crate::screens::{Screen, ScreenAction};
     use crate::test_support::{compose_scenarios, notefield_bench};
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     fn ensure_i18n() {
         use std::sync::Once;
@@ -967,13 +967,17 @@ pub(super) mod tests {
         let second_row = state.pane().selected_row[P1];
         assert!(second_row > first_row);
 
-        let now = Instant::now();
-        state.start_input[P1].held_since =
-            Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
-        state.start_input[P1].last_triggered_at =
-            Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
-
-        assert!(repeat_held_arcade_start(&mut state, &asset_manager, active, P1, now).is_none());
+        on_start_press(&mut state, P1);
+        assert!(
+            repeat_held_arcade_start(
+                &mut state,
+                &asset_manager,
+                active,
+                P1,
+                (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
+            )
+            .is_none()
+        );
         assert!(state.pane().selected_row[P1] > second_row);
     }
 
@@ -998,13 +1002,17 @@ pub(super) mod tests {
         state.pane_mut().selected_row[P1] = last_row;
         state.pane_mut().prev_selected_row[P1] = last_row;
 
-        let now = Instant::now();
-        state.start_input[P1].held_since =
-            Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
-        state.start_input[P1].last_triggered_at =
-            Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
-
-        assert!(repeat_held_arcade_start(&mut state, &asset_manager, active, P1, now).is_none());
+        on_start_press(&mut state, P1);
+        assert!(
+            repeat_held_arcade_start(
+                &mut state,
+                &asset_manager,
+                active,
+                P1,
+                (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
+            )
+            .is_none()
+        );
         assert_eq!(state.pane().selected_row[P1], last_row);
     }
 
@@ -1034,6 +1042,44 @@ pub(super) mod tests {
         }
         let state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
         (state, asset_manager)
+    }
+
+    #[test]
+    fn held_speed_mod_repeat_uses_update_dt() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let active = session_active_players();
+        let speed_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::SpeedMod)
+            .expect("Speed Mod should be in Main pane");
+        state.pane_mut().selected_row[P1] = speed_row;
+        state.pane_mut().prev_selected_row[P1] = speed_row;
+
+        let before = state.speed_mod[P1].value;
+        handle_nav_event(
+            &mut state,
+            &asset_manager,
+            active,
+            P1,
+            NavDirection::Right,
+            true,
+        );
+        let after_press = state.speed_mod[P1].value;
+        assert!(after_press > before);
+
+        update(&mut state, 0.0, &asset_manager);
+        assert_eq!(state.speed_mod[P1].value, after_press);
+
+        update(
+            &mut state,
+            (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
+            &asset_manager,
+        );
+        assert!(state.speed_mod[P1].value > after_press);
     }
 
     #[test]

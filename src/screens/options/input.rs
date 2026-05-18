@@ -3,30 +3,41 @@ use super::*;
 // Small helpers to let the app dispatcher manage hold-to-scroll without exposing fields
 pub fn on_nav_press(state: &mut State, dir: NavDirection) {
     state.nav_key_held_direction = Some(dir);
-    state.nav_key_held_since = Some(Instant::now());
-    state.nav_key_last_scrolled_at = Some(Instant::now());
+    screen_input::reset_hold_repeat(
+        &mut state.nav_key_held_for,
+        &mut state.nav_key_next_repeat_at,
+        NAV_INITIAL_HOLD_DELAY,
+    );
 }
 
 pub fn on_nav_release(state: &mut State, dir: NavDirection) {
     if state.nav_key_held_direction == Some(dir) {
         state.nav_key_held_direction = None;
-        state.nav_key_held_since = None;
-        state.nav_key_last_scrolled_at = None;
+        screen_input::reset_hold_repeat(
+            &mut state.nav_key_held_for,
+            &mut state.nav_key_next_repeat_at,
+            NAV_INITIAL_HOLD_DELAY,
+        );
     }
 }
 
 pub(super) fn on_lr_press(state: &mut State, delta: isize) {
-    let now = Instant::now();
     state.nav_lr_held_direction = Some(delta);
-    state.nav_lr_held_since = Some(now);
-    state.nav_lr_last_adjusted_at = Some(now);
+    screen_input::reset_hold_repeat(
+        &mut state.nav_lr_held_for,
+        &mut state.nav_lr_next_repeat_at,
+        NAV_INITIAL_HOLD_DELAY,
+    );
 }
 
 pub(super) fn on_lr_release(state: &mut State, delta: isize) {
     if state.nav_lr_held_direction == Some(delta) {
         state.nav_lr_held_direction = None;
-        state.nav_lr_held_since = None;
-        state.nav_lr_last_adjusted_at = None;
+        screen_input::reset_hold_repeat(
+            &mut state.nav_lr_held_for,
+            &mut state.nav_lr_next_repeat_at,
+            NAV_INITIAL_HOLD_DELAY,
+        );
     }
 }
 
@@ -654,16 +665,19 @@ fn start_side(action: VirtualAction) -> Option<profile::PlayerSide> {
 }
 
 fn on_start_press(state: &mut State, side: profile::PlayerSide) {
-    let now = Instant::now();
     let idx = screen_input::player_side_ix(side);
-    state.start_input[idx].held_since = Some(now);
-    state.start_input[idx].last_triggered_at = Some(now);
+    state.start_input[idx].held = true;
+    let start_input = &mut state.start_input[idx];
+    screen_input::reset_hold_repeat(
+        &mut start_input.held_for,
+        &mut start_input.next_repeat_at,
+        NAV_INITIAL_HOLD_DELAY,
+    );
 }
 
 fn clear_start_hold(state: &mut State, side: profile::PlayerSide) {
     let idx = screen_input::player_side_ix(side);
-    state.start_input[idx].held_since = None;
-    state.start_input[idx].last_triggered_at = None;
+    state.start_input[idx] = OptionsStartInput::default();
 }
 
 fn dedicated_three_key_options_event(action: VirtualAction) -> bool {
@@ -727,7 +741,7 @@ pub(super) fn repeat_held_dedicated_three_key_start(
     state: &mut State,
     asset_manager: &AssetManager,
     side: profile::PlayerSide,
-    now: Instant,
+    dt: f32,
 ) -> Option<ScreenAction> {
     let OptionsView::Submenu(kind) = state.view else {
         clear_start_hold(state, side);
@@ -738,18 +752,18 @@ pub(super) fn repeat_held_dedicated_three_key_start(
         return None;
     }
     let idx = screen_input::player_side_ix(side);
-    let (Some(held_since), Some(last_triggered_at)) = (
-        state.start_input[idx].held_since,
-        state.start_input[idx].last_triggered_at,
-    ) else {
+    if !state.start_input[idx].held {
         return None;
     };
-    if now.duration_since(held_since) <= NAV_INITIAL_HOLD_DELAY
-        || now.duration_since(last_triggered_at) < NAV_REPEAT_SCROLL_INTERVAL
-    {
+    let start_input = &mut state.start_input[idx];
+    if !screen_input::advance_hold_repeat(
+        &mut start_input.held_for,
+        &mut start_input.next_repeat_at,
+        NAV_REPEAT_SCROLL_INTERVAL,
+        dt,
+    ) {
         return None;
     }
-    state.start_input[idx].last_triggered_at = Some(now);
     let action = handle_dedicated_three_key_start_nav(state, asset_manager, kind, side, true);
     (!matches!(action, ScreenAction::None)).then_some(action)
 }

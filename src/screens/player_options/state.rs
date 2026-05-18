@@ -165,8 +165,8 @@ pub(super) struct NoteskinState {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PlayerNavInput {
     pub held_direction: Option<NavDirection>,
-    pub held_since: Option<Instant>,
-    pub last_scrolled_at: Option<Instant>,
+    pub held_for: Duration,
+    pub next_repeat_at: Duration,
 }
 
 /// Per-player Start button hold/repeat timing.
@@ -174,8 +174,9 @@ pub struct PlayerNavInput {
 /// Stored as `[PlayerStartInput; PLAYER_SLOTS]` on `State`.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PlayerStartInput {
-    pub held_since: Option<Instant>,
-    pub last_triggered_at: Option<Instant>,
+    pub held: bool,
+    pub held_for: Duration,
+    pub next_repeat_at: Duration,
 }
 
 #[derive(Clone, Copy, Debug)]

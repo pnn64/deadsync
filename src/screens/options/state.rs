@@ -99,8 +99,9 @@ impl std::ops::IndexMut<SubmenuKind> for SubmenuStates {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct OptionsStartInput {
-    pub(super) held_since: Option<Instant>,
-    pub(super) last_triggered_at: Option<Instant>,
+    pub(super) held: bool,
+    pub(super) held_for: Duration,
+    pub(super) next_repeat_at: Duration,
 }
 
 #[inline(always)]
@@ -151,11 +152,11 @@ pub struct State {
     pub active_color_index: i32, // <-- ADDED
     pub(super) bg: visual_style_bg::State,
     pub(super) nav_key_held_direction: Option<NavDirection>,
-    pub(super) nav_key_held_since: Option<Instant>,
-    pub(super) nav_key_last_scrolled_at: Option<Instant>,
+    pub(super) nav_key_held_for: Duration,
+    pub(super) nav_key_next_repeat_at: Duration,
     pub(super) nav_lr_held_direction: Option<isize>,
-    pub(super) nav_lr_held_since: Option<Instant>,
-    pub(super) nav_lr_last_adjusted_at: Option<Instant>,
+    pub(super) nav_lr_held_for: Duration,
+    pub(super) nav_lr_next_repeat_at: Duration,
     pub(super) view: OptionsView,
     pub(super) submenu_transition: SubmenuTransition,
     pub(super) pending_submenu_kind: Option<SubmenuKind>,
@@ -260,11 +261,11 @@ pub fn init() -> State {
         bg: visual_style_bg::State::new(),
 
         nav_key_held_direction: None,
-        nav_key_held_since: None,
-        nav_key_last_scrolled_at: None,
+        nav_key_held_for: Duration::ZERO,
+        nav_key_next_repeat_at: NAV_INITIAL_HOLD_DELAY,
         nav_lr_held_direction: None,
-        nav_lr_held_since: None,
-        nav_lr_last_adjusted_at: None,
+        nav_lr_held_for: Duration::ZERO,
+        nav_lr_next_repeat_at: NAV_INITIAL_HOLD_DELAY,
         submenu_transition: SubmenuTransition::None,
         pending_submenu_kind: None,
         pending_submenu_parent_kind: None,
