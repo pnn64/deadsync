@@ -142,6 +142,38 @@ fn main_options_left_right_move_rows_like_up_down() {
 }
 
 #[test]
+fn input_launcher_three_key_lr_moves_rows_like_service_menu() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Input);
+
+    assert_eq!(state.sub_selected, 0);
+    dedicated_press(&mut state, &asset_manager, VirtualAction::p1_right);
+    assert_eq!(state.sub_selected, 1);
+    dedicated_press(&mut state, &asset_manager, VirtualAction::p1_left);
+    assert_eq!(state.sub_selected, 0);
+    dedicated_press(&mut state, &asset_manager, VirtualAction::p2_left);
+    assert_eq!(state.sub_selected, INPUT_OPTIONS_ROWS.len());
+}
+
+#[test]
+fn input_launcher_three_key_start_opens_real_input_options() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Input);
+    select_visible_row(&mut state, SubmenuKind::Input, SubRowId::InputOptions);
+
+    dedicated_press(&mut state, &asset_manager, VirtualAction::p1_start);
+
+    assert_eq!(state.pending_submenu_kind, Some(SubmenuKind::InputBackend));
+    assert_eq!(state.pending_submenu_parent_kind, Some(SubmenuKind::Input));
+    assert_eq!(
+        state.submenu_transition,
+        SubmenuTransition::FadeOutToSubmenu
+    );
+}
+
+#[test]
 fn service_child_three_key_lr_changes_value_not_row() {
     let asset_manager = AssetManager::new();
     let mut state = init();

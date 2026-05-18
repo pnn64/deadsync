@@ -669,6 +669,13 @@ fn dedicated_three_key_options_event(action: VirtualAction) -> bool {
     )
 }
 
+fn dedicated_three_key_menu_nav(view: OptionsView) -> bool {
+    matches!(
+        view,
+        OptionsView::Main | OptionsView::Submenu(SubmenuKind::Input)
+    )
+}
+
 pub(super) fn handle_dedicated_three_key_options_input(
     state: &mut State,
     asset_manager: &AssetManager,
@@ -681,9 +688,10 @@ pub(super) fn handle_dedicated_three_key_options_input(
             | VirtualAction::p2_left
             | VirtualAction::p2_menu_left => {
                 state.menu_lr_undo = 0;
-                match state.view {
-                    OptionsView::Main => on_nav_release(state, NavDirection::Up),
-                    OptionsView::Submenu(_) => on_lr_release(state, -1),
+                if dedicated_three_key_menu_nav(state.view) {
+                    on_nav_release(state, NavDirection::Up);
+                } else {
+                    on_lr_release(state, -1);
                 }
             }
             VirtualAction::p1_right
@@ -691,9 +699,10 @@ pub(super) fn handle_dedicated_three_key_options_input(
             | VirtualAction::p2_right
             | VirtualAction::p2_menu_right => {
                 state.menu_lr_undo = 0;
-                match state.view {
-                    OptionsView::Main => on_nav_release(state, NavDirection::Down),
-                    OptionsView::Submenu(_) => on_lr_release(state, 1),
+                if dedicated_three_key_menu_nav(state.view) {
+                    on_nav_release(state, NavDirection::Down);
+                } else {
+                    on_lr_release(state, 1);
                 }
             }
             _ => {}
@@ -701,13 +710,13 @@ pub(super) fn handle_dedicated_three_key_options_input(
         return ScreenAction::None;
     }
 
-    match state.view {
-        OptionsView::Main => match ev.action {
+    if dedicated_three_key_menu_nav(state.view) {
+        return match ev.action {
             VirtualAction::p1_left
             | VirtualAction::p1_menu_left
             | VirtualAction::p2_left
             | VirtualAction::p2_menu_left => {
-                move_main_selection(state, NavDirection::Up);
+                move_options_selection_vertical(state, asset_manager, NavDirection::Up);
                 on_nav_press(state, NavDirection::Up);
                 ScreenAction::None
             }
@@ -715,7 +724,7 @@ pub(super) fn handle_dedicated_three_key_options_input(
             | VirtualAction::p1_menu_right
             | VirtualAction::p2_right
             | VirtualAction::p2_menu_right => {
-                move_main_selection(state, NavDirection::Down);
+                move_options_selection_vertical(state, asset_manager, NavDirection::Down);
                 on_nav_press(state, NavDirection::Down);
                 ScreenAction::None
             }
@@ -724,7 +733,10 @@ pub(super) fn handle_dedicated_three_key_options_input(
                 activate_current_selection(state, asset_manager)
             }
             _ => ScreenAction::None,
-        },
+        };
+    }
+
+    match state.view {
         OptionsView::Submenu(kind) => match ev.action {
             VirtualAction::p1_left
             | VirtualAction::p1_menu_left
@@ -770,6 +782,7 @@ pub(super) fn handle_dedicated_three_key_options_input(
             }
             _ => ScreenAction::None,
         },
+        OptionsView::Main => ScreenAction::None,
     }
 }
 
