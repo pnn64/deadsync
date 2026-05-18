@@ -615,6 +615,36 @@ pub(super) fn apply_submenu_choice_delta(
     action
 }
 
+fn move_main_selection(state: &mut State, dir: NavDirection) {
+    let total = ITEMS.len();
+    if total == 0 {
+        return;
+    }
+    state.selected = match dir {
+        NavDirection::Up => {
+            if state.selected == 0 {
+                total - 1
+            } else {
+                state.selected - 1
+            }
+        }
+        NavDirection::Down => (state.selected + 1) % total,
+    };
+}
+
+fn move_options_selection_vertical(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    dir: NavDirection,
+) {
+    match state.view {
+        OptionsView::Main => move_main_selection(state, dir),
+        OptionsView::Submenu(kind) => {
+            move_submenu_selection_vertical(state, asset_manager, kind, dir, NavWrap::Wrap);
+        }
+    }
+}
+
 pub(super) fn cancel_current_view(state: &mut State) -> ScreenAction {
     match state.view {
         OptionsView::Main => ScreenAction::Navigate(Screen::Menu),
@@ -1350,49 +1380,13 @@ pub fn handle_input(
     if let Some((_, nav)) = three_key_action {
         return match nav {
             screen_input::ThreeKeyMenuAction::Prev => {
-                match state.view {
-                    OptionsView::Main => {
-                        let total = ITEMS.len();
-                        if total > 0 {
-                            state.selected = if state.selected == 0 {
-                                total - 1
-                            } else {
-                                state.selected - 1
-                            };
-                        }
-                    }
-                    OptionsView::Submenu(kind) => {
-                        move_submenu_selection_vertical(
-                            state,
-                            asset_manager,
-                            kind,
-                            NavDirection::Up,
-                            NavWrap::Wrap,
-                        );
-                    }
-                }
+                move_options_selection_vertical(state, asset_manager, NavDirection::Up);
                 on_nav_press(state, NavDirection::Up);
                 state.menu_lr_undo = 1;
                 ScreenAction::None
             }
             screen_input::ThreeKeyMenuAction::Next => {
-                match state.view {
-                    OptionsView::Main => {
-                        let total = ITEMS.len();
-                        if total > 0 {
-                            state.selected = (state.selected + 1) % total;
-                        }
-                    }
-                    OptionsView::Submenu(kind) => {
-                        move_submenu_selection_vertical(
-                            state,
-                            asset_manager,
-                            kind,
-                            NavDirection::Down,
-                            NavWrap::Wrap,
-                        );
-                    }
-                }
+                move_options_selection_vertical(state, asset_manager, NavDirection::Down);
                 on_nav_press(state, NavDirection::Down);
                 state.menu_lr_undo = -1;
                 ScreenAction::None
@@ -1420,27 +1414,7 @@ pub fn handle_input(
         | VirtualAction::p2_up
         | VirtualAction::p2_menu_up => {
             if ev.pressed {
-                match state.view {
-                    OptionsView::Main => {
-                        let total = ITEMS.len();
-                        if total > 0 {
-                            state.selected = if state.selected == 0 {
-                                total - 1
-                            } else {
-                                state.selected - 1
-                            };
-                        }
-                    }
-                    OptionsView::Submenu(kind) => {
-                        move_submenu_selection_vertical(
-                            state,
-                            asset_manager,
-                            kind,
-                            NavDirection::Up,
-                            NavWrap::Wrap,
-                        );
-                    }
-                }
+                move_options_selection_vertical(state, asset_manager, NavDirection::Up);
                 on_nav_press(state, NavDirection::Up);
             } else {
                 on_nav_release(state, NavDirection::Up);
@@ -1451,23 +1425,7 @@ pub fn handle_input(
         | VirtualAction::p2_down
         | VirtualAction::p2_menu_down => {
             if ev.pressed {
-                match state.view {
-                    OptionsView::Main => {
-                        let total = ITEMS.len();
-                        if total > 0 {
-                            state.selected = (state.selected + 1) % total;
-                        }
-                    }
-                    OptionsView::Submenu(kind) => {
-                        move_submenu_selection_vertical(
-                            state,
-                            asset_manager,
-                            kind,
-                            NavDirection::Down,
-                            NavWrap::Wrap,
-                        );
-                    }
-                }
+                move_options_selection_vertical(state, asset_manager, NavDirection::Down);
                 on_nav_press(state, NavDirection::Down);
             } else {
                 on_nav_release(state, NavDirection::Down);
@@ -1477,7 +1435,14 @@ pub fn handle_input(
         | VirtualAction::p1_menu_left
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
-            if ev.pressed {
+            if matches!(state.view, OptionsView::Main) {
+                if ev.pressed {
+                    move_options_selection_vertical(state, asset_manager, NavDirection::Up);
+                    on_nav_press(state, NavDirection::Up);
+                } else {
+                    on_nav_release(state, NavDirection::Up);
+                }
+            } else if ev.pressed {
                 if let Some(action) =
                     apply_submenu_choice_delta(state, asset_manager, -1, NavWrap::Wrap)
                 {
@@ -1493,7 +1458,14 @@ pub fn handle_input(
         | VirtualAction::p1_menu_right
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
-            if ev.pressed {
+            if matches!(state.view, OptionsView::Main) {
+                if ev.pressed {
+                    move_options_selection_vertical(state, asset_manager, NavDirection::Down);
+                    on_nav_press(state, NavDirection::Down);
+                } else {
+                    on_nav_release(state, NavDirection::Down);
+                }
+            } else if ev.pressed {
                 if let Some(action) =
                     apply_submenu_choice_delta(state, asset_manager, 1, NavWrap::Wrap)
                 {

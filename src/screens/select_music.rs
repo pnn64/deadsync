@@ -5238,8 +5238,7 @@ fn build_null_or_die_overlay(
         && let Some(warning) =
             sync_low_confidence_warning(overlay.final_confidence, sync_confidence_threshold())
     {
-        let warning_y =
-            status_y + SYNC_READY_LINE_STEP * (status_lines.len() as f32 - 1.0 + 1.2);
+        let warning_y = status_y + SYNC_READY_LINE_STEP * (status_lines.len() as f32 - 1.0 + 1.2);
         actors.push(act!(text:
             font("miso"):
             settext(warning):
@@ -7554,16 +7553,11 @@ fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> Scree
                                     // the audible threshold and below typical
                                     // frame timing, so the rounded value is
                                     // what the player actually experiences.
-                                    let delta_seconds = sync_round_to_ms(
-                                        combined_sync_quantized_delta(overlay),
-                                    );
-                                    if delta_seconds.is_finite()
-                                        && delta_seconds.abs() >= 0.000_5
-                                    {
-                                        apply_sync = Some((
-                                            overlay.simfile_path.clone(),
-                                            delta_seconds,
-                                        ));
+                                    let delta_seconds =
+                                        sync_round_to_ms(combined_sync_quantized_delta(overlay));
+                                    if delta_seconds.is_finite() && delta_seconds.abs() >= 0.000_5 {
+                                        apply_sync =
+                                            Some((overlay.simfile_path.clone(), delta_seconds));
                                     }
                                 }
                                 exit_confirm_mode(overlay);

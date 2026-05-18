@@ -107,6 +107,22 @@ fn p2_can_navigate_and_change_system_options() {
 }
 
 #[test]
+fn main_options_left_right_move_rows_like_up_down() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+
+    assert_eq!(state.selected, 0);
+    press(&mut state, &asset_manager, VirtualAction::p1_right);
+    assert_eq!(state.selected, 1);
+    press(&mut state, &asset_manager, VirtualAction::p1_left);
+    assert_eq!(state.selected, 0);
+    press(&mut state, &asset_manager, VirtualAction::p2_left);
+    assert_eq!(state.selected, ITEMS.len() - 1);
+    press(&mut state, &asset_manager, VirtualAction::p2_right);
+    assert_eq!(state.selected, 0);
+}
+
+#[test]
 fn preferred_color_only_shows_when_select_color_is_off() {
     let mut state = init();
 
