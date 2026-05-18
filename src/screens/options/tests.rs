@@ -29,6 +29,14 @@ fn dedicated_press(
     handle_dedicated_three_key_options_input(state, asset_manager, &input_event(action, true))
 }
 
+fn age_start_hold(state: &mut State, side: profile::PlayerSide, now: Instant) {
+    let idx = screen_input::player_side_ix(side);
+    state.start_input[idx].held_since =
+        Some(now - NAV_INITIAL_HOLD_DELAY - Duration::from_millis(1));
+    state.start_input[idx].last_triggered_at =
+        Some(now - NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1));
+}
+
 fn select_visible_row(state: &mut State, kind: SubmenuKind, row_id: SubRowId) -> usize {
     let rows = submenu_rows(kind);
     let actual = row_position(rows, row_id).expect("row should exist");
@@ -225,6 +233,107 @@ fn service_child_three_key_left_right_start_moves_up_one_row() {
     );
 
     dedicated_press(&mut state, &asset_manager, VirtualAction::p1_start);
+
+    assert_eq!(state.sub_selected, 0);
+}
+
+#[test]
+fn service_child_three_key_held_start_repeats_down() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+    state.sub_selected = 0;
+
+    dedicated_press(&mut state, &asset_manager, VirtualAction::p1_start);
+    assert_eq!(state.sub_selected, 1);
+
+    let now = Instant::now();
+    age_start_hold(&mut state, profile::PlayerSide::P1, now);
+    assert!(
+        repeat_held_dedicated_three_key_start(
+            &mut state,
+            &asset_manager,
+            profile::PlayerSide::P1,
+            now,
+        )
+        .is_none()
+    );
+
+    assert_eq!(state.sub_selected, 2);
+}
+
+#[test]
+fn service_child_three_key_held_left_right_start_repeats_up() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+    state.sub_selected = 2;
+    screen_input::track_menu_lr_chord(
+        &mut state.menu_lr_chord,
+        &input_event(VirtualAction::p1_left, true),
+    );
+    screen_input::track_menu_lr_chord(
+        &mut state.menu_lr_chord,
+        &input_event(VirtualAction::p1_right, true),
+    );
+
+    let now = Instant::now();
+    age_start_hold(&mut state, profile::PlayerSide::P1, now);
+    assert!(
+        repeat_held_dedicated_three_key_start(
+            &mut state,
+            &asset_manager,
+            profile::PlayerSide::P1,
+            now,
+        )
+        .is_none()
+    );
+
+    assert_eq!(state.sub_selected, 1);
+}
+
+#[test]
+fn service_child_three_key_held_start_stops_at_exit() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+    let exit_row = submenu_total_rows(&state, SubmenuKind::Graphics).saturating_sub(1);
+    state.sub_selected = exit_row;
+
+    let now = Instant::now();
+    age_start_hold(&mut state, profile::PlayerSide::P1, now);
+    assert!(
+        repeat_held_dedicated_three_key_start(
+            &mut state,
+            &asset_manager,
+            profile::PlayerSide::P1,
+            now,
+        )
+        .is_none()
+    );
+
+    assert_eq!(state.sub_selected, exit_row);
+    assert_eq!(state.submenu_transition, SubmenuTransition::None);
+}
+
+#[test]
+fn input_launcher_three_key_held_start_does_not_repeat_rows() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Input);
+    state.sub_selected = 0;
+
+    let now = Instant::now();
+    age_start_hold(&mut state, profile::PlayerSide::P1, now);
+    assert!(
+        repeat_held_dedicated_three_key_start(
+            &mut state,
+            &asset_manager,
+            profile::PlayerSide::P1,
+            now,
+        )
+        .is_none()
+    );
 
     assert_eq!(state.sub_selected, 0);
 }

@@ -97,6 +97,12 @@ impl std::ops::IndexMut<SubmenuKind> for SubmenuStates {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct OptionsStartInput {
+    pub(super) held_since: Option<Instant>,
+    pub(super) last_triggered_at: Option<Instant>,
+}
+
 #[inline(always)]
 pub(super) const fn is_launcher_submenu(kind: SubmenuKind) -> bool {
     matches!(
@@ -164,6 +170,7 @@ pub struct State {
     pub(super) sync_pack_confirm: Option<SyncPackConfirmState>,
     pub(super) menu_lr_chord: screen_input::MenuLrChordTracker,
     pub(super) menu_lr_undo: i8,
+    pub(super) start_input: [OptionsStartInput; 2],
     pub(super) pending_dedicated_menu_buttons: Option<bool>,
     // Submenu state
     pub(super) sub_selected: usize,
@@ -271,6 +278,7 @@ pub fn init() -> State {
         sync_pack_confirm: None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: 0,
+        start_input: [OptionsStartInput::default(); 2],
         pending_dedicated_menu_buttons: None,
         view: OptionsView::Main,
         sub_selected: 0,

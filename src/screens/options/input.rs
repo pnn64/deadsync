@@ -653,6 +653,19 @@ fn start_side(action: VirtualAction) -> Option<profile::PlayerSide> {
     }
 }
 
+fn on_start_press(state: &mut State, side: profile::PlayerSide) {
+    let now = Instant::now();
+    let idx = screen_input::player_side_ix(side);
+    state.start_input[idx].held_since = Some(now);
+    state.start_input[idx].last_triggered_at = Some(now);
+}
+
+fn clear_start_hold(state: &mut State, side: profile::PlayerSide) {
+    let idx = screen_input::player_side_ix(side);
+    state.start_input[idx].held_since = None;
+    state.start_input[idx].last_triggered_at = None;
+}
+
 fn dedicated_three_key_options_event(action: VirtualAction) -> bool {
     matches!(
         action,
@@ -674,6 +687,60 @@ fn dedicated_three_key_menu_nav(view: OptionsView) -> bool {
         view,
         OptionsView::Main | OptionsView::Submenu(SubmenuKind::Input)
     )
+}
+
+fn handle_dedicated_three_key_start_nav(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    kind: SubmenuKind,
+    side: profile::PlayerSide,
+    repeated: bool,
+) -> ScreenAction {
+    if submenu_visible_row_to_actual(state, kind, state.sub_selected).is_none() {
+        if repeated {
+            return ScreenAction::None;
+        }
+        clear_navigation_holds(state);
+        return activate_current_selection(state, asset_manager);
+    }
+    let dir = if screen_input::menu_lr_both_held(&state.menu_lr_chord, side) {
+        NavDirection::Up
+    } else {
+        NavDirection::Down
+    };
+    move_submenu_selection_vertical(state, asset_manager, kind, dir, NavWrap::Clamp);
+    ScreenAction::None
+}
+
+pub(super) fn repeat_held_dedicated_three_key_start(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    side: profile::PlayerSide,
+    now: Instant,
+) -> Option<ScreenAction> {
+    let OptionsView::Submenu(kind) = state.view else {
+        clear_start_hold(state, side);
+        return None;
+    };
+    if dedicated_three_key_menu_nav(state.view) {
+        clear_start_hold(state, side);
+        return None;
+    }
+    let idx = screen_input::player_side_ix(side);
+    let (Some(held_since), Some(last_triggered_at)) = (
+        state.start_input[idx].held_since,
+        state.start_input[idx].last_triggered_at,
+    ) else {
+        return None;
+    };
+    if now.duration_since(held_since) <= NAV_INITIAL_HOLD_DELAY
+        || now.duration_since(last_triggered_at) < NAV_REPEAT_SCROLL_INTERVAL
+    {
+        return None;
+    }
+    state.start_input[idx].last_triggered_at = Some(now);
+    let action = handle_dedicated_three_key_start_nav(state, asset_manager, kind, side, true);
+    (!matches!(action, ScreenAction::None)).then_some(action)
 }
 
 pub(super) fn handle_dedicated_three_key_options_input(
@@ -705,6 +772,8 @@ pub(super) fn handle_dedicated_three_key_options_input(
                     on_lr_release(state, 1);
                 }
             }
+            VirtualAction::p1_start => clear_start_hold(state, profile::PlayerSide::P1),
+            VirtualAction::p2_start => clear_start_hold(state, profile::PlayerSide::P2),
             _ => {}
         }
         return ScreenAction::None;
@@ -768,17 +837,8 @@ pub(super) fn handle_dedicated_three_key_options_input(
                 let Some(side) = start_side(ev.action) else {
                     return ScreenAction::None;
                 };
-                if submenu_visible_row_to_actual(state, kind, state.sub_selected).is_none() {
-                    clear_navigation_holds(state);
-                    return activate_current_selection(state, asset_manager);
-                }
-                let dir = if screen_input::menu_lr_both_held(&state.menu_lr_chord, side) {
-                    NavDirection::Up
-                } else {
-                    NavDirection::Down
-                };
-                move_submenu_selection_vertical(state, asset_manager, kind, dir, NavWrap::Clamp);
-                ScreenAction::None
+                on_start_press(state, side);
+                handle_dedicated_three_key_start_nav(state, asset_manager, kind, side, false)
             }
             _ => ScreenAction::None,
         },
