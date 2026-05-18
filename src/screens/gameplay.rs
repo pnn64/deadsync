@@ -7942,7 +7942,7 @@ pub fn push_actors(
                     profile::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
                 }
             };
-        actors.push(screen_bar::build(ScreenBarParams {
+        actors.push(screen_bar::build_no_background(ScreenBarParams {
             title: "",
             title_placement: screen_bar::ScreenBarTitlePlacement::Center,
             position: screen_bar::ScreenBarPosition::Bottom,
