@@ -238,6 +238,28 @@ fn service_child_three_key_left_right_start_moves_up_one_row() {
 }
 
 #[test]
+fn service_child_three_key_exit_left_right_start_moves_up() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+    let exit_row = submenu_total_rows(&state, SubmenuKind::Graphics).saturating_sub(1);
+    state.sub_selected = exit_row;
+    screen_input::track_menu_lr_chord(
+        &mut state.menu_lr_chord,
+        &input_event(VirtualAction::p1_left, true),
+    );
+    screen_input::track_menu_lr_chord(
+        &mut state.menu_lr_chord,
+        &input_event(VirtualAction::p1_right, true),
+    );
+
+    dedicated_press(&mut state, &asset_manager, VirtualAction::p1_start);
+
+    assert_eq!(state.sub_selected, exit_row - 1);
+    assert_eq!(state.submenu_transition, SubmenuTransition::None);
+}
+
+#[test]
 fn service_child_three_key_held_start_repeats_down() {
     let asset_manager = AssetManager::new();
     let mut state = init();

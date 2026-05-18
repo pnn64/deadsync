@@ -696,6 +696,16 @@ fn handle_dedicated_three_key_start_nav(
     side: profile::PlayerSide,
     repeated: bool,
 ) -> ScreenAction {
+    if screen_input::menu_lr_both_held(&state.menu_lr_chord, side) {
+        move_submenu_selection_vertical(
+            state,
+            asset_manager,
+            kind,
+            NavDirection::Up,
+            NavWrap::Clamp,
+        );
+        return ScreenAction::None;
+    }
     if submenu_visible_row_to_actual(state, kind, state.sub_selected).is_none() {
         if repeated {
             return ScreenAction::None;
@@ -703,12 +713,13 @@ fn handle_dedicated_three_key_start_nav(
         clear_navigation_holds(state);
         return activate_current_selection(state, asset_manager);
     }
-    let dir = if screen_input::menu_lr_both_held(&state.menu_lr_chord, side) {
-        NavDirection::Up
-    } else {
-        NavDirection::Down
-    };
-    move_submenu_selection_vertical(state, asset_manager, kind, dir, NavWrap::Clamp);
+    move_submenu_selection_vertical(
+        state,
+        asset_manager,
+        kind,
+        NavDirection::Down,
+        NavWrap::Clamp,
+    );
     ScreenAction::None
 }
 
