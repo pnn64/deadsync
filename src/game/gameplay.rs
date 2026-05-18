@@ -14,8 +14,8 @@ use crate::game::parsing::song_lua::{
 use crate::game::scores;
 use crate::game::song::{self, SongData};
 use crate::game::timing::{
-    BeatInfoCache, ROWS_PER_BEAT, TIMING_WINDOW_ADD_S, TimingData, TimingProfile, TimingProfileNs,
-    beat_to_note_row,
+    BeatInfoCache, FA_PLUS_W010_MS, ROWS_PER_BEAT, TIMING_WINDOW_ADD_S, TimingData, TimingProfile,
+    TimingProfileNs, beat_to_note_row,
 };
 use crate::game::{
     profile::{self, TimingTickMode as TickMode},
@@ -6561,12 +6561,19 @@ fn log_timing_hit_detail(
 }
 
 fn tap_judgment_uses_bright_explosion(state: &State, player: usize, judgment: &Judgment) -> bool {
-    state
-        .player_profiles
-        .get(player)
-        .is_some_and(|profile| profile.show_fa_plus_window)
-        && judgment.grade == JudgeGrade::Fantastic
-        && judgment.window == Some(TimingWindow::W1)
+    let Some(profile) = state.player_profiles.get(player) else {
+        return false;
+    };
+    if !profile.show_fa_plus_window || judgment.grade != JudgeGrade::Fantastic {
+        return false;
+    }
+    if profile.fa_plus_10ms_blue_window
+        && !profile.split_15_10ms
+        && !profile.custom_fantastic_window
+    {
+        return judgment.time_error_ms.abs() > FA_PLUS_W010_MS;
+    }
+    judgment.window == Some(TimingWindow::W1)
 }
 
 fn trigger_tap_judgment_explosion(
@@ -8603,8 +8610,9 @@ mod tests {
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
         settle_completion_rows, single_runtime_player_is_p2, song_time_ns_from_seconds,
         song_time_ns_to_seconds, stage_music_cut, start_active_hold, step_calories,
-        step_stats_notefield_width, suppress_final_bad_rescore_visual, tick_mode_status_line,
-        tick_visual_effects, trigger_completed_row_tap_explosions, trigger_note_receptor_feedback,
+        step_stats_notefield_width, suppress_final_bad_rescore_visual,
+        tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
+        trigger_completed_row_tap_explosions, trigger_note_receptor_feedback,
         trigger_receptor_step_pulse, try_hit_crossed_mines_while_held, turn_option_bits,
         update_active_holds, update_judged_rows, update_lane_input_slot, visible_notefield_time_ns,
     };
@@ -10413,6 +10421,41 @@ return Def.ActorFrame{}
         let active = state.tap_explosions[column].expect("blue Fantastic should flash");
         assert_eq!(active.window, "W1");
         assert!(!active.bright);
+    }
+
+    #[test]
+    fn ten_ms_blue_window_uses_bright_tap_explosion_above_10ms() {
+        let mut profile = profile::Profile::default();
+        profile.show_fa_plus_window = true;
+        profile.fa_plus_10ms_blue_window = true;
+        let state = regression_state([profile, profile::Profile::default()]);
+        let judgment = Judgment {
+            time_error_ms: 12.0,
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(12.0, 1.0),
+            grade: JudgeGrade::Fantastic,
+            window: Some(TimingWindow::W0),
+            miss_because_held: false,
+        };
+
+        assert!(tap_judgment_uses_bright_explosion(&state, 0, &judgment));
+    }
+
+    #[test]
+    fn split_15_10ms_keeps_dim_tap_explosion_above_10ms() {
+        let mut profile = profile::Profile::default();
+        profile.show_fa_plus_window = true;
+        profile.fa_plus_10ms_blue_window = true;
+        profile.split_15_10ms = true;
+        let state = regression_state([profile, profile::Profile::default()]);
+        let judgment = Judgment {
+            time_error_ms: 12.0,
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(12.0, 1.0),
+            grade: JudgeGrade::Fantastic,
+            window: Some(TimingWindow::W0),
+            miss_because_held: false,
+        };
+
+        assert!(!tap_judgment_uses_bright_explosion(&state, 0, &judgment));
     }
 
     #[test]

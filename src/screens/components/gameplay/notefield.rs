@@ -2290,6 +2290,23 @@ fn split_15_10ms_active(profile: &profile::Profile, judgment: &Judgment) -> bool
 }
 
 #[inline(always)]
+fn tap_judgment_is_blue_fantastic(profile: &profile::Profile, judgment: &Judgment) -> bool {
+    if judgment.grade != JudgeGrade::Fantastic {
+        return false;
+    }
+    if !profile.show_fa_plus_window {
+        return true;
+    }
+    if profile.fa_plus_10ms_blue_window
+        && !profile.split_15_10ms
+        && !profile.custom_fantastic_window
+    {
+        return judgment.time_error_ms.abs() <= crate::game::timing::FA_PLUS_W010_MS;
+    }
+    judgment.window == Some(TimingWindow::W0)
+}
+
+#[inline(always)]
 fn resolved_judgment_texture(profile: &profile::Profile) -> Option<&'static assets::TextureChoice> {
     assets::resolve_texture_choice_entry(
         profile.judgment_graphic.texture_key(),
@@ -2350,9 +2367,10 @@ fn tap_judgment_rows(
                 // white Fantastic art at half alpha for the 10ms-15ms slice.
                 (0, Some(1))
             } else if profile.show_fa_plus_window {
-                match judgment.window {
-                    Some(TimingWindow::W0) => (0, None),
-                    _ => (1, None),
+                if tap_judgment_is_blue_fantastic(profile, judgment) {
+                    (0, None)
+                } else {
+                    (1, None)
                 }
             } else {
                 (0, None)
@@ -9655,6 +9673,33 @@ mod tests {
         };
         let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
         assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, None));
+    }
+
+    #[test]
+    fn tap_judgment_rows_use_10ms_blue_window() {
+        let profile = profile::Profile {
+            show_fa_plus_window: true,
+            fa_plus_10ms_blue_window: true,
+            ..profile::Profile::default()
+        };
+        let blue = fantastic_judgment(TimingWindow::W0, crate::game::timing::FA_PLUS_W010_MS);
+        let white = fantastic_judgment(TimingWindow::W0, 12.0);
+
+        assert_eq!(tap_judgment_rows(&profile, &blue, 7), (0, None));
+        assert_eq!(tap_judgment_rows(&profile, &white, 7), (1, None));
+    }
+
+    #[test]
+    fn tap_judgment_rows_split_keeps_blue_base_above_10ms() {
+        let profile = profile::Profile {
+            show_fa_plus_window: true,
+            fa_plus_10ms_blue_window: true,
+            split_15_10ms: true,
+            ..profile::Profile::default()
+        };
+        let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
+
+        assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, Some(1)));
     }
 
     #[test]
