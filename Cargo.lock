@@ -3604,8 +3604,8 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.4.21"
-source = "git+https://github.com/pnn64/rssp?branch=main#a4784e369862570da82c127ae88c833a05f5e0fd"
+version = "0.4.3"
+source = "git+https://github.com/pnn64/rssp?branch=main#377cf57e85e1801e4d7034e2f169e6869432db6e"
 dependencies = [
  "rssp-core",
  "serde_json",
@@ -3613,8 +3613,8 @@ dependencies = [
 
 [[package]]
 name = "rssp-core"
-version = "0.4.21"
-source = "git+https://github.com/pnn64/rssp?branch=main#a4784e369862570da82c127ae88c833a05f5e0fd"
+version = "0.4.3"
+source = "git+https://github.com/pnn64/rssp?branch=main#377cf57e85e1801e4d7034e2f169e6869432db6e"
 
 [[package]]
 name = "rubato"
@@ -5374,9 +5374,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "1.0.3"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0592e1c9d151f854e6fd382574c3a0855250e1d9b2f99d9281c6e6391af352f1"
+checksum = "2ee1708bef14716a11bae175f579062d4554d95be2c6829f518df847b7b3fdd0"
 dependencies = [
  "memchr",
 ]
