@@ -14,7 +14,7 @@ const DEFAULT_KEYMAP_LINES: [(&str, &str); 26] = [
     ("P1_MenuLeft", ""),
     ("P1_MenuRight", ""),
     ("P1_MenuUp", ""),
-    ("P1_Operator", ""),
+    ("P1_Operator", "KeyCode::ScrollLock"),
     ("P1_Restart", ""),
     ("P1_Right", "KeyCode::ArrowRight,KeyCode::KeyD"),
     ("P1_Select", "KeyCode::Slash"),

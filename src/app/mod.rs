@@ -107,6 +107,7 @@ const STUTTER_DIAG_MIN_DUMP_GAP_NS: u64 = 250_000_000;
 const STUTTER_DIAG_FRAME_SAMPLE_COUNT: usize = 128;
 const LIGHTS_AHEAD_NS: crate::game::gameplay::SongTimeNs = 50_000_000;
 const LIGHTS_MAX_CATCHUP_NS: crate::game::gameplay::SongTimeNs = 500_000_000;
+const SERVICE_SWITCH_PRESSED: &str = "Service switch pressed";
 
 #[derive(Clone, Copy, Debug, Default)]
 struct GameplayLightTracker {
@@ -325,6 +326,25 @@ const fn light_button_from_action(action: input::VirtualAction) -> Option<LightB
         )),
         _ => None,
     }
+}
+
+#[inline(always)]
+const fn is_operator_menu_action(action: input::VirtualAction) -> bool {
+    matches!(
+        action,
+        input::VirtualAction::p1_operator | input::VirtualAction::p2_operator
+    )
+}
+
+#[inline(always)]
+const fn allow_operator_menu_button(screen: CurrentScreen) -> bool {
+    !matches!(
+        screen,
+        CurrentScreen::Options
+            | CurrentScreen::Mappings
+            | CurrentScreen::Input
+            | CurrentScreen::TestLights
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1583,6 +1603,20 @@ fn combo_carry_from_profiles() -> [u32; crate::game::gameplay::MAX_PLAYERS] {
         profile::get_for_side(profile::PlayerSide::P1).current_combo,
         profile::get_for_side(profile::PlayerSide::P2).current_combo,
     ]
+}
+
+#[inline(always)]
+fn preferred_difficulty_for_side(
+    side: profile::PlayerSide,
+    play_style: profile::PlayStyle,
+) -> usize {
+    let max_diff_index = crate::engine::present::color::FILE_DIFFICULTY_NAMES
+        .len()
+        .saturating_sub(1);
+    profile::get_for_side(side)
+        .last_played(play_style)
+        .difficulty_index
+        .min(max_diff_index)
 }
 
 fn course_stage_runtime_from_plan(
@@ -4867,12 +4901,47 @@ impl App {
         true
     }
 
+    fn reset_operator_game_state(&mut self) {
+        const RESET_STYLE: profile::PlayStyle = profile::PlayStyle::Single;
+
+        profile::set_session_play_style(RESET_STYLE);
+        profile::set_session_play_mode(profile::PlayMode::Regular);
+        profile::set_session_player_side(profile::PlayerSide::P1);
+        profile::set_session_joined(false, false);
+        profile::set_session_music_rate(1.0);
+        profile::set_session_timing_tick_mode(profile::TimingTickMode::Off);
+        profile::set_fast_profile_switch_from_select_music(false);
+
+        let preferred = preferred_difficulty_for_side(profile::PlayerSide::P1, RESET_STYLE);
+        self.state.session = SessionState::new(preferred, combo_carry_from_profiles());
+        self.state.gameplay_offset_save_prompt = None;
+    }
+
+    fn route_operator_menu_button(&mut self, ev: &InputEvent) -> bool {
+        if !ev.pressed || !is_operator_menu_action(ev.action) {
+            return false;
+        }
+        if !allow_operator_menu_button(self.state.screens.current_screen) {
+            return true;
+        }
+
+        info!("{SERVICE_SWITCH_PRESSED}");
+        self.state.shell.gamepad_overlay_state =
+            Some((SERVICE_SWITCH_PRESSED.to_string(), Instant::now()));
+        self.reset_operator_game_state();
+        self.handle_navigation_action_after_prompt(CurrentScreen::Options);
+        true
+    }
+
     fn route_input_event(
         &mut self,
         event_loop: &ActiveEventLoop,
         ev: InputEvent,
     ) -> Result<(), Box<dyn Error>> {
         self.sync_light_input(&ev);
+        if self.route_operator_menu_button(&ev) {
+            return Ok(());
+        }
         if self.route_gameplay_offset_prompt_input(event_loop, &ev) {
             return Ok(());
         }
@@ -8693,6 +8762,30 @@ mod tests {
         assert!(!App::raw_keyboard_restart_screen(
             CurrentScreen::EvaluationSummary,
         ));
+    }
+
+    #[test]
+    fn operator_menu_button_matches_service_screen_gate() {
+        assert!(!allow_operator_menu_button(CurrentScreen::Options));
+        assert!(!allow_operator_menu_button(CurrentScreen::Mappings));
+        assert!(!allow_operator_menu_button(CurrentScreen::Input));
+        assert!(!allow_operator_menu_button(CurrentScreen::TestLights));
+
+        assert!(allow_operator_menu_button(CurrentScreen::Menu));
+        assert!(allow_operator_menu_button(CurrentScreen::Gameplay));
+        assert!(allow_operator_menu_button(CurrentScreen::SelectMusic));
+        assert!(allow_operator_menu_button(CurrentScreen::PlayerOptions));
+        assert!(allow_operator_menu_button(
+            CurrentScreen::ManageLocalProfiles
+        ));
+    }
+
+    #[test]
+    fn operator_menu_actions_are_player_operator_buttons() {
+        assert!(is_operator_menu_action(input::VirtualAction::p1_operator));
+        assert!(is_operator_menu_action(input::VirtualAction::p2_operator));
+        assert!(!is_operator_menu_action(input::VirtualAction::p1_start));
+        assert!(!is_operator_menu_action(input::VirtualAction::p2_back));
     }
 
     #[test]

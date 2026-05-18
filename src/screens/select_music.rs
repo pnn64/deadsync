@@ -9145,7 +9145,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager, stage_number: usi
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    
+
     let select_music_label = tr("ScreenTitles", "SelectMusic");
     screen_bars::push(&mut actors, select_music_label.as_ref());
 

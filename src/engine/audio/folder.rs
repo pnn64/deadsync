@@ -345,4 +345,3 @@ mod tests {
         assert_eq!(first, second);
     }
 }
-

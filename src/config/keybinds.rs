@@ -75,7 +75,8 @@ fn default_keymap_local() -> Keymap {
     km.bind(A::p2_select, &[InputBinding::Key(KeyCode::NumpadDecimal)]);
     km.bind(A::p2_start, &[InputBinding::Key(KeyCode::NumpadEnter)]);
     km.bind(A::p2_back, &[InputBinding::Key(KeyCode::Numpad0)]);
-    // Leave P2_Menu/Operator/Restart unbound by default for now.
+    km.bind(A::p1_operator, &[InputBinding::Key(KeyCode::ScrollLock)]);
+    // Leave dedicated menu buttons, P2 operator, and restart unbound by default for now.
     km
 }
 
@@ -90,6 +91,7 @@ const fn default_key_for_action(action: VirtualAction) -> Option<KeyCode> {
         A::p1_select => Some(KeyCode::Slash),
         A::p1_start => Some(KeyCode::Enter),
         A::p1_back => Some(KeyCode::Escape),
+        A::p1_operator => Some(KeyCode::ScrollLock),
         A::p2_up => Some(KeyCode::Numpad8),
         A::p2_down => Some(KeyCode::Numpad2),
         A::p2_left => Some(KeyCode::Numpad4),
@@ -864,6 +866,29 @@ pub fn clear_keymap_binding(action: VirtualAction, index: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_operator_key_is_scroll_lock() {
+        let defaults = default_keymap_local();
+
+        assert_eq!(
+            defaults.binding_at(VirtualAction::p1_operator, 0),
+            Some(InputBinding::Key(KeyCode::ScrollLock))
+        );
+        assert_eq!(defaults.binding_at(VirtualAction::p2_operator, 0), None);
+    }
+
+    #[test]
+    fn empty_operator_ini_restores_scroll_lock_default() {
+        let mut conf = SimpleIni::new();
+        conf.load_str("[Keymaps]\nP1_Operator=\n");
+        let keymap = load_keymap_from_ini_local(&conf);
+
+        assert_eq!(
+            keymap.binding_at(VirtualAction::p1_operator, 0),
+            Some(InputBinding::Key(KeyCode::ScrollLock))
+        );
+    }
 
     #[test]
     fn replacing_stolen_default_restores_original_action() {
