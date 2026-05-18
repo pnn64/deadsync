@@ -38,6 +38,7 @@ pub enum ScreenBarTitlePlacement {
 enum ScreenBarContext {
     Normal,
     SelectMusic,
+    NoBackground,
     TitleMenu,
 }
 
@@ -76,7 +77,10 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 }
 
 fn bar_background(transparent: bool, context: ScreenBarContext) -> Option<Background> {
-    if matches!(context, ScreenBarContext::TitleMenu) {
+    if matches!(
+        context,
+        ScreenBarContext::TitleMenu | ScreenBarContext::NoBackground
+    ) {
         return None;
     }
 
@@ -104,6 +108,10 @@ pub fn build_select_music(params: ScreenBarParams) -> Actor {
 
 pub fn build_title_menu(params: ScreenBarParams) -> Actor {
     build_with_context(params, ScreenBarContext::TitleMenu)
+}
+
+pub fn build_no_background(params: ScreenBarParams) -> Actor {
+    build_with_context(params, ScreenBarContext::NoBackground)
 }
 
 fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Actor {
@@ -242,5 +250,34 @@ fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Act
         children,
         background,
         z: 120i16,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_bar_params() -> ScreenBarParams<'static> {
+        ScreenBarParams {
+            title: "",
+            title_placement: ScreenBarTitlePlacement::Center,
+            position: ScreenBarPosition::Bottom,
+            transparent: false,
+            left_text: None,
+            center_text: None,
+            right_text: None,
+            left_avatar: None,
+            right_avatar: None,
+            fg_color: [1.0; 4],
+        }
+    }
+
+    #[test]
+    fn no_background_bar_has_no_frame_background() {
+        let actor = build_no_background(empty_bar_params());
+        let Actor::Frame { background, .. } = actor else {
+            panic!("screen bar should build a frame");
+        };
+        assert!(background.is_none());
     }
 }
