@@ -66,6 +66,28 @@ const SYNC_OVERLAY_MAX_PENDING_MSGS: usize = 32;
 const SYNC_OVERLAY_MAX_MSGS_PER_FRAME: usize = 32;
 const SYNC_OVERLAY_POLL_BUDGET: Duration = Duration::from_millis(3);
 const SYNC_ADJUST_STEP_SECONDS: f32 = 0.001;
+// Sync Song overlay only: per-tap step is 1 ms. Holding LEFT/RIGHT keeps
+// stepping by exactly 1 ms (unit-aligned with the displayed value) and ramps
+// up by *firing more often* — see `sync_song_hold_tick_interval`. Tier
+// cadences are chosen to match the effective ms/sec of the previous
+// 0.01 ms × 30 Hz ramp (0.3 / 3 / 15 / 30 / 60 ms/sec), so a held key feels
+// the same as before despite the coarser per-tick granularity.
+const SYNC_SONG_TAP_STEP_SECONDS: f32 = 0.001;
+const SYNC_SONG_HOLD_INITIAL_DELAY: Duration = Duration::from_millis(250);
+const SYNC_SONG_HOLD_SFX_INTERVAL: Duration = Duration::from_millis(75);
+
+// While the analyzer is `Running` the heat-map sprite is hidden so users
+// don't see the partial fingerprint filling row by row. Once the phase
+// transitions away from Running the sprite eases in via tint alpha over
+// `SYNC_HEAT_REVEAL_DURATION` for a clean reveal.
+const SYNC_HEAT_REVEAL_DURATION: Duration = Duration::from_millis(420);
+// Beat rate is suppressed for the first ~half second of analysis so the
+// computed value isn't dominated by warm-up noise.
+const SYNC_BEAT_RATE_MIN_ELAPSED_SECS: f32 = 0.5;
+
+// SELECT (or START) toggles between Edit mode (LEFT/RIGHT nudge) and Confirm
+// mode (3-button row: Confirm, Edit Sync, Discard) so 3-key arcade users
+// (LEFT/RIGHT/SELECT only) can both confirm and discard without other inputs.
 
 // Simply Love BGAnimations/ScreenSelectMusic overlay/PerPlayer/StepArtist.lua
 // Cycles through AuthorCredit, Description, ChartName every 2 seconds.
@@ -913,13 +935,13 @@ enum NullOrDieOverlayPhase {
     Running,
     Ready,
     Failed,
+    AnalysisUnavailable,
 }
 
 struct NullOrDieOverlayData {
     simfile_path: PathBuf,
     song_title: String,
     chart_label: String,
-    song_offset_seconds: f32,
     kernel_target: KernelTarget,
     kernel_type: BiasKernel,
     graph_mode: SyncGraphMode,
@@ -941,17 +963,18 @@ struct NullOrDieOverlayData {
     final_bias_ms: Option<f64>,
     final_confidence: Option<f64>,
     phase: NullOrDieOverlayPhase,
-    yes_selected: bool,
+    phase_changed_at: Instant,
     error_text: Option<String>,
-    rx: mpsc::Receiver<NullOrDieWorkerMsg>,
+    manual_delta_seconds: f32,
+    nav_held_dir: Option<i8>,
+    nav_held_since: Option<Instant>,
+    nav_last_tick_at: Option<Instant>,
+    nav_last_sfx_at: Option<Instant>,
+    confirm_selection: Option<ConfirmAction>,
+    rx: Option<mpsc::Receiver<NullOrDieWorkerMsg>>,
 }
 
 enum ManualSyncTarget {
-    Song {
-        simfile_path: PathBuf,
-        title: String,
-        old_offset_seconds: f32,
-    },
     Pack {
         pack_name: String,
         simfile_paths: Vec<PathBuf>,
@@ -4078,7 +4101,6 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         advanced.push(select_music_menu::ITEM_SYNC_PACK);
     }
     if has_song_selected {
-        advanced.push(select_music_menu::ITEM_NULL_OR_DIE);
         advanced.push(select_music_menu::ITEM_SYNC_SONG);
         if replays_enabled {
             advanced.push(select_music_menu::ITEM_PLAY_REPLAY);
@@ -4776,8 +4798,11 @@ fn build_sync_heat_image(
     let (lo, hi) = sync_heat_value_range(&matrix[..used], clim_pct)?;
     let mut image = RgbaImage::new(image_w, image_h);
     for py in 0..image_h as usize {
-        let row = (((image_h as usize - 1 - py) * total_rows) / image_h as usize)
-            .min(total_rows.saturating_sub(1));
+        // Top-down row mapping: screen y=0 is data row 0 so streaming
+        // analysis modes (BeatIndex, PostKernelFingerprint while running)
+        // visually fill the heat map from the top down rather than
+        // growing upward from the bottom.
+        let row = ((py * total_rows) / image_h as usize).min(total_rows.saturating_sub(1));
         for px in 0..image_w as usize {
             let rgba = if row < data_rows {
                 let col = (px * cols / image_w as usize).min(cols.saturating_sub(1));
@@ -4864,6 +4889,42 @@ fn sync_overlay_graph_size() -> (f32, f32) {
     (widescale(520.0, 640.0) - 80.0, 132.0)
 }
 
+fn set_sync_overlay_phase(overlay: &mut NullOrDieOverlayData, phase: NullOrDieOverlayPhase) {
+    if overlay.phase != phase {
+        overlay.phase = phase;
+        overlay.phase_changed_at = Instant::now();
+        exit_confirm_mode(overlay);
+    }
+}
+
+fn sync_heat_reveal_alpha(overlay: &NullOrDieOverlayData) -> f32 {
+    if overlay.phase == NullOrDieOverlayPhase::Running {
+        return 0.0;
+    }
+    let elapsed = overlay.phase_changed_at.elapsed().as_secs_f32();
+    let duration = SYNC_HEAT_REVEAL_DURATION.as_secs_f32();
+    if duration <= 0.0 {
+        return 1.0;
+    }
+    let t = (elapsed / duration).clamp(0.0, 1.0);
+    1.0 - (1.0 - t).powi(2)
+}
+
+fn sync_beat_rate(overlay: &NullOrDieOverlayData) -> Option<u32> {
+    if overlay.phase != NullOrDieOverlayPhase::Running {
+        return None;
+    }
+    if overlay.beats_processed == 0 {
+        return None;
+    }
+    let elapsed = overlay.phase_changed_at.elapsed().as_secs_f32();
+    if elapsed < SYNC_BEAT_RATE_MIN_ELAPSED_SECS {
+        return None;
+    }
+    let rate = overlay.beats_processed as f32 / elapsed;
+    Some(rate.round().max(0.0) as u32)
+}
+
 fn refresh_sync_overlay_heat_texture(overlay: &mut NullOrDieOverlayData) {
     let (graph_w, graph_h) = sync_overlay_graph_size();
     let Some((matrix, total_rows, data_rows)) = sync_heat_source(overlay) else {
@@ -4934,8 +4995,7 @@ fn build_null_or_die_overlay(
     overlay: &NullOrDieOverlayData,
     active_color_index: i32,
 ) -> Option<Vec<Actor>> {
-    let mut actors = Vec::with_capacity(26);
-    let accent = color::simply_love_rgba(active_color_index);
+    let mut actors = Vec::with_capacity(20);
     let pane_w = widescale(520.0, 640.0);
     let pane_h = 430.0;
     let pane_cx = screen_center_x();
@@ -4946,30 +5006,26 @@ fn build_null_or_die_overlay(
     let graph_x = pane_left + 40.0;
     let graph_y = pane_top + 116.0;
     let graph_center_y = graph_y + graph_h * 0.5;
+    let graph_bottom = graph_y + graph_h;
 
+    let in_confirm_mode = overlay.confirm_selection.is_some();
     let title = match overlay.phase {
         NullOrDieOverlayPhase::Running => tr("SelectMusic", "SyncingTitle"),
-        NullOrDieOverlayPhase::Ready => tr("SelectMusic", "SyncCompleteTitle"),
+        NullOrDieOverlayPhase::Ready => {
+            if in_confirm_mode {
+                tr("SelectMusic", "SyncApplyTitle")
+            } else {
+                tr("SelectMusic", "SyncCompleteTitle")
+            }
+        }
         NullOrDieOverlayPhase::Failed => tr("SelectMusic", "SyncFailedTitle"),
+        NullOrDieOverlayPhase::AnalysisUnavailable => tr("SelectMusic", "ManualSyncSongTitle"),
     };
-    let subtitle = format!("{}  [{}]", overlay.song_title, overlay.chart_label);
-    let ready_prompt_y = pane_top + pane_h - 116.0;
-    let ready_offset_line = if overlay.phase == NullOrDieOverlayPhase::Ready {
-        let delta_seconds = sync_apply_delta_seconds(overlay).unwrap_or(0.0);
-        let new_offset = overlay.song_offset_seconds + delta_seconds;
-        sync_prompt_offset_line(overlay.song_offset_seconds, new_offset)
+    let subtitle = if overlay.chart_label.is_empty() {
+        overlay.song_title.clone()
     } else {
-        None
+        format!("{}  [{}]", overlay.song_title, overlay.chart_label)
     };
-    let ready_prompt_text = if overlay.phase == NullOrDieOverlayPhase::Ready {
-        Some(build_null_or_die_save_prompt_text(overlay))
-    } else {
-        None
-    };
-    let ready_prompt_line_count = ready_prompt_text
-        .as_deref()
-        .map(|s| s.lines().count().max(1))
-        .unwrap_or(0);
 
     actors.push(act!(quad:
         align(0.0, 0.0):
@@ -5027,14 +5083,15 @@ fn build_null_or_die_overlay(
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(SYNC_OVERLAY_Z + 4)
     ));
-    if sync_heat_source(overlay).is_some() {
+    let heat_alpha = sync_heat_reveal_alpha(overlay);
+    if heat_alpha > 0.0 && sync_heat_source(overlay).is_some() {
         actors.push(Actor::Sprite {
             align: [0.0, 0.0],
             offset: [graph_x, graph_y],
             world_z: 0.0,
             size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
             source: SpriteSource::TextureStatic(SYNC_HEAT_TEXTURE_KEY),
-            tint: [1.0, 1.0, 1.0, 1.0],
+            tint: [1.0, 1.0, 1.0, heat_alpha],
             glow: [0.0, 0.0, 0.0, 0.0],
             z: SYNC_OVERLAY_Z + 4,
             cell: None,
@@ -5097,19 +5154,26 @@ fn build_null_or_die_overlay(
             z: SYNC_OVERLAY_Z + 6,
         });
     } else {
+        let placeholder_text = match overlay.phase {
+            NullOrDieOverlayPhase::AnalysisUnavailable => {
+                tr("SelectMusic", "SyncAnalysisUnavailable")
+            }
+            _ => tr("SelectMusic", "WaitingForAnalysis"),
+        };
         actors.push(act!(text:
             font("miso"):
-            settext(tr("SelectMusic", "WaitingForAnalysis")):
+            settext(placeholder_text):
             align(0.5, 0.5):
             xy(pane_cx, graph_center_y):
             zoom(0.9):
+            maxwidth(graph_w - 30.0):
             diffuse(0.6, 0.6, 0.6, 1.0):
             z(SYNC_OVERLAY_Z + 6):
             horizalign(center)
         ));
     }
 
-    if let Some(bias_ms) = overlay.final_bias_ms.or(overlay.preview_bias_ms) {
+    if let Some(bias_ms) = sync_marker_bias_ms(overlay) {
         let marker_x = graph_x + sync_bias_to_graph_x(bias_ms, &overlay.times_ms, graph_w);
         actors.push(act!(quad:
             align(0.5, 0.5):
@@ -5120,128 +5184,173 @@ fn build_null_or_die_overlay(
         ));
     }
 
-    let status_text: Arc<str> = match overlay.phase {
-        NullOrDieOverlayPhase::Running => match overlay.total_beats.max(overlay.beats_processed) {
-            0 => tr("SelectMusic", "BeatZero"),
-            total => tr_fmt(
-                "SelectMusic",
-                "BeatProgress",
-                &[
-                    ("current", &overlay.beats_processed.min(total).to_string()),
-                    ("total", &total.to_string()),
-                ],
-            ),
-        },
-        NullOrDieOverlayPhase::Ready => {
-            let bias = overlay
-                .final_bias_ms
-                .or(overlay.preview_bias_ms)
-                .unwrap_or(0.0);
-            let confidence = overlay.final_confidence.unwrap_or(0.0) * 100.0;
-            tr_fmt(
-                "SelectMusic",
-                "SuggestedSync",
-                &[
-                    ("bias", &format!("{bias:+.2}")),
-                    ("confidence", &format!("{confidence:.0}")),
-                ],
-            )
-        }
-        NullOrDieOverlayPhase::Failed => overlay
-            .error_text
-            .as_deref()
-            .map(Arc::from)
-            .unwrap_or_else(|| tr("SelectMusic", "UnknownSyncError")),
-    };
-    let status_y = if matches!(overlay.phase, NullOrDieOverlayPhase::Ready) {
-        let prompt_bottom = ready_prompt_y + SYNC_READY_LINE_STEP * 0.5;
-        let half_prompt = (ready_prompt_line_count.max(1) as f32 - 1.0) * 0.5;
-        let prompt_top = prompt_bottom - half_prompt * 2.0 * SYNC_READY_LINE_STEP;
-        let above_prompt = prompt_top - SYNC_READY_LINE_STEP;
-        if ready_offset_line.is_some() {
-            above_prompt - SYNC_READY_LINE_STEP
-        } else {
-            above_prompt
-        }
-    } else {
-        graph_y + graph_h + 18.0
-    };
-    actors.push(act!(text:
-        font("miso"):
-        settext(status_text):
-        align(0.5, 0.5):
-        xy(pane_cx, status_y):
-        zoom(SYNC_READY_TEXT_ZOOM):
-        maxwidth(pane_w - 26.0):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        z(SYNC_OVERLAY_Z + 4):
-        horizalign(center)
-    ));
-
-    match overlay.phase {
-        NullOrDieOverlayPhase::Ready => {
-            let answer_y = pane_top + pane_h - 48.0;
-            let choice_yes_x = pane_cx - 100.0;
-            let choice_no_x = pane_cx + 100.0;
-            let cursor_x = if overlay.yes_selected {
-                choice_yes_x
-            } else {
-                choice_no_x
-            };
-            let prompt = ready_prompt_text.clone().unwrap_or_default();
-            let prompt_bottom = ready_prompt_y + SYNC_READY_LINE_STEP * 0.5;
-            let half_prompt = (ready_prompt_line_count.max(1) as f32 - 1.0) * 0.5;
-            let prompt_y = prompt_bottom - half_prompt * SYNC_READY_LINE_STEP;
-            let prompt_top = prompt_y - half_prompt * SYNC_READY_LINE_STEP;
-
-            actors.push(act!(quad:
-                align(0.5, 0.5):
-                xy(cursor_x, answer_y):
-                zoomto(145.0, 40.0):
-                diffuse(accent[0], accent[1], accent[2], 1.0):
-                z(SYNC_OVERLAY_Z + 4)
-            ));
-            if let Some(line) = ready_offset_line.as_ref() {
+    let status_lines = build_sync_status_lines(overlay);
+    let status_y = graph_bottom + 22.0;
+    // Right-align labels ending at a fixed x left-of-center, then start the
+    // value just past that anchor so the colons of all labeled rows line up.
+    // The anchor is offset from pane center so the whole block reads as a
+    // single visually centered column.
+    let colon_anchor_x = pane_cx - 30.0;
+    let value_x = colon_anchor_x + 6.0;
+    for (i, line) in status_lines.iter().enumerate() {
+        let line_y = status_y + (i as f32) * SYNC_READY_LINE_STEP;
+        match line {
+            SyncStatusLine::Plain(text) => {
                 actors.push(act!(text:
                     font("miso"):
-                    settext(line.clone()):
+                    settext(Arc::clone(text)):
                     align(0.5, 0.5):
-                    xy(pane_cx, prompt_top - SYNC_READY_LINE_STEP):
+                    xy(pane_cx, line_y):
                     zoom(SYNC_READY_TEXT_ZOOM):
-                    maxwidth(pane_w - 90.0):
+                    maxwidth(pane_w - 26.0):
                     diffuse(1.0, 1.0, 1.0, 1.0):
                     z(SYNC_OVERLAY_Z + 4):
                     horizalign(center)
                 ));
             }
+            SyncStatusLine::Labeled { label, value } => {
+                actors.push(act!(text:
+                    font("miso"):
+                    settext(Arc::clone(label)):
+                    align(1.0, 0.5):
+                    xy(colon_anchor_x, line_y):
+                    zoom(SYNC_READY_TEXT_ZOOM):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(SYNC_OVERLAY_Z + 4):
+                    horizalign(right)
+                ));
+                actors.push(act!(text:
+                    font("miso"):
+                    settext(Arc::clone(value)):
+                    align(0.0, 0.5):
+                    xy(value_x, line_y):
+                    zoom(SYNC_READY_TEXT_ZOOM):
+                    maxwidth(pane_w * 0.5 - 10.0):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(SYNC_OVERLAY_Z + 4):
+                    horizalign(left)
+                ));
+            }
+        }
+    }
+
+    if matches!(overlay.phase, NullOrDieOverlayPhase::Ready)
+        && let Some(warning) =
+            sync_low_confidence_warning(overlay.final_confidence, sync_confidence_threshold())
+    {
+        let warning_y =
+            status_y + SYNC_READY_LINE_STEP * (status_lines.len() as f32 - 1.0 + 1.2);
+        actors.push(act!(text:
+            font("miso"):
+            settext(warning):
+            align(0.5, 0.5):
+            xy(pane_cx, warning_y):
+            zoom(SYNC_READY_TEXT_ZOOM * 0.85):
+            maxwidth(pane_w - 30.0):
+            diffuse(1.0, 0.9, 0.5, 1.0):
+            z(SYNC_OVERLAY_Z + 4):
+            horizalign(center)
+        ));
+    }
+
+    let answer_y = pane_top + pane_h - 48.0;
+    let footer_y = pane_top + pane_h - 16.0;
+
+    let confirm_mode = overlay.confirm_selection;
+
+    match overlay.phase {
+        NullOrDieOverlayPhase::Ready
+        | NullOrDieOverlayPhase::Failed
+        | NullOrDieOverlayPhase::AnalysisUnavailable => {
+            let action_cy = answer_y - 4.0;
+
+            if let Some(selected) = confirm_mode {
+                let button_w = 110.0_f32;
+                let button_h = 36.0_f32;
+                let button_gap = 12.0_f32;
+                let total_w = 3.0 * button_w + 2.0 * button_gap;
+                let first_cx = pane_cx - total_w * 0.5 + button_w * 0.5;
+
+                let select_color = color::simply_love_rgba(active_color_index);
+                for action in ConfirmAction::ALL {
+                    let i = action.index() as f32;
+                    let cx = first_cx + i * (button_w + button_gap);
+                    let is_selected = action == selected;
+
+                    // Match the lobby overlay's build_box_row style: white
+                    // border + white text by default; selected button gets a
+                    // simply-love-tinted border while the label stays white.
+                    let border = if is_selected {
+                        [select_color[0], select_color[1], select_color[2]]
+                    } else {
+                        [1.0, 1.0, 1.0]
+                    };
+                    let text_color = [1.0, 1.0, 1.0];
+
+                    actors.push(act!(quad:
+                        align(0.5, 0.5):
+                        xy(cx, action_cy):
+                        zoomto(button_w, button_h):
+                        diffuse(border[0], border[1], border[2], 1.0):
+                        z(SYNC_OVERLAY_Z + 4)
+                    ));
+                    actors.push(act!(quad:
+                        align(0.5, 0.5):
+                        xy(cx, action_cy):
+                        zoomto(button_w - 2.0, button_h - 2.0):
+                        diffuse(0.0, 0.0, 0.0, 1.0):
+                        z(SYNC_OVERLAY_Z + 5)
+                    ));
+
+                    let label_key = match action {
+                        ConfirmAction::Confirm => "SyncButtonConfirm",
+                        ConfirmAction::Edit => "SyncButtonEdit",
+                        ConfirmAction::Discard => "SyncButtonDiscard",
+                    };
+
+                    actors.push(act!(text:
+                        font(current_machine_font_key(FontRole::Header)):
+                        settext(tr("SelectMusic", label_key)):
+                        align(0.5, 0.5):
+                        xy(cx, action_cy):
+                        zoom(0.46):
+                        maxwidth(button_w - 12.0):
+                        diffuse(text_color[0], text_color[1], text_color[2], 1.0):
+                        z(SYNC_OVERLAY_Z + 6):
+                        horizalign(center)
+                    ));
+                }
+            } else {
+                // Edit mode hint always shows (even with no pending change),
+                // since SELECT now always opens the review surface. Use the
+                // &START; glyph (green) because both START and SELECT enter
+                // confirm mode and the SELECT glyph renders red in our font.
+                actors.push(act!(text:
+                    font("miso"):
+                    settext(tr("SelectMusic", "SyncEditModeHint")):
+                    align(0.5, 0.5):
+                    xy(pane_cx, action_cy):
+                    zoom(SYNC_READY_TEXT_ZOOM):
+                    maxwidth(pane_w - 40.0):
+                    diffuse(0.85, 0.85, 0.85, 1.0):
+                    z(SYNC_OVERLAY_Z + 4):
+                    horizalign(center)
+                ));
+            }
+
+            let footer_key = if confirm_mode.is_some() {
+                "SyncReviewHelp"
+            } else {
+                "SyncSongHelp"
+            };
             actors.push(act!(text:
                 font("miso"):
-                settext(prompt):
+                settext(tr("SelectMusic", footer_key)):
                 align(0.5, 0.5):
-                xy(pane_cx, prompt_y):
-                zoom(SYNC_READY_TEXT_ZOOM):
-                maxwidth(pane_w - 90.0):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(SYNC_OVERLAY_Z + 4):
-                horizalign(center)
-            ));
-            actors.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
-                settext(tr("Common", "Yes")):
-                align(0.5, 0.5):
-                xy(choice_yes_x, answer_y):
-                zoom(0.72):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(SYNC_OVERLAY_Z + 4):
-                horizalign(center)
-            ));
-            actors.push(act!(text:
-                font(current_machine_font_key(FontRole::Header)):
-                settext(tr("Common", "No")):
-                align(0.5, 0.5):
-                xy(choice_no_x, answer_y):
-                zoom(0.72):
-                diffuse(1.0, 1.0, 1.0, 1.0):
+                xy(pane_cx, footer_y):
+                zoom(0.74):
+                maxwidth(pane_w - 40.0):
+                diffuse(0.85, 0.85, 0.85, 1.0):
                 z(SYNC_OVERLAY_Z + 4):
                 horizalign(center)
             ));
@@ -5251,19 +5360,7 @@ fn build_null_or_die_overlay(
                 font("miso"):
                 settext(tr("SelectMusic", "SyncCancelHint")):
                 align(0.5, 0.5):
-                xy(pane_cx, pane_top + pane_h - 16.0):
-                zoom(0.82):
-                diffuse(0.85, 0.85, 0.85, 1.0):
-                z(SYNC_OVERLAY_Z + 4):
-                horizalign(center)
-            ));
-        }
-        NullOrDieOverlayPhase::Failed => {
-            actors.push(act!(text:
-                font("miso"):
-                settext(tr("SelectMusic", "SyncCloseHint")):
-                align(0.5, 0.5):
-                xy(pane_cx, pane_top + pane_h - 16.0):
+                xy(pane_cx, footer_y):
                 zoom(0.82):
                 diffuse(0.85, 0.85, 0.85, 1.0):
                 z(SYNC_OVERLAY_Z + 4):
@@ -5271,7 +5368,6 @@ fn build_null_or_die_overlay(
             ));
         }
     }
-
     Some(actors)
 }
 
@@ -6475,22 +6571,356 @@ fn sync_apply_delta_seconds(overlay: &NullOrDieOverlayData) -> Option<f32> {
 }
 
 #[inline(always)]
-fn sync_quantized_offset(v: f32) -> f32 {
-    (v / 0.001).round() * 0.001
+fn sync_delta_seconds_to_bias_ms(delta_seconds: f32) -> f64 {
+    -(delta_seconds as f64) * 1000.0
+}
+
+fn suggested_sync_delta_seconds(overlay: &NullOrDieOverlayData) -> Option<f32> {
+    if overlay.phase != NullOrDieOverlayPhase::Ready {
+        return None;
+    }
+    sync_apply_delta_seconds(overlay)
+}
+
+fn combined_sync_delta_seconds(overlay: &NullOrDieOverlayData) -> f32 {
+    let suggested = suggested_sync_delta_seconds(overlay).unwrap_or(0.0);
+    suggested + overlay.manual_delta_seconds
+}
+
+fn combined_sync_quantized_delta(overlay: &NullOrDieOverlayData) -> f32 {
+    sync_quantized_offset(combined_sync_delta_seconds(overlay))
+}
+
+fn combined_sync_has_change(overlay: &NullOrDieOverlayData) -> bool {
+    combined_sync_quantized_delta(overlay).abs() >= 0.000_005
+}
+
+fn sync_marker_bias_ms(overlay: &NullOrDieOverlayData) -> Option<f64> {
+    let combined = combined_sync_delta_seconds(overlay);
+    if combined.abs() >= 0.000_001 {
+        Some(sync_delta_seconds_to_bias_ms(combined))
+    } else {
+        overlay.preview_bias_ms
+    }
 }
 
 #[inline(always)]
-fn sync_prompt_offset_line(old_offset: f32, new_offset: f32) -> Option<String> {
-    let old_q = sync_quantized_offset(old_offset);
-    let new_q = sync_quantized_offset(new_offset);
-    let delta = new_q - old_q;
-    if delta.abs() < 0.000_1 {
-        return None;
+fn sync_quantized_offset(v: f32) -> f32 {
+    (v / 0.000_01).round() * 0.000_01
+}
+
+/// Rounds a candidate sync delta to the nearest whole millisecond. Used at
+/// apply time for the Sync Song overlay so that the value committed to the
+/// simfile lands on a clean 1 ms boundary, even though the LEFT/RIGHT
+/// movement behavior accumulates at 0.01 ms granularity for a smooth feel
+/// while nudging.
+#[inline(always)]
+fn sync_round_to_ms(v: f32) -> f32 {
+    (v * 1_000.0).round() / 1_000.0
+}
+
+fn sync_song_hold_tick_interval(hold_elapsed: Duration) -> Duration {
+    // Each tier fires a single 1 ms nudge at this interval. Effective speeds
+    // mirror the legacy 0.01 ms × 30 Hz ramp: 0.3 / 3 / 15 / 30 / 60 ms/sec.
+    let secs = hold_elapsed.as_secs_f32();
+    if secs < 0.5 {
+        Duration::from_nanos(3_333_333_333) // ~0.3 Hz → 0.3 ms/sec
+    } else if secs < 1.5 {
+        Duration::from_nanos(333_333_333) // ~3 Hz → 3 ms/sec
+    } else if secs < 3.0 {
+        Duration::from_nanos(66_666_667) // ~15 Hz → 15 ms/sec
+    } else if secs < 5.0 {
+        Duration::from_nanos(33_333_333) // ~30 Hz → 30 ms/sec
+    } else {
+        Duration::from_nanos(16_666_667) // ~60 Hz → 60 ms/sec
     }
-    let direction = if delta > 0.0 { "earlier" } else { "later" };
-    Some(format!(
-        "Song offset from {old_q:+.3} to {new_q:+.3} (notes {direction})"
-    ))
+}
+
+fn apply_sync_song_manual_nudge(overlay: &mut NullOrDieOverlayData, delta_seconds: f32) {
+    overlay.manual_delta_seconds += delta_seconds;
+}
+
+fn begin_sync_song_hold(overlay: &mut NullOrDieOverlayData, dir: i8) {
+    let now = Instant::now();
+    overlay.nav_held_dir = Some(dir);
+    overlay.nav_held_since = Some(now);
+    overlay.nav_last_tick_at = Some(now);
+    overlay.nav_last_sfx_at = Some(now);
+}
+
+fn clear_sync_song_hold(overlay: &mut NullOrDieOverlayData) {
+    overlay.nav_held_dir = None;
+    overlay.nav_held_since = None;
+    overlay.nav_last_tick_at = None;
+    overlay.nav_last_sfx_at = None;
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ConfirmAction {
+    Confirm,
+    Edit,
+    Discard,
+}
+
+impl ConfirmAction {
+    const ALL: [ConfirmAction; 3] = [
+        ConfirmAction::Edit,
+        ConfirmAction::Confirm,
+        ConfirmAction::Discard,
+    ];
+
+    fn index(self) -> usize {
+        match self {
+            ConfirmAction::Edit => 0,
+            ConfirmAction::Confirm => 1,
+            ConfirmAction::Discard => 2,
+        }
+    }
+
+    fn step(self, dir: i8) -> ConfirmAction {
+        let next = (self.index() as i32 + dir as i32).clamp(0, 2) as usize;
+        Self::ALL[next]
+    }
+}
+
+fn enter_confirm_mode(overlay: &mut NullOrDieOverlayData) {
+    if overlay.confirm_selection.is_some() {
+        return;
+    }
+    // Default to the Confirm button (now the middle of [Edit] [Confirm]
+    // [Discard]) so SELECT-SELECT activates the most likely intent: apply
+    // the change and close. LEFT navigates to Edit (return to nudging),
+    // RIGHT to Discard.
+    overlay.confirm_selection = Some(ConfirmAction::Confirm);
+    // Cancel any in-progress LEFT/RIGHT nudge ramp so it can't keep mutating
+    // the sync delta after the user has switched modes.
+    clear_sync_song_hold(overlay);
+}
+
+fn exit_confirm_mode(overlay: &mut NullOrDieOverlayData) {
+    overlay.confirm_selection = None;
+    clear_sync_song_hold(overlay);
+}
+
+#[derive(Default)]
+struct SyncTickOutcome {
+    play_hold_sfx: bool,
+}
+
+fn tick_sync_song_hold(overlay: &mut NullOrDieOverlayData) -> SyncTickOutcome {
+    let mut outcome = SyncTickOutcome::default();
+    if !matches!(
+        overlay.phase,
+        NullOrDieOverlayPhase::Ready
+            | NullOrDieOverlayPhase::Failed
+            | NullOrDieOverlayPhase::AnalysisUnavailable
+    ) {
+        clear_sync_song_hold(overlay);
+        exit_confirm_mode(overlay);
+        return outcome;
+    }
+
+    // While the user is reviewing in Confirm mode, LEFT/RIGHT navigates
+    // buttons rather than nudging — never let an in-flight ramp keep
+    // applying nudges to the sync delta in the background.
+    if overlay.confirm_selection.is_some() {
+        clear_sync_song_hold(overlay);
+        return outcome;
+    }
+
+    if let Some(dir) = overlay.nav_held_dir {
+        let (Some(held_since), Some(last_tick)) =
+            (overlay.nav_held_since, overlay.nav_last_tick_at)
+        else {
+            clear_sync_song_hold(overlay);
+            return outcome;
+        };
+
+        let now = Instant::now();
+        let hold_elapsed = now.saturating_duration_since(held_since);
+        let mut nav_should_sfx = false;
+        let tick_interval = sync_song_hold_tick_interval(hold_elapsed);
+        if hold_elapsed >= SYNC_SONG_HOLD_INITIAL_DELAY
+            && now.saturating_duration_since(last_tick) >= tick_interval
+        {
+            let step = SYNC_SONG_TAP_STEP_SECONDS * dir as f32;
+            apply_sync_song_manual_nudge(overlay, step);
+            overlay.nav_last_tick_at = Some(now);
+
+            nav_should_sfx = match overlay.nav_last_sfx_at {
+                None => true,
+                Some(t) => now.saturating_duration_since(t) >= SYNC_SONG_HOLD_SFX_INTERVAL,
+            };
+            if nav_should_sfx {
+                overlay.nav_last_sfx_at = Some(now);
+            }
+        }
+        outcome.play_hold_sfx = nav_should_sfx;
+    }
+
+    outcome
+}
+
+fn sync_action_label_short(apply_ms: f32) -> Arc<str> {
+    let magnitude = apply_ms.abs();
+    if magnitude < 0.5 {
+        tr("SelectMusic", "SyncActionNoChange")
+    } else if apply_ms > 0.0 {
+        tr("SelectMusic", "SyncActionAdvanceShort")
+    } else {
+        tr("SelectMusic", "SyncActionDelayShort")
+    }
+}
+
+enum SyncStatusLine {
+    Plain(Arc<str>),
+    Labeled { label: Arc<str>, value: Arc<str> },
+}
+
+fn build_sync_status_lines(overlay: &NullOrDieOverlayData) -> Vec<SyncStatusLine> {
+    let manual_q_seconds = sync_quantized_offset(overlay.manual_delta_seconds);
+    let manual_q_ms = manual_q_seconds * 1000.0;
+    let has_manual = manual_q_ms.abs() >= 0.001;
+
+    let labeled = |label_key: &str, value: Arc<str>| -> SyncStatusLine {
+        SyncStatusLine::Labeled {
+            label: tr("SelectMusic", label_key),
+            value,
+        }
+    };
+
+    match overlay.phase {
+        NullOrDieOverlayPhase::Running => {
+            let progress = match overlay.total_beats.max(overlay.beats_processed) {
+                0 => tr("SelectMusic", "BeatZero"),
+                total => tr_fmt(
+                    "SelectMusic",
+                    "BeatProgress",
+                    &[
+                        ("current", &overlay.beats_processed.min(total).to_string()),
+                        ("total", &total.to_string()),
+                    ],
+                ),
+            };
+            let line = match sync_beat_rate(overlay) {
+                Some(rate) => {
+                    let rate_text = tr_fmt(
+                        "SelectMusic",
+                        "SyncBeatRate",
+                        &[("rate", &rate.to_string())],
+                    );
+                    Arc::from(format!("{progress}  ·  {rate_text}"))
+                }
+                None => progress,
+            };
+            vec![SyncStatusLine::Plain(line)]
+        }
+        NullOrDieOverlayPhase::Ready => {
+            let suggested_seconds = sync_apply_delta_seconds(overlay).unwrap_or(0.0);
+            let suggested_ms = suggested_seconds * 1000.0;
+            let confidence_pct = sync_confidence_percent(overlay.final_confidence);
+            let total_seconds = suggested_seconds + manual_q_seconds;
+            let apply_ms = sync_round_to_ms(total_seconds) * 1000.0;
+
+            vec![
+                labeled(
+                    "SyncRowLabelSuggested",
+                    tr_fmt(
+                        "SelectMusic",
+                        "SyncValueWithConfidence",
+                        &[
+                            ("ms", &format!("{suggested_ms:+.2}")),
+                            ("confidence", &confidence_pct.to_string()),
+                        ],
+                    ),
+                ),
+                labeled(
+                    "SyncRowLabelManual",
+                    tr_fmt(
+                        "SelectMusic",
+                        "SyncValueMs",
+                        &[("ms", &format!("{manual_q_ms:+.2}"))],
+                    ),
+                ),
+                labeled(
+                    "SyncRowLabelAdjust",
+                    tr_fmt(
+                        "SelectMusic",
+                        "SyncValueWithAction",
+                        &[
+                            ("ms", &format!("{apply_ms:+.0}")),
+                            ("action", &sync_action_label_short(apply_ms)),
+                        ],
+                    ),
+                ),
+            ]
+        }
+        NullOrDieOverlayPhase::Failed => {
+            let err: Arc<str> = overlay
+                .error_text
+                .as_deref()
+                .map(Arc::from)
+                .unwrap_or_else(|| tr("SelectMusic", "UnknownSyncError"));
+            if has_manual {
+                let apply_ms = sync_round_to_ms(manual_q_seconds) * 1000.0;
+                vec![
+                    SyncStatusLine::Plain(err),
+                    labeled(
+                        "SyncRowLabelManual",
+                        tr_fmt(
+                            "SelectMusic",
+                            "SyncValueMs",
+                            &[("ms", &format!("{manual_q_ms:+.2}"))],
+                        ),
+                    ),
+                    labeled(
+                        "SyncRowLabelAdjust",
+                        tr_fmt(
+                            "SelectMusic",
+                            "SyncValueWithAction",
+                            &[
+                                ("ms", &format!("{apply_ms:+.0}")),
+                                ("action", &sync_action_label_short(apply_ms)),
+                            ],
+                        ),
+                    ),
+                ]
+            } else {
+                vec![SyncStatusLine::Plain(err)]
+            }
+        }
+        NullOrDieOverlayPhase::AnalysisUnavailable => {
+            if has_manual {
+                let apply_ms = sync_round_to_ms(manual_q_seconds) * 1000.0;
+                vec![
+                    labeled(
+                        "SyncRowLabelManual",
+                        tr_fmt(
+                            "SelectMusic",
+                            "SyncValueMs",
+                            &[("ms", &format!("{manual_q_ms:+.2}"))],
+                        ),
+                    ),
+                    labeled(
+                        "SyncRowLabelAdjust",
+                        tr_fmt(
+                            "SelectMusic",
+                            "SyncValueWithAction",
+                            &[
+                                ("ms", &format!("{apply_ms:+.0}")),
+                                ("action", &sync_action_label_short(apply_ms)),
+                            ],
+                        ),
+                    ),
+                ]
+            } else {
+                vec![SyncStatusLine::Plain(tr(
+                    "SelectMusic",
+                    "SyncAnalysisUnavailable",
+                ))]
+            }
+        }
+    }
 }
 
 #[inline(always)]
@@ -6528,20 +6958,6 @@ fn sync_low_confidence_warning(confidence: Option<f64>, threshold: f64) -> Optio
     )
 }
 
-fn build_null_or_die_save_prompt_text(overlay: &NullOrDieOverlayData) -> String {
-    let mut prompt = String::new();
-    if let Some(warning) =
-        sync_low_confidence_warning(overlay.final_confidence, sync_confidence_threshold())
-    {
-        prompt.push_str(&warning);
-        prompt.push('\n');
-    }
-    prompt.push_str(&tr("SelectMusic", "SyncSaveQuestion"));
-    prompt.push('\n');
-    prompt.push_str(&tr("SelectMusic", "SyncDiscardWarning"));
-    prompt
-}
-
 fn sync_graph_label(overlay: &NullOrDieOverlayData) -> Arc<str> {
     if overlay.graph_mode == SyncGraphMode::PostKernelFingerprint
         && (overlay.post_rows == 0
@@ -6564,14 +6980,12 @@ fn sync_direction(delta: f32) -> &'static str {
 
 fn sync_overlay_title(overlay: &ManualSyncOverlayData) -> std::sync::Arc<str> {
     match overlay.target {
-        ManualSyncTarget::Song { .. } => tr("SelectMusic", "ManualSyncSongTitle"),
         ManualSyncTarget::Pack { .. } => tr("SelectMusic", "ManualSyncPackTitle"),
     }
 }
 
 fn sync_overlay_subtitle(overlay: &ManualSyncOverlayData) -> String {
     match &overlay.target {
-        ManualSyncTarget::Song { title, .. } => title.clone(),
         ManualSyncTarget::Pack {
             pack_name,
             simfile_paths,
@@ -6594,15 +7008,6 @@ fn sync_overlay_change_line(overlay: &ManualSyncOverlayData) -> Option<String> {
     }
     let direction = sync_direction(delta);
     match &overlay.target {
-        ManualSyncTarget::Song {
-            old_offset_seconds, ..
-        } => {
-            let old_q = sync_quantized_offset(*old_offset_seconds);
-            let new_q = sync_quantized_offset(*old_offset_seconds + delta);
-            Some(format!(
-                "Song offset from {old_q:+.3} to {new_q:+.3} (notes {direction})"
-            ))
-        }
         ManualSyncTarget::Pack { .. } => Some(format!(
             "Pack offsets move by {delta:+.3} (notes {direction})"
         )),
@@ -6616,11 +7021,6 @@ fn sync_overlay_prompt_text(overlay: &ManualSyncOverlayData) -> String {
 
     let mut prompt = String::with_capacity(256);
     match &overlay.target {
-        ManualSyncTarget::Song { title, .. } => {
-            prompt.push_str("You have changed the timing of\n");
-            prompt.push_str(title);
-            prompt.push_str(":\n\n");
-        }
         ManualSyncTarget::Pack {
             pack_name,
             simfile_paths,
@@ -6822,32 +7222,67 @@ fn sync_overlay_apply_result(
                     overlay.edge_discard,
                 );
             }
-            overlay.phase = NullOrDieOverlayPhase::Ready;
-            overlay.yes_selected = true;
+            set_sync_overlay_phase(overlay, NullOrDieOverlayPhase::Ready);
             refresh.meshes();
         }
         Err(err) => {
-            overlay.phase = NullOrDieOverlayPhase::Failed;
+            set_sync_overlay_phase(overlay, NullOrDieOverlayPhase::Failed);
             overlay.error_text = Some(err);
         }
     }
 }
 
-fn show_null_or_die_overlay(state: &mut State) {
+fn poll_null_or_die_overlay(overlay: &mut NullOrDieOverlayData) {
+    if overlay.rx.is_none() {
+        return;
+    }
+
+    let started = Instant::now();
+    let mut handled = 0usize;
+    let mut refresh = NullOrDieOverlayRefresh::default();
+
+    loop {
+        if sync_overlay_poll_exhausted(started, handled) {
+            break;
+        }
+        let recv = match overlay.rx.as_ref() {
+            Some(rx) => rx.try_recv(),
+            None => break,
+        };
+        match recv {
+            Ok(NullOrDieWorkerMsg::Event(event)) => {
+                sync_overlay_apply_event(overlay, event, &mut refresh);
+                handled += 1;
+            }
+            Ok(NullOrDieWorkerMsg::Finished(result)) => {
+                sync_overlay_apply_result(overlay, result, &mut refresh);
+                handled += 1;
+            }
+            Err(mpsc::TryRecvError::Empty) => break,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                if overlay.phase == NullOrDieOverlayPhase::Running {
+                    set_sync_overlay_phase(overlay, NullOrDieOverlayPhase::Failed);
+                    overlay.error_text =
+                        Some(tr("SelectMusic", "SyncWorkerDisconnected").to_string());
+                }
+                break;
+            }
+        }
+    }
+
+    refresh.flush(overlay);
+}
+
+fn show_sync_song_overlay(state: &mut State) {
     let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
         return;
     };
     let song = song.clone();
     let target_chart_type = profile::get_session_play_style().chart_type();
     let steps_index = selected_steps_index_for_sync(state);
-    let Some(chart_ix) = selected_chart_ix_for_sync(song.as_ref(), target_chart_type, steps_index)
-    else {
-        return;
-    };
-    let Some(chart) = song.charts.get(chart_ix) else {
-        return;
-    };
-    let chart_label = sync_chart_label(chart);
+    let chart_ix = selected_chart_ix_for_sync(song.as_ref(), target_chart_type, steps_index);
+    let chart = chart_ix.and_then(|ix| song.charts.get(ix));
+    let chart_label = chart.map(sync_chart_label).unwrap_or_default();
 
     prepare_sync_overlay(state);
 
@@ -6855,33 +7290,39 @@ fn show_null_or_die_overlay(state: &mut State) {
     let kernel_target = cfg.kernel_target;
     let kernel_type = cfg.kernel_type;
     let graph_mode = config::get().null_or_die_sync_graph;
-    let stream_cfg = BiasStreamCfg {
-        emit_freq_delta: matches!(graph_mode, SyncGraphMode::Frequency),
-        orientation: GraphOrientation::Horizontal,
-    };
 
     let simfile_path = song.simfile_path.clone();
-    let simfile_path_thread = simfile_path.clone();
-    let (tx, rx) = mpsc::sync_channel::<NullOrDieWorkerMsg>(SYNC_OVERLAY_MAX_PENDING_MSGS);
-    std::thread::spawn(move || {
-        let tx_done = tx.clone();
-        let result = null_or_die::api::analyze_chart_stream(
-            simfile_path_thread.as_path(),
-            chart_ix,
-            &cfg,
-            stream_cfg,
-            |event| {
-                let _ = tx.send(NullOrDieWorkerMsg::Event(event));
-            },
-        );
-        let _ = tx_done.send(NullOrDieWorkerMsg::Finished(result));
-    });
+    let song_title = song.display_full_title(false);
+
+    let (phase, rx) = if let (Some(chart_ix), Some(_)) = (chart_ix, chart) {
+        let stream_cfg = BiasStreamCfg {
+            emit_freq_delta: matches!(graph_mode, SyncGraphMode::Frequency),
+            orientation: GraphOrientation::Horizontal,
+        };
+        let simfile_path_thread = simfile_path.clone();
+        let (tx, rx) = mpsc::sync_channel::<NullOrDieWorkerMsg>(SYNC_OVERLAY_MAX_PENDING_MSGS);
+        std::thread::spawn(move || {
+            let tx_done = tx.clone();
+            let result = null_or_die::api::analyze_chart_stream(
+                simfile_path_thread.as_path(),
+                chart_ix,
+                &cfg,
+                stream_cfg,
+                |event| {
+                    let _ = tx.send(NullOrDieWorkerMsg::Event(event));
+                },
+            );
+            let _ = tx_done.send(NullOrDieWorkerMsg::Finished(result));
+        });
+        (NullOrDieOverlayPhase::Running, Some(rx))
+    } else {
+        (NullOrDieOverlayPhase::AnalysisUnavailable, None)
+    };
 
     state.sync_overlay = SyncOverlayState::NullOrDie(NullOrDieOverlayData {
         simfile_path,
-        song_title: song.display_full_title(false),
+        song_title,
         chart_label,
-        song_offset_seconds: song.offset,
         kernel_target,
         kernel_type,
         graph_mode,
@@ -6902,60 +7343,16 @@ fn show_null_or_die_overlay(state: &mut State) {
         preview_bias_ms: None,
         final_bias_ms: None,
         final_confidence: None,
-        phase: NullOrDieOverlayPhase::Running,
-        yes_selected: true,
+        phase,
+        phase_changed_at: Instant::now(),
         error_text: None,
+        manual_delta_seconds: 0.0,
+        nav_held_dir: None,
+        nav_held_since: None,
+        nav_last_tick_at: None,
+        nav_last_sfx_at: None,
+        confirm_selection: None,
         rx,
-    });
-}
-
-fn poll_null_or_die_overlay(overlay: &mut NullOrDieOverlayData) {
-    let started = Instant::now();
-    let mut handled = 0usize;
-    let mut refresh = NullOrDieOverlayRefresh::default();
-
-    loop {
-        if sync_overlay_poll_exhausted(started, handled) {
-            break;
-        }
-        match overlay.rx.try_recv() {
-            Ok(NullOrDieWorkerMsg::Event(event)) => {
-                sync_overlay_apply_event(overlay, event, &mut refresh);
-                handled += 1;
-            }
-            Ok(NullOrDieWorkerMsg::Finished(result)) => {
-                sync_overlay_apply_result(overlay, result, &mut refresh);
-                handled += 1;
-            }
-            Err(mpsc::TryRecvError::Empty) => break,
-            Err(mpsc::TryRecvError::Disconnected) => {
-                if overlay.phase == NullOrDieOverlayPhase::Running {
-                    overlay.phase = NullOrDieOverlayPhase::Failed;
-                    overlay.error_text =
-                        Some(tr("SelectMusic", "SyncWorkerDisconnected").to_string());
-                }
-                break;
-            }
-        }
-    }
-
-    refresh.flush(overlay);
-}
-
-fn show_sync_song_overlay(state: &mut State) {
-    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
-        return;
-    };
-    let target = ManualSyncTarget::Song {
-        simfile_path: song.simfile_path.clone(),
-        title: song.display_full_title(false),
-        old_offset_seconds: song.offset,
-    };
-    prepare_sync_overlay(state);
-    state.sync_overlay = SyncOverlayState::Manual(ManualSyncOverlayData {
-        target,
-        delta_seconds: 0.0,
-        yes_selected: true,
     });
 }
 
@@ -6986,10 +7383,6 @@ fn sync_overlay_apply_action(overlay: &ManualSyncOverlayData) -> Option<ScreenAc
     }
     let delta_seconds = sync_quantized_offset(overlay.delta_seconds);
     match &overlay.target {
-        ManualSyncTarget::Song { simfile_path, .. } => Some(ScreenAction::ApplySongOffsetSync {
-            simfile_path: simfile_path.clone(),
-            delta_seconds,
-        }),
         ManualSyncTarget::Pack { simfile_paths, .. } => {
             let changes = unique_sync_paths(simfile_paths)
                 .into_iter()
@@ -7022,14 +7415,14 @@ fn handle_manual_sync_overlay_input(state: &mut State, ev: &InputEvent) -> Scree
             | VirtualAction::p1_menu_left
             | VirtualAction::p2_left
             | VirtualAction::p2_menu_left => {
-                overlay.delta_seconds -= SYNC_ADJUST_STEP_SECONDS;
+                overlay.delta_seconds += SYNC_ADJUST_STEP_SECONDS;
                 play_change = true;
             }
             VirtualAction::p1_right
             | VirtualAction::p1_menu_right
             | VirtualAction::p2_right
             | VirtualAction::p2_menu_right => {
-                overlay.delta_seconds += SYNC_ADJUST_STEP_SECONDS;
+                overlay.delta_seconds -= SYNC_ADJUST_STEP_SECONDS;
                 play_change = true;
             }
             VirtualAction::p1_up
@@ -7079,78 +7472,163 @@ fn handle_manual_sync_overlay_input(state: &mut State, ev: &InputEvent) -> Scree
 }
 
 fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
-        return ScreenAction::None;
-    }
-
     let mut close_overlay = false;
     let mut apply_sync: Option<(PathBuf, f32)> = None;
     let mut play_change = false;
     let mut play_start = false;
+    let mut play_unjoin = false;
 
     {
         let SyncOverlayState::NullOrDie(overlay) = &mut state.sync_overlay else {
             return ScreenAction::None;
         };
-        match overlay.phase {
-            NullOrDieOverlayPhase::Running | NullOrDieOverlayPhase::Failed => match ev.action {
-                VirtualAction::p1_start
-                | VirtualAction::p2_start
-                | VirtualAction::p1_back
-                | VirtualAction::p2_back
-                | VirtualAction::p1_select
-                | VirtualAction::p2_select => {
-                    close_overlay = true;
-                    play_start = true;
-                }
-                _ => {}
-            },
-            NullOrDieOverlayPhase::Ready => match ev.action {
+
+        if !ev.pressed {
+            match ev.action {
                 VirtualAction::p1_left
                 | VirtualAction::p1_menu_left
-                | VirtualAction::p1_up
-                | VirtualAction::p1_menu_up
                 | VirtualAction::p2_left
-                | VirtualAction::p2_menu_left
-                | VirtualAction::p2_up
-                | VirtualAction::p2_menu_up => {
-                    if !overlay.yes_selected {
-                        overlay.yes_selected = true;
-                        play_change = true;
+                | VirtualAction::p2_menu_left => {
+                    if overlay.nav_held_dir == Some(1) {
+                        clear_sync_song_hold(overlay);
                     }
                 }
                 VirtualAction::p1_right
                 | VirtualAction::p1_menu_right
-                | VirtualAction::p1_down
-                | VirtualAction::p1_menu_down
                 | VirtualAction::p2_right
-                | VirtualAction::p2_menu_right
-                | VirtualAction::p2_down
-                | VirtualAction::p2_menu_down => {
-                    if overlay.yes_selected {
-                        overlay.yes_selected = false;
-                        play_change = true;
+                | VirtualAction::p2_menu_right => {
+                    if overlay.nav_held_dir == Some(-1) {
+                        clear_sync_song_hold(overlay);
                     }
-                }
-                VirtualAction::p1_start | VirtualAction::p2_start => {
-                    if overlay.yes_selected
-                        && let Some(delta_seconds) = sync_apply_delta_seconds(overlay)
-                        && delta_seconds.abs() >= 0.000_001
-                    {
-                        apply_sync = Some((overlay.simfile_path.clone(), delta_seconds));
-                    }
-                    close_overlay = true;
-                    play_start = true;
-                }
-                VirtualAction::p1_back
-                | VirtualAction::p2_back
-                | VirtualAction::p1_select
-                | VirtualAction::p2_select => {
-                    close_overlay = true;
-                    play_start = true;
                 }
                 _ => {}
-            },
+            }
+        } else {
+            match overlay.phase {
+                NullOrDieOverlayPhase::Running => match ev.action {
+                    VirtualAction::p1_start
+                    | VirtualAction::p2_start
+                    | VirtualAction::p1_back
+                    | VirtualAction::p2_back
+                    | VirtualAction::p1_select
+                    | VirtualAction::p2_select => {
+                        close_overlay = true;
+                        play_start = true;
+                    }
+                    _ => {}
+                },
+                NullOrDieOverlayPhase::Ready
+                | NullOrDieOverlayPhase::Failed
+                | NullOrDieOverlayPhase::AnalysisUnavailable => match overlay.confirm_selection {
+                    Some(selected) => match ev.action {
+                        VirtualAction::p1_left
+                        | VirtualAction::p1_menu_left
+                        | VirtualAction::p2_left
+                        | VirtualAction::p2_menu_left => {
+                            let next = selected.step(-1);
+                            if next != selected {
+                                overlay.confirm_selection = Some(next);
+                                play_change = true;
+                            }
+                        }
+                        VirtualAction::p1_right
+                        | VirtualAction::p1_menu_right
+                        | VirtualAction::p2_right
+                        | VirtualAction::p2_menu_right => {
+                            let next = selected.step(1);
+                            if next != selected {
+                                overlay.confirm_selection = Some(next);
+                                play_change = true;
+                            }
+                        }
+                        VirtualAction::p1_start
+                        | VirtualAction::p2_start
+                        | VirtualAction::p1_select
+                        | VirtualAction::p2_select => match selected {
+                            ConfirmAction::Confirm => {
+                                if combined_sync_has_change(overlay) {
+                                    // Movement accumulated at 0.01 ms
+                                    // granularity for fine-grained feel, but
+                                    // commit to the simfile in clean whole-ms
+                                    // increments — sub-ms precision is below
+                                    // the audible threshold and below typical
+                                    // frame timing, so the rounded value is
+                                    // what the player actually experiences.
+                                    let delta_seconds = sync_round_to_ms(
+                                        combined_sync_quantized_delta(overlay),
+                                    );
+                                    if delta_seconds.is_finite()
+                                        && delta_seconds.abs() >= 0.000_5
+                                    {
+                                        apply_sync = Some((
+                                            overlay.simfile_path.clone(),
+                                            delta_seconds,
+                                        ));
+                                    }
+                                }
+                                exit_confirm_mode(overlay);
+                                close_overlay = true;
+                                play_start = true;
+                            }
+                            ConfirmAction::Edit => {
+                                exit_confirm_mode(overlay);
+                                play_start = true;
+                            }
+                            ConfirmAction::Discard => {
+                                exit_confirm_mode(overlay);
+                                close_overlay = true;
+                                play_unjoin = true;
+                            }
+                        },
+                        VirtualAction::p1_back | VirtualAction::p2_back => {
+                            // BACK in Confirm mode now cancels the entire
+                            // overlay (matching the on-screen "BACK: CANCEL"
+                            // hint) — discarding any pending manual nudge
+                            // without applying it.
+                            exit_confirm_mode(overlay);
+                            close_overlay = true;
+                            play_unjoin = true;
+                        }
+                        _ => {}
+                    },
+                    None => match ev.action {
+                        VirtualAction::p1_left
+                        | VirtualAction::p1_menu_left
+                        | VirtualAction::p2_left
+                        | VirtualAction::p2_menu_left => {
+                            apply_sync_song_manual_nudge(overlay, SYNC_SONG_TAP_STEP_SECONDS);
+                            begin_sync_song_hold(overlay, 1);
+                            play_change = true;
+                        }
+                        VirtualAction::p1_right
+                        | VirtualAction::p1_menu_right
+                        | VirtualAction::p2_right
+                        | VirtualAction::p2_menu_right => {
+                            apply_sync_song_manual_nudge(overlay, -SYNC_SONG_TAP_STEP_SECONDS);
+                            begin_sync_song_hold(overlay, -1);
+                            play_change = true;
+                        }
+                        VirtualAction::p1_start
+                        | VirtualAction::p2_start
+                        | VirtualAction::p1_select
+                        | VirtualAction::p2_select => {
+                            // Always enter Confirm mode on SELECT/START so the
+                            // user reaches a consistent review surface
+                            // regardless of whether they nudged the offset.
+                            // The Confirm button's apply path re-validates
+                            // the delta and is a safe no-op when there is
+                            // nothing to apply.
+                            enter_confirm_mode(overlay);
+                            play_start = true;
+                        }
+                        VirtualAction::p1_back | VirtualAction::p2_back => {
+                            close_overlay = true;
+                            play_start = true;
+                        }
+                        _ => {}
+                    },
+                },
+            }
         }
     }
 
@@ -7159,6 +7637,9 @@ fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> Scree
     }
     if play_start {
         audio::play_sfx("assets/sounds/start.ogg");
+    }
+    if play_unjoin {
+        audio::play_sfx("assets/sounds/unjoin.ogg");
     }
     if close_overlay {
         hide_sync_overlay(state);
@@ -7506,11 +7987,6 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
         select_music_menu::Action::ViewDownloads => {
             hide_select_music_menu(state);
             show_downloads_overlay(state);
-            ScreenAction::None
-        }
-        select_music_menu::Action::NullOrDie => {
-            hide_select_music_menu(state);
-            show_null_or_die_overlay(state);
             ScreenAction::None
         }
         select_music_menu::Action::NullOrDiePack => {
@@ -8022,6 +8498,9 @@ pub fn handle_raw_key_event(
 
     if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {
         if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
+            // Escape always closes the sync overlay outright, even from
+            // Confirm mode. The two-press Confirm→Edit→close behavior is
+            // still available via the gamepad BACK / virtual-action path.
             hide_sync_overlay(state);
             state.song_search_ignore_next_back_select = true;
         }
@@ -8498,6 +8977,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
     if let SyncOverlayState::NullOrDie(overlay) = &mut state.sync_overlay {
         poll_null_or_die_overlay(overlay);
+        let outcome = tick_sync_song_hold(overlay);
+        if outcome.play_hold_sfx {
+            audio::play_sfx("assets/sounds/change.ogg");
+        }
         return ScreenAction::None;
     }
     if matches!(state.sync_overlay, SyncOverlayState::Manual(_)) {
