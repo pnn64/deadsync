@@ -3,22 +3,41 @@ use crate::assets::AssetManager;
 use crate::engine::input::{InputEvent, InputSource, VirtualAction};
 use std::time::{Duration, Instant};
 
-fn press(state: &mut State, asset_manager: &AssetManager, action: VirtualAction) -> ScreenAction {
+fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
     let now = Instant::now();
-    handle_input(
-        state,
-        asset_manager,
-        &InputEvent {
-            action,
-            input_slot: 0,
-            pressed: true,
-            source: InputSource::Keyboard,
-            timestamp: now,
-            timestamp_host_nanos: 0,
-            stored_at: now,
-            emitted_at: now,
-        },
-    )
+    InputEvent {
+        action,
+        input_slot: 0,
+        pressed,
+        source: InputSource::Keyboard,
+        timestamp: now,
+        timestamp_host_nanos: 0,
+        stored_at: now,
+        emitted_at: now,
+    }
+}
+
+fn press(state: &mut State, asset_manager: &AssetManager, action: VirtualAction) -> ScreenAction {
+    handle_input(state, asset_manager, &input_event(action, true))
+}
+
+fn dedicated_press(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    action: VirtualAction,
+) -> ScreenAction {
+    handle_dedicated_three_key_options_input(state, asset_manager, &input_event(action, true))
+}
+
+fn select_visible_row(state: &mut State, kind: SubmenuKind, row_id: SubRowId) -> usize {
+    let rows = submenu_rows(kind);
+    let actual = row_position(rows, row_id).expect("row should exist");
+    let visible = submenu_visible_row_indices(state, kind, rows);
+    state.sub_selected = visible
+        .iter()
+        .position(|&idx| idx == actual)
+        .expect("row should be visible");
+    actual
 }
 
 #[test]
@@ -120,6 +139,62 @@ fn main_options_left_right_move_rows_like_up_down() {
     assert_eq!(state.selected, ITEMS.len() - 1);
     press(&mut state, &asset_manager, VirtualAction::p2_right);
     assert_eq!(state.selected, 0);
+}
+
+#[test]
+fn service_child_three_key_lr_changes_value_not_row() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::Graphics,
+        SubRowId::DisplayAspectRatio,
+    );
+    let before_row = state.sub_selected;
+    let before_choice = state.sub[SubmenuKind::Graphics].cursor_indices[row];
+    let choices = row_choices(&state, SubmenuKind::Graphics, GRAPHICS_OPTIONS_ROWS, row);
+    assert!(choices.len() > 1);
+
+    dedicated_press(&mut state, &asset_manager, VirtualAction::p1_right);
+
+    assert_eq!(state.sub_selected, before_row);
+    assert_ne!(
+        state.sub[SubmenuKind::Graphics].cursor_indices[row],
+        before_choice
+    );
+}
+
+#[test]
+fn service_child_three_key_start_moves_down_one_row() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+    state.sub_selected = 0;
+
+    dedicated_press(&mut state, &asset_manager, VirtualAction::p1_start);
+
+    assert_eq!(state.sub_selected, 1);
+}
+
+#[test]
+fn service_child_three_key_left_right_start_moves_up_one_row() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+    state.sub_selected = 1;
+    screen_input::track_menu_lr_chord(
+        &mut state.menu_lr_chord,
+        &input_event(VirtualAction::p1_left, true),
+    );
+    screen_input::track_menu_lr_chord(
+        &mut state.menu_lr_chord,
+        &input_event(VirtualAction::p1_right, true),
+    );
+
+    dedicated_press(&mut state, &asset_manager, VirtualAction::p1_start);
+
+    assert_eq!(state.sub_selected, 0);
 }
 
 #[test]
