@@ -38,6 +38,17 @@ pub fn update_arcade_options_navigation(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_delayed_back(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.delayed_back == enabled {
+            return;
+        }
+        cfg.delayed_back = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_three_key_navigation(enabled: bool) {
     let dedicated = {
         let mut cfg = lock_config();

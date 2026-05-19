@@ -473,6 +473,10 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "ArcadeOptionsNavigation")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.arcade_options_navigation);
+    cfg.delayed_back = conf
+        .get("Options", "DelayedBack")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.delayed_back);
     cfg.three_key_navigation = conf
         .get("Options", "ThreeKeyNavigation")
         .and_then(|v| parse_loose_bool_str(&v))
