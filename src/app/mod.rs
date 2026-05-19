@@ -1184,6 +1184,11 @@ pub struct SessionState {
     course_individual_stage_indices: Vec<usize>,
     combo_carry: [u32; crate::game::gameplay::MAX_PLAYERS],
     gameplay_restart_count: u32,
+    /// SL/zmod parity: when a restart key is pressed mid-gameplay, the gameplay
+    /// state runs its fast Cancel exit. This flag intercepts the resulting
+    /// `NavigateNoFade(SelectMusic)` and redirects it back to Gameplay so the
+    /// player skips the long out-transition.
+    restart_pending: bool,
     course_run: Option<CourseRunState>,
     course_eval_pages: Vec<evaluation::State>,
     course_eval_page_index: usize,
@@ -1580,6 +1585,7 @@ impl SessionState {
             course_individual_stage_indices: Vec::new(),
             combo_carry,
             gameplay_restart_count: 0,
+            restart_pending: false,
             course_run: None,
             course_eval_pages: Vec::new(),
             course_eval_page_index: 0,
@@ -3848,6 +3854,16 @@ impl App {
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
         let action = match action {
+            // SL/zmod parity: a restart-triggered Cancel exit returns
+            // `NavigateNoFade(SelectMusic)`. Redirect it to Gameplay so the
+            // player skips the trip through SelectMusic.
+            ScreenAction::NavigateNoFade(CurrentScreen::SelectMusic)
+                if self.state.session.restart_pending
+                    && self.state.screens.current_screen == CurrentScreen::Gameplay =>
+            {
+                self.state.session.restart_pending = false;
+                ScreenAction::NavigateNoFade(CurrentScreen::Gameplay)
+            }
             ScreenAction::Navigate(CurrentScreen::Evaluation)
                 if self.should_chain_course_to_next_stage() =>
             {
@@ -4576,20 +4592,37 @@ impl App {
     }
 
     fn try_gameplay_restart(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
-        if self.prepare_player_options_for_gameplay_restart() {
-            let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
-            if let Err(e) =
-                self.handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
-            {
-                log::error!("Failed to restart Gameplay with {label}: {e}");
-            } else {
-                self.state.session.gameplay_restart_count = restart_count;
-            }
-            true
-        } else {
+        if !self.prepare_player_options_for_gameplay_restart() {
             log::warn!("Ignored {label} restart: no restartable stage state.");
-            false
+            return false;
         }
+        let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
+
+        // SL/zmod parity: if we're already in Gameplay, run the fast Cancel
+        // exit (~0.5s) instead of the full ~1.5s gameplay out-transition.
+        // The Cancel navigation is intercepted in `handle_action` and
+        // redirected back to Gameplay, which uses a shortened in-transition.
+        if self.state.screens.current_screen == CurrentScreen::Gameplay
+            && let Some(gs) = self.state.screens.gameplay_state.as_mut()
+        {
+            let already_exiting = gs.exit_transition.is_some();
+            crate::game::gameplay::begin_restart_exit(gs);
+            if !already_exiting && gs.exit_transition.is_some() {
+                self.state.session.gameplay_restart_count = restart_count;
+                self.state.session.restart_pending = true;
+            }
+            return true;
+        }
+
+        // Fallback (e.g. Ctrl+R from Evaluation): use the standard navigation.
+        if let Err(e) =
+            self.handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
+        {
+            log::error!("Failed to restart Gameplay with {label}: {e}");
+        } else {
+            self.state.session.gameplay_restart_count = restart_count;
+        }
+        true
     }
 
     fn should_chain_course_to_next_stage(&self) -> bool {
@@ -7266,6 +7299,7 @@ impl App {
             crate::engine::audio::stop_music();
             if prev != CurrentScreen::Gameplay {
                 self.state.session.gameplay_restart_count = 0;
+                self.state.session.restart_pending = false;
             }
             let mut course_display_carry = None;
             let course_display_totals = self

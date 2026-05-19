@@ -53,9 +53,10 @@ pub struct ActorViewOverride {
 use crate::game::gameplay::{
     self as gameplay_core, CourseDisplayCarry, CourseDisplayTotals, GameplayAction, GameplayExit,
     LeadInTiming, MAX_PLAYERS, ReplayInputEdge, ReplayOffsetSnapshot, TRANSITION_IN_DURATION,
-    TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION,
-    effective_visibility_effects_for_player, handle_input as gameplay_handle_input,
-    timing_tick_status_line, toggle_flash_text, update as gameplay_update,
+    TRANSITION_IN_RESTART_DURATION, TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION,
+    TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
+    handle_input as gameplay_handle_input, timing_tick_status_line, toggle_flash_text,
+    update as gameplay_update,
 };
 
 pub struct DensityGraphRenderState {
@@ -998,7 +999,26 @@ pub fn prewarm_text_layout(
 }
 
 // --- TRANSITIONS ---
-pub fn in_transition(state: Option<&State>, asset_manager: &AssetManager) -> (Vec<Actor>, f32) {
+pub fn in_transition(
+    state: Option<&State>,
+    asset_manager: &AssetManager,
+    is_restart: bool,
+) -> (Vec<Actor>, f32) {
+    if is_restart {
+        // SL/zmod parity: on a song restart, skip the splode + stage-text
+        // splash and run only a brief fade-from-black so the first gameplay
+        // frame doesn't pop in. The "RESTART N" label still appears in the
+        // gameplay footer overlay.
+        let actor = act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 1.0):
+            z(1100):
+            linear(TRANSITION_IN_RESTART_DURATION): alpha(0.0):
+            linear(0.0): visible(false)
+        );
+        return (vec![actor], TRANSITION_IN_RESTART_DURATION);
+    }
     let text = state
         .map(|gs| gs.stage_intro_text.clone())
         .unwrap_or_else(|| Arc::from("EVENT"));
@@ -7867,8 +7887,12 @@ pub fn push_actors(
             }
         }
         // Simply Love parity: keep Stage/Event text visible at the footer after intro animation ends.
-        if !state.stage_intro_text.is_empty()
-            && state.total_elapsed_in_screen >= INTRO_TEXT_SETTLE_SECONDS
+        // On a song restart we skip the splode/text in-transition entirely, so make the footer
+        // label appear immediately rather than waiting `INTRO_TEXT_SETTLE_SECONDS` of dead time.
+        let intro_text = state.stage_intro_text.as_ref();
+        let is_restart_label = intro_text.starts_with("RESTART ");
+        if !intro_text.is_empty()
+            && (is_restart_label || state.total_elapsed_in_screen >= INTRO_TEXT_SETTLE_SECONDS)
         {
             let text_x = intro_text_target_x(
                 state,

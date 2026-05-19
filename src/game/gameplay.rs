@@ -175,6 +175,11 @@ pub(crate) use self::time::{
 
 // Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
 pub const TRANSITION_IN_DURATION: f32 = 2.0;
+/// SL/zmod parity: when re-entering Gameplay as a restart, skip the splode +
+/// stage-text in-transition (`ScreenGameplay in/default.lua` calls
+/// `Hide` immediately when `SL.Global.GameplayReloadCheck` is true). Use a
+/// short fade-from-black so the new gameplay frame doesn't pop in.
+pub const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
 // Simply Love ScreenGameplay out.lua: sleep(0.5), linear(1.0).
 pub const TRANSITION_OUT_DELAY: f32 = 0.5;
 pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
@@ -4652,6 +4657,14 @@ fn begin_exit_transition(state: &mut State, kind: ExitTransitionKind) {
     if audio::is_initialized() {
         audio::stop_music();
     }
+}
+
+/// SL/zmod parity: trigger the fast Cancel exit fade (~0.5s) used by BACK,
+/// so an in-progress song can hand off to the next gameplay entry without
+/// playing the long ~1.5s gameplay out-transition. The app shell intercepts
+/// the resulting `Cancel` navigation and re-enters Gameplay.
+pub fn begin_restart_exit(state: &mut State) {
+    begin_exit_transition(state, ExitTransitionKind::Cancel);
 }
 
 pub fn danger_overlay_rgba(state: &State, player: usize) -> Option<[f32; 4]> {
@@ -9420,6 +9433,41 @@ return Def.ActorFrame{}
                     "exit_transition should not fire until the hold elapses"
                 );
             },
+        );
+    }
+
+    #[test]
+    fn begin_restart_exit_arms_cancel_transition_like_back_out() {
+        let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(state_profiles);
+        assert!(state.exit_transition.is_none());
+
+        super::begin_restart_exit(&mut state);
+
+        let exit = state
+            .exit_transition
+            .expect("begin_restart_exit should arm an exit_transition");
+        assert_eq!(
+            exit.kind,
+            ExitTransitionKind::Cancel,
+            "restart should reuse the fast Cancel out-fade for SL/zmod parity"
+        );
+    }
+
+    #[test]
+    fn begin_restart_exit_is_idempotent_when_already_exiting() {
+        let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(state_profiles);
+
+        // Pretend a give-up exit is already in flight.
+        super::begin_exit_transition(&mut state, ExitTransitionKind::Out);
+        let original = state.exit_transition.expect("primed exit");
+
+        super::begin_restart_exit(&mut state);
+        let after = state.exit_transition.expect("still exiting");
+        assert_eq!(
+            after.kind, original.kind,
+            "begin_restart_exit must not overwrite an in-flight exit transition"
         );
     }
 
