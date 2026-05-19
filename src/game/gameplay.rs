@@ -5132,6 +5132,7 @@ pub fn start_practice_music(
     judge_start_music_time: f32,
 ) {
     reset_practice_playback(state, judge_start_music_time);
+    state.audio_lead_in_seconds = (-playback_music_time).max(0.0);
     set_current_music_time_ns(state, song_time_ns_from_seconds(playback_music_time));
 
     let Some(music_path) = state.charts[0].music_path.as_ref() else {
